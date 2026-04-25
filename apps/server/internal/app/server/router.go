@@ -195,7 +195,7 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	handlers.RegisterGamificationRoutes(gamificationAPI, handlers.NewGamificationHandler(deps.GamificationService))
 
 	voiceAPI := api.Group("/")
-	voiceAPI.Use(middleware.RequireResourcePermission("assist"))
+	voiceAPI.Use(middleware.RequireResourcePermission("voice"))
 	handlers.RegisterVoiceRoutes(voiceAPI, handlers.NewVoiceHandler(deps.VoiceCoordinator, deps.VoiceProtocolRegistry))
 
 	auditAPI := api.Group("/")

@@ -139,6 +139,7 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 
 	for _, name := range []string{
 		"summary.txt",
+		"manifest.json",
 		"servify-health.json",
 		"weknora-health.json",
 		"ai-status.json",
@@ -171,6 +172,9 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 		"overall_status=healthy",
 		"service_type=orchestrated_enhanced",
 		"service_provider_capable=true",
+		"knowledge_provider=weknora",
+		"knowledge_provider_enabled=true",
+		"knowledge_provider_healthy=true",
 		"weknora_available=true",
 		"knowledge_provider_disable_ok=true",
 		"knowledge_provider_enable_ok=true",
@@ -185,6 +189,24 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 	} {
 		if !strings.Contains(summaryText, want) {
 			t.Fatalf("expected %q in summary, got %s", want, summaryText)
+		}
+	}
+
+	manifest, err := os.ReadFile(filepath.Join(evidenceDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifestText := string(manifest)
+	for _, want := range []string{
+		`"provider": "weknora"`,
+		`"mode": "mock"`,
+		`"knowledge_provider": "weknora"`,
+		`"fallback_query_strategy": "fallback"`,
+		`"knowledge_upload_ok": "true"`,
+		`"knowledge_sync_ok": "true"`,
+	} {
+		if !strings.Contains(manifestText, want) {
+			t.Fatalf("expected %q in manifest, got %s", want, manifestText)
 		}
 	}
 }

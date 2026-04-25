@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -97,6 +98,7 @@ func TestDifyIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 
 	for _, name := range []string{
 		"summary.txt",
+		"manifest.json",
 		"servify-health.json",
 		"dify-dataset.json",
 		"ai-status.json",
@@ -129,6 +131,23 @@ func TestDifyIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 	} {
 		if !strings.Contains(summaryText, want) {
 			t.Fatalf("expected %q in summary, got %s", want, summaryText)
+		}
+	}
+
+	manifest, err := os.ReadFile(filepath.Join(evidenceDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifestText := string(manifest)
+	for _, want := range []string{
+		`"provider": "dify"`,
+		`"mode": "mock"`,
+		`"knowledge_provider": "dify"`,
+		`"knowledge_upload_ok": "true"`,
+		`"knowledge_sync_ok": "true"`,
+	} {
+		if !strings.Contains(manifestText, want) {
+			t.Fatalf("expected %q in manifest, got %s", want, manifestText)
 		}
 	}
 }
@@ -216,4 +235,72 @@ func TestDifyIntegrationScriptMockModePersistsFailureEvidence(t *testing.T) {
 			t.Fatalf("expected %q in summary, got %s", want, summaryText)
 		}
 	}
+}
+
+func TestDifyIntegrationScriptRealModeRejectsFallbackQuery(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed acceptance script tests are not stable against httptest servers on Windows")
+	}
+
+	servify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/health":
+			_, _ = w.Write([]byte(`{"status":"healthy"}`))
+		case "/api/v1/ai/status":
+			_, _ = w.Write([]byte(`{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider_enabled":true,"knowledge_provider":"dify","knowledge_provider_healthy":true}}`))
+		case "/api/v1/ai/query":
+			_, _ = w.Write([]byte(`{"success":true,"data":{"content":"fallback-ok","strategy":"fallback"}}`))
+		case "/api/v1/ai/knowledge/upload":
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/api/v1/ai/knowledge/sync":
+			_, _ = w.Write([]byte(`{"success":true}`))
+		case "/api/v1/ai/metrics":
+			_, _ = w.Write([]byte(`{"success":true,"data":{"dify_usage_count":0}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer servify.Close()
+
+	difyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v1/datasets/dataset-1" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"dataset-1","name":"Real Dify Dataset"}`))
+	}))
+	defer difyServer.Close()
+
+	evidenceDir := t.TempDir()
+	servifyHost := strings.TrimPrefix(servify.URL, "http://")
+	difyHost := strings.TrimPrefix(difyServer.URL, "http://")
+
+	cmd := exec.Command("bash", "-lc", fmt.Sprintf("curl() { command curl --resolve real-servify.example.test:%s:127.0.0.1 --resolve real-dify.example.test:%s:127.0.0.1 \"$@\"; }; export -f curl; DIFY_ACCEPTANCE_MODE=real SERVIFY_URL=%q DIFY_URL=%q DIFY_DATASET_ID=%q EVIDENCE_DIR=%q ./test-dify-integration.sh",
+		mustPort(t, servifyHost),
+		mustPort(t, difyHost),
+		"http://real-servify.example.test:"+mustPort(t, servifyHost),
+		"http://real-dify.example.test:"+mustPort(t, difyHost)+"/v1",
+		"dataset-1",
+		evidenceDir,
+	))
+	cmd.Dir = "."
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected real mode to reject fallback query, output=%s", string(output))
+	}
+	if !strings.Contains(string(output), "不能只落入 fallback") {
+		t.Fatalf("expected fallback guard message, output=%s", string(output))
+	}
+}
+
+func mustPort(t *testing.T, hostport string) string {
+	t.Helper()
+	_, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		t.Fatalf("split host port %q: %v", hostport, err)
+	}
+	return port
 }

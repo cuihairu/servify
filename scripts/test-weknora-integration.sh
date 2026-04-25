@@ -30,6 +30,67 @@ append_summary() {
   printf '%s\n' "$1" >> "$EVIDENCE_DIR/summary.txt"
 }
 
+write_manifest() {
+  MANIFEST_MODE="${WEKNORA_ACCEPTANCE_MODE:-unknown}" \
+  MANIFEST_SERVIFY_URL="${SERVIFY_URL:-}" \
+  MANIFEST_PROVIDER_URL="${WEKNORA_URL:-}" \
+  MANIFEST_OVERALL_STATUS="${OVERALL_STATUS:-unknown}" \
+  MANIFEST_SERVICE_TYPE="${SERVICE_TYPE:-unknown}" \
+  MANIFEST_PROVIDER_CAPABLE="${SERVICE_IS_PROVIDER_CAPABLE:-false}" \
+  MANIFEST_ACTIVE_PROVIDER="${ACTIVE_PROVIDER:-unknown}" \
+  MANIFEST_PROVIDER_ENABLED="${KNOWLEDGE_PROVIDER_ENABLED:-unknown}" \
+  MANIFEST_PROVIDER_HEALTHY="${KNOWLEDGE_PROVIDER_HEALTHY:-unknown}" \
+  MANIFEST_PROVIDER_AVAILABLE="${WEKNORA_AVAILABLE:-false}" \
+  MANIFEST_DISABLE_OK="${KNOWLEDGE_PROVIDER_DISABLE_OK:-false}" \
+  MANIFEST_ENABLE_OK="${KNOWLEDGE_PROVIDER_ENABLE_OK:-false}" \
+  MANIFEST_RESET_OK="${CIRCUIT_BREAKER_RESET_OK:-false}" \
+  MANIFEST_FALLBACK_OK="${FALLBACK_QUERY_OK:-false}" \
+  MANIFEST_FALLBACK_STRATEGY="${FALLBACK_QUERY_STRATEGY:-unknown}" \
+  MANIFEST_FALLBACK_USAGE="${FALLBACK_USAGE_COUNT_AFTER_DISABLE:-N/A}" \
+  MANIFEST_UPLOAD_OK="${UPLOAD_OK:-false}" \
+  MANIFEST_SYNC_OK="${SYNC_OK:-false}" \
+  python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
+import json
+import os
+import sys
+
+out = sys.argv[1]
+evidence_dir = os.path.dirname(out)
+payload = {
+    "provider": "weknora",
+    "mode": os.environ.get("MANIFEST_MODE", "unknown"),
+    "servify_url": os.environ.get("MANIFEST_SERVIFY_URL", ""),
+    "provider_url": os.environ.get("MANIFEST_PROVIDER_URL", ""),
+    "status": {
+        "overall": os.environ.get("MANIFEST_OVERALL_STATUS", "unknown"),
+        "service_type": os.environ.get("MANIFEST_SERVICE_TYPE", "unknown"),
+        "service_provider_capable": os.environ.get("MANIFEST_PROVIDER_CAPABLE", "false"),
+        "knowledge_provider": os.environ.get("MANIFEST_ACTIVE_PROVIDER", "unknown"),
+        "knowledge_provider_enabled": os.environ.get("MANIFEST_PROVIDER_ENABLED", "unknown"),
+        "knowledge_provider_healthy": os.environ.get("MANIFEST_PROVIDER_HEALTHY", "unknown"),
+    },
+    "checks": {
+        "provider_available": os.environ.get("MANIFEST_PROVIDER_AVAILABLE", "false"),
+        "knowledge_provider_disable_ok": os.environ.get("MANIFEST_DISABLE_OK", "false"),
+        "knowledge_provider_enable_ok": os.environ.get("MANIFEST_ENABLE_OK", "false"),
+        "circuit_breaker_reset_ok": os.environ.get("MANIFEST_RESET_OK", "false"),
+        "fallback_query_ok": os.environ.get("MANIFEST_FALLBACK_OK", "false"),
+        "fallback_query_strategy": os.environ.get("MANIFEST_FALLBACK_STRATEGY", "unknown"),
+        "fallback_usage_count_after_disable": os.environ.get("MANIFEST_FALLBACK_USAGE", "N/A"),
+        "knowledge_upload_ok": os.environ.get("MANIFEST_UPLOAD_OK", "false"),
+        "knowledge_sync_ok": os.environ.get("MANIFEST_SYNC_OK", "false"),
+    },
+    "evidence_files": sorted(
+        name for name in os.listdir(evidence_dir)
+        if name != "manifest.json" and os.path.isfile(os.path.join(evidence_dir, name))
+    ),
+}
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+}
+
 json_get() {
   local json_input="${1:-}"
   local python_expr="${2:-}"
@@ -277,6 +338,7 @@ if echo "$AI_STATUS" | grep -q '"success":true'; then
     SERVICE_TYPE=$(json_get "$AI_STATUS" '.data.type // "unknown"' || echo "unknown")
     ACTIVE_PROVIDER=$(json_get "$AI_STATUS" '.data.knowledge_provider // "unknown"' || echo "unknown")
     KNOWLEDGE_PROVIDER_ENABLED=$(json_get "$AI_STATUS" '.data.knowledge_provider_enabled // "__missing__"' || echo "__missing__")
+    KNOWLEDGE_PROVIDER_HEALTHY=$(json_get "$AI_STATUS" '.data.knowledge_provider_healthy // "unknown"' || echo "unknown")
     echo "    📊 服务类型: $SERVICE_TYPE"
     echo "    📊 当前 knowledge provider: $ACTIVE_PROVIDER"
 
@@ -301,6 +363,8 @@ fi
 UPLOAD_OK=false
 SYNC_OK=false
 ACTIVE_PROVIDER=${ACTIVE_PROVIDER:-unknown}
+KNOWLEDGE_PROVIDER_ENABLED=${KNOWLEDGE_PROVIDER_ENABLED:-unknown}
+KNOWLEDGE_PROVIDER_HEALTHY=${KNOWLEDGE_PROVIDER_HEALTHY:-unknown}
 KNOWLEDGE_PROVIDER_DISABLE_OK=false
 KNOWLEDGE_PROVIDER_ENABLE_OK=false
 CIRCUIT_BREAKER_RESET_OK=false
@@ -557,6 +621,9 @@ esac
 append_summary "overall_status=$OVERALL_STATUS"
 append_summary "service_type=$SERVICE_TYPE"
 append_summary "service_provider_capable=$SERVICE_IS_PROVIDER_CAPABLE"
+append_summary "knowledge_provider=$ACTIVE_PROVIDER"
+append_summary "knowledge_provider_enabled=$KNOWLEDGE_PROVIDER_ENABLED"
+append_summary "knowledge_provider_healthy=$KNOWLEDGE_PROVIDER_HEALTHY"
 append_summary "weknora_available=$WEKNORA_AVAILABLE"
 append_summary "knowledge_provider_disable_ok=$KNOWLEDGE_PROVIDER_DISABLE_OK"
 append_summary "knowledge_provider_enable_ok=$KNOWLEDGE_PROVIDER_ENABLE_OK"
@@ -585,12 +652,26 @@ if [ "$WEKNORA_ACCEPTANCE_MODE" = "real" ]; then
         echo "❌ real 模式要求 Servify 运行在支持外部 knowledge provider 的 AI 模式"
         exit 1
     fi
+    if [ "$ACTIVE_PROVIDER" != "weknora" ]; then
+        echo "❌ real 模式要求当前 provider 为 weknora，当前为 $ACTIVE_PROVIDER"
+        exit 1
+    fi
+    if [ "$KNOWLEDGE_PROVIDER_ENABLED" != "true" ] || [ "$KNOWLEDGE_PROVIDER_HEALTHY" != "true" ]; then
+        echo "❌ real 模式要求 WeKnora provider enabled=true 且 healthy=true"
+        exit 1
+    fi
+    if [ "$FALLBACK_QUERY_OK" != "true" ] || [ "$FALLBACK_QUERY_STRATEGY" != "fallback" ]; then
+        echo "❌ real 模式要求 disable 后 fallback 查询成功"
+        exit 1
+    fi
     if [ "$UPLOAD_OK" != "true" ] || [ "$SYNC_OK" != "true" ]; then
         echo "❌ real 模式要求知识上传和同步都成功"
         exit 1
     fi
     echo "✅ real 模式验收通过，可将 $EVIDENCE_DIR 下证据回填到 docs/acceptance-checklist.md"
 fi
+
+write_manifest
 
 echo ""
 echo "🔗 服务地址:"

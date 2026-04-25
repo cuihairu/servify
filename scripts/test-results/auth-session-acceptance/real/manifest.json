@@ -1,0 +1,43 @@
+{
+  "checks": {
+    "login_primary_ok": "true",
+    "login_secondary_ok": "true",
+    "logout_current_ok": "true",
+    "logout_others_ok": "true",
+    "old_refresh_rejected": "true",
+    "post_logout_current_rejected": "true",
+    "refresh_ok": "true",
+    "register_ok": "true",
+    "sessions_after_logout_others_ok": "true",
+    "sessions_before_ok": "true"
+  },
+  "evidence_files": [
+    "auth-login-primary.json",
+    "auth-login-secondary.json",
+    "auth-logout-current.json",
+    "auth-logout-others.json",
+    "auth-refresh-reuse-old.json",
+    "auth-refresh.json",
+    "auth-register.json",
+    "auth-sessions-after-logout-current.json",
+    "auth-sessions-after-logout-others.json",
+    "auth-sessions-before.json",
+    "summary.txt"
+  ],
+  "metrics": {
+    "logout_current_status": "revoked",
+    "logout_others_count": "2",
+    "post_logout_current_status": "401",
+    "sessions_after_logout_others_active_count": "1",
+    "sessions_after_logout_others_revoked_count": "2",
+    "sessions_before_active_count": "3",
+    "sessions_before_count": "3",
+    "sessions_before_current_count": "1"
+  },
+  "mode": "real",
+  "provider": "auth-session",
+  "servify_url": "http://127.0.0.1:18081",
+  "status": {
+    "overall": "passed"
+  }
+}

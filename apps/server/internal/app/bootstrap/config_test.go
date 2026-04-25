@@ -120,3 +120,21 @@ func TestResolveRuntimeOverridesSupportsSQLiteDriver(t *testing.T) {
 		t.Fatalf("database dsn = %q", overrides.Database.DSN)
 	}
 }
+
+func TestLoadConfigAppliesOpenAIBaseURLEnvOverride(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.yml")
+	if err := os.WriteFile(configPath, []byte("ai:\n  openai:\n    base_url: https://api.openai.com/v1\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("OPENAI_BASE_URL", "http://127.0.0.1:15002/v1")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.AI.OpenAI.BaseURL != "http://127.0.0.1:15002/v1" {
+		t.Fatalf("openai base url = %q, want env override", cfg.AI.OpenAI.BaseURL)
+	}
+}

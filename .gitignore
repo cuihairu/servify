@@ -15,6 +15,7 @@ logs/
 
 # 依赖
 vendor/
+docs/node_modules/
 
 # IDE
 .vscode/
@@ -40,12 +41,20 @@ dump.rdb
 *.bak
 
 # 测试输出
-scripts/test-results/
+scripts/test-results/*
+!scripts/test-results/.gitkeep
+!scripts/test-results/**/
+scripts/test-results/**/*.json
+!scripts/test-results/**/manifest.json
+scripts/test-results/**/*.txt
 
 # 缓存文件
 .cache/
 .gocache/
 bin/
+docs/.vuepress/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
 # Upload 存储（运行时/测试产物）
 uploads/

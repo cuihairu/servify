@@ -26,6 +26,26 @@ security:
     allowed_headers: ["Authorization", "Content-Type", "X-Request-ID"]
   rbac:
     enabled: true
+    roles:
+      admin: ["*"]
+      agent:
+        - "tickets.read"
+        - "tickets.write"
+        - "customers.read"
+        - "agents.read"
+        - "knowledge.read"
+        - "assist.read"
+        - "gamification.read"
+        - "voice.read"
+        - "voice.write"
+        - "custom_fields.read"
+        - "session_transfer.read"
+        - "session_transfer.write"
+        - "satisfaction.read"
+        - "satisfaction.write"
+        - "workspace.read"
+        - "macros.read"
+        - "integrations.read"
   rate_limiting:
     enabled: true
     requests_per_minute: 180

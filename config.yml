@@ -120,6 +120,8 @@ security:
         - "knowledge.read"
         - "assist.read"
         - "gamification.read"
+        - "voice.read"
+        - "voice.write"
         - "custom_fields.read"
         - "session_transfer.read"
         - "session_transfer.write"

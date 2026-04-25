@@ -272,7 +272,7 @@
   - 至少一条真实文档上传、同步、查询命中成功
   - fallback 有实际日志、响应、状态三类证据
 - 状态：`[-]`
-- 最近进展：**2026-04-19** 除 Docker 环境配置修复外，本轮继续补齐了 AI / Knowledge 验收留档能力：1) `test-dify-integration.sh` 现已在 upload/sync 返回 4xx/5xx 时保留失败响应证据，不再因 `curl -f` 直接中断导致证据缺失；2) 新增 handler 级回归，锁定 knowledge provider 禁用时 `POST /api/v1/ai/knowledge/upload` 与 `POST /api/v1/ai/knowledge/sync` 均返回 `503`，避免控制面 disable 后 API 仍出现假成功；3) 脚本测试已标注当前 Windows 环境下对 bash + httptest server 的运行边界，避免本机门禁被宿主网络差异误伤
+- 最近进展：**2026-04-22** 继续收紧 AI / Knowledge 真实验收口径：1) `test-dify-integration.sh` 的 real 模式除 upload/sync 外，新增要求 `knowledge_provider_enabled=true`、`knowledge_provider_healthy=true`，且 `ai-query` 不能只落入 `fallback`；2) `test-weknora-integration.sh` 的 real 模式新增要求当前 provider 必须是 `weknora`、provider 启用且健康，并强制验证 `disable -> fallback query` 的降级证据；3) 两个脚本现在都会额外输出 `manifest.json`，把 provider、mode、关键检查结果和证据文件列表结构化；4) 新增 `validate-acceptance-manifest.sh`、`check-acceptance-evidence.sh` 以及对应 `make` 入口，可在真实环境跑完后直接校验证据集，也可在仓库存在 tracked manifest 时做批量扫描；5) CI `script-checks` 已接入 acceptance evidence 校验，且只检查已纳入 git 的 manifest，避免把本地临时产物误算成正式证据；6) `docs/WEKNORA_INTEGRATION.md` 与脚本测试已同步更新，避免“接口成功但真实 provider 主路径未命中”仍被误填成通过
 - 下一步：使用真实 WeKnora 或 Dify 服务完成 upload/sync 端到端验收，并把成功/失败证据回填到 `docs/acceptance-checklist.md`，将 `知识上传`、`知识同步`、`AI 控制面人工运行验证第二轮/第三轮` 从 `部分通过` 推进到 `通过`
 - 阻塞项：真实 WeKnora / Dify 服务环境与凭证；当前 Windows 本机无法用 `go test ./scripts` 直接模拟 bash 脚本对 `httptest` 端口的访问，需要在 Linux/CI 或真实环境执行脚本留档
 
@@ -290,10 +290,10 @@
   - refresh token 轮转成功
   - 旧 refresh token 复用失败
   - 当前会话与其它会话退出都能看到状态变化
-- 状态：`[ ]`
-- 最近进展：自动化与基础运行验证已覆盖 `login` / `refresh` / `sessions` / `logout-current` / `logout-others`；当前已确认代码与自动化存在，但 `acceptance-checklist` 已按发布口径回调为 `部分通过`，因为真实请求证据与反例留档仍不完整
-- 下一步：补真实请求证据和至少一条反例证据
-- 阻塞项：暂无
+- 状态：`[x]`
+- 最近进展：**2026-04-25** 已在本机用 SQLite 运行口径启动 Servify，并实际执行 `AUTH_ACCEPTANCE_MODE=real SERVIFY_URL=http://127.0.0.1:18081 ./scripts/test-auth-session-acceptance.sh`；生成了 `scripts/test-results/auth-session-acceptance/real/manifest.json` 与对应接口响应留档，且 `validate-acceptance-manifest.sh` 校验通过。`docs/acceptance-checklist.md` 的 3A 条目现已按真实留档更新为 `通过`
+- 下一步：把 `scripts/test-results/auth-session-acceptance/real/manifest.json` 纳入 git，并继续推进 AI / Knowledge real 证据留档，避免验收闭环只停在 auth-session
+- 阻塞项：无代码阻塞；剩余是证据入库和 AI / Knowledge 外部依赖环境
 
 ### [!] P1-3 会话工作台主操作补齐到“通过”
 
@@ -547,12 +547,20 @@
 ## 当前恢复点
 
 - 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`
-- 原因：P0 级公开配置和状态命名已完成收口，下一阶段应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
+- 原因：本轮整体审核确认 P0 项均已收口，核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。下一阶段仍应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
 - 如果本轮无法推进实现，至少先补：
   - 真实边界文档
   - 默认 prod 策略
   - 风险说明
   - 告警/死信/恢复规则
+
+## 2026-04-22 全局基础功能审核补充
+
+- 审核结论：后端主干基础能力不是“未实现”，当前主要风险集中在验收闭环、权限语义一致性、真实环境证据和少量输入/错误边界。
+- 已验证：`go test ./apps/server/internal/services ./apps/server/internal/handlers ./apps/server/internal/app/server ./apps/server/internal/app/bootstrap` 通过；`go test ./apps/server/internal/modules/...` 通过。
+- 已修复：`/api/voice/*` 从 `assist` 权限拆分为独立 `voice` 权限，默认 agent 权限补 `voice.read` / `voice.write`，并新增路由鉴权回归，避免辅助推荐权限误授权语音能力。
+- 已确认：P1-4 运行基线最小事实在 `docs/acceptance-checklist.md` 已记录为通过，并已有 `/ready`、`/metrics`、`/api/v1/messages/platforms` 自动化/发布自检证据。
+- 残留风险：`config.yml` 与 `config.staging.example.yml` 的 strict security baseline 会因占位 JWT、数据库、OpenAI/Dify 凭证失败；这是开发/模板配置占位问题，不是本轮代码改动引入。继续交付前应使用真实安全配置执行 `make security-check CONFIG=...` 留证。
 
 ---
 

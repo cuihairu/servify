@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
@@ -116,8 +117,16 @@ func (h *ConversationWorkspaceHandler) SendMessage(c *gin.Context) {
 		})
 		return
 	}
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid request body",
+			Message: "content is required",
+		})
+		return
+	}
 
-	item, err := h.service.SendAgentMessage(c.Request.Context(), sessionID, req.Content)
+	item, err := h.service.SendAgentMessage(c.Request.Context(), sessionID, content)
 	if err != nil {
 		status := http.StatusInternalServerError
 		errLabel := "Failed to send message"

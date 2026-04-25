@@ -363,6 +363,48 @@ func TestConversationWorkspaceHandler_SendMessage_InvalidBody(t *testing.T) {
 	}
 }
 
+func TestConversationWorkspaceHandler_SendMessage_BlankContent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	body, _ := json.Marshal(map[string]string{"content": "   "})
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/sess-1/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_SendMessage_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	body, _ := json.Marshal(map[string]string{"content": "admin reply"})
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/missing/messages", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestConversationWorkspaceHandler_AssignAgent_InvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
@@ -380,5 +422,85 @@ func TestConversationWorkspaceHandler_AssignAgent_InvalidBody(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_ListMessages_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/omni/sessions/missing/messages", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_AssignAgent_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	body, _ := json.Marshal(map[string]uint{"agent_id": 1})
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/missing/assign", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_Transfer_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	body, _ := json.Marshal(map[string]uint{"to_agent_id": 2})
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/missing/transfer", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_CloseSession_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	service := seedConversation(t, db)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/missing/close", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }

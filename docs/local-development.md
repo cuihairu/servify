@@ -30,10 +30,16 @@
   - `./scripts/run-smoke-tests.sh`
   - `make dify-acceptance`
   - `make weknora-acceptance`
+  - `make auth-session-acceptance`
+  - `make validate-acceptance-manifest MANIFEST=./scripts/test-results/<provider>/<mode>/manifest.json`
+  - `make check-acceptance-evidence`
   - `make knowledge-provider-acceptance`
   - `dify-acceptance` 用于 Dify 主路径验收；默认 `DIFY_ACCEPTANCE_MODE=mock`
   - `weknora-acceptance` 用于 WeKnora compatibility 验收；默认 `WEKNORA_ACCEPTANCE_MODE=mock`
-  - 两个脚本都会把证据写到 `./scripts/test-results/...`，真实环境验收前需显式覆盖 `SERVIFY_URL`、provider 地址与数据集/凭证
+  - `auth-session-acceptance` 用于认证与自助会话链路验收；默认 `AUTH_ACCEPTANCE_MODE=real`
+  - 这些脚本都会把证据写到 `./scripts/test-results/...`
+  - `scripts/test-results/**/manifest.json` 可以作为正式验收索引纳入 git；其他响应文件默认仍保持忽略，避免把本地产物整包提交
+  - 真实环境验收前需显式覆盖 `SERVIFY_URL`、provider 地址与数据集/凭证
 - 生成物与仓库卫生：
   - `make demo-sync-sdk`
   - `make generated-assets`

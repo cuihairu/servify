@@ -17,6 +17,7 @@ const (
 	ResourceKnowledge       = "knowledge"
 	ResourceAssist          = "assist"
 	ResourceGamification    = "gamification"
+	ResourceVoice           = "voice"
 )
 
 var fallbackAgentPermissions = []string{
@@ -32,4 +33,6 @@ var fallbackAgentPermissions = []string{
 	ResourcePermission(ResourceWorkspace, "GET"),
 	ResourcePermission(ResourceMacros, "GET"),
 	ResourcePermission(ResourceIntegrations, "GET"),
+	ResourcePermission(ResourceVoice, "GET"),
+	ResourcePermission(ResourceVoice, "POST"),
 }

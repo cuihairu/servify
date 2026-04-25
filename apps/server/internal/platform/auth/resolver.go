@@ -39,6 +39,7 @@ func (r Resolver) ExpandPermissions(roles, explicit []string) []string {
 				"workspace.read",
 				"macros.read",
 				"integrations.read",
+				"voice.read", "voice.write",
 			)
 		}
 	}

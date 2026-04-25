@@ -138,6 +138,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 
 - Dify 主路径：
   - `summary.txt`
+  - `manifest.json`
   - `servify-health.json`
   - `dify-dataset.json`（可用时）
   - `ai-status.json`
@@ -147,6 +148,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
   - `ai-metrics.json`
 - WeKnora compatibility 路径：
 - `summary.txt`
+- `manifest.json`
 - `servify-health.json`
 - `weknora-health.json`（可用时）
 - `ai-status.json`
@@ -165,6 +167,8 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 
 - `dify-dataset` 探针成功
 - `knowledge provider` 当前激活为 `dify`
+- `knowledge_provider_enabled=true` 且 `knowledge_provider_healthy=true`
+- `ai-query` 必须成功，且不能只返回 `strategy=fallback`
 - `knowledge upload` 和 `knowledge sync` 必须都成功
 
 其中 `WeKnora real` 模式针对兼容路径，不是“尽量通过”，而是严格验收：
@@ -173,11 +177,29 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 - 健康检查返回若标识 `service=weknora-mock`，脚本会直接拒绝作为真实证据
 - WeKnora 健康检查必须通过
 - Servify 必须运行在 `enhanced` 模式
+- `knowledge provider` 当前必须为 `weknora`
+- `knowledge_provider_enabled=true` 且 `knowledge_provider_healthy=true`
+- `disable` 后的 fallback 查询必须成功，证明外部 provider 不可用时降级路径可控
 - `knowledge upload` 和 `knowledge sync` 必须都成功
 
 可以通过 `make dify-acceptance`、`make weknora-acceptance` 作为统一入口运行脚本；其中 `knowledge-provider-acceptance` 目前等价于 `make weknora-acceptance`，用于兼容路径回归。
 
 只有满足以上条件，才能把结果回填到 `docs/acceptance-checklist.md` 里，分别作为 Dify 主路径和 WeKnora compatibility 路径的真实运行证据。
+
+`manifest.json` 是机器可读验收索引，包含 provider、mode、关键状态、核心检查结果和实际生成的证据文件列表。真实环境回填时优先以 `manifest.json` 判断是否满足验收门槛，再引用具体响应文件作为人工审阅证据。
+
+真实环境建议追加执行：
+
+```bash
+# 先运行对应 acceptance 脚本，确保 real 目录下已生成 manifest.json
+make validate-acceptance-manifest MANIFEST=./scripts/test-results/dify-acceptance/real/manifest.json
+make validate-acceptance-manifest MANIFEST=./scripts/test-results/weknora-acceptance/real/manifest.json
+
+# 如果需要校验仓库里已纳入 git 的全部证据目录
+make check-acceptance-evidence
+```
+
+只有 validator 返回成功，才建议把该目录作为“可回填验收清单”的证据集；批量扫描也只会检查已纳入 git 的 manifest，避免把本地临时产物误算成正式证据。
 
 ## 🔧 开发指南
 

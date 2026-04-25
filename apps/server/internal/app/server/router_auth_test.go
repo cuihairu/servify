@@ -312,6 +312,44 @@ func TestBuildRouter_UserSecurityRouteRequiresSecurityPermission(t *testing.T) {
 	})
 }
 
+func TestBuildRouter_VoiceRoutesRequireVoicePermission(t *testing.T) {
+	router := BuildRouter(Dependencies{
+		Config: testRouterConfig(),
+	})
+
+	t.Run("assist permission alone is rejected", func(t *testing.T) {
+		token := createTestHS256JWT(t, map[string]interface{}{
+			"user_id":        7,
+			"principal_kind": "agent",
+			"permissions":    []string{"assist.read"},
+		}, "test-secret")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/voice/protocols", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 got %d body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("voice permission reaches handler", func(t *testing.T) {
+		token := createTestHS256JWT(t, map[string]interface{}{
+			"user_id":        7,
+			"principal_kind": "agent",
+			"permissions":    []string{"voice.read"},
+		}, "test-secret")
+
+		req := httptest.NewRequest(http.MethodGet, "/api/voice/protocols", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected authz to pass and reach handler, got %d body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
 func TestBuildRouter_AuthSessionsUsesConfiguredSessionIPIntelligence(t *testing.T) {
 	db := newRouterAuthTestDB(t)
 	now := time.Now().UTC()

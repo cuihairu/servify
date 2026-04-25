@@ -60,6 +60,7 @@ func LoadConfig(configPath string) (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	applyConfigEnvOverrides(cfg)
 	// Log security warnings for development environments
 	if len(result.Warnings) > 0 && cfg.Server.Environment != "production" {
 		LogSecurityWarnings(nil, cfg)
@@ -199,4 +200,49 @@ func expandEnvVarsInConfig(configPath string) string {
 	}
 
 	return tmpFile.Name()
+}
+
+func applyConfigEnvOverrides(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if v := os.Getenv("OPENAI_API_KEY"); v != "" {
+		cfg.AI.OpenAI.APIKey = v
+	}
+	if v := os.Getenv("OPENAI_BASE_URL"); v != "" {
+		cfg.AI.OpenAI.BaseURL = v
+	}
+	if v := os.Getenv("OPENAI_MODEL"); v != "" {
+		cfg.AI.OpenAI.Model = v
+	}
+
+	if v := os.Getenv("DIFY_ENABLED"); v != "" {
+		cfg.Dify.Enabled = strings.EqualFold(v, "true")
+	}
+	if v := os.Getenv("DIFY_BASE_URL"); v != "" {
+		cfg.Dify.BaseURL = v
+	}
+	if v := os.Getenv("DIFY_API_KEY"); v != "" {
+		cfg.Dify.APIKey = v
+	}
+	if v := os.Getenv("DIFY_DATASET_ID"); v != "" {
+		cfg.Dify.DatasetID = v
+	}
+
+	if v := os.Getenv("WEKNORA_ENABLED"); v != "" {
+		cfg.WeKnora.Enabled = strings.EqualFold(v, "true")
+	}
+	if v := os.Getenv("WEKNORA_BASE_URL"); v != "" {
+		cfg.WeKnora.BaseURL = v
+	}
+	if v := os.Getenv("WEKNORA_API_KEY"); v != "" {
+		cfg.WeKnora.APIKey = v
+	}
+	if v := os.Getenv("WEKNORA_TENANT_ID"); v != "" {
+		cfg.WeKnora.TenantID = v
+	}
+	if v := os.Getenv("WEKNORA_KB_ID"); v != "" {
+		cfg.WeKnora.KnowledgeBaseID = v
+	}
 }

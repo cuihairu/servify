@@ -284,7 +284,13 @@ jobs:
       - name: Verify provider acceptance scripts
         timeout-minutes: 5
         run: |
-          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence))$"
+          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|ValidateAcceptanceManifestScript|CheckAcceptanceEvidenceScript)$"
+
+      - name: Validate checked-in acceptance evidence
+        timeout-minutes: 2
+        run: |
+          chmod +x scripts/check-acceptance-evidence.sh scripts/validate-acceptance-manifest.sh
+          ./scripts/check-acceptance-evidence.sh
 
       - name: Validate repository hygiene
         timeout-minutes: 2

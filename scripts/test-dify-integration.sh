@@ -29,6 +29,61 @@ append_summary() {
   printf '%s\n' "$1" >> "$EVIDENCE_DIR/summary.txt"
 }
 
+write_manifest() {
+  MANIFEST_MODE="${DIFY_ACCEPTANCE_MODE:-unknown}" \
+  MANIFEST_SERVIFY_URL="${SERVIFY_URL:-}" \
+  MANIFEST_PROVIDER_URL="${DIFY_URL:-}" \
+  MANIFEST_DATASET_ID="${DIFY_DATASET_ID:-}" \
+  MANIFEST_OVERALL_STATUS="${OVERALL_STATUS:-unknown}" \
+  MANIFEST_SERVICE_TYPE="${SERVICE_TYPE:-unknown}" \
+  MANIFEST_ACTIVE_PROVIDER="${ACTIVE_PROVIDER:-unknown}" \
+  MANIFEST_PROVIDER_ENABLED="${KNOWLEDGE_PROVIDER_ENABLED:-unknown}" \
+  MANIFEST_PROVIDER_HEALTHY="${KNOWLEDGE_PROVIDER_HEALTHY:-unknown}" \
+  MANIFEST_PROVIDER_AVAILABLE="${DIFY_AVAILABLE:-false}" \
+  MANIFEST_QUERY_OK="${QUERY_OK:-false}" \
+  MANIFEST_QUERY_STRATEGY="${QUERY_STRATEGY:-unknown}" \
+  MANIFEST_UPLOAD_OK="${UPLOAD_OK:-false}" \
+  MANIFEST_SYNC_OK="${SYNC_OK:-false}" \
+  MANIFEST_USAGE_COUNT="${DIFY_USAGE_COUNT:-N/A}" \
+  python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
+import json
+import os
+import sys
+
+out = sys.argv[1]
+evidence_dir = os.path.dirname(out)
+payload = {
+    "provider": "dify",
+    "mode": os.environ.get("MANIFEST_MODE", "unknown"),
+    "servify_url": os.environ.get("MANIFEST_SERVIFY_URL", ""),
+    "provider_url": os.environ.get("MANIFEST_PROVIDER_URL", ""),
+    "dataset_id": os.environ.get("MANIFEST_DATASET_ID", ""),
+    "status": {
+        "overall": os.environ.get("MANIFEST_OVERALL_STATUS", "unknown"),
+        "service_type": os.environ.get("MANIFEST_SERVICE_TYPE", "unknown"),
+        "knowledge_provider": os.environ.get("MANIFEST_ACTIVE_PROVIDER", "unknown"),
+        "knowledge_provider_enabled": os.environ.get("MANIFEST_PROVIDER_ENABLED", "unknown"),
+        "knowledge_provider_healthy": os.environ.get("MANIFEST_PROVIDER_HEALTHY", "unknown"),
+    },
+    "checks": {
+        "provider_available": os.environ.get("MANIFEST_PROVIDER_AVAILABLE", "false"),
+        "query_ok": os.environ.get("MANIFEST_QUERY_OK", "false"),
+        "query_strategy": os.environ.get("MANIFEST_QUERY_STRATEGY", "unknown"),
+        "knowledge_upload_ok": os.environ.get("MANIFEST_UPLOAD_OK", "false"),
+        "knowledge_sync_ok": os.environ.get("MANIFEST_SYNC_OK", "false"),
+        "dify_usage_count": os.environ.get("MANIFEST_USAGE_COUNT", "N/A"),
+    },
+    "evidence_files": sorted(
+        name for name in os.listdir(evidence_dir)
+        if name != "manifest.json" and os.path.isfile(os.path.join(evidence_dir, name))
+    ),
+}
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(payload, f, ensure_ascii=False, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+}
+
 json_get() {
   local json_input="${1:-}"
   local python_expr="${2:-}"
@@ -223,6 +278,17 @@ if [ "$ACTIVE_PROVIDER" != "dify" ]; then
   exit 1
 fi
 
+if [ "$DIFY_ACCEPTANCE_MODE" = "real" ]; then
+  if [ "$KNOWLEDGE_PROVIDER_ENABLED" != "true" ]; then
+    echo "❌ real 模式要求 Dify provider 已启用，当前 knowledge_provider_enabled=$KNOWLEDGE_PROVIDER_ENABLED"
+    exit 1
+  fi
+  if [ "$KNOWLEDGE_PROVIDER_HEALTHY" != "true" ]; then
+    echo "❌ real 模式要求 Dify provider 健康，当前 knowledge_provider_healthy=$KNOWLEDGE_PROVIDER_HEALTHY"
+    exit 1
+  fi
+fi
+
 AI_QUERY=$(curl -fsS -X POST "$SERVIFY_URL/api/v1/ai/query" \
   -H "$AUTH_HEADER" \
   -H "Content-Type: application/json" \
@@ -235,6 +301,17 @@ QUERY_STRATEGY=$(json_get "$AI_QUERY" '.data.strategy // "unknown"' || echo "unk
 QUERY_OK=false
 if echo "$AI_QUERY" | grep -q '"success":true'; then
   QUERY_OK=true
+fi
+
+if [ "$DIFY_ACCEPTANCE_MODE" = "real" ]; then
+  if [ "$QUERY_OK" != "true" ]; then
+    echo "❌ real 模式要求 AI 查询成功"
+    exit 1
+  fi
+  if [ "$QUERY_STRATEGY" = "fallback" ]; then
+    echo "❌ real 模式要求查询命中 Dify 主路径，不能只落入 fallback"
+    exit 1
+  fi
 fi
 
 UPLOAD_RESPONSE=$(curl -sS -X POST "$SERVIFY_URL/api/v1/ai/knowledge/upload" \
@@ -264,8 +341,9 @@ fi
 METRICS_RESPONSE=$(curl -fsS -H "$AUTH_HEADER" "$SERVIFY_URL/api/v1/ai/metrics")
 save_response "ai-metrics" "$METRICS_RESPONSE"
 DIFY_USAGE_COUNT=$(json_get "$METRICS_RESPONSE" '.data.dify_usage_count // "N/A"' || echo "N/A")
+OVERALL_STATUS=$(json_get "$SERVIFY_HEALTH" '.status // "unknown"' || echo "unknown")
 
-append_summary "overall_status=$(json_get "$SERVIFY_HEALTH" '.status // "unknown"' || echo "unknown")"
+append_summary "overall_status=$OVERALL_STATUS"
 append_summary "service_type=$SERVICE_TYPE"
 append_summary "knowledge_provider_enabled=$KNOWLEDGE_PROVIDER_ENABLED"
 append_summary "knowledge_provider=$ACTIVE_PROVIDER"
@@ -286,10 +364,19 @@ if [ "$DIFY_ACCEPTANCE_MODE" = "real" ]; then
     echo "❌ real 模式要求 Servify 当前 provider 为 dify"
     exit 1
   fi
+  if [ "$KNOWLEDGE_PROVIDER_ENABLED" != "true" ] || [ "$KNOWLEDGE_PROVIDER_HEALTHY" != "true" ]; then
+    echo "❌ real 模式要求 Dify provider enabled=true 且 healthy=true"
+    exit 1
+  fi
+  if [ "$QUERY_OK" != "true" ] || [ "$QUERY_STRATEGY" = "fallback" ]; then
+    echo "❌ real 模式要求 AI 查询走 Dify 主路径而非 fallback"
+    exit 1
+  fi
   if [ "$UPLOAD_OK" != "true" ] || [ "$SYNC_OK" != "true" ]; then
     echo "❌ real 模式要求 Dify 主路径 upload/sync 都成功"
     exit 1
   fi
 fi
 
+write_manifest
 echo "✅ Dify primary integration 测试完成"
