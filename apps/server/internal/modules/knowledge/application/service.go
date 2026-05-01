@@ -226,6 +226,12 @@ func (s *Service) syncDocument(ctx context.Context, doc *domain.Document) error 
 	if s.provider == nil || doc == nil {
 		return nil
 	}
+
+	// 设置 provider ID
+	if doc.ProviderID == "" {
+		doc.ProviderID = "pgvector"
+	}
+
 	externalID, err := s.provider.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{
 		ID:         doc.ID,
 		ProviderID: doc.ProviderID,
@@ -240,9 +246,6 @@ func (s *Service) syncDocument(ctx context.Context, doc *domain.Document) error 
 	}
 	if strings.TrimSpace(externalID) != "" {
 		doc.ExternalID = strings.TrimSpace(externalID)
-	}
-	if doc.ProviderID == "" {
-		doc.ProviderID = providerIdentity(s.provider)
 	}
 	return nil
 }
