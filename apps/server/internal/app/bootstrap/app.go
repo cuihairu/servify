@@ -8,6 +8,7 @@ import (
 
 	appserver "servify/apps/server/internal/app/server"
 	"servify/apps/server/internal/config"
+	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/redis/go-redis/v9"
@@ -31,16 +32,17 @@ type HTTPRuntime interface {
 
 // App is the bootstrap root for shared server runtime wiring.
 type App struct {
-	Config        *config.Config
-	Logger        *logrus.Logger
-	DB            *gorm.DB
-	Redis         *redis.Client
-	Runtime       HTTPRuntime
-	Router        http.Handler
-	Server        *http.Server
-	EventBus      eventbus.Bus
-	Workers       []Worker
-	ShutdownHooks []func() error
+	Config           *config.Config
+	Logger           *logrus.Logger
+	DB               *gorm.DB
+	Redis            *redis.Client
+	Runtime          HTTPRuntime
+	Router           http.Handler
+	Server           *http.Server
+	EventBus         eventbus.Bus
+	EmbeddingProvider embedding.Provider
+	Workers          []Worker
+	ShutdownHooks    []func() error
 }
 
 // BuildApp creates the shared application runtime dependencies used by entrypoints.
@@ -64,13 +66,38 @@ func BuildApp(cfg *config.Config) (*App, error) {
 		return nil, err
 	}
 
+	// 初始化 Embedding Provider
+	embeddingProvider, err := embedding.NewProvider(embedding.FactoryConfig{
+		Provider: cfg.Embedding.Provider,
+		OpenAI: embedding.OpenAIProviderConfig{
+			APIKey:  cfg.Embedding.OpenAI.APIKey,
+			BaseURL: cfg.Embedding.OpenAI.BaseURL,
+			Model:   cfg.Embedding.OpenAI.Model,
+		},
+		TEI: embedding.TEIProviderConfig{
+			BaseURL: cfg.Embedding.TEI.BaseURL,
+			Model:   cfg.Embedding.TEI.Model,
+		},
+		Xinference: embedding.XinferenceProviderConfig{
+			BaseURL:  cfg.Embedding.Xinference.BaseURL,
+			ModelUID: cfg.Embedding.Xinference.ModelUID,
+		},
+	})
+	if err != nil {
+		if redisClient != nil {
+			_ = redisClient.Close()
+		}
+		return nil, fmt.Errorf("create embedding provider: %w", err)
+	}
+
 	app := &App{
-		Config:        cfg,
-		Logger:        logger,
-		Redis:         redisClient,
-		EventBus:      bus,
-		Workers:       make([]Worker, 0),
-		ShutdownHooks: make([]func() error, 0),
+		Config:           cfg,
+		Logger:           logger,
+		Redis:            redisClient,
+		EventBus:         bus,
+		EmbeddingProvider: embeddingProvider,
+		Workers:          make([]Worker, 0),
+		ShutdownHooks:    make([]func() error, 0),
 	}
 	if redisClient != nil {
 		app.AddShutdownHook(func() error {
