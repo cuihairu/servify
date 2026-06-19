@@ -146,13 +146,13 @@ flowchart TD
 
 ## Phase 5 Product Workflow 对齐
 
-目标是让架构围绕主产品链路收束：
+目标是让架构围绕主产品链路收束（V1 范围见 [v1-product-scope.md](./v1-product-scope.md)）：
 
 ```text
-Web 接入 -> AI 首答 -> 远程协助 -> 人工接管 -> 转接协作 -> 工单闭环
+Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单闭环
 ```
 
-这条链路涉及：
+远程协助保留为 `人工接管` 之后的增强方向，不进入 V1 主链路验收。这条 V1 链路涉及：
 
 - SDK session bootstrap
 - conversation / realtime

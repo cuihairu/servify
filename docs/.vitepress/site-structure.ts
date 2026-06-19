@@ -20,6 +20,7 @@ const migrationGovernancePages = [
 ];
 
 const productPages = [
+  '/v1-product-scope',
   '/ARCHITECTURE',
   '/current-architecture',
   '/architecture-redesign-plan',
@@ -46,7 +47,7 @@ const appendixPages = [
 
 export const docsNav = [
   { text: '首页', link: '/' },
-  { text: '产品', link: '/remote-assistance' },
+  { text: '产品', link: '/v1-product-scope' },
   { text: '架构', link: '/ARCHITECTURE' },
   { text: '部署', link: '/deployment' },
   {

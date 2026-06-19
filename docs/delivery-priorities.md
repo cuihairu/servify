@@ -11,6 +11,8 @@
 
 ## 当前判断
 
+当前第一版产品目标已经收敛为 [Web 独立站智能客服](./v1-product-scope.md)：Web widget 接入、AI 基于知识库首答、人工接管、转接协作、工单闭环和必要后台运营。
+
 现阶段最需要优先处理的，不是继续扩展功能面，而是收口以下三类风险：
 
 1. 生产路径里仍保留 `inmemory` / `mock` / `legacy` 兼容实现，导致本地可演示不等于生产可交付。
@@ -51,6 +53,7 @@
 - 更复杂的多实例治理
 - 更完整的远程协助产品化工作台
 - SDK / channel / voice 的能力面扩张
+- 多 Agent 自治工作流或面向开发者的平台化扩展
 
 这些内容应以 [implementation/README.md](./implementation/README.md) 为索引继续拆解，而不是插队覆盖 P0/P1。
 
