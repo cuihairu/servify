@@ -10,7 +10,7 @@
 - 主入口已经从 `cmd/server` 下沉到 `internal/app/bootstrap` 与 `internal/app/server`。
 - 主要业务能力正在从旧的 `handlers -> services -> models` 收口到 `modules/*/{domain,application,infra,delivery}`。
 - `handlers` 大多已经依赖 module delivery contract 或 handler-local contract，而不是直接依赖 concrete legacy service。
-- `services` 目录仍存在，但职责正在收缩为 compatibility facade、runtime state holder、event bus glue、worker glue 或历史调用兼容。
+- `services` 目录仍存在。其中一部分已收缩为 compatibility facade、runtime state holder、event bus glue、worker glue 或历史调用兼容；另一批（如 statistics、SLA、satisfaction、shift、workspace、macro、custom_field、app_integration、AI enhanced、MessageRouter）仍是当前业务逻辑的主要承载者，尚未完成模块化迁移（详见下方“仍在过渡的区域”）。
 
 换句话说，当前系统不是纯目标态，也不是旧架构；它是一个已经有边界守护的迁移中架构。
 

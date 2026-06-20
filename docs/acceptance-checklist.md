@@ -181,7 +181,7 @@ go test -tags weknora ./apps/server/cmd ./apps/server/internal/handlers ./apps/s
 | 禁用 Knowledge Provider | `PUT /api/v1/ai/knowledge-provider/disable` | 禁用外部知识增强能力 | 状态切换成功 | [ai_handler_comprehensive_test.go](/Users/cui/Workspaces/servify/apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
 | 熔断器重置 | `POST /api/v1/ai/circuit-breaker/reset` | 先制造失败再重置 | 熔断状态恢复 | [ai_handler_comprehensive_test.go](/Users/cui/Workspaces/servify/apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
 | 外部 Knowledge Provider 不可用回退 | AI 查询主链路 | 关闭当前 knowledge provider 或制造超时 | 系统进入 fallback，而不是整体不可用 | [orchestrated_ai_fallback_integration_test.go](/Users/cui/Workspaces/servify/apps/server/internal/services/orchestrated_ai_fallback_integration_test.go) | 通过 |
-| pgvector 自建知识库 | `knowledge.provider=pgvector` | 配置 pgvector 并执行查询 | 向量检索正确返回结果 | [pgvector_provider_test.go](/Users/cui/Workspaces/servify/apps/server/internal/modules/knowledge/infra/providers/pgvector_provider_test.go) | 未验 |
+| pgvector 自建知识库 | `knowledge.provider=pgvector` | 配置 pgvector 并执行查询 | 向量检索正确返回结果 | [provider_test.go](/Users/cui/Workspaces/servify/apps/server/internal/platform/knowledgeprovider/pgvector/provider_test.go) | 未验 |
 
 ### 3A. 认证与会话
 

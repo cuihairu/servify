@@ -64,11 +64,11 @@
 - `suggestion`
   - handler-facing contract 已收口到 `modules/suggestion/delivery.HandlerService`
   - runtime 已改为 `modules/suggestion/delivery.NewHandlerService(db)`
-  - 旧 `services.SuggestionService` 明确保留为兼容 facade + DTO alias 包装
+  - 旧 `services.SuggestionService` 已删除，DTO alias 与 helper 已下沉到 module application / contract
 - `gamification`
   - handler-facing contract 已收口到 `modules/gamification/delivery.HandlerService`
   - runtime 已改为 `modules/gamification/delivery.NewHandlerService(db)`
-  - 旧 `services.GamificationService` 明确保留为兼容 facade + DTO alias 包装
+  - 旧 `services.GamificationService` 已删除，评分 / 徽章逻辑与 DTO alias 已下沉到 module application / contract
 - 边界守护
   - CI 已增加 `scripts/check-module-boundaries.sh`
   - 当前自动校验 `ticket` / `agent` / `analytics` / `customer` / `automation` / `knowledge` / `routing` / `ai` / `suggestion` / `gamification` 的 handler constructor、router dependency、runtime wiring，以及 `conversation` 的 websocket persistence wiring，都必须停留在 module delivery contract

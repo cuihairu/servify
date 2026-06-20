@@ -111,7 +111,7 @@ Servify 当前更适合这样理解：
 | `infra/` | 本地或部署环境相关的 compose、可观测性与辅助配置 |
 | `scripts/` | CI、本地开发、生成物与检查脚本 |
 | `sdk/` | SDK workspace 源码（TypeScript） |
-| `config.yml`、`config.weknora.yml` | 本地运行配置样例，AI/knowledge 默认推荐使用 Dify |
+| `config.yml`、`config.weknora.yml` | 本地运行配置样例；`config.yml` 默认使用 pgvector 自建知识库，`config.weknora.yml` 用于 WeKnora 兼容部署 |
 | `config.production.secure.example.yml` | 生产环境安全配置模板 |
 | `generated-assets.manifest` | 必须提交的生成物清单 |
 | `Makefile`、`build.sh` | 常用构建与开发入口 |
@@ -130,7 +130,7 @@ Servify 当前更适合这样理解：
 - 🔌 **平台能力抽象**：认证、事件总线、AI/Knowledge provider、realtime/SIP 独立
 - 🌐 **多端 SDK 预留**：Web 先落地，API/App 预留 contract，不做伪实现
 - 📞 **语音能力隔离**：通过 `voice` 模块和 SIP adapter 接入，不耦合聊天链路
-- 🔄 **Provider 可替换**：Dify 是当前优先 `KnowledgeProvider`，WeKnora 是兼容实现之一
+- 🔄 **Provider 可替换**：默认 pgvector 自建知识库，Dify 为推荐的外部知识源，WeKnora 为兼容实现之一
 
 ---
 
@@ -185,19 +185,28 @@ flowchart LR
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| `ticket` | 已完成当前轮拆分 | 核心读写、命令、查询、事务边界、handler adapter 已完成 |
-| `conversation` | 已完成当前轮拆分 | 会话、消息、参与者、消息落库、最近历史读取已归拢 |
-| `routing` | 已完成当前轮拆分 | 人工接管、排队、分配、转接记录边界已独立 |
-| `ai` | 已完成基础能力 | Query orchestrator、guardrails、tools、provider 抽象已到位 |
-| `knowledge` | 已完成基础能力 | 文档管理、索引任务、provider 抽象已到位 |
+| `ticket` | 主路径收口（legacy 已删除） | 核心读写、命令、查询、事务边界、handler adapter 已完成 |
+| `conversation` | 主路径收口 | 会话、消息、参与者、消息落库、最近历史读取已归拢 |
+| `routing` | 主路径收口（legacy 已删除） | 人工接管、排队、分配、转接记录边界已独立 |
+| `ai` | 主路径收口 | Query orchestrator、guardrails、tools、provider 抽象已到位 |
+| `knowledge` | 主路径收口（facade 保留兼容） | 文档管理、索引任务、provider 抽象已到位 |
+| `agent` | 主路径收口（facade 保留兼容） | handler DTO 与 transfer runtime contract 已回到 module delivery |
+| `customer` | 主路径收口（facade 保留兼容） | handler/router/runtime 已直接走 module delivery |
+| `automation` | 主路径收口（facade 保留兼容） | 触发器与执行查询已下沉到 module application |
+| `analytics` | 主路径收口（facade 保留兼容） | 核心统计已走 module application，event bus subscriber 仍在 legacy |
+| `suggestion` | 主路径收口（legacy 已删除） | 推荐、token/意图辅助逻辑已下沉到 module application |
+| `gamification` | 主路径收口（legacy 已删除） | 评分、徽章逻辑已下沉到 module application |
+| `voice` | 模块化（mixed） | 呼叫、媒体、录音、转写通过 `voice` 模块与 SIP adapter 接入；非典型 services→modules 迁移形态 |
 
-### 🚧 下一批模块
+各模块的迁移成熟度与 legacy service 角色，以 [迁移记分卡](./docs/implementation/10-migration-scorecard.md) 为准。
 
-| 模块 | 当前目标 |
-| --- | --- |
-| `automation` | 基于事件总线的自动化执行 |
-| `analytics` | 统计读模型与增量聚合 |
-| `voice` | 呼叫会话、媒体会话、录音、转接，作为 SIP 落点 |
+### 🔧 持续硬化方向
+
+主链路模块均已落地并接入 router/runtime；当前的重点不是“再找一个模块收口”，而是：
+
+- 继续压缩仍保留 facade 的模块（agent / customer / automation / analytics / knowledge）的 legacy 兼容层
+- 收口仍以 legacy service 为主承载的业务（statistics、SLA、satisfaction、shift、workspace、macro、custom_field、app_integration）
+- 扩大边界守护与验收证据覆盖
 
 ### 🔐 安全与管理面现状
 
@@ -232,8 +241,8 @@ flowchart LR
 
 **结论：**
 
-- Dify 是当前优先知识源，WeKnora 已经不是硬编码依赖，只是 `KnowledgeProvider` 的一个 compatibility 适配器
-- 后续如果切 Milvus、Elasticsearch、pgvector、自研知识库，只需要新增 provider adapter
+- 默认知识源是 pgvector 自建知识库（见下节）；Dify 是推荐的外部知识源，WeKnora 是 compatibility 适配器之一
+- 后续如果切 Milvus、Elasticsearch 或自研知识库，只需要新增 provider adapter（pgvector 已是内置 provider）
 - AI 主流程不应该感知具体知识库实现，只依赖统一检索 contract
 
 ### 自建知识库 (pgvector)

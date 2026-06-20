@@ -226,6 +226,7 @@ Servify 配置遵循四层作用域，优先级从高到低：
 # config.yml 关键配置结构
 server:
   port: 8080
+  environment: "production"
 
 database:
   host: "localhost"
@@ -236,9 +237,6 @@ database:
 redis:
   host: "localhost"
   port: 6379
-
-server:
-  environment: "production"
 
 jwt:
   secret: "${JWT_SECRET}"      # 通过环境变量注入，禁止使用默认值

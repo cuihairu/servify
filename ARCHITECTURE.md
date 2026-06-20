@@ -52,6 +52,8 @@ Code should be organized by business capability:
 - voice
 - automation
 - analytics
+- suggestion
+- gamification
 
 ### 3.3 Ports and Adapters
 
