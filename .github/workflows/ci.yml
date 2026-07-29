@@ -27,11 +27,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -77,7 +77,7 @@ jobs:
       - name: Upload test artifacts
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v8
         with:
           name: go-test-results
           path: scripts/test-results
@@ -101,11 +101,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -140,11 +140,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -201,11 +201,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -214,7 +214,7 @@ jobs:
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -254,7 +254,7 @@ jobs:
       - name: Upload docs artifact
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v8
         with:
           name: docs-site
           path: docs/.vitepress/dist
@@ -270,7 +270,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Validate shell syntax
         timeout-minutes: 2
@@ -318,11 +318,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -331,7 +331,7 @@ jobs:
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -357,11 +357,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -378,7 +378,7 @@ jobs:
 
       - name: Setup pnpm cache
         timeout-minutes: 3
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('apps/admin/pnpm-lock.yaml') }}
@@ -396,7 +396,7 @@ jobs:
       - name: Upload admin build artifact
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v8
         with:
           name: admin-dist
           path: apps/admin/dist
@@ -419,7 +419,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Compose version
         timeout-minutes: 1

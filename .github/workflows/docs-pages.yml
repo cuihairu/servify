@@ -33,11 +33,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -45,7 +45,7 @@ jobs:
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -66,15 +66,15 @@ jobs:
 
       - name: Configure Pages
         timeout-minutes: 3
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@v7
 
       - name: Upload Pages Artifact
         timeout-minutes: 3
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@v6
         with:
           path: docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         timeout-minutes: 3
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v6
