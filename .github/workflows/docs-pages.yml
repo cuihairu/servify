@@ -66,15 +66,15 @@ jobs:
 
       - name: Configure Pages
         timeout-minutes: 3
-        uses: actions/configure-pages@v7
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages Artifact
         timeout-minutes: 3
-        uses: actions/upload-pages-artifact@v6
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs/.vitepress/dist
 
       - name: Deploy to GitHub Pages
         timeout-minutes: 3
         id: deployment
-        uses: actions/deploy-pages@v6
+        uses: actions/deploy-pages@v5
