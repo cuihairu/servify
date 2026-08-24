@@ -10,7 +10,7 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/pgvector/pgvector-go v0.3.0
 	github.com/pion/webrtc/v3 v3.2.40
 	github.com/prometheus/client_golang v1.23.2
