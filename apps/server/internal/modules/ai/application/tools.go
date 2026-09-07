@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"fmt"
+
+	"servify/apps/server/internal/platform/llm"
 )
 
 // Tool describes an executable capability exposed to AI orchestration.
@@ -89,4 +91,18 @@ func (e *ToolExecutor) Execute(ctx context.Context, req AIRequest, toolName stri
 		}
 	}
 	return tool.Execute(ctx, input)
+}
+
+// Definitions returns all registered tools as LLM tool definitions.
+func (e *ToolExecutor) Definitions() []llm.ToolDefinition {
+	tools := e.registry.List()
+	out := make([]llm.ToolDefinition, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, llm.ToolDefinition{
+			Name:        tool.Name(),
+			Description: tool.Description(),
+			InputSchema: tool.Schema(),
+		})
+	}
+	return out
 }

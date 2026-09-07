@@ -10,5 +10,8 @@
   },
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  "routes": [
+    { "pattern": "servify.cuihairu.site", "custom_domain": true }
   ]
 }

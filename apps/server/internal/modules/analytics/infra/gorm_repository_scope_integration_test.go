@@ -32,6 +32,13 @@ func newAnalyticsScopeTestDB(t *testing.T) *gorm.DB {
 	); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
+	// Close all connections when the test finishes so the shared-cache
+	// in-memory database is destroyed and re-runs (-count>1) start clean.
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	return db
 }
 

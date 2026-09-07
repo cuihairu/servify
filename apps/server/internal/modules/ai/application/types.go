@@ -28,6 +28,7 @@ type RetrievalPolicy struct {
 type ToolPolicy struct {
 	Enabled      bool
 	AllowedTools []string
+	MaxSteps     int
 }
 
 // AIRequest is the vendor-neutral input model for AI orchestration.

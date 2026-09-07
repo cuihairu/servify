@@ -49,6 +49,8 @@
   - 多租户、权限模型、审计日志、配置边界
 - [12-operator-observability.md](./12-operator-observability.md)
   - tracing、metrics、日志、告警、回放与运营诊断
+- [13-ai-agent-loop.md](./13-ai-agent-loop.md)
+  - P0：接通 AI agent loop（tool-calling 循环 + 流式），让智能客服多步行动
 
 状态约定：
 

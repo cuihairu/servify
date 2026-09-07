@@ -10,6 +10,7 @@ const implementationPages = [
   '/implementation/09-runtime-and-repo-hygiene',
   '/implementation/11-tenant-auth-and-audit',
   '/implementation/12-operator-observability',
+  '/implementation/13-ai-agent-loop',
 ];
 
 const migrationGovernancePages = [
@@ -23,6 +24,7 @@ const productPages = [
   '/v1-product-scope',
   '/ARCHITECTURE',
   '/current-architecture',
+  '/architecture-review-2026',
   '/architecture-redesign-plan',
   '/remote-assistance',
   '/deployment',

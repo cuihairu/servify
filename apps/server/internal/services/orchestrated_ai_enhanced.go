@@ -29,6 +29,7 @@ type OrchestratedEnhancedAIService struct {
 	circuitBreaker           *CircuitBreaker
 	metrics                  *AIMetrics
 	logger                   *logrus.Logger
+	toolExecutor             *aimodule.ToolExecutor
 }
 
 func NewOrchestratedEnhancedAIService(
@@ -47,6 +48,12 @@ func NewOrchestratedEnhancedAIService(
 		knowledgeProviderID = "weknora"
 	}
 	orchestrator := aimodule.NewQueryOrchestrator(llmProvider, knowledgeProvider)
+	registry := aimodule.NewToolRegistry()
+	registry.Register(aimodule.NewCustomerLookupTool(nil))
+	registry.Register(aimodule.NewTicketLookupTool(nil))
+	registry.Register(aimodule.NewHandoffTool(nil))
+	toolExecutor := aimodule.NewToolExecutor(registry, nil)
+	orchestrator.SetToolExecutor(toolExecutor)
 	return &OrchestratedEnhancedAIService{
 		base:                     base,
 		orchestrator:             orchestrator,
@@ -60,6 +67,7 @@ func NewOrchestratedEnhancedAIService(
 		circuitBreaker:           NewCircuitBreaker(),
 		metrics:                  &AIMetrics{ActiveKnowledgeProvider: strings.TrimSpace(knowledgeProviderID)},
 		logger:                   logger,
+		toolExecutor:             toolExecutor,
 	}
 }
 
@@ -96,6 +104,10 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 			TopK:      5,
 			Threshold: 0.7,
 			Strategy:  "semantic",
+		},
+		ToolPolicy: aimodule.ToolPolicy{
+			Enabled:  true,
+			MaxSteps: 5,
 		},
 	})
 	if err != nil {
@@ -267,10 +279,17 @@ func (s *OrchestratedEnhancedAIService) activeOrchestrator() *aimodule.QueryOrch
 	if provider == s.knowledgeProvider {
 		if s.orchestrator == nil {
 			s.orchestrator = aimodule.NewQueryOrchestrator(s.llmProvider, provider)
+			if s.toolExecutor != nil {
+				s.orchestrator.SetToolExecutor(s.toolExecutor)
+			}
 		}
 		return s.orchestrator
 	}
-	return aimodule.NewQueryOrchestrator(s.llmProvider, provider)
+	o := aimodule.NewQueryOrchestrator(s.llmProvider, provider)
+	if s.toolExecutor != nil {
+		o.SetToolExecutor(s.toolExecutor)
+	}
+	return o
 }
 
 func toWeKnoraSources(hits []knowledgeprovider.KnowledgeHit) []baseweknora.SearchResult {

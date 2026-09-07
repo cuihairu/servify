@@ -1,9 +1,18 @@
 package llm
 
 // ChatMessage is the vendor-neutral message format used by LLM providers.
+//
+// For multi-turn tool-calling it carries the optional pieces providers need to
+// round-trip a tool exchange:
+//   - ToolCalls: populated on an assistant message that requested tool execution.
+//   - ToolCallID: populated on a "tool" role message to correlate it with the
+//     originating assistant tool call (OpenAI) or as a tool_result block (Anthropic).
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Name       string     `json:"name,omitempty"`
 }
 
 // ToolDefinition describes a callable tool/function exposed to the model.

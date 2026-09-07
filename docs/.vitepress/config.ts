@@ -20,7 +20,7 @@ const config = defineConfig({
     nav: docsNav,
     sidebar: docsSidebar,
     editLink: {
-      pattern: 'https://github.com/timebeau/servify/edit/main/docs/:path',
+      pattern: 'https://github.com/cuihairu/servify/edit/main/docs/:path',
       text: '在 GitHub 上编辑此页',
     },
     lastUpdated: {

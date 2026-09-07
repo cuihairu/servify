@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -26,8 +27,21 @@ type request struct {
 }
 
 type requestMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string            `json:"role"`
+	Content    string            `json:"content"`
+	ToolCalls  []requestToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string            `json:"tool_call_id,omitempty"`
+}
+
+type requestToolCall struct {
+	ID       string                  `json:"id"`
+	Type     string                  `json:"type"`
+	Function requestToolCallFunction `json:"function"`
+}
+
+type requestToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 type requestTool struct {
@@ -104,12 +118,18 @@ func (p *Provider) Chat(ctx context.Context, req llm.ChatRequest) (llm.ChatRespo
 }
 
 func (p *Provider) ChatStream(ctx context.Context, req llm.ChatRequest) (<-chan llm.ChatChunk, error) {
-	return nil, &llm.ProviderError{
-		Provider:  "openai",
-		Code:      llm.ProviderErrorNotSupported,
-		Message:   "openai stream not implemented yet",
-		Retryable: false,
-	}
+	ch := make(chan llm.ChatChunk)
+	go func() {
+		defer close(ch)
+		err := p.streamOnce(ctx, req, ch)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+			case ch <- llm.ChatChunk{ContentDelta: fmt.Sprintf("stream error: %v", err), Done: true}:
+			}
+		}
+	}()
+	return ch, nil
 }
 
 func (p *Provider) Embed(ctx context.Context, texts []string) ([][]float32, error) {
@@ -154,10 +174,26 @@ func (p *Provider) chatOnce(ctx context.Context, req llm.ChatRequest) (llm.ChatR
 		payload.Model = config.DefaultOpenAIModel
 	}
 	for _, msg := range req.Messages {
-		payload.Messages = append(payload.Messages, requestMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+		m := requestMessage{Role: msg.Role, Content: msg.Content}
+		if len(msg.ToolCalls) > 0 {
+			m.ToolCalls = make([]requestToolCall, 0, len(msg.ToolCalls))
+			for _, tc := range msg.ToolCalls {
+				args := tc.Arguments
+				argsJSON, _ := json.Marshal(args)
+				m.ToolCalls = append(m.ToolCalls, requestToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: requestToolCallFunction{
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
+					},
+				})
+			}
+		}
+		if msg.Role == "tool" {
+			m.ToolCallID = msg.ToolCallID
+		}
+		payload.Messages = append(payload.Messages, m)
 	}
 	for _, tool := range req.Tools {
 		payload.Tools = append(payload.Tools, requestTool{
@@ -241,6 +277,227 @@ func (p *Provider) chatOnce(ctx context.Context, req llm.ChatRequest) (llm.ChatR
 		}
 	}
 	return out, nil
+}
+
+// streamTypes for SSE parsing.
+type streamEvent struct {
+	ID      string         `json:"id"`
+	Object  string         `json:"object"`
+	Choices []streamChoice `json:"choices"`
+}
+
+type streamChoice struct {
+	Index        int         `json:"index"`
+	Delta        streamDelta `json:"delta"`
+	FinishReason *string     `json:"finish_reason"`
+}
+
+type streamDelta struct {
+	Content   string           `json:"content,omitempty"`
+	Role      string           `json:"role,omitempty"`
+	ToolCalls []streamToolCall `json:"tool_calls,omitempty"`
+}
+
+type streamToolCall struct {
+	Index    int            `json:"index"`
+	ID       string         `json:"id,omitempty"`
+	Type     string         `json:"type,omitempty"`
+	Function streamFunction `json:"function,omitempty"`
+}
+
+type streamFunction struct {
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
+// streamingToolAccumulator accumulates streaming tool call deltas by index.
+type streamingToolAccumulator struct {
+	index int
+	id    string
+	name  string
+	args  string
+}
+
+func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<- llm.ChatChunk) error {
+	payload := request{
+		Model:       req.Model,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		Stream:      true,
+		Messages:    make([]requestMessage, 0, len(req.Messages)),
+		Tools:       make([]requestTool, 0, len(req.Tools)),
+	}
+	if payload.Model == "" {
+		payload.Model = config.DefaultOpenAIModel
+	}
+	for _, msg := range req.Messages {
+		m := requestMessage{Role: msg.Role, Content: msg.Content}
+		if len(msg.ToolCalls) > 0 {
+			m.ToolCalls = make([]requestToolCall, 0, len(msg.ToolCalls))
+			for _, tc := range msg.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Arguments)
+				m.ToolCalls = append(m.ToolCalls, requestToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: requestToolCallFunction{
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
+					},
+				})
+			}
+		}
+		if msg.Role == "tool" {
+			m.ToolCallID = msg.ToolCallID
+		}
+		payload.Messages = append(payload.Messages, m)
+	}
+	for _, tool := range req.Tools {
+		payload.Tools = append(payload.Tools, requestTool{
+			Type: "function",
+			Function: requestToolFunction{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.InputSchema,
+			},
+		})
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal openai stream request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("create openai stream request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if p.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+
+	httpResp, err := p.client.Do(httpReq)
+	if err != nil {
+		return &llm.ProviderError{
+			Provider:  "openai",
+			Code:      llm.ProviderErrorUnavailable,
+			Message:   "send openai stream request failed",
+			Retryable: true,
+			Cause:     err,
+		}
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(httpResp.Body)
+		return llm.HTTPError("openai", httpResp.StatusCode, string(respBody))
+	}
+
+	scanner := bufio.NewScanner(httpResp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+
+	// Accumulate tool calls across chunks.
+	toolAccums := make(map[int]*streamingToolAccumulator)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			// Emit any accumulated tool calls before finishing.
+			emitToolResults(ch, toolAccums)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case ch <- llm.ChatChunk{Done: true}:
+			}
+			return nil
+		}
+
+		var evt streamEvent
+		if err := json.Unmarshal([]byte(data), &evt); err != nil {
+			continue
+		}
+		if len(evt.Choices) == 0 {
+			continue
+		}
+		choice := evt.Choices[0]
+
+		// Emit content delta.
+		if choice.Delta.Content != "" {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case ch <- llm.ChatChunk{ContentDelta: choice.Delta.Content}:
+			}
+		}
+
+		// Accumulate tool call deltas.
+		for _, tc := range choice.Delta.ToolCalls {
+			acc, ok := toolAccums[tc.Index]
+			if !ok {
+				acc = &streamingToolAccumulator{index: tc.Index}
+				toolAccums[tc.Index] = acc
+			}
+			if tc.ID != "" {
+				acc.id = tc.ID
+			}
+			if tc.Function.Name != "" {
+				acc.name = tc.Function.Name
+			}
+			if tc.Function.Arguments != "" {
+				acc.args += tc.Function.Arguments
+			}
+		}
+
+		// If finish reason is set and non-null, emit remaining.
+		if choice.FinishReason != nil && *choice.FinishReason != "" {
+			emitToolResults(ch, toolAccums)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case ch <- llm.ChatChunk{Done: true}:
+			}
+			return nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read openai stream: %w", err)
+	}
+
+	// Stream ended without [DONE] or finish_reason.
+	emitToolResults(ch, toolAccums)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ch <- llm.ChatChunk{Done: true}:
+	}
+	return nil
+}
+
+func emitToolResults(ch chan<- llm.ChatChunk, accums map[int]*streamingToolAccumulator) {
+	for _, acc := range accums {
+		args := map[string]interface{}{}
+		if strings.TrimSpace(acc.args) != "" {
+			_ = json.Unmarshal([]byte(acc.args), &args)
+		}
+		select {
+		case ch <- llm.ChatChunk{
+			ToolCall: &llm.ToolCall{
+				ID:        acc.id,
+				Name:      acc.name,
+				Arguments: args,
+			},
+		}:
+		default:
+		}
+	}
+	// Clear accumulators.
+	for k := range accums {
+		delete(accums, k)
+	}
 }
 
 func decodeToolCalls(toolCalls []struct {
