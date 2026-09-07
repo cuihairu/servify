@@ -318,6 +318,9 @@ func (o *TicketOrchestrator) selectAutoAssignee(ctx context.Context) (*models.Ag
 	if o.findAutoAssignee != nil {
 		return o.findAutoAssignee(ctx)
 	}
+	if o.db == nil {
+		return nil, fmt.Errorf("no db or findAutoAssignee configured")
+	}
 
 	var agent models.Agent
 	err := o.db.WithContext(ctx).
