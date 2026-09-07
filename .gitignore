@@ -60,3 +60,4 @@ docs/.vitepress/dist/
 uploads/
 apps/server/uploads/
 internal/handlers/uploads/
+apps/website/.wrangler/cache/
