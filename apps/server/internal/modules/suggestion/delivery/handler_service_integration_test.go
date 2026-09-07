@@ -11,9 +11,9 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	platformauth "servify/apps/server/internal/platform/auth"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
+	platformauth "servify/apps/server/internal/platform/auth"
 )
 
 func newSuggestionDeliveryTestDB(t *testing.T) *gorm.DB {

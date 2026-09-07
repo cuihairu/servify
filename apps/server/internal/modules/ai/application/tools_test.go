@@ -74,3 +74,31 @@ func TestHandoffToolExecute(t *testing.T) {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 }
+
+func TestToolExecutorDefinitions(t *testing.T) {
+	registry := NewToolRegistry()
+	registry.Register(NewTicketLookupTool(stubTicketLookup{}))
+	registry.Register(NewCustomerLookupTool(stubCustomerLookup{}))
+	executor := NewToolExecutor(registry, nil)
+
+	defs := executor.Definitions()
+	if len(defs) != 2 {
+		t.Fatalf("expected 2 tool definitions, got %d", len(defs))
+	}
+	names := make(map[string]bool)
+	for _, d := range defs {
+		names[d.Name] = true
+		if d.Description == "" {
+			t.Fatalf("tool %q has empty description", d.Name)
+		}
+		if d.InputSchema == nil {
+			t.Fatalf("tool %q has nil input schema", d.Name)
+		}
+	}
+	if !names["ticket_lookup"] {
+		t.Fatal("expected ticket_lookup in definitions")
+	}
+	if !names["customer_lookup"] {
+		t.Fatal("expected customer_lookup in definitions")
+	}
+}

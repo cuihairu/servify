@@ -49,9 +49,9 @@ func TestServiceSuggest_SortsAndTrimsResults(t *testing.T) {
 	svc := suggestionapp.NewService(repo)
 
 	resp, err := svc.Suggest(context.Background(), &suggestioncontract.SuggestionRequest{
-		Query:             " alpha beta ",
-		TicketLimit:       2,
-		KnowledgeDocLimit: 2,
+		Query:              " alpha beta ",
+		TicketLimit:        2,
+		KnowledgeDocLimit:  2,
 		CandidateTicketMax: 3,
 	})
 	if err != nil {
@@ -141,4 +141,3 @@ func TestServiceSuggest_DefaultsOnNilRequest(t *testing.T) {
 		t.Fatalf("expected no suggestions for empty query, got %+v", resp)
 	}
 }
-

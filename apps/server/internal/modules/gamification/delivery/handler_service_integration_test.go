@@ -12,8 +12,8 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	platformauth "servify/apps/server/internal/platform/auth"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
+	platformauth "servify/apps/server/internal/platform/auth"
 )
 
 func newGamificationDeliveryTestDB(t *testing.T) *gorm.DB {

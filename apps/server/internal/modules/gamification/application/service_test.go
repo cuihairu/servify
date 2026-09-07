@@ -129,9 +129,9 @@ func TestServiceGetLeaderboard_ValidationAndDefaultLimit(t *testing.T) {
 	svc := gamificationapp.NewService(repo)
 
 	tests := []struct {
-		name     string
-		req      *gamificationapp.LeaderboardRequest
-		wantErr  bool
+		name      string
+		req       *gamificationapp.LeaderboardRequest
+		wantErr   bool
 		wantLimit int
 	}{
 		{
@@ -190,10 +190,10 @@ func TestServiceGetLeaderboard_CapsLimitAt100(t *testing.T) {
 	for i := 1; i <= 101; i++ {
 		id := uint(i)
 		repo.profiles = append(repo.profiles, gamificationapp.AgentProfile{
-			UserID:         id,
-			Username:       fmt.Sprintf("agent-%d", i),
-			Name:           fmt.Sprintf("Agent %d", i),
-			Department:     "support",
+			UserID:          id,
+			Username:        fmt.Sprintf("agent-%d", i),
+			Name:            fmt.Sprintf("Agent %d", i),
+			Department:      "support",
 			AvgResponseTime: 100,
 		})
 		repo.resolved = append(repo.resolved, gamificationapp.AgentResolvedCount{AgentID: id, Count: 1})
@@ -219,4 +219,3 @@ func TestServiceGetLeaderboard_CapsLimitAt100(t *testing.T) {
 		t.Fatalf("unexpected leaderboard bounds: first=%d last=%d", resp.Entries[0].AgentID, resp.Entries[99].AgentID)
 	}
 }
-
