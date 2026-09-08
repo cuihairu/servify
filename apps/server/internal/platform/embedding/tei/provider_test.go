@@ -3,9 +3,11 @@ package tei
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestProvider_Embed_Single(t *testing.T) {
@@ -140,5 +142,115 @@ func TestProvider_HealthCheck_Failure(t *testing.T) {
 	ctx := context.Background()
 	if err := provider.HealthCheck(ctx); err == nil {
 		t.Fatal("expected error for failed health check")
+	}
+}
+
+func TestProvider_Embed_UnmarshalError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("not-json"))
+	}))
+	defer server.Close()
+
+	provider := NewProvider(Config{BaseURL: server.URL})
+	if _, err := provider.Embed(context.Background(), []string{"t"}); err == nil {
+		t.Fatal("expected unmarshal error")
+	}
+}
+
+func TestProvider_Embed_CountMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string][][]float32{
+			"embeddings": {make([]float32, 4)},
+		})
+	}))
+	defer server.Close()
+
+	provider := NewProvider(Config{BaseURL: server.URL})
+	if _, err := provider.Embed(context.Background(), []string{"a", "b"}); err == nil {
+		t.Fatal("expected count mismatch error")
+	}
+}
+
+func TestProvider_Embed_ConnectionRefused(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := server.URL
+	server.Close()
+
+	provider := NewProvider(Config{BaseURL: url})
+	if _, err := provider.Embed(context.Background(), []string{"t"}); err == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestProvider_Embed_CanceledContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string][][]float32{"embeddings": {make([]float32, 4)}})
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	provider := NewProvider(Config{BaseURL: server.URL})
+	if _, err := provider.Embed(ctx, []string{"t"}); err == nil {
+		t.Fatal("expected context canceled error")
+	}
+}
+
+func TestProvider_HealthCheck_ConnectionError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := server.URL
+	server.Close()
+
+	provider := NewProvider(Config{BaseURL: url})
+	if err := provider.HealthCheck(context.Background()); err == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestNewProviderDefaults(t *testing.T) {
+	p := NewProvider(Config{})
+	if p.config.BaseURL != "http://localhost:8080" {
+		t.Fatalf("default base url = %q", p.config.BaseURL)
+	}
+	if p.config.Timeout != 30*time.Second {
+		t.Fatalf("default timeout = %v", p.config.Timeout)
+	}
+}
+
+type erroringReadCloser struct{}
+
+func (erroringReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("read body failed") }
+func (erroringReadCloser) Close() error               { return nil }
+
+type stubRoundTripper struct {
+	resp *http.Response
+	err  error
+}
+
+func (s *stubRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return s.resp, s.err
+}
+
+func TestProvider_Embed_BadURL(t *testing.T) {
+	p := NewProvider(Config{BaseURL: "http://bad\x7furl:%%"})
+	if _, err := p.Embed(context.Background(), []string{"t"}); err == nil {
+		t.Fatal("expected create request error")
+	}
+	if err := p.HealthCheck(context.Background()); err == nil {
+		t.Fatal("expected health check create request error")
+	}
+}
+
+func TestProvider_Embed_ReadBodyError(t *testing.T) {
+	p := NewProvider(Config{BaseURL: "http://teistub.local"})
+	p.client = &http.Client{Transport: &stubRoundTripper{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       erroringReadCloser{},
+			Header:     http.Header{},
+		},
+	}}
+	if _, err := p.Embed(context.Background(), []string{"t"}); err == nil {
+		t.Fatal("expected read body error")
 	}
 }

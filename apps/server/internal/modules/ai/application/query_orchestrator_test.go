@@ -1,8 +1,11 @@
 package application
 
 import (
+	"strings"
+
 	"context"
 	"errors"
+	"servify/apps/server/internal/models"
 	"testing"
 
 	"servify/apps/server/internal/platform/knowledgeprovider"
@@ -479,5 +482,133 @@ func TestQueryOrchestratorToolErrorDoesNotCrashLoop(t *testing.T) {
 	}
 	if resp.Content != "recovered" {
 		t.Fatalf("expected recovery content, got %q", resp.Content)
+	}
+}
+
+type failingProvider struct{}
+
+func (failingProvider) Chat(_ context.Context, _ llm.ChatRequest) (llm.ChatResponse, error) {
+	return llm.ChatResponse{}, errors.New("chat boom")
+}
+func (failingProvider) ChatStream(_ context.Context, _ llm.ChatRequest) (<-chan llm.ChatChunk, error) {
+	return nil, errors.New("not implemented")
+}
+func (failingProvider) Embed(_ context.Context, _ []string) ([][]float32, error) {
+	return nil, errors.New("not implemented")
+}
+func (failingProvider) HealthCheck(_ context.Context) error { return nil }
+
+func TestQueryOrchestratorHandleNilProviderReturnsNil(t *testing.T) {
+	o := NewQueryOrchestrator(nil, nil)
+	resp, err := o.Handle(context.Background(), AIRequest{Query: "hi", Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response, got %+v", resp)
+	}
+}
+
+func TestQueryOrchestratorChatErrorPath(t *testing.T) {
+	o := NewQueryOrchestrator(failingProvider{}, nil)
+	if _, err := o.Handle(context.Background(), AIRequest{Query: "hi"}); err == nil {
+		t.Fatal("expected chat error")
+	}
+
+	// same error inside the tool loop
+	registry := NewToolRegistry()
+	registry.Register(NewHandoffTool(stubHandoff{}))
+	o2 := NewQueryOrchestrator(failingProvider{}, nil)
+	o2.SetToolExecutor(NewToolExecutor(registry, nil))
+	toolReq := AIRequest{
+		Query:      "hi",
+		ToolPolicy: ToolPolicy{Enabled: true, MaxSteps: 2},
+	}
+	if _, err := o2.Handle(context.Background(), toolReq); err == nil {
+		t.Fatal("expected tool loop chat error")
+	}
+}
+
+func TestQueryOrchestratorToolLoopMarshalFailure(t *testing.T) {
+	unmarshalable := &stepProvider{responses: []llm.ChatResponse{
+		{
+			Content: "calling tool",
+			ToolCalls: []llm.ToolCall{
+				{Name: "handoff", Arguments: map[string]interface{}{"conversation_id": "c1", "bad": make(chan int)}},
+			},
+		},
+		{Content: "done"},
+	}}
+	registry := NewToolRegistry()
+	registry.Register(&badJSONTool{})
+	o := NewQueryOrchestrator(unmarshalable, nil)
+	o.SetToolExecutor(NewToolExecutor(registry, nil))
+	resp, err := o.Handle(context.Background(), AIRequest{Query: "hi", ToolPolicy: ToolPolicy{Enabled: true}})
+	if err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if resp.Content != "done" {
+		t.Fatalf("content = %q", resp.Content)
+	}
+}
+
+type badJSONTool struct{}
+
+func (badJSONTool) Name() string        { return "handoff" }
+func (badJSONTool) Description() string { return "returns unmarshalable result" }
+func (badJSONTool) Schema() map[string]interface{} {
+	return map[string]interface{}{"type": "object"}
+}
+func (badJSONTool) Execute(_ context.Context, _ map[string]interface{}) (map[string]interface{}, error) {
+	return map[string]interface{}{"bad": make(chan int)}, nil
+}
+
+func TestMaxToolStepsDefaults(t *testing.T) {
+	o := NewQueryOrchestrator(nil, nil)
+	if got := o.maxToolSteps(AIRequest{}); got != 5 {
+		t.Fatalf("default max steps = %d, want 5", got)
+	}
+	if got := o.maxToolSteps(AIRequest{ToolPolicy: ToolPolicy{MaxSteps: 3}}); got != 3 {
+		t.Fatalf("max steps = %d, want 3", got)
+	}
+}
+
+func TestGuardrailsValidateInputBranches(t *testing.T) {
+	g := NewGuardrails()
+	if err := g.ValidateInput(AIRequest{Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}}}); err != nil {
+		t.Fatalf("empty query with messages should pass, got %v", err)
+	}
+	if err := g.ValidateInput(AIRequest{Query: strings.Repeat("a", defaultMaxQueryLength+1)}); err == nil {
+		t.Fatal("oversized query should fail")
+	}
+	if err := g.ValidateInput(AIRequest{Query: "drop table users;"}); err == nil {
+		t.Fatal("blocked term should fail")
+	}
+}
+
+func TestSimpleSessionSummaryEmptyContent(t *testing.T) {
+	if got := SimpleSessionSummary([]models.Message{{Content: "   "}}); got == "" {
+		t.Fatal("expected fallback summary for blank content")
+	}
+}
+
+func TestMetricsSnapshotWithToolErrors(t *testing.T) {
+	m := NewMetrics()
+	m.RecordToolCall("handoff")
+	m.RecordToolError("handoff")
+	snap := m.Snapshot()
+	if snap.ToolErrorCount["handoff"] != 1 || snap.ToolCallCountByTool["handoff"] != 1 {
+		t.Fatalf("snapshot = %+v", snap)
+	}
+}
+
+func TestRetrieverSkipsBlankQuery(t *testing.T) {
+	r := NewRetriever(&mockkp.Provider{})
+	hits, err := r.Retrieve(context.Background(), AIRequest{Query: "   ", RetrievalPolicy: RetrievalPolicy{Enabled: true}})
+	if err != nil {
+		t.Fatalf("Retrieve() error = %v", err)
+	}
+	if hits != nil {
+		t.Fatalf("expected nil hits, got %v", hits)
 	}
 }

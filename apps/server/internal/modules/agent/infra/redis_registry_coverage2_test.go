@@ -207,6 +207,7 @@ func TestRedisRegistryApplyTransferSyncsBothAgents(t *testing.T) {
 	require.NoError(t, err)
 	_, err = registry.GoOnline(agentdomain.AgentProfile{UserID: 8, MaxChatConcurrency: 2})
 	require.NoError(t, err)
+	waitForRegistryPubsubDrain(t, client)
 	_, err = registry.AssignSession(7, &models.Session{ID: "sess-1"})
 	require.NoError(t, err)
 
@@ -350,4 +351,28 @@ func TestRedisRegistryHeartbeatLoopRefreshesTTL(t *testing.T) {
 	ttl, err := client.TTL(context.Background(), agentRuntimeKey(7)).Result()
 	require.NoError(t, err)
 	require.Greater(t, int64(ttl/time.Second), int64(50), "expected heartbeat to renew the TTL")
+}
+
+// waitForRegistryPubsubDrain blocks until the registry's syncLoop has consumed
+// all queued status messages. It publishes a sentinel on the status channel and
+// waits for it on a test subscriber; since pubsub delivery is ordered, the
+// sentinel trailing the "online" messages lets us know the queue is drained.
+func waitForRegistryPubsubDrain(t *testing.T, client *redis.Client) {
+	t.Helper()
+	pubsub := client.Subscribe(context.Background(), agentStatusChannel)
+	defer pubsub.Close()
+	require.NoError(t, client.Publish(context.Background(), agentStatusChannel, "sentinel:0").Err())
+	msgCh := pubsub.Channel()
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case msg := <-msgCh:
+			if msg.Payload == "sentinel:0" {
+				time.Sleep(20 * time.Millisecond)
+				return
+			}
+		case <-timeout:
+			return
+		}
+	}
 }

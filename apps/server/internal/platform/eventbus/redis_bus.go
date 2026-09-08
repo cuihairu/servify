@@ -123,9 +123,7 @@ func (b *RedisBus) Publish(ctx context.Context, event Event) error {
 func (b *RedisBus) subscribeLoop() {
 	pubsub := b.client.Subscribe(b.ctx, eventPubSubChannel)
 	defer pubsub.Close()
-	b.readyOnce.Do(func() {
-		close(b.readyCh)
-	})
+	b.awaitSubscriptionConfirmed()
 
 	ch := pubsub.Channel()
 	for {
@@ -141,6 +139,39 @@ func (b *RedisBus) subscribeLoop() {
 			b.dispatchFromStream(b.ctx, msg.Payload)
 		}
 	}
+}
+
+// awaitSubscriptionConfirmed marks the bus ready only after the server has
+// actually registered the pub/sub subscription.
+//
+// go-redis v9 PubSub.Subscribe only writes the SUBSCRIBE command and returns
+// without waiting for the server acknowledgement, so a Publish issued right
+// after Subscribe can race ahead of the subscription and get dropped. Polling
+// PUBSUB NUMSUB closes that window: once the channel reports at least one
+// subscriber, subsequent PUBLISH commands are guaranteed to be delivered to
+// this bus.
+func (b *RedisBus) awaitSubscriptionConfirmed() {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		subs, err := b.client.PubSubNumSub(b.ctx, eventPubSubChannel).Result()
+		if err == nil && subs[eventPubSubChannel] > 0 {
+			break
+		}
+		select {
+		case <-b.ctx.Done():
+			// Bus is closing before the subscription was confirmed; unblock
+			// waiters so nobody deadlocks on readyCh.
+		case <-ticker.C:
+			continue
+		}
+		break
+	}
+
+	b.readyOnce.Do(func() {
+		close(b.readyCh)
+	})
 }
 
 func (b *RedisBus) waitUntilReady(ctx context.Context) bool {

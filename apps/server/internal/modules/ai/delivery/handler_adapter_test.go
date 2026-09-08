@@ -205,3 +205,49 @@ func TestHandlerServiceAdapter_PropagatesEnhancedErrors(t *testing.T) {
 		t.Fatalf("SyncKnowledgeBase() err=%v", err)
 	}
 }
+
+func TestHandlerServiceAdapter_NilReceiverAndStatus(t *testing.T) {
+	var nilAdapter *HandlerServiceAdapter
+	if _, err := nilAdapter.ProcessQuery(context.Background(), "hi", "s1"); err == nil {
+		t.Fatal("nil adapter ProcessQuery should fail")
+	}
+	if status := nilAdapter.GetStatus(context.Background()); status != nil {
+		t.Fatalf("nil adapter GetStatus = %v", status)
+	}
+	if _, ok := nilAdapter.GetMetrics(); ok {
+		t.Fatal("nil adapter GetMetrics should be false")
+	}
+	if nilAdapter.SetKnowledgeProviderEnabled(true) {
+		t.Fatal("nil adapter SetKnowledgeProviderEnabled should be false")
+	}
+	if nilAdapter.ResetCircuitBreaker() {
+		t.Fatal("nil adapter ResetCircuitBreaker should be false")
+	}
+	if err := nilAdapter.UploadKnowledgeDocument(context.Background(), "t", "c", nil); err == nil {
+		t.Fatal("nil adapter UploadKnowledgeDocument should fail")
+	}
+	if err := nilAdapter.SyncKnowledgeBase(context.Background()); err == nil {
+		t.Fatal("nil adapter SyncKnowledgeBase should fail")
+	}
+
+	emptyAdapter := &HandlerServiceAdapter{}
+	if status := emptyAdapter.GetStatus(context.Background()); status != nil {
+		t.Fatalf("empty adapter GetStatus = %v", status)
+	}
+	if _, err := emptyAdapter.ProcessQuery(context.Background(), "q", "s"); err == nil {
+		t.Fatal("empty adapter ProcessQuery should fail")
+	}
+}
+
+func TestUnsupportedEnhancedFeatureError(t *testing.T) {
+	err := errUnsupportedEnhancedFeature("document upload")
+	if err.Error() != "document upload not available for standard AI service" {
+		t.Fatalf("unexpected message: %q", err.Error())
+	}
+	if !IsUnsupportedEnhancedFeature(err) {
+		t.Fatal("IsUnsupportedEnhancedFeature should recognize its own error")
+	}
+	if IsUnsupportedEnhancedFeature(errors.New("other")) {
+		t.Fatal("IsUnsupportedEnhancedFeature should reject foreign errors")
+	}
+}

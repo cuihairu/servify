@@ -322,3 +322,135 @@ func TestUserStateTokenPolicyRejectsStaleSessionTokenVersion(t *testing.T) {
 		t.Fatalf("expected 401 got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+func TestTokenPolicyNilDB(t *testing.T) {
+	if NewUserStateTokenPolicy(nil) != nil {
+		t.Fatal("expected nil user state policy")
+	}
+	if NewRevokedTokenPolicy(nil) != nil {
+		t.Fatal("expected nil revoked token policy")
+	}
+}
+
+func TestUserStateTokenPolicySkipsUserlessClaims(t *testing.T) {
+	db := testAuthDB(t)
+	policy := NewUserStateTokenPolicy(db)
+	if err := policy(map[string]interface{}{}, Claims{}, time.Now()); err != nil {
+		t.Fatalf("userless claims should pass, got %v", err)
+	}
+	if err := policy(map[string]interface{}{}, Claims{HasUserID: true, UserID: 0}, time.Now()); err != nil {
+		t.Fatalf("zero user id should pass, got %v", err)
+	}
+}
+
+func TestUserStateTokenPolicySessionBranches(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	db := testAuthDB(t)
+	if err := db.AutoMigrate(&models.UserAuthSession{}); err != nil {
+		t.Fatalf("migrate session: %v", err)
+	}
+	if err := db.Create(&models.User{ID: 21, Username: "u21", Email: "u21@example.com", Status: "active"}).Error; err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	policy := NewUserStateTokenPolicy(db)
+
+	// missing session
+	err := policy(map[string]interface{}{"iat": float64(now.Unix())}, Claims{HasUserID: true, UserID: 21, SessionID: "missing"}, now)
+	if err == nil || err.Error() != "token session no longer exists" {
+		t.Fatalf("missing session = %v", err)
+	}
+
+	// inactive session
+	session := models.UserAuthSession{ID: "sess-21", UserID: 21, Status: "revoked"}
+	if err := db.Create(&session).Error; err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	err = policy(map[string]interface{}{"iat": float64(now.Unix())}, Claims{HasUserID: true, UserID: 21, SessionID: session.ID}, now)
+	if err == nil || err.Error() != "token session is not active" {
+		t.Fatalf("inactive session = %v", err)
+	}
+
+	// active session without token version requirement
+	db.Model(&session).Update("status", "active")
+	err = policy(map[string]interface{}{"iat": float64(now.Unix())}, Claims{HasUserID: true, UserID: 21, SessionID: session.ID}, now)
+	if err != nil {
+		t.Fatalf("active session = %v", err)
+	}
+
+	// stale session token version
+	db.Model(&session).Update("token_version", 5)
+	err = policy(map[string]interface{}{"iat": float64(now.Unix()), "stv": float64(1)}, Claims{HasUserID: true, UserID: 21, SessionID: session.ID}, now)
+	if err == nil || err.Error() != "token has been revoked by session policy" {
+		t.Fatalf("stale session version = %v", err)
+	}
+	err = policy(map[string]interface{}{"iat": float64(now.Unix())}, Claims{HasUserID: true, UserID: 21, SessionID: session.ID}, now)
+	if err == nil || err.Error() != "token missing session_token_version required by session policy" {
+		t.Fatalf("missing session version = %v", err)
+	}
+	err = policy(map[string]interface{}{"iat": float64(now.Unix()), "stv": float64(7)}, Claims{HasUserID: true, UserID: 21, SessionID: session.ID}, now)
+	if err != nil {
+		t.Fatalf("fresh session version = %v", err)
+	}
+}
+
+func TestUserStateTokenPolicyUserBranches(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	db := testAuthDB(t)
+
+	policy := NewUserStateTokenPolicy(db)
+
+	// db error while loading user
+	err := policy(map[string]interface{}{}, Claims{HasUserID: true, UserID: 42}, now)
+	if err == nil || err.Error() != "token user no longer exists" {
+		t.Fatalf("missing user = %v", err)
+	}
+
+	if err := db.Migrator().DropTable(&models.User{}); err != nil {
+		t.Fatalf("drop user table: %v", err)
+	}
+	err = policy(map[string]interface{}{}, Claims{HasUserID: true, UserID: 42}, now)
+	if err == nil || err.Error() != "failed to evaluate token state" {
+		t.Fatalf("user db failure = %v", err)
+	}
+}
+
+func TestRevokedTokenPolicyBranches(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	db := testAuthDB(t)
+	policy := NewRevokedTokenPolicy(db)
+
+	if err := policy(map[string]interface{}{}, Claims{}, now); err != nil {
+		t.Fatalf("token without id should pass, got %v", err)
+	}
+	if err := policy(map[string]interface{}{}, Claims{TokenID: "unknown"}, now); err != nil {
+		t.Fatalf("unrevoked token should pass, got %v", err)
+	}
+
+	past := now.Add(-24 * time.Hour)
+	revoked := models.RevokedToken{JTI: "revoked-1", ExpiresAt: &past, RevokedAt: past}
+	if err := db.Create(&revoked).Error; err != nil {
+		t.Fatalf("seed revoked token: %v", err)
+	}
+	if err := policy(map[string]interface{}{}, Claims{TokenID: "revoked-1"}, now); err != nil {
+		t.Fatalf("expired revoked token (expires_at <= now) should pass, got %v", err)
+	}
+
+	future := now.Add(time.Hour)
+	active := models.RevokedToken{JTI: "revoked-2", ExpiresAt: &future}
+	if err := db.Create(&active).Error; err != nil {
+		t.Fatalf("seed active revoked token: %v", err)
+	}
+	err := policy(map[string]interface{}{}, Claims{TokenID: "revoked-2"}, now)
+	if err == nil || err.Error() != "token has been explicitly revoked" {
+		t.Fatalf("revoked token = %v", err)
+	}
+
+	if err := db.Migrator().DropTable(&models.RevokedToken{}); err != nil {
+		t.Fatalf("drop table: %v", err)
+	}
+	err = policy(map[string]interface{}{}, Claims{TokenID: "any"}, now)
+	if err == nil || err.Error() != "failed to evaluate revoked token state" {
+		t.Fatalf("revoked db failure = %v", err)
+	}
+}

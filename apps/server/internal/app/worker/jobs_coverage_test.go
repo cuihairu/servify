@@ -2,11 +2,15 @@ package worker
 
 import (
 	"context"
+	"errors"
+	"io"
 	"testing"
 	"time"
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -37,10 +41,10 @@ func TestJitterBoundaries(t *testing.T) {
 
 func TestWorkerNames(t *testing.T) {
 	names := map[string]bootstrap.Worker{
-		"statistics-daily-stats":    NewStatisticsWorker(nil, time.Hour, nil),
-		"sla-monitor":               NewSLAMonitorWorker(nil, time.Minute, nil),
-		"audit-retention-cleanup":   NewAuditCleanupWorker(nil, time.Hour, nil),
-		"revoked-token-cleanup":     NewRevokedTokenCleanupWorker(nil, time.Hour, nil),
+		"statistics-daily-stats":  NewStatisticsWorker(nil, time.Hour, nil),
+		"sla-monitor":             NewSLAMonitorWorker(nil, time.Minute, nil),
+		"audit-retention-cleanup": NewAuditCleanupWorker(nil, time.Hour, nil),
+		"revoked-token-cleanup":   NewRevokedTokenCleanupWorker(nil, time.Hour, nil),
 	}
 	for want, w := range names {
 		if got := w.Name(); got != want {
@@ -201,5 +205,168 @@ func TestRegisterDefaultWorkersWithRetentionWorkers(t *testing.T) {
 	RegisterDefaultWorkers(app, cfg, db, &fakeRuntimeWorkerDependencies{})
 	if len(app.Workers) != 4 {
 		t.Fatalf("expected 4 workers, got %d", len(app.Workers))
+	}
+}
+
+type countingCleanupService struct {
+	calls  int
+	result int64
+	err    error
+	logger bool
+}
+
+func (c *countingCleanupService) Cleanup(ctx context.Context, now time.Time) (int64, error) {
+	c.calls++
+	return c.result, c.err
+}
+
+type blockingStatisticsService struct {
+	started chan struct{}
+}
+
+func (b *blockingStatisticsService) StartDailyStatsWorkerContext(ctx context.Context, interval time.Duration) {
+	close(b.started)
+	<-ctx.Done()
+	time.Sleep(300 * time.Millisecond)
+}
+
+type blockingSLAService struct {
+	started chan struct{}
+}
+
+func (b *blockingSLAService) StartSLAMonitor(ctx context.Context, interval time.Duration) {
+	close(b.started)
+	<-ctx.Done()
+	time.Sleep(300 * time.Millisecond)
+}
+
+func TestStatisticsWorkerDefaultInterval(t *testing.T) {
+	w := NewStatisticsWorker(nil, 0, nil)
+	if got := w.(*StatisticsWorker).interval; got != time.Hour {
+		t.Fatalf("default interval = %v, want 1h", got)
+	}
+}
+
+func TestStatisticsWorkerStopDuringJitter(t *testing.T) {
+	w := NewStatisticsWorker(&fakeStatisticsService{loop: &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}}, time.Hour, nil)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := w.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop() during jitter error = %v", err)
+	}
+}
+
+func TestStatisticsWorkerStopReturnsContextError(t *testing.T) {
+	started := make(chan struct{})
+	w := NewStatisticsWorker(&blockingStatisticsService{started: started}, 100*time.Millisecond, nil)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("statistics loop did not start")
+	}
+	stopCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := w.Stop(stopCtx); err == nil {
+		t.Fatal("Stop() with cancelled ctx expected context error")
+	}
+}
+
+func TestSLAMonitorWorkerStopVariants(t *testing.T) {
+	w := NewSLAMonitorWorker(nil, time.Minute, nil)
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() before start = %v", err)
+	}
+
+	started := make(chan struct{})
+	w2 := NewSLAMonitorWorker(&blockingSLAService{started: started}, 100*time.Millisecond, nil)
+	if err := w2.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("sla loop did not start")
+	}
+	stopCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := w2.Stop(stopCtx); err == nil {
+		t.Fatal("Stop() with cancelled ctx expected context error")
+	}
+}
+
+func TestAuditCleanupWorkerRunsWithLoggerAndTicker(t *testing.T) {
+	service := &countingCleanupService{result: 3}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	w := NewAuditCleanupWorker(service, 40*time.Millisecond, logger)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for service.calls < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	if service.calls < 2 {
+		t.Fatalf("expected ticker loop to run twice, got %d", service.calls)
+	}
+}
+
+func TestAuditCleanupWorkerStopBeforeStart(t *testing.T) {
+	w := NewAuditCleanupWorker(nil, time.Minute, nil)
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() before start = %v", err)
+	}
+}
+
+func TestRevokedTokenCleanupWorkerRunsWithLoggerAndTicker(t *testing.T) {
+	service := &countingCleanupService{result: 2}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	w := NewRevokedTokenCleanupWorker(service, 40*time.Millisecond, logger)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for service.calls < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	if service.calls < 2 {
+		t.Fatalf("expected ticker loop to run twice, got %d", service.calls)
+	}
+}
+
+func TestRevokedTokenCleanupWorkerStopBeforeStart(t *testing.T) {
+	w := NewRevokedTokenCleanupWorker(nil, time.Minute, nil)
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() before start = %v", err)
+	}
+}
+
+func TestCleanupWorkerLogsErrorsWithLogger(t *testing.T) {
+	service := &countingCleanupService{err: errors.New("cleanup boom")}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	w := NewAuditCleanupWorker(service, 30*time.Millisecond, logger)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for service.calls < 1 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
 	}
 }

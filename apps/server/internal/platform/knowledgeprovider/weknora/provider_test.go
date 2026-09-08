@@ -3,6 +3,7 @@ package weknora
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,5 +101,60 @@ func TestProviderDeleteDocumentUnsupported(t *testing.T) {
 	err := provider.DeleteDocument(context.Background(), "doc-1")
 	if !errors.Is(err, knowledgeprovider.ErrOperationNotSupported) {
 		t.Fatalf("expected unsupported operation error, got %v", err)
+	}
+}
+
+func TestProviderSearchErrorBranches(t *testing.T) {
+	ctx := context.Background()
+
+	nilProvider := NewProvider(nil, "kb-1")
+	if _, err := nilProvider.Search(ctx, knowledgeprovider.SearchRequest{}); err == nil {
+		t.Fatal("nil client search should fail")
+	}
+
+	errProvider := NewProvider(&mockClient{searchErr: errors.New("boom")}, "kb-1")
+	if _, err := errProvider.Search(ctx, knowledgeprovider.SearchRequest{}); err == nil {
+		t.Fatal("search error should propagate")
+	}
+
+	failProvider := NewProvider(&mockClient{searchResp: &base.SearchResponse{Success: false, Message: "not found"}}, "kb-1")
+	_, err := failProvider.Search(ctx, knowledgeprovider.SearchRequest{})
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("unsuccessful search = %v", err)
+	}
+}
+
+func TestProviderUpsertErrorBranches(t *testing.T) {
+	ctx := context.Background()
+
+	nilProvider := NewProvider(nil, "kb-1")
+	if _, err := nilProvider.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{}); err == nil {
+		t.Fatal("nil client upsert should fail")
+	}
+
+	noKB := NewProvider(&mockClient{}, "")
+	if _, err := noKB.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{}); err == nil {
+		t.Fatal("missing knowledge id upsert should fail")
+	}
+
+	uploadErr := NewProvider(&mockClient{uploadErr: errors.New("upload failed")}, "kb-1")
+	if _, err := uploadErr.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{}); err == nil {
+		t.Fatal("upload error should propagate")
+	}
+}
+
+func TestProviderRebuildIndex(t *testing.T) {
+	ctx := context.Background()
+	if err := NewProvider(nil, "kb-1").RebuildIndex(ctx, knowledgeprovider.RebuildRequest{}); err == nil {
+		t.Fatal("nil client rebuild should fail")
+	}
+	if err := NewProvider(&mockClient{}, "kb-1").RebuildIndex(ctx, knowledgeprovider.RebuildRequest{}); err != nil {
+		t.Fatalf("rebuild should be a no-op, got %v", err)
+	}
+}
+
+func TestProviderHealthCheckNilClient(t *testing.T) {
+	if err := NewProvider(nil, "kb-1").HealthCheck(context.Background()); err == nil {
+		t.Fatal("nil client health check should fail")
 	}
 }

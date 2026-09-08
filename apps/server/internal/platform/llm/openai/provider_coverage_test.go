@@ -3,10 +3,12 @@ package openai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
@@ -308,4 +310,268 @@ func TestDecodeToolCallsInvalidArguments(t *testing.T) {
 
 func decodeJSONBody(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
+}
+
+func TestProviderHealthCheckInvalidURL(t *testing.T) {
+	p := NewProvider("key", "http://bad\x7furl:%%")
+	if err := p.HealthCheck(context.Background()); err == nil {
+		t.Fatal("expected create request error")
+	}
+}
+
+func TestProviderChatInvalidURL(t *testing.T) {
+	p := NewProvider("key", "http://bad\x7furl:%%")
+	if _, err := p.Chat(context.Background(), llm.ChatRequest{Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}}}); err == nil {
+		t.Fatal("expected create request error")
+	}
+}
+
+type erroringReadCloser struct{}
+
+func (erroringReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("read failed") }
+func (erroringReadCloser) Close() error               { return nil }
+
+func TestProviderChatReadResponseFailure(t *testing.T) {
+	p := &Provider{
+		apiKey:  "key",
+		baseURL: "http://openai-stub.local",
+		client: &http.Client{Transport: &stubTransport{
+			resp: &http.Response{StatusCode: http.StatusOK, Body: erroringReadCloser{}, Header: http.Header{}},
+		}},
+	}
+	if _, err := p.Chat(context.Background(), llm.ChatRequest{Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}}}); err == nil {
+		t.Fatal("expected read response error")
+	}
+}
+
+type stubTransport struct {
+	resp *http.Response
+}
+
+func (s *stubTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return s.resp, nil
+}
+
+func TestProviderChatStreamToolCallAccumulation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"handoff","arguments":"{\"conversation_"}}]}}]}` + "\n\n"))
+		flusher.Flush()
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"id\":\"c-9\",\"reason\":\"rage quit\"}"}}]}}]}` + "\n\n"))
+		flusher.Flush()
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		flusher.Flush()
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(context.Background(), llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "help"}},
+		Tools: []llm.ToolDefinition{{
+			Name:        "handoff",
+			Description: "handoff to human",
+			InputSchema: map[string]interface{}{"type": "object"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+
+	var toolCalls []*llm.ToolCall
+	done := false
+	for chunk := range ch {
+		if chunk.ToolCall != nil {
+			toolCalls = append(toolCalls, chunk.ToolCall)
+		}
+		if chunk.Done {
+			done = true
+		}
+	}
+	if !done {
+		t.Fatal("expected done chunk")
+	}
+	if len(toolCalls) != 1 {
+		t.Fatalf("tool calls = %+v", toolCalls)
+	}
+	call := toolCalls[0]
+	if call.ID != "call-1" || call.Name != "handoff" || call.Arguments["conversation_id"] != "c-9" {
+		t.Fatalf("accumulated tool call = %+v", call)
+	}
+}
+
+func TestProviderChatStreamFinishReasonWithoutDone(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"final"},"finish_reason":"stop"}]}` + "\n\n"))
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(context.Background(), llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	content := ""
+	done := false
+	for chunk := range ch {
+		content += chunk.ContentDelta
+		if chunk.Done {
+			done = true
+		}
+	}
+	if content != "final" || !done {
+		t.Fatalf("content=%q done=%v", content, done)
+	}
+}
+
+func TestProviderChatStreamCanceledContextDuringStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"partial"}}]}` + "\n\n"))
+		flusher.Flush()
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"-more"}}]}` + "\n\n"))
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	seen := 0
+	for range ch {
+		seen++
+		if seen == 1 {
+			cancel()
+		}
+	}
+}
+
+func TestProviderChatStreamDoneMarkerEmitsToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-2","type":"function","function":{"name":"ticket_lookup","arguments":"{\"ticket_id\":7}"}}]}}]}` + "\n\n"))
+		flusher.Flush()
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(context.Background(), llm.ChatRequest{
+		Messages: []llm.ChatMessage{
+			{Role: "user", Content: "status?"},
+			{Role: "assistant", Content: "", ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "handoff", Arguments: map[string]interface{}{"conversation_id": "c1"}}}},
+			{Role: "tool", ToolCallID: "call-1", Content: "{}"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	var toolCalls []*llm.ToolCall
+	done := false
+	for chunk := range ch {
+		if chunk.ToolCall != nil {
+			toolCalls = append(toolCalls, chunk.ToolCall)
+		}
+		if chunk.Done {
+			done = true
+		}
+	}
+	if !done || len(toolCalls) != 1 || toolCalls[0].Name != "ticket_lookup" {
+		t.Fatalf("done=%v toolCalls=%+v", done, toolCalls)
+	}
+}
+
+func TestProviderChatStreamInvalidURL(t *testing.T) {
+	p := NewProvider("key", "http://bad\x7furl:%%")
+	ch, err := p.ChatStream(context.Background(), llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	for range ch {
+	}
+}
+
+func TestProviderChatStreamContextCanceledDuringSend(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		for i := 0; i < 10; i++ {
+			_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"chunk"}}]}` + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	<-ch
+	cancel()
+	for range ch {
+	}
+}
+
+func TestProviderChatStreamContextCanceledAtStreamEnd(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"only"}}]}` + "\n\n"))
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	<-ch
+	cancel()
+	for range ch {
+	}
+}
+
+func TestProviderChatStreamErrorWithCanceledContext(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	for range ch {
+	}
 }

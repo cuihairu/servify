@@ -2,9 +2,12 @@ package telemetry
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func TestFieldsFromContext_AllFields(t *testing.T) {
@@ -56,5 +59,64 @@ func TestLoggerWithRequestID(t *testing.T) {
 
 	if entry.Data[FieldRequestID] != "req-abc" {
 		t.Fatalf("expected req-abc, got %v", entry.Data[FieldRequestID])
+	}
+}
+
+func TestLoggerWithFields(t *testing.T) {
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	ctx := WithRequestID(context.Background(), "req-9")
+	entry := LoggerWithFields(logger, ctx)
+	if entry.Data[FieldRequestID] != "req-9" {
+		t.Fatalf("entry fields = %+v", entry.Data)
+	}
+}
+
+func TestTraceAndSpanIDsWithActiveSpan(t *testing.T) {
+	otel.SetTracerProvider(sdktrace.NewTracerProvider())
+	tracer := otel.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "test-span")
+	defer span.End()
+
+	if traceID := TraceIDFromContext(ctx); traceID == "" {
+		t.Fatal("expected non-empty trace id")
+	}
+	if spanID := SpanIDFromContext(ctx); spanID == "" {
+		t.Fatal("expected non-empty span id")
+	}
+}
+
+func TestTraceAndSpanIDsNilContext(t *testing.T) {
+	if got := TraceIDFromContext(nil); got != "" {
+		t.Fatalf("nil context trace id = %q", got)
+	}
+	if got := SpanIDFromContext(nil); got != "" {
+		t.Fatalf("nil context span id = %q", got)
+	}
+}
+
+func TestFieldsFromContextWithSpan(t *testing.T) {
+	otel.SetTracerProvider(sdktrace.NewTracerProvider())
+	tracer := otel.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "test-span")
+	defer span.End()
+
+	fields := FieldsFromContext(ctx)
+	if fields[FieldTraceID] == nil || fields[FieldSpanID] == nil {
+		t.Fatalf("expected trace/span fields, got %+v", fields)
+	}
+}
+
+func TestTraceAndSpanIDsVariantsDirect(t *testing.T) {
+	otel.SetTracerProvider(sdktrace.NewTracerProvider())
+	tracer := otel.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "direct-span")
+	defer span.End()
+
+	if traceID := TraceIDFromContext(ctx); traceID == "" {
+		t.Fatal("expected non-empty trace id")
+	}
+	if spanID := SpanIDFromContext(ctx); spanID == "" {
+		t.Fatal("expected non-empty span id")
 	}
 }

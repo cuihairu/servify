@@ -2,7 +2,9 @@ package application_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,5 +141,152 @@ func TestServiceSuggest_DefaultsOnNilRequest(t *testing.T) {
 	}
 	if len(resp.SimilarTickets) != 0 || len(resp.KnowledgeDocs) != 0 {
 		t.Fatalf("expected no suggestions for empty query, got %+v", resp)
+	}
+}
+
+type suggestionRepoFailing struct {
+	ticketErr bool
+	docErr    bool
+}
+
+func (r *suggestionRepoFailing) FindTicketCandidates(ctx context.Context, tokens []string, candidateMax int) ([]suggestionapp.TicketCandidate, error) {
+	if r.ticketErr {
+		return nil, errors.New("ticket lookup failed")
+	}
+	return nil, nil
+}
+
+func (r *suggestionRepoFailing) FindKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
+	if r.docErr {
+		return nil, errors.New("doc lookup failed")
+	}
+	return nil, nil
+}
+
+func TestServiceSuggest_PropagatesRepoErrors(t *testing.T) {
+	if _, err := suggestionapp.NewService(&suggestionRepoFailing{ticketErr: true}).Suggest(context.Background(), &suggestioncontract.SuggestionRequest{Query: "alpha"}); err == nil {
+		t.Fatal("expected ticket repo error")
+	}
+	if _, err := suggestionapp.NewService(&suggestionRepoFailing{docErr: true}).Suggest(context.Background(), &suggestioncontract.SuggestionRequest{Query: "alpha"}); err == nil {
+		t.Fatal("expected doc repo error")
+	}
+}
+
+func TestServiceSuggest_ClampsLimitsAndSkipsZeroScore(t *testing.T) {
+	repo := &suggestionRepoStub{
+		ticketRows: []suggestionapp.TicketCandidate{
+			{ID: 1, Title: "alpha", Status: "open"},
+			{ID: 2, Title: "unrelated", Status: "open"},
+		},
+		docRows: []suggestionapp.KnowledgeDocCandidate{
+			{ID: 1, Title: "alpha"},
+			{ID: 2, Title: "unrelated"},
+		},
+	}
+	svc := suggestionapp.NewService(repo)
+	resp, err := svc.Suggest(context.Background(), &suggestioncontract.SuggestionRequest{
+		Query:              "alpha",
+		TicketLimit:        50,
+		KnowledgeDocLimit:  50,
+		CandidateTicketMax: 5000,
+	})
+	if err != nil {
+		t.Fatalf("Suggest() error = %v", err)
+	}
+	if len(resp.SimilarTickets) != 1 || resp.SimilarTickets[0].ID != 1 {
+		t.Fatalf("unexpected tickets: %+v", resp.SimilarTickets)
+	}
+	if len(resp.KnowledgeDocs) != 1 || resp.KnowledgeDocs[0].ID != 1 {
+		t.Fatalf("unexpected docs: %+v", resp.KnowledgeDocs)
+	}
+	if repo.ticketCandidateMax != 1000 {
+		t.Fatalf("candidate max clamped to %d, want 1000", repo.ticketCandidateMax)
+	}
+}
+
+func TestBuildLikeWhereTokens_SkipsEmptyTokens(t *testing.T) {
+	where, args := suggestionapp.BuildLikeWhereTokens([]string{"title"}, []string{"", "api"}, 3)
+	if where != "(title LIKE ?)" || len(args) != 1 {
+		t.Fatalf("where=%q args=%v", where, args)
+	}
+	if where, args := suggestionapp.BuildLikeWhereTokens([]string{"title"}, []string{""}, 3); where != "" || args != nil {
+		t.Fatalf("all-empty tokens should return empty, got %q %v", where, args)
+	}
+}
+
+func TestClassifyIntent_ConfidenceCap(t *testing.T) {
+	result := suggestionapp.ClassifyIntent("complaint angry refund invoice payment")
+	if result.Label != "billing" && result.Label != "complaint" {
+		t.Fatalf("unexpected label: %+v", result)
+	}
+	if result.Confidence > 0.95 {
+		t.Fatalf("confidence should be capped at 0.95, got %f", result.Confidence)
+	}
+	if len(result.Matches) == 0 {
+		t.Fatal("expected keyword matches")
+	}
+}
+
+func TestServiceSuggest_TicketTiebreakAndTrim(t *testing.T) {
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	repo := &suggestionRepoStub{
+		ticketRows: []suggestionapp.TicketCandidate{
+			{ID: 1, Title: "alpha", Status: "open", CreatedAt: base},
+			{ID: 2, Title: "alpha", Status: "open", CreatedAt: base.Add(time.Hour)},
+			{ID: 3, Title: "alpha", Status: "open", CreatedAt: base.Add(2 * time.Hour)},
+		},
+		docRows: []suggestionapp.KnowledgeDocCandidate{
+			{ID: 3, Title: "alpha"},
+			{ID: 2, Title: "alpha"},
+			{ID: 1, Title: "alpha"},
+		},
+	}
+	svc := suggestionapp.NewService(repo)
+	resp, err := svc.Suggest(context.Background(), &suggestioncontract.SuggestionRequest{
+		Query:             "alpha",
+		TicketLimit:       2,
+		KnowledgeDocLimit: 2,
+	})
+	if err != nil {
+		t.Fatalf("Suggest() error = %v", err)
+	}
+	if len(resp.SimilarTickets) != 2 {
+		t.Fatalf("expected trimmed tickets, got %+v", resp.SimilarTickets)
+	}
+	if resp.SimilarTickets[0].ID != 3 || resp.SimilarTickets[1].ID != 2 {
+		t.Fatalf("expected newest first on tie, got %+v", resp.SimilarTickets)
+	}
+	if len(resp.KnowledgeDocs) != 2 {
+		t.Fatalf("expected trimmed docs, got %+v", resp.KnowledgeDocs)
+	}
+	if resp.KnowledgeDocs[0].ID != 1 || resp.KnowledgeDocs[1].ID != 2 {
+		t.Fatalf("expected ascending id on tie, got %+v", resp.KnowledgeDocs)
+	}
+}
+
+func TestExtractTokens_EdgeCases(t *testing.T) {
+	if got := suggestionapp.ExtractTokens("!!! ???"); got != nil {
+		t.Fatalf("punctuation-only tokens = %v", got)
+	}
+	long := strings.Repeat("a", 40)
+	if got := suggestionapp.ExtractTokens("short " + long); len(got) != 1 || got[0] != "short" {
+		t.Fatalf("expected long token dropped, got %v", got)
+	}
+}
+
+func TestBuildLikeWhereTokens_StopsAtMaxTokens(t *testing.T) {
+	where, args := suggestionapp.BuildLikeWhereTokens([]string{"title"}, []string{"a", "b", "c"}, 2)
+	if where != "(title LIKE ?) OR (title LIKE ?)" || len(args) != 2 {
+		t.Fatalf("where=%q args=%v", where, args)
+	}
+}
+
+func TestClassifyIntent_ManyHitsCapConfidence(t *testing.T) {
+	result := suggestionapp.ClassifyIntent("发票 付款 支付 收费 价格")
+	if result.Label != "billing" {
+		t.Fatalf("label = %q", result.Label)
+	}
+	if result.Confidence != 0.95 {
+		t.Fatalf("confidence = %f, want 0.95", result.Confidence)
 	}
 }

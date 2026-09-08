@@ -16,14 +16,19 @@ import (
 
 // mockEmbeddingProvider 是 embedding.Provider 的 mock 实现
 type mockEmbeddingProvider struct {
-	vectors    [][]float32
-	dimension  int
-	embedError error
+	vectors     [][]float32
+	dimension   int
+	embedError  error
+	healthError error
+	emptyResult bool
 }
 
 func (m *mockEmbeddingProvider) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if m.embedError != nil {
 		return nil, m.embedError
+	}
+	if m.emptyResult {
+		return [][]float32{}, nil
 	}
 	if len(m.vectors) > 0 {
 		return m.vectors, nil
@@ -48,7 +53,7 @@ func (m *mockEmbeddingProvider) Dimension() int {
 }
 
 func (m *mockEmbeddingProvider) HealthCheck(ctx context.Context) error {
-	return nil
+	return m.healthError
 }
 
 // setupTestDB 创建内存 SQLite 数据库用于测试
@@ -651,4 +656,293 @@ func BenchmarkProvider_UpsertDocument(b *testing.B) {
 		doc.ExternalID = fmt.Sprintf("doc-%d", i)
 		_, _ = provider.UpsertDocument(ctx, doc)
 	}
+}
+
+func TestProvider_SearchEmptyVectors(t *testing.T) {
+	db := setupTestDB(t)
+	provider := NewProvider(db, &mockEmbeddingProvider{dimension: 3, emptyResult: true}, Config{})
+	_, err := provider.Search(context.Background(), knowledgeprovider.SearchRequest{Query: "q"})
+	if err == nil || !strings.Contains(err.Error(), "no vectors") {
+		t.Fatalf("expected no-vectors error, got %v", err)
+	}
+}
+
+func interceptQuery(db *gorm.DB, docs []models.KnowledgeDoc) {
+	_ = db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
+		if dest, ok := tx.Statement.Dest.(*[]models.KnowledgeDoc); ok {
+			*dest = docs
+		}
+	})
+}
+
+func TestProvider_SearchScoresAndFilters(t *testing.T) {
+	db := setupTestDB(t)
+	ctx := context.Background()
+
+	docs := []models.KnowledgeDoc{
+		{ID: 1, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e1", Title: "Same Direction", Content: "c1", ChunkIndex: 0, DocChunkID: "e1-chunk-0", Embedding: models.NewEmbedding([]float32{0.1, 0.2, 0.3})},
+		{ID: 2, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e2", Title: "Orthogonal", Content: "c2", ChunkIndex: 0, DocChunkID: "e2-chunk-0", Embedding: models.NewEmbedding([]float32{0.3, -0.3, 0.0})},
+		{ID: 3, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e3", Title: "Dim Mismatch", Content: "c3", ChunkIndex: 0, DocChunkID: "e3-chunk-0", Embedding: models.NewEmbedding([]float32{0.1, 0.2})},
+		{ID: 4, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e4", Title: "Opposite", Content: "c4", ChunkIndex: 0, DocChunkID: "e4-chunk-0", Embedding: models.NewEmbedding([]float32{-0.1, -0.2, -0.3})},
+	}
+	interceptQuery(db, docs)
+
+	provider := NewProvider(db, &mockEmbeddingProvider{
+		dimension: 3,
+		vectors:   [][]float32{{0.1, 0.2, 0.3}},
+	}, Config{Search: SearchConfig{Strategy: "cosine"}})
+
+	hits, err := provider.Search(ctx, knowledgeprovider.SearchRequest{
+		Query:      "q",
+		TenantID:   "t1",
+		KnowledgeID: "kb1",
+	})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(hits) != 3 {
+		t.Fatalf("expected 3 hits (dim mismatch skipped), got %d", len(hits))
+	}
+	if hits[0].DocumentID != "1" || hits[0].Score <= 0.99 {
+		t.Fatalf("unexpected first hit: %+v", hits[0])
+	}
+
+	// threshold filters everything except the near-identical vector
+	hits, err = provider.Search(ctx, knowledgeprovider.SearchRequest{Query: "q", Threshold: 0.99})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("expected 1 hit after threshold, got %d", len(hits))
+	}
+
+	// euclidean strategy scores via exponential decay
+	euclid := NewProvider(db, &mockEmbeddingProvider{
+		dimension: 3,
+		vectors:   [][]float32{{0.1, 0.2, 0.3}},
+	}, Config{Search: SearchConfig{Strategy: "euclidean"}})
+	hits, err = euclid.Search(ctx, knowledgeprovider.SearchRequest{Query: "q"})
+	if err != nil {
+		t.Fatalf("Search(euclidean) error = %v", err)
+	}
+	if len(hits) != 3 {
+		t.Fatalf("euclidean expected 3 hits, got %d", len(hits))
+	}
+	if hits[0].Score <= 0.5 {
+		t.Fatalf("euclidean score too low: %+v", hits[0])
+	}
+}
+
+func TestProvider_UpsertDocumentBranches(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+
+	// embedding count mismatch
+	mismatch := NewProvider(db, &mockEmbeddingProvider{
+		dimension: 3,
+		vectors:   [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
+	}, Config{Indexing: IndexingConfig{ChunkSize: 5}})
+	_, err := mismatch.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{Title: "T", Content: "short"})
+	if err == nil || !strings.Contains(err.Error(), "mismatch") {
+		t.Fatalf("expected count mismatch error, got %v", err)
+	}
+
+	// delete by numeric id branch (no external id)
+	byID := NewProvider(db, &mockEmbeddingProvider{dimension: 3, vectors: [][]float32{{0.1, 0.2, 0.3}}}, Config{})
+	seed := models.KnowledgeDoc{ProviderID: "pgvector", Title: "Old", Content: "old"}
+	if err := db.Create(&seed).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	idStr := fmt.Sprintf("%d", seed.ID)
+	if _, err := byID.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{ID: idStr, Title: "Replaced", Content: "new"}); err != nil {
+		t.Fatalf("upsert by id: %v", err)
+	}
+
+	// delete failure surfaces as error
+	brokenDB := setupTestDB(t)
+	if err := brokenDB.Migrator().DropTable("knowledge_docs"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	broken := NewProvider(brokenDB, &mockEmbeddingProvider{dimension: 3, vectors: [][]float32{{0.1, 0.2, 0.3}}}, Config{})
+	_, err = broken.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "x", Title: "T", Content: "c"})
+	if err == nil {
+		t.Fatal("expected delete failure error")
+	}
+}
+
+func TestProvider_DeleteDocumentBranches(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	if err := db.Migrator().DropTable("knowledge_docs"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	provider := NewProvider(db, &mockEmbeddingProvider{dimension: 3}, Config{})
+	if err := provider.DeleteDocument(ctx, "whatever"); err == nil {
+		t.Fatal("expected delete error on missing table")
+	}
+}
+
+func TestProvider_HealthCheckBranches(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+
+	embeddingDown := NewProvider(db, &mockEmbeddingProvider{dimension: 3, healthError: errors.New("embedding down")}, Config{})
+	if err := embeddingDown.HealthCheck(ctx); err == nil || !strings.Contains(err.Error(), "embedding") {
+		t.Fatalf("expected embedding health error, got %v", err)
+	}
+
+	closed, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if sqlDB, err := closed.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	closedProvider := NewProvider(closed, &mockEmbeddingProvider{dimension: 3}, Config{})
+	if err := closedProvider.HealthCheck(ctx); err == nil {
+		t.Fatal("expected ping failure after closing db")
+	}
+}
+
+func TestExpHelpers(t *testing.T) {
+	if got := exp64(-11); got != 0 {
+		t.Fatalf("exp64(-11) = %v want 0", got)
+	}
+	if got := exp64(11); got != 22026.465794806718 {
+		t.Fatalf("exp64(11) = %v", got)
+	}
+	if got := exp64(1); got < 2.7 || got > 2.72 {
+		t.Fatalf("exp64(1) = %v", got)
+	}
+	if got := exp32(0); got != 1 {
+		t.Fatalf("exp32(0) = %v", got)
+	}
+	if got := exp64(0); got != 1 {
+		t.Fatalf("exp64(0) = %v", got)
+	}
+}
+
+func TestChunkerEdgeBranches(t *testing.T) {
+	c := NewChunker(10, 2)
+
+	// whitespace-only input normalizes to empty
+	if got := c.Chunk("   \t  "); len(got) != 0 {
+		t.Fatalf("Chunk(whitespace) = %v", got)
+	}
+	if got := c.ChunkByParagraph("   "); len(got) != 0 {
+		t.Fatalf("ChunkByParagraph(whitespace) = %v", got)
+	}
+	if got := c.ChunkByParagraph("\n \n \n"); len(got) != 0 {
+		t.Fatalf("ChunkByParagraph(no valid paragraphs) = %v", got)
+	}
+
+	// merging paragraphs: two short paras fit together, third overflows
+	got := c.ChunkByParagraph("aaaa\n\nbbbb\n\ncccccccccccccc")
+	if len(got) < 2 {
+		t.Fatalf("expected merged then overflow chunks, got %v", got)
+	}
+
+	// paragraph exactly at chunk size becomes current chunk
+	got = c.ChunkByParagraph("12345\n\n6789012345")
+	if len(got) < 2 {
+		t.Fatalf("expected split chunks, got %v", got)
+	}
+
+	// four short paragraphs enter the merge loop
+	got = NewChunker(50, 5).ChunkByParagraph("p1\n\np2\n\np3\n\np4")
+	if len(got) != 1 {
+		t.Fatalf("expected single merged chunk, got %v", got)
+	}
+
+	// CountTokens minimum clamp
+	if got := CountTokens("a"); got != 1 {
+		t.Fatalf("CountTokens('a') = %d want 1", got)
+	}
+}
+
+func TestFindSentenceBoundaryFallbacks(t *testing.T) {
+	c := NewChunker(10, 2)
+	runes := []rune("one two three four five six seven eight nine ten eleven")
+	// no punctuation, no space within window → returns end
+	if got := c.findSentenceBoundary(runes, 0, 10); got <= 0 {
+		t.Fatalf("boundary = %d", got)
+	}
+
+	// comma boundary is preferred over raw end
+	commaText := []rune("aaaaaaaaaa,bbbbbbbbbb cccccccccc")
+	if got := c.findSentenceBoundary(commaText, 0, 10); got != 11 {
+		t.Fatalf("comma boundary = %d want 11", got)
+	}
+
+	// chinese sentence ender followed by space
+	cnText := []rune("哈哈哈哈哈哈哈哈哈哈。 哈哈哈哈哈哈")
+	if got := c.findSentenceBoundary(cnText, 0, 10); got != 11 {
+		t.Fatalf("chinese boundary = %d want 11", got)
+	}
+}
+
+func TestProvider_UpsertDocumentCreateFailure(t *testing.T) {
+	db := setupTestDB(t)
+	if err := db.Migrator().DropTable("knowledge_docs"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	p := NewProvider(db, &mockEmbeddingProvider{dimension: 3, vectors: [][]float32{{0.1, 0.2, 0.3}}}, Config{})
+	if _, err := p.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{Title: "T", Content: "c"}); err == nil {
+		t.Fatal("expected create chunk failure")
+	}
+}
+
+func TestProvider_DeleteDocumentSecondQueryFailure(t *testing.T) {
+	db := setupTestDB(t)
+	calls := 0
+	_ = db.Callback().Delete().Replace("gorm:delete", func(tx *gorm.DB) {
+		calls++
+		if calls == 1 {
+			tx.RowsAffected = 0
+			return
+		}
+		tx.Error = errors.New("second delete failed")
+	})
+	p := NewProvider(db, &mockEmbeddingProvider{dimension: 3}, Config{})
+	if err := p.DeleteDocument(context.Background(), "missing-id"); err == nil {
+		t.Fatal("expected second delete failure")
+	}
+}
+
+func TestProvider_HealthCheckSucceedsWithFakeExtensionTable(t *testing.T) {
+	db := setupTestDB(t)
+	if err := db.Exec("CREATE TABLE pg_extension (extname TEXT, extversion TEXT)").Error; err != nil {
+		t.Fatalf("create pg_extension: %v", err)
+	}
+	p := NewProvider(db, &mockEmbeddingProvider{dimension: 3}, Config{})
+	if err := p.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("expected healthy, got %v", err)
+	}
+}
+
+func TestDistanceMismatchGuards(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("CosineDistance should panic on length mismatch")
+		}
+	}()
+	_ = CosineDistance([]float32{1}, []float32{1, 2})
+}
+
+func TestEuclideanDistanceMismatchGuard(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("EuclideanDistance should panic on length mismatch")
+		}
+	}()
+	_ = EuclideanDistance([]float32{1}, []float32{1, 2})
+}
+
+func TestDotProductMismatchGuard(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("DotProduct should panic on length mismatch")
+		}
+	}()
+	_ = DotProduct([]float32{1}, []float32{1, 2})
 }

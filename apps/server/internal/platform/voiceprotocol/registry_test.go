@@ -84,3 +84,70 @@ func TestRegistryRejectsNilAdapter(t *testing.T) {
 		t.Fatalf("expected nil media adapter error")
 	}
 }
+
+func TestRegistryNilGuards(t *testing.T) {
+	var nilRegistry *Registry
+	if err := nilRegistry.RegisterSignaling(testSignalingAdapter{protocol: ProtocolSIP}); err == nil {
+		t.Fatal("nil registry RegisterSignaling should fail")
+	}
+	if err := nilRegistry.RegisterMedia(testMediaAdapter{protocol: ProtocolSIP}); err == nil {
+		t.Fatal("nil registry RegisterMedia should fail")
+	}
+	if _, ok := nilRegistry.Signaling(ProtocolSIP); ok {
+		t.Fatal("nil registry Signaling should miss")
+	}
+	if _, ok := nilRegistry.Media(ProtocolSIP); ok {
+		t.Fatal("nil registry Media should miss")
+	}
+	if got := nilRegistry.SupportedProtocols(); got != nil {
+		t.Fatalf("nil registry SupportedProtocols = %v", got)
+	}
+
+	registry := NewRegistry()
+	if err := registry.RegisterSignaling(nil); err == nil {
+		t.Fatal("nil signaling adapter should fail")
+	}
+	if err := registry.RegisterMedia(nil); err == nil {
+		t.Fatal("nil media adapter should fail")
+	}
+	if _, ok := registry.Signaling(ProtocolSIP); ok {
+		t.Fatal("unregistered signaling should miss")
+	}
+	if _, ok := registry.Media(ProtocolSIP); ok {
+		t.Fatal("unregistered media should miss")
+	}
+	if got := registry.SupportedProtocols(); len(got) != 0 {
+		t.Fatalf("empty registry protocols = %v", got)
+	}
+}
+
+func TestRegistrySignalingOverridesExisting(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.RegisterSignaling(testSignalingAdapter{protocol: ProtocolSIP}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if err := registry.RegisterSignaling(testSignalingAdapter{protocol: ProtocolSIP}); err != nil {
+		t.Fatalf("re-register: %v", err)
+	}
+	adapter, ok := registry.Signaling(ProtocolSIP)
+	if !ok || adapter.Protocol() != ProtocolSIP {
+		t.Fatalf("Signaling() = (%v, %v)", adapter, ok)
+	}
+}
+
+func TestRegistrySupportedProtocolsUnionsAndSorts(t *testing.T) {
+	registry := NewRegistry()
+	if err := registry.RegisterSignaling(testSignalingAdapter{protocol: ProtocolWebRTC}); err != nil {
+		t.Fatalf("register signaling: %v", err)
+	}
+	if err := registry.RegisterMedia(testMediaAdapter{protocol: ProtocolSIP}); err != nil {
+		t.Fatalf("register media: %v", err)
+	}
+	if err := registry.RegisterMedia(testMediaAdapter{protocol: ProtocolWebRTC}); err != nil {
+		t.Fatalf("register media ws: %v", err)
+	}
+	got := registry.SupportedProtocols()
+	if len(got) != 2 || got[0] != ProtocolSIP || got[1] != ProtocolWebRTC {
+		t.Fatalf("SupportedProtocols() = %v", got)
+	}
+}
