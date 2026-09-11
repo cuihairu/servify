@@ -301,7 +301,7 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 		c.processMessageWithAI(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "hi"}})
 		time.Sleep(50 * time.Millisecond)
 		if ai.processCalls.Load() != 0 {
-			t.Fatalf("expected skip, got %d calls", ai.processCalls)
+			t.Fatalf("expected skip, got %d calls", ai.processCalls.Load())
 		}
 	})
 
