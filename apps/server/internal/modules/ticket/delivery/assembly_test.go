@@ -3,8 +3,10 @@ package delivery
 import (
 	"context"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,9 +19,12 @@ import (
 	"gorm.io/gorm"
 )
 
+var ticketDeliveryDBSeq uint32
+
 func newTicketDeliveryDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:ticket_delivery_" + strings.ReplaceAll(t.Name(), "/", "_") + "?mode=memory&cache=shared"
+	// 全局唯一序号避免 -count 重跑或并行测试时命中同一命名内存库
+	dsn := "file:ticket_delivery_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" + strconv.Itoa(int(atomic.AddUint32(&ticketDeliveryDBSeq, 1))) + "?mode=memory&cache=shared"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

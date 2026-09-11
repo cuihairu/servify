@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,8 +18,15 @@ import (
 	"gorm.io/gorm"
 )
 
+var usersecurityDBSeq uint32
+
+// uniqueMemoryDSN 返回带全局唯一序号的内存库 DSN，避免重跑或并行时命中同一命名库
+func uniqueMemoryDSN(name string) string {
+	return fmt.Sprintf("file:%s_%d?mode=memory&cache=shared", name, atomic.AddUint32(&usersecurityDBSeq, 1))
+}
+
 func TestRevokeUserTokens(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_revoke?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_revoke")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -55,7 +64,7 @@ func TestRevokeUserTokens(t *testing.T) {
 }
 
 func TestServiceGetUsers(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_get_users?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_get_users")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -89,7 +98,7 @@ func TestServiceGetUsers(t *testing.T) {
 }
 
 func TestServiceListAndRevokeSession(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_sessions?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_sessions")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -139,7 +148,7 @@ func TestServiceListAndRevokeSession(t *testing.T) {
 }
 
 func TestServiceRevokeAllSessions(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_revoke_all_sessions?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_revoke_all_sessions")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -184,7 +193,7 @@ func TestServiceRevokeAllSessions(t *testing.T) {
 }
 
 func TestServiceScopedUserAccess(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_scope_access?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_scope_access")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -258,7 +267,7 @@ func TestServiceScopedUserAccess(t *testing.T) {
 }
 
 func TestServiceRevokeJWT(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_revoke_jwt?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_revoke_jwt")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -296,7 +305,7 @@ func TestServiceRevokeJWT(t *testing.T) {
 }
 
 func TestServiceScopedTokenSurface(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_scoped_tokens?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_scoped_tokens")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -351,7 +360,7 @@ func TestServiceScopedTokenSurface(t *testing.T) {
 }
 
 func TestServiceListRevokedTokensAndCleanup(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:usersecurity_query_cleanup?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_query_cleanup")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
