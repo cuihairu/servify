@@ -33,6 +33,21 @@ type WebRTCConnection struct {
 	DataChannel    *webrtc.DataChannel
 	Status         string
 	CreatedAt      time.Time
+
+	statusMu sync.RWMutex
+}
+
+// SetStatus 更新连接状态，供 pion 状态回调 goroutine 调用。
+func (c *WebRTCConnection) SetStatus(status string) {
+	c.statusMu.Lock()
+	defer c.statusMu.Unlock()
+	c.Status = status
+}
+
+func (c *WebRTCConnection) statusValue() string {
+	c.statusMu.RLock()
+	defer c.statusMu.RUnlock()
+	return c.Status
 }
 
 type WebRTCSignal struct {
@@ -84,7 +99,7 @@ func (s *WebRTCService) CreatePeerConnection(sessionID string) (*WebRTCConnectio
 	// 设置连接状态回调
 	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		logrus.Infof("WebRTC connection %s state changed to %s", connectionID, state.String())
-		conn.Status = state.String()
+		conn.SetStatus(state.String())
 
 		// 通知客户端状态变化
 		s.wsHub.SendToSession(sessionID, WebSocketMessage{
@@ -272,7 +287,7 @@ func (s *WebRTCService) GetConnectionStats(sessionID string) (map[string]interfa
 		"ice_connection_state": iceConnState.String(),
 		"ice_gathering_state":  iceGatheringState.String(),
 		"created_at":           conn.CreatedAt,
-		"status":               conn.Status,
+		"status":               conn.statusValue(),
 	}
 
 	// 获取数据通道信息

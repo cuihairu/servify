@@ -127,7 +127,7 @@ func (h *WebSocketHub) Run() {
 			h.mutex.Unlock()
 
 		case message := <-h.broadcast:
-			h.mutex.RLock()
+			h.mutex.Lock()
 			for _, client := range h.clients {
 				if message.SessionID == "" || client.SessionID == message.SessionID {
 					select {
@@ -138,7 +138,7 @@ func (h *WebSocketHub) Run() {
 					}
 				}
 			}
-			h.mutex.RUnlock()
+			h.mutex.Unlock()
 		}
 	}
 }
