@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,11 +85,11 @@ func (s *unitTransferService) TransferToHuman(ctx context.Context, req *routingc
 type unitAIService struct {
 	queryErr       error
 	shouldTransfer bool
-	processCalls   int
+	processCalls   atomic.Int64
 }
 
 func (a *unitAIService) ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error) {
-	a.processCalls++
+	a.processCalls.Add(1)
 	if a.queryErr != nil {
 		return nil, a.queryErr
 	}
@@ -271,8 +272,8 @@ func TestWebSocket_HandleTextMessageFlow(t *testing.T) {
 	if second.Type != "ai-response" {
 		t.Fatalf("expected ai-response, got %s", second.Type)
 	}
-	if ai.processCalls != 1 {
-		t.Fatalf("expected 1 ai call, got %d", ai.processCalls)
+	if ai.processCalls.Load() != 1 {
+		t.Fatalf("expected 1 ai call, got %d", ai.processCalls.Load())
 	}
 }
 
@@ -284,7 +285,7 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 		hub.SetAIService(ai)
 		c := &WebSocketClient{ID: "c", SessionID: "s", Hub: hub}
 		c.processMessageWithAI(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "   "}})
-		if ai.processCalls != 0 {
+		if ai.processCalls.Load() != 0 {
 			t.Fatal("blank content should not reach AI")
 		}
 	})
@@ -299,7 +300,7 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 		c := &WebSocketClient{ID: "c", SessionID: "s", Hub: hub}
 		c.processMessageWithAI(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "hi"}})
 		time.Sleep(50 * time.Millisecond)
-		if ai.processCalls != 0 {
+		if ai.processCalls.Load() != 0 {
 			t.Fatalf("expected skip, got %d calls", ai.processCalls)
 		}
 	})
@@ -314,8 +315,8 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 		c := &WebSocketClient{ID: "c", SessionID: "s", Hub: hub}
 		c.processMessageWithAI(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "hi"}})
 		time.Sleep(50 * time.Millisecond)
-		if ai.processCalls != 1 {
-			t.Fatalf("expected ai call after lookup error, got %d", ai.processCalls)
+		if ai.processCalls.Load() != 1 {
+			t.Fatalf("expected ai call after lookup error, got %d", ai.processCalls.Load())
 		}
 	})
 
@@ -338,7 +339,7 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 		if !strings.Contains(msg.Data.(map[string]interface{})["content"].(string), "等待队列") {
 			t.Fatalf("unexpected waiting message: %+v", msg.Data)
 		}
-		if ai.processCalls != 0 {
+		if ai.processCalls.Load() != 0 {
 			t.Fatal("transfer path must not call AI")
 		}
 	})

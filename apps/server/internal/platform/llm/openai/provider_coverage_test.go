@@ -444,6 +444,7 @@ func TestProviderChatStreamCanceledContextDuringStream(t *testing.T) {
 	defer srv.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	provider := NewProvider("key", srv.URL)
 	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
 		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},

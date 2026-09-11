@@ -405,7 +405,7 @@ func TestAuthService_SequentialErrors(t *testing.T) {
 	tok, err := createHS256JWT(map[string]interface{}{
 		"token_use": "refresh", "user_id": float64(92), "session_id": "s92",
 		"session_token_version": float64(0), "token_version": float64(0),
-		"iat":                   float64(time.Now().Unix()),
+		"iat": float64(time.Now().Unix()),
 	}, cfg.JWT.Secret)
 	if err != nil {
 		t.Fatalf("token: %v", err)

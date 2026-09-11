@@ -193,11 +193,11 @@ func TestToCallEventDefaults(t *testing.T) {
 
 func TestToCallEventDoesNotMutateSourceMetadata(t *testing.T) {
 	src := WebhookEvent{
-		CallID:      "call-y",
-		EventID:     "evt-y",
-		Metadata:    map[string]interface{}{"k": "v"},
-		EventType:   "call.hangup",
-		OccurredAt:  time.Now(),
+		CallID:     "call-y",
+		EventID:    "evt-y",
+		Metadata:   map[string]interface{}{"k": "v"},
+		EventType:  "call.hangup",
+		OccurredAt: time.Now(),
 	}
 	event := toCallEvent(src, voiceprotocol.CallEventHangup)
 	event.Metadata["k2"] = "v2"

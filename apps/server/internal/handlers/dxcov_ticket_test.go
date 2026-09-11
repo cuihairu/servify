@@ -31,14 +31,14 @@ func dxcExportTicketFixture() *models.Ticket {
 	agentID := uint(7)
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	return &models.Ticket{
-		ID:        42,
-		Title:     "t1",
+		ID:         42,
+		Title:      "t1",
 		CustomerID: 3,
-		AgentID:   &agentID,
-		Status:    "open",
-		Priority:  "high",
-		Category:  "tech",
-		Tags:      "a,b",
+		AgentID:    &agentID,
+		Status:     "open",
+		Priority:   "high",
+		Category:   "tech",
+		Tags:       "a,b",
 		CustomFieldValues: []models.TicketCustomFieldValue{
 			{CustomField: models.CustomField{Key: "env"}, Value: "prod"},
 			{CustomField: models.CustomField{Key: ""}, Value: "skip"},

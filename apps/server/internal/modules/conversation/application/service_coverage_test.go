@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/modules/conversation/domain"
 	"gorm.io/gorm"
+	"servify/apps/server/internal/modules/conversation/domain"
 )
 
 // scriptedRepo 允许按方法注入错误，用于覆盖 service 的错误分支。

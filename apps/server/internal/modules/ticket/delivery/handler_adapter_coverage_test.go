@@ -72,7 +72,7 @@ func TestHandlerServiceAdapterUpdateTicketWithCustomFieldMutation(t *testing.T) 
 
 	status := "resolved"
 	updated, err := adapter.UpdateTicket(ctx, 3, &ticketcontract.UpdateTicketRequest{
-		Status:        &status,
+		Status:       &status,
 		CustomFields: map[string]interface{}{"severity": "low", "region": nil},
 	}, 42)
 	if err != nil {

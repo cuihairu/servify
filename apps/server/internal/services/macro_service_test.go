@@ -378,6 +378,9 @@ func TestMacroService_ApplyToTicket(t *testing.T) {
 				if comment.Content != "这是活跃宏的内容" {
 					t.Errorf("unexpected content: %s", comment.Content)
 				}
+				if comment.TicketID != ticket.ID {
+					t.Errorf("unexpected ticket ID: %d", comment.TicketID)
+				}
 				if comment.Type != "system" {
 					t.Errorf("expected type 'system', got '%s'", comment.Type)
 				}

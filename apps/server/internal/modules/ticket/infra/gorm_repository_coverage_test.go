@@ -300,7 +300,9 @@ func TestTicketCovGetTicketStatsQueryErrors(t *testing.T) {
 		name  string
 		match func(sql string) bool
 	}{
-		{"total", func(sql string) bool { return strings.Contains(sql, "count(*)") && !strings.Contains(sql, "created_at >=") }},
+		{"total", func(sql string) bool {
+			return strings.Contains(sql, "count(*)") && !strings.Contains(sql, "created_at >=")
+		}},
 		{"by_status", func(sql string) bool { return strings.Contains(sql, "GROUP BY") && strings.Contains(sql, "status") }},
 		{"by_priority", func(sql string) bool { return strings.Contains(sql, "GROUP BY") && strings.Contains(sql, "priority") }},
 		{"today", func(sql string) bool { return strings.Contains(sql, "created_at >=") }},

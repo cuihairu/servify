@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -209,14 +210,14 @@ func TestRegisterDefaultWorkersWithRetentionWorkers(t *testing.T) {
 }
 
 type countingCleanupService struct {
-	calls  int
+	calls  atomic.Int64
 	result int64
 	err    error
 	logger bool
 }
 
 func (c *countingCleanupService) Cleanup(ctx context.Context, now time.Time) (int64, error) {
-	c.calls++
+	c.calls.Add(1)
 	return c.result, c.err
 }
 
@@ -309,14 +310,14 @@ func TestAuditCleanupWorkerRunsWithLoggerAndTicker(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 	deadline := time.Now().Add(2 * time.Second)
-	for service.calls < 2 && time.Now().Before(deadline) {
+	for service.calls.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if err := w.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	if service.calls < 2 {
-		t.Fatalf("expected ticker loop to run twice, got %d", service.calls)
+	if service.calls.Load() < 2 {
+		t.Fatalf("expected ticker loop to run twice, got %d", service.calls.Load())
 	}
 }
 
@@ -336,14 +337,14 @@ func TestRevokedTokenCleanupWorkerRunsWithLoggerAndTicker(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 	deadline := time.Now().Add(2 * time.Second)
-	for service.calls < 2 && time.Now().Before(deadline) {
+	for service.calls.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if err := w.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	if service.calls < 2 {
-		t.Fatalf("expected ticker loop to run twice, got %d", service.calls)
+	if service.calls.Load() < 2 {
+		t.Fatalf("expected ticker loop to run twice, got %d", service.calls.Load())
 	}
 }
 
@@ -363,7 +364,7 @@ func TestCleanupWorkerLogsErrorsWithLogger(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 	deadline := time.Now().Add(time.Second)
-	for service.calls < 1 && time.Now().Before(deadline) {
+	for service.calls.Load() < 1 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if err := w.Stop(context.Background()); err != nil {

@@ -693,8 +693,8 @@ func TestProvider_SearchScoresAndFilters(t *testing.T) {
 	}, Config{Search: SearchConfig{Strategy: "cosine"}})
 
 	hits, err := provider.Search(ctx, knowledgeprovider.SearchRequest{
-		Query:      "q",
-		TenantID:   "t1",
+		Query:       "q",
+		TenantID:    "t1",
 		KnowledgeID: "kb1",
 	})
 	if err != nil {

@@ -42,10 +42,10 @@ type mockAgentRepo struct {
 }
 
 type createCall struct {
-	userID       uint
-	department   string
-	skills       []string
-	concurrency  int
+	userID      uint
+	department  string
+	skills      []string
+	concurrency int
 }
 
 type chatLoadCall struct {

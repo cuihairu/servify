@@ -93,7 +93,7 @@ func TestProviderSearchUsesRequestKnowledgeIDAndDefaults(t *testing.T) {
 	})
 
 	hits, err := provider.Search(context.Background(), knowledgeprovider.SearchRequest{
-		Query:      "refund",
+		Query:       "refund",
 		KnowledgeID: "dataset-override",
 	})
 	if err != nil {

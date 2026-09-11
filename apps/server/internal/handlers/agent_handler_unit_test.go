@@ -47,10 +47,10 @@ func TestAgentHandlerUnitCreateAgent(t *testing.T) {
 	agent := &models.Agent{UserID: 1, Department: "sales"}
 
 	cases := []struct {
-		name   string
-		svc    *unitAgentService
-		body   string
-		want   int
+		name string
+		svc  *unitAgentService
+		body string
+		want int
 	}{
 		{"success", &unitAgentService{agent: agent}, validBody, http.StatusCreated},
 		{"invalid body", &unitAgentService{agent: agent}, `{`, http.StatusBadRequest},
@@ -125,10 +125,10 @@ func TestAgentHandlerUnitUpdateAgentStatus(t *testing.T) {
 func TestAgentHandlerUnitOnlineOffline(t *testing.T) {
 	agent := &models.Agent{UserID: 5}
 	cases := []struct {
-		name   string
-		svc    *unitAgentService
-		path   string
-		want   int
+		name string
+		svc  *unitAgentService
+		path string
+		want int
 	}{
 		{"online success", &unitAgentService{agent: agent}, "/agents/5/online", http.StatusOK},
 		{"offline success", &unitAgentService{agent: agent}, "/agents/5/offline", http.StatusOK},
@@ -194,11 +194,11 @@ func TestAgentHandlerUnitListAndOnline(t *testing.T) {
 func TestAgentHandlerUnitAssignRelease(t *testing.T) {
 	body := `{"session_id":"sess-1"}`
 	cases := []struct {
-		name   string
-		svc    *unitAgentService
-		path   string
-		body   string
-		want   int
+		name string
+		svc  *unitAgentService
+		path string
+		body string
+		want int
 	}{
 		{"assign success", &unitAgentService{}, "/agents/6/assign-session", body, http.StatusOK},
 		{"assign bad id", &unitAgentService{}, "/agents/x/assign-session", body, http.StatusBadRequest},

@@ -13,7 +13,7 @@ func TestDxcPortalConfigHandlerGetWithoutResolver(t *testing.T) {
 	t.Run("nil resolver with config", func(t *testing.T) {
 		cfg := &config.Config{
 			Portal: config.PortalConfig{
-				BrandName:    "Dxc Brand",
+				BrandName:     "Dxc Brand",
 				DefaultLocale: "zh-CN",
 			},
 		}

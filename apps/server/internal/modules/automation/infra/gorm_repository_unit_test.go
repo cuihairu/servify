@@ -99,17 +99,17 @@ func TestGormRepositoryCreateTriggerMarshalErrors(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := repo.CreateTrigger(ctx, automationapp.TriggerRequest{
-		Name:        "bad-cond",
-		Event:       "ticket.created",
-		Conditions:  []automationapp.TriggerCondition{{Field: "f", Op: "eq", Value: make(chan int)}},
+		Name:       "bad-cond",
+		Event:      "ticket.created",
+		Conditions: []automationapp.TriggerCondition{{Field: "f", Op: "eq", Value: make(chan int)}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid conditions") {
 		t.Fatalf("expected invalid conditions error, got %v", err)
 	}
 
 	_, err = repo.CreateTrigger(ctx, automationapp.TriggerRequest{
-		Name:   "bad-actions",
-		Event:  "ticket.created",
+		Name:    "bad-actions",
+		Event:   "ticket.created",
 		Actions: []automationapp.TriggerAction{{Type: "t", Params: map[string]interface{}{"bad": make(chan int)}}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "invalid actions") {

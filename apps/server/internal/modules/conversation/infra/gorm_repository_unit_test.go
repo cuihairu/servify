@@ -434,9 +434,9 @@ func TestMapConversationEdgeCases(t *testing.T) {
 func TestMapConversationModelDefaults(t *testing.T) {
 	endedAt := time.Now()
 	model := mapConversationModel(domain.Conversation{
-		ID:       "conv-1",
-		Status:   domain.ConversationStatusClosed,
-		EndedAt:  &endedAt,
+		ID:        "conv-1",
+		Status:    domain.ConversationStatusClosed,
+		EndedAt:   &endedAt,
 		StartedAt: endedAt.Add(-time.Hour),
 	})
 	if model.Platform != "web" {

@@ -213,7 +213,7 @@ func TestHandlerServiceAdapterNilDTOGuards(t *testing.T) {
 	assert.Nil(t, customerStatsFromDTO(nil))
 
 	activity := customerActivityFromDTO(&customerapp.CustomerActivityDTO{
-		CustomerID: 3,
+		CustomerID:     3,
 		RecentSessions: []models.Session{{ID: "s1"}},
 		RecentTickets:  []models.Ticket{{Title: "t1"}},
 		RecentMessages: []models.Message{{Content: "m1"}},

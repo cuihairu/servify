@@ -185,11 +185,11 @@ func TestRedisBusDispatchMessageHandlerError(t *testing.T) {
 	msg := redis.XMessage{
 		ID: "1-1",
 		Values: map[string]interface{}{
-			"id":         "evt-1",
-			"data":       `{"event_id":"evt-1"}`,
+			"id":          "evt-1",
+			"data":        `{"event_id":"evt-1"}`,
 			"occurred_at": 1710000000,
-			"tenant_id":  "tenant-1",
-			"aggregate":  "agg-1",
+			"tenant_id":   "tenant-1",
+			"aggregate":   "agg-1",
 		},
 	}
 	bus.dispatchMessage(context.Background(), "ticket.created", msg, handlers)

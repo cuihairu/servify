@@ -2,7 +2,6 @@ package services
 
 import (
 	"testing"
-	"time"
 
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
@@ -76,49 +75,6 @@ func TestMacroService_ListAndDelete(t *testing.T) {
 	}
 	if err := svc.Delete(ctx, items[0].ID); err == nil {
 		t.Fatal("expected error deleting missing macro")
-	}
-}
-
-func TestMacroService_ApplyToTicket(t *testing.T) {
-	svc, db := newMacroTestService(t)
-	ctx := unitScopedContext("t1", "w1")
-
-	macro, err := svc.Create(ctx, &MacroCreateRequest{Name: "reply", Content: "content"})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	ticket := &models.Ticket{Title: "T", TenantID: "t1", WorkspaceID: "w1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-
-	comment, err := svc.ApplyToTicket(ctx, macro.ID, ticket.ID, 5)
-	if err != nil {
-		t.Fatalf("ApplyToTicket: %v", err)
-	}
-	if comment.Content != "content" || comment.TicketID != ticket.ID {
-		t.Fatalf("unexpected comment: %+v", comment)
-	}
-
-	// inactive macro
-	active := false
-	macro2, err := svc.Create(ctx, &MacroCreateRequest{Name: "inactive", Content: "x"})
-	if err != nil {
-		t.Fatalf("Create macro2: %v", err)
-	}
-	if _, err := svc.Update(ctx, macro2.ID, &MacroUpdateRequest{Active: &active}); err != nil {
-		t.Fatalf("deactivate: %v", err)
-	}
-	if _, err := svc.ApplyToTicket(ctx, macro2.ID, ticket.ID, 5); err == nil {
-		t.Fatal("expected error for inactive macro")
-	}
-
-	// missing macro / missing ticket
-	if _, err := svc.ApplyToTicket(ctx, 4242, ticket.ID, 5); err == nil {
-		t.Fatal("expected error for missing macro")
-	}
-	if _, err := svc.ApplyToTicket(ctx, macro.ID, 4242, 5); err == nil {
-		t.Fatal("expected error for missing ticket")
 	}
 }
 
