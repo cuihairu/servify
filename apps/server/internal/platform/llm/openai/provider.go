@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -406,7 +407,7 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
 			// Emit any accumulated tool calls before finishing.
-			emitToolResults(ch, toolAccums)
+			emitToolResults(ctx, ch, toolAccums)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -453,7 +454,7 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 
 		// If finish reason is set and non-null, emit remaining.
 		if choice.FinishReason != nil && *choice.FinishReason != "" {
-			emitToolResults(ch, toolAccums)
+			emitToolResults(ctx, ch, toolAccums)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -468,7 +469,7 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 	}
 
 	// Stream ended without [DONE] or finish_reason.
-	emitToolResults(ch, toolAccums)
+	emitToolResults(ctx, ch, toolAccums)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -477,12 +478,21 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 	return nil
 }
 
-func emitToolResults(ch chan<- llm.ChatChunk, accums map[int]*streamingToolAccumulator) {
-	for _, acc := range accums {
+func emitToolResults(ctx context.Context, ch chan<- llm.ChatChunk, accums map[int]*streamingToolAccumulator) {
+	// 按 index 有序发送，避免 map 遍历顺序导致乱序
+	indexes := make([]int, 0, len(accums))
+	for idx := range accums {
+		indexes = append(indexes, idx)
+	}
+	sort.Ints(indexes)
+	for _, idx := range indexes {
+		acc := accums[idx]
 		args := map[string]interface{}{}
 		if strings.TrimSpace(acc.args) != "" {
 			_ = json.Unmarshal([]byte(acc.args), &args)
 		}
+		// 阻塞发送：消费方未就绪时丢弃 tool call 是数据丢失，
+		// 仅在流被取消时放弃
 		select {
 		case ch <- llm.ChatChunk{
 			ToolCall: &llm.ToolCall{
@@ -491,7 +501,8 @@ func emitToolResults(ch chan<- llm.ChatChunk, accums map[int]*streamingToolAccum
 				Arguments: args,
 			},
 		}:
-		default:
+		case <-ctx.Done():
+			return
 		}
 	}
 	// Clear accumulators.
