@@ -126,7 +126,7 @@ export interface RemoteAssistConfig {
   dataChannelLabel?: string;
 }
 
-export interface RemoteAssistStartOptions extends RemoteAssistConfig {}
+export type RemoteAssistStartOptions = RemoteAssistConfig;
 
 export type RemoteAssistState =
   | 'idle'
