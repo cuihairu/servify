@@ -17,7 +17,7 @@ import (
 func newStatisticsServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	name := t.Name()
-	dsn := "file:statistics_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:statistics_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

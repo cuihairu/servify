@@ -19,7 +19,7 @@ import (
 func newTicketInfraTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	dsn := "file:ticket_infra_" + strings.ReplaceAll(t.Name(), "/", "_") + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:ticket_infra_" + strings.ReplaceAll(t.Name(), "/", "_") + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

@@ -25,7 +25,7 @@ func newAgentHandlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	name := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
-	dsn := "file:agent_handler_extended_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:agent_handler_extended_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

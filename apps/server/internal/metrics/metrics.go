@@ -41,3 +41,12 @@ func RateLimitSnapshot() (total uint64, by map[string]uint64) {
 	}
 	return total, by
 }
+
+// ResetRateLimit zeroes the rate limit drop counters.
+// 进程级全局计数器没有按测试隔离的手段，供测试在开头重置以保证断言确定性。
+func ResetRateLimit() {
+	atomic.StoreUint64(&rl.total, 0)
+	rl.mu.Lock()
+	rl.byPrefix = nil
+	rl.mu.Unlock()
+}

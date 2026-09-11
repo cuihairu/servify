@@ -23,7 +23,7 @@ import (
 func newShiftHandlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	name := t.Name()
-	dsn := "file:shift_handler_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:shift_handler_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

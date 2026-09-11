@@ -214,6 +214,16 @@ func (r *RedisRegistry) syncLoop() {
 	pubsub := r.client.Subscribe(r.ctx, agentStatusChannel)
 	defer pubsub.Close()
 
+	// 等待订阅确认：确认前发布的消息不会送达本实例。
+	if _, err := pubsub.Receive(r.ctx); err != nil {
+		r.logger.Warnf("redis registry subscribe: %v", err)
+		return
+	}
+
+	// 订阅就绪后全量补同步一次，覆盖订阅建立前其他实例写入的状态，
+	// 否则启动窗口内的 online/offline 事件会永久丢失。
+	r.syncFromRedis()
+
 	ch := pubsub.Channel()
 	for {
 		select {
@@ -224,6 +234,26 @@ func (r *RedisRegistry) syncLoop() {
 				return
 			}
 			r.handleStatusChange(msg.Payload)
+		}
+	}
+}
+
+// syncFromRedis 拉取 Redis 中所有在线 agent 到本地缓存，作为启动兜底。
+func (r *RedisRegistry) syncFromRedis() {
+	ids, err := r.client.SMembers(r.ctx, agentSetKey).Result()
+	if err != nil {
+		r.logger.Warnf("redis registry full sync: %v", err)
+		return
+	}
+	for _, idStr := range ids {
+		var userID uint
+		if _, err := fmt.Sscanf(idStr, "%d", &userID); err != nil {
+			continue
+		}
+		if dto, err := r.getFromRedis(userID); err == nil {
+			r.mu.Lock()
+			r.localCache.GoOnline(dtoToProfile(*dto))
+			r.mu.Unlock()
 		}
 	}
 }

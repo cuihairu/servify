@@ -21,7 +21,7 @@ import (
 func newCustomFieldHandlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	name := t.Name()
-	dsn := "file:custom_field_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:custom_field_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

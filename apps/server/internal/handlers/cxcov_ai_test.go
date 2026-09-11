@@ -97,6 +97,8 @@ func (s *cxcDBStats) Stats() (sql.DBStats, bool) { return s.stats, s.ok }
 
 func TestCxcMetricsHandlerGetMetricsVariants(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	// 全局限流计数器跨测试累积，先重置保证 "global 0" 兜底分支的断言确定性
+	svrmetrics.ResetRateLimit()
 
 	ai := &unitAIService{
 		metrics: &services.AIMetrics{

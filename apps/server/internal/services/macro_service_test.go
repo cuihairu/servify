@@ -15,7 +15,7 @@ import (
 
 func newMacroTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:macro_service_" + t.Name() + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:macro_service_" + t.Name() + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

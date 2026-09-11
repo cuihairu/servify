@@ -31,7 +31,7 @@ func newTestDBForUserSecurity(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	name := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
-	dsn := "file:user_security_handler_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:user_security_handler_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

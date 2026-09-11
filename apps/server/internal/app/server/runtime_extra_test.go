@@ -23,7 +23,7 @@ import (
 
 func newRuntimeTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:runtime_assembly_"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:runtime_assembly_"+strings.ReplaceAll(t.Name(), "/", "_")+"")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

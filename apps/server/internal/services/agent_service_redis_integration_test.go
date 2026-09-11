@@ -19,7 +19,7 @@ import (
 
 func newAgentRedisIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:agent_redis_" + t.Name() + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:agent_redis_" + t.Name() + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

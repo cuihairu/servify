@@ -2,7 +2,9 @@ package infra
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,9 +17,12 @@ import (
 	"gorm.io/gorm"
 )
 
+var agentCoverageDBSeq uint32
+
 func newAgentCoverageDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:agent_cov_" + strings.ReplaceAll(t.Name(), "/", "_") + "?mode=memory&cache=shared"
+	// 全局唯一序号避免 -count 重跑或并行测试时命中同一命名内存库
+	dsn := "file:agent_cov_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" + strconv.Itoa(int(atomic.AddUint32(&agentCoverageDBSeq, 1))) + "?mode=memory&cache=shared"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&models.User{}, &models.Agent{}, &models.Session{}, &models.Ticket{}))

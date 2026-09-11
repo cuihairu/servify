@@ -29,7 +29,7 @@ import (
 func axcNewSecurityDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	name := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
-	dsn := "file:axc_user_security_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:axc_user_security_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

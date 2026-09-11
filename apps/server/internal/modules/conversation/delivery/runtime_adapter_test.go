@@ -15,7 +15,7 @@ import (
 
 func newRuntimeAdapterTestDB(t *testing.T, shard string) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"_"+shard+"?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:"+t.Name()+"_"+shard+"")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

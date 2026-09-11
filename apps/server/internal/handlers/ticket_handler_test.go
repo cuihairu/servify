@@ -90,7 +90,7 @@ func newTestDBForTickets(t *testing.T) *gorm.DB {
 
 	// Use shared in-memory DB; ticket orchestration may spawn goroutines that
 	// use a different connection.
-	dsn := "file:ticket_handler_" + strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()) + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:ticket_handler_" + strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()) + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

@@ -6,7 +6,9 @@ package infra
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,9 +19,12 @@ import (
 	"gorm.io/gorm"
 )
 
+var agentInfraDBSeq uint32
+
 func newAgentInfraTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:agent_infra_" + strings.ReplaceAll(t.Name(), "/", "_") + "?mode=memory&cache=shared"
+	// 全局唯一序号避免 -count 重跑或并行测试时命中同一命名内存库
+	dsn := fmt.Sprintf("file:agent_infra_%s_%d?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"), atomic.AddUint32(&agentInfraDBSeq, 1))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

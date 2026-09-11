@@ -18,7 +18,7 @@ import (
 func newAgentServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	name := t.Name()
-	dsn := "file:agent_service_" + name + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:agent_service_" + name + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

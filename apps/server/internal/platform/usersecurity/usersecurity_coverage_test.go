@@ -16,7 +16,7 @@ import (
 
 func openScopeTestDB(t *testing.T, models ...any) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:usersecurity_cov_%s?mode=memory&cache=shared", t.Name())), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueMemoryDSN("usersecurity_cov_"+t.Name())), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}

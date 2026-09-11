@@ -15,7 +15,7 @@ import (
 
 func newAnalyticsScopeTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:analytics_scope_" + strings.ReplaceAll(t.Name(), "/", "_") + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:analytics_scope_" + strings.ReplaceAll(t.Name(), "/", "_") + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

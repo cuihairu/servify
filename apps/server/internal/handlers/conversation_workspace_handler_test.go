@@ -32,7 +32,7 @@ func (s *stubRealtimeGateway) ClientCount() int { return 0 }
 
 func newConversationWorkspaceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := "file:conversation_workspace_" + t.Name() + "?mode=memory&cache=shared"
+	dsn := uniqueMemDSN("file:conversation_workspace_" + t.Name() + "")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
