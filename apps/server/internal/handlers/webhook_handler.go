@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 
 	"github.com/gin-gonic/gin"
@@ -126,7 +125,7 @@ func (h *WebhookHandler) TestEndpoint(c *gin.Context) {
 
 // ListDeliveries 分页查询投递日志（可按 endpoint_id / status 过滤）
 func (h *WebhookHandler) ListDeliveries(c *gin.Context) {
-	query := application.DeliveryListQuery{
+	query := webhookdelivery.DeliveryListQuery{
 		Status: c.Query("status"),
 	}
 	if v := c.Query("endpoint_id"); v != "" {

@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 
 	"github.com/gin-gonic/gin"
@@ -23,7 +22,7 @@ func NewOpenConversationHandler(service conversationdelivery.OpenConversationRea
 // List godoc
 // @Router /api/v1/conversations [get]
 func (h *OpenConversationHandler) List(c *gin.Context) {
-	query := conversationapp.OpenSessionListQuery{
+	query := conversationdelivery.OpenSessionListQuery{
 		Status:  strings.TrimSpace(c.Query("status")),
 		Channel: strings.TrimSpace(c.Query("channel")),
 	}
