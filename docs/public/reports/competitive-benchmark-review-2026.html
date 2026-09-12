@@ -477,7 +477,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
         <li><b>对象存储 Provider</b> <span class="tag">P0</span>　storage 抽象只有 LocalProvider（<code>./uploads</code> + 静态路由）。独立部署定位恰恰意味着容器化/多副本是常态，本地盘存储在此形态下必然损坏。S3 协议实现即可同时覆盖 AWS/MinIO/OSS。</li>
         <li><b>OIDC SSO 管理端登录</b> <span class="tag">P0</span>　认证只有自建注册/登录/刷新。企业独立部署场景下，接入客户 IdP（OIDC/LDAP）是安全问卷必过项，也是安全维度「完整」评级的最后一公里。</li>
         <li><b>版本化数据迁移</b> <span class="tag">P0</span>　当前依赖 GORM AutoMigrate（详见设计评审）。字段重命名、数据回填、回滚均无法表达，升级路径不可审计。</li>
-        <li><b>Email 渠道</b> <span class="tag">P1</span>　channel 契约已就绪，IMAP/SMTP 适配器即可落地「Web 优先」之外的第一条真实通路；AI 首答管线无需改动即可复用。</li>
+        <li><b>Email 渠道</b> <span class="tag">P1</span>　channel 契约已就绪，IMAP/SMTP 适配器即可落地「Web 优先」之外的第一条真实通路；AI 首答管线无需改动即可复用。 <span class="tag">已落地 dde9c1f</span></li>
         <li><b>SSO 之外的认证补强</b> <span class="tag">P1</span>　TOTP 双因素；当前会话风险评分体系已具备风控底座，补强成本低。</li>
         <li><b>AI 效果回归</b> <span class="tag">P1</span>　golden set + 置信度阈值 CI 回归。「AI 首答」是产品第一承诺，需要可度量的质量线。</li>
       </ul>
@@ -489,7 +489,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
         <li><b>呼叫中心真实通路</b> <span class="tag">缓</span>　voiceprotocol 架构已建，建议只验证不扩张：接一条托管 PSTN 通路证明设计成立即可，h323/FreeSWITCH 枚举可长期保持 reserved。</li>
         <li><b>质检运营</b> <span class="tag">看市场</span>　国内市场交付几乎必问；国际市场可后置。规则质检成本低，LLM 打分可复用 AI 编排。</li>
         <li><b>移动端 SDK</b> <span class="tag">缓</span>　react/vue/vanilla 三绑定覆盖 Web；RN 绑定等有客户诉求再做，contracts 能力协商机制已为其预留。</li>
-        <li><b>开放平台闭环</b> <span class="tag">P1–P2</span>　出站 Webhook + API Key 是最小闭环，做齐即可宣称「可集成」，不必追 Zendesk 市场规模。</li>
+        <li><b>开放平台闭环</b> <span class="tag">P1–P2</span>　出站 Webhook + API Key 是最小闭环，做齐即可宣称「可集成」，不必追 Zendesk 市场规模。 <span class="tag">已落地 9aef039 / e1967cf / d004a15</span></li>
       </ul>
     </div>
   </div>
@@ -561,11 +561,11 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
     <div class="road-col p1">
       <h3><small>P1 · 三个月内</small>拉平第一梯队底线</h3>
       <ol>
-        <li><b>Email 渠道</b>（IMAP/SMTP 适配器）</li>
+        <li><b>Email 渠道</b>（IMAP/SMTP 适配器）<span class="tag">已落地 dde9c1f</span></li>
         <li><b>AI golden set + CI 回归</b>——效果可度量</li>
-        <li><b>出站 Webhook + API Key</b>——开放平台最小闭环</li>
+        <li><b>出站 Webhook + API Key</b>——开放平台最小闭环 <span class="tag">已落地 9aef039 / e1967cf / d004a15</span></li>
         <li><b>规则质检 + 抽检工作台</b>——数据已就绪</li>
-        <li><b>自动化表达力</b>：webhook/加标/升级动作 + timer 触发</li>
+        <li><b>自动化表达力</b>：webhook/加标/升级动作 + timer 触发 <span class="tag">部分落地 3e5d67e（call_webhook 动作）</span></li>
         <li><b>报表导出</b>（CSV/Excel）</li>
       </ol>
     </div>
