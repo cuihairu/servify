@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'servify_token';
+const REFRESH_TOKEN_KEY = 'servify_refresh_token';
 const USER_KEY = 'servify_user';
 
 export function getToken(): string | null {
@@ -9,8 +10,17 @@ export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(token: string) {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+}
+
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 

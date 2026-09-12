@@ -233,6 +233,31 @@ embedding:
     base_url: "http://localhost:9997"
     model_uid: "embedding-model"
 
+# 管理端 OIDC 单点登录（Keycloak / Okta / Entra ID 等标准 IdP）
+# 默认关闭；开启后登录页出现「使用 SSO 登录」按钮（授权码 + PKCE 流程）
+# oidc:
+#   enabled: false
+#   # IdP 的 OIDC discovery 地址（服务启动时会请求 {issuer}/.well-known/openid-configuration）
+#   issuer: "https://sso.example.com/realms/servify"
+#   client_id: "servify-admin"
+#   client_secret: ""
+#   # 回调地址 = 本服务对外可达地址 + /api/v1/auth/oidc/callback（须在 IdP 侧登记）
+#   redirect_url: "https://admin.example.com/api/v1/auth/oidc/callback"
+#   # 管理端前端地址：SSO 成功/失败后重定向落点
+#   frontend_base_url: "https://admin.example.com"
+#   scopes: ["openid", "profile", "email"]
+#   # 从 ID token 的这些 claim 读取角色提示（仅用于新建账号时的初始角色）
+#   role_claims: ["roles", "groups"]
+#   # IdP 角色 → 本地角色映射（白名单：admin / agent）
+#   role_mapping:
+#     admin: "idp-admins"
+#   # 无匹配角色时的默认角色
+#   default_role: "agent"
+#   # 是否为 IdP 上存在而本地不存在的邮箱自动建号（默认 false，拒绝未登记用户）
+#   auto_provision: false
+#   # auto_provision 开启时建议限定邮箱域；留空则放行 IdP 验证过的任意邮箱
+#   allowed_domains: []
+
 # Knowledge base configuration
 knowledge:
   # Available providers: pgvector

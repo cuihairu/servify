@@ -4,6 +4,7 @@
  */
 export default [
   { path: '/login', layout: false, component: './Login' },
+  { path: '/login/oidc/callback', layout: false, component: './Login/oidcCallback' },
   { path: '/', redirect: '/dashboard' },
 
   // 仪表板

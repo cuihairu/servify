@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"servify/apps/server/internal/config"
@@ -19,6 +20,7 @@ import (
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
+	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 	"servify/apps/server/internal/platform/eventbus"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/voiceprotocol"
@@ -63,6 +65,7 @@ type Runtime struct {
 	KnowledgeDocHandler      knowledgedelivery.HandlerService
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
+	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 
 	// Private fields for worker access only
@@ -106,6 +109,16 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 
 	wireOperationalServices(rt, state)
 	wireTransferRuntime(rt, state)
+
+	// OIDC SSO: fail fast on a configured-but-broken provider so a server
+	// never comes up advertising SSO it cannot serve.
+	if cfg.OIDC.Enabled {
+		provider, err := oidcplatform.NewFromConfig(context.Background(), cfg.OIDC, cfg.Server.Environment)
+		if err != nil {
+			return nil, fmt.Errorf("oidc provider: %w", err)
+		}
+		rt.OIDCProvider = provider
+	}
 	return rt, nil
 }
 
@@ -169,6 +182,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		KnowledgeDocHandler:      rt.KnowledgeDocHandler,
 		SuggestionService:        rt.SuggestionService,
 		GamificationService:      rt.GamificationService,
+		OIDCProvider:             rt.OIDCProvider,
 		HTTPMetrics:              rt.HTTPMetrics,
 	}
 }

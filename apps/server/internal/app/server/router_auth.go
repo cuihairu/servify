@@ -49,7 +49,29 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	authMe.POST("/sessions/logout-current", authHandler.LogoutCurrentSession)
 	authMe.POST("/sessions/logout-others", authHandler.LogoutOtherSessions)
 
+	registerOIDCRoutes(r, deps)
 	registerUploadRoutes(r, deps)
+}
+
+// registerOIDCRoutes wires the admin SSO endpoints. /api/v1/auth/oidc/* stays
+// inside the auth-public surface (rate limit + catalog), so the security
+// surface catalog needs no changes.
+func registerOIDCRoutes(r *gin.Engine, deps Dependencies) {
+	if deps.OIDCProvider != nil {
+		oidcHandler := handlers.NewOIDCHandler(
+			deps.OIDCProvider,
+			deps.Config.OIDC,
+			services.NewAuthService(deps.DB, deps.Config),
+			deps.Config.Server.Environment,
+		)
+		oidcGroup := r.Group("/api/v1/auth/oidc")
+		oidcGroup.GET("/start", oidcHandler.Start)
+		oidcGroup.GET("/callback", oidcHandler.Callback)
+		oidcGroup.GET("/status", oidcHandler.Status)
+		return
+	}
+	// SSO 关闭时 status 仍响应，前端据此决定是否渲染 SSO 按钮
+	r.GET("/api/v1/auth/oidc/status", handlers.NewOIDCHandler(nil, deps.Config.OIDC, nil, deps.Config.Server.Environment).Status)
 }
 
 // registerUploadRoutes wires the upload endpoint and object serving from

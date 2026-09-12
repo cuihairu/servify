@@ -50,6 +50,7 @@ type Config struct {
 	Security   SecurityConfig   `yaml:"security"`
 	Portal     PortalConfig     `yaml:"portal"`
 	Upload     UploadConfig     `yaml:"upload"`
+	OIDC       OIDCConfig       `yaml:"oidc"`
 	Embedding  EmbeddingConfig  `yaml:"embedding"`
 	Knowledge  KnowledgeConfig  `yaml:"knowledge"`
 }
@@ -334,6 +335,26 @@ type S3UploadConfig struct {
 	PublicBaseURL        string `yaml:"public_base_url" json:"public_base_url,omitempty"`
 }
 
+// OIDCConfig 配置管理端 OIDC SSO 登录（授权码 + PKCE）。
+// 启用后 /api/v1/auth/oidc/* 提供 Start/Callback/Status；
+// RoleMapping 把 IdP 角色/组映射到本地角色（仅 admin/agent 生效）。
+type OIDCConfig struct {
+	Enabled      bool     `yaml:"enabled" json:"enabled,omitempty"`
+	Issuer       string   `yaml:"issuer" json:"issuer,omitempty"`
+	ClientID     string   `yaml:"client_id" json:"client_id,omitempty"`
+	ClientSecret string   `yaml:"client_secret" json:"-"`
+	RedirectURL  string   `yaml:"redirect_url" json:"redirect_url,omitempty"`
+	Scopes       []string `yaml:"scopes" json:"scopes,omitempty"`
+	// FrontendBaseURL 是登录成功后 302 交接 token 的前端基地址（fragment 传递，不进服务器日志）
+	FrontendBaseURL string            `yaml:"frontend_base_url" json:"frontend_base_url,omitempty"`
+	RoleClaims      []string          `yaml:"role_claims" json:"role_claims,omitempty"`
+	RoleMapping     map[string]string `yaml:"role_mapping" json:"role_mapping,omitempty"`
+	DefaultRole     string            `yaml:"default_role" json:"default_role,omitempty"`
+	// AutoProvision 为 true 时允许首次登录的 IdP 用户自动建号；默认拒绝
+	AutoProvision  bool     `yaml:"auto_provision" json:"auto_provision,omitempty"`
+	AllowedDomains []string `yaml:"allowed_domains" json:"allowed_domains,omitempty"`
+}
+
 // EmbeddingConfig 是文本嵌入服务配置
 type EmbeddingConfig struct {
 	Provider   string                `yaml:"provider" json:"provider,omitempty"`
@@ -448,6 +469,27 @@ func InsecureDefaults(cfg *Config) []string {
 		}
 		if strings.TrimSpace(cfg.Upload.S3.Region) == "" {
 			warnings = append(warnings, "upload.provider is s3 but upload.s3.region is empty")
+		}
+	}
+
+	if cfg.OIDC.Enabled {
+		if strings.TrimSpace(cfg.OIDC.Issuer) == "" {
+			warnings = append(warnings, "oidc.enabled is true but oidc.issuer is empty")
+		}
+		if strings.TrimSpace(cfg.OIDC.ClientID) == "" || strings.TrimSpace(cfg.OIDC.ClientSecret) == "" {
+			warnings = append(warnings, "oidc.enabled is true but oidc.client_id/oidc.client_secret is empty")
+		}
+		if strings.TrimSpace(cfg.OIDC.RedirectURL) == "" {
+			warnings = append(warnings, "oidc.enabled is true but oidc.redirect_url is empty")
+		}
+		if strings.TrimSpace(cfg.OIDC.FrontendBaseURL) == "" {
+			warnings = append(warnings, "oidc.enabled is true but oidc.frontend_base_url is empty")
+		}
+		if strings.HasPrefix(strings.TrimSpace(cfg.OIDC.Issuer), "http://") {
+			warnings = append(warnings, "oidc.issuer uses http; production issuers must be https")
+		}
+		if cfg.OIDC.AutoProvision && len(cfg.OIDC.AllowedDomains) == 0 {
+			warnings = append(warnings, "oidc.auto_provision is true without oidc.allowed_domains; any verified IdP identity can create an account")
 		}
 	}
 
@@ -745,6 +787,13 @@ func GetDefaultConfig() *Config {
 			S3: S3UploadConfig{
 				PresignExpirySeconds: 3600,
 			},
+		},
+		OIDC: OIDCConfig{
+			// 管理端 SSO 默认关闭；启用需完整配置 issuer/client/redirect，
+			// 生产环境 issuer 必须 https（见 InsecureDefaults 与 oidc.NewFromConfig）
+			Enabled:     false,
+			DefaultRole: "agent",
+			RoleClaims:  []string{"roles", "groups"},
 		},
 		Embedding: EmbeddingConfig{
 			Provider: "openai",
