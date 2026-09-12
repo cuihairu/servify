@@ -549,11 +549,14 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
     <div class="road-col">
       <h3><small>P0 · 上线前必补</small>交付阻断项</h3>
       <ol>
-        <li><b>S3 存储 Provider</b>——多副本部署的前置条件</li>
-        <li><b>golang-migrate 落地</b>——首次真实客户升级前必须完成</li>
-        <li><b>OIDC SSO</b>——企业客户安全门槛</li>
-        <li><b>Admin CI typecheck</b>——一行改动，当天可做</li>
+        <li><b>S3 存储 Provider</b>——多副本部署的前置条件 <span class="tag">已落地 baf7aa1</span></li>
+        <li><b>golang-migrate 落地</b>——首次真实客户升级前必须完成 <span class="tag">已落地 41c4318</span></li>
+        <li><b>OIDC SSO</b>——企业客户安全门槛 <span class="tag">已落地 5f029c2</span></li>
+        <li><b>Admin CI typecheck</b>——一行改动，当天可做 <span class="tag">已落地 24b4264</span></li>
       </ol>
+      <p style="margin:12px 0 0; font-size:12.5px; line-height:1.7; color:var(--ink-2); border-top:1px dashed var(--line-2); padding-top:10px">
+        <b style="color:var(--ink)">部署核对 · SERVIFY_JWT_SECRET</b>——<code>config.yml</code> 默认值 <code>${SERVIFY_JWT_SECRET}</code> 在环境变量未设置时展开为空串。此时密码登录与 SSO 均能正常完成并签发会话，但所有 Bearer 鉴权接口会被中间件的空 secret 防护整体拒绝（401 <code>invalid token or server misconfig</code>）。SSO 端到端联调（Keycloak 容器）实测发现；独立部署核对单必须包含「显式设置 SERVIFY_JWT_SECRET」一项。
+      </p>
     </div>
     <div class="road-col p1">
       <h3><small>P1 · 三个月内</small>拉平第一梯队底线</h3>
