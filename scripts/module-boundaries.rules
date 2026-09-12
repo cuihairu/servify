@@ -20,6 +20,7 @@ handler|Shift|apps/server/internal/handlers/shift_handler.go|shiftService|ShiftS
 handler|Suggestion|apps/server/internal/handlers/suggestion_handler.go|service|suggestiondelivery\.HandlerService|func NewSuggestionHandler\(service suggestiondelivery\.HandlerService\)|\*services\.SuggestionService
 handler|Gamification|apps/server/internal/handlers/gamification_handler.go|service|gamificationdelivery\.HandlerService|func NewGamificationHandler\(service gamificationdelivery\.HandlerService\)|\*services\.GamificationService
 handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|SLAService|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|\*services\.SLAService
+handler|Quality|apps/server/internal/handlers/quality_handler.go|service|qualitydelivery\.HandlerService|func NewQualityHandler\(service qualitydelivery\.HandlerService\)|qualityapp\.QualityService
 
 runtime|customer handlers|CustomerHandlerService|customerdelivery\.HandlerService
 runtime|automation handlers|AutomationHandlerService|automationdelivery\.HandlerService
@@ -29,6 +30,7 @@ runtime|ticket handlers|TicketHandlerService|ticketdelivery\.HandlerService
 runtime|statistics handlers|StatisticsHandlerService|analyticsdelivery\.HandlerService
 runtime|session transfer handlers|TransferHandlerService|routingdelivery\.HandlerService
 runtime|AI handlers|AIHandlerService|aidelivery\.HandlerService
+runtime|quality handlers|QualityHandlerService|qualitydelivery\.HandlerService
 
 require|apps/server/internal/handlers/health_enhanced.go|aiService aidelivery\.HandlerService|Enhanced health handler must store modules/ai/delivery.HandlerService.
 require|apps/server/internal/services/websocket.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.

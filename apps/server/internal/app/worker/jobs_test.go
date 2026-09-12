@@ -8,6 +8,7 @@ import (
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
+	qualityapp "servify/apps/server/internal/modules/quality/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/services"
 )
@@ -83,6 +84,10 @@ func (f *fakeRuntimeWorkerDependencies) WebhookDeliveryForWorker() webhookapp.Pr
 }
 
 func (f *fakeRuntimeWorkerDependencies) EmailPollAdapterForWorker() emaildelivery.PollProcessor {
+	return nil
+}
+
+func (f *fakeRuntimeWorkerDependencies) QualityScanForWorker() *qualityapp.QualityService {
 	return nil
 }
 

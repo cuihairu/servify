@@ -11,6 +11,7 @@ import (
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
@@ -60,6 +61,7 @@ type Dependencies struct {
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
 	WebhookHandlerService    webhookdelivery.HandlerService
+	QualityHandlerService    qualitydelivery.HandlerService
 	APIKeyService            *services.APIKeyService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider

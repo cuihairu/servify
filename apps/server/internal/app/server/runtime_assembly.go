@@ -13,6 +13,7 @@ import (
 	emailinfra "servify/apps/server/internal/modules/email/infra"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
@@ -209,8 +210,13 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 
 	// 开放平台：API Key 签发/吊销管理（X-API-Key 认证分支在 AuthMiddleware 内）。
 	rt.APIKeyService = services.NewAPIKeyService(rt.DB)
-}
 
+	// 质检：规则 + 可选 LLM 打分，扫描走后台 worker（quality.enabled 才装配）。
+	rt.qualityService = rt.buildQualityService()
+	if rt.qualityService != nil {
+		rt.QualityHandlerService = qualitydelivery.NewHandlerServiceAdapter(rt.qualityService)
+	}
+}
 func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 	transferService := routingdelivery.NewHandlerService(routingdelivery.HandlerDependencies{
 		DB:           rt.DB,

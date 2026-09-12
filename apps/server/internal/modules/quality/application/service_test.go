@@ -57,7 +57,7 @@ func (f *fakeRepo) ListReviewCandidates(_ context.Context, lookback time.Time, l
 func (f *fakeRepo) ListReviewsForRetry(_ context.Context, maxAttempts int, now time.Time, limit int) ([]models.QualityReview, error) {
 	var out []models.QualityReview
 	for _, r := range f.reviews {
-		if r.Status == "failed" && r.AttemptCount < maxAttempts &&
+		if (r.Status == StatusPending || r.Status == StatusFailed) && r.AttemptCount < maxAttempts &&
 			(r.NextRetryAt == nil || !r.NextRetryAt.After(now)) {
 			out = append(out, *r)
 		}
@@ -134,6 +134,46 @@ func (f *fakeRepo) MarkReviewFailed(_ context.Context, sessionID string, allowed
 		}
 	}
 	return false, nil
+}
+
+func (f *fakeRepo) ListReviews(_ context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
+	var out []models.QualityReview
+	for _, r := range f.reviews {
+		if query.Status == "" || r.Status == query.Status {
+			out = append(out, *r)
+		}
+	}
+	return out, int64(len(out)), nil
+}
+
+func (f *fakeRepo) ConfirmReview(_ context.Context, sessionID string, cmd ConfirmCommand) (bool, error) {
+	r, ok := f.reviews[sessionID]
+	if !ok || r.Status != StatusScored {
+		return false, nil
+	}
+	r.Status = StatusConfirmed
+	r.ManualScore = cmd.ManualScore
+	r.ManualResult = cmd.ManualResult
+	r.ReviewNote = cmd.ReviewNote
+	reviewedBy := cmd.ReviewedBy
+	r.ReviewedBy = &reviewedBy
+	return true, nil
+}
+
+func (f *fakeRepo) RescheduleReview(_ context.Context, sessionID string, force bool) (bool, error) {
+	r, ok := f.reviews[sessionID]
+	if !ok {
+		return false, nil
+	}
+	if r.Status == StatusConfirmed && !force {
+		return false, nil
+	}
+	r.Status = StatusPending
+	r.Trigger = "rescore"
+	r.AttemptCount = 0
+	r.NextRetryAt = nil
+	r.LastError = ""
+	return true, nil
 }
 
 // ---- stubs ----
@@ -351,6 +391,70 @@ func TestRunScanGivesUpAfterMaxAttempts(t *testing.T) {
 	svc.SetNowFunc(func() time.Time { return now })
 	if n, _ := svc.RunScan(context.Background()); n != 0 {
 		t.Fatal("exhausted review must not revive")
+	}
+}
+
+func TestConfirmReviewLifecycle(t *testing.T) {
+	f := newFakeRepo()
+	seedNormalConversation(f, "s-confirm", time.Now().Add(-time.Hour))
+	svc := NewQualityService(f, nil, testConfig(), nil)
+	ctx := context.Background()
+
+	// 不存在的会话
+	if err := svc.ConfirmReview(ctx, "nope", ConfirmCommand{}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("want ErrNotFound, got %v", err)
+	}
+	// 记录先打分（rules-only）
+	svc.RunScan(ctx)
+	// 确认成功
+	score := 7.5
+	if err := svc.ConfirmReview(ctx, "s-confirm", ConfirmCommand{
+		ManualScore: &score, ManualResult: "pass", ReviewNote: "抽检通过", ReviewedBy: 42,
+	}); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	review, _ := f.GetReviewBySession(ctx, "s-confirm")
+	if review.Status != StatusConfirmed || review.ManualScore == nil || *review.ManualScore != 7.5 {
+		t.Fatalf("confirmed review expected: %+v", review)
+	}
+	if review.ReviewedBy == nil || *review.ReviewedBy != 42 {
+		t.Fatalf("reviewed_by expected: %+v", review.ReviewedBy)
+	}
+	// 重复确认：confirmed 不可再确认
+	if err := svc.ConfirmReview(ctx, "s-confirm", ConfirmCommand{}); !errors.Is(err, ErrNotScoreable) {
+		t.Fatalf("want ErrNotScoreable, got %v", err)
+	}
+}
+
+func TestRescoreReviewForceGate(t *testing.T) {
+	f := newFakeRepo()
+	seedNormalConversation(f, "s-rescore", time.Now().Add(-time.Hour))
+	svc := NewQualityService(f, nil, testConfig(), nil)
+	ctx := context.Background()
+
+	svc.RunScan(ctx) // rules-only → scored
+	if err := svc.ConfirmReview(ctx, "s-rescore", ConfirmCommand{}); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	// confirmed 不带 force：拒绝
+	if err := svc.RescoreReview(ctx, "s-rescore", false); !errors.Is(err, ErrConfirmedNeedsForce) {
+		t.Fatalf("want ErrConfirmedNeedsForce, got %v", err)
+	}
+	// force：重置 pending（attempt 清零，trigger=rescore）
+	if err := svc.RescoreReview(ctx, "s-rescore", true); err != nil {
+		t.Fatalf("force rescore: %v", err)
+	}
+	review, _ := f.GetReviewBySession(ctx, "s-rescore")
+	if review.Status != StatusPending || review.AttemptCount != 0 || review.Trigger != "rescore" {
+		t.Fatalf("rescheduled review expected: %+v", review)
+	}
+	// 下一轮扫描：pending 滞留进入复活集重新打分
+	if n, err := svc.RunScan(ctx); err != nil || n != 1 {
+		t.Fatalf("rescheduled review must be re-processed: n=%d err=%v", n, err)
+	}
+	review, _ = f.GetReviewBySession(ctx, "s-rescore")
+	if review.Status != StatusScored {
+		t.Fatalf("rescored to scored expected, got %s", review.Status)
 	}
 }
 

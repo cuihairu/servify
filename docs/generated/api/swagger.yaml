@@ -340,6 +340,20 @@ definitions:
         example: 10
         type: integer
     type: object
+  handlers.ConfirmReviewRequest:
+    properties:
+      manual_result:
+        description: pass|violation
+        example: pass
+        type: string
+      manual_score:
+        description: 人工覆盖分，缺省不覆盖
+        example: 8.5
+        type: number
+      review_note:
+        example: 抽检通过
+        type: string
+    type: object
   handlers.ErrorResponse:
     properties:
       code:
@@ -595,6 +609,72 @@ definitions:
         $ref: '#/definitions/models.User'
       user_id:
         type: integer
+      workspace_id:
+        type: string
+    type: object
+  models.QualityReview:
+    properties:
+      agent_id:
+        description: users.id，与 Session.AgentID 同语义
+        type: integer
+      attempt_count:
+        type: integer
+      created_at:
+        type: string
+      customer_id:
+        type: integer
+      dimensions_json:
+        type: string
+      duration_seconds:
+        type: integer
+      id:
+        type: integer
+      last_error:
+        type: string
+      llm_model:
+        type: string
+      llm_provider:
+        type: string
+      llm_summary:
+        type: string
+      llm_total_score:
+        type: number
+      manual_result:
+        description: '''''|pass|violation'
+        type: string
+      manual_score:
+        type: number
+      max_severity:
+        description: '''''|low|medium|high'
+        type: string
+      message_count:
+        type: integer
+      next_retry_at:
+        type: string
+      review_note:
+        type: string
+      reviewed_at:
+        type: string
+      reviewed_by:
+        type: integer
+      scored_at:
+        type: string
+      session_id:
+        type: string
+      status:
+        description: pending|skipped|scored|failed|confirmed
+        type: string
+      tenant_id:
+        type: string
+      trigger:
+        description: worker|manual|rescore
+        type: string
+      updated_at:
+        type: string
+      violation_count:
+        type: integer
+      violations_json:
+        type: string
       workspace_id:
         type: string
     type: object
@@ -2125,6 +2205,176 @@ paths:
       summary: 全渠道工作台概览
       tags:
       - 全渠道
+  /api/quality/reviews:
+    get:
+      description: 分页查询质检记录，支持按状态、坐席、有无违规、严重度、分数区间与时间过滤
+      parameters:
+      - description: 状态 pending|skipped|scored|failed|confirmed
+        in: query
+        name: status
+        type: string
+      - description: 坐席用户 ID
+        in: query
+        name: agent_id
+        type: integer
+      - description: 是否含规则违规
+        in: query
+        name: has_violations
+        type: boolean
+      - description: 最高严重度 low|medium|high
+        in: query
+        name: severity
+        type: string
+      - description: LLM 总分下界
+        in: query
+        name: min_score
+        type: number
+      - description: LLM 总分上界
+        in: query
+        name: max_score
+        type: number
+      - description: 创建时间起始 (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: 创建时间截止 (RFC3339)
+        in: query
+        name: to
+        type: string
+      - description: 页码（默认 1）
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数（默认 20，上限 200）
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取质检记录列表
+      tags:
+      - 质检
+  /api/quality/reviews/{sessionId}:
+    get:
+      description: 按会话 ID 返回质检记录（含违规明细与维度得分 JSON）
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.QualityReview'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取单条质检记录
+      tags:
+      - 质检
+  /api/quality/reviews/{sessionId}/confirm:
+    post:
+      consumes:
+      - application/json
+      description: 将 scored 记录置为 confirmed，可带人工覆盖分、结论与备注
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: 人工确认内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ConfirmReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 人工确认质检记录
+      tags:
+      - 质检
+  /api/quality/reviews/{sessionId}/rescore:
+    post:
+      description: 将记录重置为 pending（attempt 清零），下一轮扫描重新质检打分；confirmed 需 force=true
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: 强制重打已确认记录
+        in: query
+        name: force
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 重新打分
+      tags:
+      - 质检
+  /api/quality/scorer:
+    get:
+      description: enabled 表示 LLM 打分生效；false 表示 rules-only 模式
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 返回 LLM 打分开关状态
+      tags:
+      - 质检
   /api/satisfactions:
     get:
       description: 获取满意度评价列表，支持分页和筛选

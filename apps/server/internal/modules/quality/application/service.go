@@ -12,6 +12,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// 质检记录状态（models.QualityReview.Status 的取值域）。
+const (
+	StatusPending   = "pending"
+	StatusSkipped   = "skipped"
+	StatusScored    = "scored"
+	StatusFailed    = "failed"
+	StatusConfirmed = "confirmed"
+)
+
 // ServiceConfig 是 RunScan 的运行参数（来自 config.QualityConfig）。
 type ServiceConfig struct {
 	SampleRate          float64 // 0-100
@@ -88,6 +97,51 @@ func (s *QualityService) RunScan(ctx context.Context) (int, error) {
 		processed++
 	}
 	return processed, nil
+}
+
+// ListReviews 管理面分页查询质检记录。
+func (s *QualityService) ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
+	return s.repo.ListReviews(ctx, query)
+}
+
+// GetReviewBySession 按会话取单条质检记录。
+func (s *QualityService) GetReviewBySession(ctx context.Context, sessionID string) (*models.QualityReview, error) {
+	return s.repo.GetReviewBySession(ctx, sessionID)
+}
+
+// ConfirmReview 人工确认：scored → confirmed，写入人工字段；绝不覆盖已有确认。
+func (s *QualityService) ConfirmReview(ctx context.Context, sessionID string, cmd ConfirmCommand) error {
+	if _, err := s.repo.GetReviewBySession(ctx, sessionID); err != nil {
+		return err
+	}
+	ok, err := s.repo.ConfirmReview(ctx, sessionID, cmd)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotScoreable
+	}
+	return nil
+}
+
+// RescoreReview 重新打分：记录重置为 pending（attempt 清零），下一轮扫描重新处理。
+// confirmed 记录需显式 force。
+func (s *QualityService) RescoreReview(ctx context.Context, sessionID string, force bool) error {
+	review, err := s.repo.GetReviewBySession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if review.Status == StatusConfirmed && !force {
+		return ErrConfirmedNeedsForce
+	}
+	ok, err := s.repo.RescheduleReview(ctx, sessionID, force)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // processCandidate 处理一个尚无质检记录的已结束会话：抽样 → 规则 → （可选）打分。

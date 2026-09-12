@@ -1125,6 +1125,263 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/quality/reviews": {
+            "get": {
+                "description": "分页查询质检记录，支持按状态、坐席、有无违规、严重度、分数区间与时间过滤",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "质检"
+                ],
+                "summary": "获取质检记录列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "状态 pending|skipped|scored|failed|confirmed",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "坐席用户 ID",
+                        "name": "agent_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否含规则违规",
+                        "name": "has_violations",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "最高严重度 low|medium|high",
+                        "name": "severity",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "LLM 总分下界",
+                        "name": "min_score",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "LLM 总分上界",
+                        "name": "max_score",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "创建时间起始 (RFC3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "创建时间截止 (RFC3339)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码（默认 1）",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数（默认 20，上限 200）",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/quality/reviews/{sessionId}": {
+            "get": {
+                "description": "按会话 ID 返回质检记录（含违规明细与维度得分 JSON）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "质检"
+                ],
+                "summary": "获取单条质检记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.QualityReview"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/quality/reviews/{sessionId}/confirm": {
+            "post": {
+                "description": "将 scored 记录置为 confirmed，可带人工覆盖分、结论与备注",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "质检"
+                ],
+                "summary": "人工确认质检记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "人工确认内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ConfirmReviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/quality/reviews/{sessionId}/rescore": {
+            "post": {
+                "description": "将记录重置为 pending（attempt 清零），下一轮扫描重新质检打分；confirmed 需 force=true",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "质检"
+                ],
+                "summary": "重新打分",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "sessionId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "强制重打已确认记录",
+                        "name": "force",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/quality/scorer": {
+            "get": {
+                "description": "enabled 表示 LLM 打分生效；false 表示 rules-only 模式",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "质检"
+                ],
+                "summary": "返回 LLM 打分开关状态",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/satisfactions": {
             "get": {
                 "description": "获取满意度评价列表，支持分页和筛选",
@@ -4745,6 +5002,25 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ConfirmReviewRequest": {
+            "type": "object",
+            "properties": {
+                "manual_result": {
+                    "description": "pass|violation",
+                    "type": "string",
+                    "example": "pass"
+                },
+                "manual_score": {
+                    "description": "人工覆盖分，缺省不覆盖",
+                    "type": "number",
+                    "example": 8.5
+                },
+                "review_note": {
+                    "type": "string",
+                    "example": "抽检通过"
+                }
+            }
+        },
         "handlers.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -5120,6 +5396,103 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.QualityReview": {
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "description": "users.id，与 Session.AgentID 同语义",
+                    "type": "integer"
+                },
+                "attempt_count": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "dimensions_json": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "llm_model": {
+                    "type": "string"
+                },
+                "llm_provider": {
+                    "type": "string"
+                },
+                "llm_summary": {
+                    "type": "string"
+                },
+                "llm_total_score": {
+                    "type": "number"
+                },
+                "manual_result": {
+                    "description": "''|pass|violation",
+                    "type": "string"
+                },
+                "manual_score": {
+                    "type": "number"
+                },
+                "max_severity": {
+                    "description": "''|low|medium|high",
+                    "type": "string"
+                },
+                "message_count": {
+                    "type": "integer"
+                },
+                "next_retry_at": {
+                    "type": "string"
+                },
+                "review_note": {
+                    "type": "string"
+                },
+                "reviewed_at": {
+                    "type": "string"
+                },
+                "reviewed_by": {
+                    "type": "integer"
+                },
+                "scored_at": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "pending|skipped|scored|failed|confirmed",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "trigger": {
+                    "description": "worker|manual|rescore",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "violation_count": {
+                    "type": "integer"
+                },
+                "violations_json": {
+                    "type": "string"
                 },
                 "workspace_id": {
                     "type": "string"

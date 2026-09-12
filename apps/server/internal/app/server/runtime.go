@@ -16,6 +16,8 @@ import (
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	qualityapp "servify/apps/server/internal/modules/quality/application"
+	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
@@ -69,6 +71,7 @@ type Runtime struct {
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
 	WebhookHandlerService    webhookdelivery.HandlerService
+	QualityHandlerService    qualitydelivery.HandlerService
 	APIKeyService            *services.APIKeyService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider
@@ -78,6 +81,7 @@ type Runtime struct {
 	statisticsService *services.StatisticsService
 	slaService        *services.SLAService
 	webhookService    *webhookapp.Service
+	qualityService    *qualityapp.QualityService
 	emailAdapter      *emaildelivery.Adapter
 }
 
@@ -173,6 +177,12 @@ func (rt *Runtime) EmailPollAdapterForWorker() emaildelivery.PollProcessor {
 	return rt.emailAdapter
 }
 
+// QualityScanForWorker returns the quality review scanner when quality review is
+// enabled; nil keeps the scan worker unregistered.
+func (rt *Runtime) QualityScanForWorker() *qualityapp.QualityService {
+	return rt.qualityService
+}
+
 func (rt *Runtime) RouterDependencies() Dependencies {
 	return Dependencies{
 		Config:                   rt.Config,
@@ -205,6 +215,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		SuggestionService:        rt.SuggestionService,
 		GamificationService:      rt.GamificationService,
 		WebhookHandlerService:    rt.WebhookHandlerService,
+		QualityHandlerService:    rt.QualityHandlerService,
 		APIKeyService:            rt.APIKeyService,
 		OpenConversationReader:   rt.OpenConversationReader,
 		OIDCProvider:             rt.OIDCProvider,

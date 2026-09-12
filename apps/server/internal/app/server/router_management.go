@@ -90,6 +90,10 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	webhooksAPI.Use(middleware.RequireResourcePermission("webhooks"))
 	handlers.RegisterWebhookRoutes(webhooksAPI, handlers.NewWebhookHandler(deps.WebhookHandlerService))
 
+	qualityAPI := api.Group("/")
+	qualityAPI.Use(middleware.RequireResourcePermission("quality"))
+	handlers.RegisterQualityRoutes(qualityAPI, handlers.NewQualityHandler(deps.QualityHandlerService))
+
 	// 开放平台：API Key 管理 + X-API-Key 只读会话面（service principal）。
 	apiKeysAPI := api.Group("/")
 	apiKeysAPI.Use(middleware.RequireResourcePermission("api_keys"))

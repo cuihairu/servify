@@ -9,6 +9,7 @@ import (
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
+	qualityapp "servify/apps/server/internal/modules/quality/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/usersecurity"
@@ -47,6 +48,7 @@ type RuntimeWorkerDependencies interface {
 	SLAServiceForWorker() *services.SLAService
 	WebhookDeliveryForWorker() webhookapp.Processor
 	EmailPollAdapterForWorker() emaildelivery.PollProcessor
+	QualityScanForWorker() *qualityapp.QualityService
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -65,6 +67,11 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 	if processor := deps.EmailPollAdapterForWorker(); processor != nil {
 		interval := time.Duration(cfg.Email.PollIntervalSeconds) * time.Second
 		app.RegisterWorker(NewEmailPollWorker(processor, interval, app.Logger))
+	}
+
+	if scanner := deps.QualityScanForWorker(); scanner != nil {
+		interval := time.Duration(cfg.Quality.ScanIntervalSeconds) * time.Second
+		app.RegisterWorker(NewQualityReviewWorker(scanner, interval, app.Logger))
 	}
 
 	if cfg.Security.Audit.Enabled && db != nil {
