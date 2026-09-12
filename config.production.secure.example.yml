@@ -155,6 +155,19 @@ log:
   format: "json"
   output: "both"
 
+upload:
+  # 多副本部署必须切 "s3"（本地磁盘存储在副本间不共享）；单机可用默认 "local"
+  provider: "local"
+  s3:
+    region: "${S3_REGION}"
+    bucket: "${S3_BUCKET}"
+    endpoint: ""            # MinIO 等 S3 兼容端点；留空使用 AWS 默认
+    access_key_id: "${S3_ACCESS_KEY_ID}"     # 与 secret_access_key 同时留空走 IAM role
+    secret_access_key: "${S3_SECRET_ACCESS_KEY}"
+    force_path_style: false
+    presign_expiry_seconds: 3600
+    public_base_url: ""     # 公共读 bucket/CDN 地址；留空则 /uploads/ 302 到 presigned URL
+
 monitoring:
   enabled: true
   health_checks:

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -310,12 +311,27 @@ type PortalConfig struct {
 	SupportEmail   string   `yaml:"support_email" json:"support_email,omitempty"`
 }
 type UploadConfig struct {
-	Enabled      bool     `yaml:"enabled"`
-	MaxFileSize  string   `yaml:"max_file_size"`
-	AllowedTypes []string `yaml:"allowed_types"`
-	StoragePath  string   `yaml:"storage_path"`
-	AutoProcess  bool     `yaml:"auto_process"`
-	AutoIndex    bool     `yaml:"auto_index"`
+	Enabled      bool           `yaml:"enabled"`
+	Provider     string         `yaml:"provider"` // "local"(default) | "s3"
+	MaxFileSize  string         `yaml:"max_file_size"`
+	AllowedTypes []string       `yaml:"allowed_types"`
+	StoragePath  string         `yaml:"storage_path"`
+	AutoProcess  bool           `yaml:"auto_process"`
+	AutoIndex    bool           `yaml:"auto_index"`
+	S3           S3UploadConfig `yaml:"s3"`
+}
+
+// S3UploadConfig 参数化 S3 兼容对象存储后端（AWS S3、MinIO 等）。
+// access_key_id/secret_access_key 同时为空时走默认凭据链（env/IAM role）。
+type S3UploadConfig struct {
+	Region               string `yaml:"region" json:"region,omitempty"`
+	Bucket               string `yaml:"bucket" json:"bucket,omitempty"`
+	Endpoint             string `yaml:"endpoint" json:"endpoint,omitempty"`
+	AccessKeyID          string `yaml:"access_key_id" json:"access_key_id,omitempty"`
+	SecretAccessKey      string `yaml:"secret_access_key" json:"secret_access_key,omitempty"`
+	ForcePathStyle       bool   `yaml:"force_path_style" json:"force_path_style,omitempty"`
+	PresignExpirySeconds int    `yaml:"presign_expiry_seconds" json:"presign_expiry_seconds,omitempty"`
+	PublicBaseURL        string `yaml:"public_base_url" json:"public_base_url,omitempty"`
 }
 
 // EmbeddingConfig 是文本嵌入服务配置
@@ -424,6 +440,15 @@ func InsecureDefaults(cfg *Config) []string {
 
 	if InsecureDatabasePasswords[cfg.Database.Password] {
 		warnings = append(warnings, "database.password is empty or using a default value")
+	}
+
+	if strings.EqualFold(strings.TrimSpace(cfg.Upload.Provider), "s3") {
+		if strings.TrimSpace(cfg.Upload.S3.Bucket) == "" {
+			warnings = append(warnings, "upload.provider is s3 but upload.s3.bucket is empty")
+		}
+		if strings.TrimSpace(cfg.Upload.S3.Region) == "" {
+			warnings = append(warnings, "upload.provider is s3 but upload.s3.region is empty")
+		}
 	}
 
 	return warnings
@@ -704,12 +729,22 @@ func GetDefaultConfig() *Config {
 			SupportEmail:   "",
 		},
 		Upload: UploadConfig{
-			Enabled:      true,
-			MaxFileSize:  "10MB",
-			AllowedTypes: []string{".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg"},
-			StoragePath:  "./.runtime/uploads",
-			AutoProcess:  true,
-			AutoIndex:    true,
+			Enabled:  true,
+			Provider: "local",
+			// 与此前 /api/v1/upload 硬编码的 32MB 上限保持一致；收紧留给部署显式配置
+			MaxFileSize: "32MB",
+			// 上传附件白名单（原 handler 硬编码集），与知识文档类型取并集语义
+			AllowedTypes: []string{
+				".jpg", ".jpeg", ".png", ".gif", ".webp",
+				".pdf", ".doc", ".docx", ".xls", ".xlsx",
+				".txt", ".csv", ".md", ".zip", ".mp3", ".mp4",
+			},
+			StoragePath: "./uploads",
+			AutoProcess: true,
+			AutoIndex:   true,
+			S3: S3UploadConfig{
+				PresignExpirySeconds: 3600,
+			},
 		},
 		Embedding: EmbeddingConfig{
 			Provider: "openai",

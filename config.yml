@@ -197,11 +197,23 @@ security:
 
 upload:
   enabled: true
-  max_file_size: "10MB"
-  allowed_types: [".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg"]
-  storage_path: "./.runtime/uploads"
+  # 存储后端：local（默认，单机）或 s3（AWS S3 / MinIO 等兼容对象存储，多副本部署必需）
+  provider: "local"
+  max_file_size: "32MB"
+  allowed_types: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv", ".md", ".zip", ".mp3", ".mp4"]
+  storage_path: "./uploads"
   auto_process: true
   auto_index: true
+  # provider 为 s3 时生效；region/bucket 必填（生产环境缺失将拒绝启动）
+  s3:
+    region: ""
+    bucket: ""
+    endpoint: ""            # MinIO 等 S3 兼容端点；留空使用 AWS 默认
+    access_key_id: ""       # 与 secret_access_key 同时留空时走默认凭据链（env / IAM role）
+    secret_access_key: ""
+    force_path_style: false # MinIO 通常需要 true
+    presign_expiry_seconds: 3600
+    public_base_url: ""     # 公共读 bucket/CDN 地址；留空则 /uploads/ 302 到 presigned URL
 
 # Embedding configuration for text vectorization
 embedding:

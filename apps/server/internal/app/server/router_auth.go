@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"net/http"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/storage"
+	storagefactory "servify/apps/server/internal/platform/storage/factory"
 	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -46,10 +49,86 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	authMe.POST("/sessions/logout-current", authHandler.LogoutCurrentSession)
 	authMe.POST("/sessions/logout-others", authHandler.LogoutOtherSessions)
 
-	localStorage := storage.NewLocalProvider("./uploads", "/uploads")
-	uploadHandler := handlers.NewFileUploadHandler(localStorage, 32<<20)
+	registerUploadRoutes(r, deps)
+}
+
+// registerUploadRoutes wires the upload endpoint and object serving from
+// config.Upload (provider selection, size limit, extension whitelist).
+// A failed S3 construction is fail-closed: routes are not registered.
+func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
+	cfg := deps.Config.Upload
+	logger := deps.Logger
+
+	provider, err := storagefactory.NewProvider(context.Background(), storagefactory.FactoryConfig{
+		Provider: cfg.Provider,
+		Local:    storagefactory.LocalConfig{BaseDir: cfg.StoragePath, URLBase: "/uploads"},
+		S3: storagefactory.S3Config{
+			Region:               cfg.S3.Region,
+			Bucket:               cfg.S3.Bucket,
+			Endpoint:             cfg.S3.Endpoint,
+			AccessKeyID:          cfg.S3.AccessKeyID,
+			SecretAccessKey:      cfg.S3.SecretAccessKey,
+			ForcePathStyle:       cfg.S3.ForcePathStyle,
+			PresignExpirySeconds: cfg.S3.PresignExpirySeconds,
+			PublicBaseURL:        cfg.S3.PublicBaseURL,
+		},
+	})
+	if err != nil {
+		if logger != nil {
+			logger.WithError(err).Errorf("storage provider %q unavailable; upload endpoints disabled", cfg.Provider)
+		}
+		return
+	}
+
+	maxSize := int64(32 << 20)
+	if n, err := config.ParseSizeBytes(cfg.MaxFileSize); err != nil {
+		if logger != nil {
+			logger.WithError(err).Warnf("invalid upload.max_file_size %q; falling back to 32MB", cfg.MaxFileSize)
+		}
+	} else if n > 0 {
+		maxSize = n
+	}
+
+	uploadHandler := handlers.NewFileUploadHandlerWithConfig(provider, handlers.UploadHandlerConfig{
+		MaxSize:     maxSize,
+		AllowedExts: cfg.AllowedTypes,
+	})
 	r.POST("/api/v1/upload", middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...), uploadHandler.Upload)
-	r.Static("/uploads", "./uploads")
+
+	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")
+	if isS3 {
+		// S3 模式：/uploads/<key> 302 到现签 presigned URL（或 public_base_url），
+		// 消息中固化的链接因此永不过期，且每次访问都经过本服务的限流与审计。
+		r.GET("/uploads/*filepath", uploadsPresignRedirect(provider, cfg.S3))
+		return
+	}
+	r.Static("/uploads", cfg.StoragePath)
+}
+
+// uploadsPresignRedirect serves stable /uploads/<key> links against object storage.
+func uploadsPresignRedirect(provider storage.Provider, s3Cfg config.S3UploadConfig) gin.HandlerFunc {
+	expiry := time.Duration(s3Cfg.PresignExpirySeconds) * time.Second
+	if expiry <= 0 {
+		expiry = time.Hour
+	}
+	publicBase := strings.TrimSuffix(strings.TrimSpace(s3Cfg.PublicBaseURL), "/")
+	return func(c *gin.Context) {
+		key := strings.TrimPrefix(c.Param("filepath"), "/")
+		if key == "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		if publicBase != "" {
+			c.Redirect(http.StatusFound, publicBase+"/"+key)
+			return
+		}
+		url, err := provider.PresignedURL(key, int(expiry.Seconds()))
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "生成文件访问链接失败"})
+			return
+		}
+		c.Redirect(http.StatusFound, url)
+	}
 }
 
 func sessionIPIntelligenceFromConfig(cfg *config.Config) *handlers.HTTPSessionIPIntelligence {

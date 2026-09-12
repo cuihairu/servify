@@ -400,8 +400,15 @@ func TestConfig_UploadSettings(t *testing.T) {
 	if len(cfg.Upload.AllowedTypes) == 0 {
 		t.Error("expected allowed types to be set")
 	}
-	if cfg.Upload.StoragePath != "./.runtime/uploads" {
-		t.Fatalf("expected upload storage path to use runtime directory, got %q", cfg.Upload.StoragePath)
+	// 默认与原 /api/v1/upload 硬编码行为对齐：./uploads 目录 + local provider
+	if cfg.Upload.StoragePath != "./uploads" {
+		t.Fatalf("expected upload storage path to default to ./uploads, got %q", cfg.Upload.StoragePath)
+	}
+	if cfg.Upload.Provider != "local" {
+		t.Fatalf("expected default upload provider local, got %q", cfg.Upload.Provider)
+	}
+	if cfg.Upload.S3.PresignExpirySeconds != 3600 {
+		t.Fatalf("expected default presign expiry 3600, got %d", cfg.Upload.S3.PresignExpirySeconds)
 	}
 }
 
