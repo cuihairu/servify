@@ -17,7 +17,7 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	aiHandler := handlers.NewAIHandler(deps.AIHandlerService)
 
 	managementV1 := r.Group("/api/v1")
-	managementV1.Use(middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...))
+	managementV1.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	managementV1.Use(middleware.EnforceRequestScope())
 	managementV1.Use(middleware.RequirePrincipalKinds("agent", "admin", "service"))
 	managementV1.GET("/ws/stats", wsHandler.GetStats)
@@ -37,7 +37,7 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 
 	ingest := handlers.NewMetricsIngestHandler(handlers.NewMetricsAggregator())
 	serviceV1 := r.Group("/api/v1")
-	serviceV1.Use(middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...))
+	serviceV1.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	serviceV1.Use(middleware.EnforceRequestScope())
 	serviceV1.Use(middleware.RequirePrincipalKinds("service"))
 	serviceV1.POST("/metrics/ingest", ingest.Ingest)

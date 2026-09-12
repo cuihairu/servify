@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/conversation/domain"
 	platformauth "servify/apps/server/internal/platform/auth"
 
@@ -563,4 +564,50 @@ func TestApplyScopeFieldsNilModels(t *testing.T) {
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "ws-1")
 	applyConversationScopeFields(ctx, nil)
 	applyMessageScopeFields(ctx, nil)
+}
+
+func TestGormConversationRepositoryListSessions(t *testing.T) {
+	db := newConversationUnitTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := platformauth.ContextWithScope(context.Background(), "t1", "w1")
+
+	seed := []models.Session{
+		{ID: "s1", TenantID: "t1", WorkspaceID: "w1", Status: "active", Platform: "web", StartedAt: time.Now().Add(-3 * time.Hour)},
+		{ID: "s2", TenantID: "t1", WorkspaceID: "w1", Status: "ended", Platform: "web", StartedAt: time.Now().Add(-2 * time.Hour)},
+		{ID: "s3", TenantID: "t1", WorkspaceID: "w1", Status: "active", Platform: "email", StartedAt: time.Now().Add(-time.Hour)},
+		{ID: "s4", TenantID: "other", WorkspaceID: "w1", Status: "active", Platform: "web", StartedAt: time.Now()},
+	}
+	for i := range seed {
+		if err := db.Create(&seed[i]).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	// 分页 + 作用域过滤（s4 属于其他租户，必须不可见）
+	items, total, err := repo.ListSessions(ctx, conversationapp.OpenSessionListQuery{Page: 1, PageSize: 2})
+	if err != nil || total != 3 || len(items) != 2 {
+		t.Fatalf("page1: %v total=%d len=%d", err, total, len(items))
+	}
+	// created_at DESC
+	if items[0].ID != "s3" || items[1].ID != "s2" {
+		t.Fatalf("unexpected order: %s, %s", items[0].ID, items[1].ID)
+	}
+
+	// 状态过滤（domain 状态 → session 状态）
+	items, total, err = repo.ListSessions(ctx, conversationapp.OpenSessionListQuery{Status: "closed"})
+	if err != nil || total != 1 || items[0].ID != "s2" {
+		t.Fatalf("status filter: %v total=%d", err, total)
+	}
+
+	// 渠道过滤
+	items, total, err = repo.ListSessions(ctx, conversationapp.OpenSessionListQuery{Channel: "email"})
+	if err != nil || total != 1 || items[0].ID != "s3" {
+		t.Fatalf("channel filter: %v total=%d", err, total)
+	}
+
+	// 非法参数回退
+	items, total, err = repo.ListSessions(ctx, conversationapp.OpenSessionListQuery{Page: -1, PageSize: 500})
+	if err != nil || total != 3 || len(items) != 3 {
+		t.Fatalf("clamps: %v total=%d len=%d", err, total, len(items))
+	}
 }

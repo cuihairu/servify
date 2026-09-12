@@ -12,7 +12,7 @@ import (
 
 func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	api := r.Group("/api")
-	api.Use(middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...))
+	api.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	api.Use(middleware.EnforceRequestScope())
 	api.Use(middleware.RequirePrincipalKinds("agent", "admin", "service"))
 	api.Use(middleware.AuditMiddleware(deps.DB))
@@ -89,6 +89,15 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	webhooksAPI := api.Group("/")
 	webhooksAPI.Use(middleware.RequireResourcePermission("webhooks"))
 	handlers.RegisterWebhookRoutes(webhooksAPI, handlers.NewWebhookHandler(deps.WebhookHandlerService))
+
+	// 开放平台：API Key 管理 + X-API-Key 只读会话面（service principal）。
+	apiKeysAPI := api.Group("/")
+	apiKeysAPI.Use(middleware.RequireResourcePermission("api_keys"))
+	handlers.RegisterAPIKeyRoutes(apiKeysAPI, handlers.NewAPIKeyHandler(deps.APIKeyService))
+
+	conversationsAPI := api.Group("/")
+	conversationsAPI.Use(middleware.RequireResourcePermission("conversations"))
+	handlers.RegisterOpenConversationRoutes(conversationsAPI, handlers.NewOpenConversationHandler(deps.OpenConversationReader))
 
 	auditAPI := api.Group("/")
 	auditAPI.Use(middleware.RequireResourcePermission("audit"))

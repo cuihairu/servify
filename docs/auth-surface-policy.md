@@ -106,6 +106,37 @@
 - JWT 与 claims 归一化：[platform/auth](https://github.com/timebeau/servify/tree/main/apps/server/internal/platform/auth)
 - Gin 兼容入口：[internal/middleware](https://github.com/timebeau/servify/tree/main/apps/server/internal/middleware)
 
+## X-API-Key（service principal，开放平台）
+
+P1 引入机器凭据：`Authorization: Bearer` 之外，`AuthMiddleware` 现在接受 `X-API-Key` 头。
+
+认证流程：
+
+1. 请求带 `X-API-Key: sv_...` 时走 API Key 分支（无此头则完全走原 JWT 路径，逐行不变）
+2. 明文密钥 sha256 哈希后查 `api_keys.key_hash`（唯一索引）；高熵随机密钥抗穷举，无需慢哈希
+3. 已吊销（`revoked_at`）、已过期（`expires_at`）或不存在一律统一 401，不区分原因
+4. 成功后注入 `principal_kind=service`、租户/工作区 scope、只读权限集
+5. `last_used_at` 按 60s 节流条件更新，避免高频请求写放大
+
+权限面：
+
+- 默认只读：`tickets.read`、`conversations.read`
+- `scopes` 字段保留扩展（逗号分隔），签发时可显式指定
+- 吊销即时生效：每次请求都经解析器查库校验
+
+开放面路由（挂 management surface，`RequireResourcePermission` 控权）：
+
+- `GET /api/v1/tickets`（既有 tickets read 权限）
+- `GET /api/v1/conversations`、`GET /api/v1/conversations/:id`、`GET /api/v1/conversations/:id/messages`（conversations read）
+- `POST /api/v1/metrics/ingest`（既有 service surface 能力的重复入口）
+
+管理面路由（`api_keys` 资源权限）：
+
+- `GET /api/v1/api-keys`（列表，只回显 prefix 与指纹状态，永不回显明文）
+- `POST /api/v1/api-keys`（签发，明文仅在该响应出现一次）
+- `POST /api/v1/api-keys/:id/revoke`（吊销即时生效）
+- `DELETE /api/v1/api-keys/:id`
+
 ## 后续扩展
 
 - 如果未来出现真正的 end-user authenticated business API，应新增独立 surface，而不是回退复用 management surface

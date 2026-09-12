@@ -43,7 +43,7 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	auth.POST("/refresh", authHandler.RefreshToken)
 
 	authMe := auth.Group("")
-	authMe.Use(middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...))
+	authMe.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	authMe.GET("/me", authHandler.GetCurrentUser)
 	authMe.GET("/sessions", authHandler.ListSessions)
 	authMe.POST("/sessions/logout-current", authHandler.LogoutCurrentSession)
@@ -115,7 +115,7 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 		MaxSize:     maxSize,
 		AllowedExts: cfg.AllowedTypes,
 	})
-	r.POST("/api/v1/upload", middleware.AuthMiddleware(deps.Config, authPolicies(deps.DB)...), uploadHandler.Upload)
+	r.POST("/api/v1/upload", middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...), uploadHandler.Upload)
 
 	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")
 	if isS3 {

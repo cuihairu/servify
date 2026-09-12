@@ -60,7 +60,7 @@ func TestEnforceRequestScopeWrapper(t *testing.T) {
 	r := gin.New()
 	cfg := &config.Config{}
 	cfg.JWT.Secret = secret
-	r.Use(AuthMiddleware(cfg, platformauth.RejectIssuedBefore(0)))
+	r.Use(AuthMiddleware(cfg, nil, platformauth.RejectIssuedBefore(0)))
 	r.Use(EnforceRequestScope())
 	r.GET("/scoped", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"tenant_id": c.MustGet("tenant_id")}) })
 

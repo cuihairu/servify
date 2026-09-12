@@ -25,6 +25,10 @@ type scriptedConversationRepo struct {
 	listBeforeErr error
 }
 
+func (s *scriptedConversationRepo) ListSessions(ctx context.Context, query conversationapp.OpenSessionListQuery) ([]conversationdomain.Conversation, int64, error) {
+	return nil, 0, nil
+}
+
 func (s *scriptedConversationRepo) CreateConversation(ctx context.Context, conversation *conversationdomain.Conversation) error {
 	if s.createErr != nil {
 		return s.createErr

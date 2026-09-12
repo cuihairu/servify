@@ -28,6 +28,10 @@ type scriptedRepo struct {
 	listBeforeBefore string
 }
 
+func (s *scriptedRepo) ListSessions(ctx context.Context, query OpenSessionListQuery) ([]domain.Conversation, int64, error) {
+	return nil, 0, nil
+}
+
 func (s *scriptedRepo) CreateConversation(ctx context.Context, conversation *domain.Conversation) error {
 	if s.createErr != nil {
 		return s.createErr

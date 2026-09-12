@@ -15,6 +15,8 @@ type MiddlewareConfig struct {
 	RBAC   config.RBACConfig
 	Now    func() time.Time
 	Policy TokenPolicy
+	// APIKeyResolver 可选：提供后接受 X-API-Key 认证（service principal）。
+	APIKeyResolver APIKeyResolver
 }
 
 func MiddlewareConfigFromApp(cfg *config.Config) MiddlewareConfig {
@@ -36,6 +38,10 @@ func AuthMiddleware(cfg MiddlewareConfig) gin.HandlerFunc {
 	resolver := Resolver{RBAC: cfg.RBAC}
 
 	return func(c *gin.Context) {
+		if key := strings.TrimSpace(c.GetHeader("X-API-Key")); key != "" {
+			handleAPIKeyAuth(c, cfg, key)
+			return
+		}
 		ah := c.GetHeader("Authorization")
 		if !strings.HasPrefix(strings.ToLower(ah), "bearer ") {
 			abortJSON(c, http.StatusUnauthorized, "Unauthorized", "missing bearer token")
@@ -178,6 +184,45 @@ func RequirePrincipalKinds(required ...string) gin.HandlerFunc {
 		}
 		abortJSON(c, http.StatusForbidden, "Forbidden", "insufficient principal type")
 	}
+}
+
+// handleAPIKeyAuth X-API-Key 分支：解析凭据、注入只读 service principal 上下文。
+// 失败统一 401（不区分密钥不存在/吊销/过期），原 JWT 路径不受影响。
+func handleAPIKeyAuth(c *gin.Context, cfg MiddlewareConfig, key string) {
+	if cfg.APIKeyResolver == nil {
+		abortJSON(c, http.StatusUnauthorized, "Unauthorized", "api key auth not configured")
+		return
+	}
+	record, err := cfg.APIKeyResolver.ResolveAPIKey(c.Request.Context(), key)
+	if err != nil {
+		abortJSON(c, http.StatusUnauthorized, "Unauthorized", "invalid api key")
+		return
+	}
+	claims := Claims{
+		Values: map[string]interface{}{
+			"api_key_id":     record.ID,
+			"principal_kind": PrincipalService,
+		},
+		Roles:         []string{},
+		Permissions:   APIKeyScopesOrDefault(record.Scopes),
+		PrincipalKind: PrincipalService,
+		TenantID:      record.TenantID,
+		WorkspaceID:   record.WorkspaceID,
+	}
+	reqCtx := ContextWithScope(c.Request.Context(), claims.TenantID, claims.WorkspaceID)
+	c.Request = c.Request.WithContext(reqCtx)
+	c.Set("permissions", claims.Permissions)
+	c.Set("principal_kind", claims.PrincipalKind)
+	if claims.TenantID != "" {
+		c.Set("tenant_id", claims.TenantID)
+	}
+	if claims.WorkspaceID != "" {
+		c.Set("workspace_id", claims.WorkspaceID)
+	}
+	c.Set("api_key_id", record.ID)
+	c.Set("auth_claims", claims.Values)
+
+	c.Next()
 }
 
 func getGrantedPermissions(c *gin.Context) []string {

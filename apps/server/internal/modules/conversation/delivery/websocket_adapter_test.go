@@ -17,6 +17,10 @@ type stubConversationRepo struct {
 	messages      map[string][]conversationdomain.ConversationMessage
 }
 
+func (s *stubConversationRepo) ListSessions(ctx context.Context, query conversationapp.OpenSessionListQuery) ([]conversationdomain.Conversation, int64, error) {
+	return nil, 0, nil
+}
+
 func (s *stubConversationRepo) CreateConversation(ctx context.Context, conversation *conversationdomain.Conversation) error {
 	if s.conversations == nil {
 		s.conversations = map[string]*conversationdomain.Conversation{}

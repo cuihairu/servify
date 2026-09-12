@@ -68,6 +68,8 @@ type Runtime struct {
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
 	WebhookHandlerService    webhookdelivery.HandlerService
+	APIKeyService            *services.APIKeyService
+	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 
@@ -192,6 +194,8 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		SuggestionService:        rt.SuggestionService,
 		GamificationService:      rt.GamificationService,
 		WebhookHandlerService:    rt.WebhookHandlerService,
+		APIKeyService:            rt.APIKeyService,
+		OpenConversationReader:   rt.OpenConversationReader,
 		OIDCProvider:             rt.OIDCProvider,
 		HTTPMetrics:              rt.HTTPMetrics,
 	}

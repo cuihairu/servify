@@ -60,6 +60,8 @@ type Dependencies struct {
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
 	WebhookHandlerService    webhookdelivery.HandlerService
+	APIKeyService            *services.APIKeyService
+	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 }

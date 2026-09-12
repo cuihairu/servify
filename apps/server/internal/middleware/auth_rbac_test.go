@@ -62,7 +62,7 @@ func TestAuthMiddleware_RBACRoleExpansion(t *testing.T) {
 	}, secret)
 
 	r := gin.New()
-	r.Use(AuthMiddleware(cfg))
+	r.Use(AuthMiddleware(cfg, nil))
 	r.Use(RequireResourcePermission("tickets"))
 	r.GET("/tickets", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	r.POST("/tickets", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })

@@ -13,6 +13,7 @@ import (
 type stubConversationRepo struct {
 	conversations map[string]*domain.Conversation
 	messages      map[string][]domain.ConversationMessage
+	sessions      []domain.Conversation
 	err           error
 }
 
@@ -92,6 +93,10 @@ func (s *stubConversationRepo) ListMessagesBefore(ctx context.Context, conversat
 	out := make([]domain.ConversationMessage, 0, len(items))
 	out = append(out, items...)
 	return out, nil
+}
+
+func (s *stubConversationRepo) ListSessions(ctx context.Context, query OpenSessionListQuery) ([]domain.Conversation, int64, error) {
+	return s.sessions, int64(len(s.sessions)), nil
 }
 
 type stubConversationPublisher struct {

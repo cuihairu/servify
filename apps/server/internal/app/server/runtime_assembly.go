@@ -68,6 +68,8 @@ func wireConversationRuntime(rt *Runtime, wsHub *services.WebSocketHub) {
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
 	wsHub.SetConversationMessageWriter(conversationdelivery.NewWebSocketMessageAdapter(conversationService))
+	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。
+	rt.OpenConversationReader = conversationdelivery.NewOpenConversationAdapter(conversationService)
 }
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
@@ -169,6 +171,9 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	automationService.SetWebhookDispatcher(webhookdelivery.NewAutomationWebhookDispatcher(webhookService))
 	rt.webhookService = webhookService
 	rt.WebhookHandlerService = webhookdelivery.NewHandlerServiceAdapter(webhookService)
+
+	// 开放平台：API Key 签发/吊销管理（X-API-Key 认证分支在 AuthMiddleware 内）。
+	rt.APIKeyService = services.NewAPIKeyService(rt.DB)
 }
 
 func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {

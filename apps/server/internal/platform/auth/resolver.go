@@ -31,6 +31,7 @@ func (r Resolver) ExpandPermissions(roles, explicit []string) []string {
 		case "agent":
 			perms = append(perms,
 				"tickets.read", "tickets.write",
+				"conversations.read",
 				"customers.read",
 				"agents.read",
 				"custom_fields.read",

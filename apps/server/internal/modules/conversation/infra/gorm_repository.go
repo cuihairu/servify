@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/conversation/domain"
 	platformauth "servify/apps/server/internal/platform/auth"
 )
@@ -139,6 +140,42 @@ func (r *GormRepository) ListMessagesBefore(ctx context.Context, conversationID 
 		out = append(out, mapMessage(item))
 	}
 	return out, nil
+}
+
+// ListSessions 开放 API 只读分页查询；沿用请求作用域（租户/工作区）过滤。
+func (r *GormRepository) ListSessions(ctx context.Context, query conversationapp.OpenSessionListQuery) ([]domain.Conversation, int64, error) {
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	if query.PageSize <= 0 {
+		query.PageSize = 20
+	}
+	if query.PageSize > 100 {
+		query.PageSize = 100
+	}
+	q := applyConversationScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx)
+	if query.Status != "" {
+		q = q.Where("status = ?", mapConversationStatusToSessionStatus(domain.ConversationStatus(strings.ToLower(strings.TrimSpace(query.Status)))))
+	}
+	if query.Channel != "" {
+		q = q.Where("platform = ?", strings.TrimSpace(query.Channel))
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []models.Session
+	if err := q.Order("created_at DESC").
+		Limit(query.PageSize).
+		Offset((query.Page - 1) * query.PageSize).
+		Find(&items).Error; err != nil {
+		return nil, 0, err
+	}
+	out := make([]domain.Conversation, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapConversation(item))
+	}
+	return out, total, nil
 }
 
 func mapConversation(model models.Session) domain.Conversation {

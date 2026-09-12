@@ -61,6 +61,19 @@ func (s *Service) GetConversation(ctx context.Context, conversationID string) (*
 	return s.ResumeConversation(ctx, ResumeConversationQuery{ConversationID: conversationID})
 }
 
+// ListConversations 开放 API 只读分页查询（透传作用域过滤）。
+func (s *Service) ListConversations(ctx context.Context, query OpenSessionListQuery) ([]ConversationDTO, int64, error) {
+	items, total, err := s.repo.ListSessions(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]ConversationDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, MapConversation(item))
+	}
+	return out, total, nil
+}
+
 func (s *Service) ListRecentMessages(ctx context.Context, conversationID string, limit int) ([]ConversationMessageDTO, error) {
 	if strings.TrimSpace(conversationID) == "" {
 		return nil, fmt.Errorf("conversation_id required")
