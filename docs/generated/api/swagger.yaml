@@ -265,6 +265,8 @@ definitions:
       title:
         type: string
     type: object
+  handlers.AddAnnotationRequest:
+    type: object
   handlers.AgentCreateRequest:
     properties:
       department:
@@ -343,6 +345,23 @@ definitions:
         example: 10
         type: integer
     type: object
+  handlers.AttachRecordingRequest:
+    properties:
+      recording_duration_ms:
+        example: 95000
+        type: integer
+      recording_key:
+        example: uploads/2026/09/rec-abc.webm
+        type: string
+      recording_mime:
+        example: video/webm
+        type: string
+      recording_size:
+        example: 1048576
+        type: integer
+    required:
+    - recording_key
+    type: object
   handlers.ConfirmReviewRequest:
     properties:
       manual_result:
@@ -386,6 +405,21 @@ definitions:
     required:
     - name
     type: object
+  handlers.EndAssistRequest:
+    properties:
+      outcome:
+        description: ended|failed
+        example: ended
+        type: string
+      recording_duration_ms:
+        type: integer
+      recording_key:
+        type: string
+      recording_mime:
+        type: string
+      recording_size:
+        type: integer
+    type: object
   handlers.ErrorResponse:
     properties:
       code:
@@ -414,6 +448,21 @@ definitions:
         items:
           type: integer
         type: array
+    type: object
+  handlers.StartAssistRequest:
+    properties:
+      agent_user_id:
+        example: 7
+        type: integer
+      conversation_session_id:
+        example: sess-123
+        type: string
+      tenant_id:
+        type: string
+      workspace_id:
+        type: string
+    required:
+    - conversation_session_id
     type: object
   handlers.SuccessResponse:
     properties:
@@ -763,6 +812,57 @@ definitions:
       violation_count:
         type: integer
       violations_json:
+        type: string
+      workspace_id:
+        type: string
+    type: object
+  models.RemoteAssistAnnotation:
+    properties:
+      assist_session_id:
+        type: integer
+      created_at:
+        type: string
+      created_by:
+        type: integer
+      id:
+        type: integer
+      payload:
+        type: string
+      shape:
+        description: rect|freehand|arrow
+        type: string
+      timestamp_ms:
+        type: integer
+    type: object
+  models.RemoteAssistSession:
+    properties:
+      agent_user_id:
+        type: integer
+      conversation_session_id:
+        type: string
+      created_at:
+        type: string
+      ended_at:
+        type: string
+      id:
+        type: integer
+      recording_duration_ms:
+        type: integer
+      recording_key:
+        description: 录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息
+        type: string
+      recording_mime:
+        type: string
+      recording_size:
+        type: integer
+      started_at:
+        type: string
+      status:
+        description: active|ended|failed
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
         type: string
       workspace_id:
         type: string
@@ -2672,6 +2772,228 @@ paths:
       summary: 返回 LLM 打分开关状态
       tags:
       - 质检
+  /api/remote-assist/annotations/{id}:
+    delete:
+      parameters:
+      - description: 标注 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 删除远程协助标注
+      tags:
+      - 远程协助
+  /api/remote-assist/sessions:
+    get:
+      description: 按会话（可选）倒序列出协助记录
+      parameters:
+      - description: 按会话过滤
+        in: query
+        name: conversation_session_id
+        type: string
+      - description: 上限（默认 100，最大 200）
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取远程协助列表
+      tags:
+      - 远程协助
+    post:
+      consumes:
+      - application/json
+      description: 在指定会话上创建 active 状态的协助记录；信令与媒体面走既有 WS/RTC 通道
+      parameters:
+      - description: 协助内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.StartAssistRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.RemoteAssistSession'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 发起远程协助会话
+      tags:
+      - 远程协助
+  /api/remote-assist/sessions/{id}:
+    get:
+      description: 按协助会话 ID 返回详情（含录制元数据）
+      parameters:
+      - description: 协助会话 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RemoteAssistSession'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取单次远程协助
+      tags:
+      - 远程协助
+  /api/remote-assist/sessions/{id}/annotations:
+    get:
+      description: 按时间戳升序返回协助会话的全部标注
+      parameters:
+      - description: 协助会话 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取远程协助标注
+      tags:
+      - 远程协助
+    post:
+      consumes:
+      - application/json
+      description: 在协助会话上追加一条 Canvas 标注（坐标按归一化比例存储）
+      parameters:
+      - description: 协助会话 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 标注内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AddAnnotationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.RemoteAssistAnnotation'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 追加远程协助标注
+      tags:
+      - 远程协助
+  /api/remote-assist/sessions/{id}/end:
+    post:
+      consumes:
+      - application/json
+      description: 将协助置为 ended/failed 并落录制元数据（文件本体经 /api/v1/upload 上传）
+      parameters:
+      - description: 协助会话 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 结束内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.EndAssistRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RemoteAssistSession'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 结束远程协助会话
+      tags:
+      - 远程协助
   /api/satisfactions:
     get:
       description: 获取满意度评价列表，支持分页和筛选
@@ -4719,4 +5041,47 @@ paths:
   /api/v1/conversations/{id}/messages:
     get:
       responses: {}
+  /api/v1/remote-assist/{id}/recording:
+    post:
+      consumes:
+      - application/json
+      description: 访客经 /api/v1/upload 上传录制文件后，把 key/时长/大小挂到对应协助会话；校验该协助归属当前访客的会话
+      parameters:
+      - description: 协助会话 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 录制元数据
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AttachRecordingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.RemoteAssistSession'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 回写远程协助录制元数据（访客面）
+      tags:
+      - 远程协助
 swagger: "2.0"

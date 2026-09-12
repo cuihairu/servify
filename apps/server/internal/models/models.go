@@ -600,3 +600,33 @@ type AgentGroupMember struct {
 	AgentUserID uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:2" json:"agent_user_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// RemoteAssistSession 远程协助会话（信令走 WS/RTC，本表承载审计、录制元数据与标注锚点）。
+type RemoteAssistSession struct {
+	ID                    uint       `gorm:"primaryKey" json:"id"`
+	TenantID              string     `json:"tenant_id"`
+	WorkspaceID           string     `json:"workspace_id"`
+	ConversationSessionID string     `gorm:"index" json:"conversation_session_id"`
+	AgentUserID           uint       `json:"agent_user_id"`
+	Status                string     `json:"status"` // active|ended|failed
+	StartedAt             time.Time  `json:"started_at"`
+	EndedAt               *time.Time `json:"ended_at,omitempty"`
+	// 录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息
+	RecordingKey        string    `json:"recording_key,omitempty"`
+	RecordingMime       string    `json:"recording_mime,omitempty"`
+	RecordingDurationMs int64     `json:"recording_duration_ms,omitempty"`
+	RecordingSize       int64     `json:"recording_size,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// RemoteAssistAnnotation 远程协助标注（Canvas 覆盖层逐笔落库，坐标 JSON）。
+type RemoteAssistAnnotation struct {
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	AssistSessionID uint      `gorm:"not null;index:idx_assist_annotations_session" json:"assist_session_id"`
+	TimestampMs     int64     `json:"timestamp_ms"`
+	Shape           string    `json:"shape"` // rect|freehand|arrow
+	Payload         string    `gorm:"type:text" json:"payload"`
+	CreatedBy       uint      `json:"created_by"`
+	CreatedAt       time.Time `json:"created_at"`
+}

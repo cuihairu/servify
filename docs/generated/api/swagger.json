@@ -1684,6 +1684,342 @@
                 }
             }
         },
+        "/api/remote-assist/annotations/{id}": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "删除远程协助标注",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标注 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/remote-assist/sessions": {
+            "get": {
+                "description": "按会话（可选）倒序列出协助记录",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "获取远程协助列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "按会话过滤",
+                        "name": "conversation_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "上限（默认 100，最大 200）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "在指定会话上创建 active 状态的协助记录；信令与媒体面走既有 WS/RTC 通道",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "发起远程协助会话",
+                "parameters": [
+                    {
+                        "description": "协助内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.StartAssistRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistSession"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/remote-assist/sessions/{id}": {
+            "get": {
+                "description": "按协助会话 ID 返回详情（含录制元数据）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "获取单次远程协助",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistSession"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/remote-assist/sessions/{id}/annotations": {
+            "get": {
+                "description": "按时间戳升序返回协助会话的全部标注",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "获取远程协助标注",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "在协助会话上追加一条 Canvas 标注（坐标按归一化比例存储）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "追加远程协助标注",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "标注内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AddAnnotationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistAnnotation"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/remote-assist/sessions/{id}/end": {
+            "post": {
+                "description": "将协助置为 ended/failed 并落录制元数据（文件本体经 /api/v1/upload 上传）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "结束远程协助会话",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "结束内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.EndAssistRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistSession"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/satisfactions": {
             "get": {
                 "description": "获取满意度评价列表，支持分页和筛选",
@@ -4793,6 +5129,71 @@
             "get": {
                 "responses": {}
             }
+        },
+        "/api/v1/remote-assist/{id}/recording": {
+            "post": {
+                "description": "访客经 /api/v1/upload 上传录制文件后，把 key/时长/大小挂到对应协助会话；校验该协助归属当前访客的会话",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "回写远程协助录制元数据（访客面）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "录制元数据",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AttachRecordingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistSession"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -5200,6 +5601,9 @@
                 }
             }
         },
+        "handlers.AddAnnotationRequest": {
+            "type": "object"
+        },
         "handlers.AgentCreateRequest": {
             "type": "object",
             "required": [
@@ -5308,6 +5712,30 @@
                 }
             }
         },
+        "handlers.AttachRecordingRequest": {
+            "type": "object",
+            "required": [
+                "recording_key"
+            ],
+            "properties": {
+                "recording_duration_ms": {
+                    "type": "integer",
+                    "example": 95000
+                },
+                "recording_key": {
+                    "type": "string",
+                    "example": "uploads/2026/09/rec-abc.webm"
+                },
+                "recording_mime": {
+                    "type": "string",
+                    "example": "video/webm"
+                },
+                "recording_size": {
+                    "type": "integer",
+                    "example": 1048576
+                }
+            }
+        },
         "handlers.ConfirmReviewRequest": {
             "type": "object",
             "properties": {
@@ -5367,6 +5795,28 @@
                 }
             }
         },
+        "handlers.EndAssistRequest": {
+            "type": "object",
+            "properties": {
+                "outcome": {
+                    "description": "ended|failed",
+                    "type": "string",
+                    "example": "ended"
+                },
+                "recording_duration_ms": {
+                    "type": "integer"
+                },
+                "recording_key": {
+                    "type": "string"
+                },
+                "recording_mime": {
+                    "type": "string"
+                },
+                "recording_size": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -5408,6 +5858,28 @@
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "handlers.StartAssistRequest": {
+            "type": "object",
+            "required": [
+                "conversation_session_id"
+            ],
+            "properties": {
+                "agent_user_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "conversation_session_id": {
+                    "type": "string",
+                    "example": "sess-123"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
                 }
             }
         },
@@ -5918,6 +6390,82 @@
                     "type": "integer"
                 },
                 "violations_json": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RemoteAssistAnnotation": {
+            "type": "object",
+            "properties": {
+                "assist_session_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "payload": {
+                    "type": "string"
+                },
+                "shape": {
+                    "description": "rect|freehand|arrow",
+                    "type": "string"
+                },
+                "timestamp_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.RemoteAssistSession": {
+            "type": "object",
+            "properties": {
+                "agent_user_id": {
+                    "type": "integer"
+                },
+                "conversation_session_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "recording_duration_ms": {
+                    "type": "integer"
+                },
+                "recording_key": {
+                    "description": "录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息",
+                    "type": "string"
+                },
+                "recording_mime": {
+                    "type": "string"
+                },
+                "recording_size": {
+                    "type": "integer"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "active|ended|failed",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "workspace_id": {

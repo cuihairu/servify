@@ -22,6 +22,8 @@ handler|Gamification|apps/server/internal/handlers/gamification_handler.go|servi
 handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|SLAService|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|\*services\.SLAService
 handler|Quality|apps/server/internal/handlers/quality_handler.go|service|qualitydelivery\.HandlerService|func NewQualityHandler\(service qualitydelivery\.HandlerService\)|qualityapp\.QualityService
 handler|Agent group|apps/server/internal/handlers/agent_group_handler.go|service|agentdelivery\.AgentGroupService|func NewAgentGroupHandler\(service agentdelivery\.AgentGroupService\)|\*services\.AgentService
+handler|Assist|apps/server/internal/handlers/assist_handler.go|service|assistdelivery\.HandlerService|func NewAssistHandler\(service assistdelivery\.HandlerService\)|assistapp\.Service
+handler|Assist recording|apps/server/internal/handlers/assist_recording_handler.go|service|assistdelivery\.HandlerService|func NewAssistRecordingHandler\(service assistdelivery\.HandlerService\)|assistapp\.Service
 
 runtime|customer handlers|CustomerHandlerService|customerdelivery\.HandlerService
 runtime|automation handlers|AutomationHandlerService|automationdelivery\.HandlerService
@@ -33,6 +35,7 @@ runtime|statistics handlers|StatisticsHandlerService|analyticsdelivery\.HandlerS
 runtime|session transfer handlers|TransferHandlerService|routingdelivery\.HandlerService
 runtime|AI handlers|AIHandlerService|aidelivery\.HandlerService
 runtime|quality handlers|QualityHandlerService|qualitydelivery\.HandlerService
+runtime|assist handlers|AssistHandlerService|assistdelivery\.HandlerService
 
 require|apps/server/internal/handlers/health_enhanced.go|aiService aidelivery\.HandlerService|Enhanced health handler must store modules/ai/delivery.HandlerService.
 require|apps/server/internal/services/websocket.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.

@@ -4,6 +4,9 @@ import (
 	"time"
 
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	assistapp "servify/apps/server/internal/modules/assist/application"
+	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
+	assistinfra "servify/apps/server/internal/modules/assist/infra"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
@@ -167,6 +170,10 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	slaService.SetAutomationService(automationService)
 
 	rt.CustomerHandlerService = customerdelivery.NewHandlerService(rt.DB)
+
+	// 远程协助：会话/录制/标注（媒体面走既有 WS+RTC，不在此装配）
+	rt.AssistHandlerService = assistdelivery.NewHandlerService(
+		assistapp.NewAssistService(assistinfra.NewGormRepository(rt.DB)))
 
 	agentAssembly := services.BuildAgentServiceAssembly(rt.DB, rt.Logger, rt.Redis)
 	rt.AgentHandlerService = agentAssembly.Service

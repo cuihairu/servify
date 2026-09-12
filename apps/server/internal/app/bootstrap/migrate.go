@@ -49,6 +49,8 @@ func MigrationModels() []interface{} {
 		&models.QualityReview{},
 		&models.AgentGroup{},
 		&models.AgentGroupMember{},
+		&models.RemoteAssistSession{},
+		&models.RemoteAssistAnnotation{},
 	}
 }
 

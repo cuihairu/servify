@@ -117,6 +117,14 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 	})
 	r.POST("/api/v1/upload", middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...), uploadHandler.Upload)
 
+	// 访客面：远程协助录制元数据回写（文件本体走上方 /api/v1/upload；归属校验在服务内）
+	if deps.AssistHandlerService != nil {
+		recordingHandler := handlers.NewAssistRecordingHandler(deps.AssistHandlerService)
+		r.POST("/api/v1/remote-assist/:id/recording",
+			middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...),
+			recordingHandler.AttachRecording)
+	}
+
 	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")
 	if isS3 {
 		// S3 模式：/uploads/<key> 302 到现签 presigned URL（或 public_base_url），

@@ -26,6 +26,10 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	handlers.RegisterAgentRoutes(agentsAPI, handlers.NewAgentHandler(deps.AgentHandlerService, deps.Logger))
 	handlers.RegisterAgentGroupRoutes(agentsAPI, handlers.NewAgentGroupHandler(deps.AgentGroupService))
 
+	remoteAssistAPI := api.Group("/")
+	remoteAssistAPI.Use(middleware.RequireResourcePermission("assist"))
+	handlers.RegisterAssistRoutes(remoteAssistAPI, handlers.NewAssistHandler(deps.AssistHandlerService))
+
 	ticketsAPI := api.Group("/")
 	ticketsAPI.Use(middleware.RequireResourcePermission("tickets"))
 	handlers.RegisterTicketRoutes(ticketsAPI, handlers.NewTicketHandler(deps.TicketHandlerService, deps.Logger))
