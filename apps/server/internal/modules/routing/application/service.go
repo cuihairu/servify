@@ -29,6 +29,26 @@ func (s *Service) RequestHumanHandoff(ctx context.Context, cmd RequestHumanHando
 	})
 }
 
+// ClaimWaitingRecords 认领一批到期等待记录（claim-then-process）：
+// 原子置 claimed_at=now，仅命中 status=waiting 且无租约或租约已过期（claimed_at < leaseBefore）
+// 的记录；崩溃后租约到期自动复活。按优先级（urgent→low）+ 入队时间排序。
+func (s *Service) ClaimWaitingRecords(ctx context.Context, now, leaseBefore time.Time, limit int) ([]QueueEntryDTO, error) {
+	entries, err := s.repo.ClaimQueueEntries(ctx, now, leaseBefore, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]QueueEntryDTO, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, MapQueueEntry(entry))
+	}
+	return out, nil
+}
+
+// ReleaseQueueClaim 处理失败时归还租约（claimed_at 清空），下一轮立即可再认领。
+func (s *Service) ReleaseWaitingClaim(ctx context.Context, sessionID string) error {
+	return s.repo.ReleaseQueueClaim(ctx, sessionID)
+}
+
 func (s *Service) AssignAgent(ctx context.Context, cmd AssignAgentCommand) (*AssignmentDTO, error) {
 	if strings.TrimSpace(cmd.SessionID) == "" {
 		return nil, fmt.Errorf("session_id required")
@@ -92,13 +112,14 @@ func (s *Service) AddToWaitingQueue(ctx context.Context, cmd AddToWaitingQueueCo
 		return nil, fmt.Errorf("session_id required")
 	}
 	item := &domain.QueueEntry{
-		SessionID:    cmd.SessionID,
-		Reason:       strings.TrimSpace(cmd.Reason),
-		TargetSkills: append([]string(nil), cmd.TargetSkills...),
-		Priority:     strings.TrimSpace(cmd.Priority),
-		Notes:        strings.TrimSpace(cmd.Notes),
-		Status:       domain.QueueStatusWaiting,
-		QueuedAt:     s.now(),
+		SessionID:     cmd.SessionID,
+		Reason:        strings.TrimSpace(cmd.Reason),
+		TargetSkills:  append([]string(nil), cmd.TargetSkills...),
+		TargetGroupID: cmd.TargetGroupID,
+		Priority:      strings.TrimSpace(cmd.Priority),
+		Notes:         strings.TrimSpace(cmd.Notes),
+		Status:        domain.QueueStatusWaiting,
+		QueuedAt:      s.now(),
 	}
 	if err := s.repo.CreateQueueEntry(ctx, item); err != nil {
 		return nil, err

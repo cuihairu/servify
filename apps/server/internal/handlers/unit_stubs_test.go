@@ -437,7 +437,12 @@ func (s *unitTransferService) CancelWaitingRecord(ctx context.Context, sessionID
 	return s.cancelErr
 }
 
-func (s *unitTransferService) ProcessWaitingQueue(ctx context.Context) error { return s.processErr }
+func (s *unitTransferService) ProcessWaitingQueue(ctx context.Context) (int, error) {
+	if s.processErr != nil {
+		return 0, s.processErr
+	}
+	return 0, nil
+}
 
 func (s *unitTransferService) AutoTransferCheck(ctx context.Context, sessionID string, messages []models.Message) bool {
 	return s.shouldTran

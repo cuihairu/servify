@@ -57,6 +57,7 @@ func (a *SessionTransferAdapter) AddToWaitingQueue(
 	sessionID string,
 	reason string,
 	targetSkills []string,
+	targetGroupID uint,
 	priority string,
 	notes string,
 ) (*models.WaitingRecord, error) {
@@ -66,16 +67,36 @@ func (a *SessionTransferAdapter) AddToWaitingQueue(
 	}
 
 	entry, err := svc.AddToWaitingQueue(ctx, routingapp.AddToWaitingQueueCommand{
-		SessionID:    sessionID,
-		Reason:       reason,
-		TargetSkills: targetSkills,
-		Priority:     priority,
-		Notes:        notes,
+		SessionID:     sessionID,
+		Reason:        reason,
+		TargetSkills:  targetSkills,
+		TargetGroupID: targetGroupID,
+		Priority:      priority,
+		Notes:         notes,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return mapWaitingRecord(entry), nil
+}
+
+// ClaimWaitingRecords 认领到期等待记录（租约内不重复派发）。
+func (a *SessionTransferAdapter) ClaimWaitingRecords(ctx context.Context, now, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error) {
+	svc := a.service
+	entries, err := svc.ClaimWaitingRecords(ctx, now, leaseBefore, limit)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]models.WaitingRecord, 0, len(entries))
+	for _, entry := range entries {
+		records = append(records, mapQueueWaitingRecord(entry))
+	}
+	return records, nil
+}
+
+// ReleaseWaitingClaim 处理失败归还租约。
+func (a *SessionTransferAdapter) ReleaseWaitingClaim(ctx context.Context, sessionID string) error {
+	return a.service.ReleaseWaitingClaim(ctx, sessionID)
 }
 
 func (a *SessionTransferAdapter) GetTransferHistory(ctx context.Context, sessionID string) ([]models.TransferRecord, error) {
@@ -160,17 +181,30 @@ func mapWaitingRecord(item *routingapp.QueueEntryDTO) *models.WaitingRecord {
 		return nil
 	}
 	return &models.WaitingRecord{
-		SessionID:    item.SessionID,
-		Reason:       item.Reason,
-		TargetSkills: marshalSkills(item.TargetSkills),
-		Priority:     item.Priority,
-		Notes:        item.Notes,
-		Status:       item.Status,
-		QueuedAt:     item.QueuedAt,
-		AssignedAt:   item.AssignedAt,
-		AssignedTo:   item.AssignedTo,
-		CreatedAt:    item.QueuedAt,
+		SessionID:     item.SessionID,
+		Reason:        item.Reason,
+		TargetSkills:  marshalSkills(item.TargetSkills),
+		TargetGroupID: nilableGroupID(item.TargetGroupID),
+		Priority:      item.Priority,
+		Notes:         item.Notes,
+		Status:        item.Status,
+		QueuedAt:      item.QueuedAt,
+		AssignedAt:    item.AssignedAt,
+		AssignedTo:    item.AssignedTo,
+		CreatedAt:     item.QueuedAt,
 	}
+}
+
+// mapQueueWaitingRecord 认领结果 DTO → 持久模型（claim 流程读字段用）。
+func mapQueueWaitingRecord(item routingapp.QueueEntryDTO) models.WaitingRecord {
+	return *mapWaitingRecord(&item)
+}
+
+func nilableGroupID(id uint) *uint {
+	if id == 0 {
+		return nil
+	}
+	return &id
 }
 
 func marshalSkills(skills []string) string {

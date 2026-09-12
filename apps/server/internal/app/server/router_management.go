@@ -24,6 +24,7 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	agentsAPI := api.Group("/")
 	agentsAPI.Use(middleware.RequireResourcePermission("agents"))
 	handlers.RegisterAgentRoutes(agentsAPI, handlers.NewAgentHandler(deps.AgentHandlerService, deps.Logger))
+	handlers.RegisterAgentGroupRoutes(agentsAPI, handlers.NewAgentGroupHandler(deps.AgentGroupService))
 
 	ticketsAPI := api.Group("/")
 	ticketsAPI.Use(middleware.RequireResourcePermission("tickets"))

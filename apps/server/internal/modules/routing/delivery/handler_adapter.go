@@ -23,6 +23,7 @@ type AISessionService interface {
 
 type agentRuntime interface {
 	FindAvailableAgent(ctx context.Context, skills []string, priority string) (*agentdelivery.AgentInfo, error)
+	SelectAgent(ctx context.Context, req agentdelivery.SelectionRequest) (*agentdelivery.SelectionResult, error)
 	GetOnlineAgent(ctx context.Context, userID uint) (*agentdelivery.AgentInfo, bool)
 	ApplySessionTransfer(ctx context.Context, sessionID string, fromAgentID *uint, toAgentID uint)
 }
@@ -48,19 +49,24 @@ type HandlerDependencies struct {
 	Tickets      ticketdelivery.RuntimeService
 	Conversation conversationdelivery.RuntimeService
 	AgentLoad    agentdelivery.RuntimeService
+	// 等待队列 worker 分派参数（0 取默认值）。
+	DispatchBatchSize int
+	ClaimLeaseSeconds int
 }
 
 // HandlerServiceAdapter is the routing module entry for handler/runtime session transfer flows.
 type HandlerServiceAdapter struct {
-	db           *gorm.DB
-	logger       *logrus.Logger
-	aiService    AISessionService
-	agentService agentRuntime
-	notifier     notifier
-	routing      RuntimeService
-	tickets      ticketdelivery.RuntimeService
-	conversation conversationdelivery.RuntimeService
-	agents       agentdelivery.RuntimeService
+	db            *gorm.DB
+	logger        *logrus.Logger
+	aiService     AISessionService
+	agentService  agentRuntime
+	notifier      notifier
+	routing       RuntimeService
+	tickets       ticketdelivery.RuntimeService
+	conversation  conversationdelivery.RuntimeService
+	agents        agentdelivery.RuntimeService
+	dispatchBatch int
+	claimLease    time.Duration
 }
 
 func NewHandlerService(deps HandlerDependencies) *HandlerServiceAdapter {
@@ -68,16 +74,26 @@ func NewHandlerService(deps HandlerDependencies) *HandlerServiceAdapter {
 	if logger == nil {
 		logger = logrus.New()
 	}
+	batch := deps.DispatchBatchSize
+	if batch <= 0 || batch > 200 {
+		batch = 10
+	}
+	lease := deps.ClaimLeaseSeconds
+	if lease <= 0 {
+		lease = 120
+	}
 	return &HandlerServiceAdapter{
-		db:           deps.DB,
-		logger:       logger,
-		aiService:    deps.AI,
-		agentService: deps.Agents,
-		notifier:     deps.Notifier,
-		routing:      deps.Routing,
-		tickets:      deps.Tickets,
-		conversation: deps.Conversation,
-		agents:       deps.AgentLoad,
+		db:            deps.DB,
+		logger:        logger,
+		aiService:     deps.AI,
+		agentService:  deps.Agents,
+		notifier:      deps.Notifier,
+		routing:       deps.Routing,
+		tickets:       deps.Tickets,
+		conversation:  deps.Conversation,
+		agents:        deps.AgentLoad,
+		dispatchBatch: batch,
+		claimLease:    time.Duration(lease) * time.Second,
 	}
 }
 
@@ -101,11 +117,28 @@ func (s *HandlerServiceAdapter) TransferToHuman(ctx context.Context, req *routin
 			Summary:   "会话已在等待队列中",
 		}, nil
 	}
-	agent, err := s.agentService.FindAvailableAgent(ctx, req.TargetSkills, req.Priority)
+	agent, err := s.selectAgentForTransfer(ctx, req.TargetSkills, req.Priority, req.TargetGroupID, session.CustomerID)
 	if err != nil {
 		return s.addToWaitingQueue(ctx, session, req)
 	}
 	return s.executeTransfer(ctx, session, agent.UserID, req.Reason, req.Notes)
+}
+
+// selectAgentForTransfer 统一的三级分配入口：亲和（老客户回原坐席）→ 指定组 → 全局池。
+func (s *HandlerServiceAdapter) selectAgentForTransfer(ctx context.Context, skills []string, priority string, targetGroupID uint, customerUserID uint) (*agentdelivery.AgentInfo, error) {
+	req := agentdelivery.SelectionRequest{Skills: skills, Priority: priority}
+	if targetGroupID != 0 {
+		gid := targetGroupID
+		req.GroupID = &gid
+	}
+	if customerUserID != 0 {
+		req.Affinity = &agentdelivery.AffinityHint{CustomerUserID: customerUserID}
+	}
+	result, err := s.agentService.SelectAgent(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return agentdelivery.AgentInfoFromRuntime(result.Agent), nil
 }
 
 func (s *HandlerServiceAdapter) TransferToAgent(ctx context.Context, sessionID string, targetAgentID uint, reason string) (*routingcontract.TransferResult, error) {
@@ -224,7 +257,7 @@ func (s *HandlerServiceAdapter) addToWaitingQueue(ctx context.Context, session *
 		if err := s.ensureWaitingSessionState(ctx, tx, session); err != nil {
 			return fmt.Errorf("failed to ensure session active: %w", err)
 		}
-		createdRecord, err := s.routing.AddToWaitingQueue(ctx, tx, session.ID, req.Reason, req.TargetSkills, req.Priority, req.Notes)
+		createdRecord, err := s.routing.AddToWaitingQueue(ctx, tx, session.ID, req.Reason, req.TargetSkills, req.TargetGroupID, req.Priority, req.Notes)
 		if err != nil {
 			return fmt.Errorf("failed to create waiting record: %w", err)
 		}
@@ -247,32 +280,55 @@ func (s *HandlerServiceAdapter) addToWaitingQueue(ctx context.Context, session *
 	}, nil
 }
 
-func (s *HandlerServiceAdapter) ProcessWaitingQueue(ctx context.Context) error {
-	waitingRecords, err := s.ListWaitingRecords(ctx, "waiting", 10)
+// ProcessWaitingQueue claim-then-process 分派等待队列：认领（租约防双发）→
+// 三级选坐席 → 执行转接；失败归还租约等下一轮。返回本轮实际转接数。
+func (s *HandlerServiceAdapter) ProcessWaitingQueue(ctx context.Context) (int, error) {
+	now := time.Now()
+	leaseBefore := now.Add(-s.claimLease)
+	waitingRecords, err := s.routing.ClaimWaitingRecords(ctx, now, leaseBefore, s.dispatchBatch)
 	if err != nil {
-		return err
+		return 0, err
 	}
+	processed := 0
 	for _, record := range waitingRecords {
 		skills := []string{}
 		if record.TargetSkills != "" {
 			skills = strings.Split(record.TargetSkills, ",")
 		}
-		agent, err := s.agentService.FindAvailableAgent(ctx, skills, record.Priority)
-		if err != nil {
-			continue
-		}
 		session, err := s.loadTransferSession(ctx, record.SessionID)
 		if err != nil {
+			s.releaseClaim(ctx, record.SessionID)
+			continue
+		}
+		agent, err := s.selectAgentForTransfer(ctx, skills, record.Priority, derefTargetGroupID(record.TargetGroupID), session.CustomerID)
+		if err != nil {
+			s.releaseClaim(ctx, record.SessionID)
 			continue
 		}
 		result, err := s.executeTransfer(ctx, session, agent.UserID, record.Reason, record.Notes)
 		if err != nil {
 			s.logger.Errorf("Failed to transfer waiting session %s: %v", record.SessionID, err)
+			s.releaseClaim(ctx, record.SessionID)
 			continue
 		}
+		processed++
 		s.logger.Infof("Successfully transferred waiting session %s to agent %d", result.SessionID, result.NewAgentID)
 	}
-	return nil
+	return processed, nil
+}
+
+// releaseClaim 归还租约的容错包装：归还失败只记日志（租约到期仍会复活）。
+func (s *HandlerServiceAdapter) releaseClaim(ctx context.Context, sessionID string) {
+	if err := s.routing.ReleaseWaitingClaim(ctx, sessionID); err != nil {
+		s.logger.Warnf("Failed to release waiting claim for %s: %v", sessionID, err)
+	}
+}
+
+func derefTargetGroupID(id *uint) uint {
+	if id == nil {
+		return 0
+	}
+	return *id
 }
 
 func normalizeWaitingRecordQuery(status string, limit int) (string, int) {

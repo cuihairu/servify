@@ -42,6 +42,8 @@ type Repository interface {
 	ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error
 	// ListEnabledGroupMemberIDs 返回启用组的成员 user_id；组不存在或禁用返回空。
 	ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error)
+	// ListGroupMemberIDs 返回组成员 user_id（不 gate enabled，管理面完整视图）。
+	ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error)
 }
 
 type RuntimeRegistry interface {

@@ -55,6 +55,7 @@ type Config struct {
 	Knowledge  KnowledgeConfig  `yaml:"knowledge"`
 	Email      EmailConfig      `yaml:"email"`
 	Quality    QualityConfig    `yaml:"quality"`
+	Routing    RoutingConfig    `yaml:"routing"`
 }
 
 type ServerConfig struct {
@@ -475,6 +476,18 @@ type QualityLLMConfig struct {
 	MaxInputChars  int     `yaml:"max_input_chars" json:"max_input_chars,omitempty"`
 	MaxTurnChars   int     `yaml:"max_turn_chars" json:"max_turn_chars,omitempty"`
 	TimeoutSeconds int     `yaml:"timeout_seconds" json:"timeout_seconds,omitempty"`
+}
+
+// RoutingConfig 是坐席分派/等待队列配置
+type RoutingConfig struct {
+	// Enabled 控制等待队列自动分派 worker；关闭时仍可手动触发分派端点
+	Enabled bool `yaml:"enabled" json:"enabled,omitempty"`
+	// DispatchIntervalSeconds 是等待队列自动分派 worker 的轮询间隔
+	DispatchIntervalSeconds int `yaml:"dispatch_interval_seconds" json:"dispatch_interval_seconds,omitempty"`
+	// ClaimLeaseSeconds 是 claim-then-process 的认领租约时长，过期自动复活
+	ClaimLeaseSeconds int `yaml:"claim_lease_seconds" json:"claim_lease_seconds,omitempty"`
+	// DispatchBatchSize 是单轮分派的最大认领条数
+	DispatchBatchSize int `yaml:"dispatch_batch_size" json:"dispatch_batch_size,omitempty"`
 }
 
 func Load() (*Config, error) {
@@ -937,6 +950,13 @@ func GetDefaultConfig() *Config {
 				MaxTurnChars:   500,
 				TimeoutSeconds: 30,
 			},
+		},
+		Routing: RoutingConfig{
+			// 等待队列自动分派默认关闭；开启后按间隔轮询分派
+			Enabled:                 false,
+			DispatchIntervalSeconds: 30,
+			ClaimLeaseSeconds:       120,
+			DispatchBatchSize:       10,
 		},
 	}
 }

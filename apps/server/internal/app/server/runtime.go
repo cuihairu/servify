@@ -55,6 +55,7 @@ type Runtime struct {
 	VoiceProtocolRegistry    *voiceprotocol.Registry
 	CustomerHandlerService   customerdelivery.HandlerService
 	AgentHandlerService      agentdelivery.HandlerService
+	AgentGroupService        agentdelivery.AgentGroupService
 	TicketHandlerService     ticketdelivery.HandlerService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
@@ -83,6 +84,7 @@ type Runtime struct {
 	webhookService    *webhookapp.Service
 	qualityService    *qualityapp.QualityService
 	emailAdapter      *emaildelivery.Adapter
+	transferHandler   *routingdelivery.HandlerServiceAdapter
 }
 
 type websocketRunner interface {
@@ -183,6 +185,15 @@ func (rt *Runtime) QualityScanForWorker() *qualityapp.QualityService {
 	return rt.qualityService
 }
 
+// WaitingQueueForWorker returns the waiting-queue dispatcher when auto dispatch is
+// enabled; nil keeps the dispatch worker unregistered (manual trigger still works).
+func (rt *Runtime) WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapter {
+	if !rt.Config.Routing.Enabled {
+		return nil
+	}
+	return rt.transferHandler
+}
+
 func (rt *Runtime) RouterDependencies() Dependencies {
 	return Dependencies{
 		Config:                   rt.Config,
@@ -199,6 +210,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		VoiceProtocolRegistry:    rt.VoiceProtocolRegistry,
 		CustomerHandlerService:   rt.CustomerHandlerService,
 		AgentHandlerService:      rt.AgentHandlerService,
+		AgentGroupService:        rt.AgentGroupService,
 		TicketHandlerService:     rt.TicketHandlerService,
 		TicketReaderService:      rt.TicketReaderService,
 		TransferHandlerService:   rt.TransferHandlerService,

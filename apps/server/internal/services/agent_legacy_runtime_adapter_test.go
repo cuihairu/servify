@@ -103,6 +103,10 @@ func (r *legacyAdapterRepo) ReplaceGroupMembers(ctx context.Context, groupID uin
 	return nil
 }
 
+func (r *legacyAdapterRepo) ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
+}
+
 func (r *legacyAdapterRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	return nil, nil
 }

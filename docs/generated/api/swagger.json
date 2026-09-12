@@ -141,6 +141,319 @@
                 }
             }
         },
+        "/api/agents/groups": {
+            "get": {
+                "description": "返回当前租户/工作区下全部坐席组（软删的不返回）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "获取坐席组列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建坐席组并可同时设置成员；同名组在租户+工作区内唯一",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "创建坐席组",
+                "parameters": [
+                    {
+                        "description": "坐席组内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.CreateGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.AgentGroup"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/groups/{id}": {
+            "get": {
+                "description": "按 ID 返回坐席组详情",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "获取单个坐席组",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "坐席组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.AgentGroup"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "部分更新坐席组（指针字段缺省不覆盖；enabled=false 可停用组）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "更新坐席组",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "坐席组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.AgentGroup"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "软删坐席组；成员关系随之失效，排队中的目标组改为全局池兜底",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "删除坐席组",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "坐席组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/agents/groups/{id}/members": {
+            "get": {
+                "description": "返回组内坐席用户 ID 列表",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "获取坐席组成员",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "坐席组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "以请求体列表为准全量替换组成员（增量请先 GET 现有成员）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "坐席组"
+                ],
+                "summary": "全量替换坐席组成员",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "坐席组 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "成员用户 ID 全量列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ReplaceGroupMembersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/agents/online": {
             "get": {
                 "description": "获取当前在线的所有客服",
@@ -2485,7 +2798,7 @@
         },
         "/api/session-transfer/process-queue": {
             "post": {
-                "description": "手动触发等待队列处理，分配等待中的会话给可用客服",
+                "description": "手动触发等待队列分派（claim-then-process），返回本轮实际转接数",
                 "consumes": [
                     "application/json"
                 ],
@@ -4816,6 +5129,10 @@
                 "session_id": {
                     "type": "string"
                 },
+                "target_group_id": {
+                    "description": "指定坐席组（0=不限组）",
+                    "type": "integer"
+                },
                 "target_skills": {
                     "type": "array",
                     "items": {
@@ -5010,6 +5327,46 @@
                 }
             }
         },
+        "handlers.CreateGroupRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "售前咨询坐席"
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "member_ids": {
+                    "description": "坐席用户 ID 列表",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "example": "售前组"
+                },
+                "overflow_policy": {
+                    "description": "global|none",
+                    "type": "string",
+                    "example": "global"
+                },
+                "parent_id": {
+                    "description": "预留：父组",
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 10
+                }
+            }
+        },
         "handlers.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -5042,12 +5399,53 @@
                 }
             }
         },
+        "handlers.ReplaceGroupMembersRequest": {
+            "type": "object",
+            "properties": {
+                "member_ids": {
+                    "description": "坐席用户 ID 全量列表",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "handlers.SuccessResponse": {
             "type": "object",
             "properties": {
                 "data": {},
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.UpdateGroupRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "售前咨询坐席"
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "type": "string",
+                    "example": "售前组"
+                },
+                "overflow_policy": {
+                    "description": "global|none",
+                    "type": "string",
+                    "example": "global"
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 10
                 }
             }
         },
@@ -5199,6 +5597,45 @@
                 },
                 "user_id": {
                     "type": "integer"
+                },
+                "workspace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AgentGroup": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "overflow_policy": {
+                    "description": "不加 gorm default tag：零值（enabled=false / policy=\"\"）必须原样落库，\n默认值由 CreateAgentGroup（policy 兜底 global）与管理面入参（enabled 缺省 true）保证。",
+                    "type": "string"
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 },
                 "workspace_id": {
                     "type": "string"

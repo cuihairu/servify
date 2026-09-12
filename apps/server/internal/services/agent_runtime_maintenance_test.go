@@ -116,6 +116,10 @@ func (r *maintenanceRepo) ReplaceGroupMembers(ctx context.Context, groupID uint,
 	return nil
 }
 
+func (r *maintenanceRepo) ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
+}
+
 func (r *maintenanceRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	return nil, nil
 }

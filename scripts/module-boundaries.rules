@@ -21,11 +21,13 @@ handler|Suggestion|apps/server/internal/handlers/suggestion_handler.go|service|s
 handler|Gamification|apps/server/internal/handlers/gamification_handler.go|service|gamificationdelivery\.HandlerService|func NewGamificationHandler\(service gamificationdelivery\.HandlerService\)|\*services\.GamificationService
 handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|SLAService|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|\*services\.SLAService
 handler|Quality|apps/server/internal/handlers/quality_handler.go|service|qualitydelivery\.HandlerService|func NewQualityHandler\(service qualitydelivery\.HandlerService\)|qualityapp\.QualityService
+handler|Agent group|apps/server/internal/handlers/agent_group_handler.go|service|agentdelivery\.AgentGroupService|func NewAgentGroupHandler\(service agentdelivery\.AgentGroupService\)|\*services\.AgentService
 
 runtime|customer handlers|CustomerHandlerService|customerdelivery\.HandlerService
 runtime|automation handlers|AutomationHandlerService|automationdelivery\.HandlerService
 runtime|knowledge handlers|KnowledgeDocHandler|knowledgedelivery\.HandlerService
 runtime|agent handlers|AgentHandlerService|agentdelivery\.HandlerService
+runtime|agent group handlers|AgentGroupService|agentdelivery\.AgentGroupService
 runtime|ticket handlers|TicketHandlerService|ticketdelivery\.HandlerService
 runtime|statistics handlers|StatisticsHandlerService|analyticsdelivery\.HandlerService
 runtime|session transfer handlers|TransferHandlerService|routingdelivery\.HandlerService

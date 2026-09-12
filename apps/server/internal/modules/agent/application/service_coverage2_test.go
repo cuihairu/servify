@@ -183,6 +183,10 @@ func (m *mockAgentRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, a
 	return nil
 }
 
+func (m *mockAgentRepo) ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
+}
+
 func (m *mockAgentRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	return nil, nil
 }

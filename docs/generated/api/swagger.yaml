@@ -216,6 +216,9 @@ definitions:
         type: string
       session_id:
         type: string
+      target_group_id:
+        description: 指定坐席组（0=不限组）
+        type: integer
       target_skills:
         items:
           type: string
@@ -354,6 +357,35 @@ definitions:
         example: 抽检通过
         type: string
     type: object
+  handlers.CreateGroupRequest:
+    properties:
+      description:
+        example: 售前咨询坐席
+        type: string
+      enabled:
+        example: true
+        type: boolean
+      member_ids:
+        description: 坐席用户 ID 列表
+        items:
+          type: integer
+        type: array
+      name:
+        example: 售前组
+        type: string
+      overflow_policy:
+        description: global|none
+        example: global
+        type: string
+      parent_id:
+        description: 预留：父组
+        type: integer
+      priority:
+        example: 10
+        type: integer
+    required:
+    - name
+    type: object
   handlers.ErrorResponse:
     properties:
       code:
@@ -375,11 +407,40 @@ definitions:
       total:
         type: integer
     type: object
+  handlers.ReplaceGroupMembersRequest:
+    properties:
+      member_ids:
+        description: 坐席用户 ID 全量列表
+        items:
+          type: integer
+        type: array
+    type: object
   handlers.SuccessResponse:
     properties:
       data: {}
       message:
         type: string
+    type: object
+  handlers.UpdateGroupRequest:
+    properties:
+      description:
+        example: 售前咨询坐席
+        type: string
+      enabled:
+        example: true
+        type: boolean
+      name:
+        example: 售前组
+        type: string
+      overflow_policy:
+        description: global|none
+        example: global
+        type: string
+      parent_id:
+        type: integer
+      priority:
+        example: 10
+        type: integer
     type: object
   handlers.loginRequest:
     properties:
@@ -482,6 +543,34 @@ definitions:
         $ref: '#/definitions/models.User'
       user_id:
         type: integer
+      workspace_id:
+        type: string
+    type: object
+  models.AgentGroup:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      overflow_policy:
+        description: |-
+          不加 gorm default tag：零值（enabled=false / policy=""）必须原样落库，
+          默认值由 CreateAgentGroup（policy 兜底 global）与管理面入参（enabled 缺省 true）保证。
+        type: string
+      parent_id:
+        type: integer
+      priority:
+        type: integer
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
       workspace_id:
         type: string
     type: object
@@ -1795,6 +1884,214 @@ paths:
       summary: 查找可用客服
       tags:
       - 客服管理
+  /api/agents/groups:
+    get:
+      description: 返回当前租户/工作区下全部坐席组（软删的不返回）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取坐席组列表
+      tags:
+      - 坐席组
+    post:
+      consumes:
+      - application/json
+      description: 创建坐席组并可同时设置成员；同名组在租户+工作区内唯一
+      parameters:
+      - description: 坐席组内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.AgentGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 创建坐席组
+      tags:
+      - 坐席组
+  /api/agents/groups/{id}:
+    delete:
+      description: 软删坐席组；成员关系随之失效，排队中的目标组改为全局池兜底
+      parameters:
+      - description: 坐席组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 删除坐席组
+      tags:
+      - 坐席组
+    get:
+      description: 按 ID 返回坐席组详情
+      parameters:
+      - description: 坐席组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.AgentGroup'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取单个坐席组
+      tags:
+      - 坐席组
+    put:
+      consumes:
+      - application/json
+      description: 部分更新坐席组（指针字段缺省不覆盖；enabled=false 可停用组）
+      parameters:
+      - description: 坐席组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.AgentGroup'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 更新坐席组
+      tags:
+      - 坐席组
+  /api/agents/groups/{id}/members:
+    get:
+      description: 返回组内坐席用户 ID 列表
+      parameters:
+      - description: 坐席组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取坐席组成员
+      tags:
+      - 坐席组
+    put:
+      consumes:
+      - application/json
+      description: 以请求体列表为准全量替换组成员（增量请先 GET 现有成员）
+      parameters:
+      - description: 坐席组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 成员用户 ID 全量列表
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ReplaceGroupMembersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 全量替换坐席组成员
+      tags:
+      - 坐席组
   /api/agents/online:
     get:
       consumes:
@@ -3115,7 +3412,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 手动触发等待队列处理，分配等待中的会话给可用客服
+      description: 手动触发等待队列分派（claim-then-process），返回本轮实际转接数
       produces:
       - application/json
       responses:

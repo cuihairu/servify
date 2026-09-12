@@ -35,7 +35,7 @@ func TestSessionTransferAdapter_WaitingLifecycle(t *testing.T) {
 	db := newRoutingDeliveryTestDB(t)
 	adapter := newRoutingDeliveryAdapter(db)
 
-	entry, err := adapter.AddToWaitingQueue(context.Background(), nil, "sess-1", "need_help", []string{"billing", "vip"}, "high", "first contact")
+	entry, err := adapter.AddToWaitingQueue(context.Background(), nil, "sess-1", "need_help", []string{"billing", "vip"}, 0, "high", "first contact")
 	if err != nil {
 		t.Fatalf("AddToWaitingQueue: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestSessionTransferAdapter_UsesTransactionScopedRepository(t *testing.T) {
 		t.Fatalf("begin tx: %v", tx.Error)
 	}
 
-	entry, err := adapter.AddToWaitingQueue(context.Background(), tx, "sess-tx", "need_help", []string{"cn"}, "normal", "")
+	entry, err := adapter.AddToWaitingQueue(context.Background(), tx, "sess-tx", "need_help", []string{"cn"}, 0, "normal", "")
 	if err != nil {
 		t.Fatalf("AddToWaitingQueue with tx: %v", err)
 	}

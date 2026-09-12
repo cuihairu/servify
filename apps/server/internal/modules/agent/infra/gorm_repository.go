@@ -340,6 +340,11 @@ func (r *GormRepository) ListEnabledGroupMemberIDs(ctx context.Context, groupID 
 	if !group.Enabled {
 		return nil, nil
 	}
+	return r.ListGroupMemberIDs(ctx, groupID)
+}
+
+// ListGroupMemberIDs 组成员 user_id（不 gate enabled，管理面完整视图）。
+func (r *GormRepository) ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	var ids []uint
 	if err := r.db.WithContext(ctx).Model(&models.AgentGroupMember{}).
 		Where("group_id = ?", groupID).

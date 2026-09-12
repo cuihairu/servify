@@ -133,6 +133,42 @@ func (s *AgentService) FindAvailableAgent(ctx context.Context, skills []string, 
 	return mapRuntimeToLegacy(runtime), nil
 }
 
+// SelectAgent 三级分配管线（亲和 → 组内 → 全局池），供 routing 等调用方使用。
+func (s *AgentService) SelectAgent(ctx context.Context, req agentdelivery.SelectionRequest) (*agentdelivery.SelectionResult, error) {
+	return s.module.SelectAgent(ctx, req)
+}
+
+// ---- 坐席组管理（实现 agentdelivery.AgentGroupService）----
+
+func (s *AgentService) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	return s.module.ListAgentGroups(ctx)
+}
+
+func (s *AgentService) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	return s.module.GetAgentGroup(ctx, id)
+}
+
+func (s *AgentService) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return s.module.CreateAgentGroup(ctx, group)
+}
+
+func (s *AgentService) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return s.module.UpdateAgentGroup(ctx, group)
+}
+
+func (s *AgentService) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return s.module.DeleteAgentGroup(ctx, id)
+}
+
+func (s *AgentService) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return s.module.ReplaceGroupMembers(ctx, groupID, agentUserIDs)
+}
+
+// ListGroupMembers 组成员读取（含禁用组——管理面需要完整视图）。
+func (s *AgentService) ListGroupMembers(ctx context.Context, groupID uint) ([]uint, error) {
+	return s.module.ListGroupMembers(ctx, groupID)
+}
+
 func (s *AgentService) GetOnlineAgents(ctx context.Context) []*AgentInfo {
 	runtimes := s.module.GetOnlineAgents(ctx)
 	out := make([]*AgentInfo, 0, len(runtimes))

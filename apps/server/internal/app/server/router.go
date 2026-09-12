@@ -45,6 +45,7 @@ type Dependencies struct {
 	CustomerHandlerService   customerdelivery.HandlerService
 	ConversationHandler      conversationdelivery.HandlerService
 	AgentHandlerService      agentdelivery.HandlerService
+	AgentGroupService        agentdelivery.AgentGroupService
 	TicketHandlerService     ticketdelivery.HandlerService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService

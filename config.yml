@@ -321,6 +321,16 @@ embedding:
 #     max_turn_chars: 500
 #     timeout_seconds: 30
 
+# 坐席分派：等待队列自动分派 worker（默认关闭——关闭时仍可手动触发分派端点）
+# routing:
+#   enabled: false
+#   # 等待队列轮询间隔（秒）
+#   dispatch_interval_seconds: 30
+#   # claim-then-process 认领租约（秒）；过期未完成的认领自动复活
+#   claim_lease_seconds: 120
+#   # 单轮分派的最大认领条数
+#   dispatch_batch_size: 10
+
 # Knowledge base configuration
 knowledge:
   # Available providers: pgvector

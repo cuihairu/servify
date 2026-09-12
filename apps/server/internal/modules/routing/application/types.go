@@ -25,11 +25,12 @@ type AssignAgentCommand struct {
 }
 
 type AddToWaitingQueueCommand struct {
-	SessionID    string
-	Reason       string
-	TargetSkills []string
-	Priority     string
-	Notes        string
+	SessionID     string
+	Reason        string
+	TargetSkills  []string
+	TargetGroupID uint // 指定坐席组（0=不限组）
+	Priority      string
+	Notes         string
 }
 
 type CancelWaitingCommand struct {
@@ -64,15 +65,16 @@ type TransferRecordDTO struct {
 }
 
 type QueueEntryDTO struct {
-	SessionID    string     `json:"session_id"`
-	Reason       string     `json:"reason,omitempty"`
-	TargetSkills []string   `json:"target_skills,omitempty"`
-	Priority     string     `json:"priority,omitempty"`
-	Notes        string     `json:"notes,omitempty"`
-	Status       string     `json:"status"`
-	QueuedAt     time.Time  `json:"queued_at"`
-	AssignedAt   *time.Time `json:"assigned_at,omitempty"`
-	AssignedTo   *uint      `json:"assigned_to,omitempty"`
+	SessionID     string     `json:"session_id"`
+	Reason        string     `json:"reason,omitempty"`
+	TargetSkills  []string   `json:"target_skills,omitempty"`
+	TargetGroupID uint       `json:"target_group_id,omitempty"`
+	Priority      string     `json:"priority,omitempty"`
+	Notes         string     `json:"notes,omitempty"`
+	Status        string     `json:"status"`
+	QueuedAt      time.Time  `json:"queued_at"`
+	AssignedAt    *time.Time `json:"assigned_at,omitempty"`
+	AssignedTo    *uint      `json:"assigned_to,omitempty"`
 }
 
 func MapAssignment(item domain.Assignment) AssignmentDTO {
@@ -101,14 +103,15 @@ func MapTransferRecord(item domain.TransferRecord) TransferRecordDTO {
 
 func MapQueueEntry(item domain.QueueEntry) QueueEntryDTO {
 	return QueueEntryDTO{
-		SessionID:    item.SessionID,
-		Reason:       item.Reason,
-		TargetSkills: append([]string(nil), item.TargetSkills...),
-		Priority:     item.Priority,
-		Notes:        item.Notes,
-		Status:       string(item.Status),
-		QueuedAt:     item.QueuedAt,
-		AssignedAt:   item.AssignedAt,
-		AssignedTo:   item.AssignedTo,
+		SessionID:     item.SessionID,
+		Reason:        item.Reason,
+		TargetSkills:  append([]string(nil), item.TargetSkills...),
+		TargetGroupID: item.TargetGroupID,
+		Priority:      item.Priority,
+		Notes:         item.Notes,
+		Status:        string(item.Status),
+		QueuedAt:      item.QueuedAt,
+		AssignedAt:    item.AssignedAt,
+		AssignedTo:    item.AssignedTo,
 	}
 }

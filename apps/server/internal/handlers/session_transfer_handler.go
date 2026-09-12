@@ -248,7 +248,7 @@ func (h *SessionTransferHandler) CancelWaiting(c *gin.Context) {
 
 // ProcessWaitingQueue 处理等待队列
 // @Summary 处理等待队列
-// @Description 手动触发等待队列处理，分配等待中的会话给可用客服
+// @Description 手动触发等待队列分派（claim-then-process），返回本轮实际转接数
 // @Tags 会话转接
 // @Accept json
 // @Produce json
@@ -256,7 +256,8 @@ func (h *SessionTransferHandler) CancelWaiting(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/session-transfer/process-queue [post]
 func (h *SessionTransferHandler) ProcessWaitingQueue(c *gin.Context) {
-	if err := h.transferService.ProcessWaitingQueue(c.Request.Context()); err != nil {
+	processed, err := h.transferService.ProcessWaitingQueue(c.Request.Context())
+	if err != nil {
 		h.logger.Errorf("Failed to process waiting queue: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "Failed to process waiting queue",
@@ -266,7 +267,8 @@ func (h *SessionTransferHandler) ProcessWaitingQueue(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Waiting queue processed successfully",
+		"message":   "Waiting queue processed successfully",
+		"processed": processed,
 	})
 }
 

@@ -131,6 +131,39 @@ func (r *GormRepository) UpdateQueueEntry(ctx context.Context, entry *domain.Que
 		Updates(updates).Error
 }
 
+// ClaimQueueEntries 原子认领：单条 UPDATE ... WHERE id IN (子查询) RETURNING *，
+// pg 与 sqlite（3.35+）通用；并发 worker 只会命中其中之一（行级 UPDATE 串行化）。
+func (r *GormRepository) ClaimQueueEntries(ctx context.Context, now, leaseBefore time.Time, limit int) ([]domain.QueueEntry, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 10
+	}
+	var items []models.WaitingRecord
+	sql := `UPDATE waiting_records SET claimed_at = ?
+		WHERE id IN (
+			SELECT id FROM waiting_records
+			WHERE status = 'waiting'
+			  AND (claimed_at IS NULL OR claimed_at < ?)
+			ORDER BY CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, queued_at ASC
+			LIMIT ?
+		)
+		RETURNING *`
+	if err := r.db.WithContext(ctx).Raw(sql, now, leaseBefore, limit).Scan(&items).Error; err != nil {
+		return nil, fmt.Errorf("claim waiting records: %w", err)
+	}
+	out := make([]domain.QueueEntry, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapQueueEntry(item))
+	}
+	return out, nil
+}
+
+// ReleaseQueueClaim 处理失败归还租约；仅清 claimed_at，不动 status（waiting 原样）。
+func (r *GormRepository) ReleaseQueueClaim(ctx context.Context, sessionID string) error {
+	return r.db.WithContext(ctx).Model(&models.WaitingRecord{}).
+		Where("session_id = ? AND status = ?", sessionID, string(domain.QueueStatusWaiting)).
+		Update("claimed_at", nil).Error
+}
+
 func (r *GormRepository) MarkQueueEntryTransferred(ctx context.Context, sessionID string, agentID uint, assignedAt time.Time) (*domain.QueueEntry, error) {
 	result := applyRoutingScope(r.db.WithContext(ctx).Model(&models.WaitingRecord{}), ctx).
 		Where("session_id = ? AND status = ?", sessionID, "waiting").
@@ -175,31 +208,49 @@ func mapTransferRecord(model models.TransferRecord) domain.TransferRecord {
 
 func mapQueueEntry(model models.WaitingRecord) domain.QueueEntry {
 	return domain.QueueEntry{
-		SessionID:    model.SessionID,
-		Reason:       model.Reason,
-		TargetSkills: unmarshalSkills(model.TargetSkills),
-		Priority:     model.Priority,
-		Notes:        model.Notes,
-		Status:       mapQueueStatus(model.Status),
-		QueuedAt:     model.QueuedAt,
-		AssignedAt:   model.AssignedAt,
-		AssignedTo:   model.AssignedTo,
+		SessionID:     model.SessionID,
+		Reason:        model.Reason,
+		TargetSkills:  unmarshalSkills(model.TargetSkills),
+		TargetGroupID: derefGroupID(model.TargetGroupID),
+		Priority:      model.Priority,
+		Notes:         model.Notes,
+		Status:        mapQueueStatus(model.Status),
+		QueuedAt:      model.QueuedAt,
+		ClaimedAt:     model.ClaimedAt,
+		AssignedAt:    model.AssignedAt,
+		AssignedTo:    model.AssignedTo,
 	}
 }
 
 func mapWaitingRecordModel(item domain.QueueEntry) models.WaitingRecord {
 	return models.WaitingRecord{
-		SessionID:    item.SessionID,
-		Reason:       item.Reason,
-		TargetSkills: marshalSkills(item.TargetSkills),
-		Priority:     item.Priority,
-		Notes:        item.Notes,
-		Status:       string(item.Status),
-		QueuedAt:     item.QueuedAt,
-		AssignedAt:   item.AssignedAt,
-		AssignedTo:   item.AssignedTo,
-		CreatedAt:    item.QueuedAt,
+		SessionID:     item.SessionID,
+		Reason:        item.Reason,
+		TargetSkills:  marshalSkills(item.TargetSkills),
+		TargetGroupID: nilableGroupID(item.TargetGroupID),
+		Priority:      item.Priority,
+		Notes:         item.Notes,
+		Status:        string(item.Status),
+		QueuedAt:      item.QueuedAt,
+		ClaimedAt:     item.ClaimedAt,
+		AssignedAt:    item.AssignedAt,
+		AssignedTo:    item.AssignedTo,
+		CreatedAt:     item.QueuedAt,
 	}
+}
+
+func nilableGroupID(id uint) *uint {
+	if id == 0 {
+		return nil
+	}
+	return &id
+}
+
+func derefGroupID(id *uint) uint {
+	if id == nil {
+		return 0
+	}
+	return *id
 }
 
 func mapQueueStatus(status string) domain.QueueStatus {

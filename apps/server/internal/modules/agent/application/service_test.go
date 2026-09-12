@@ -195,6 +195,10 @@ func (s *stubRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, agentU
 	return nil
 }
 
+func (s *stubRepo) ListGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return s.groupMembers, nil
+}
+
 func (s *stubRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
 	return s.groupMembers, nil
 }

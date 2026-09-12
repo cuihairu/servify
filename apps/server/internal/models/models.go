@@ -590,7 +590,7 @@ type AgentGroup struct {
 	ParentID       *uint          `json:"parent_id,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // AgentGroupMember 坐席组成员（AgentUserID = users.id，与 Session.AgentID 同语义）。

@@ -170,6 +170,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 
 	agentAssembly := services.BuildAgentServiceAssembly(rt.DB, rt.Logger, rt.Redis)
 	rt.AgentHandlerService = agentAssembly.Service
+	rt.AgentGroupService = agentAssembly.Service
 	go agentAssembly.Maintenance.Start()
 	state.agentAssembly = agentAssembly
 
@@ -219,16 +220,19 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 }
 func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 	transferService := routingdelivery.NewHandlerService(routingdelivery.HandlerDependencies{
-		DB:           rt.DB,
-		Logger:       rt.Logger,
-		AI:           rt.AIService,
-		Agents:       state.agentAssembly.Service,
-		Notifier:     newRoutingTransferNotifier(rt.RealtimeGateway),
-		Routing:      routingdelivery.NewSessionTransferAdapter(state.routingService, rt.Bus),
-		Tickets:      ticketdelivery.NewRuntimeAdapter(rt.Bus),
-		Conversation: conversationdelivery.NewRuntimeAdapter(rt.DB, rt.Bus),
-		AgentLoad:    agentdelivery.NewTransferRuntimeAdapter(),
+		DB:                rt.DB,
+		Logger:            rt.Logger,
+		AI:                rt.AIService,
+		Agents:            state.agentAssembly.Service,
+		Notifier:          newRoutingTransferNotifier(rt.RealtimeGateway),
+		Routing:           routingdelivery.NewSessionTransferAdapter(state.routingService, rt.Bus),
+		Tickets:           ticketdelivery.NewRuntimeAdapter(rt.Bus),
+		Conversation:      conversationdelivery.NewRuntimeAdapter(rt.DB, rt.Bus),
+		AgentLoad:         agentdelivery.NewTransferRuntimeAdapter(),
+		DispatchBatchSize: rt.Config.Routing.DispatchBatchSize,
+		ClaimLeaseSeconds: rt.Config.Routing.ClaimLeaseSeconds,
 	})
 	rt.TransferHandlerService = transferService
+	rt.transferHandler = transferService
 	state.wsHub.SetSessionTransferService(transferService)
 }

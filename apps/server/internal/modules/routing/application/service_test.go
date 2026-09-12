@@ -140,6 +140,17 @@ type stubRoutingPublisher struct {
 	events []eventbus.Event
 }
 
+func (s *stubRoutingRepo) ClaimQueueEntries(ctx context.Context, now time.Time, leaseBefore time.Time, limit int) ([]domain.QueueEntry, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return nil, nil
+}
+
+func (s *stubRoutingRepo) ReleaseQueueClaim(ctx context.Context, sessionID string) error {
+	return s.err
+}
+
 func (s *stubRoutingPublisher) Publish(ctx context.Context, event eventbus.Event) error {
 	s.events = append(s.events, event)
 	return nil

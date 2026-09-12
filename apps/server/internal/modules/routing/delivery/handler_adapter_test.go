@@ -58,7 +58,7 @@ func seedHandlerMessages(t *testing.T, db *gorm.DB, sessionID string, count int)
 func seedHandlerWaiting(t *testing.T, db *gorm.DB, sessionID string) *models.WaitingRecord {
 	t.Helper()
 	record, err := newRoutingDeliveryAdapter(db).AddToWaitingQueue(
-		context.Background(), nil, sessionID, "need_help", []string{"billing"}, "high", "",
+		context.Background(), nil, sessionID, "need_help", []string{"billing"}, 0, "high", "",
 	)
 	require.NoError(t, err)
 	return record
@@ -104,6 +104,39 @@ func (f *handlerAgentsStub) FindAvailableAgent(ctx context.Context, skills []str
 	f.lastSkills = skills
 	f.lastPriority = priority
 	return f.findAgent, f.findErr
+}
+
+func (f *handlerAgentsStub) SelectAgent(ctx context.Context, req agentdelivery.SelectionRequest) (*agentdelivery.SelectionResult, error) {
+	f.findCalls++
+	f.lastSkills = req.Skills
+	f.lastPriority = req.Priority
+	if f.findErr != nil {
+		return nil, f.findErr
+	}
+	if f.findAgent == nil {
+		return nil, nil
+	}
+	source := agentdelivery.SelectionSourceGlobal
+	if req.GroupID != nil {
+		source = agentdelivery.SelectionSourceGroup
+	} else if req.Affinity != nil {
+		source = agentdelivery.SelectionSourceAffinity
+	}
+	dto := &agentdelivery.AgentRuntimeDTO{
+		UserID:             f.findAgent.UserID,
+		Username:           f.findAgent.Username,
+		Name:               f.findAgent.Name,
+		Department:         f.findAgent.Department,
+		Skills:             append([]string(nil), f.findAgent.Skills...),
+		Status:             f.findAgent.Status,
+		MaxChatConcurrency: f.findAgent.MaxConcurrent,
+		CurrentChatLoad:    f.findAgent.CurrentLoad,
+		Rating:             f.findAgent.Rating,
+		AvgResponseTime:    f.findAgent.AvgResponseTime,
+		LastActivity:       f.findAgent.LastActivity,
+		ConnectedAt:        f.findAgent.ConnectedAt,
+	}
+	return &agentdelivery.SelectionResult{Agent: dto, Source: source}, nil
 }
 
 func (f *handlerAgentsStub) GetOnlineAgent(ctx context.Context, userID uint) (*agentdelivery.AgentInfo, bool) {
@@ -190,7 +223,9 @@ func (f *handlerLoadStub) SyncTransferLoad(ctx context.Context, tx *gorm.DB, fro
 }
 
 type handlerRoutingStub struct {
-	addToWaiting    func(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, priority string, notes string) (*models.WaitingRecord, error)
+	addToWaiting    func(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, targetGroupID uint, priority string, notes string) (*models.WaitingRecord, error)
+	claimWaiting    func(ctx context.Context, now time.Time, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error)
+	releaseClaim    func(ctx context.Context, sessionID string) error
 	assign          func(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error)
 	getHistory      func(ctx context.Context, sessionID string) ([]models.TransferRecord, error)
 	listRecent      func(ctx context.Context, limit int) ([]models.TransferRecord, error)
@@ -200,11 +235,25 @@ type handlerRoutingStub struct {
 	markTransferred func(ctx context.Context, tx *gorm.DB, sessionID string, agentID uint, assignedAt time.Time) (*models.WaitingRecord, error)
 }
 
-func (s *handlerRoutingStub) AddToWaitingQueue(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, priority string, notes string) (*models.WaitingRecord, error) {
+func (s *handlerRoutingStub) AddToWaitingQueue(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, targetGroupID uint, priority string, notes string) (*models.WaitingRecord, error) {
 	if s.addToWaiting == nil {
 		return &models.WaitingRecord{SessionID: sessionID, Status: "waiting", QueuedAt: time.Now()}, nil
 	}
-	return s.addToWaiting(ctx, tx, sessionID, reason, targetSkills, priority, notes)
+	return s.addToWaiting(ctx, tx, sessionID, reason, targetSkills, targetGroupID, priority, notes)
+}
+
+func (s *handlerRoutingStub) ClaimWaitingRecords(ctx context.Context, now time.Time, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error) {
+	if s.claimWaiting != nil {
+		return s.claimWaiting(ctx, now, leaseBefore, limit)
+	}
+	return nil, nil
+}
+
+func (s *handlerRoutingStub) ReleaseWaitingClaim(ctx context.Context, sessionID string) error {
+	if s.releaseClaim != nil {
+		return s.releaseClaim(ctx, sessionID)
+	}
+	return nil
 }
 
 func (s *handlerRoutingStub) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error) {
@@ -618,7 +667,7 @@ func TestHandlerAddToWaitingQueueBranches(t *testing.T) {
 		db := newRoutingHandlerTestDB(t)
 		conv := &handlerConvStub{session: &conversationdelivery.TransferSession{ID: "sess-f", CustomerID: 5, Status: "active"}}
 		stub := &handlerRoutingStub{}
-		stub.addToWaiting = func(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, priority string, notes string) (*models.WaitingRecord, error) {
+		stub.addToWaiting = func(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, targetGroupID uint, priority string, notes string) (*models.WaitingRecord, error) {
 			return nil, errors.New("queue boom")
 		}
 		svc := NewHandlerService(HandlerDependencies{
@@ -642,16 +691,16 @@ func TestHandlerAddToWaitingQueueBranches(t *testing.T) {
 func TestHandlerProcessWaitingQueue(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("list failure propagates", func(t *testing.T) {
+	t.Run("claim failure propagates", func(t *testing.T) {
 		db := newRoutingHandlerTestDB(t)
 		stub := &handlerRoutingStub{}
-		stub.listWaiting = func(ctx context.Context, status string, limit int) ([]models.WaitingRecord, error) {
-			return nil, errors.New("list boom")
+		stub.claimWaiting = func(ctx context.Context, now time.Time, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error) {
+			return nil, errors.New("claim boom")
 		}
 		svc := NewHandlerService(HandlerDependencies{DB: db, Logger: logrus.New(), Routing: stub})
-		err := svc.ProcessWaitingQueue(ctx)
+		_, err := svc.ProcessWaitingQueue(ctx)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to list waiting records")
+		assert.Contains(t, err.Error(), "claim boom")
 	})
 
 	t.Run("skips when agent unavailable", func(t *testing.T) {
@@ -659,7 +708,9 @@ func TestHandlerProcessWaitingQueue(t *testing.T) {
 		seedHandlerWaiting(t, fx.db, "sess-p1")
 		fx.agents.findErr = errors.New("no agent")
 
-		require.NoError(t, fx.svc.ProcessWaitingQueue(ctx))
+		processed, err := fx.svc.ProcessWaitingQueue(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, processed)
 		var records []models.TransferRecord
 		require.NoError(t, fx.db.Find(&records).Error)
 		assert.Empty(t, records)
@@ -671,7 +722,9 @@ func TestHandlerProcessWaitingQueue(t *testing.T) {
 		seedHandlerWaiting(t, fx.db, "sess-p2")
 		fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9}
 
-		require.NoError(t, fx.svc.ProcessWaitingQueue(ctx))
+		processed, err := fx.svc.ProcessWaitingQueue(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, processed)
 		var records []models.TransferRecord
 		require.NoError(t, fx.db.Find(&records).Error)
 		assert.Empty(t, records)
@@ -683,7 +736,9 @@ func TestHandlerProcessWaitingQueue(t *testing.T) {
 		fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9}
 		fx.conv.syncErr = errors.New("sync boom")
 
-		require.NoError(t, fx.svc.ProcessWaitingQueue(ctx))
+		processed, err := fx.svc.ProcessWaitingQueue(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, processed)
 		var records []models.TransferRecord
 		require.NoError(t, fx.db.Find(&records).Error)
 		assert.Empty(t, records)
@@ -696,13 +751,15 @@ func TestHandlerProcessWaitingQueue(t *testing.T) {
 			"sess-p5": {ID: "sess-p5", CustomerID: 6, Status: "active"},
 		}
 		adapter := newRoutingDeliveryAdapter(fx.db)
-		_, err := adapter.AddToWaitingQueue(ctx, nil, "sess-p4", "need_help", []string{"billing", "vip"}, "high", "queued note")
+		_, err := adapter.AddToWaitingQueue(ctx, nil, "sess-p4", "need_help", []string{"billing", "vip"}, 0, "high", "queued note")
 		require.NoError(t, err)
-		_, err = adapter.AddToWaitingQueue(ctx, nil, "sess-p5", "need_help", nil, "low", "")
+		_, err = adapter.AddToWaitingQueue(ctx, nil, "sess-p5", "need_help", nil, 0, "low", "")
 		require.NoError(t, err)
 		fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9}
 
-		require.NoError(t, fx.svc.ProcessWaitingQueue(ctx))
+		processed, err := fx.svc.ProcessWaitingQueue(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 2, processed)
 
 		var waiting []models.WaitingRecord
 		require.NoError(t, fx.db.Find(&waiting).Error)
@@ -719,7 +776,9 @@ func TestHandlerProcessWaitingQueue(t *testing.T) {
 
 		// 第二次处理时队列已空
 		fx.agents.findCalls = 0
-		require.NoError(t, fx.svc.ProcessWaitingQueue(ctx))
+		processed, err = fx.svc.ProcessWaitingQueue(ctx)
+		require.NoError(t, err)
+		assert.Zero(t, processed)
 		assert.Zero(t, fx.agents.findCalls)
 	})
 }
@@ -731,7 +790,7 @@ func TestHandlerHistoryAndWaitingQueries(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	_, err := adapter.AssignAgent(ctx, nil, AssignAgentCommand{SessionID: "sess-q", AgentID: 9, Reason: "r1", AssignedAt: now})
 	require.NoError(t, err)
-	_, err = adapter.AddToWaitingQueue(ctx, nil, "sess-q2", "need_help", []string{"billing"}, "high", "")
+	_, err = adapter.AddToWaitingQueue(ctx, nil, "sess-q2", "need_help", []string{"billing"}, 0, "high", "")
 	require.NoError(t, err)
 
 	history, err := fx.svc.GetTransferHistory(ctx, "sess-q")
@@ -949,7 +1008,7 @@ func TestSessionTransferAdapterErrorBranches(t *testing.T) {
 	adapter := newRoutingDeliveryAdapter(db)
 	ctx := context.Background()
 
-	_, err := adapter.AddToWaitingQueue(ctx, nil, "", "r", nil, "", "")
+	_, err := adapter.AddToWaitingQueue(ctx, nil, "", "r", nil, 0, "", "")
 	require.Error(t, err)
 
 	_, err = adapter.GetTransferHistory(ctx, "")
