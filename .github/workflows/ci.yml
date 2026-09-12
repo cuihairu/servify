@@ -389,6 +389,10 @@ jobs:
         timeout-minutes: 5
         run: pnpm --dir apps/admin install --frozen-lockfile
 
+      - name: Typecheck admin frontend
+        timeout-minutes: 5
+        run: pnpm --dir apps/admin run typecheck
+
       - name: Build admin frontend
         timeout-minutes: 15
         run: pnpm --dir apps/admin run build
