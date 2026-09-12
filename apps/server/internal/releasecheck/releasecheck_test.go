@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/handlers"

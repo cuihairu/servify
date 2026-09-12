@@ -3,7 +3,7 @@ package realtime
 import (
 	"servify/apps/server/internal/services"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 type WebRTCAdapter struct {

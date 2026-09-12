@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
 	"servify/apps/server/internal/models"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"

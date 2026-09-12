@@ -12,7 +12,7 @@ import (
 	mockllm "servify/apps/server/internal/platform/llm/mock"
 
 	"errors"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
 )
 

@@ -8,7 +8,7 @@ import (
 
 	"servify/apps/server/internal/models"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"

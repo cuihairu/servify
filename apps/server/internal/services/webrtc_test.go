@@ -1,7 +1,7 @@
 package services
 
 import (
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"testing"
 )
 

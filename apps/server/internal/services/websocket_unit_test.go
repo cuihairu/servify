@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 
 	"servify/apps/server/internal/models"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
