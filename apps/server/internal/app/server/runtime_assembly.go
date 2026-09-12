@@ -1,12 +1,16 @@
 package server
 
 import (
+	"time"
+
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
+	emaildelivery "servify/apps/server/internal/modules/email/delivery"
+	emailinfra "servify/apps/server/internal/modules/email/infra"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	routingapp "servify/apps/server/internal/modules/routing/application"
@@ -70,6 +74,37 @@ func wireConversationRuntime(rt *Runtime, wsHub *services.WebSocketHub) {
 	wsHub.SetConversationMessageWriter(conversationdelivery.NewWebSocketMessageAdapter(conversationService))
 	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。
 	rt.OpenConversationReader = conversationdelivery.NewOpenConversationAdapter(conversationService)
+	wireEmailRuntime(rt, conversationService)
+}
+
+// wireEmailRuntime 按需构建单邮箱 IMAP 渠道（enabled=false 时不构建任何组件）。
+func wireEmailRuntime(rt *Runtime, conversationService *conversationapp.Service) {
+	cfg := rt.Config.Email
+	if !cfg.Enabled {
+		return
+	}
+	imapClient := emailinfra.NewGoIMAPClient(cfg, rt.Logger)
+	smtpFrom := cfg.SMTP.From
+	if smtpFrom == "" {
+		smtpFrom = cfg.Username
+	}
+	smtpSender := emailinfra.NewGoSMTPSender(emailinfra.SMTPConfig{
+		Host:        cfg.SMTP.Host,
+		Port:        cfg.SMTP.Port,
+		Username:    cfg.SMTP.Username,
+		Password:    cfg.SMTP.Password,
+		From:        smtpFrom,
+		UseSTARTTLS: cfg.SMTP.UseSTARTTLS,
+		SkipVerify:  cfg.SMTP.SkipVerify,
+	})
+	rt.emailAdapter = emaildelivery.NewAdapter(emaildelivery.AdapterDeps{
+		IMAP:     imapClient,
+		SMTP:     smtpSender,
+		Ingestor: conversationService,
+		From:     smtpFrom,
+		Interval: time.Duration(cfg.PollIntervalSeconds) * time.Second,
+		Logger:   rt.Logger,
+	})
 }
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {

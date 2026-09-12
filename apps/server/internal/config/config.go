@@ -53,6 +53,7 @@ type Config struct {
 	OIDC       OIDCConfig       `yaml:"oidc"`
 	Embedding  EmbeddingConfig  `yaml:"embedding"`
 	Knowledge  KnowledgeConfig  `yaml:"knowledge"`
+	Email      EmailConfig      `yaml:"email"`
 }
 
 type ServerConfig struct {
@@ -407,6 +408,37 @@ type IndexingConfig struct {
 	ChunkOverlap int `yaml:"chunk_overlap" json:"chunk_overlap,omitempty"`
 }
 
+// EmailConfig 配置单邮箱 IMAP 收件渠道（定时轮询）与 SMTP 出站。
+// 零表零迁移：入站邮件按发件人地址归并进 conversation 模块；带附件邮件跳过。
+// 出站 Send 本期已实现但无生产触发点（坐席回复转 email 留待后续）。
+type EmailConfig struct {
+	Enabled  bool   `yaml:"enabled" json:"enabled,omitempty"`
+	Host     string `yaml:"host" json:"host,omitempty"`
+	Port     int    `yaml:"port" json:"port,omitempty"`
+	Username string `yaml:"username" json:"username,omitempty"`
+	// Password 是 IMAP 登录口令（JSON 序列化不落日志）
+	Password string `yaml:"password" json:"-"`
+	// Mailbox 是轮询的 IMAP 文件夹（默认 INBOX）
+	Mailbox    string `yaml:"mailbox" json:"mailbox,omitempty"`
+	UseTLS     bool   `yaml:"use_tls" json:"use_tls,omitempty"`
+	SkipVerify bool   `yaml:"skip_verify" json:"skip_verify,omitempty"`
+	// PollIntervalSeconds 是轮询间隔；过小会触发部分服务商限流
+	PollIntervalSeconds int             `yaml:"poll_interval_seconds" json:"poll_interval_seconds,omitempty"`
+	SMTP                EmailSMTPConfig `yaml:"smtp" json:"smtp,omitempty"`
+}
+
+// EmailSMTPConfig 是出站 SMTP 配置（本期 Send 通路就绪，生产触发点留待后续版本）
+type EmailSMTPConfig struct {
+	Host     string `yaml:"host" json:"host,omitempty"`
+	Port     int    `yaml:"port" json:"port,omitempty"`
+	Username string `yaml:"username" json:"username,omitempty"`
+	Password string `yaml:"password" json:"-"`
+	// From 是出站邮件的发件人地址；空则回退 email.username
+	From        string `yaml:"from" json:"from,omitempty"`
+	UseSTARTTLS bool   `yaml:"use_starttls" json:"use_starttls,omitempty"`
+	SkipVerify  bool   `yaml:"skip_verify" json:"skip_verify,omitempty"`
+}
+
 func Load() (*Config, error) {
 	// Start with default config to ensure all fields have valid defaults
 	config := GetDefaultConfig()
@@ -490,6 +522,24 @@ func InsecureDefaults(cfg *Config) []string {
 		}
 		if cfg.OIDC.AutoProvision && len(cfg.OIDC.AllowedDomains) == 0 {
 			warnings = append(warnings, "oidc.auto_provision is true without oidc.allowed_domains; any verified IdP identity can create an account")
+		}
+	}
+
+	if cfg.Email.Enabled {
+		if strings.TrimSpace(cfg.Email.Host) == "" {
+			warnings = append(warnings, "email.enabled is true but email.host is empty")
+		}
+		if strings.TrimSpace(cfg.Email.Username) == "" || strings.TrimSpace(cfg.Email.Password) == "" {
+			warnings = append(warnings, "email.enabled is true but email.username/email.password is empty")
+		}
+		if !cfg.Email.UseTLS {
+			warnings = append(warnings, "email.use_tls is false; production mailboxes must use IMAPS (port 993)")
+		}
+		if cfg.Email.SkipVerify {
+			warnings = append(warnings, "email.skip_verify is true; IMAP TLS certificates will not be verified")
+		}
+		if strings.TrimSpace(cfg.Email.SMTP.Host) == "" {
+			warnings = append(warnings, "email.enabled is true but email.smtp.host is empty; outbound email cannot be sent")
 		}
 	}
 
@@ -814,6 +864,19 @@ func GetDefaultConfig() *Config {
 					ChunkSize:    1000,
 					ChunkOverlap: 200,
 				},
+			},
+		},
+		Email: EmailConfig{
+			// 单邮箱 IMAP 渠道默认关闭；启用需 host/username/password + smtp.host，
+			// 生产环境必须 use_tls（见 InsecureDefaults 与 email 模块连接逻辑）
+			Enabled:             false,
+			Port:                993,
+			Mailbox:             "INBOX",
+			UseTLS:              true,
+			PollIntervalSeconds: 60,
+			SMTP: EmailSMTPConfig{
+				Port:        587,
+				UseSTARTTLS: true,
 			},
 		},
 	}

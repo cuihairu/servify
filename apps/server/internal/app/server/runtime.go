@@ -13,6 +13,7 @@ import (
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
+	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -77,6 +78,7 @@ type Runtime struct {
 	statisticsService *services.StatisticsService
 	slaService        *services.SLAService
 	webhookService    *webhookapp.Service
+	emailAdapter      *emaildelivery.Adapter
 }
 
 type websocketRunner interface {
@@ -160,6 +162,15 @@ func (rt *Runtime) SLAServiceForWorker() *services.SLAService {
 // WebhookDeliveryForWorker returns the webhook delivery processor for worker use.
 func (rt *Runtime) WebhookDeliveryForWorker() webhookapp.Processor {
 	return rt.webhookService
+}
+
+// EmailPollAdapterForWorker returns the email poll adapter when the email channel
+// is enabled; nil keeps the poll worker unregistered.
+func (rt *Runtime) EmailPollAdapterForWorker() emaildelivery.PollProcessor {
+	if rt.emailAdapter == nil {
+		return nil
+	}
+	return rt.emailAdapter
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {

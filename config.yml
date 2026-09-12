@@ -258,6 +258,35 @@ embedding:
 #   # auto_provision 开启时建议限定邮箱域；留空则放行 IdP 验证过的任意邮箱
 #   allowed_domains: []
 
+# 单邮箱 Email 渠道：IMAP 轮询收件 + SMTP 出站
+# 默认关闭；开启后客户来信自动归并为会话（按发件人地址），管理端会话工作台直接回复可见
+# email:
+#   enabled: false
+#   # IMAP 服务器地址与端口（use_tls=true 时通常为 993）
+#   host: "imap.example.com"
+#   port: 993
+#   # 登录凭据（建议使用专用客服邮箱与应用专用密码）
+#   username: "support@example.com"
+#   password: ""
+#   # 轮询的 IMAP 文件夹
+#   mailbox: "INBOX"
+#   # IMAPS 加密；生产环境必须开启
+#   use_tls: true
+#   # 跳过 TLS 证书校验（仅自签名调试用，生产禁用）
+#   skip_verify: false
+#   # 轮询间隔（秒）；过小可能触发服务商限流
+#   poll_interval_seconds: 60
+#   smtp:
+#     # 出站 SMTP 服务器（坐席回复经此发出；留空则出站不可用）
+#     host: "smtp.example.com"
+#     port: 587
+#     username: "support@example.com"
+#     password: ""
+#     # 发件人地址；留空回退 email.username
+#     from: "support@example.com"
+#     use_starttls: true
+#     skip_verify: false
+
 # Knowledge base configuration
 knowledge:
   # Available providers: pgvector
