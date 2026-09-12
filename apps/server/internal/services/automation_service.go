@@ -64,6 +64,11 @@ func (s *AutomationService) SetEventBus(bus eventbus.Bus) {
 	}
 }
 
+// SetWebhookDispatcher 注入 call_webhook 动作的外呼实现（由 webhook 模块提供）。
+func (s *AutomationService) SetWebhookDispatcher(d automationapp.WebhookDispatcher) {
+	s.module.SetWebhookDispatcher(d)
+}
+
 func (s *AutomationService) HandleEvent(ctx context.Context, evt AutomationEvent) {
 	s.module.HandleEvent(ctx, evt)
 }

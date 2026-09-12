@@ -678,6 +678,84 @@ func TestExecuteActionUnsupportedType(t *testing.T) {
 	}
 }
 
+type recordingDispatcher struct {
+	url     string
+	secret  string
+	payload map[string]interface{}
+	err     error
+}
+
+func (r *recordingDispatcher) Dispatch(ctx context.Context, url, secret string, payload map[string]interface{}) error {
+	r.url, r.secret, r.payload = url, secret, payload
+	return r.err
+}
+
+func TestExecuteActionCallWebhookDispatches(t *testing.T) {
+	dispatcher := &recordingDispatcher{}
+	repo := &stubRepo{}
+	svc := NewService(repo)
+	svc.SetWebhookDispatcher(dispatcher)
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://ops.example.com/hook","secret":"s3cret"}}]`}
+	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 5}, &TicketView{ID: 5, Title: "printer", Priority: "high"}, false) {
+		t.Fatal("expected success with dispatcher configured")
+	}
+	if dispatcher.url != "https://ops.example.com/hook" || dispatcher.secret != "s3cret" {
+		t.Fatalf("unexpected dispatch target: %s %s", dispatcher.url, dispatcher.secret)
+	}
+	if dispatcher.payload["id"] != float64(5) || dispatcher.payload["title"] != "printer" {
+		t.Fatalf("expected default ticket snapshot payload, got %+v", dispatcher.payload)
+	}
+}
+
+func TestExecuteActionCallWebhookCustomPayload(t *testing.T) {
+	dispatcher := &recordingDispatcher{}
+	svc := NewService(&stubRepo{})
+	svc.SetWebhookDispatcher(dispatcher)
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com","payload":{"text":"escalated"}}}]`}
+	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 5}, &TicketView{ID: 5}, false) {
+		t.Fatal("expected success")
+	}
+	if len(dispatcher.payload) != 1 || dispatcher.payload["text"] != "escalated" {
+		t.Fatalf("expected custom payload to override snapshot, got %+v", dispatcher.payload)
+	}
+}
+
+func TestExecuteActionCallWebhookRequiresURL(t *testing.T) {
+	svc := NewService(&stubRepo{})
+	svc.SetWebhookDispatcher(&recordingDispatcher{})
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"secret":"s"}}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
+		t.Fatal("expected failure without url param")
+	}
+}
+
+func TestExecuteActionCallWebhookRequiresDispatcher(t *testing.T) {
+	svc := NewService(&stubRepo{})
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
+		t.Fatal("expected failure without dispatcher")
+	}
+}
+
+func TestExecuteActionCallWebhookDispatchErrorFailsRun(t *testing.T) {
+	svc := NewService(&stubRepo{})
+	svc.SetWebhookDispatcher(&recordingDispatcher{err: errors.New("boom")})
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
+		t.Fatal("expected dispatch error to fail the trigger")
+	}
+}
+
+func TestDefaultWebhookPayloadVariants(t *testing.T) {
+	if got := defaultWebhookPayload(nil); len(got) != 0 {
+		t.Fatalf("expected empty map for nil ticket, got %+v", got)
+	}
+	got := defaultWebhookPayload(&models.Ticket{ID: 7})
+	if got["id"] != float64(7) {
+		t.Fatalf("expected marshaled snapshot, got %+v", got)
+	}
+}
+
 func TestEvaluateCondition(t *testing.T) {
 	attrs := map[string]interface{}{
 		"ticket.status": "open",

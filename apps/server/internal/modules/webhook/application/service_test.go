@@ -355,6 +355,49 @@ func TestTestEndpointDeliversPingSynchronously(t *testing.T) {
 	}
 }
 
+func TestDeliverOneShotPersistsAuditRow(t *testing.T) {
+	repo := &fakeRepo{endpoints: []models.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}}}
+	deliverer := &fakeDeliverer{}
+	svc := newTestService(repo, deliverer)
+
+	err := svc.DeliverOneShot(context.Background(), "https://ops.example.com/hook", "sec", "automation.call_webhook", "", map[string]interface{}{"id": float64(9)})
+	if err != nil {
+		t.Fatalf("deliver one shot: %v", err)
+	}
+	if deliverer.request[0].URL != "https://ops.example.com/hook" || deliverer.request[0].Secret != "sec" {
+		t.Fatalf("unexpected request target: %+v", deliverer.request[0])
+	}
+	if repo.createdCount != 1 {
+		t.Fatal("automation delivery should be persisted for audit")
+	}
+	if got := repo.deliveries[0]; got.EndpointID != 0 || got.EventName != "automation.call_webhook" || got.Status != models.WebhookDeliveryStatusSuccess {
+		t.Fatalf("unexpected audit row: %+v", got)
+	}
+}
+
+func TestDeliverOneShotFailureReturnsError(t *testing.T) {
+	repo := &fakeRepo{}
+	deliverer := &fakeDeliverer{results: []DeliveryResult{{Success: false, Error: "connection refused"}}}
+	svc := newTestService(repo, deliverer)
+
+	if err := svc.DeliverOneShot(context.Background(), "https://x.example.com", "", "automation.call_webhook", "", nil); err == nil {
+		t.Fatal("expected dispatch failure to return error")
+	}
+	if repo.createdCount != 1 {
+		t.Fatal("failed delivery should still be persisted for audit")
+	}
+	if got := repo.deliveries[0]; got.Status != models.WebhookDeliveryStatusFailed {
+		t.Fatalf("failed dispatch should be terminal failed, got %+v", got)
+	}
+}
+
+func TestDeliverOneShotRequiresURL(t *testing.T) {
+	svc := newTestService(&fakeRepo{}, nil)
+	if err := svc.DeliverOneShot(context.Background(), "", "", "automation.call_webhook", "", nil); !errors.Is(err, ErrNilRequest) {
+		t.Fatalf("expected ErrNilRequest, got %v", err)
+	}
+}
+
 func TestRedeliverResetsDelivery(t *testing.T) {
 	repo := &fakeRepo{deliveries: []models.WebhookDelivery{{ID: 1, Status: models.WebhookDeliveryStatusDead, Attempt: 6}}}
 	svc := newTestService(repo, nil)

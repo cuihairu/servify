@@ -327,6 +327,27 @@ func (s *Service) TestEndpoint(ctx context.Context, id uint) (*models.WebhookDel
 	return s.deliverOnce(ctx, ep, "ping", "", "", map[string]string{"ping": time.Now().UTC().Format(time.RFC3339)}, true)
 }
 
+// DeliverOneShot 为 automation call_webhook 动作执行一次性签名投递并落审计行。
+// endpoint_id=0 表示非订阅端点来源；失败即 failed 终态（无退避重试），
+// 错误由 AutomationRun 记录、投递日志支持手动重放。
+func (s *Service) DeliverOneShot(ctx context.Context, url, secret, eventName, aggregateID string, payload map[string]interface{}) error {
+	if url == "" {
+		return ErrNilRequest
+	}
+	ep := &models.WebhookEndpoint{URL: url, Secret: secret}
+	delivery, err := s.deliverOnce(ctx, ep, eventName, "", aggregateID, payload, true)
+	if err != nil {
+		return err
+	}
+	if delivery.Status != models.WebhookDeliveryStatusSuccess {
+		if delivery.LastError != "" {
+			return fmt.Errorf("webhook delivery failed: %s", delivery.LastError)
+		}
+		return fmt.Errorf("webhook delivery failed with http status %d", delivery.HTTPStatus)
+	}
+	return nil
+}
+
 // ListDeliveries 分页查询投递日志。
 func (s *Service) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
 	if query.Page <= 0 {

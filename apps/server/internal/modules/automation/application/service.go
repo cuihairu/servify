@@ -11,12 +11,22 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo              Repository
+	webhookDispatcher WebhookDispatcher
+}
+
+// WebhookDispatcher 由 webhook 模块实现：触发器命中时一次性外呼（不退避重试，
+// 失败直接进 AutomationRun failed，由调用方在投递日志里重放）。
+type WebhookDispatcher interface {
+	Dispatch(ctx context.Context, url, secret string, payload map[string]interface{}) error
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
+
+// SetWebhookDispatcher 注入 call_webhook 动作的外呼实现（可选能力，未注入则该动作报错）。
+func (s *Service) SetWebhookDispatcher(d WebhookDispatcher) { s.webhookDispatcher = d }
 
 func (s *Service) HandleEvent(ctx context.Context, evt Event) {
 	triggers, err := s.repo.ListActiveTriggersByEvent(ctx, normalizeEvent(evt.Type))
@@ -193,9 +203,44 @@ func (s *Service) executeAction(ctx context.Context, act TriggerAction, ticket *
 		return s.repo.CreateTicketComment(ctx, ticket.ID, content)
 	case "notify_log":
 		return nil
+	case "call_webhook":
+		url, _ := act.Params["url"].(string)
+		if url == "" {
+			return fmt.Errorf("url param required")
+		}
+		if s.webhookDispatcher == nil {
+			return fmt.Errorf("webhook dispatcher not configured")
+		}
+		secret, _ := act.Params["secret"].(string)
+		payload := defaultWebhookPayload(ticket)
+		if raw, ok := act.Params["payload"]; ok && raw != nil {
+			if obj, isObj := raw.(map[string]interface{}); isObj {
+				payload = obj
+			} else {
+				payload = map[string]interface{}{"payload": raw}
+			}
+		}
+		return s.webhookDispatcher.Dispatch(ctx, url, secret, payload)
 	default:
 		return fmt.Errorf("unsupported action type: %s", act.Type)
 	}
+}
+
+// defaultWebhookPayload 未显式给 payload 参数时，用工单快照作为请求体
+// （JSON 序列化保持与 webhook 订阅投递相同的字段名）。
+func defaultWebhookPayload(ticket *models.Ticket) map[string]interface{} {
+	if ticket == nil {
+		return map[string]interface{}{}
+	}
+	raw, err := json.Marshal(ticket)
+	if err != nil {
+		return map[string]interface{}{"ticket_id": ticket.ID}
+	}
+	out := map[string]interface{}{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]interface{}{"ticket_id": ticket.ID}
+	}
+	return out
 }
 
 func EvaluateCondition(cond TriggerCondition, attrs map[string]interface{}) bool {

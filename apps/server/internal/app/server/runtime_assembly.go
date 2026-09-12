@@ -165,6 +165,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	webhookService := webhookapp.NewService(webhookinfra.NewGormRepository(rt.DB), rt.Logger)
 	webhookService.SetDeliverer(webhookinfra.NewHTTPDeliverer())
 	webhookdelivery.NewEventBusSubscriber(webhookService).Register(rt.Bus)
+	// automation call_webhook 动作复用同一投递器（单次投递 + 审计行）。
+	automationService.SetWebhookDispatcher(webhookdelivery.NewAutomationWebhookDispatcher(webhookService))
 	rt.webhookService = webhookService
 	rt.WebhookHandlerService = webhookdelivery.NewHandlerServiceAdapter(webhookService)
 }
