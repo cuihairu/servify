@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -17,6 +18,25 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+// syncBuffer 并发安全的输出缓冲：exec 的拷贝 goroutine 写、测试断言读，
+// strings.Builder 本身不支持并发。
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func freePort(t *testing.T) int {
 	t.Helper()
@@ -95,7 +115,7 @@ func TestServerMainHappyPath(t *testing.T) {
 		"-db-driver=sqlite", "-dsn="+dbPath,
 		"-host=127.0.0.1", fmt.Sprintf("-port=%d", port),
 	)
-	var out strings.Builder
+	var out syncBuffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	require.NoError(t, cmd.Start())
@@ -152,7 +172,7 @@ func TestServerMainTracingSetupWarning(t *testing.T) {
 	// A malformed OTEL_RESOURCE_ATTRIBUTES makes resource.New fail inside
 	// SetupTracing, which must only be logged as a warning by main.
 	cmd.Env = append(cmd.Env, "OTEL_RESOURCE_ATTRIBUTES=not-a-valid-entry")
-	var out strings.Builder
+	var out syncBuffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	require.NoError(t, cmd.Start())

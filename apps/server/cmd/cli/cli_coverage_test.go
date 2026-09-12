@@ -83,6 +83,8 @@ func resetCLIFlags() {
 	decVerify = false
 	decSecret = ""
 	decShowSig = false
+	securityCheckStrict = false
+	observabilityCheckStrict = false
 }
 
 func executeCommand(t *testing.T, cmd *cobra.Command, args ...string) (string, error) {

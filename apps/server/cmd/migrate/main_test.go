@@ -83,10 +83,6 @@ func TestSeedDefaultData(t *testing.T) {
 
 func TestMainSQLiteDatabasePath(t *testing.T) {
 	dir := t.TempDir()
-	origWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(dir))
-	t.Cleanup(func() { _ = os.Chdir(origWd) })
 
 	cfgPath := filepath.Join(dir, "override.yml")
 	require.NoError(t, os.WriteFile(cfgPath, []byte(strings.Join([]string{
@@ -103,11 +99,10 @@ func TestMainSQLiteDatabasePath(t *testing.T) {
 
 	dbPath := filepath.Join(dir, "migrated.db")
 
-	origArgs := os.Args
-	os.Args = []string{"migrate", "-config=" + cfgPath, "-db-driver=sqlite", "-dsn=" + dbPath, "-seed"}
-	t.Cleanup(func() { os.Args = origArgs })
-
-	main()
+	// 通过子进程执行 main()：flag 注册在 -count>1 的同进程重复执行下会
+	// panic "flag redefined"，进程隔离后任意次数安全。
+	out, code := runMigrateSubprocess(t, dir, nil, "-config="+cfgPath, "-db-driver=sqlite", "-dsn="+dbPath, "-seed")
+	require.Equal(t, 0, code, "migrate subprocess output: %s", out)
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	require.NoError(t, err)
