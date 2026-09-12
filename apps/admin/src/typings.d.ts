@@ -614,4 +614,51 @@ declare namespace API {
       description: string;
     }>;
   }
+
+  /** Webhook 订阅端点（开放平台）；secret 只在创建/轮换响应中出现一次 */
+  interface WebhookEndpoint {
+    id: number;
+    name: string;
+    url: string;
+    /** 逗号分隔事件名，空 = 订阅全部已支持事件 */
+    events?: string;
+    description?: string;
+    active?: boolean;
+    created_at?: string;
+    updated_at?: string;
+  }
+
+  /** Webhook 投递记录：pending -> success / failed(带 next_retry_at) / dead */
+  interface WebhookDelivery {
+    id: number;
+    endpoint_id: number;
+    event_name: string;
+    event_id?: string;
+    aggregate_id?: string;
+    status: 'pending' | 'success' | 'failed' | 'dead' | string;
+    attempt?: number;
+    http_status?: number;
+    duration_ms?: number;
+    last_error?: string;
+    payload?: string;
+    created_at?: string;
+    updated_at?: string;
+    delivered_at?: string | null;
+    next_retry_at?: string | null;
+  }
+
+  /** API Key（开放平台）；明文只在签发响应中返回一次 */
+  interface APIKey {
+    id: number;
+    name: string;
+    prefix: string;
+    workspace_id?: string;
+    scopes?: string;
+    created_by?: string;
+    last_used_at?: string | null;
+    expires_at?: string | null;
+    revoked_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+  }
 }

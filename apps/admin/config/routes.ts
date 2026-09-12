@@ -228,4 +228,12 @@ export default [
     icon: 'SettingOutlined',
     component: './Settings',
   },
+
+  // 开放平台（Webhook 订阅 / 投递日志 / API Keys；Email 渠道经 config.yml 配置）
+  {
+    path: '/open-platform',
+    name: '开放平台',
+    icon: 'ApiOutlined',
+    component: './OpenPlatform',
+  },
 ];
