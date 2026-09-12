@@ -287,6 +287,40 @@ embedding:
 #     use_starttls: true
 #     skip_verify: false
 
+# 质检全链路：定时扫描已结束会话 → 规则质检（违禁词/响应超时/首次响应）→ LLM 打分（可选）
+# 默认关闭；LLM 打分独立开关，无 key 时降级为 rules-only
+# quality:
+#   enabled: false
+#   # 扫描间隔（秒）
+#   scan_interval_seconds: 300
+#   # 单轮扫描处理的会话上限
+#   batch_size: 20
+#   # 抽样百分比 0-100；100 = 全量质检
+#   sample_rate: 100
+#   # 只扫描最近 N 天内结束的会话
+#   lookback_days: 7
+#   # 参与质检的最少消息数，低于此值记 skipped
+#   min_messages: 3
+#   # LLM 打分失败重试上限与退避（秒）
+#   max_attempts: 3
+#   retry_backoff_seconds: 600
+#   rules:
+#     # 违禁词列表（只检查坐席/AI 发出的消息）；改动需重启生效
+#     banned_words: []
+#     # 客户消息到坐席/AI 回复的超时阈值（秒）
+#     response_timeout_seconds: 120
+#     # 会话开始到首次回复的超时阈值（秒）
+#     first_response_timeout_seconds: 60
+#   llm:
+#     enabled: false
+#     # 打分模型；留空回退 ai.openai.model
+#     model: ""
+#     temperature: 0.1
+#     # 输入预算：总字符与单轮字符上限（防 token 超支）
+#     max_input_chars: 12000
+#     max_turn_chars: 500
+#     timeout_seconds: 30
+
 # Knowledge base configuration
 knowledge:
   # Available providers: pgvector

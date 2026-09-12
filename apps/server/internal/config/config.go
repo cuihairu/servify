@@ -54,6 +54,7 @@ type Config struct {
 	Embedding  EmbeddingConfig  `yaml:"embedding"`
 	Knowledge  KnowledgeConfig  `yaml:"knowledge"`
 	Email      EmailConfig      `yaml:"email"`
+	Quality    QualityConfig    `yaml:"quality"`
 }
 
 type ServerConfig struct {
@@ -437,6 +438,43 @@ type EmailSMTPConfig struct {
 	From        string `yaml:"from" json:"from,omitempty"`
 	UseSTARTTLS bool   `yaml:"use_starttls" json:"use_starttls,omitempty"`
 	SkipVerify  bool   `yaml:"skip_verify" json:"skip_verify,omitempty"`
+}
+
+// QualityConfig 配置质检全链路：定时扫描已结束会话 → 规则质检 → LLM 打分（可选）。
+// 禁用或 LLM 未启用时降级为 rules-only。LLM 成本由 sample_rate × batch_size ×
+// max_attempts × retry_backoff 四级上限控制。
+type QualityConfig struct {
+	Enabled             bool `yaml:"enabled" json:"enabled,omitempty"`
+	ScanIntervalSeconds int  `yaml:"scan_interval_seconds" json:"scan_interval_seconds,omitempty"`
+	// BatchSize 是单轮扫描处理的会话上限
+	BatchSize int `yaml:"batch_size" json:"batch_size,omitempty"`
+	// SampleRate 是抽样百分比 0-100；100 = 全量
+	SampleRate   float64 `yaml:"sample_rate" json:"sample_rate,omitempty"`
+	LookbackDays int     `yaml:"lookback_days" json:"lookback_days,omitempty"`
+	// MinMessages 是参与质检的最少消息数，低于此值直接 skipped
+	MinMessages         int                `yaml:"min_messages" json:"min_messages,omitempty"`
+	MaxAttempts         int                `yaml:"max_attempts" json:"max_attempts,omitempty"`
+	RetryBackoffSeconds int                `yaml:"retry_backoff_seconds" json:"retry_backoff_seconds,omitempty"`
+	Rules               QualityRulesConfig `yaml:"rules" json:"rules,omitempty"`
+	LLM                 QualityLLMConfig   `yaml:"llm" json:"llm,omitempty"`
+}
+
+// QualityRulesConfig 是规则质检配置（违禁词走 config，不上表）
+type QualityRulesConfig struct {
+	BannedWords                 []string `yaml:"banned_words" json:"banned_words,omitempty"`
+	ResponseTimeoutSeconds      int      `yaml:"response_timeout_seconds" json:"response_timeout_seconds,omitempty"`
+	FirstResponseTimeoutSeconds int      `yaml:"first_response_timeout_seconds" json:"first_response_timeout_seconds,omitempty"`
+}
+
+// QualityLLMConfig 是 LLM 打分配置；Enabled 且有可用 provider 时才打分
+type QualityLLMConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled,omitempty"`
+	// Model 为空时回退 ai.openai.model
+	Model          string  `yaml:"model" json:"model,omitempty"`
+	Temperature    float64 `yaml:"temperature" json:"temperature,omitempty"`
+	MaxInputChars  int     `yaml:"max_input_chars" json:"max_input_chars,omitempty"`
+	MaxTurnChars   int     `yaml:"max_turn_chars" json:"max_turn_chars,omitempty"`
+	TimeoutSeconds int     `yaml:"timeout_seconds" json:"timeout_seconds,omitempty"`
 }
 
 func Load() (*Config, error) {
@@ -877,6 +915,27 @@ func GetDefaultConfig() *Config {
 			SMTP: EmailSMTPConfig{
 				Port:        587,
 				UseSTARTTLS: true,
+			},
+		},
+		Quality: QualityConfig{
+			// 质检默认关闭；LLM 打分独立开关（无 key 时 rules-only）
+			Enabled:             false,
+			ScanIntervalSeconds: 300,
+			BatchSize:           20,
+			SampleRate:          100,
+			LookbackDays:        7,
+			MinMessages:         3,
+			MaxAttempts:         3,
+			RetryBackoffSeconds: 600,
+			Rules: QualityRulesConfig{
+				ResponseTimeoutSeconds:      120,
+				FirstResponseTimeoutSeconds: 60,
+			},
+			LLM: QualityLLMConfig{
+				Temperature:    0.1,
+				MaxInputChars:  12000,
+				MaxTurnChars:   500,
+				TimeoutSeconds: 30,
 			},
 		},
 	}
