@@ -15,6 +15,7 @@ import (
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
+	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -58,6 +59,7 @@ type Dependencies struct {
 	KnowledgeDocHandler      knowledgedelivery.HandlerService
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
+	WebhookHandlerService    webhookdelivery.HandlerService
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 }

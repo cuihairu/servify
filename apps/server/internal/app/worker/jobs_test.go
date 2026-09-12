@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/services"
 )
 
@@ -74,6 +75,10 @@ func (f *fakeRuntimeWorkerDependencies) StatisticsServiceForWorker() *services.S
 
 func (f *fakeRuntimeWorkerDependencies) SLAServiceForWorker() *services.SLAService {
 	return f.sla
+}
+
+func (f *fakeRuntimeWorkerDependencies) WebhookDeliveryForWorker() webhookapp.Processor {
+	return nil
 }
 
 func TestStatisticsWorkerLifecycle(t *testing.T) {

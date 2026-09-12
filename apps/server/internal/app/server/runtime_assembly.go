@@ -17,6 +17,9 @@ import (
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
+	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
+	webhookinfra "servify/apps/server/internal/modules/webhook/infra"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/pstnprovider"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -157,6 +160,13 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 		Satisfaction: satisfactionService,
 	})
 	rt.TicketReaderService = ticketdelivery.NewReaderServiceAdapter(rt.DB)
+
+	// 出站 Webhook：订阅 bus 事件入队（同步、只落库），投递与重试全部走后台 worker。
+	webhookService := webhookapp.NewService(webhookinfra.NewGormRepository(rt.DB), rt.Logger)
+	webhookService.SetDeliverer(webhookinfra.NewHTTPDeliverer())
+	webhookdelivery.NewEventBusSubscriber(webhookService).Register(rt.Bus)
+	rt.webhookService = webhookService
+	rt.WebhookHandlerService = webhookdelivery.NewHandlerServiceAdapter(webhookService)
 }
 
 func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {

@@ -86,6 +86,10 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	voiceAPI.Use(middleware.RequireResourcePermission("voice"))
 	handlers.RegisterVoiceRoutes(voiceAPI, handlers.NewVoiceHandler(deps.VoiceCoordinator, deps.VoiceProtocolRegistry))
 
+	webhooksAPI := api.Group("/")
+	webhooksAPI.Use(middleware.RequireResourcePermission("webhooks"))
+	handlers.RegisterWebhookRoutes(webhooksAPI, handlers.NewWebhookHandler(deps.WebhookHandlerService))
+
 	auditAPI := api.Group("/")
 	auditAPI.Use(middleware.RequireResourcePermission("audit"))
 	handlers.RegisterAuditRoutes(auditAPI, handlers.NewAuditHandler(auditplatform.NewGormQueryService(deps.DB)))

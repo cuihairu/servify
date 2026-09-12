@@ -19,6 +19,8 @@ import (
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
+	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 	"servify/apps/server/internal/platform/eventbus"
@@ -65,12 +67,14 @@ type Runtime struct {
 	KnowledgeDocHandler      knowledgedelivery.HandlerService
 	SuggestionService        suggestiondelivery.HandlerService
 	GamificationService      gamificationdelivery.HandlerService
+	WebhookHandlerService    webhookdelivery.HandlerService
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 
 	// Private fields for worker access only
 	statisticsService *services.StatisticsService
 	slaService        *services.SLAService
+	webhookService    *webhookapp.Service
 }
 
 type websocketRunner interface {
@@ -151,6 +155,11 @@ func (rt *Runtime) SLAServiceForWorker() *services.SLAService {
 	return rt.slaService
 }
 
+// WebhookDeliveryForWorker returns the webhook delivery processor for worker use.
+func (rt *Runtime) WebhookDeliveryForWorker() webhookapp.Processor {
+	return rt.webhookService
+}
+
 func (rt *Runtime) RouterDependencies() Dependencies {
 	return Dependencies{
 		Config:                   rt.Config,
@@ -182,6 +191,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		KnowledgeDocHandler:      rt.KnowledgeDocHandler,
 		SuggestionService:        rt.SuggestionService,
 		GamificationService:      rt.GamificationService,
+		WebhookHandlerService:    rt.WebhookHandlerService,
 		OIDCProvider:             rt.OIDCProvider,
 		HTTPMetrics:              rt.HTTPMetrics,
 	}

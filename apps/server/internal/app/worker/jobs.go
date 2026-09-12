@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/usersecurity"
 	"servify/apps/server/internal/services"
@@ -43,6 +44,7 @@ type StatisticsWorker struct {
 type RuntimeWorkerDependencies interface {
 	StatisticsServiceForWorker() *services.StatisticsService
 	SLAServiceForWorker() *services.SLAService
+	WebhookDeliveryForWorker() webhookapp.Processor
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -53,6 +55,10 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 
 	app.RegisterWorker(NewStatisticsWorker(deps.StatisticsServiceForWorker(), time.Hour, app.Logger))
 	app.RegisterWorker(NewSLAMonitorWorker(deps.SLAServiceForWorker(), 5*time.Minute, app.Logger))
+
+	if processor := deps.WebhookDeliveryForWorker(); processor != nil {
+		app.RegisterWorker(NewWebhookDeliveryWorker(processor, 30*time.Second, app.Logger))
+	}
 
 	if cfg.Security.Audit.Enabled && db != nil {
 		app.RegisterWorker(NewAuditCleanupWorker(

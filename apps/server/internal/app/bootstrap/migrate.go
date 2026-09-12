@@ -43,6 +43,8 @@ func MigrationModels() []interface{} {
 		&models.VoiceCall{},
 		&models.VoiceRecording{},
 		&models.VoiceTranscript{},
+		&models.WebhookEndpoint{},
+		&models.WebhookDelivery{},
 	}
 }
 

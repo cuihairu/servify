@@ -110,13 +110,13 @@ migrate-verify:
 		go -C apps/server run ./cmd/migrate || { docker rm -f servify-migrate-verify; exit 1; }
 	@version=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT version FROM schema_migrations"); \
 	dirty=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT dirty FROM schema_migrations"); \
-	tables=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'"); \
+	tables=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'"); \
 	echo "schema_migrations: version=$$version dirty=$$dirty tables=$$tables"; \
 	docker rm -f servify-migrate-verify >/dev/null; \
-	if [ "$$version" != "1" ] || [ "$$dirty" != "f" ] || [ "$$tables" != "37" ]; then \
-		echo "migrate-verify FAILED: expected version=1 dirty=f tables=37"; exit 1; \
+	if [ "$$version" != "2" ] || [ "$$dirty" != "f" ] || [ "$$tables" != "39" ]; then \
+		echo "migrate-verify FAILED: expected version=2 dirty=f tables=39"; exit 1; \
 	fi
-	@echo "migrate-verify passed: version=1 dirty=false, 37 tables created, second run was a no-op"
+	@echo "migrate-verify passed: version=2 dirty=false, 39 tables created, second run was a no-op"
 
 # Clean build artifacts
 clean:

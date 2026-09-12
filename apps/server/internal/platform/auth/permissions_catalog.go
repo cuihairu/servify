@@ -18,6 +18,9 @@ const (
 	ResourceAssist          = "assist"
 	ResourceGamification    = "gamification"
 	ResourceVoice           = "voice"
+	ResourceWebhooks        = "webhooks"
+	ResourceAPIKeys         = "api_keys"
+	ResourceConversations   = "conversations"
 )
 
 var fallbackAgentPermissions = []string{
