@@ -47,6 +47,8 @@ func MigrationModels() []interface{} {
 		&models.WebhookDelivery{},
 		&models.APIKey{},
 		&models.QualityReview{},
+		&models.AgentGroup{},
+		&models.AgentGroupMember{},
 	}
 }
 

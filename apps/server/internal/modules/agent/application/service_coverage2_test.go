@@ -153,6 +153,40 @@ func (m *mockAgentRepo) RevokeUserTokens(ctx context.Context, userID uint, revok
 	return m.revoked, nil
 }
 
+// ---- 选坐席（selection）桩 ----
+
+func (m *mockAgentRepo) GetLastAgentForCustomer(ctx context.Context, customerUserID uint, since time.Time) (*uint, error) {
+	return nil, nil
+}
+
+func (m *mockAgentRepo) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (m *mockAgentRepo) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	return nil, nil
+}
+
+func (m *mockAgentRepo) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (m *mockAgentRepo) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (m *mockAgentRepo) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return nil
+}
+
+func (m *mockAgentRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return nil
+}
+
+func (m *mockAgentRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
+}
+
 // mockRegistry is a configurable RuntimeRegistry.
 type mockRegistry struct {
 	items       map[uint]AgentRuntimeDTO

@@ -86,6 +86,40 @@ func (r *maintenanceRepo) RevokeUserTokens(ctx context.Context, userID uint, rev
 	return 0, nil
 }
 
+// ---- 选坐席（selection）桩 ----
+
+func (r *maintenanceRepo) GetLastAgentForCustomer(ctx context.Context, customerUserID uint, since time.Time) (*uint, error) {
+	return nil, nil
+}
+
+func (r *maintenanceRepo) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (r *maintenanceRepo) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	return nil, nil
+}
+
+func (r *maintenanceRepo) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (r *maintenanceRepo) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (r *maintenanceRepo) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return nil
+}
+
+func (r *maintenanceRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return nil
+}
+
+func (r *maintenanceRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
+}
+
 func (r *maintenanceRepo) UpdateLastActivity(ctx context.Context, userID uint) error {
 	return nil
 }

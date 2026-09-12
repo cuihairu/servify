@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -220,6 +221,132 @@ func (r *GormRepository) GetStats(ctx context.Context, agentUserID *uint) (*agen
 
 func (r *GormRepository) RevokeUserTokens(ctx context.Context, userID uint, revokeAt time.Time) (int, error) {
 	return usersecurity.RevokeUserTokens(ctx, r.db, userID, revokeAt)
+}
+
+// GetLastAgentForCustomer 亲和路由：客户在 since 之后最近一次被坐席服务的 agent_id。
+func (r *GormRepository) GetLastAgentForCustomer(ctx context.Context, customerUserID uint, since time.Time) (*uint, error) {
+	var session models.Session
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND agent_id IS NOT NULL AND created_at >= ?", customerUserID, since).
+		Order("created_at DESC").
+		First(&session).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find last agent for customer: %w", err)
+	}
+	return session.AgentID, nil
+}
+
+// GetAgentGroup 取单个组（软删过滤，组员操作不需要 scope）。
+func (r *GormRepository) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	var group models.AgentGroup
+	if err := r.db.WithContext(ctx).First(&group, id).Error; err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
+// ListAgentGroups 返回全部组（软删过滤，系统级读取不加 scope）。
+func (r *GormRepository) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	var groups []models.AgentGroup
+	if err := r.db.WithContext(ctx).
+		Order("priority DESC, created_at ASC").
+		Find(&groups).Error; err != nil {
+		return nil, fmt.Errorf("failed to list agent groups: %w", err)
+	}
+	return groups, nil
+}
+
+// CreateAgentGroup 创建组；tenant/workspace 从 ctx scope 注入（有则写）。
+func (r *GormRepository) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	if group.OverflowPolicy == "" {
+		group.OverflowPolicy = "global"
+	}
+	if tenantID := platformauth.TenantIDFromContext(ctx); tenantID != "" {
+		group.TenantID = tenantID
+	}
+	if workspaceID := platformauth.WorkspaceIDFromContext(ctx); workspaceID != "" {
+		group.WorkspaceID = workspaceID
+	}
+	if err := r.db.WithContext(ctx).Create(group).Error; err != nil {
+		return fmt.Errorf("failed to create agent group: %w", err)
+	}
+	return nil
+}
+
+// UpdateAgentGroup 更新组基础字段（按主键，不整行覆盖）。
+func (r *GormRepository) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	updates := map[string]interface{}{
+		"name":            group.Name,
+		"description":     group.Description,
+		"priority":        group.Priority,
+		"overflow_policy": group.OverflowPolicy,
+		"enabled":         group.Enabled,
+	}
+	if err := r.db.WithContext(ctx).Model(&models.AgentGroup{}).Where("id = ?", group.ID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("failed to update agent group: %w", err)
+	}
+	return nil
+}
+
+// DeleteAgentGroup 软删组并清空成员（事务）。
+func (r *GormRepository) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&models.AgentGroup{}, id).Error; err != nil {
+			return fmt.Errorf("failed to delete agent group: %w", err)
+		}
+		if err := tx.Where("group_id = ?", id).Delete(&models.AgentGroupMember{}).Error; err != nil {
+			return fmt.Errorf("failed to clear group members: %w", err)
+		}
+		return nil
+	})
+}
+
+// ReplaceGroupMembers 全量替换组成员（事务；去重入参）。
+func (r *GormRepository) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("group_id = ?", groupID).Delete(&models.AgentGroupMember{}).Error; err != nil {
+			return fmt.Errorf("failed to clear group members: %w", err)
+		}
+		seen := make(map[uint]struct{}, len(agentUserIDs))
+		for _, userID := range agentUserIDs {
+			if userID == 0 {
+				continue
+			}
+			if _, dup := seen[userID]; dup {
+				continue
+			}
+			seen[userID] = struct{}{}
+			member := models.AgentGroupMember{GroupID: groupID, AgentUserID: userID}
+			if err := tx.Create(&member).Error; err != nil {
+				return fmt.Errorf("failed to add group member %d: %w", userID, err)
+			}
+		}
+		return nil
+	})
+}
+
+// ListEnabledGroupMemberIDs 启用组的成员 user_id；组不存在或禁用返回空切片。
+func (r *GormRepository) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	var group models.AgentGroup
+	if err := r.db.WithContext(ctx).First(&group, groupID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get agent group: %w", err)
+	}
+	if !group.Enabled {
+		return nil, nil
+	}
+	var ids []uint
+	if err := r.db.WithContext(ctx).Model(&models.AgentGroupMember{}).
+		Where("group_id = ?", groupID).
+		Pluck("agent_user_id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("failed to list group members: %w", err)
+	}
+	return ids, nil
 }
 
 func applyAgentScope(db *gorm.DB, ctx context.Context) *gorm.DB {

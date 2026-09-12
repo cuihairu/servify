@@ -9,6 +9,8 @@ import (
 	agentdomain "servify/apps/server/internal/modules/agent/domain"
 
 	"servify/apps/server/internal/models"
+
+	"gorm.io/gorm"
 )
 
 type legacyAdapterRepo struct {
@@ -69,6 +71,40 @@ func (r *legacyAdapterRepo) GetStats(ctx context.Context, agentUserID *uint) (*a
 
 func (r *legacyAdapterRepo) RevokeUserTokens(ctx context.Context, userID uint, revokeAt time.Time) (int, error) {
 	return 0, nil
+}
+
+// ---- 选坐席（selection）桩 ----
+
+func (r *legacyAdapterRepo) GetLastAgentForCustomer(ctx context.Context, customerUserID uint, since time.Time) (*uint, error) {
+	return nil, nil
+}
+
+func (r *legacyAdapterRepo) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (r *legacyAdapterRepo) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	return nil, nil
+}
+
+func (r *legacyAdapterRepo) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (r *legacyAdapterRepo) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (r *legacyAdapterRepo) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return nil
+}
+
+func (r *legacyAdapterRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return nil
+}
+
+func (r *legacyAdapterRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return nil, nil
 }
 
 func (r *legacyAdapterRepo) UpdateLastActivity(ctx context.Context, userID uint) error {

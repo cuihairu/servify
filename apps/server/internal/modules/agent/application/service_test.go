@@ -21,6 +21,10 @@ type stubRepo struct {
 	sessionAssigned string
 	tokenVersion    int
 	tokenRevokedAt  time.Time
+
+	lastAgentForCustomer *uint
+	group                *models.AgentGroup
+	groupMembers         []uint
 }
 
 func (s *stubRepo) CreateAgent(ctx context.Context, userID uint, department string, skills []string, maxChatConcurrency int) (*agentdomain.AgentProfile, error) {
@@ -149,6 +153,50 @@ func (s *stubRepo) SetConnectedTime(ctx context.Context, userID uint) error {
 
 func (s *stubRepo) ClearConnectedTime(ctx context.Context, userID uint) error {
 	return nil
+}
+
+// ---- 选坐席（selection）桩 ----
+
+func (s *stubRepo) GetLastAgentForCustomer(ctx context.Context, customerUserID uint, since time.Time) (*uint, error) {
+	if s.lastAgentForCustomer == nil {
+		return nil, nil
+	}
+	id := *s.lastAgentForCustomer
+	return &id, nil
+}
+
+func (s *stubRepo) GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error) {
+	if s.group == nil || s.group.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return s.group, nil
+}
+
+func (s *stubRepo) ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error) {
+	if s.group == nil {
+		return nil, nil
+	}
+	return []models.AgentGroup{*s.group}, nil
+}
+
+func (s *stubRepo) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (s *stubRepo) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
+	return nil
+}
+
+func (s *stubRepo) DeleteAgentGroup(ctx context.Context, id uint) error {
+	return nil
+}
+
+func (s *stubRepo) ReplaceGroupMembers(ctx context.Context, groupID uint, agentUserIDs []uint) error {
+	return nil
+}
+
+func (s *stubRepo) ListEnabledGroupMemberIDs(ctx context.Context, groupID uint) ([]uint, error) {
+	return s.groupMembers, nil
 }
 
 func TestServiceGoOnlineAndAssignSession(t *testing.T) {

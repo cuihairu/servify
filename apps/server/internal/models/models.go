@@ -265,19 +265,21 @@ type TransferRecord struct {
 
 // 会话等待队列记录
 type WaitingRecord struct {
-	ID           uint       `gorm:"primaryKey" json:"id"`
-	TenantID     string     `gorm:"index:idx_waiting_records_scope" json:"tenant_id"`
-	WorkspaceID  string     `gorm:"index:idx_waiting_records_scope" json:"workspace_id"`
-	SessionID    string     `gorm:"index" json:"session_id"`
-	Reason       string     `json:"reason"`
-	TargetSkills string     `json:"target_skills"`
-	Priority     string     `json:"priority"`
-	Notes        string     `json:"notes"`
-	Status       string     `gorm:"default:'waiting'" json:"status"` // waiting, transferred, cancelled
-	QueuedAt     time.Time  `json:"queued_at"`
-	AssignedAt   *time.Time `json:"assigned_at,omitempty"`
-	AssignedTo   *uint      `gorm:"index" json:"assigned_to,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	TenantID      string     `gorm:"index:idx_waiting_records_scope" json:"tenant_id"`
+	WorkspaceID   string     `gorm:"index:idx_waiting_records_scope" json:"workspace_id"`
+	SessionID     string     `gorm:"index" json:"session_id"`
+	Reason        string     `json:"reason"`
+	TargetSkills  string     `json:"target_skills"`
+	TargetGroupID *uint      `gorm:"index" json:"target_group_id,omitempty"` // 指定坐席组（0/nil = 不限组）
+	Priority      string     `json:"priority"`
+	Notes         string     `json:"notes"`
+	Status        string     `gorm:"default:'waiting'" json:"status"` // waiting, transferred, cancelled
+	QueuedAt      time.Time  `json:"queued_at"`
+	ClaimedAt     *time.Time `gorm:"index:idx_waiting_records_claim" json:"claimed_at,omitempty"` // worker 认领租约起点
+	AssignedAt    *time.Time `json:"assigned_at,omitempty"`
+	AssignedTo    *uint      `gorm:"index" json:"assigned_to,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // 知识库文档
@@ -570,4 +572,31 @@ type QualityReview struct {
 	ScoredAt        *time.Time `json:"scored_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// AgentGroup 坐席组：组内分配 + 溢出策略（global 落全局池 / none 直接失败）。
+// agent_id 语义全链路统一 users.id；parent_id 预留列，本期不实现树语义。
+type AgentGroup struct {
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	TenantID    string `gorm:"index:idx_agent_groups_scope,priority:1;uniqueIndex:uniq_agent_groups_name,priority:1" json:"tenant_id"`
+	WorkspaceID string `gorm:"index:idx_agent_groups_scope,priority:2;uniqueIndex:uniq_agent_groups_name,priority:2" json:"workspace_id"`
+	Name        string `gorm:"not null;uniqueIndex:uniq_agent_groups_name,priority:3" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+	Priority    int    `json:"priority"`
+	// 不加 gorm default tag：零值（enabled=false / policy=""）必须原样落库，
+	// 默认值由 CreateAgentGroup（policy 兜底 global）与管理面入参（enabled 缺省 true）保证。
+	OverflowPolicy string         `json:"overflow_policy"` // global|none
+	Enabled        bool           `json:"enabled"`
+	ParentID       *uint          `json:"parent_id,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+}
+
+// AgentGroupMember 坐席组成员（AgentUserID = users.id，与 Session.AgentID 同语义）。
+type AgentGroupMember struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	GroupID     uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:1;index" json:"group_id"`
+	AgentUserID uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:2" json:"agent_user_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }

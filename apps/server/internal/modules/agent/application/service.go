@@ -139,31 +139,11 @@ func (s *Service) ReleaseSession(ctx context.Context, sessionID string, agentUse
 }
 
 func (s *Service) FindAvailableAgent(ctx context.Context, skills []string, priority string) (*AgentRuntimeDTO, error) {
-	requiredSkills := sanitizeSkills(skills)
-	runtimes, err := s.repo.ListActiveAgentRuntimes(ctx)
+	result, err := s.SelectAgent(ctx, SelectionRequest{Skills: skills, Priority: priority})
 	if err != nil {
 		return nil, err
 	}
-	var best *AgentRuntimeDTO
-	bestScore := -1.0
-	for _, candidate := range s.mergeRuntimeMetadata(runtimes) {
-		if candidate.Status != string(agentdomain.PresenceStatusOnline) {
-			continue
-		}
-		if candidate.CurrentChatLoad >= candidate.MaxChatConcurrency {
-			continue
-		}
-		score := calculateScore(candidate, requiredSkills, priority)
-		if score > bestScore {
-			copy := candidate
-			best = &copy
-			bestScore = score
-		}
-	}
-	if best == nil {
-		return nil, fmt.Errorf("no available agent found")
-	}
-	return best, nil
+	return result.Agent, nil
 }
 
 func (s *Service) GetOnlineAgents(ctx context.Context) []AgentRuntimeDTO {
@@ -232,7 +212,7 @@ func (s *Service) ApplySessionTransfer(ctx context.Context, sessionID string, fr
 }
 
 func (s *Service) mergeRuntimeMetadata(runtimes []AgentRuntimeDTO) []AgentRuntimeDTO {
-	if len(runtimes) == 0 {
+	if len(runtimes) == 0 || s.registry == nil {
 		return runtimes
 	}
 	// In-memory registry provides transient metadata (e.g., cached sessions).
