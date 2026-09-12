@@ -3950,6 +3950,24 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/api-keys": {
+            "get": {
+                "responses": {}
+            },
+            "post": {
+                "responses": {}
+            }
+        },
+        "/api/v1/api-keys/{id}": {
+            "delete": {
+                "responses": {}
+            }
+        },
+        "/api/v1/api-keys/{id}/revoke": {
+            "post": {
+                "responses": {}
+            }
+        },
         "/api/v1/auth/login": {
             "post": {
                 "consumes": [
@@ -4200,6 +4218,21 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/conversations": {
+            "get": {
+                "responses": {}
+            }
+        },
+        "/api/v1/conversations/{id}": {
+            "get": {
+                "responses": {}
+            }
+        },
+        "/api/v1/conversations/{id}/messages": {
+            "get": {
+                "responses": {}
             }
         }
     },

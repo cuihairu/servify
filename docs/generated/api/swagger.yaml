@@ -3995,6 +3995,17 @@ paths:
       summary: 获取工单统计
       tags:
       - 工单
+  /api/v1/api-keys:
+    get:
+      responses: {}
+    post:
+      responses: {}
+  /api/v1/api-keys/{id}:
+    delete:
+      responses: {}
+  /api/v1/api-keys/{id}/revoke:
+    post:
+      responses: {}
   /api/v1/auth/login:
     post:
       consumes:
@@ -4152,4 +4163,13 @@ paths:
       summary: Logout other auth sessions
       tags:
       - auth
+  /api/v1/conversations:
+    get:
+      responses: {}
+  /api/v1/conversations/{id}:
+    get:
+      responses: {}
+  /api/v1/conversations/{id}/messages:
+    get:
+      responses: {}
 swagger: "2.0"
