@@ -1,0 +1,122 @@
+package bootstrap
+
+import (
+	"embed"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	mgpostgres "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+
+	"github.com/golang-migrate/migrate/v4"
+	"gorm.io/gorm"
+)
+
+// migrationsFS embeds the versioned SQL migrations applied to PostgreSQL
+// databases. Files follow the golang-migrate naming convention
+// NNNNNN_name.up.sql; down migrations are intentionally not shipped — the
+// baseline is not reversible, rollbacks restore from backup.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// SchemaManagementMode selects how a boot manages the database schema.
+type SchemaManagementMode int
+
+const (
+	// SchemaModeSkip leaves the schema untouched (DBA-managed deployments).
+	SchemaModeSkip SchemaManagementMode = iota
+	// SchemaModeVersioned applies the embedded versioned SQL migrations.
+	SchemaModeVersioned
+	// SchemaModeAutoMigrate uses the legacy GORM AutoMigrate (sqlite, or the
+	// SERVIFY_AUTO_MIGRATE escape hatch on PostgreSQL).
+	SchemaModeAutoMigrate
+)
+
+// MigrationsEnabled reports whether automatic schema management should run at
+// all. Setting MIGRATIONS_ENABLED to a falsy value ("0", "false", "no", "off")
+// hands the schema over to external management; the default is enabled.
+func MigrationsEnabled() bool {
+	return !falsyEnv("MIGRATIONS_ENABLED")
+}
+
+// AutoMigrateRequested reports whether the legacy GORM AutoMigrate escape
+// hatch was requested on PostgreSQL. SERVIFY_AUTO_MIGRATE used to default to
+// on; versioned migrations are now the default and the variable flips to an
+// explicit opt-in.
+func AutoMigrateRequested() bool {
+	return truthyEnv("SERVIFY_AUTO_MIGRATE")
+}
+
+// ResolveSchemaMode decides how the given driver should get its schema.
+// PostgreSQL runs versioned migrations by default; sqlite keeps AutoMigrate
+// (the SQL baseline is postgres-dialect). MIGRATIONS_ENABLED=off wins over
+// everything, and SERVIFY_AUTO_MIGRATE=on opts back into the legacy path.
+func ResolveSchemaMode(driver string) SchemaManagementMode {
+	if !MigrationsEnabled() {
+		return SchemaModeSkip
+	}
+	if normalizedDatabaseDriver(DatabaseOptions{Driver: driver}) != "postgres" {
+		return SchemaModeAutoMigrate
+	}
+	if AutoMigrateRequested() {
+		return SchemaModeAutoMigrate
+	}
+	return SchemaModeVersioned
+}
+
+// UsesVersionedMigrations reports whether the driver dialect is managed by
+// the versioned SQL migrations. Only postgres qualifies; sqlite keeps the
+// legacy AutoMigrate path (the baseline is postgres-dialect SQL).
+func UsesVersionedMigrations(driver string) bool {
+	return normalizedDatabaseDriver(DatabaseOptions{Driver: driver}) == "postgres"
+}
+
+// RunMigrations applies the embedded versioned migrations to the database
+// behind db. It is idempotent: an up-to-date database yields migrate.ErrNoChange,
+// which is treated as success. A dirty migration state fails loudly so a
+// broken rollout is never silently ignored.
+func RunMigrations(db *gorm.DB) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return fmt.Errorf("migrations: get sql.DB: %w", err)
+	}
+	driver, err := mgpostgres.WithInstance(sqlDB, &mgpostgres.Config{})
+	if err != nil {
+		return fmt.Errorf("migrations: build driver: %w", err)
+	}
+	defer driver.Close()
+
+	src, err := iofs.New(migrationsFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("migrations: load embedded source: %w", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", src, "postgres", driver)
+	if err != nil {
+		return fmt.Errorf("migrations: build migrator: %w", err)
+	}
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrations: %w", err)
+	}
+	return nil
+}
+
+func truthyEnv(key string) bool {
+	switch strings.TrimSpace(strings.ToLower(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func falsyEnv(key string) bool {
+	switch strings.TrimSpace(strings.ToLower(os.Getenv(key))) {
+	case "0", "false", "no", "off":
+		return true
+	default:
+		return false
+	}
+}

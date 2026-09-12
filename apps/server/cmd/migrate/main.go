@@ -41,17 +41,18 @@ func main() {
 
 	// CLI flags / env 覆盖
 	var (
-		flagConfig string
-		dbDriver   string
-		flagDSN    string
-		dbHost     string
-		dbPortStr  string
-		dbUser     string
-		dbPass     string
-		dbName     string
-		dbSSLMode  string
-		dbTZ       string
-		withSeed   bool
+		flagConfig  string
+		dbDriver    string
+		flagDSN     string
+		dbHost      string
+		dbPortStr   string
+		dbUser      string
+		dbPass      string
+		dbName      string
+		dbSSLMode   string
+		dbTZ        string
+		withSeed    bool
+		autoMigrate bool
 	)
 
 	defaultDSN := ""
@@ -70,6 +71,7 @@ func main() {
 	flag.StringVar(&dbSSLMode, "db-sslmode", getenvDefault("DB_SSLMODE", "disable"), "sslmode (disable, require, verify-ca, verify-full)")
 	flag.StringVar(&dbTZ, "db-timezone", getenvDefault("DB_TIMEZONE", "UTC"), "database timezone")
 	flag.BoolVar(&withSeed, "seed", false, "seed default data after migration")
+	flag.BoolVar(&autoMigrate, "auto-migrate", false, "use legacy GORM AutoMigrate instead of versioned SQL migrations (also implied for sqlite)")
 	flag.Parse()
 
 	// 如果指定了 --config，则重新加载配置文件
@@ -114,18 +116,26 @@ func main() {
 
 	log.Println("Starting database migration...")
 
-	err = appbootstrap.AutoMigrate(db)
-	if err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
-	}
+	if appbootstrap.UsesVersionedMigrations(dbDriver) && !autoMigrate {
+		if err := appbootstrap.RunMigrations(db); err != nil {
+			log.Fatalf("Failed to run versioned migrations: %v", err)
+		}
+		log.Println("Versioned migrations applied successfully!")
+	} else {
+		if autoMigrate {
+			log.Println("-auto-migrate set; running legacy GORM AutoMigrate")
+		}
+		if err := appbootstrap.AutoMigrate(db); err != nil {
+			log.Fatalf("Failed to migrate database: %v", err)
+		}
+		log.Println("Database migration completed successfully!")
 
-	log.Println("Database migration completed successfully!")
-
-	log.Println("Creating additional indexes...")
-	if err := appbootstrap.CreateIndexes(db); err != nil {
-		log.Fatalf("Failed to create indexes: %v", err)
+		log.Println("Creating additional indexes...")
+		if err := appbootstrap.CreateIndexes(db); err != nil {
+			log.Fatalf("Failed to create indexes: %v", err)
+		}
+		log.Println("Additional indexes created successfully!")
 	}
-	log.Println("Additional indexes created successfully!")
 
 	// 插入默认数据
 	if withSeed {

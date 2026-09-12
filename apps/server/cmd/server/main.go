@@ -46,7 +46,18 @@ func main() {
 	}
 	app.DB = db
 
-	if appbootstrap.AutoMigrateEnabled() {
+	switch appbootstrap.ResolveSchemaMode(dbOpts.Driver) {
+	case appbootstrap.SchemaModeSkip:
+		appLogger.Info("Automatic schema management disabled (MIGRATIONS_ENABLED is falsy); expecting a pre-migrated database")
+	case appbootstrap.SchemaModeVersioned:
+		appLogger.Info("Applying versioned database migrations...")
+		if err := appbootstrap.RunMigrations(db); err != nil {
+			appLogger.Fatalf("Failed to run database migrations: %v", err)
+		}
+	case appbootstrap.SchemaModeAutoMigrate:
+		if appbootstrap.AutoMigrateRequested() {
+			appLogger.Info("SERVIFY_AUTO_MIGRATE is set; running legacy GORM AutoMigrate instead of versioned migrations")
+		}
 		if err := appbootstrap.AutoMigrate(db); err != nil {
 			appLogger.Fatalf("Failed to migrate database: %v", err)
 		}

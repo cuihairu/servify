@@ -265,9 +265,11 @@ func TestAutoMigrateFailure(t *testing.T) {
 	}
 }
 
-func TestAutoMigrateEnabledValues(t *testing.T) {
+func TestAutoMigrateRequestedValues(t *testing.T) {
+	// SERVIFY_AUTO_MIGRATE flipped from a default-on legacy switch to an
+	// explicit opt-in escape hatch for the versioned migrations.
 	cases := map[string]bool{
-		"":      true,
+		"":      false,
 		"1":     true,
 		"true":  true,
 		"YES":   true,
@@ -276,12 +278,12 @@ func TestAutoMigrateEnabledValues(t *testing.T) {
 		"false": false,
 		"No":    false,
 		"off":   false,
-		"bogus": true,
+		"bogus": false,
 	}
 	for value, want := range cases {
 		t.Setenv("SERVIFY_AUTO_MIGRATE", value)
-		if got := AutoMigrateEnabled(); got != want {
-			t.Fatalf("AutoMigrateEnabled(%q) = %v, want %v", value, got, want)
+		if got := AutoMigrateRequested(); got != want {
+			t.Fatalf("AutoMigrateRequested(%q) = %v, want %v", value, got, want)
 		}
 	}
 }

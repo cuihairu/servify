@@ -1,9 +1,6 @@
 package bootstrap
 
 import (
-	"os"
-	"strings"
-
 	"servify/apps/server/internal/models"
 
 	"gorm.io/gorm"
@@ -49,51 +46,16 @@ func MigrationModels() []interface{} {
 	}
 }
 
-// AutoMigrate runs the canonical application migration set.
+// AutoMigrate runs the canonical model set through GORM AutoMigrate.
+//
+// FROZEN: this is the legacy escape hatch (SERVIFY_AUTO_MIGRATE=on, sqlite
+// databases and cmd/migrate -auto-migrate only). PostgreSQL databases are
+// managed by versioned SQL migrations (see migrate_runner.go /
+// migrations/000001_init.up.sql). Do not add new schema changes here — write
+// the next numbered migration instead. The historical AddColumn patches below
+// are already part of the baseline.
 func AutoMigrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(MigrationModels()...); err != nil {
-		return err
-	}
-	if !db.Migrator().HasColumn(&models.KnowledgeDoc{}, "is_public") {
-		if err := db.Migrator().AddColumn(&models.KnowledgeDoc{}, "IsPublic"); err != nil {
-			return err
-		}
-	}
-	if !db.Migrator().HasColumn(&models.KnowledgeDoc{}, "provider_id") {
-		if err := db.Migrator().AddColumn(&models.KnowledgeDoc{}, "ProviderID"); err != nil {
-			return err
-		}
-	}
-	if !db.Migrator().HasColumn(&models.KnowledgeDoc{}, "external_id") {
-		if err := db.Migrator().AddColumn(&models.KnowledgeDoc{}, "ExternalID"); err != nil {
-			return err
-		}
-	}
-	// Agent runtime metadata persistence (migrate from in-memory registry)
-	if !db.Migrator().HasColumn(&models.Agent{}, "LastActivityAt") {
-		if err := db.Migrator().AddColumn(&models.Agent{}, "LastActivityAt"); err != nil {
-			return err
-		}
-	}
-	if !db.Migrator().HasColumn(&models.Agent{}, "ConnectedAt") {
-		if err := db.Migrator().AddColumn(&models.Agent{}, "ConnectedAt"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AutoMigrateEnabled preserves current default behavior while allowing explicit opt-out.
-func AutoMigrateEnabled() bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv("SERVIFY_AUTO_MIGRATE")))
-	switch v {
-	case "", "1", "true", "yes", "on":
-		return true
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
+	return db.AutoMigrate(MigrationModels()...)
 }
 
 // CreateIndexes applies additional runtime indexes used by the app.

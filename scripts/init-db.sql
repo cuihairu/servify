@@ -1,4 +1,9 @@
 -- 数据库初始化脚本
+--
+-- DEPRECATED: 本脚本已由版本化迁移取代（apps/server/internal/app/bootstrap/
+-- migrations/000001_init.up.sql，经 cmd/migrate / server 启动自动应用）。
+-- compose 编排不再挂载本文件；仅为手动初始化裸库保留，内容与迁移基线保持
+-- 语义一致，新增 schema 变更一律写进 migrations/000NNN_*.up.sql，勿改此处。
 
 -- 创建 pgvector 扩展
 CREATE EXTENSION IF NOT EXISTS vector;

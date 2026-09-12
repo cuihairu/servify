@@ -94,6 +94,7 @@ func OpenDatabase(cfg *config.Config, opts DatabaseOptions) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	applyConnectionPoolSettings(db, cfg)
 	enableTracing := opts.EnableTracing
 	if cfg != nil && cfg.Monitoring.Tracing.Enabled {
 		enableTracing = true
@@ -102,6 +103,28 @@ func OpenDatabase(cfg *config.Config, opts DatabaseOptions) (*gorm.DB, error) {
 		_ = db.Use(gormtracing.NewPlugin())
 	}
 	return db, nil
+}
+
+// applyConnectionPoolSettings wires the configured pool limits onto the
+// underlying *sql.DB. These options were historically parsed from config but
+// never applied; zero values keep database/sql defaults.
+func applyConnectionPoolSettings(db *gorm.DB, cfg *config.Config) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return
+	}
+	if cfg == nil {
+		return
+	}
+	if cfg.Database.MaxOpenConns > 0 {
+		sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	}
+	if cfg.Database.MaxIdleConns > 0 {
+		sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	}
+	if cfg.Database.ConnMaxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	}
 }
 
 // OpenDatabaseWithRetry opens the database with bounded retry for container startup.

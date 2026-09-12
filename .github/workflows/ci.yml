@@ -446,6 +446,29 @@ jobs:
           done
           exit 1
 
+      - name: Verify versioned migrations applied
+        timeout-minutes: 3
+        run: |
+          state=$(docker compose -f infra/compose/docker-compose.yml exec -T postgres psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations")
+          echo "schema_migrations: $state"
+          if [ "$state" != "1|f" ]; then
+            echo "expected schema_migrations version=1 dirty=false, got: $state"
+            exit 1
+          fi
+
+      - name: Restart server (idempotent startup over migrated schema)
+        timeout-minutes: 5
+        run: |
+          docker compose -f infra/compose/docker-compose.yml restart servify
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8080/health; then
+              echo "server healthy after restart"
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
       - name: Run integration script
         timeout-minutes: 10
         env:

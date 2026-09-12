@@ -37,7 +37,7 @@ func TestBuildPostgresDSN(t *testing.T) {
 	}
 }
 
-func TestAutoMigrateEnabled(t *testing.T) {
+func TestAutoMigrateRequested(t *testing.T) {
 	orig := os.Getenv("SERVIFY_AUTO_MIGRATE")
 	defer os.Setenv("SERVIFY_AUTO_MIGRATE", orig)
 
@@ -45,7 +45,7 @@ func TestAutoMigrateEnabled(t *testing.T) {
 		value string
 		want  bool
 	}{
-		{"", true},
+		{"", false},
 		{"true", true},
 		{"false", false},
 		{"0", false},
@@ -57,9 +57,39 @@ func TestAutoMigrateEnabled(t *testing.T) {
 		} else {
 			os.Setenv("SERVIFY_AUTO_MIGRATE", tt.value)
 		}
-		if got := AutoMigrateEnabled(); got != tt.want {
-			t.Fatalf("AutoMigrateEnabled(%q)=%v want %v", tt.value, got, tt.want)
+		if got := AutoMigrateRequested(); got != tt.want {
+			t.Fatalf("AutoMigrateRequested(%q)=%v want %v", tt.value, got, tt.want)
 		}
+	}
+}
+
+// TestOpenDatabaseAppliesConnectionPoolSettings verifies the configured pool
+// limits are actually wired onto the underlying *sql.DB (they were parsed but
+// never applied historically).
+func TestOpenDatabaseAppliesConnectionPoolSettings(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	cfg.Database.MaxOpenConns = 7
+	cfg.Database.MaxIdleConns = 3
+	cfg.Database.ConnMaxLifetime = time.Hour
+
+	db, err := OpenDatabase(cfg, DatabaseOptions{
+		Driver: "sqlite",
+		DSN:    filepath.Join(t.TempDir(), "pool.db"),
+	})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("raw db: %v", err)
+	}
+	defer sqlDB.Close()
+	stats := sqlDB.Stats()
+	// database/sql only exposes MaxOpenConnections via DBStats; the
+	// idle/lifetime settings are applied unconditionally above and are not
+	// introspectable.
+	if stats.MaxOpenConnections != 7 {
+		t.Fatalf("MaxOpenConnections = %d, want 7", stats.MaxOpenConnections)
 	}
 }
 

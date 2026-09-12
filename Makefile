@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed test clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  run-knowledge-provider - Alias of run-weknora for external provider compatibility runs"
 	@echo "  migrate       - Run database migrations"
 	@echo "  migrate-seed  - Run database migrations with seed data"
+	@echo "  migrate-verify - Verify versioned migrations on a scratch postgres (requires docker)"
 	@echo "  test          - Run tests"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  clean-runtime - Remove local runtime output directories"
@@ -93,6 +94,29 @@ migrate-seed:
 test:
 	@echo "Running tests via scripts/run-tests.sh..."
 	./scripts/run-tests.sh
+
+# Verify versioned migrations against a scratch postgres (pgvector)
+# Requirements: docker + the pgvector/pgvector:pg15 image; the image is pulled on first use.
+migrate-verify:
+	@echo "Verifying versioned migrations against a scratch postgres..."
+	@command -v docker >/dev/null 2>&1 || { echo "docker is required for migrate-verify"; exit 1; }
+	@docker rm -f servify-migrate-verify >/dev/null 2>&1 || true
+	docker run -d --name servify-migrate-verify -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=servify -p 127.0.0.1:55433:5432 pgvector/pgvector:pg15 >/dev/null
+	@for i in $$(seq 1 30); do docker exec servify-migrate-verify pg_isready -U postgres -d servify >/dev/null 2>&1 && break; sleep 2; done
+	@DB_HOST=127.0.0.1 DB_PORT=55433 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=servify DB_SSLMODE=disable \
+		go -C apps/server run ./cmd/migrate || { docker rm -f servify-migrate-verify; exit 1; }
+	@echo "Second run (must be a no-op)..."
+	@DB_HOST=127.0.0.1 DB_PORT=55433 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=servify DB_SSLMODE=disable \
+		go -C apps/server run ./cmd/migrate || { docker rm -f servify-migrate-verify; exit 1; }
+	@version=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT version FROM schema_migrations"); \
+	dirty=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT dirty FROM schema_migrations"); \
+	tables=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'"); \
+	echo "schema_migrations: version=$$version dirty=$$dirty tables=$$tables"; \
+	docker rm -f servify-migrate-verify >/dev/null; \
+	if [ "$$version" != "1" ] || [ "$$dirty" != "f" ] || [ "$$tables" != "37" ]; then \
+		echo "migrate-verify FAILED: expected version=1 dirty=f tables=37"; exit 1; \
+	fi
+	@echo "migrate-verify passed: version=1 dirty=false, 37 tables created, second run was a no-op"
 
 # Clean build artifacts
 clean:
