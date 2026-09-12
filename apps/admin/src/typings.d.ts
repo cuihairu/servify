@@ -311,6 +311,63 @@ declare namespace API {
     created_at: string;
   }
 
+  /** 质检记录（规则违规 + LLM 打分 + 人工复核） */
+  interface QualityReview {
+    id: number;
+    tenant_id: string;
+    workspace_id: string;
+    session_id: string;
+    customer_id?: number;
+    agent_id?: number;
+    status: 'pending' | 'skipped' | 'scored' | 'failed' | 'confirmed';
+    trigger: 'worker' | 'manual' | 'rescore';
+    message_count: number;
+    duration_seconds: number;
+    violations_json: string;
+    violation_count: number;
+    max_severity: '' | 'low' | 'medium' | 'high';
+    dimensions_json: string;
+    llm_total_score?: number;
+    llm_summary: string;
+    llm_provider: string;
+    llm_model: string;
+    attempt_count: number;
+    next_retry_at?: string;
+    last_error: string;
+    manual_score?: number;
+    manual_result: '' | 'pass' | 'violation';
+    review_note: string;
+    reviewed_by?: number;
+    reviewed_at?: string;
+    scored_at?: string;
+    created_at: string;
+    updated_at: string;
+  }
+
+  /** 质检记录列表响应（{items,total} 风格） */
+  interface QualityReviewListResponse {
+    items: QualityReview[];
+    total: number;
+    page: number;
+    page_size: number;
+  }
+
+  /** 质检违规明细（violations_json 数组元素） */
+  interface QualityViolation {
+    rule: string;
+    severity: 'low' | 'medium' | 'high';
+    message_ids?: number[];
+    snippet?: string;
+    detail?: string;
+  }
+
+  /** 质检维度得分（dimensions_json 映射值） */
+  interface QualityDimensionScore {
+    score: number;
+    weight: number;
+    reason?: string;
+  }
+
   // ---- 统计 ----
   interface DashboardStats {
     total_sessions: number;

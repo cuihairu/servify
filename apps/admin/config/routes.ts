@@ -213,6 +213,14 @@ export default [
     component: './Audit',
   },
 
+  // 质检抽检工作台
+  {
+    path: '/quality',
+    name: '质检抽检',
+    icon: 'AuditOutlined',
+    component: './Quality',
+  },
+
   // 安全管理
   {
     path: '/security',
