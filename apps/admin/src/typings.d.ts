@@ -122,6 +122,8 @@ declare namespace API {
   // ---- 客服 ----
   interface Agent {
     id: number;
+    /** 坐席用户 ID（users.id；坐席组成员、亲和路由均用此 ID） */
+    user_id?: number;
     name: string;
     email: string;
     status: string;
@@ -717,5 +719,28 @@ declare namespace API {
     revoked_at?: string | null;
     created_at?: string;
     updated_at?: string;
+  }
+}
+
+declare namespace API {
+  /** 坐席组（AgentGroup）；成员为坐席用户 ID 列表 */
+  interface AgentGroup {
+    id: number;
+    tenant_id: string;
+    workspace_id: string;
+    name: string;
+    description: string;
+    priority: number;
+    /** global=溢出落全局池；none=组不可用即失败 */
+    overflow_policy: 'global' | 'none' | string;
+    enabled: boolean;
+    parent_id?: number | null;
+    created_at?: string;
+    updated_at?: string;
+  }
+
+  interface AgentGroupListResponse {
+    groups: API.AgentGroup[];
+    total: number;
   }
 }

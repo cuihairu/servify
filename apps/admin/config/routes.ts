@@ -76,6 +76,11 @@ export default [
         component: './Agent/detail',
         hideInMenu: true,
       },
+      {
+        path: '/agent/groups',
+        name: '坐席组',
+        component: './AgentGroup',
+      },
     ],
   },
 
