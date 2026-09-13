@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -74,6 +75,10 @@ jobs:
           CGO_ENABLED: "1"
         run: ./scripts/run-go-race-tests.sh
 
+      - name: Run AI golden set (mock)
+        timeout-minutes: 5
+        run: make test-golden
+
       - name: Upload test artifacts
         timeout-minutes: 3
         if: always()
@@ -90,6 +95,42 @@ jobs:
       - name: Build WeKnora CLI
         timeout-minutes: 15
         run: make build-weknora
+
+  golden-real:
+    name: AI Golden Set (real LLM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 手动触发才跑；secret 未配置时静默跳过，不阻塞任何常态门禁
+    if: github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        timeout-minutes: 3
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        timeout-minutes: 3
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: |
+            apps/server/go.sum
+            go.work.sum
+
+      - name: Run AI golden set (real LLM)
+        timeout-minutes: 10
+        env:
+          SERVIFY_GOLDEN_MODE: real
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY secret is not configured; skipping real-mode golden set."
+            exit 0
+          fi
+          ./scripts/run-golden-tests.sh
 
   module-checks:
     name: Module Checks

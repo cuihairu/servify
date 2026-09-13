@@ -1,0 +1,26 @@
+{
+  "name": "retrieval-disabled",
+  "description": "检索策略关闭：即使知识库有数据也不检索、不注入、不透传来源",
+  "request": {
+    "task_type": "qa",
+    "query": "退款政策",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.3,
+    "retrieval": { "enabled": false }
+  },
+  "knowledge_hits": [
+    {
+      "document_id": "doc-refund",
+      "title": "退款政策",
+      "content": "商品签收后 7 天内可申请退款。",
+      "score": 0.92
+    }
+  ],
+  "mock_reply": "这个问题我可以直接回答。",
+  "expect": {
+    "content_contains": ["直接回答"],
+    "source_titles": [],
+    "prompt_not_contains": ["Knowledge context:"],
+    "handoff": false
+  }
+}

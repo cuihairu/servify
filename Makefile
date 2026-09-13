@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  migrate-seed  - Run database migrations with seed data"
 	@echo "  migrate-verify - Verify versioned migrations on a scratch postgres (requires docker)"
 	@echo "  test          - Run tests"
+	@echo "  test-golden   - Run the AI golden set regression (mock mode)"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  clean-runtime - Remove local runtime output directories"
 	@echo "  docker-build  - Build Docker image"
@@ -94,6 +95,11 @@ migrate-seed:
 test:
 	@echo "Running tests via scripts/run-tests.sh..."
 	./scripts/run-tests.sh
+
+# Run the AI golden set regression (mock mode, zero network)
+test-golden:
+	@echo "Running AI golden set regression..."
+	SERVIFY_GOLDEN_MODE=mock ./scripts/run-golden-tests.sh
 
 # Verify versioned migrations against a scratch postgres (pgvector)
 # Requirements: docker + the pgvector/pgvector:pg15 image; the image is pulled on first use.

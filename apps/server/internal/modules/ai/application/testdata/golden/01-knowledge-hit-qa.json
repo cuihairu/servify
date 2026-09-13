@@ -1,0 +1,28 @@
+{
+  "name": "knowledge-hit-qa",
+  "description": "命中单条知识的 QA：知识片段注入 prompt，来源透传到响应",
+  "request": {
+    "task_type": "qa",
+    "query": "退款政策",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.3,
+    "system_prompt": "你是 Servify 客服助手。",
+    "retrieval": { "enabled": true, "top_k": 3 }
+  },
+  "knowledge_hits": [
+    {
+      "document_id": "doc-refund",
+      "title": "退款政策",
+      "content": "商品签收后 7 天内可申请退款。",
+      "score": 0.92
+    }
+  ],
+  "mock_reply": "根据退款政策，商品签收后 7 天内可申请退款。",
+  "expect": {
+    "content_contains": ["退款"],
+    "source_titles": ["退款政策"],
+    "prompt_contains": ["Knowledge context:", "退款政策", "签收后 7 天内", "你是 Servify 客服助手。"],
+    "prompt_not_contains": ["Conversation context:"],
+    "handoff": false
+  }
+}

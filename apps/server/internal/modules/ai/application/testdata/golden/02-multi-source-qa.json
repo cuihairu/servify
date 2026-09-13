@@ -1,0 +1,38 @@
+{
+  "name": "multi-source-qa",
+  "description": "多条知识命中：来源按检索顺序完整透传，top_k 生效",
+  "request": {
+    "task_type": "qa",
+    "query": "退款",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.2,
+    "retrieval": { "enabled": true, "top_k": 3 }
+  },
+  "knowledge_hits": [
+    {
+      "document_id": "doc-refund",
+      "title": "退款政策",
+      "content": "签收后 7 天内可申请退款。",
+      "score": 0.95
+    },
+    {
+      "document_id": "doc-return",
+      "title": "退货流程",
+      "content": "退款前需先完成退货寄回。",
+      "score": 0.88
+    },
+    {
+      "document_id": "doc-shipping",
+      "title": "运费说明",
+      "content": "退款金额不含原始运费。",
+      "score": 0.71
+    }
+  ],
+  "mock_reply": "退款需在签收后 7 天内申请，先退货再退款，运费不退。",
+  "expect": {
+    "content_contains": ["退款"],
+    "source_titles": ["退款政策", "退货流程", "运费说明"],
+    "prompt_contains": ["Knowledge context:", "退款政策", "退货流程", "运费说明"],
+    "handoff": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "long-history-context",
+  "description": "长会话历史：上下文注入 system prompt，且历史超阈值触发转人工兜底",
+  "request": {
+    "task_type": "qa",
+    "query": "还有别的优惠吗",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.4,
+    "retrieval": { "enabled": false },
+    "messages": [
+      { "role": "user", "content": "你们的退货政策是什么" },
+      { "role": "assistant", "content": "签收后 7 天内可退货。" },
+      { "role": "user", "content": "运费谁承担" },
+      { "role": "assistant", "content": "质量问题由商家承担。" },
+      { "role": "user", "content": "多久能到账" },
+      { "role": "assistant", "content": "退款 3-5 个工作日到账。" }
+    ]
+  },
+  "knowledge_hits": [],
+  "mock_reply": "目前有满减优惠券可以领取。",
+  "expect": {
+    "content_contains": ["优惠券"],
+    "source_titles": [],
+    "prompt_contains": ["Conversation context:", "退货政策", "3-5 个工作日"],
+    "prompt_not_contains": ["Knowledge context:"],
+    "handoff": true
+  }
+}

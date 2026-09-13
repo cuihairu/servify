@@ -1,0 +1,16 @@
+{
+  "name": "empty-query-rejected",
+  "description": "空输入被 guardrails 拒绝：无 query 且无历史消息时不调用模型",
+  "request": {
+    "task_type": "qa",
+    "query": "",
+    "retrieval": { "enabled": true, "top_k": 3 }
+  },
+  "knowledge_hits": [],
+  "mock_reply": "",
+  "expect": {
+    "error_contains": ["empty"],
+    "source_titles": [],
+    "handoff": false
+  }
+}

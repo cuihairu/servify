@@ -1,0 +1,23 @@
+{
+  "name": "provider-default",
+  "description": "请求未指定模型与温度：零值不写入 ChatRequest，由 provider 使用自身默认",
+  "request": {
+    "task_type": "qa",
+    "query": "退款政策",
+    "retrieval": { "enabled": true, "top_k": 3 }
+  },
+  "knowledge_hits": [
+    {
+      "document_id": "doc-refund",
+      "title": "退款政策",
+      "content": "商品签收后 7 天内可申请退款。",
+      "score": 0.92
+    }
+  ],
+  "mock_reply": "签收后 7 天内可申请退款。",
+  "expect": {
+    "content_contains": ["退款"],
+    "source_titles": ["退款政策"],
+    "handoff": false
+  }
+}

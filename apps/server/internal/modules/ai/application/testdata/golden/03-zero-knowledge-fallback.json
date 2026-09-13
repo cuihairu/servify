@@ -1,0 +1,20 @@
+{
+  "name": "zero-knowledge-fallback",
+  "description": "知识库无命中：不注入知识段，来源为空，模型自行兜底回答",
+  "request": {
+    "task_type": "qa",
+    "query": "月球上能收快递吗",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.5,
+    "retrieval": { "enabled": true, "top_k": 3 }
+  },
+  "knowledge_hits": [],
+  "mock_reply": "抱歉，暂未找到与该问题相关的知识。",
+  "expect": {
+    "content_contains": ["暂未找到"],
+    "source_titles": [],
+    "prompt_contains": [],
+    "prompt_not_contains": ["Knowledge context:"],
+    "handoff": false
+  }
+}
