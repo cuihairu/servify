@@ -185,13 +185,48 @@ func (s *Service) executeAction(ctx context.Context, act TriggerAction, ticket *
 		if val == "" {
 			return fmt.Errorf("tag param required")
 		}
-		tags := ticket.Tags
-		if tags == "" {
-			tags = val
-		} else if !strings.Contains(tags, val) {
-			tags = tags + "," + val
+		tags := splitTags(ticket.Tags)
+		if containsTag(tags, val) {
+			// 按 token 精确判重：已是既存标签时不再写同一值
+			return nil
 		}
-		return s.repo.UpdateTicketTags(ctx, ticket.ID, tags)
+		tags = append(tags, val)
+		return s.repo.UpdateTicketTags(ctx, ticket.ID, strings.Join(tags, ","))
+	case "remove_tag":
+		if ticket == nil {
+			return fmt.Errorf("ticket not loaded")
+		}
+		val, _ := act.Params["tag"].(string)
+		if val == "" {
+			return fmt.Errorf("tag param required")
+		}
+		tags := splitTags(ticket.Tags)
+		if !containsTag(tags, val) {
+			return nil
+		}
+		kept := make([]string, 0, len(tags))
+		for _, t := range tags {
+			if t != val {
+				kept = append(kept, t)
+			}
+		}
+		return s.repo.UpdateTicketTags(ctx, ticket.ID, strings.Join(kept, ","))
+	case "escalate_priority":
+		if ticket == nil {
+			return fmt.Errorf("ticket not loaded")
+		}
+		rank := priorityRank(ticket.Priority)
+		if rank < 0 {
+			return fmt.Errorf("unknown current priority: %s", ticket.Priority)
+		}
+		if rank >= len(priorityOrder)-1 {
+			// 已是最高级：默认 no-op，params.wrap=true 才回绕到 low
+			if wrap, _ := act.Params["wrap"].(bool); wrap {
+				return s.repo.UpdateTicketPriority(ctx, ticket.ID, priorityOrder[0])
+			}
+			return nil
+		}
+		return s.repo.UpdateTicketPriority(ctx, ticket.ID, priorityOrder[rank+1])
 	case "add_comment":
 		if ticket == nil {
 			return fmt.Errorf("ticket not loaded")
@@ -224,6 +259,43 @@ func (s *Service) executeAction(ctx context.Context, act TriggerAction, ticket *
 	default:
 		return fmt.Errorf("unsupported action type: %s", act.Type)
 	}
+}
+
+// priorityOrder 是工单优先级从低到高的固定序；escalate_priority 按此升一级。
+var priorityOrder = []string{"low", "normal", "high", "urgent"}
+
+func priorityRank(priority string) int {
+	for i, p := range priorityOrder {
+		if p == priority {
+			return i
+		}
+	}
+	return -1
+}
+
+// splitTags 把逗号分隔的标签串拆成去空白、去空项的标签列表，
+// 供 add/remove_tag 按 token 精确判重（子串匹配会把 urgent 误判已含于 not_urgent）。
+func splitTags(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	tags := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if tag := strings.TrimSpace(p); tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+	return tags
+}
+
+func containsTag(tags []string, tag string) bool {
+	for _, t := range tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // defaultWebhookPayload 未显式给 payload 参数时，用工单快照作为请求体

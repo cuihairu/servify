@@ -601,7 +601,7 @@ func TestExecuteActionAddTagVariants(t *testing.T) {
 	}{
 		{"empty tags", "", "vip", "vip", true},
 		{"append tag", "base", "vip", "base,vip", true},
-		{"existing tag", "base,vip", "vip", "base,vip", true},
+		{"trims whitespace", " base , vip ", "urgent", "base,vip,urgent", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -615,6 +615,151 @@ func TestExecuteActionAddTagVariants(t *testing.T) {
 				t.Fatalf("expected tags %q, got %v", tc.want, repo.tags)
 			}
 		})
+	}
+}
+
+func TestExecuteActionAddTagSkipsDuplicateToken(t *testing.T) {
+	repo := &stubRepo{}
+	svc := NewService(repo)
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"vip"}}]`}
+	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: "base,vip"}, false) {
+		t.Fatal("expected success")
+	}
+	if len(repo.tags) != 0 {
+		t.Fatalf("existing exact tag should not rewrite, got %v", repo.tags)
+	}
+}
+
+// 回归：旧实现用 strings.Contains 判重，会把 urgent 误判已含于 not_urgent（反之亦然）；
+// 修复后按 token 精确匹配，互为子串的不同标签都正常追加。
+func TestExecuteActionAddTagSubstringNotConfused(t *testing.T) {
+	cases := []struct {
+		name string
+		tags string
+		tag  string
+		want string
+	}{
+		{"add urgent to not_urgent", "not_urgent", "urgent", "not_urgent,urgent"},
+		{"add not_urgent to urgent", "urgent", "not_urgent", "urgent,not_urgent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &stubRepo{}
+			svc := NewService(repo)
+			trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"` + tc.tag + `"}}]`}
+			if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: tc.tags}, false) {
+				t.Fatal("expected success")
+			}
+			if len(repo.tags) != 1 || repo.tags[0] != tc.want {
+				t.Fatalf("expected tags %q, got %v", tc.want, repo.tags)
+			}
+		})
+	}
+}
+
+func TestExecuteActionRemoveTagVariants(t *testing.T) {
+	cases := []struct {
+		name    string
+		tags    string
+		tag     string
+		want    string
+		wantSet bool
+	}{
+		{"removes middle tag", "base,vip,urgent", "vip", "base,urgent", true},
+		{"removes last tag", "base,vip", "vip", "base", true},
+		{"removes only tag", "vip", "vip", "", true},
+		{"missing tag is noop", "base", "vip", "", false},
+		{"substring is not removed", "not_vip", "vip", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &stubRepo{}
+			svc := NewService(repo)
+			trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"` + tc.tag + `"}}]`}
+			if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: tc.tags}, false) {
+				t.Fatal("expected success")
+			}
+			if tc.wantSet {
+				if len(repo.tags) != 1 || repo.tags[0] != tc.want {
+					t.Fatalf("expected tags %q, got %v", tc.want, repo.tags)
+				}
+				return
+			}
+			if len(repo.tags) != 0 {
+				t.Fatalf("missing tag should not rewrite, got %v", repo.tags)
+			}
+		})
+	}
+}
+
+func TestExecuteActionRemoveTagRequiresTicketAndParam(t *testing.T) {
+	repo := &stubRepo{}
+	svc := NewService(repo)
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"vip"}}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
+		t.Fatal("expected failure without ticket")
+	}
+	trig = models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag"}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
+		t.Fatal("expected failure without tag param")
+	}
+	if len(repo.tags) != 0 {
+		t.Fatalf("expected no tag update, got %v", repo.tags)
+	}
+}
+
+func TestExecuteActionEscalatePriority(t *testing.T) {
+	cases := []struct {
+		name    string
+		from    string
+		wrap    bool
+		want    string
+		wantSet bool
+		wantErr bool
+	}{
+		{"low to normal", "low", false, "normal", true, false},
+		{"normal to high", "normal", false, "high", true, false},
+		{"high to urgent", "high", false, "urgent", true, false},
+		{"urgent noop without wrap", "urgent", false, "", false, false},
+		{"urgent wraps with wrap", "urgent", true, "low", true, false},
+		{"unknown current priority fails", "weird", false, "", false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &stubRepo{}
+			svc := NewService(repo)
+			actions := `[{"type":"escalate_priority"`
+			if tc.wrap {
+				actions += `,"params":{"wrap":true}`
+			}
+			actions += `}]`
+			trig := models.AutomationTrigger{ID: 1, Actions: actions}
+			matched := svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Priority: tc.from}, false)
+			if matched == tc.wantErr {
+				t.Fatalf("expected matched=%v", !tc.wantErr)
+			}
+			if tc.wantSet {
+				if repo.priority != tc.want {
+					t.Fatalf("expected priority %q, got %q", tc.want, repo.priority)
+				}
+				return
+			}
+			if repo.priority != "" {
+				t.Fatalf("expected no priority write, got %q", repo.priority)
+			}
+		})
+	}
+}
+
+func TestExecuteActionEscalatePriorityRequiresTicket(t *testing.T) {
+	repo := &stubRepo{}
+	svc := NewService(repo)
+	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"escalate_priority"}]`}
+	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
+		t.Fatal("expected failure without ticket")
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "failed" {
+		t.Fatalf("expected failed run, got %v", repo.runs)
 	}
 }
 
