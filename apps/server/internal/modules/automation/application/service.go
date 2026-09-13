@@ -97,9 +97,33 @@ func (s *Service) ListRuns(ctx context.Context, query RunListQuery) ([]models.Au
 }
 
 func (s *Service) BatchRun(ctx context.Context, req BatchRunRequest) (*BatchRunResponse, error) {
-	req.Event = normalizeEvent(req.Event)
-	if !isSupportedEvent(req.Event) {
-		return nil, fmt.Errorf("unsupported event: %s", req.Event)
+	var triggers []models.AutomationTrigger
+	if req.TriggerID > 0 {
+		// 手动运行：按 ID 定位单个触发器（跳过事件白名单，事件取触发器自身定义）
+		all, err := s.repo.ListTriggers(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, trig := range all {
+			if trig.ID == req.TriggerID {
+				triggers = []models.AutomationTrigger{trig}
+				break
+			}
+		}
+		if len(triggers) == 0 {
+			return nil, fmt.Errorf("trigger not found: %d", req.TriggerID)
+		}
+		req.Event = triggers[0].Event
+	} else {
+		req.Event = normalizeEvent(req.Event)
+		if !isSupportedEvent(req.Event) {
+			return nil, fmt.Errorf("unsupported event: %s", req.Event)
+		}
+		var err error
+		triggers, err = s.repo.ListActiveTriggersByEvent(ctx, req.Event)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if len(req.TicketIDs) == 0 {
 		return nil, fmt.Errorf("ticket_ids required")
@@ -107,19 +131,15 @@ func (s *Service) BatchRun(ctx context.Context, req BatchRunRequest) (*BatchRunR
 	if len(req.TicketIDs) > 500 {
 		return nil, fmt.Errorf("too many ticket_ids (max 500)")
 	}
-	triggers, err := s.repo.ListActiveTriggersByEvent(ctx, req.Event)
-	if err != nil {
-		return nil, err
-	}
 	resp := &BatchRunResponse{Event: req.Event, DryRun: req.DryRun}
 	for _, ticketID := range req.TicketIDs {
 		ticket, err := s.repo.GetTicket(ctx, ticketID)
 		if err != nil {
 			continue
 		}
-		evt := Event{Type: req.Event, TicketID: ticket.ID}
 		var matched []uint
 		for _, trig := range triggers {
+			evt := Event{Type: trig.Event, TicketID: ticket.ID}
 			ok := s.applyTrigger(ctx, trig, evt, ticket, req.DryRun)
 			if ok {
 				matched = append(matched, trig.ID)

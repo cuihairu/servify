@@ -43,7 +43,10 @@ type RunListQuery struct {
 }
 
 type BatchRunRequest struct {
-	Event     string `json:"event"`
+	Event string `json:"event"`
+	// TriggerID > 0 表示按指定触发器手动运行：跳过事件白名单，
+	// 事件名取触发器自身定义；此时要求 ticket_ids 非空
+	TriggerID uint   `json:"trigger_id,omitempty"`
 	TicketIDs []uint `json:"ticket_ids"`
 	DryRun    bool   `json:"dry_run"`
 }

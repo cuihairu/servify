@@ -1253,3 +1253,73 @@ func TestDelayTimerExecutesWebhookAction(t *testing.T) {
 		t.Fatalf("expected success run, got %v", repo.runs)
 	}
 }
+
+func TestBatchRunByTriggerID(t *testing.T) {
+	repo := &stubRepo{
+		triggers: []models.AutomationTrigger{{
+			ID:      9,
+			Name:    "manual",
+			Event:   "ticket.updated",
+			Actions: `[{"type":"add_tag","params":{"tag":"reviewed"}}]`,
+			Active:  true,
+		}},
+	}
+	svc := NewService(repo)
+	resp, err := svc.BatchRun(context.Background(), BatchRunRequest{
+		TriggerID: 9,
+		TicketIDs: []uint{1},
+	})
+	if err != nil {
+		t.Fatalf("BatchRun() error = %v", err)
+	}
+	// 跳过事件白名单：手动运行无需事件匹配，且事件取触发器自身定义
+	if resp.Event != "ticket.updated" {
+		t.Fatalf("event should come from trigger, got %q", resp.Event)
+	}
+	if resp.Matches != 1 || resp.TicketsProcessed != 1 {
+		t.Fatalf("expected 1 match/processed, got %+v", resp)
+	}
+	if len(repo.tags) != 1 || repo.tags[0] != "base,reviewed" {
+		t.Fatalf("expected action executed, got %v", repo.tags)
+	}
+}
+
+func TestBatchRunByTriggerIDNotFound(t *testing.T) {
+	repo := &stubRepo{
+		triggers: []models.AutomationTrigger{{ID: 9, Name: "manual", Event: "ticket.updated"}},
+	}
+	svc := NewService(repo)
+	_, err := svc.BatchRun(context.Background(), BatchRunRequest{TriggerID: 404, TicketIDs: []uint{1}})
+	if err == nil || !strings.Contains(err.Error(), "trigger not found") {
+		t.Fatalf("expected trigger not found, got %v", err)
+	}
+}
+
+func TestBatchRunByTriggerIDInactiveStillRuns(t *testing.T) {
+	// 手动运行语义：停用的触发器也可按 ID 显式执行
+	repo := &stubRepo{
+		triggers: []models.AutomationTrigger{{
+			ID:      9,
+			Name:    "paused",
+			Event:   "ticket.updated",
+			Actions: `[{"type":"notify_log"}]`,
+			Active:  false,
+		}},
+	}
+	svc := NewService(repo)
+	resp, err := svc.BatchRun(context.Background(), BatchRunRequest{TriggerID: 9, TicketIDs: []uint{1}})
+	if err != nil {
+		t.Fatalf("BatchRun() error = %v", err)
+	}
+	if resp.Matches != 1 {
+		t.Fatalf("manual run should bypass active filter, got %+v", resp)
+	}
+}
+
+func TestBatchRunByTriggerIDRequiresTickets(t *testing.T) {
+	svc := NewService(&stubRepo{triggers: []models.AutomationTrigger{{ID: 9}}})
+	_, err := svc.BatchRun(context.Background(), BatchRunRequest{TriggerID: 9})
+	if err == nil || !strings.Contains(err.Error(), "ticket_ids required") {
+		t.Fatalf("expected ticket_ids required, got %v", err)
+	}
+}

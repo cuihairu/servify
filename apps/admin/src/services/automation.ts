@@ -20,20 +20,18 @@ export async function getAutomationRuns(params?: { page?: number; page_size?: nu
   return request<API.PaginatedResponse<API.AutomationRun>>(`${API}/runs`, { params });
 }
 
-export async function runAutomation(id: number) {
-  // RunBatch accepts BatchRunRequest with event, ticket_ids, dry_run
-  // For running a single automation by ID, use the event-based trigger
-  return request<API.MessageResponse>(`${API}/run`, {
+export async function runAutomation(id: number, ticketIds: number[]) {
+  // 手动运行：trigger_id 定位单个触发器，跳过事件白名单
+  // （后端按触发器自身定义的事件评估条件）
+  return request<{ event: string; tickets_processed: number; matches: number }>(`${API}/run`, {
     method: 'POST',
-    data: {
-      event: 'manual_trigger',
-      ticket_ids: [],
-      dry_run: false,
-      metadata: { automation_id: id },
-    },
+    data: { trigger_id: id, ticket_ids: ticketIds, dry_run: false },
   });
 }
 
-export async function bulkRunAutomations(data: { trigger_type: string; payload?: Record<string, unknown> }) {
-  return request<API.MessageResponse>(`${API}/run`, { method: 'POST', data });
+export async function dryRunAutomation(id: number, ticketIds: number[]) {
+  return request<{ event: string; tickets_processed: number; matches: number }>(`${API}/run`, {
+    method: 'POST',
+    data: { trigger_id: id, ticket_ids: ticketIds, dry_run: true },
+  });
 }
