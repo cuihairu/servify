@@ -512,16 +512,25 @@ func containsTag(tags []string, tag string) bool {
 
 // defaultWebhookPayload 未显式给 payload 参数时，用工单快照作为请求体
 // （JSON 序列化保持与 webhook 订阅投递相同的字段名）。
+//
+// ticketToJSON / jsonToMap 为测试注入点（默认即 json.Marshal/Unmarshal）：
+// *models.Ticket 与 map 的往返序列化对纯数据结构恒成功，两条错误分支
+// 只能经注入触发。
+var (
+	ticketToJSON = json.Marshal
+	jsonToMap    = json.Unmarshal
+)
+
 func defaultWebhookPayload(ticket *models.Ticket) map[string]interface{} {
 	if ticket == nil {
 		return map[string]interface{}{}
 	}
-	raw, err := json.Marshal(ticket)
+	raw, err := ticketToJSON(ticket)
 	if err != nil {
 		return map[string]interface{}{"ticket_id": ticket.ID}
 	}
 	out := map[string]interface{}{}
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := jsonToMap(raw, &out); err != nil {
 		return map[string]interface{}{"ticket_id": ticket.ID}
 	}
 	return out

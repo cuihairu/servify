@@ -296,6 +296,11 @@ func jsonValueEquals(left, right interface{}) bool {
 	return string(leftJSON) == string(rightJSON)
 }
 
+// jsonMarshal 是包级 seam（默认 json.Marshal）：redactJSONText 的输入已
+// 先通过 Unmarshal 校验、redactValue 只变换结构不改类型，重序列化生产路径
+// 恒成功，测试注入失败以覆盖回落分支。
+var jsonMarshal = json.Marshal
+
 func redactJSONText(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -312,7 +317,7 @@ func redactJSONText(raw string) string {
 		return raw
 	}
 
-	data, err := json.Marshal(redacted)
+	data, err := jsonMarshal(redacted)
 	if err != nil {
 		return raw
 	}

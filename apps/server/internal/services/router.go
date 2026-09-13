@@ -386,6 +386,8 @@ type TelegramAdapter struct {
 	chatID   string
 	msgChan  chan UnifiedMessage
 	stopChan chan struct{}
+	// pollInterval 供测试注入毫秒级轮询；零值取默认 1 秒。
+	pollInterval time.Duration
 }
 
 func NewTelegramAdapter(botToken, chatID string) *TelegramAdapter {
@@ -439,7 +441,11 @@ func (t *TelegramAdapter) Start() error {
 	// 这里实现长轮询获取消息的框架
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		pollInterval := t.pollInterval
+		if pollInterval <= 0 {
+			pollInterval = 1 * time.Second
+		}
+		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
 
 		for {
@@ -494,6 +500,8 @@ type WeChatAdapter struct {
 	appSecret string
 	msgChan   chan UnifiedMessage
 	stopChan  chan struct{}
+	// pollInterval 供测试注入毫秒级轮询；零值取默认 5 秒。
+	pollInterval time.Duration
 }
 
 func NewWeChatAdapter(appID, appSecret string) *WeChatAdapter {
@@ -555,7 +563,11 @@ func (w *WeChatAdapter) Start() error {
 	// 这里可以通过 webhook 或 主动查询的方式
 
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		pollInterval := w.pollInterval
+		if pollInterval <= 0 {
+			pollInterval = 5 * time.Second
+		}
+		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
 
 		for {

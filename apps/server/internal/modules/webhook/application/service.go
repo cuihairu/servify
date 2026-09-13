@@ -49,6 +49,16 @@ var noRetryStatuses = map[int]bool{
 // payloadTruncateLimit 投递记录里 payload 的最大保留字节数。
 const payloadTruncateLimit = 64 << 10
 
+// 测试注入点（默认值保持生产行为）：
+//   - readRandom：GenerateSecret 的熵源，注入失败覆盖错误分支；
+//   - newSecret：端点密钥生成，注入失败覆盖创建/轮换错误分支；
+//   - marshalEnvelope：事件信封序列化，注入失败覆盖序列化错误分支。
+var (
+	readRandom      = rand.Read
+	newSecret       = GenerateSecret
+	marshalEnvelope = json.Marshal
+)
+
 // Service webhook 应用服务：事件入队、端点管理、投递处理。
 type Service struct {
 	repo      Repository
@@ -160,7 +170,7 @@ func (s *Service) buildPayload(ctx context.Context, eventName, aggregateID, even
 		"created_at": s.now().UTC().Format(time.RFC3339),
 		"data":       data,
 	}
-	encoded, err := json.Marshal(envelope)
+	encoded, err := marshalEnvelope(envelope)
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +187,7 @@ func truncatePayload(body []byte) string {
 // GenerateSecret 生成端点签名密钥明文（仅创建/轮换时返回一次）。
 func GenerateSecret() (string, error) {
 	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := readRandom(buf); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
@@ -239,7 +249,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, req EndpointRequest) (*mod
 	if err := s.validateEvents(req.Events); err != nil {
 		return nil, "", err
 	}
-	secret, err := GenerateSecret()
+	secret, err := newSecret()
 	if err != nil {
 		return nil, "", err
 	}
@@ -314,7 +324,7 @@ func (s *Service) RotateEndpointSecret(ctx context.Context, id uint) (*models.We
 	if err != nil {
 		return nil, "", err
 	}
-	secret, err := GenerateSecret()
+	secret, err := newSecret()
 	if err != nil {
 		return nil, "", err
 	}

@@ -300,11 +300,15 @@ func applyRoutingWaitingScopeFields(ctx context.Context, model *models.WaitingRe
 	}
 }
 
+// marshalSkillsJSON 为测试注入点（默认即 json.Marshal）：
+// []string 序列化恒成功，错误分支仅经注入触发。
+var marshalSkillsJSON = json.Marshal
+
 func marshalSkills(skills []string) string {
 	if len(skills) == 0 {
 		return ""
 	}
-	data, err := json.Marshal(skills)
+	data, err := marshalSkillsJSON(skills)
 	if err != nil {
 		return ""
 	}

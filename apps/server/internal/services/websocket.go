@@ -47,6 +47,8 @@ type WebSocketClient struct {
 	Conn      *websocket.Conn
 	Send      chan WebSocketMessage
 	Hub       *WebSocketHub
+	// pingInterval 供测试注入；零值取默认 54 秒。
+	pingInterval time.Duration
 }
 
 type WebSocketHub struct {
@@ -223,7 +225,11 @@ func (c *WebSocketClient) readPump() {
 }
 
 func (c *WebSocketClient) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	interval := c.pingInterval
+	if interval <= 0 {
+		interval = 54 * time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()

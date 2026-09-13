@@ -153,6 +153,11 @@ func serverPortFromEnv(defaultPort int) int {
 	return defaultPort
 }
 
+// createExpandedConfigFile 是包级 seam（默认 os.CreateTemp），测试注入
+// 已关闭的文件以覆盖 WriteString 失败后的清理分支（真实临时文件在创建
+// 后立即写入，写失败仅出现于磁盘故障等不可注入场景）。
+var createExpandedConfigFile = os.CreateTemp
+
 // expandEnvVarsInConfig reads the config file, expands ${VAR} environment variables,
 // and writes to a temporary file. Returns the temp file path or empty string on error.
 // Must be called BEFORE viper.ReadInConfig() to ensure ${VAR} is expanded before type parsing.
@@ -188,7 +193,7 @@ func expandEnvVarsInConfig(configPath string) string {
 	expanded := os.ExpandEnv(string(content))
 
 	// Create a temp file for the expanded content
-	tmpFile, err := os.CreateTemp("", "servify-config-*.yml")
+	tmpFile, err := createExpandedConfigFile("", "servify-config-*.yml")
 	if err != nil {
 		return ""
 	}

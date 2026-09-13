@@ -119,11 +119,9 @@ func (s *WebRTCService) CreatePeerConnection(sessionID string) (*WebRTCConnectio
 
 		logrus.Infof("New ICE candidate for connection %s", connectionID)
 
-		candidateData, err := json.Marshal(candidate.ToJSON())
-		if err != nil {
-			logrus.Error("Failed to marshal ICE candidate:", err)
-			return
-		}
+		// ICECandidateInit 仅含可序列化标量字段，json.Marshal 不会失败，
+		// 错误分支为不可达死代码。
+		candidateData, _ := json.Marshal(candidate.ToJSON())
 
 		s.wsHub.SendToSession(sessionID, WebSocketMessage{
 			Type: "webrtc-candidate",
@@ -184,13 +182,13 @@ func (s *WebRTCService) HandleOffer(sessionID string, offer webrtc.SessionDescri
 	}
 
 	// 创建答案
-	answer, err := conn.PeerConnection.CreateAnswer(nil)
+	answer, err := hookPeerConnectionCreateAnswer(conn.PeerConnection, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create answer: %w", err)
 	}
 
 	// 设置本地描述
-	err = conn.PeerConnection.SetLocalDescription(answer)
+	err = hookPeerConnectionSetLocalDescription(conn.PeerConnection, answer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set local description: %w", err)
 	}
@@ -244,7 +242,7 @@ func (s *WebRTCService) CloseConnection(sessionID string) error {
 			if s.voice != nil {
 				s.voice.EndCall(context.Background(), conn.ID)
 			}
-			err := conn.PeerConnection.Close()
+			err := hookPeerConnectionClose(conn.PeerConnection)
 			if err != nil {
 				logrus.Errorf("Failed to close peer connection %s: %v", id, err)
 			}

@@ -33,6 +33,15 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
+// versioned 迁移分支的测试 seam：默认指向 appbootstrap 的生产实现，生产行为
+// 不变。该分支仅在 driver=postgres 时进入（sqlite 走 AutoMigrate），子进程
+// 测试通过 SERVIFY_MIGRATE_FAULT 环境变量（见 migrate_seams_test.go）注入以
+// 覆盖分支与 fatal。
+var (
+	usesVersionedMigrations = appbootstrap.UsesVersionedMigrations
+	runVersionedMigrations  = appbootstrap.RunMigrations
+)
+
 func main() {
 	cfg, err := appbootstrap.LoadConfig("")
 	if err != nil {
@@ -116,8 +125,8 @@ func main() {
 
 	log.Println("Starting database migration...")
 
-	if appbootstrap.UsesVersionedMigrations(dbDriver) && !autoMigrate {
-		if err := appbootstrap.RunMigrations(db); err != nil {
+	if usesVersionedMigrations(dbDriver) && !autoMigrate {
+		if err := runVersionedMigrations(db); err != nil {
 			log.Fatalf("Failed to run versioned migrations: %v", err)
 		}
 		log.Println("Versioned migrations applied successfully!")

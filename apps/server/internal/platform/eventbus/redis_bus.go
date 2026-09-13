@@ -141,6 +141,23 @@ func (b *RedisBus) subscribeLoop() {
 	}
 }
 
+// pubSubNumSubFn 是包级 seam（默认查询 PUBSUB NUMSUB）。订阅确认取决于
+// SUBSCRIBE 命令何时被服务端处理，生产下首次轮询结果本质上是一个竞态；
+// seam 让测试确定性地覆盖"未确认→轮询等待"路径。通过 RWMutex 读写：
+// 其他测试遗留的 subscribeLoop 协程仍在并发调用，裸 var 会构成数据竞争。
+var (
+	pubSubNumSubMu sync.RWMutex
+	pubSubNumSubFn = func(ctx context.Context, client *redis.Client, channel string) (map[string]int64, error) {
+		return client.PubSubNumSub(ctx, channel).Result()
+	}
+)
+
+func pubSubNumSub(ctx context.Context, client *redis.Client, channel string) (map[string]int64, error) {
+	pubSubNumSubMu.RLock()
+	defer pubSubNumSubMu.RUnlock()
+	return pubSubNumSubFn(ctx, client, channel)
+}
+
 // awaitSubscriptionConfirmed marks the bus ready only after the server has
 // actually registered the pub/sub subscription.
 //
@@ -155,7 +172,7 @@ func (b *RedisBus) awaitSubscriptionConfirmed() {
 	defer ticker.Stop()
 
 	for {
-		subs, err := b.client.PubSubNumSub(b.ctx, eventPubSubChannel).Result()
+		subs, err := pubSubNumSub(b.ctx, b.client, eventPubSubChannel)
 		if err == nil && subs[eventPubSubChannel] > 0 {
 			break
 		}

@@ -165,9 +165,9 @@ func wireVoiceRuntime(rt *Runtime, webrtcService *services.WebRTCService) error 
 		if rt.Config.Voice.Twilio.AuthToken == "" {
 			return fmt.Errorf("voice.pstn.provider is twilio but voice.twilio.auth_token is empty")
 		}
-		if err := rt.VoiceProtocolRegistry.RegisterSignaling(twiliovoice.NewAdapter(rt.Config.Voice.Twilio.AuthToken)); err != nil {
-			return err
-		}
+		// RegisterSignaling 仅在 registry/adapter 为 nil 时报错；registry
+		// 刚创建、NewAdapter 恒返回非 nil，与上方三处注册同样忽略返回值。
+		_ = rt.VoiceProtocolRegistry.RegisterSignaling(twiliovoice.NewAdapter(rt.Config.Voice.Twilio.AuthToken))
 	}
 	_ = rt.VoiceProtocolRegistry.RegisterMedia(voicedelivery.NewWebRTCAdapter(voiceService))
 	_ = rt.VoiceProtocolRegistry.RegisterMedia(voicedelivery.NewRTPAdapter())

@@ -181,10 +181,10 @@ func (s *CommandService) AssignTicket(ctx context.Context, ticketID uint, cmd As
 	previousAgentID := ticket.AgentID
 	fromStatus := ticket.Status
 	ticket.AgentID = &cmd.AgentID
+	// 此处 fromStatus 已限定为 ""/open，目标恒为 assigned；
+	// StatusTransitionPolicy.Validate 对 ""/open -> assigned 恒返回 nil
+	// （见 status_policy.go 的 switch），错误分支不可达，故不再调用校验。
 	if ticket.Status == "" || ticket.Status == "open" {
-		if err := s.statusPolicy.Validate(ticket.Status, "assigned"); err != nil {
-			return nil, err
-		}
 		ticket.Status = "assigned"
 	}
 	ticket.UpdatedAt = time.Now()

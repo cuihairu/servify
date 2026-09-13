@@ -206,10 +206,7 @@ func TestTokenCommandEmptySecret(t *testing.T) {
 }
 
 func TestCreateHS256JWTRoundTrip(t *testing.T) {
-	tok, err := createHS256JWT(map[string]interface{}{"k": "v"}, "s3cret")
-	if err != nil {
-		t.Fatalf("createHS256JWT() error = %v", err)
-	}
+	tok := createHS256JWT(map[string]interface{}{"k": "v"}, "s3cret")
 	parts := strings.Split(tok, ".")
 	if len(parts) != 3 {
 		t.Fatalf("token = %q", tok)
@@ -250,10 +247,7 @@ func TestDecodeJWTErrors(t *testing.T) {
 
 func TestVerifyHS256AndTimeClaims(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	token, err := createHS256JWT(map[string]interface{}{"exp": float64(now.Unix() + 600)}, "s")
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	token := createHS256JWT(map[string]interface{}{"exp": float64(now.Unix() + 600)}, "s")
 	sigValid, timeValid, sigB64, err := verifyHS256(token, "s", now)
 	if err != nil || !sigValid || !timeValid {
 		t.Fatalf("verify = (%v, %v, %v)", sigValid, timeValid, err)
@@ -278,7 +272,7 @@ func TestVerifyHS256AndTimeClaims(t *testing.T) {
 	}
 
 	// expired token
-	expired, _ := createHS256JWT(map[string]interface{}{"exp": float64(now.Unix() - 1)}, "s")
+	expired := createHS256JWT(map[string]interface{}{"exp": float64(now.Unix() - 1)}, "s")
 	_, timeValid, _, _ = verifyHS256(expired, "s", now)
 	if timeValid {
 		t.Fatal("expired token should fail time claims")
@@ -325,10 +319,7 @@ func TestDecodeTokenCommandVariants(t *testing.T) {
 	dir := t.TempDir()
 	resetViperForCLI(t, dir)
 
-	token, err := createHS256JWT(map[string]interface{}{"sub": "cli"}, "cli-test-secret")
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	token := createHS256JWT(map[string]interface{}{"sub": "cli"}, "cli-test-secret")
 
 	out, err := executeCommandCapturingStdout(t, decodeTokenCmd, token)
 	if err != nil {
@@ -364,10 +355,7 @@ func TestDecodeTokenCommandVerifyUsesConfigSecret(t *testing.T) {
 	dir := t.TempDir()
 	resetViperForCLI(t, dir)
 
-	token, err := createHS256JWT(map[string]interface{}{"sub": "cfg"}, "cli-test-secret")
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	token := createHS256JWT(map[string]interface{}{"sub": "cfg"}, "cli-test-secret")
 	out, err := executeCommandCapturingStdout(t, decodeTokenCmd, "--verify", token)
 	if err != nil {
 		t.Fatalf("token-decode error = %v (out=%s)", err, out)
@@ -382,7 +370,7 @@ func TestDecodeTokenCommandVerifyNoSecret(t *testing.T) {
 	resetViperForCLI(t, dir)
 	viper.Set("jwt.secret", "")
 
-	token, _ := createHS256JWT(map[string]interface{}{"sub": "x"}, "any")
+	token := createHS256JWT(map[string]interface{}{"sub": "x"}, "any")
 	if _, err := executeCommand(t, decodeTokenCmd, "--verify", token); err == nil {
 		t.Fatal("expected missing secret error")
 	}

@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -302,7 +301,7 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 	}
 
 	now := time.Now()
-	token, err := createHS256JWT(map[string]interface{}{
+	token, err := hookCreateHS256JWT(map[string]interface{}{
 		"iat":                   now.Unix(),
 		"sub":                   user.ID,
 		"jti":                   newAuthTokenID(),
@@ -318,7 +317,7 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 		return nil, err
 	}
 	refreshExpiresIn := s.refreshExpiresIn()
-	refreshToken, err := createHS256JWT(map[string]interface{}{
+	refreshToken, err := hookCreateHS256JWT(map[string]interface{}{
 		"iat":                   now.Unix(),
 		"sub":                   user.ID,
 		"jti":                   newAuthTokenID(),
@@ -451,7 +450,7 @@ func normalizeAuthSessionField(value string, max int) string {
 
 func newAuthSessionID() string {
 	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
+	if _, err := hookRandRead(buf[:]); err != nil {
 		return fmt.Sprintf("auth_%d", time.Now().UnixNano())
 	}
 	return "auth_" + hex.EncodeToString(buf[:])
@@ -459,7 +458,7 @@ func newAuthSessionID() string {
 
 func newAuthTokenID() string {
 	var buf [16]byte
-	if _, err := rand.Read(buf[:]); err != nil {
+	if _, err := hookRandRead(buf[:]); err != nil {
 		return fmt.Sprintf("jti_%d", time.Now().UnixNano())
 	}
 	return "jti_" + hex.EncodeToString(buf[:])

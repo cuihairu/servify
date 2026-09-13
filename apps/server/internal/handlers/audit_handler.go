@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -62,10 +61,8 @@ func (h *AuditHandler) ExportCSV(c *gin.Context) {
 		return
 	}
 
+	// intQuery 恒返回正数（解析失败/非正数时回落 fallback=1000），无需再 clamp 下限。
 	limit := intQuery(c, "limit", 1000)
-	if limit <= 0 {
-		limit = 1000
-	}
 	if limit > 5000 {
 		limit = 5000
 	}
@@ -79,16 +76,15 @@ func (h *AuditHandler) ExportCSV(c *gin.Context) {
 	}
 
 	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
+	writer := newCSVWriter(&buf)
 	header := []string{
 		"id", "created_at", "action", "resource_type", "resource_id", "principal_kind", "actor_user_id",
 		"success", "status_code", "route", "method", "request_id", "tenant_id", "workspace_id",
 		"client_ip", "user_agent", "request_json", "before_json", "after_json",
 	}
-	if err := writer.Write(header); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to write csv", Message: err.Error()})
-		return
-	}
+	// 表头为固定 19 列（约 160 字节，远小于 csv.Writer 内部 4KB bufio 缓冲），
+	// Write 不会失败；行写入与 Flush 的错误在下方统一处理。
+	_ = writer.Write(header)
 	for _, item := range items {
 		actorUserID := ""
 		if item.ActorUserID != nil {

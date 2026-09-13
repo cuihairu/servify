@@ -90,18 +90,12 @@ func (c *Chunker) ChunkByParagraph(text string) []string {
 		return []string{}
 	}
 
-	// 预处理文本
-	text = normalizeWhitespace(text)
-	if text == "" {
-		return []string{}
-	}
-
-	// 按段落分割
-	paragraphs := strings.Split(text, "\n")
+	// 先按换行分出段落，再在段落内部做空白规范化。
+	// 若先对全文 normalizeWhitespace（Fields+Join " "），换行会被折叠成空格，
+	// 多个段落会合并成单段，ChunkByParagraph 退化为按字符窗口切分。
 	var validParagraphs []string
-
-	for _, para := range paragraphs {
-		para = strings.TrimSpace(para)
+	for _, para := range strings.Split(text, "\n") {
+		para = normalizeWhitespace(para)
 		if para != "" {
 			validParagraphs = append(validParagraphs, para)
 		}

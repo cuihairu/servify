@@ -166,13 +166,18 @@ type goOidcVerifier struct {
 	roleClaims []string
 }
 
+// oidcTokenClaims 是包级 seam（默认 (*oidc.IDToken).Claims）：go-oidc 的
+// Verify 已将 RawClaims 限定为 JSON 对象、sub 限定为字符串，两个解码错误
+// 分支生产不可达，测试注入异常载荷以保持防御性传播。
+var oidcTokenClaims = func(token *oidc.IDToken, v any) error { return token.Claims(v) }
+
 func (g *goOidcVerifier) Verify(ctx context.Context, rawIDToken, nonce string) (*Claims, error) {
 	token, err := g.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		return nil, fmt.Errorf("verify id token: %w", err)
 	}
 	var payload map[string]json.RawMessage
-	if err := token.Claims(&payload); err != nil {
+	if err := oidcTokenClaims(token, &payload); err != nil {
 		return nil, fmt.Errorf("decode id token claims: %w", err)
 	}
 	get := func(key string) (string, bool, error) {

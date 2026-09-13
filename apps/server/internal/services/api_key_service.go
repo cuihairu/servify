@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	platformauth "servify/apps/server/internal/platform/auth"
 
 	"gorm.io/gorm"
 )
@@ -47,7 +46,7 @@ func (s *APIKeyService) Create(ctx context.Context, req *APIKeyCreateRequest, cr
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, "", errors.New("expires_at must be in the future")
 	}
-	plaintext, prefix, hash, err := platformauth.GenerateAPIKey()
+	plaintext, prefix, hash, err := hookGenerateAPIKey()
 	if err != nil {
 		return nil, "", err
 	}

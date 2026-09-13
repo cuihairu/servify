@@ -171,11 +171,9 @@ func RateLimitMiddlewareFromConfig(cfg *config.Config) gin.HandlerFunc {
 		l.buckets[ip] = b
 		return b
 	}
+	// rl 是构造时 cfg.Security.RateLimiting 的值拷贝，构造处（本函数开头）
+	// 已拒绝 !rl.Enabled，拷贝不会再变化，故 handler 内无需重复检查。
 	return func(c *gin.Context) {
-		if !rl.Enabled {
-			c.Next()
-			return
-		}
 		key := extractKey(c)
 		// whitelist checks
 		if rl.KeyHeader != "" && inStrings(key, rl.WhitelistKeys) {

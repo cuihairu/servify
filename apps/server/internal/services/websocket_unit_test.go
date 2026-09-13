@@ -263,14 +263,14 @@ func TestWebSocket_HandleTextMessageFlow(t *testing.T) {
 
 	client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "hi"}})
 
-	// broadcast echo then ai response
-	first := waitForMessage(t, client.Send)
-	if first.Type != "text-message" {
-		t.Fatalf("expected broadcast echo, got %s", first.Type)
+	// broadcast echo 与 ai-response 分属 hub 中转与 AI goroutine 两条路径，
+	// 到达顺序不受保证，按集合断言两类消息各一条。
+	seen := map[string]int{}
+	for i := 0; i < 2; i++ {
+		seen[waitForMessage(t, client.Send).Type]++
 	}
-	second := waitForMessage(t, client.Send)
-	if second.Type != "ai-response" {
-		t.Fatalf("expected ai-response, got %s", second.Type)
+	if seen["text-message"] != 1 || seen["ai-response"] != 1 {
+		t.Fatalf("expected one echo and one ai-response, got %v", seen)
 	}
 	if ai.processCalls.Load() != 1 {
 		t.Fatalf("expected 1 ai call, got %d", ai.processCalls.Load())

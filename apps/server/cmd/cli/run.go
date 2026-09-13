@@ -37,6 +37,39 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
+// run 的测试 seam：默认指向生产实现，生产行为不变。run() 只能在子进程测试
+// 里执行，且 setupRouter 的静态路由注册（router.Static("/")）与已注册的
+// /health、/api/v1/* 在 gin radix tree 上冲突必然 panic，run() 的错误
+// fatal 与收尾段无法从 run() 正常流程触达，子进程测试通过
+// CLI_RUN_VARIANT=start-failure（见 cli_shutdown_test.go）注入覆盖。
+var (
+	startMessageRouter = func(rt *appserver.RealtimeRuntime) error { return rt.Start() }
+	shutdownHTTPServer = func(srv *http.Server, ctx context.Context) error { return srv.Shutdown(ctx) }
+)
+
+// shutdownRuntime 执行 run() 的收尾段：停消息路由、关 HTTP server、跑
+// shutdown hooks。从 run() 抽出成可直接调用的函数，使该段在 gin 静态路由
+// 注册 panic 使其从 run() 流程不可达的情况下仍可测试；语句与拆分前逐一致。
+func shutdownRuntime(appLogger *logrus.Logger, rt *appserver.RealtimeRuntime, srv *http.Server, app *appbootstrap.App) {
+	ctx, cancel := appbootstrap.ShutdownContext(30 * time.Second)
+	defer cancel()
+
+	// 停止消息路由
+	if err := rt.Stop(ctx); err != nil {
+		appLogger.Errorf("Failed to stop message router: %v", err)
+	}
+
+	// 关闭服务器
+	if err := shutdownHTTPServer(srv, ctx); err != nil {
+		appLogger.Errorf("Server forced to shutdown: %v", err)
+	}
+	if err := app.RunShutdownHooks(); err != nil {
+		appLogger.Errorf("Failed to run shutdown hooks: %v", err)
+	}
+
+	appLogger.Info("Server exited")
+}
+
 func run(cmd *cobra.Command, args []string) {
 	cfg, err := appbootstrap.LoadConfig("")
 	if err != nil {
@@ -70,7 +103,7 @@ func run(cmd *cobra.Command, args []string) {
 		app.Logger,
 	)
 	runtime := appserver.BuildRealtimeRuntime(cfg, app.Logger, db, aiService, aidelivery.NewHandlerServiceAdapter(aiService))
-	if err := runtime.Start(); err != nil {
+	if err := startMessageRouter(runtime); err != nil {
 		logrus.Fatalf("Failed to start message router: %v", err)
 	}
 
@@ -88,23 +121,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	appLogger.Info("Shutting down server...")
 
-	ctx, cancel := appbootstrap.ShutdownContext(30 * time.Second)
-	defer cancel()
-
-	// 停止消息路由
-	if err := runtime.Stop(ctx); err != nil {
-		appLogger.Errorf("Failed to stop message router: %v", err)
-	}
-
-	// 关闭服务器
-	if err := server.Shutdown(ctx); err != nil {
-		appLogger.Errorf("Server forced to shutdown: %v", err)
-	}
-	if err := app.RunShutdownHooks(); err != nil {
-		appLogger.Errorf("Failed to run shutdown hooks: %v", err)
-	}
-
-	appLogger.Info("Server exited")
+	shutdownRuntime(appLogger, runtime, server, app)
 }
 
 func setupRouter(cfg *config.Config, runtime *appserver.RealtimeRuntime) *gin.Engine {

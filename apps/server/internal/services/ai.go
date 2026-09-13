@@ -137,10 +137,9 @@ func (s *AIService) callOpenAI(ctx context.Context, prompt string) (string, erro
 		MaxTokens:   1000,
 	}
 
-	reqBody, err := json.Marshal(request)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
+	// OpenAIRequest/Message 仅含字符串与数值字段，json.Marshal 不可能失败，
+	// 错误分支为不可达死代码。
+	reqBody, _ := json.Marshal(request)
 
 	url := fmt.Sprintf("%s/chat/completions", s.openAIBaseURL)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))

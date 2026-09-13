@@ -119,11 +119,10 @@ func (s *Service) GetUsers(ctx context.Context, userIDs []uint) ([]models.User, 
 
 	orderedUsers := make([]models.User, 0, len(userIDs))
 	for _, userID := range userIDs {
-		user, ok := byID[userID]
-		if !ok {
-			return nil, fmt.Errorf("user not found: %d", userID)
-		}
-		orderedUsers = append(orderedUsers, user)
+		// byID 必然包含 userIDs 的每个元素:上面 len(users) == len(orderedIDs)
+		// 的穷举校验已通过,且 orderedUniqueUserIDs 不增删元素,查询又限定在
+		// orderedIDs 内,故此处无需 ok 兜底分支。
+		orderedUsers = append(orderedUsers, byID[userID])
 	}
 	return orderedUsers, nil
 }

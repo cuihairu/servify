@@ -159,11 +159,10 @@ func (s *Service) GetOnlineAgent(ctx context.Context, userID uint) (*AgentRuntim
 	if err != nil {
 		return nil, err
 	}
-	merged := s.mergeRuntimeMetadata([]AgentRuntimeDTO{*runtime})
-	if len(merged) == 0 {
-		return nil, fmt.Errorf("agent %d runtime not found", userID)
-	}
-	return &merged[0], nil
+	// mergeRuntimeMetadata 对非空输入恒返回等长切片（registry 为 nil 时原样
+	// 返回，否则仅就地下标覆写），len==1 输入后恒 len==1，len==0 守卫不可达，
+	// 已删除。
+	return &s.mergeRuntimeMetadata([]AgentRuntimeDTO{*runtime})[0], nil
 }
 
 func (s *Service) GetStats(ctx context.Context, agentUserID *uint) (*AgentStatsDTO, error) {

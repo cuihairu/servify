@@ -60,10 +60,7 @@ func TestDecodeTokenCommandVerifyConfigLoadFailure(t *testing.T) {
 	viper.Set("server.port", "not-a-number")
 	resetCLIFlags()
 
-	token, err := createHS256JWT(map[string]interface{}{"sub": "x"}, "any")
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	token := createHS256JWT(map[string]interface{}{"sub": "x"}, "any")
 	if _, err := executeCommand(t, decodeTokenCmd, "--verify", token); err == nil {
 		t.Fatal("expected config load error during verify")
 	}
@@ -229,6 +226,8 @@ func TestCLIWorker(t *testing.T) {
 		// means the failure branch did not run.
 		os.Exit(7)
 	}
+
+	applyCLIRunFault(variant)
 
 	defer func() {
 		_ = recover()

@@ -408,7 +408,9 @@ func hasExplicitAgentParticipant(items []domain.Participant) bool {
 	return false
 }
 
-func resolveMessageUserID(message domain.ConversationMessage) uint {
+// resolveMessageUserID 从消息解析所属用户。当前为存根（恒 0），
+// 包级 var seam 供测试注入非零值覆盖 mapMessageModel 的赋值分支。
+var resolveMessageUserID = func(message domain.ConversationMessage) uint {
 	return 0
 }
 

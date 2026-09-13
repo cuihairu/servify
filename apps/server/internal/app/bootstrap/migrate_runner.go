@@ -74,6 +74,14 @@ func UsesVersionedMigrations(driver string) bool {
 	return normalizedDatabaseDriver(DatabaseOptions{Driver: driver}) == "postgres"
 }
 
+// newMigrationsSource / newSchemaMigrator 是包级 seam（默认即生产实现）。
+// 嵌入式 FS 编译期保证有效、两处构造参数恒非空，生产路径这两个错误分支
+// 不可达，仅测试注入以保持防御性错误传播。
+var (
+	newMigrationsSource = iofs.New
+	newSchemaMigrator   = migrate.NewWithInstance
+)
+
 // RunMigrations applies the embedded versioned migrations to the database
 // behind db. It is idempotent: an up-to-date database yields migrate.ErrNoChange,
 // which is treated as success. A dirty migration state fails loudly so a
@@ -89,11 +97,11 @@ func RunMigrations(db *gorm.DB) error {
 	}
 	defer driver.Close()
 
-	src, err := iofs.New(migrationsFS, "migrations")
+	src, err := newMigrationsSource(migrationsFS, "migrations")
 	if err != nil {
 		return fmt.Errorf("migrations: load embedded source: %w", err)
 	}
-	m, err := migrate.NewWithInstance("iofs", src, "postgres", driver)
+	m, err := newSchemaMigrator("iofs", src, "postgres", driver)
 	if err != nil {
 		return fmt.Errorf("migrations: build migrator: %w", err)
 	}

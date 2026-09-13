@@ -43,6 +43,14 @@ type QualityService struct {
 	nowFn  func() time.Time
 }
 
+// 测试注入点（默认值保持生产行为）：
+//   - newRuleEngine：替换以在构造期触发规则 panic 回调，覆盖日志闭包；
+//   - marshalDimensions：维度结果序列化，注入失败覆盖序列化错误分支。
+var (
+	newRuleEngine     = NewRuleEngine
+	marshalDimensions = json.Marshal
+)
+
 func NewQualityService(repo Repository, scorer ScoreProvider, cfg ServiceConfig, logger *logrus.Logger) *QualityService {
 	if logger == nil {
 		logger = logrus.New()
@@ -53,7 +61,7 @@ func NewQualityService(repo Repository, scorer ScoreProvider, cfg ServiceConfig,
 		scorer: scorer,
 		cfg:    cfg,
 		logger: logger,
-		engine: NewRuleEngine(cfg.Rules, func(rule string, r any) {
+		engine: newRuleEngine(cfg.Rules, func(rule string, r any) {
 			logger.WithField("rule", rule).Errorf("quality rule panic: %v", r)
 		}),
 		nowFn: time.Now,
@@ -206,7 +214,7 @@ func (s *QualityService) scoreAndPersist(ctx context.Context, sessionID string, 
 		}
 		return err
 	}
-	dimensionsJSON, err := json.Marshal(result.Dimensions)
+	dimensionsJSON, err := marshalDimensions(result.Dimensions)
 	if err != nil {
 		return fmt.Errorf("marshal dimensions: %w", err)
 	}

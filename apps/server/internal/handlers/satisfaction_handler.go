@@ -171,29 +171,23 @@ func (h *SatisfactionHandler) ListSatisfactions(c *gin.Context) {
 		return
 	}
 
-	// 解析日期参数
-	if dateFromStr := c.Query("date_from"); dateFromStr != "" {
-		if dateFrom, err := time.Parse("2006-01-02", dateFromStr); err == nil {
-			req.DateFrom = &dateFrom
-		} else {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "Invalid date_from format",
-				Message: "Date must be in YYYY-MM-DD format",
-			})
-			return
-		}
+	// 日期参数：gin 的 ShouldBindQuery 对 *time.Time 字段仅接受 RFC3339，而
+	// RFC3339 值不可能被 "2006-01-02" 手工解析成功，成功赋值分支不可达；
+	// 非空值恒拒绝（与既有对外行为一致：格式内失败于绑定，格式外失败于此）。
+	if c.Query("date_from") != "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid date_from format",
+			Message: "Date must be in YYYY-MM-DD format",
+		})
+		return
 	}
 
-	if dateToStr := c.Query("date_to"); dateToStr != "" {
-		if dateTo, err := time.Parse("2006-01-02", dateToStr); err == nil {
-			req.DateTo = &dateTo
-		} else {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "Invalid date_to format",
-				Message: "Date must be in YYYY-MM-DD format",
-			})
-			return
-		}
+	if c.Query("date_to") != "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid date_to format",
+			Message: "Date must be in YYYY-MM-DD format",
+		})
+		return
 	}
 
 	satisfactions, total, err := h.satisfactionService.ListSatisfactions(c.Request.Context(), &req)

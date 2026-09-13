@@ -12,9 +12,9 @@ import (
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
 
-// TestNormalizeWhitespaceStripsNewlines 证明 ChunkByParagraph 的多段落
-// 合并分支不可达:输入先经过 normalizeWhitespace,换行全部变成空格,
-// strings.Split(text, "\n") 永远只会得到一个段落。
+// TestNormalizeWhitespaceStripsNewlines 固化 normalizeWhitespace 的语义:
+// 它把换行折叠成空格。ChunkByParagraph 必须先按换行分段、再在段内调用它,
+// 否则多段落会被合并成单段(见 chunking.go ChunkByParagraph 注释)。
 func TestNormalizeWhitespaceStripsNewlines(t *testing.T) {
 	normalized := normalizeWhitespace("line one\n\nline two\n\tline three")
 	if strings.Contains(normalized, "\n") {

@@ -82,7 +82,8 @@ func baseServerConfig(port int) string {
 }
 
 // TestServerMainSubprocess runs main() inside a child process with startup
-// flags provided via SERVIFY_SERVER_ARGS (\x1f separated).
+// flags provided via SERVIFY_SERVER_ARGS (\x1f separated). SERVIFY_SERVER_FAULT
+// (仅子进程测试设置) selects a seam fault injection for defensive branches.
 func TestServerMainSubprocess(t *testing.T) {
 	if os.Getenv("SERVIFY_SERVER_SUBPROCESS") != "1" {
 		return
@@ -90,6 +91,7 @@ func TestServerMainSubprocess(t *testing.T) {
 	if a := os.Getenv("SERVIFY_SERVER_ARGS"); a != "" {
 		os.Args = append([]string{"server"}, strings.Split(a, "\x1f")...)
 	}
+	applyServerFault(os.Getenv("SERVIFY_SERVER_FAULT"))
 	main()
 	os.Exit(0)
 }

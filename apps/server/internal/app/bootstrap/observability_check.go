@@ -62,11 +62,11 @@ func ObservabilityWarnings(cfg *config.Config, repoRoot string) []string {
 	return warnings
 }
 
-func repoRootFromSource() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return ""
-	}
+// repoRootFromSource 是包级变量 seam：测试可注入空实现以覆盖调用方的
+// "root could not be resolved" 分支。runtime.Caller(0) 对运行中的函数
+// 恒成功，故不再保留 !ok 分支。
+var repoRootFromSource = func() string {
+	_, file, _, _ := runtime.Caller(0)
 
 	root := filepath.Dir(file)
 	for i := 0; i < 5; i++ {

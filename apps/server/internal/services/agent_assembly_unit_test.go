@@ -49,12 +49,6 @@ func TestAgentRuntimeMaintenance_StartSmoke(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestAgentRuntimeMaintenance_UpdateAgentMetrics(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.Session{}, &models.Ticket{})
-	asm := BuildAgentServiceAssembly(db, logrus.New(), nil)
-	asm.Maintenance.updateAgentMetrics()
-}
-
 func TestAgentRuntimeCache(t *testing.T) {
 	cache := &agentRuntimeCache{}
 	if _, ok := cache.Load(1); ok {

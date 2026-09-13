@@ -175,3 +175,13 @@ func TestProviderChatStreamCanceledBeforeToolEmit(t *testing.T) {
 		t.Fatalf("streamOnce() error = %v, want context.Canceled", err)
 	}
 }
+
+// TestProviderChatStreamCanceledAtStreamEnd 覆盖流自然结束（无 [DONE]、无
+// finish_reason）后最终 select 的 ctx.Done 分支：消费方取消后不再接收，
+// ch 发送恒不就绪，分支选择是确定的。
+func TestProviderChatStreamCanceledAtStreamEnd(t *testing.T) {
+	body := `data: {"choices":[{"index":0,"delta":{"content":"hello"}}]}` + "\n\n"
+	if err := streamOnceCanceledAfterFirstChunk(t, body); !errors.Is(err, context.Canceled) {
+		t.Fatalf("streamOnce() error = %v, want context.Canceled", err)
+	}
+}

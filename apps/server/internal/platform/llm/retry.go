@@ -28,15 +28,17 @@ func WithRequestTimeout(ctx context.Context, options RequestOptions, fallback ti
 
 func Retry(ctx context.Context, policy RetryPolicy, fn func(context.Context) error) error {
 	policy = NormalizeRetryPolicy(policy)
-	var err error
-	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
-		err = fn(ctx)
+	// NormalizeRetryPolicy 保证 MaxAttempts >= 1，且最后一次尝试必然在循环
+	// 体内 return（成功、不可重试或已到最大次数），因此无条件循环即是
+	// 终止语句，无需循环后的兜底 return。
+	for attempt := 1; ; attempt++ {
+		err := fn(ctx)
 		if err == nil {
 			return nil
 		}
 
 		providerErr, ok := err.(*ProviderError)
-		if !ok || !providerErr.Retryable || attempt == policy.MaxAttempts {
+		if !ok || !providerErr.Retryable || attempt >= policy.MaxAttempts {
 			return err
 		}
 
@@ -53,5 +55,4 @@ func Retry(ctx context.Context, policy RetryPolicy, fn func(context.Context) err
 		case <-timer.C:
 		}
 	}
-	return err
 }

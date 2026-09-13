@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 )
 
 type StartRecordingCommand struct {
@@ -84,14 +83,16 @@ func shouldRetryProviderError(err error) bool {
 	return false
 }
 
+// applyRetry 最多尝试 attempts 次；循环体每轮要么成功返回 nil，要么在
+// 不可重试或到达最后一次时返回错误，因此无限 for（无 break）等价于原先
+// 的计数循环，且循环后不存在可达语句（原 lastErr 恒为 nil，循环后的
+// 两个 return 均不可达，已删除）。
 func applyRetry(attempts int, fn func() error) error {
 	if attempts <= 0 {
 		attempts = 1
 	}
-	var lastErr error
-	for i := 0; i < attempts; i++ {
+	for i := 0; ; i++ {
 		if err := fn(); err != nil {
-			lastErr = err
 			if !shouldRetryProviderError(err) || i == attempts-1 {
 				return err
 			}
@@ -99,8 +100,4 @@ func applyRetry(attempts int, fn func() error) error {
 		}
 		return nil
 	}
-	if lastErr != nil {
-		return lastErr
-	}
-	return fmt.Errorf("provider retry failed without error")
 }

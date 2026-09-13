@@ -13,11 +13,10 @@ import (
 
 // OpenRedis initializes the shared Redis client when runtime features require it.
 func OpenRedis(cfg *config.Config) (*redis.Client, error) {
+	// redisRequired 对 nil cfg 返回 false，走到这里 cfg 必非 nil，
+	// 无需默认值兜底分支。
 	if !redisRequired(cfg) {
 		return nil, nil
-	}
-	if cfg == nil {
-		cfg = config.GetDefaultConfig()
 	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)

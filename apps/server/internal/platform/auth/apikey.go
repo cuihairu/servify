@@ -42,11 +42,15 @@ type APIKeyResolver interface {
 	ResolveAPIKey(ctx context.Context, plaintext string) (*APIKeyRecord, error)
 }
 
+// cryptoRandRead 是包级 seam（默认 crypto/rand.Read）。现代 Go 中
+// rand.Read 恒成功，错误分支生产不可达，测试注入以保持防御性传播。
+var cryptoRandRead = rand.Read
+
 // GenerateAPIKey 生成新明文密钥 "sv_" + 40 hex 字符。
 // 返回 (明文, prefix, hash)；明文仅此一次可见。
 func GenerateAPIKey() (plaintext, prefix, hash string, err error) {
 	raw := make([]byte, 20)
-	if _, err = rand.Read(raw); err != nil {
+	if _, err = cryptoRandRead(raw); err != nil {
 		return "", "", "", err
 	}
 	plaintext = APIKeyPrefix + hex.EncodeToString(raw)

@@ -531,5 +531,4 @@ func TestAgentRuntimeMaintenance_CleanupSkipsZeroActivity(t *testing.T) {
 	if len(repo.statusUpdates) != 0 {
 		t.Fatalf("expected no updates for zero activity, got %v", repo.statusUpdates)
 	}
-	m.updateAgentMetrics()
 }

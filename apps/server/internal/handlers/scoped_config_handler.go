@@ -1945,17 +1945,15 @@ func scopedConfigChangeRiskForTemplate(operation string, template scopedConfigVe
 		risk.RiskLevel = "high"
 		risk.RiskReasons = append(risk.RiskReasons, "rollback_operation")
 	}
+	// 进入本循环意味着 len(template.Checks) > 0，上方已把 RiskLevel 提升到
+	// "medium"（rollback 则为 "high"），因此循环内不可能回落到 "low"，
+	// 也无需再处理 check.RiskLevel == "medium" 的情况。
 	for _, check := range template.Checks {
 		if reason := scopedConfigChangeRiskReason(check); reason != "" {
 			risk.RiskReasons = append(risk.RiskReasons, reason)
 		}
-		switch strings.TrimSpace(check.RiskLevel) {
-		case "high":
+		if strings.TrimSpace(check.RiskLevel) == "high" {
 			risk.RiskLevel = "high"
-		case "medium":
-			if risk.RiskLevel == "low" {
-				risk.RiskLevel = "medium"
-			}
 		}
 	}
 	risk.RiskReasons = normalizeScopedConfigRiskReasons(risk.RiskReasons)
@@ -2398,10 +2396,9 @@ func (h *ScopedConfigHandler) listScopedConfigApprovalIndex(ctx context.Context,
 		if !ok {
 			continue
 		}
+		// extractScopedConfigApproval 已拒绝 ChangeRef/ApprovalRef 为空的记录，
+		// scopedConfigApprovalKey 在此恒非空，无需空 key 守卫。
 		key := scopedConfigApprovalKey(approval.ChangeControl)
-		if key == "" {
-			continue
-		}
 		result[key] = append(result[key], approval)
 	}
 	for key := range result {

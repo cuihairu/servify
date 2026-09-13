@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
 	"mime/quotedprintable"
 	"net"
@@ -125,6 +126,17 @@ func (s *GoSMTPSender) Send(ctx context.Context, from string, to []string, msg [
 	return client.Quit()
 }
 
+// composeQuotedPrintable 将正文以 quoted-printable 编码写入 w。
+// 包级 var seam：生产默认实现写入 *bytes.Buffer 恒不失败（bytes.Buffer.Write
+// 恒返 nil），测试注入失败 writer / 失败实现以覆盖两条错误分支。
+var composeQuotedPrintable = func(w io.Writer, text string) error {
+	qp := quotedprintable.NewWriter(w)
+	if _, err := qp.Write([]byte(text)); err != nil {
+		return err
+	}
+	return qp.Close()
+}
+
 // ComposeTextMessage 组装纯文本 RFC 5322 报文：
 // Subject 按 RFC 2047 Q 编码，正文 quoted-printable；inReplyTo 非空时透传 In-Reply-To/References。
 func ComposeTextMessage(from, to, subject, textBody, inReplyTo string) ([]byte, error) {
@@ -149,11 +161,7 @@ func ComposeTextMessage(from, to, subject, textBody, inReplyTo string) ([]byte, 
 	header.WriteString("\r\n")
 
 	body := &bytes.Buffer{}
-	qp := quotedprintable.NewWriter(body)
-	if _, err := qp.Write([]byte(textBody)); err != nil {
-		return nil, fmt.Errorf("compose message: %w", err)
-	}
-	if err := qp.Close(); err != nil {
+	if err := composeQuotedPrintable(body, textBody); err != nil {
 		return nil, fmt.Errorf("compose message: %w", err)
 	}
 	return append(header.Bytes(), body.Bytes()...), nil

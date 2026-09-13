@@ -115,6 +115,11 @@ func SecuritySurfaceCatalog(cfg *config.Config) []SecuritySurface {
 	return surfaces
 }
 
+// routeSecurityWarnings 是包级 seam（默认 RouteSecurityWarnings）：
+// BuildRouter 内注册的路由全部来自目录内路径，真实警告在启动装配下
+// 不会出现，测试注入以覆盖告警日志分支。
+var routeSecurityWarnings = RouteSecurityWarnings
+
 func RouteSecurityWarnings(routes gin.RoutesInfo, cfg *config.Config) []string {
 	catalog := SecuritySurfaceCatalog(cfg)
 	if len(routes) == 0 {

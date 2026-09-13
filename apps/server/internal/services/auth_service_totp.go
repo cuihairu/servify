@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -254,7 +253,7 @@ func (s *AuthService) VerifyTwoFactorLogin(ctx context.Context, req TwoFactorVer
 func (s *AuthService) createChallengeToken(user *models.User, meta AuthSessionMetadata) (string, int, error) {
 	ttl := s.challengeTTL()
 	now := time.Now()
-	token, err := createHS256JWT(map[string]interface{}{
+	token, err := hookCreateHS256JWT(map[string]interface{}{
 		"iat":       now.Unix(),
 		"sub":       user.ID,
 		"jti":       newAuthTokenID(),
@@ -395,7 +394,7 @@ func generateRecoveryCodes(n int) ([]string, []string, error) {
 	hashes := make([]string, 0, n)
 	for i := 0; i < n; i++ {
 		var buf [4]byte
-		if _, err := rand.Read(buf[:]); err != nil {
+		if _, err := hookRandRead(buf[:]); err != nil {
 			return nil, nil, fmt.Errorf("generate recovery code: %w", err)
 		}
 		raw := hex.EncodeToString(buf[:])

@@ -263,12 +263,10 @@ func (s *EnhancedAIService) calculateConfidence(docs []models.KnowledgeDoc, stra
 		baseConfidence += docBonus
 	}
 
-	// 确保置信度在合理范围内
+	// 确保置信度在合理范围内。基础置信度最小为 0.3（"none" 策略），文档加成
+	// 只增不减，下限 0.1 的分支不可达，无需 clamp。
 	if baseConfidence > 0.95 {
 		baseConfidence = 0.95
-	}
-	if baseConfidence < 0.1 {
-		baseConfidence = 0.1
 	}
 
 	return baseConfidence

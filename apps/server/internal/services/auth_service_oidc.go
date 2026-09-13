@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -163,7 +162,7 @@ func oidcEmailAllowed(allowed []string, email string) bool {
 
 func randomHex(n int) (string, error) {
 	buf := make([]byte, n)
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := hookRandRead(buf); err != nil {
 		return "", fmt.Errorf("generate random: %w", err)
 	}
 	return hex.EncodeToString(buf), nil

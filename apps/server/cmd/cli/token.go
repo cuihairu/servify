@@ -76,11 +76,7 @@ var tokenCmd = &cobra.Command{
 		if !flagNoExpiry {
 			payload["exp"] = now.Add(time.Duration(flagTTLMin) * time.Minute).Unix()
 		}
-		tok, err := createHS256JWT(payload, secret)
-		if err != nil {
-			return err
-		}
-		fmt.Println(tok)
+		fmt.Println(createHS256JWT(payload, secret))
 		return nil
 	},
 }
@@ -96,7 +92,9 @@ func init() {
 }
 
 // createHS256JWT builds a compact JWT using HS256 with the given payload.
-func createHS256JWT(payload map[string]interface{}, secret string) (string, error) {
+// 无错误返回：函数内唯一的错误来源 json.Marshal 的错误在函数内即被丢弃，
+// 返回值恒为拼接结果，调用方不存在可触达的错误分支。
+func createHS256JWT(payload map[string]interface{}, secret string) string {
 	header := map[string]string{
 		"alg": "HS256",
 		"typ": "JWT",
@@ -113,5 +111,5 @@ func createHS256JWT(payload map[string]interface{}, secret string) (string, erro
 	mac.Write([]byte(signing))
 	sig := mac.Sum(nil)
 	s := enc(sig)
-	return signing + "." + s, nil
+	return signing + "." + s
 }

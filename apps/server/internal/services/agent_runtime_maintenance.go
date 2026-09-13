@@ -12,6 +12,8 @@ import (
 type agentRuntimeMaintenance struct {
 	logger *logrus.Logger
 	module *agentapp.Service
+	// interval 供测试注入毫秒级 tick；零值取默认 1 分钟。
+	interval time.Duration
 }
 
 func newAgentRuntimeMaintenance(logger *logrus.Logger, module *agentapp.Service) *agentRuntimeMaintenance {
@@ -22,12 +24,15 @@ func newAgentRuntimeMaintenance(logger *logrus.Logger, module *agentapp.Service)
 }
 
 func (m *agentRuntimeMaintenance) Start() {
-	ticker := time.NewTicker(1 * time.Minute)
+	interval := m.interval
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		m.cleanupInactiveAgents(context.Background(), 5*time.Minute)
-		m.updateAgentMetrics()
 	}
 }
 
@@ -43,5 +48,3 @@ func (m *agentRuntimeMaintenance) cleanupInactiveAgents(ctx context.Context, tim
 		}
 	}
 }
-
-func (m *agentRuntimeMaintenance) updateAgentMetrics() {}

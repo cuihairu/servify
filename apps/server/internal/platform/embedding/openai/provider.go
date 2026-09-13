@@ -55,6 +55,10 @@ func NewProvider(cfg Config) *Provider {
 	}
 }
 
+// jsonMarshal 是包级 seam（默认 json.Marshal）：embedRequest 只含
+// string/[]string 字段，序列化生产恒成功，测试注入失败以覆盖防御分支。
+var jsonMarshal = json.Marshal
+
 func (p *Provider) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("no texts provided")
@@ -65,7 +69,7 @@ func (p *Provider) Embed(ctx context.Context, texts []string) ([][]float32, erro
 		Model: p.config.Model,
 	}
 
-	payload, err := json.Marshal(reqBody)
+	payload, err := jsonMarshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}

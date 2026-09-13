@@ -26,8 +26,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -74,45 +76,86 @@ func isDDL(stmt string) bool {
 	return false
 }
 
+// 测试 seam：run() 经由这三个包级变量访问 postgres 专属的连接、空库探测
+// 与扩展创建步骤，默认分别指向下方 *Postgres 实现，生产行为不变。测试注入
+// sqlite 实现后即可在无 postgres 的环境下驱动 run() 的全流程。
+var (
+	openBaselineDB    = openPostgresBaseline
+	probePublicTables = probePostgresPublicTables
+	prepareExtensions = createPostgresExtensions
+)
+
+func openPostgresBaseline(dsn string, cfg *gorm.Config) (*gorm.DB, error) {
+	return gorm.Open(postgres.Open(dsn), cfg)
+}
+
+// probePostgresPublicTables counts tables in the public schema; a scratch
+// database must report 0 before generation starts.
+func probePostgresPublicTables(db *gorm.DB) (int, error) {
+	var existing int
+	err := db.Raw(`SELECT count(*) FROM pg_tables WHERE schemaname = 'public'`).Scan(&existing).Error
+	return existing, err
+}
+
+// baselineExtensions 是 baseline 依赖的 postgres 扩展列表；数据 seam，测试
+// 置空以走 createPostgresExtensions 的无扩展成功路径，生产默认不变。
+var baselineExtensions = []string{"vector", "hstore"}
+
+// createPostgresExtensions creates the extensions the baseline depends on;
+// the vector(1536) column requires them to exist before AutoMigrate.
+func createPostgresExtensions(db *gorm.DB) error {
+	for _, ext := range baselineExtensions {
+		if err := db.Exec(fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS %s", ext)).Error; err != nil {
+			return fmt.Errorf("create extension %s: %w", ext, err)
+		}
+	}
+	return nil
+}
+
 func main() {
 	dsn := flag.String("dsn", os.Getenv("GEN_BASELINE_DSN"), "scratch postgres DSN (empty database)")
 	out := flag.String("out", "", "output file (default stdout)")
 	flag.Parse()
-	if strings.TrimSpace(*dsn) == "" {
-		log.Fatal("-dsn or GEN_BASELINE_DSN is required")
+	if err := run(*dsn, *out, os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run 执行 baseline 生成的完整流程。错误沿返回值上抛，由 main 以 log.Fatal
+// 终止；错误文案与拆分前 log.Fatalf 的输出逐字一致，退出码同为 1。
+func run(dsn, out string, stdout io.Writer) error {
+	if strings.TrimSpace(dsn) == "" {
+		return errors.New("-dsn or GEN_BASELINE_DSN is required")
 	}
 
 	capture := &captureLogger{}
-	db, err := gorm.Open(postgres.Open(*dsn), &gorm.Config{
+	db, err := openBaselineDB(dsn, &gorm.Config{
 		Logger:                                   capture,
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
-		log.Fatalf("connect scratch postgres: %v", err)
+		return fmt.Errorf("connect scratch postgres: %w", err)
 	}
 
 	// The baseline must be generated against an empty schema, otherwise the
 	// capture would miss tables/columns that already exist.
-	var existing int
-	if err := db.Raw(`SELECT count(*) FROM pg_tables WHERE schemaname = 'public'`).Scan(&existing).Error; err != nil {
-		log.Fatalf("probe existing tables: %v", err)
+	existing, err := probePublicTables(db)
+	if err != nil {
+		return fmt.Errorf("probe existing tables: %w", err)
 	}
 	if existing != 0 {
-		log.Fatalf("scratch database is not empty (%d public tables); start from a fresh container", existing)
+		return fmt.Errorf("scratch database is not empty (%d public tables); start from a fresh container", existing)
 	}
 
-	// Extensions must exist before the vector(1536) column is created.
-	for _, ext := range []string{"vector", "hstore"} {
-		if err := db.Exec(fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS %s", ext)).Error; err != nil {
-			log.Fatalf("create extension %s: %v", ext, err)
-		}
+	if err := prepareExtensions(db); err != nil {
+		return err
 	}
 
 	if err := appbootstrap.AutoMigrate(db); err != nil {
-		log.Fatalf("AutoMigrate: %v", err)
+		return fmt.Errorf("AutoMigrate: %w", err)
 	}
 	if err := appbootstrap.CreateIndexes(db); err != nil {
-		log.Fatalf("CreateIndexes: %v", err)
+		return fmt.Errorf("CreateIndexes: %w", err)
 	}
 
 	capture.mu.Lock()
@@ -137,25 +180,31 @@ func main() {
 
 	if len(skipped) > 0 {
 		log.Printf("captured %d DDL statements, skipped %d non-DDL (metadata probes):", len(ddl), len(skipped))
-		seen := map[string]bool{}
-		for _, s := range skipped {
-			key := s
-			if len(key) > 120 {
-				key = key[:120] + "..."
-			}
-			if !seen[key] {
-				seen[key] = true
-				log.Printf("  SKIP: %s", key)
-			}
-		}
+		summarizeSkipped(skipped)
 	}
 
-	if *out == "" {
-		fmt.Print(b.String())
-		return
+	if out == "" {
+		_, _ = fmt.Fprint(stdout, b.String())
+		return nil
 	}
-	if err := os.WriteFile(*out, []byte(b.String()), 0o644); err != nil {
-		log.Fatalf("write %s: %v", *out, err)
+	if err := os.WriteFile(out, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", out, err)
 	}
-	log.Printf("wrote %d DDL statements to %s", len(ddl), *out)
+	log.Printf("wrote %d DDL statements to %s", len(ddl), out)
+	return nil
+}
+
+// summarizeSkipped 打印去重后的非 DDL 语句，超长语句截断到 120 字节加省略号。
+func summarizeSkipped(skipped []string) {
+	seen := map[string]bool{}
+	for _, s := range skipped {
+		key := s
+		if len(key) > 120 {
+			key = key[:120] + "..."
+		}
+		if !seen[key] {
+			seen[key] = true
+			log.Printf("  SKIP: %s", key)
+		}
+	}
 }

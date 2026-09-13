@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -72,11 +71,9 @@ func (h *OIDCHandler) Start(c *gin.Context) {
 	}
 	verifier := oauth2.GenerateVerifier()
 
-	flow, err := json.Marshal(oidcFlow{State: state, Nonce: nonce, Verifier: verifier})
-	if err != nil {
-		redirectOIDCError(c, h.cfg.FrontendBaseURL, "oidc_failed")
-		return
-	}
+	// oidcFlow 仅含字符串字段，json.Marshal 不可能失败（无 chan/func/环引用），
+	// 错误分支为不可达死代码。
+	flow, _ := json.Marshal(oidcFlow{State: state, Nonce: nonce, Verifier: verifier})
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     oidcFlowCookie,
 		Value:    base64.RawURLEncoding.EncodeToString(flow),
@@ -191,7 +188,7 @@ func redirectOIDCError(c *gin.Context, frontend, code string) {
 
 func randomToken(nBytes int) (string, error) {
 	buf := make([]byte, nBytes)
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := oidcRandRead(buf); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil

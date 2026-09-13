@@ -237,8 +237,13 @@ func workspaceRowToDocument(row models.WorkspaceConfig) (*ScopedConfigDocument, 
 	return doc, nil
 }
 
+// yamlMarshal 是包级 seam（默认 yaml.Marshal）：五个 Scoped 配置结构体只含
+// 基础类型字段，且 yaml.v3 对不可序列化类型直接 panic 而不返回 error，
+// 错误分支生产不可达；测试注入失败以保持各 Upsert 路径的防御性传播。
+var yamlMarshal = yaml.Marshal
+
 func encodeConfig[T any](value T) (string, error) {
-	body, err := yaml.Marshal(value)
+	body, err := yamlMarshal(value)
 	if err != nil {
 		return "", err
 	}

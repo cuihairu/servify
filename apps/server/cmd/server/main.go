@@ -13,6 +13,19 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// main 的测试 seam：默认全部指向生产实现，生产行为不变。main 只能在子进程
+// 测试里执行，而 versioned 迁移分支仅 postgres driver 会进入、
+// StartRuntime/StartWorkers/Shutdown 的错误分支在真实依赖下恒为 nil，子进程
+// 测试通过 SERVIFY_SERVER_FAULT 环境变量（见 server_seams_test.go）注入失败
+// 以覆盖这些防御性分支。
+var (
+	resolveSchemaMode      = appbootstrap.ResolveSchemaMode
+	runVersionedMigrations = appbootstrap.RunMigrations
+	startRuntime           = func(app *appbootstrap.App) error { return app.StartRuntime() }
+	startWorkers           = func(app *appbootstrap.App) error { return app.StartWorkers() }
+	shutdownApp            = func(app *appbootstrap.App, ctx context.Context) error { return app.Shutdown(ctx) }
+)
+
 func main() {
 	cfg, err := appbootstrap.LoadConfig("")
 	if err != nil {
@@ -46,12 +59,12 @@ func main() {
 	}
 	app.DB = db
 
-	switch appbootstrap.ResolveSchemaMode(dbOpts.Driver) {
+	switch resolveSchemaMode(dbOpts.Driver) {
 	case appbootstrap.SchemaModeSkip:
 		appLogger.Info("Automatic schema management disabled (MIGRATIONS_ENABLED is falsy); expecting a pre-migrated database")
 	case appbootstrap.SchemaModeVersioned:
 		appLogger.Info("Applying versioned database migrations...")
-		if err := appbootstrap.RunMigrations(db); err != nil {
+		if err := runVersionedMigrations(db); err != nil {
 			appLogger.Fatalf("Failed to run database migrations: %v", err)
 		}
 	case appbootstrap.SchemaModeAutoMigrate:
@@ -67,12 +80,12 @@ func main() {
 	if err != nil {
 		appLogger.Fatalf("Failed to build runtime: %v", err)
 	}
-	if err := app.StartRuntime(); err != nil {
+	if err := startRuntime(app); err != nil {
 		appLogger.Fatalf("Failed to start runtime: %v", err)
 	}
 
 	appworker.RegisterDefaultWorkers(app, cfg, db, runtime)
-	if err := app.StartWorkers(); err != nil {
+	if err := startWorkers(app); err != nil {
 		appLogger.Fatalf("Failed to start workers: %v", err)
 	}
 
@@ -83,7 +96,7 @@ func main() {
 	appLogger.Info("Shutting down server...")
 	shutdownCtx, cancel := appbootstrap.ShutdownContext(30 * time.Second)
 	defer cancel()
-	if err := app.Shutdown(shutdownCtx); err != nil {
+	if err := shutdownApp(app, shutdownCtx); err != nil {
 		appLogger.Errorf("Failed to shutdown cleanly: %v", err)
 	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {

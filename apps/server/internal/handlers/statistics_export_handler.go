@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -260,10 +259,10 @@ func categoryRows(labelHeader, countHeader string, items []analyticscontract.Cat
 func buildCSV(headers []string, rows [][]string) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF")
-	w := csv.NewWriter(&buf)
-	if err := w.Write(headers); err != nil {
-		return nil, err
-	}
+	w := newCSVWriter(&buf)
+	// 表头列数固定（各类报表 2~8 列），远小于 csv.Writer 内部 4KB bufio
+	// 缓冲，Write 不会失败；行写入与 Flush 错误在下方处理。
+	_ = w.Write(headers)
 	for _, row := range rows {
 		if err := w.Write(row); err != nil {
 			return nil, err
@@ -278,20 +277,20 @@ func buildXLSX(headers []string, rows [][]string) ([]byte, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 	sheet := "Sheet1"
-	if err := f.SetSheetRow(sheet, "A1", &headers); err != nil {
+	if err := hookExcelizeSetSheetRow(f, sheet, "A1", &headers); err != nil {
 		return nil, err
 	}
 	for i, row := range rows {
-		cell, err := excelize.CoordinatesToCellName(1, i+2)
+		cell, err := hookExcelizeCellName(1, i+2)
 		if err != nil {
 			return nil, err
 		}
-		if err := f.SetSheetRow(sheet, cell, &row); err != nil {
+		if err := hookExcelizeSetSheetRow(f, sheet, cell, &row); err != nil {
 			return nil, err
 		}
 	}
 	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
+	if err := hookExcelizeWrite(f, &buf); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

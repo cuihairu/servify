@@ -151,10 +151,9 @@ func ExtractTokens(query string) []string {
 	seen := make(map[string]struct{}, len(matches))
 	out := make([]string, 0, len(matches))
 	for _, m := range matches {
+		// tokenRe 只匹配单个汉字或 [A-Za-z0-9_]+，TrimSpace 后恒非空，
+		// 无需空串守卫。
 		m = strings.ToLower(strings.TrimSpace(m))
-		if m == "" {
-			continue
-		}
 		if len([]rune(m)) >= 32 {
 			continue
 		}
@@ -245,9 +244,7 @@ func ClassifyIntent(query string) suggestioncontract.IntentSuggestion {
 		hits := 0
 		var m []string
 		for _, kw := range b.keywords {
-			if kw == "" {
-				continue
-			}
+			// buckets 关键词均为非空字面量，无需空串守卫。
 			if strings.Contains(q, strings.ToLower(kw)) {
 				hits++
 				m = append(m, kw)

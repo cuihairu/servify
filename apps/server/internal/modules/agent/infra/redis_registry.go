@@ -33,6 +33,10 @@ type RedisRegistry struct {
 	logger     *logrus.Logger
 	localCache *InMemoryRegistry // For fast local reads
 
+	// statusCh 为测试注入点：非 nil 时替代 pubsub.Channel() 作为状态消息
+	// 来源，用于确定性覆盖通道关闭（!ok）分支；生产恒为 nil。
+	statusCh <-chan *redis.Message
+
 	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -224,7 +228,10 @@ func (r *RedisRegistry) syncLoop() {
 	// 否则启动窗口内的 online/offline 事件会永久丢失。
 	r.syncFromRedis()
 
-	ch := pubsub.Channel()
+	ch := r.statusCh
+	if ch == nil {
+		ch = pubsub.Channel()
+	}
 	for {
 		select {
 		case <-r.ctx.Done():
@@ -341,8 +348,12 @@ func (r *RedisRegistry) persistOnlineState(userID uint, t time.Time) error {
 		}).Error
 }
 
+// marshalAgentRuntime 为测试注入点（默认即 json.Marshal）：
+// AgentRuntimeDTO 为纯数据结构，序列化恒成功，错误分支仅经注入触发。
+var marshalAgentRuntime = json.Marshal
+
 func (r *RedisRegistry) storeInRedis(userID uint, dto agentapp.AgentRuntimeDTO) error {
-	data, err := json.Marshal(dto)
+	data, err := marshalAgentRuntime(dto)
 	if err != nil {
 		return err
 	}

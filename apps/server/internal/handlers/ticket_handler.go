@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -367,11 +366,10 @@ func (h *TicketHandler) ExportTicketsCSV(c *gin.Context) {
 	}
 
 	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
-	if err := w.Write(header); err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to write csv", Message: err.Error()})
-		return
-	}
+	w := newCSVWriter(&buf)
+	// 表头为定长列（基础 10 列 + 自定义字段名），远小于 csv.Writer 内部
+	// 4KB bufio 缓冲，Write 不会失败；行写入与 Flush 错误在下方统一处理。
+	_ = w.Write(header)
 	for _, t := range tickets {
 		cf := make(map[string]string)
 		for _, v := range t.CustomFieldValues {

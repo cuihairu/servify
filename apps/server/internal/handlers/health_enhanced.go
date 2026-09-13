@@ -109,15 +109,9 @@ func (h *EnhancedHealthHandler) Health(c *gin.Context) {
 		response.Status = "degraded"
 	}
 
-	// 返回适当的状态码
-	statusCode := http.StatusOK
-	if response.Status == "unhealthy" {
-		statusCode = http.StatusServiceUnavailable
-	} else if response.Status == "degraded" {
-		statusCode = http.StatusOK // 部分服务不可用时仍返回 200，但状态为 degraded
-	}
-
-	c.JSON(statusCode, response)
+	// response.Status 只可能为 "healthy" 或 "degraded"（"unhealthy" 仅出现在
+	// 各子服务的 ServiceInfo.Status 里），整体健康端点恒返回 200。
+	c.JSON(http.StatusOK, response)
 }
 
 // Ready 就绪检查端点

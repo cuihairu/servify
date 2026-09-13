@@ -46,9 +46,18 @@ type App struct {
 	ShutdownHooks     []func() error
 }
 
+// initLogging 与 buildEventBus 是包级 seam（默认值即生产实现），仅用于
+// 测试注入防御性分支：InitLogging 正常路径恒返回非 nil logger，其 nil
+// 兜底不可经真实实现触达；BuildEventBus 的错误路径需要 redis client 已
+// 建立后失败，同样只能注入。
+var (
+	initLogging   = InitLogging
+	buildEventBus = BuildEventBus
+)
+
 // BuildApp creates the shared application runtime dependencies used by entrypoints.
 func BuildApp(cfg *config.Config) (*App, error) {
-	logger, err := InitLogging(cfg)
+	logger, err := initLogging(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +68,7 @@ func BuildApp(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	bus, err := BuildEventBus(cfg, logger, redisClient)
+	bus, err := buildEventBus(cfg, logger, redisClient)
 	if err != nil {
 		if redisClient != nil {
 			_ = redisClient.Close()
