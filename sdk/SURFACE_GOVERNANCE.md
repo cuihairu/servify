@@ -5,9 +5,10 @@
 - `@servify/core`: shared browser runtime contracts and Web primitives
 - `@servify/react`, `@servify/vue`, `@servify/vanilla`: framework surfaces built on top of `@servify/core`
 - `@servify/api-client`: server-side API client surface (auth providers, retry policy, request middleware pipeline)
+- `@servify/react-native`: headless mobile binding (mobile capability set, storage/snapshot wiring, provider and hooks)
 - `@servify/app-core`: mobile foundation surface (storage adapter, offline queue, session snapshot, push token registrar)
 - future transport packages should follow `@servify/transport-http`, `@servify/transport-websocket`, `@servify/transport-sse`
-- `core/react/vue/vanilla/api-client/app-core` are eligible for production release today
+- `core/react/vue/vanilla/api-client/app-core/react-native` are eligible for production release today
 - future reserved packages stay `0.0.0` and `private` until runtime behavior is implemented and reviewed
 
 ## Public API Review Boundary

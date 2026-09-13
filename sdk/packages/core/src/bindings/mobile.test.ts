@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ServifySDK } from '../sdk';
 import { createMobileCapabilitySet } from './mobile';
 
 describe('mobile bindings', () => {
@@ -24,5 +25,17 @@ describe('mobile bindings', () => {
     expect(result.rejected).toHaveLength(2);
     expect(result.rejected[0]).toMatchObject({ request: { name: 'remote_assist' }, reason: 'disabled' });
     expect(result.rejected[1]).toMatchObject({ request: { name: 'voice' }, reason: 'disabled' });
+  });
+
+  it('plugs into ServifySDK through config.capabilities while the default stays web', () => {
+    const mobile = new ServifySDK({
+      apiUrl: 'https://api.example.com',
+      capabilities: createMobileCapabilitySet(),
+    });
+    expect(mobile.capabilities.has('chat')).toBe(true);
+    expect(mobile.capabilities.has('remote_assist')).toBe(false);
+
+    const web = new ServifySDK({ apiUrl: 'https://api.example.com' });
+    expect(web.capabilities.has('remote_assist')).toBe(true);
   });
 });

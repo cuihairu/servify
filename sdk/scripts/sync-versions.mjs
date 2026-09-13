@@ -10,6 +10,7 @@ const publishablePackages = new Set([
   "@servify/vanilla",
   "@servify/api-client",
   "@servify/app-core",
+  "@servify/react-native",
 ]);
 const reservedPackages = new Set([]);
 const checkOnly = process.argv.includes("--check");

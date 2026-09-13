@@ -1,4 +1,5 @@
 import type { AuthProvider } from './contracts/auth-provider';
+import type { CapabilitySet } from './contracts/capability';
 import type { ReconnectPolicy } from './contracts/transport';
 
 // 基础类型定义
@@ -22,6 +23,11 @@ export interface ServifyConfig {
    * 全局 WebSocket 构造。缺省使用 globalThis.WebSocket。
    */
   webSocketFactory?: WebSocketFactory;
+  /**
+   * 能力集覆盖：平台绑定（React Native headless 等）注入宿主能力面，
+   * 缺省 createWebCapabilitySet()。
+   */
+  capabilities?: CapabilitySet;
 }
 
 /** WebSocket 传输工厂：返回宿主平台的 WebSocket 实例（浏览器/RN 同形 API）。 */

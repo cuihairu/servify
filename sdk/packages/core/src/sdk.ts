@@ -53,7 +53,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   constructor(config: ServifyConfig) {
     super();
     this.id = config.sessionId || `web-${Date.now()}`;
-    this.capabilities = createWebCapabilitySet();
+    this.capabilities = config.capabilities ?? createWebCapabilitySet();
 
     this.config = {
       autoConnect: true,
