@@ -17,26 +17,26 @@ var _ auth2FAService = (*cvh2FAService)(nil)
 
 // cvh2FAService 两步验证服务 inline mock。
 type cvh2FAService struct {
-	setup     *services.TwoFactorSetup
-	setupErr  error
-	enable    []string
-	enableErr error
+	setup      *services.TwoFactorSetup
+	setupErr   error
+	enable     []string
+	enableErr  error
 	disableErr error
-	regen     []string
-	regenErr  error
-	remaining int64
-	remainErr error
-	verify    *services.AuthResult
-	verifyErr error
+	regen      []string
+	regenErr   error
+	remaining  int64
+	remainErr  error
+	verify     *services.AuthResult
+	verifyErr  error
 
-	setupUID    uint
-	enableUID   uint
+	setupUID     uint
+	enableUID    uint
 	enableSecret string
 	enableCode   string
-	regenUID    uint
-	regenCode   string
-	verifyToken string
-	verifyCode  string
+	regenUID     uint
+	regenCode    string
+	verifyToken  string
+	verifyCode   string
 }
 
 func (s *cvh2FAService) SetupTwoFactor(_ context.Context, userID uint) (*services.TwoFactorSetup, error) {

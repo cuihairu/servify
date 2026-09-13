@@ -17,14 +17,14 @@ var _ qualitydelivery.HandlerService = (*cvhQualityService)(nil)
 
 // cvhQualityService 质检服务 inline mock。
 type cvhQualityService struct {
-	reviews     []models.QualityReview
-	total       int64
-	listErr     error
-	review      *models.QualityReview
-	getErr      error
-	confirmErr  error
-	rescoreErr  error
-	scorerOn    bool
+	reviews    []models.QualityReview
+	total      int64
+	listErr    error
+	review     *models.QualityReview
+	getErr     error
+	confirmErr error
+	rescoreErr error
+	scorerOn   bool
 
 	gotQuery          qualitydelivery.ReviewListQuery
 	gotGetSession     string
@@ -79,11 +79,11 @@ func TestCvhRegisterQualityRoutes(t *testing.T) {
 	routes := r.Routes()
 	assert.Len(t, routes, 5)
 	want := map[string]bool{
-		"GET /api/quality/reviews":                   false,
-		"GET /api/quality/reviews/:sessionId":        false,
+		"GET /api/quality/reviews":                     false,
+		"GET /api/quality/reviews/:sessionId":          false,
 		"POST /api/quality/reviews/:sessionId/confirm": false,
 		"POST /api/quality/reviews/:sessionId/rescore": false,
-		"GET /api/quality/scorer":                    false,
+		"GET /api/quality/scorer":                      false,
 	}
 	for _, rt := range routes {
 		key := rt.Method + " " + rt.Path

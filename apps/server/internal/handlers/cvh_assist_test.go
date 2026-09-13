@@ -33,18 +33,18 @@ type cvhAssistService struct {
 	attach       *models.RemoteAssistSession
 	attachErr    error
 
-	startCmd    assistdelivery.StartCommand
-	endCmd      assistdelivery.EndCommand
-	annotCmd    assistdelivery.AnnotationCommand
-	annotID     uint
-	attachCmd   assistdelivery.RecordingMeta
-	attachID    uint
-	attachUID   uint
-	endID       uint
-	listConvID  string
-	listLimit   int
-	deleteID    uint
-	getID       uint
+	startCmd   assistdelivery.StartCommand
+	endCmd     assistdelivery.EndCommand
+	annotCmd   assistdelivery.AnnotationCommand
+	annotID    uint
+	attachCmd  assistdelivery.RecordingMeta
+	attachID   uint
+	attachUID  uint
+	endID      uint
+	listConvID string
+	listLimit  int
+	deleteID   uint
+	getID      uint
 }
 
 func (s *cvhAssistService) StartSession(_ context.Context, cmd assistdelivery.StartCommand) (*models.RemoteAssistSession, error) {
@@ -138,10 +138,10 @@ func TestCvhRegisterAssistRoutes(t *testing.T) {
 	routes := r.Routes()
 	assert.Len(t, routes, 7)
 	want := map[string]bool{
-		"POST /api/remote-assist/sessions":                false,
-		"GET /api/remote-assist/sessions":                 false,
-		"GET /api/remote-assist/sessions/:id":             false,
-		"POST /api/remote-assist/sessions/:id/end":        false,
+		"POST /api/remote-assist/sessions":                 false,
+		"GET /api/remote-assist/sessions":                  false,
+		"GET /api/remote-assist/sessions/:id":              false,
+		"POST /api/remote-assist/sessions/:id/end":         false,
 		"GET /api/remote-assist/sessions/:id/annotations":  false,
 		"POST /api/remote-assist/sessions/:id/annotations": false,
 		"DELETE /api/remote-assist/annotations/:id":        false,

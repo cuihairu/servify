@@ -99,13 +99,13 @@ func TestCvhRegisterAgentGroupRoutes(t *testing.T) {
 	routes := r.Routes()
 	assert.Len(t, routes, 7)
 	want := map[string]bool{
-		"GET /api/agents/groups":            false,
-		"POST /api/agents/groups":           false,
-		"GET /api/agents/groups/:id":        false,
-		"PUT /api/agents/groups/:id":        false,
-		"DELETE /api/agents/groups/:id":     false,
-		"GET /api/agents/groups/:id/members":  false,
-		"PUT /api/agents/groups/:id/members":  false,
+		"GET /api/agents/groups":             false,
+		"POST /api/agents/groups":            false,
+		"GET /api/agents/groups/:id":         false,
+		"PUT /api/agents/groups/:id":         false,
+		"DELETE /api/agents/groups/:id":      false,
+		"GET /api/agents/groups/:id/members": false,
+		"PUT /api/agents/groups/:id/members": false,
 	}
 	for _, rt := range routes {
 		key := rt.Method + " " + rt.Path
