@@ -62,6 +62,9 @@ type ServerConfig struct {
 	Host        string `yaml:"host"`
 	Port        int    `yaml:"port"`
 	Environment string `yaml:"environment"`
+	// PublicBaseURL 是对外可访问的基地址（如 https://support.example.com），
+	// 用于拼装对外链接（CSAT 评分页等）；空则生成相对路径。
+	PublicBaseURL string `yaml:"public_base_url"`
 }
 
 type EventBusConfig struct {

@@ -51,6 +51,7 @@ type RuntimeWorkerDependencies interface {
 	EmailPollAdapterForWorker() emaildelivery.PollProcessor
 	QualityScanForWorker() *qualityapp.QualityService
 	WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapter
+	SurveysForWorker() *services.SatisfactionService
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -79,6 +80,10 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 	if dispatcher := deps.WaitingQueueForWorker(); dispatcher != nil {
 		interval := time.Duration(cfg.Routing.DispatchIntervalSeconds) * time.Second
 		app.RegisterWorker(NewWaitingQueueWorker(dispatcher, interval, app.Logger))
+	}
+
+	if surveyService := deps.SurveysForWorker(); surveyService != nil {
+		app.RegisterWorker(NewSurveyEmailWorker(surveyService, app.Logger))
 	}
 
 	if cfg.Security.Audit.Enabled && db != nil {

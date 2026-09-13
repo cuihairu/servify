@@ -101,6 +101,7 @@ func wireEmailRuntime(rt *Runtime, conversationService *conversationapp.Service)
 		UseSTARTTLS: cfg.SMTP.UseSTARTTLS,
 		SkipVerify:  cfg.SMTP.SkipVerify,
 	})
+	rt.smtpSender = smtpSender
 	rt.emailAdapter = emaildelivery.NewAdapter(emaildelivery.AdapterDeps{
 		IMAP:     imapClient,
 		SMTP:     smtpSender,
@@ -188,7 +189,18 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 
 	satisfactionService := services.NewSatisfactionService(rt.DB, rt.Logger)
 	rt.SatisfactionService = satisfactionService
+	rt.satisfactionSvc = satisfactionService
 	state.satisfactionService = satisfactionService
+	// CSAT 邮件：评分链接基地址 + email 渠道启用时注入 SMTP 投递器
+	//（mailer 未注入时 ScheduleSurvey 维持旧行为：直接置 sent）。
+	satisfactionService.SetSurveyLinkBaseURL(rt.Config.Server.PublicBaseURL)
+	if rt.smtpSender != nil {
+		smtpFrom := rt.Config.Email.SMTP.From
+		if smtpFrom == "" {
+			smtpFrom = rt.Config.Email.Username
+		}
+		satisfactionService.SetSurveyMailer(&surveyEmailMailer{sender: rt.smtpSender, from: smtpFrom})
+	}
 
 	rt.ShiftService = services.NewShiftService(rt.DB, rt.Logger)
 	rt.WorkspaceService = services.NewWorkspaceService(rt.DB, agentAssembly.Service)

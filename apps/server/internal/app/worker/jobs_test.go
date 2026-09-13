@@ -96,6 +96,10 @@ func (f *fakeRuntimeWorkerDependencies) WaitingQueueForWorker() *routingdelivery
 	return nil
 }
 
+func (f *fakeRuntimeWorkerDependencies) SurveysForWorker() *services.SatisfactionService {
+	return nil
+}
+
 func TestStatisticsWorkerLifecycle(t *testing.T) {
 	loop := &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}
 	w := NewStatisticsWorker(&fakeStatisticsService{loop: loop}, 100*time.Millisecond, nil)

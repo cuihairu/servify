@@ -15,6 +15,7 @@ import (
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
+	emailinfra "servify/apps/server/internal/modules/email/infra"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
@@ -86,6 +87,8 @@ type Runtime struct {
 	webhookService    *webhookapp.Service
 	qualityService    *qualityapp.QualityService
 	emailAdapter      *emaildelivery.Adapter
+	smtpSender        *emailinfra.GoSMTPSender
+	satisfactionSvc   *services.SatisfactionService
 	transferHandler   *routingdelivery.HandlerServiceAdapter
 }
 
@@ -194,6 +197,12 @@ func (rt *Runtime) WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapte
 		return nil
 	}
 	return rt.transferHandler
+}
+
+// SurveysForWorker returns the satisfaction service for the survey email worker.
+// Worker 自身对 mailer 为 nil 的服务是无操作（直接返回），无需开关判断。
+func (rt *Runtime) SurveysForWorker() *services.SatisfactionService {
+	return rt.satisfactionSvc
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {

@@ -15,10 +15,20 @@ import (
 	"gorm.io/gorm"
 )
 
+// SurveyMailer CSAT 邮件投递的窄接口（由 email 渠道的 SMTP 适配器实现）。
+// 未注入时 ScheduleSurvey 维持旧行为：直接置 sent（视为站内送达）。
+type SurveyMailer interface {
+	SendSurveyEmail(ctx context.Context, to, subject, textBody string) error
+}
+
 // SatisfactionService 客户满意度管理服务
 type SatisfactionService struct {
 	db     *gorm.DB
 	logger *logrus.Logger
+	// mailer 为 nil 时 CSAT 邮件不投递（queued 分支不生效）
+	mailer SurveyMailer
+	// surveyLinkBaseURL 是评分页基地址（如 https://support.example.com），空则正文用相对路径
+	surveyLinkBaseURL string
 }
 
 // NewSatisfactionService 创建满意度服务
@@ -31,6 +41,16 @@ func NewSatisfactionService(db *gorm.DB, logger *logrus.Logger) *SatisfactionSer
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetSurveyMailer 注入邮件投递器（email 渠道启用时由装配层注入）
+func (s *SatisfactionService) SetSurveyMailer(mailer SurveyMailer) {
+	s.mailer = mailer
+}
+
+// SetSurveyLinkBaseURL 设置评分页链接基地址
+func (s *SatisfactionService) SetSurveyLinkBaseURL(base string) {
+	s.surveyLinkBaseURL = strings.TrimRight(strings.TrimSpace(base), "/")
 }
 
 // SatisfactionCreateRequest 创建满意度评价请求
@@ -156,6 +176,8 @@ func (s *SatisfactionService) ScheduleSurvey(ctx context.Context, ticket *models
 	expires := now.Add(defaultSurveyTTL)
 	channel := detectSurveyChannel(scopedTicket.Source)
 
+	// email 渠道且已配置投递器 → 入队由后台 worker 真实发送；否则维持直接置 sent
+	emailDelivery := channel == "email" && s.mailer != nil
 	survey := &models.SatisfactionSurvey{
 		TenantID:    platformauth.TenantIDFromContext(scopeCtx),
 		WorkspaceID: platformauth.WorkspaceIDFromContext(scopeCtx),
@@ -168,12 +190,20 @@ func (s *SatisfactionService) ScheduleSurvey(ctx context.Context, ticket *models
 		SentAt:      &now,
 		ExpiresAt:   &expires,
 	}
+	if emailDelivery {
+		survey.Status = "queued"
+		survey.SentAt = nil
+	}
 
 	if err := s.db.WithContext(ctx).Create(survey).Error; err != nil {
 		return nil, fmt.Errorf("failed to schedule satisfaction survey: %w", err)
 	}
 
-	s.logger.Infof("Scheduled CSAT survey for ticket %d (token=%s)", ticket.ID, survey.SurveyToken)
+	if emailDelivery {
+		s.logger.Infof("Queued CSAT survey email for ticket %d (token=%s)", ticket.ID, survey.SurveyToken)
+	} else {
+		s.logger.Infof("Scheduled CSAT survey for ticket %d (token=%s)", ticket.ID, survey.SurveyToken)
+	}
 	return survey, nil
 }
 
@@ -341,6 +371,11 @@ func (s *SatisfactionService) ResendSurvey(ctx context.Context, id uint) (*model
 	survey.Status = "sent"
 	survey.SentAt = &now
 	survey.ExpiresAt = &expires
+	// 与 ScheduleSurvey 一致：email 渠道且已配置投递器时重新入队
+	if survey.Channel == "email" && s.mailer != nil {
+		survey.Status = "queued"
+		survey.SentAt = nil
+	}
 	if !originalCompleted {
 		survey.CompletedAt = nil
 		survey.SatisfactionID = nil
@@ -352,6 +387,101 @@ func (s *SatisfactionService) ResendSurvey(ctx context.Context, id uint) (*model
 
 	s.logger.Infof("Resent CSAT survey for ticket %d", survey.TicketID)
 	return &survey, nil
+}
+
+// ProcessPendingSurveyEmails 扫描 queued 的 email 渠道调查并真实投递。
+// 成功 → sent+sent_at（CAS 只覆盖 queued，防并发重复发送）；
+// 暂时失败（SMTP 抖动）保留 queued 下一轮重试；过期/收件人缺失置 failed。
+func (s *SatisfactionService) ProcessPendingSurveyEmails(ctx context.Context, batchSize int) (int, error) {
+	if s.mailer == nil {
+		return 0, nil
+	}
+	if batchSize <= 0 {
+		batchSize = 50
+	}
+	now := time.Now()
+
+	// 过期兜底：过期 queued 置 failed（无重试列，靠 expires_at 收敛）
+	if err := s.db.WithContext(ctx).Model(&models.SatisfactionSurvey{}).
+		Where("status = ? AND channel = ? AND expires_at IS NOT NULL AND expires_at < ?", "queued", "email", now).
+		Update("status", "failed").Error; err != nil {
+		return 0, fmt.Errorf("failed to expire overdue surveys: %w", err)
+	}
+
+	var surveys []models.SatisfactionSurvey
+	if err := s.db.WithContext(ctx).
+		Where("status = ? AND channel = ? AND (expires_at IS NULL OR expires_at >= ?)", "queued", "email", now).
+		Order("created_at ASC").
+		Limit(batchSize).
+		Find(&surveys).Error; err != nil {
+		return 0, fmt.Errorf("failed to list pending surveys: %w", err)
+	}
+
+	sent := 0
+	for _, survey := range surveys {
+		recipient, ok := s.resolveSurveyRecipient(ctx, survey.CustomerID)
+		if !ok {
+			// 收件人缺失是永久性失败，置 failed 避免无限重试
+			_ = s.db.WithContext(ctx).Model(&models.SatisfactionSurvey{}).
+				Where("id = ? AND status = ?", survey.ID, "queued").
+				Update("status", "failed")
+			s.logger.Warnf("Survey %d has no deliverable recipient (customer_id=%d), marked failed", survey.ID, survey.CustomerID)
+			continue
+		}
+
+		subject, body := buildSurveyEmailContent(&survey, s.surveyLinkBaseURL)
+		if err := s.mailer.SendSurveyEmail(ctx, recipient, subject, body); err != nil {
+			// 暂时性失败：保留 queued，下一轮扫描重试
+			s.logger.WithError(err).Warnf("Failed to send survey email %d to %s", survey.ID, recipient)
+			continue
+		}
+
+		result := s.db.WithContext(ctx).Model(&models.SatisfactionSurvey{}).
+			Where("id = ? AND status = ?", survey.ID, "queued").
+			Updates(map[string]interface{}{
+				"status":  "sent",
+				"sent_at": time.Now(),
+			})
+		if result.Error != nil {
+			s.logger.WithError(result.Error).Warnf("Failed to mark survey %d as sent", survey.ID)
+			continue
+		}
+		if result.RowsAffected > 0 {
+			sent++
+		}
+	}
+	return sent, nil
+}
+
+// resolveSurveyRecipient 解析收件邮箱：survey.CustomerID 即 users.id。
+func (s *SatisfactionService) resolveSurveyRecipient(ctx context.Context, customerUserID uint) (string, bool) {
+	var user models.User
+	if err := s.db.WithContext(ctx).Select("id", "email").First(&user, customerUserID).Error; err != nil {
+		return "", false
+	}
+	email := strings.TrimSpace(user.Email)
+	if email == "" {
+		return "", false
+	}
+	return email, true
+}
+
+func buildSurveyEmailContent(survey *models.SatisfactionSurvey, baseURL string) (string, string) {
+	link := fmt.Sprintf("%s/csat/%s", baseURL, survey.SurveyToken)
+	if baseURL == "" {
+		link = fmt.Sprintf("/csat/%s", survey.SurveyToken)
+	}
+	subject := fmt.Sprintf("您的工单 #%d 服务满意度评价", survey.TicketID)
+	body := strings.Join([]string{
+		"尊敬的客户，您好：",
+		"",
+		fmt.Sprintf("您的工单 #%d 已处理完毕，恳请您对本次服务做出评价。", survey.TicketID),
+		"",
+		fmt.Sprintf("评分链接：%s", link),
+		"",
+		"链接 7 天内有效，感谢您的反馈！",
+	}, "\n")
+	return subject, body
 }
 
 // CreateSatisfaction 创建满意度评价
