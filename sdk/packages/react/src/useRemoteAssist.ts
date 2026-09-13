@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { RemoteAssistRecordingState, RemoteAssistStartOptions, RemoteAssistState } from '@servify/core';
+import type { RemoteAssistRecordingState, RemoteAssistStartOptions, RemoteAssistState, ServifyRTCTrackEvent } from '@servify/core';
 import { useServify } from './ServifyProvider';
 
 export interface UseRemoteAssistReturn {
@@ -99,10 +99,11 @@ export function useRemoteAssist(): UseRemoteAssistReturn {
       void addRemoteIce(candidate).catch(() => undefined);
     };
 
-    const handleTrack = (event: RTCTrackEvent) => {
+    const handleTrack = (event: ServifyRTCTrackEvent) => {
       const [stream] = event.streams;
       if (stream) {
-        setRemoteStream(stream);
+        // DOM 宿主的 streams 元素即 MediaStream；core 契约持最小结构面
+        setRemoteStream(stream as MediaStream);
       }
     };
 

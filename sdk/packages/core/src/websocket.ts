@@ -7,7 +7,7 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeState, RemoteAssistState } from './types';
+import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory } from './types';
 
 export interface WebSocketManagerOptions {
   url: string;
@@ -19,6 +19,20 @@ export interface WebSocketManagerOptions {
   reconnectPolicy?: ReconnectPolicy;
   authProvider?: AuthProvider;
   onTokenRefreshRequired?: () => Promise<void>;
+  /** WebSocket 工厂注入点；缺省用 globalThis.WebSocket（非 DOM 宿主需自行注入）。 */
+  webSocketFactory?: WebSocketFactory;
+}
+
+// 默认构造：运行时探测全局 WebSocket，缺失时给出可操作的错误信息。
+function createDefaultWebSocket(url: string, protocols?: string | string[]): WebSocket {
+  const WS = (globalThis as { WebSocket?: new (url: string, protocols?: string | string[]) => WebSocket })
+    .WebSocket;
+  if (!WS) {
+    throw new Error(
+      'WebSocket is not available in this environment; provide options.webSocketFactory to supply one.',
+    );
+  }
+  return new WS(url, protocols);
 }
 
 type NormalizedWebSocketManagerOptions = Omit<
@@ -56,7 +70,9 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       reconnectPolicy,
       authProvider: options.authProvider,
       onTokenRefreshRequired: options.onTokenRefreshRequired ?? (async () => undefined),
-      ...options
+      ...options,
+      // 展开后再兜底：调用方显式传 undefined 也不会覆盖掉默认工厂
+      webSocketFactory: options.webSocketFactory ?? createDefaultWebSocket,
     };
   }
 
@@ -75,7 +91,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       this.log('正在连接 WebSocket...', connectionUrl);
 
       try {
-        this.ws = new WebSocket(connectionUrl, this.options.protocols);
+        this.ws = this.options.webSocketFactory(connectionUrl, this.options.protocols);
       } catch (error) {
         this.state = 'error';
         reject(error);

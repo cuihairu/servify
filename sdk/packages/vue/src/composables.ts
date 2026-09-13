@@ -7,6 +7,7 @@ import {
   Ticket,
   RemoteAssistStartOptions,
   RemoteAssistState,
+  ServifyRTCTrackEvent,
 } from '@servify/core';
 
 export function useChat() {
@@ -342,10 +343,11 @@ export function useRemoteAssist() {
     void addRemoteIce(candidate).catch(() => undefined);
   };
 
-  const handleTrack = (event: RTCTrackEvent) => {
+  const handleTrack = (event: ServifyRTCTrackEvent) => {
     const [stream] = event.streams;
     if (stream) {
-      remoteStream.value = stream;
+      // DOM 宿主的 streams 元素即 MediaStream；core 契约持最小结构面
+      remoteStream.value = stream as MediaStream;
     }
   };
 

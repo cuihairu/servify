@@ -17,7 +17,15 @@ export interface ServifyConfig {
   authProvider?: AuthProvider;
   onTokenRefreshRequired?: () => Promise<void>;
   remoteAssist?: RemoteAssistConfig;
+  /**
+   * WebSocket 工厂注入点：非 DOM 宿主（React Native 测试、自定义传输）替换
+   * 全局 WebSocket 构造。缺省使用 globalThis.WebSocket。
+   */
+  webSocketFactory?: WebSocketFactory;
 }
+
+/** WebSocket 传输工厂：返回宿主平台的 WebSocket 实例（浏览器/RN 同形 API）。 */
+export type WebSocketFactory = (url: string, protocols?: string | string[]) => WebSocket;
 
 export interface Customer {
   id: number;
@@ -124,7 +132,9 @@ export interface RemoteAssistConfig {
   audio?: boolean;
   /** 访客端本地录制屏幕共享，结束后自动上传并回写协助会话（默认 false） */
   record?: boolean;
-  iceServers?: RTCIceServer[];
+  iceServers?: ServifyRTCIceServer[];
+  /** RTCPeerConnection 工厂注入点：非 DOM 宿主替换全局构造（缺省 globalThis）。 */
+  peerConnectionFactory?: (config: { iceServers?: ServifyRTCIceServer[] }) => RTCPeerConnection;
   dataChannelLabel?: string;
 }
 
@@ -153,6 +163,54 @@ export interface RemoteAssistRuntimeState {
   state: string;
 }
 
+// --- DOM 解耦的 RTC 结构化类型 ---
+// 与 DOM 库同名类型字段兼容（{type,sdp}/{candidate,...}），但由 core 自持，
+// 非 DOM 宿主（React Native）无需 DOM lib 即可消费共享契约。
+
+export type ServifyRTCSdpType = 'offer' | 'pranswer' | 'answer' | 'rollback';
+
+export interface ServifyRTCSessionDescriptionInit {
+  type: ServifyRTCSdpType;
+  sdp?: string;
+}
+
+export interface ServifyRTCIceCandidateInit {
+  candidate?: string;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+  usernameFragment?: string | null;
+}
+
+export interface ServifyRTCIceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+  credentialType?: string;
+}
+
+/** 远端媒体轨道的最小结构面（DOM MediaStreamTrack / RN 注入轨道同形）。 */
+export interface ServifyMediaStreamTrack {
+  readonly id: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly enabled: boolean;
+  readonly muted: boolean;
+  stop(): void;
+}
+
+/** 远端媒体流的最小结构面（DOM MediaStream / RN 注入流同形）。 */
+export interface ServifyMediaStream {
+  readonly id: string;
+  readonly active: boolean;
+  getTracks(): ServifyMediaStreamTrack[];
+}
+
+/** ontrack 事件的最小结构面（peer.ontrack 负载鸭子类型）。 */
+export interface ServifyRTCTrackEvent {
+  readonly track: ServifyMediaStreamTrack;
+  readonly streams: readonly ServifyMediaStream[];
+}
+
 // 事件类型
 export type ServifyEventMap = {
   'connected': [];
@@ -167,10 +225,10 @@ export type ServifyEventMap = {
   'error': [error: Error];
   'ticket_created': [ticket: Ticket];
   'ticket_updated': [ticket: Ticket];
-  'webrtc:offer': [offer: RTCSessionDescriptionInit];
-  'webrtc:answer': [answer: RTCSessionDescriptionInit];
-  'webrtc:candidate': [candidate: RTCIceCandidateInit];
-  'webrtc:track': [event: RTCTrackEvent];
+  'webrtc:offer': [offer: ServifyRTCSessionDescriptionInit];
+  'webrtc:answer': [answer: ServifyRTCSessionDescriptionInit];
+  'webrtc:candidate': [candidate: ServifyRTCIceCandidateInit];
+  'webrtc:track': [event: ServifyRTCTrackEvent];
   'webrtc:state': [state: RemoteAssistState];
   'remote-assist:session': [assistId: string];
   'remote-assist:recording': [state: RemoteAssistRecordingState];
@@ -186,7 +244,7 @@ export interface ApiResponse<T = unknown> {
 
 // WebRTC 相关类型
 export interface WebRTCConfig {
-  iceServers?: RTCIceServer[];
+  iceServers?: ServifyRTCIceServer[];
   video?: boolean;
   audio?: boolean;
 }

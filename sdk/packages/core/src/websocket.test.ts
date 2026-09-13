@@ -162,4 +162,35 @@ describe('WebSocketManager', () => {
     });
     expect(stateSpy).toHaveBeenCalledWith('connected');
   });
+
+  it('creates the transport socket through the injected factory', async () => {
+    const created: FakeWebSocket[] = [];
+    const factory = vi.fn((url: string, protocols?: string | string[]) => {
+      const socket = new FakeWebSocket(url, protocols);
+      created.push(socket);
+      return socket as unknown as WebSocket;
+    });
+
+    // 不 stub 全局 WebSocket：工厂是唯一的构造来源
+    const manager = new WebSocketManager({
+      url: 'ws://localhost:8080/api/v1/ws',
+      webSocketFactory: factory,
+    });
+
+    const connectPromise = manager.connect();
+    await vi.waitFor(() => expect(created).toHaveLength(1));
+    created[0].open();
+    await connectPromise;
+
+    expect(factory).toHaveBeenCalledWith('ws://localhost:8080/api/v1/ws', []);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('throws a clear error when no WebSocket is available and no factory is injected', async () => {
+    vi.stubGlobal('WebSocket', undefined);
+
+    const manager = new WebSocketManager({ url: 'ws://localhost:8080/api/v1/ws' });
+
+    await expect(manager.connect()).rejects.toThrow('provide options.webSocketFactory');
+  });
 });

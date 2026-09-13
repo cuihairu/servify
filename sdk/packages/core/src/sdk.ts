@@ -16,6 +16,9 @@ import {
   RemoteAssistStartOptions,
   RemoteAssistState,
   RemoteAssistRecordingState,
+  ServifyRTCIceServer,
+  ServifyRTCSessionDescriptionInit,
+  ServifyRTCIceCandidateInit,
 } from './types';
 
 export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientSession<Record<string, unknown>, ServifyEventMap> {
@@ -117,6 +120,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       reconnectPolicy: this.config.reconnectPolicy,
       authProvider: this.config.authProvider,
       onTokenRefreshRequired: this.config.onTokenRefreshRequired,
+      webSocketFactory: this.config.webSocketFactory,
       debug: this.config.debug,
     });
 
@@ -276,9 +280,12 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     // 重置残留媒体资源但保留已绑定的 assist 会话（宿主页可能在 start 前注入）
     await this.cleanupRemoteAssistMedia();
 
-    const peer = new RTCPeerConnection({
-      iceServers: options?.iceServers || this.config.remoteAssist?.iceServers || [],
-    });
+    const iceServers = options?.iceServers || this.config.remoteAssist?.iceServers || [];
+    const peerFactory =
+      options?.peerConnectionFactory ?? this.config.remoteAssist?.peerConnectionFactory;
+    const peer = peerFactory
+      ? peerFactory({ iceServers })
+      : this.createDefaultPeerConnection(iceServers);
     this.remoteAssistPeer = peer;
 
     const dataChannel = peer.createDataChannel(
@@ -348,7 +355,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     return peer;
   }
 
-  async acceptRemoteAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
+  async acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void> {
     if (!this.remoteAssistPeer) {
       throw new Error('Remote assist has not started');
     }
@@ -357,7 +364,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.updateRemoteAssistState('connecting');
   }
 
-  async addRemoteIce(candidate: RTCIceCandidateInit): Promise<void> {
+  async addRemoteIce(candidate: ServifyRTCIceCandidateInit): Promise<void> {
     if (!this.remoteAssistPeer) {
       throw new Error('Remote assist has not started');
     }
@@ -703,6 +710,19 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     } catch {
       // 非 JSON 消息忽略（DataChannel 上可能跑其他协议）
     }
+  }
+
+  // 默认 RTCPeerConnection 构造：非 DOM 宿主必须注入 peerConnectionFactory。
+  private createDefaultPeerConnection(iceServers: ServifyRTCIceServer[]): RTCPeerConnection {
+    const RTC = (globalThis as {
+      RTCPeerConnection?: new (config?: { iceServers?: unknown[] }) => RTCPeerConnection;
+    }).RTCPeerConnection;
+    if (!RTC) {
+      throw new Error(
+        'RTCPeerConnection is not available in this environment; inject remoteAssist.peerConnectionFactory to provide one.',
+      );
+    }
+    return new RTC({ iceServers: iceServers as unknown[] });
   }
 
   private async captureRemoteAssistStream(options?: RemoteAssistStartOptions): Promise<MediaStream> {
