@@ -1,14 +1,21 @@
 {
   "name": "@servify/app-core",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Reserved package for future Servify app and mobile SDK foundations",
+  "version": "1.0.0",
+  "description": "Servify app/mobile foundations: storage, offline queue, session snapshot and push token contracts with in-memory runtime",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
+    "build": "npx vite build",
+    "test": "npx vitest run",
     "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vite": "^8.2.2",
+    "vite-plugin-dts": "^5.1.0",
+    "vitest": "^5.0.0"
   }
 }

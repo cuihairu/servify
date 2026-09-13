@@ -9,10 +9,9 @@ const publishablePackages = new Set([
   "@servify/vue",
   "@servify/vanilla",
   "@servify/api-client",
-]);
-const reservedPackages = new Set([
   "@servify/app-core",
 ]);
+const reservedPackages = new Set([]);
 const checkOnly = process.argv.includes("--check");
 
 function readJSON(filePath) {
