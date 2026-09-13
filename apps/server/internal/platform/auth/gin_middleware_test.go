@@ -153,3 +153,47 @@ func TestAuthMiddleware_ProjectsTenantAndWorkspace(t *testing.T) {
 		t.Fatalf("expected tenant/workspace in response, body=%s", body)
 	}
 }
+
+func TestAuthMiddleware_RejectsNonAccessTokenUse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Unix(1_700_000_000, 0)
+	secret := "test-secret"
+
+	r := gin.New()
+	r.Use(AuthMiddleware(MiddlewareConfig{
+		Secret: secret,
+		Now:    func() time.Time { return now },
+	}))
+	r.GET("/protected", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+
+	// 历史 access token 无 token_use claim → 放行；显式 access 同样放行
+	legacyToken := createTestHS256JWT(t, map[string]interface{}{
+		"user_id": 1,
+		"iat":     now.Unix(),
+		"exp":     now.Add(10 * time.Minute).Unix(),
+	}, secret)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+legacyToken)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("legacy token expected 200 got %d body=%s", w.Code, w.Body.String())
+	}
+
+	// 2fa_challenge / refresh 等 token_use 一律拒绝——挑战 token 换不到任何受保护资源
+	for _, use := range []string{"2fa_challenge", "refresh"} {
+		token := createTestHS256JWT(t, map[string]interface{}{
+			"user_id":   1,
+			"token_use": use,
+			"iat":       now.Unix(),
+			"exp":       now.Add(10 * time.Minute).Unix(),
+		}, secret)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("token_use=%q expected 401 got %d body=%s", use, w.Code, w.Body.String())
+		}
+	}
+}

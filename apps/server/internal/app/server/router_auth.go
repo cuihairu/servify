@@ -42,12 +42,22 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	auth.POST("/login", authHandler.Login)
 	auth.POST("/refresh", authHandler.RefreshToken)
 
+	// TOTP 两步验证：挑战步换会话在 public 组（限流沿用 auth 前缀 25rpm）；
+	// 绑定/解绑/恢复码自服务走 authMe 组。
+	auth2FA := handlers.NewAuth2FAHandler(services.NewAuthService(deps.DB, deps.Config))
+	auth.POST("/2fa/verify", auth2FA.VerifyLogin)
+
 	authMe := auth.Group("")
 	authMe.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	authMe.GET("/me", authHandler.GetCurrentUser)
 	authMe.GET("/sessions", authHandler.ListSessions)
 	authMe.POST("/sessions/logout-current", authHandler.LogoutCurrentSession)
 	authMe.POST("/sessions/logout-others", authHandler.LogoutOtherSessions)
+	authMe.POST("/2fa/setup", auth2FA.Setup)
+	authMe.POST("/2fa/enable", auth2FA.Enable)
+	authMe.POST("/2fa/disable", auth2FA.Disable)
+	authMe.GET("/2fa/recovery-codes", auth2FA.RecoveryCodes)
+	authMe.POST("/2fa/recovery-codes/regenerate", auth2FA.RegenerateRecoveryCodes)
 
 	registerOIDCRoutes(r, deps)
 	registerUploadRoutes(r, deps)

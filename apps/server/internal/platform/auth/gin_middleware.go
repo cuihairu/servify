@@ -58,6 +58,14 @@ func AuthMiddleware(cfg MiddlewareConfig) gin.HandlerFunc {
 			abortJSON(c, http.StatusUnauthorized, "Unauthorized", err.Error())
 			return
 		}
+		// 挑战 token（2fa_challenge）与 refresh token 只对各自专用端点有效；
+		// 这里黑名单式拒绝（历史 access token 无 token_use claim，不能要求严格相等）。
+		switch tokenUse, _ := payload["token_use"].(string); tokenUse {
+		case "", "access":
+		default:
+			abortJSON(c, http.StatusUnauthorized, "Unauthorized", "token is not an access token")
+			return
+		}
 
 		claims := extractClaims(payload, resolver)
 		now := time.Now()

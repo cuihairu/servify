@@ -28,7 +28,7 @@ type AuthHandler struct {
 
 type authService interface {
 	Register(ctx context.Context, req services.RegisterInput, meta services.AuthSessionMetadata) (*services.AuthResult, error)
-	Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.AuthResult, error)
+	Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error)
 	GetCurrentUser(ctx context.Context, userID uint) (*models.User, error)
 	ListAuthSessions(ctx context.Context, userID uint) ([]models.UserAuthSession, error)
 	RevokeCurrentSession(ctx context.Context, userID uint, sessionID string) (*models.UserAuthSession, error)
@@ -131,7 +131,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.Login(c.Request.Context(), services.LoginInput{
+	outcome, err := h.service.Login(c.Request.Context(), services.LoginInput{
 		Username: req.Username,
 		Password: req.Password,
 	}, authSessionMetadataFromRequest(c))
@@ -146,6 +146,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 		return
 	}
+	if outcome.TwoFactorRequired {
+		// 两步验证挑战：200 但不带 token 字段，客户端须持挑战 token 调
+		// /auth/2fa/verify 换取正式会话（未启用用户响应形状不变）。
+		c.JSON(http.StatusOK, gin.H{
+			"two_factor_required": true,
+			"challenge_token":     outcome.ChallengeToken,
+			"expires_in":          outcome.ExpiresIn,
+		})
+		return
+	}
+	result := outcome.Result
 
 	c.JSON(http.StatusOK, tokenResponse{
 		Token:            result.Token,

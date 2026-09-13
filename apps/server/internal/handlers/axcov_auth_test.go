@@ -41,9 +41,12 @@ func (s *axcAuthService) Register(ctx context.Context, req services.RegisterInpu
 	return s.registerResp, s.registerErr
 }
 
-func (s *axcAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *axcAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error) {
 	s.loginInput = req
-	return s.loginResp, s.loginErr
+	if s.loginResp == nil {
+		return nil, s.loginErr
+	}
+	return &services.LoginOutcome{Result: s.loginResp}, s.loginErr
 }
 
 func (s *axcAuthService) GetCurrentUser(ctx context.Context, userID uint) (*models.User, error) {

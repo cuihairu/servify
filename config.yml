@@ -196,6 +196,14 @@ security:
     # Risk score cutoffs for low / medium / high classification.
     medium_risk_score: 2
     high_risk_score: 4
+  # TOTP 两步验证：登录密码通过后进入挑战步（认证器验证码或恢复码）
+  two_factor:
+    # 总开关（kill-switch）：关闭时已启用用户降级为单因子直登，setup/enable 拒绝
+    enabled: false
+    # 认证器 App 里显示的发行方标识
+    issuer: "Servify"
+    # 登录挑战 JWT 有效期（首轮密码验证后到完成第二因子的窗口）
+    challenge_ttl: 5m
 
 upload:
   enabled: true

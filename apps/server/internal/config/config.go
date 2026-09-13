@@ -238,6 +238,18 @@ type SecurityConfig struct {
 	SessionRisk           SessionRiskPolicyConfig            `yaml:"session_risk"`
 	SessionRiskProfiles   map[string]SessionRiskPolicyConfig `yaml:"session_risk_profiles"`
 	SessionIPIntelligence SessionIPIntelligenceConfig        `yaml:"session_ip_intelligence"`
+	TwoFactor             TwoFactorConfig                    `yaml:"two_factor"`
+}
+
+// TwoFactorConfig 是 TOTP 两步验证配置。
+type TwoFactorConfig struct {
+	// Enabled 是总开关（kill-switch）：关闭时登录不进入挑战步（已启用用户
+	// 降级为单因子直登），setup/enable 端点拒绝；disable 不受限
+	Enabled bool `yaml:"enabled" json:"enabled,omitempty"`
+	// Issuer 是 TOTP otpauth URI 中的发行方标识（认证器 App 里显示的站点名）
+	Issuer string `yaml:"issuer" json:"issuer,omitempty"`
+	// ChallengeTTL 是登录挑战 JWT 的有效期（首轮密码验证通过后到完成第二因子的窗口）
+	ChallengeTTL time.Duration `yaml:"challenge_ttl" json:"challenge_ttl,omitempty"`
 }
 
 type CORSConfig struct {
@@ -829,6 +841,12 @@ func GetDefaultConfig() *Config {
 				Enabled:           false,
 				RequestsPerMinute: 300,
 				Burst:             50,
+			},
+			TwoFactor: TwoFactorConfig{
+				// 两步验证默认关闭（企业客户按需开启）；挑战窗口 5 分钟
+				Enabled:      false,
+				Issuer:       "Servify",
+				ChallengeTTL: 5 * time.Minute,
 			},
 			Audit: AuditConfig{
 				Enabled:          true,

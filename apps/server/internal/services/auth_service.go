@@ -115,7 +115,10 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 	return s.buildAuthResult(ctx, user, session)
 }
 
-func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessionMetadata) (*AuthResult, error) {
+// Login 验证密码后分岔：未启用两步验证（或 kill-switch 关闭）的用户直接拿
+// 到会话 token；已启用的用户只拿到短命挑战 token，须走 VerifyTwoFactorLogin
+// 完成第二因子后才换取正式会话。
+func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessionMetadata) (*LoginOutcome, error) {
 	if s == nil || s.db == nil {
 		return nil, gorm.ErrInvalidDB
 	}
@@ -132,11 +135,22 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, ErrAuthInvalidCredentials
 	}
+	if s.twoFactorChallengeEnabled(s.config, &user) {
+		token, expiresIn, err := s.createChallengeToken(&user, meta)
+		if err != nil {
+			return nil, err
+		}
+		return &LoginOutcome{TwoFactorRequired: true, ChallengeToken: token, ExpiresIn: expiresIn}, nil
+	}
 	session, err := s.createAuthSession(ctx, user.ID, meta)
 	if err != nil {
 		return nil, err
 	}
-	return s.buildAuthResult(ctx, &user, session)
+	result, err := s.buildAuthResult(ctx, &user, session)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginOutcome{Result: result}, nil
 }
 
 func (s *AuthService) GetCurrentUser(ctx context.Context, userID uint) (*models.User, error) {

@@ -22,7 +22,7 @@ func newAuthServiceTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.User{}, &models.UserAuthSession{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.UserAuthSession{}, &models.UserRecoveryCode{}); err != nil {
 		t.Fatalf("migrate models: %v", err)
 	}
 	return db
@@ -68,19 +68,23 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
-	if loginResult.SessionID == "" {
+	if loginResult.TwoFactorRequired || loginResult.Result == nil {
+		t.Fatalf("expected direct login result, got challenge=%v", loginResult.TwoFactorRequired)
+	}
+	result := loginResult.Result
+	if result.SessionID == "" {
 		t.Fatalf("expected session id in login result")
 	}
 
-	payload1, err := (platformauth.Validator{Secret: testAuthConfig().JWT.Secret}).ValidateToken(loginResult.Token)
+	payload1, err := (platformauth.Validator{Secret: testAuthConfig().JWT.Secret}).ValidateToken(result.Token)
 	if err != nil {
 		t.Fatalf("validate login token: %v", err)
 	}
 	if got := int(payload1["token_version"].(float64)); got != 2 {
 		t.Fatalf("token_version = %d want 2", got)
 	}
-	if got := payload1["session_id"].(string); got != loginResult.SessionID {
-		t.Fatalf("session_id = %q want %q", got, loginResult.SessionID)
+	if got := payload1["session_id"].(string); got != result.SessionID {
+		t.Fatalf("session_id = %q want %q", got, result.SessionID)
 	}
 	if got := int(payload1["session_token_version"].(float64)); got != 0 {
 		t.Fatalf("session_token_version = %d want 0", got)
@@ -91,7 +95,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 	if got := payload1["jti"].(string); got == "" {
 		t.Fatalf("expected access token jti")
 	}
-	refreshPayload1, err := (platformauth.Validator{Secret: testAuthConfig().JWT.Secret}).ValidateToken(loginResult.RefreshToken)
+	refreshPayload1, err := (platformauth.Validator{Secret: testAuthConfig().JWT.Secret}).ValidateToken(result.RefreshToken)
 	if err != nil {
 		t.Fatalf("validate login refresh token: %v", err)
 	}
@@ -105,7 +109,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("refresh session_token_version = %d want 0", got)
 	}
 
-	refreshResult, err := svc.RefreshToken(context.Background(), loginResult.RefreshToken, AuthSessionMetadata{
+	refreshResult, err := svc.RefreshToken(context.Background(), result.RefreshToken, AuthSessionMetadata{
 		DeviceFingerprint: "fp-refresh-1",
 		UserAgent:         "servify-test/2.0",
 		ClientIP:          "198.51.100.9",
@@ -113,8 +117,8 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RefreshToken() error = %v", err)
 	}
-	if refreshResult.SessionID != loginResult.SessionID {
-		t.Fatalf("refresh session id = %q want %q", refreshResult.SessionID, loginResult.SessionID)
+	if refreshResult.SessionID != result.SessionID {
+		t.Fatalf("refresh session id = %q want %q", refreshResult.SessionID, result.SessionID)
 	}
 
 	payload2, err := (platformauth.Validator{Secret: testAuthConfig().JWT.Secret}).ValidateToken(refreshResult.Token)
@@ -133,7 +137,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 	}
 
 	var session models.UserAuthSession
-	if err := db.First(&session, "id = ?", loginResult.SessionID).Error; err != nil {
+	if err := db.First(&session, "id = ?", result.SessionID).Error; err != nil {
 		t.Fatalf("load session: %v", err)
 	}
 	if session.TokenVersion != 1 {
@@ -155,7 +159,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("expected last_seen_at to be set")
 	}
 
-	if _, err := svc.RefreshToken(context.Background(), loginResult.RefreshToken, AuthSessionMetadata{}); !errors.Is(err, ErrAuthInvalidRefreshToken) {
+	if _, err := svc.RefreshToken(context.Background(), result.RefreshToken, AuthSessionMetadata{}); !errors.Is(err, ErrAuthInvalidRefreshToken) {
 		t.Fatalf("reusing old refresh token err = %v want %v", err, ErrAuthInvalidRefreshToken)
 	}
 }

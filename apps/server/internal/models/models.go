@@ -7,21 +7,25 @@ import (
 
 // 用户模型
 type User struct {
-	ID              uint           `gorm:"primaryKey" json:"id"`
-	Username        string         `gorm:"unique;not null" json:"username"`
-	Email           string         `gorm:"unique;not null" json:"email"`
-	Password        string         `gorm:"not null" json:"-"` // bcrypt hash, never exposed via JSON
-	Name            string         `json:"name"`
-	Phone           string         `json:"phone"`
-	Avatar          string         `json:"avatar"`
-	Role            string         `gorm:"default:'customer'" json:"role"` // customer, agent, admin
-	Status          string         `gorm:"default:'active'" json:"status"` // active, inactive, banned
-	LastLogin       *time.Time     `json:"last_login"`
-	TokenValidAfter *time.Time     `json:"token_valid_after,omitempty"`
-	TokenVersion    int            `gorm:"default:0" json:"token_version"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	ID              uint       `gorm:"primaryKey" json:"id"`
+	Username        string     `gorm:"unique;not null" json:"username"`
+	Email           string     `gorm:"unique;not null" json:"email"`
+	Password        string     `gorm:"not null" json:"-"` // bcrypt hash, never exposed via JSON
+	Name            string     `json:"name"`
+	Phone           string     `json:"phone"`
+	Avatar          string     `json:"avatar"`
+	Role            string     `gorm:"default:'customer'" json:"role"` // customer, agent, admin
+	Status          string     `gorm:"default:'active'" json:"status"` // active, inactive, banned
+	LastLogin       *time.Time `json:"last_login"`
+	TokenValidAfter *time.Time `json:"token_valid_after,omitempty"`
+	TokenVersion    int        `gorm:"default:0" json:"token_version"`
+	// TOTP 两步验证；totp_secret 绝不进 JSON 响应
+	TotpSecret    string         `gorm:"default:''" json:"-"`
+	TotpEnabled   bool           `gorm:"default:false" json:"totp_enabled,omitempty"`
+	TotpEnabledAt *time.Time     `json:"totp_enabled_at,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// 关联关系
 	Sessions     []Session         `gorm:"foreignKey:UserID" json:"sessions,omitempty"`
@@ -46,6 +50,16 @@ type UserAuthSession struct {
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 
 	User User `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// UserRecoveryCode 是 TOTP 两步验证的恢复码：只存 sha256 原文哈希，
+// 核销走原子 UPDATE（used_at IS NULL 才置位），防止并发重复使用同一码。
+type UserRecoveryCode struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserID    uint       `gorm:"index;not null" json:"user_id"`
+	CodeHash  string     `gorm:"size:64;not null" json:"-"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // RevokedToken tracks explicitly denylisted JWTs by their unique token id (jti).

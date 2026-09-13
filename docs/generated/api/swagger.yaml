@@ -526,6 +526,32 @@ definitions:
       user:
         $ref: '#/definitions/handlers.userResponse'
     type: object
+  handlers.twoFactorDisableRequest:
+    properties:
+      code:
+        type: string
+      password:
+        type: string
+    type: object
+  handlers.twoFactorEnableRequest:
+    properties:
+      code:
+        type: string
+      secret:
+        type: string
+    type: object
+  handlers.twoFactorRegenerateRequest:
+    properties:
+      code:
+        type: string
+    type: object
+  handlers.twoFactorVerifyRequest:
+    properties:
+      challenge_token:
+        type: string
+      code:
+        type: string
+    type: object
   handlers.userResponse:
     properties:
       avatar:
@@ -1225,6 +1251,10 @@ definitions:
         type: string
       token_version:
         type: integer
+      totp_enabled:
+        type: boolean
+      totp_enabled_at:
+        type: string
       updated_at:
         type: string
       username:
@@ -1386,6 +1416,10 @@ definitions:
         type: string
       token_version:
         type: integer
+      totp_enabled:
+        type: boolean
+      totp_enabled_at:
+        type: string
       updated_at:
         type: string
       username:
@@ -1616,6 +1650,13 @@ definitions:
       count:
         type: integer
       date:
+        type: string
+    type: object
+  services.TwoFactorSetup:
+    properties:
+      otpauth_uri:
+        type: string
+      secret:
         type: string
     type: object
   services.WorkspaceOverview:
@@ -4875,6 +4916,197 @@ paths:
   /api/v1/api-keys/{id}/revoke:
     post:
       responses: {}
+  /api/v1/auth/2fa/disable:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account password and authenticator or recovery code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.twoFactorDisableRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Disable two-factor auth
+      tags:
+      - auth
+  /api/v1/auth/2fa/enable:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Secret from setup and authenticator code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.twoFactorEnableRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Enable two-factor auth with the verified secret
+      tags:
+      - auth
+  /api/v1/auth/2fa/recovery-codes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              format: int64
+              type: integer
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Show remaining recovery code count
+      tags:
+      - auth
+  /api/v1/auth/2fa/recovery-codes/regenerate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Current authenticator code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.twoFactorRegenerateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                type: string
+              type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace recovery codes with a fresh batch
+      tags:
+      - auth
+  /api/v1/auth/2fa/setup:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.TwoFactorSetup'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate a TOTP secret for two-factor enrollment
+      tags:
+      - auth
+  /api/v1/auth/2fa/verify:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Challenge token and authenticator or recovery code
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.twoFactorVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.tokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Complete two-factor login challenge
+      tags:
+      - auth
   /api/v1/auth/login:
     post:
       consumes:

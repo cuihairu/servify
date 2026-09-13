@@ -52,7 +52,7 @@ func (s *stubAuthService) Register(ctx context.Context, req services.RegisterInp
 	return nil, errors.New("not implemented")
 }
 
-func (s *stubAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *stubAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error) {
 	s.meta = meta
 	return nil, errors.New("not implemented")
 }
