@@ -59,34 +59,112 @@ func (r *GormRepository) GetDashboardStats(ctx context.Context) (*analyticsapp.D
 	return stats, nil
 }
 
+// GetTimeRangeStats 按日聚合区间统计。原先逐日发起 5 条 COUNT（N+1），
+// 现改为每指标一条 GROUP BY 聚合，再在 Go 侧按日零填充组装；输出口径与
+// 旧实现逐字段一致（UTC 日界，Date 为 YYYY-MM-DD，区间内每一天都有行）。
 func (r *GormRepository) GetTimeRangeStats(ctx context.Context, startDate, endDate time.Time) ([]analyticsapp.TimeRangeStats, error) {
-	var stats []analyticsapp.TimeRangeStats
 	current := startDate.Truncate(24 * time.Hour)
 	end := endDate.Truncate(24 * time.Hour)
-	for current.Before(end) || current.Equal(end) {
-		nextDay := current.Add(24 * time.Hour)
-		stat := analyticsapp.TimeRangeStats{Date: current.Format("2006-01-02")}
-		applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), ctx).Where("created_at >= ? AND created_at < ?", current, nextDay).Count(&stat.Tickets)
-		applyEntityScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx).Where("created_at >= ? AND created_at < ?", current, nextDay).Count(&stat.Sessions)
-		applyEntityScope(r.db.WithContext(ctx).Model(&models.Message{}), ctx).Where("created_at >= ? AND created_at < ?", current, nextDay).Count(&stat.Messages)
-		applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), ctx).Where("resolved_at >= ? AND resolved_at < ?", current, nextDay).Count(&stat.ResolvedTickets)
-		if shouldUseGlobalDailyStats(ctx) {
-			var daily models.DailyStats
-			if err := r.db.WithContext(ctx).Where("date = ?", current).First(&daily).Error; err == nil {
+	if end.Before(current) {
+		return nil, nil
+	}
+	exclusiveEnd := end.Add(24 * time.Hour)
+
+	days := make([]string, 0, 32)
+	byDate := make(map[string]*analyticsapp.TimeRangeStats, 32)
+	for d := current; d.Before(end) || d.Equal(end); d = d.Add(24 * time.Hour) {
+		key := d.Format("2006-01-02")
+		days = append(days, key)
+		byDate[key] = &analyticsapp.TimeRangeStats{Date: key}
+	}
+
+	type dailyRow struct {
+		Day   string
+		Total int64
+	}
+	countInto := func(model interface{}, column string, dest func(*analyticsapp.TimeRangeStats) *int64) error {
+		day := dayExpr(r.db, column)
+		var rows []dailyRow
+		if err := applyEntityScope(r.db.WithContext(ctx).Model(model), ctx).
+			Where(column+" >= ? AND "+column+" < ?", current, exclusiveEnd).
+			Select(day + " AS day, COUNT(*) AS total").
+			Group(day).
+			Scan(&rows).Error; err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if stat, ok := byDate[row.Day]; ok {
+				*dest(stat) = row.Total
+			}
+		}
+		return nil
+	}
+
+	if err := countInto(&models.Ticket{}, "created_at", func(s *analyticsapp.TimeRangeStats) *int64 { return &s.Tickets }); err != nil {
+		return nil, err
+	}
+	if err := countInto(&models.Session{}, "created_at", func(s *analyticsapp.TimeRangeStats) *int64 { return &s.Sessions }); err != nil {
+		return nil, err
+	}
+	if err := countInto(&models.Message{}, "created_at", func(s *analyticsapp.TimeRangeStats) *int64 { return &s.Messages }); err != nil {
+		return nil, err
+	}
+	if err := countInto(&models.Ticket{}, "resolved_at", func(s *analyticsapp.TimeRangeStats) *int64 { return &s.ResolvedTickets }); err != nil {
+		return nil, err
+	}
+
+	if shouldUseGlobalDailyStats(ctx) {
+		var dailies []models.DailyStats
+		if err := r.db.WithContext(ctx).
+			Where("date >= ? AND date <= ?", current, end).
+			Find(&dailies).Error; err != nil {
+			return nil, err
+		}
+		for _, daily := range dailies {
+			if stat, ok := byDate[daily.Date.Format("2006-01-02")]; ok {
 				stat.AvgResponseTime = float64(daily.AvgResponseTime)
 				stat.CustomerSatisfaction = daily.CustomerSatisfaction
 			}
-		} else {
-			// DailyStats is currently system-scoped; for scoped requests only derive
-			// values that can be safely recomputed from scoped primary data.
-			applyEntityScope(r.db.WithContext(ctx).Model(&models.CustomerSatisfaction{}), ctx).
-				Where("created_at >= ? AND created_at < ?", current, nextDay).
-				Select("COALESCE(AVG(rating), 0)").Row().Scan(&stat.CustomerSatisfaction)
 		}
-		stats = append(stats, stat)
-		current = nextDay
+	} else {
+		// DailyStats is currently system-scoped; for scoped requests only derive
+		// values that can be safely recomputed from scoped primary data.
+		column := "created_at"
+		day := dayExpr(r.db, column)
+		var rows []struct {
+			Day       string
+			AvgRating float64
+		}
+		if err := applyEntityScope(r.db.WithContext(ctx).Model(&models.CustomerSatisfaction{}), ctx).
+			Where(column+" >= ? AND "+column+" < ?", current, exclusiveEnd).
+			Select(day + " AS day, COALESCE(AVG(rating), 0) AS avg_rating").
+			Group(day).
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if stat, ok := byDate[row.Day]; ok {
+				stat.CustomerSatisfaction = row.AvgRating
+			}
+		}
+	}
+
+	stats := make([]analyticsapp.TimeRangeStats, 0, len(days))
+	for _, key := range days {
+		stats = append(stats, *byDate[key])
 	}
 	return stats, nil
+}
+
+// dayExpr 把时间列格式化为 UTC 日界的 YYYY-MM-DD 文本；pg 用 AT TIME ZONE
+// 固定 UTC 与 Truncate(24h) 口径一致，sqlite 直接 strftime。
+func dayExpr(db *gorm.DB, column string) string {
+	switch db.Dialector.Name() {
+	case "sqlite":
+		return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s)", column)
+	default:
+		return fmt.Sprintf("TO_CHAR(%s AT TIME ZONE 'UTC', 'YYYY-MM-DD')", column)
+	}
 }
 
 func (r *GormRepository) GetAgentPerformanceStats(ctx context.Context, startDate, endDate time.Time, limit int) ([]analyticsapp.AgentPerformanceStats, error) {

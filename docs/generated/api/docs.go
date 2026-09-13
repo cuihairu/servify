@@ -4016,6 +4016,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/statistics/export": {
+            "get": {
+                "description": "按类型与格式导出统计数据：time_range（时间范围）、agent_performance（客服绩效）、\nticket_category（工单分类）、ticket_priority（工单优先级）、customer_source（客户来源）、satisfaction（满意度趋势）",
+                "produces": [
+                    "text/csv",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ],
+                "tags": [
+                    "统计"
+                ],
+                "summary": "导出统计报表（CSV / Excel）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "报表类型 time_range|agent_performance|ticket_category|ticket_priority|customer_source|satisfaction",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "导出格式 csv（默认）|xlsx",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "开始日期 YYYY-MM-DD（默认近 30 天；time_range 上限 366 天）",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/statistics/remote-assist-tickets": {
             "get": {
                 "description": "获取远程协助来源工单的总量、待处理、已解决、已关闭统计",

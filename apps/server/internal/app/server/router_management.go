@@ -61,7 +61,9 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 
 	statisticsAPI := api.Group("/")
 	statisticsAPI.Use(middleware.RequireResourcePermission("statistics"))
-	handlers.RegisterStatisticsRoutes(statisticsAPI, handlers.NewStatisticsHandler(deps.StatisticsHandlerService, deps.Logger))
+	handlers.RegisterStatisticsRoutes(statisticsAPI,
+		handlers.NewStatisticsHandler(deps.StatisticsHandlerService, deps.Logger),
+		handlers.NewStatisticsExportHandler(deps.StatisticsHandlerService, deps.SatisfactionService, deps.Logger))
 
 	slaAPI := api.Group("/")
 	slaAPI.Use(middleware.RequireResourcePermission("sla"))

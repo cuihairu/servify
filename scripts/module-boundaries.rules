@@ -18,6 +18,7 @@ handler|Satisfaction|apps/server/internal/handlers/satisfaction_handler.go|satis
 handler|CSAT public|apps/server/internal/handlers/csat_public_handler.go|service|SatisfactionService|func NewCSATSurveyHandler\(service SatisfactionService\)|\*services\.SatisfactionService
 handler|Shift|apps/server/internal/handlers/shift_handler.go|shiftService|ShiftService|func NewShiftHandler\(shiftService ShiftService\)|\*services\.ShiftService
 handler|Suggestion|apps/server/internal/handlers/suggestion_handler.go|service|suggestiondelivery\.HandlerService|func NewSuggestionHandler\(service suggestiondelivery\.HandlerService\)|\*services\.SuggestionService
+handler|Statistics export|apps/server/internal/handlers/statistics_export_handler.go|statsService|analyticsdelivery\.HandlerService|func NewStatisticsExportHandler\(statsService analyticsdelivery\.HandlerService, satisfaction SatisfactionStatsReader, logger \*logrus\.Logger\)|\*services\.StatisticsService
 handler|Gamification|apps/server/internal/handlers/gamification_handler.go|service|gamificationdelivery\.HandlerService|func NewGamificationHandler\(service gamificationdelivery\.HandlerService\)|\*services\.GamificationService
 handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|SLAService|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|\*services\.SLAService
 handler|Quality|apps/server/internal/handlers/quality_handler.go|service|qualitydelivery\.HandlerService|func NewQualityHandler\(service qualitydelivery\.HandlerService\)|qualityapp\.QualityService
@@ -122,3 +123,4 @@ forbid|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space
 forbid|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+\*services\.MessageRouter|Message handler must not depend on concrete MessageRouter.
 forbid|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+slaHandlerSLAService|SLA handler must not keep private slaHandlerSLAService wiring.
 forbid|apps/server/internal/handlers/sla_handler.go|ticketService[[:space:]]+slaHandlerTicketService|SLA handler must not keep private slaHandlerTicketService wiring.
+require|apps/server/internal/handlers/statistics_export_handler.go|SatisfactionStatsReader|Statistics export handler must consume satisfaction stats behind the narrow reader interface.

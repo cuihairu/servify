@@ -4355,6 +4355,44 @@ paths:
       summary: 获取仪表板统计数据
       tags:
       - 统计
+  /api/statistics/export:
+    get:
+      description: |-
+        按类型与格式导出统计数据：time_range（时间范围）、agent_performance（客服绩效）、
+        ticket_category（工单分类）、ticket_priority（工单优先级）、customer_source（客户来源）、satisfaction（满意度趋势）
+      parameters:
+      - description: 报表类型 time_range|agent_performance|ticket_category|ticket_priority|customer_source|satisfaction
+        in: query
+        name: type
+        required: true
+        type: string
+      - description: 导出格式 csv（默认）|xlsx
+        in: query
+        name: format
+        type: string
+      - description: 开始日期 YYYY-MM-DD（默认近 30 天；time_range 上限 366 天）
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      produces:
+      - text/csv
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 导出统计报表（CSV / Excel）
+      tags:
+      - 统计
   /api/statistics/remote-assist-tickets:
     get:
       consumes:

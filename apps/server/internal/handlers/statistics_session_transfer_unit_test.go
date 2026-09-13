@@ -19,7 +19,7 @@ func newStatisticsUnitRouter(svc *unitAnalyticsService) *gin.Engine {
 	logger.SetLevel(logrus.ErrorLevel)
 	h := NewStatisticsHandler(svc, logger)
 	r := gin.New()
-	RegisterStatisticsRoutes(&r.RouterGroup, h)
+	RegisterStatisticsRoutes(&r.RouterGroup, h, NewStatisticsExportHandler(svc, &stubSatisfactionStatsReader{}, logger))
 	return r
 }
 

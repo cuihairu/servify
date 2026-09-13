@@ -370,7 +370,7 @@ func (h *StatisticsHandler) UpdateDailyStats(c *gin.Context) {
 }
 
 // RegisterStatisticsRoutes 注册统计相关路由
-func RegisterStatisticsRoutes(r *gin.RouterGroup, handler *StatisticsHandler) {
+func RegisterStatisticsRoutes(r *gin.RouterGroup, handler *StatisticsHandler, exportHandler *StatisticsExportHandler) {
 	stats := r.Group("/statistics")
 	{
 		stats.GET("/dashboard", handler.GetDashboardStats)
@@ -380,6 +380,7 @@ func RegisterStatisticsRoutes(r *gin.RouterGroup, handler *StatisticsHandler) {
 		stats.GET("/ticket-priority", handler.GetTicketPriorityStats)
 		stats.GET("/customer-source", handler.GetCustomerSourceStats)
 		stats.GET("/remote-assist-tickets", handler.GetRemoteAssistTicketStats)
+		stats.GET("/export", exportHandler.ExportStatistics)
 		stats.POST("/update-daily", handler.UpdateDailyStats)
 	}
 }
