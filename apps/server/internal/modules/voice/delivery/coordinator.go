@@ -41,6 +41,13 @@ func (c *Coordinator) HandleCallEvent(ctx context.Context, event voiceprotocol.C
 	}
 	switch event.Kind {
 	case voiceprotocol.CallEventInvite:
+		// hosted provider 会重试 webhook:通话已在(重复 invite)时幂等短路,
+		// 不重复建记录、不重发 call.started。
+		if callReached(ctx, c, event.CallID, func(status string, _ *voiceapp.CallDTO) bool {
+			return true
+		}) {
+			return nil
+		}
 		_, err := c.calls.StartCall(ctx, voiceapp.StartCallCommand{
 			CallID:       event.CallID,
 			SessionID:    firstNonEmpty(event.ConversationID, event.ConnectionID, event.CallID),
@@ -48,18 +55,40 @@ func (c *Coordinator) HandleCallEvent(ctx context.Context, event voiceprotocol.C
 		})
 		return err
 	case voiceprotocol.CallEventAnswer:
+		if callReached(ctx, c, event.CallID, func(status string, dto *voiceapp.CallDTO) bool {
+			return status == "answered"
+		}) {
+			return nil
+		}
 		_, err := c.calls.AnswerCall(ctx, voiceapp.AnswerCallCommand{CallID: event.CallID})
 		return err
 	case voiceprotocol.CallEventHold:
+		if callReached(ctx, c, event.CallID, func(status string, _ *voiceapp.CallDTO) bool {
+			return status == "held"
+		}) {
+			return nil
+		}
 		_, err := c.calls.HoldCall(ctx, voiceapp.HoldCallCommand{CallID: event.CallID})
 		return err
 	case voiceprotocol.CallEventResume:
+		if callReached(ctx, c, event.CallID, func(status string, dto *voiceapp.CallDTO) bool {
+			return status == "answered" && dto.ResumedAt != nil
+		}) {
+			return nil
+		}
 		_, err := c.calls.ResumeCall(ctx, voiceapp.ResumeCallCommand{CallID: event.CallID})
 		return err
 	case voiceprotocol.CallEventTransfer:
+		// 参数校验优先于幂等短路:非法事件(缺目标坐席)永远报错,
+		// 守卫只豁免合法事件的重复投递。
 		targetAgentID, err := targetAgentIDFromMetadata(event.Metadata)
 		if err != nil {
 			return err
+		}
+		if callReached(ctx, c, event.CallID, func(status string, _ *voiceapp.CallDTO) bool {
+			return status == "transferred"
+		}) {
+			return nil
 		}
 		_, err = c.calls.TransferCall(ctx, voiceapp.TransferCallCommand{
 			CallID:    event.CallID,
@@ -67,6 +96,14 @@ func (c *Coordinator) HandleCallEvent(ctx context.Context, event voiceprotocol.C
 		})
 		return err
 	case voiceprotocol.CallEventHangup:
+		// 通话已结束(重复 completed 重试)时幂等短路,防止重复 call.ended
+		// 出站 webhook;通话不存在时维持报错(500 → provider 重试,待
+		// invite 落地后自愈),不为乱序回调伪造终态记录。
+		if callReached(ctx, c, event.CallID, func(status string, _ *voiceapp.CallDTO) bool {
+			return status == "ended"
+		}) {
+			return nil
+		}
 		_, err := c.calls.EndCall(ctx, voiceapp.EndCallCommand{CallID: event.CallID})
 		return err
 	case voiceprotocol.CallEventDTMF:
@@ -76,6 +113,16 @@ func (c *Coordinator) HandleCallEvent(ctx context.Context, event voiceprotocol.C
 	default:
 		return fmt.Errorf("unsupported call event kind %q", event.Kind)
 	}
+}
+
+// callReached 查询通话当前状态并判断是否已达成目标态(即事件为重复投递)。
+// 查询错误(含未找到)一律返回 false,走正常执行路径维持原有报错行为。
+func callReached(ctx context.Context, c *Coordinator, callID string, reached func(status string, dto *voiceapp.CallDTO) bool) bool {
+	dto, err := c.calls.FindCall(ctx, callID)
+	if err != nil || dto == nil {
+		return false
+	}
+	return reached(dto.Status, dto)
 }
 
 func (c *Coordinator) HandleMediaEvent(ctx context.Context, event voiceprotocol.MediaEvent) error {
@@ -97,6 +144,18 @@ func (c *Coordinator) HandleMediaEvent(ctx context.Context, event voiceprotocol.
 			return nil
 		}
 		recordingID, _ := event.Metadata["recording_id"].(string)
+		storageURI, _ := event.Metadata["storage_uri"].(string)
+		// 携带 storage_uri 的是 hosted vendor 的录音完成回调(URL 由回调
+		// 直接带来),落 upsert 终态;否则是本方发起的 Stop 指令回执,维持
+		// 原路径(provider 侧停止 + 标记),向后兼容 WebRTC 录制流。
+		if storageURI != "" {
+			return c.recordings.CompleteRecording(ctx, voiceapp.CompleteRecordingCommand{
+				RecordingID: recordingID,
+				CallID:      event.CallID,
+				Provider:    string(event.Protocol),
+				StorageURI:  storageURI,
+			})
+		}
 		if recordingID == "" {
 			return nil
 		}

@@ -118,3 +118,16 @@ func (r *InMemoryRepository) GetCall(callID string) (*voiceapp.CallDTO, bool) {
 	copy := *call
 	return &copy, true
 }
+
+// FindByID 供协调层状态守卫查询;未找到返回错误。
+func (r *InMemoryRepository) FindByID(ctx context.Context, callID string) (*voiceapp.CallDTO, error) {
+	_ = ctx
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	call, ok := r.calls[callID]
+	if !ok {
+		return nil, fmt.Errorf("call not found")
+	}
+	copy := *call
+	return &copy, nil
+}

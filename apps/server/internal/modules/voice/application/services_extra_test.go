@@ -31,6 +31,9 @@ func (r *errorCallRepo) EndCall(ctx context.Context, cmd EndCallCommand) (*CallD
 func (r *errorCallRepo) TransferCall(ctx context.Context, cmd TransferCallCommand) (*CallDTO, error) {
 	return nil, r.err
 }
+func (r *errorCallRepo) FindByID(ctx context.Context, callID string) (*CallDTO, error) {
+	return nil, r.err
+}
 
 type okCallRepo struct{}
 
@@ -51,6 +54,9 @@ func (r *okCallRepo) EndCall(ctx context.Context, cmd EndCallCommand) (*CallDTO,
 }
 func (r *okCallRepo) TransferCall(ctx context.Context, cmd TransferCallCommand) (*CallDTO, error) {
 	return &CallDTO{ID: cmd.CallID, Status: "transferred"}, nil
+}
+func (r *okCallRepo) FindByID(ctx context.Context, callID string) (*CallDTO, error) {
+	return nil, fmt.Errorf("call not found")
 }
 
 func TestServiceAnswerCallDelegates(t *testing.T) {
@@ -181,6 +187,16 @@ func (r *stubRecordingRepo) FindByID(ctx context.Context, recordingID string) (*
 		return nil, r.findErr
 	}
 	return r.find, nil
+}
+
+func (r *stubRecordingRepo) UpsertCompleted(ctx context.Context, recording RecordingDTO) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.saveErr != nil {
+		return r.saveErr
+	}
+	r.saved = append(r.saved, recording)
+	return nil
 }
 
 type capturingCallbackSink struct {

@@ -71,6 +71,30 @@ func (s *RecordingService) StopRecording(ctx context.Context, cmd StopRecordingC
 	return nil
 }
 
+// CompleteRecording 落录音终态(upsert 语义)。hosted vendor 的录音完成回调
+// 不经过 provider Stop 指令方向——URL 由回调直接携带,此处只落库与广播。
+func (s *RecordingService) CompleteRecording(ctx context.Context, cmd CompleteRecordingCommand) error {
+	if s.repo == nil {
+		return nil
+	}
+	recording := RecordingDTO{
+		ID:         cmd.RecordingID,
+		CallID:     cmd.CallID,
+		Provider:   cmd.Provider,
+		Status:     "stopped",
+		StorageURI: cmd.StorageURI,
+		StartedAt:  time.Now(),
+	}
+	if err := s.repo.UpsertCompleted(ctx, recording); err != nil {
+		return err
+	}
+	s.publish(ctx, RecordingStoppedEventName, cmd.RecordingID, map[string]string{
+		"recording_id": cmd.RecordingID,
+		"storage_uri":  cmd.StorageURI,
+	})
+	return nil
+}
+
 func (s *RecordingService) GetRecording(ctx context.Context, recordingID string) (*RecordingDTO, error) {
 	if s.repo == nil {
 		return nil, nil

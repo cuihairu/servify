@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"servify/apps/server/internal/platform/eventbus"
@@ -34,6 +35,12 @@ func (s *stubRepo) EndCall(ctx context.Context, cmd EndCallCommand) (*CallDTO, e
 func (s *stubRepo) TransferCall(ctx context.Context, cmd TransferCallCommand) (*CallDTO, error) {
 	s.call.Status = "transferred"
 	s.call.TransferToAgent = &cmd.ToAgentID
+	return s.call, nil
+}
+func (s *stubRepo) FindByID(ctx context.Context, callID string) (*CallDTO, error) {
+	if s.call == nil || s.call.ID != callID {
+		return nil, fmt.Errorf("call not found")
+	}
 	return s.call, nil
 }
 

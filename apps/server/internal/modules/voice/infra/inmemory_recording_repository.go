@@ -51,3 +51,22 @@ func (r *InMemoryRecordingRepository) FindByID(ctx context.Context, recordingID 
 }
 
 var _ voiceapp.RecordingRepository = (*InMemoryRecordingRepository)(nil)
+
+// UpsertCompleted 按录音 ID 落终态:存在则补 status/storage_uri,不存在则建完成态。
+func (r *InMemoryRecordingRepository) UpsertCompleted(ctx context.Context, recording voiceapp.RecordingDTO) error {
+	_ = ctx
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, ok := r.recordings[recording.ID]
+	if !ok {
+		recording.Status = "stopped"
+		r.recordings[recording.ID] = recording
+		return nil
+	}
+	existing.Status = "stopped"
+	if recording.StorageURI != "" {
+		existing.StorageURI = recording.StorageURI
+	}
+	r.recordings[recording.ID] = existing
+	return nil
+}

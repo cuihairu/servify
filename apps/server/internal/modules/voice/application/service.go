@@ -60,6 +60,11 @@ func (s *Service) TransferCall(ctx context.Context, cmd TransferCallCommand) (*C
 	return call, nil
 }
 
+// FindCall 供 delivery 层状态守卫查询当前通话;未找到时返回错误。
+func (s *Service) FindCall(ctx context.Context, callID string) (*CallDTO, error) {
+	return s.repo.FindByID(ctx, callID)
+}
+
 func (s *Service) publish(ctx context.Context, name, callID string, payload interface{}) {
 	if s.publisher == nil {
 		return

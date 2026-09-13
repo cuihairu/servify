@@ -130,3 +130,12 @@ func callModelToDTO(m *models.VoiceCall) *voiceapp.CallDTO {
 		TransferToAgent: m.TransferToAgent,
 	}
 }
+
+// FindByID 供协调层状态守卫查询;未找到返回错误(与状态变更方法同风格)。
+func (r *GormRepository) FindByID(ctx context.Context, callID string) (*voiceapp.CallDTO, error) {
+	var m models.VoiceCall
+	if err := r.db.WithContext(ctx).First(&m, "id = ?", callID).Error; err != nil {
+		return nil, fmt.Errorf("call not found: %w", err)
+	}
+	return callModelToDTO(&m), nil
+}
