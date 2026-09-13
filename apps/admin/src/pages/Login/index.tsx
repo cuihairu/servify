@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { LoginForm, ProFormText } from '@ant-design/pro-components';
-import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
-import { Button, message, Space } from 'antd';
+import {
+  LockOutlined,
+  SafetyCertificateOutlined,
+  SafetyOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
+import { Alert, Button, message, Space } from 'antd';
 import { navigateTo } from '@/lib/navigation';
 import { setToken, setRefreshToken, parseJwtPayload, setUserInfo } from '@/utils/auth';
+import { verifyTwoFactorLogin, type TwoFactorChallengeResponse } from '@/services/auth2fa';
 
 /** SSO 失败码 → 用户可读文案（与后端 redirectOIDCError 的 code 对齐） */
 const OIDC_ERROR_MESSAGES: Record<string, string> = {
@@ -16,6 +22,9 @@ const OIDC_ERROR_MESSAGES: Record<string, string> = {
 const LoginPage: React.FC = () => {
   const [oidcEnabled, setOidcEnabled] = useState(false);
   const [oidcIssuerHost, setOidcIssuerHost] = useState('');
+  // 两步验证挑战态：非空表示第一步密码已通过，等待输入认证器验证码
+  const [challenge, setChallenge] = useState<TwoFactorChallengeResponse | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     // SSO 失败重定向回来时带上 ?error=<code>
@@ -49,11 +58,23 @@ const LoginPage: React.FC = () => {
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ message: '登录失败' }));
-        message.error(err.message || '登录失败');
+        message.error(err.message || err.error || '登录失败');
         return;
       }
 
       const data = await resp.json();
+
+      // 两步验证：密码已通过，进入验证码第二步
+      if (data.two_factor_required) {
+        setChallenge({
+          two_factor_required: true,
+          challenge_token: data.challenge_token,
+          expires_in: data.expires_in,
+        });
+        message.info('请输入认证器验证码完成登录');
+        return;
+      }
+
       const token = data.token || data.data?.token;
       if (!token) {
         message.error('服务端未返回有效 Token');
@@ -68,9 +89,77 @@ const LoginPage: React.FC = () => {
     }
   };
 
+  const handleVerify = async (code: string) => {
+    if (!challenge) return false;
+    setVerifying(true);
+    try {
+      const result = await verifyTwoFactorLogin(challenge.challenge_token, code);
+      if (!result.token) {
+        message.error('服务端未返回有效 Token');
+        return false;
+      }
+      applyTokens(result.token, result.refresh_token);
+      message.success('登录成功');
+      navigateTo('/dashboard');
+      return true;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '验证失败，请重试');
+      return false;
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const startSSO = () => {
     window.location.href = '/api/v1/auth/oidc/start';
   };
+
+  if (challenge) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <LoginForm
+          title="两步验证"
+          subTitle="请输入认证器 App 中的 6 位验证码（或 8 位恢复码）"
+          onFinish={async (values: { code?: string }) => {
+            const code = (values.code || '').trim();
+            if (!code) {
+              message.error('请输入验证码');
+              return;
+            }
+            await handleVerify(code);
+          }}
+        >
+          <Alert
+            type="info"
+            showIcon
+            message="验证码每 30 秒刷新一次；恢复码验证后即失效"
+            style={{ marginBottom: 16 }}
+          />
+          <ProFormText
+            name="code"
+            fieldProps={{
+              size: 'large',
+              prefix: <SafetyOutlined />,
+              maxLength: 9,
+              autoComplete: 'one-time-code',
+              autoFocus: true,
+              disabled: verifying,
+            }}
+            placeholder="验证码 / 恢复码"
+            rules={[{ required: true, message: '请输入验证码' }]}
+          />
+          <Button
+            block
+            type="link"
+            onClick={() => setChallenge(null)}
+            disabled={verifying}
+          >
+            返回重新登录
+          </Button>
+        </LoginForm>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>

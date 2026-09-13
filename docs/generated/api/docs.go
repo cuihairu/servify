@@ -6355,6 +6355,9 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
+                "totp_enabled": {
+                    "type": "boolean"
+                },
                 "username": {
                     "type": "string"
                 }

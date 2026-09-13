@@ -795,14 +795,15 @@ type tokenResponse struct {
 }
 
 type userResponse struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Avatar   string `json:"avatar"`
-	Role     string `json:"role"`
-	Status   string `json:"status"`
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	Phone       string `json:"phone"`
+	Avatar      string `json:"avatar"`
+	Role        string `json:"role"`
+	Status      string `json:"status"`
+	TotpEnabled bool   `json:"totp_enabled"`
 }
 
 func mapUserResponse(user *models.User) userResponse {
@@ -810,13 +811,14 @@ func mapUserResponse(user *models.User) userResponse {
 		return userResponse{}
 	}
 	return userResponse{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Name:     user.Name,
-		Phone:    user.Phone,
-		Avatar:   user.Avatar,
-		Role:     user.Role,
-		Status:   user.Status,
+		ID:          user.ID,
+		Username:    user.Username,
+		Email:       user.Email,
+		Name:        user.Name,
+		Phone:       user.Phone,
+		Avatar:      user.Avatar,
+		Role:        user.Role,
+		Status:      user.Status,
+		TotpEnabled: user.TotpEnabled,
 	}
 }
