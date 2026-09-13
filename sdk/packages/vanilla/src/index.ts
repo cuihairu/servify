@@ -53,6 +53,8 @@ export class VanillaServifySDK {
     this.sdk.on('webrtc:candidate', (candidate) => this.triggerCallback('webrtc:candidate', candidate));
     this.sdk.on('webrtc:track', (event) => this.triggerCallback('webrtc:track', event));
     this.sdk.on('webrtc:state', (state) => this.triggerCallback('webrtc:state', state));
+    this.sdk.on('remote-assist:session', (assistId) => this.triggerCallback('remote-assist:session', assistId));
+    this.sdk.on('remote-assist:recording', (state) => this.triggerCallback('remote-assist:recording', state));
   }
 
   /**
@@ -129,6 +131,20 @@ export class VanillaServifySDK {
    */
   async endRemoteAssist(): Promise<void> {
     return this.sdk.endRemoteAssist();
+  }
+
+  /**
+   * 显式登记远程协助会话 ID（录制上传时回写该会话）
+   */
+  setRemoteAssistSession(assistId: string | number): void {
+    this.sdk.setRemoteAssistSession(assistId);
+  }
+
+  /**
+   * 当前绑定的远程协助会话 ID
+   */
+  getRemoteAssistSession(): string | null {
+    return this.sdk.getRemoteAssistSession();
   }
 
   /**

@@ -285,6 +285,23 @@ export class ApiClient {
     }
   }
 
+  // 远程协助：访客回写录制元数据（recording_key 为 upload 返回的 URL）
+  async attachRemoteAssistRecording(
+    assistId: string | number,
+    meta: {
+      recording_key: string;
+      recording_mime?: string;
+      recording_duration_ms?: number;
+      recording_size?: number;
+    },
+  ): Promise<ApiResponse<void>> {
+    return this.request<void>(
+      'POST',
+      `/api/v1/remote-assist/${encodeURIComponent(String(assistId))}/recording`,
+      meta,
+    );
+  }
+
   // WebRTC 相关 API
   async startCall(sessionId: number, callType: 'audio' | 'video'): Promise<ApiResponse<{
     call_id: number;

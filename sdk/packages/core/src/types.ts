@@ -122,11 +122,22 @@ export interface RemoteAssistConfig {
   enabled?: boolean;
   captureScreen?: boolean;
   audio?: boolean;
+  /** 访客端本地录制屏幕共享，结束后自动上传并回写协助会话（默认 false） */
+  record?: boolean;
   iceServers?: RTCIceServer[];
   dataChannelLabel?: string;
 }
 
 export type RemoteAssistStartOptions = RemoteAssistConfig;
+
+/** 录制生命周期状态（'remote-assist:recording' 事件负载） */
+export type RemoteAssistRecordingState =
+  | 'idle'
+  | 'recording'
+  | 'saving'
+  | 'saved'
+  | 'failed'
+  | 'unsupported';
 
 export type RemoteAssistState =
   | 'idle'
@@ -161,6 +172,8 @@ export type ServifyEventMap = {
   'webrtc:candidate': [candidate: RTCIceCandidateInit];
   'webrtc:track': [event: RTCTrackEvent];
   'webrtc:state': [state: RemoteAssistState];
+  'remote-assist:session': [assistId: string];
+  'remote-assist:recording': [state: RemoteAssistRecordingState];
 };
 
 // API 响应类型
