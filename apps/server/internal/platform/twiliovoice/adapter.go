@@ -71,7 +71,11 @@ func (a *Adapter) ValidateSignature(ctx context.Context, requestURL string, head
 // status callbacks take priority (they may arrive without CallStatus);
 // otherwise the call status decides the signaling kind, and DTMF digits
 // (gather results) are appended as a separate event.
-func (a *Adapter) MapWebhook(ctx context.Context, form url.Values) ([]voiceprotocol.CallEvent, []voiceprotocol.MediaEvent, error) {
+func (a *Adapter) MapWebhook(ctx context.Context, payload interface{}) ([]voiceprotocol.CallEvent, []voiceprotocol.MediaEvent, error) {
+	form, err := formFromPayload(payload)
+	if err != nil {
+		return nil, nil, err
+	}
 	if form.Get("RecordingSid") != "" && (form.Get("RecordingUrl") != "" || form.Get("RecordingStatus") == "completed") {
 		return nil, []voiceprotocol.MediaEvent{a.recordingEvent(form)}, nil
 	}
