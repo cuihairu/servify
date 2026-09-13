@@ -4,10 +4,11 @@
 
 - `@servify/core`: shared browser runtime contracts and Web primitives
 - `@servify/react`, `@servify/vue`, `@servify/vanilla`: framework surfaces built on top of `@servify/core`
-- `@servify/api-client`, `@servify/app-core`: reserved contract packages for future server-side and mobile SDK work
+- `@servify/api-client`: server-side API client surface (auth providers, retry policy, request middleware pipeline)
+- `@servify/app-core`: reserved contract package for future mobile SDK work
 - future transport packages should follow `@servify/transport-http`, `@servify/transport-websocket`, `@servify/transport-sse`
-- only `core/react/vue/vanilla` are eligible for production release today
-- reserved packages stay `0.0.0` and `private` until runtime behavior is implemented and reviewed
+- `core/react/vue/vanilla/api-client` are eligible for production release today
+- remaining reserved packages stay `0.0.0` and `private` until runtime behavior is implemented and reviewed
 
 ## Public API Review Boundary
 
@@ -21,7 +22,7 @@
 - confirm whether any `src/index.ts` export was removed, renamed, or changed semantically
 - confirm package README usage snippets still match the exported API
 - confirm example apps still compile against the published entrypoints
-- confirm reserved packages remain design-time only unless explicitly promoted
+- confirm still-reserved packages remain design-time only unless explicitly promoted
 - add migration notes before changing transport/auth/session contracts
 
 ## Example And README Alignment

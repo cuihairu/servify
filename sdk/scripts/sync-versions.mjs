@@ -8,9 +8,9 @@ const publishablePackages = new Set([
   "@servify/react",
   "@servify/vue",
   "@servify/vanilla",
+  "@servify/api-client",
 ]);
 const reservedPackages = new Set([
-  "@servify/api-client",
   "@servify/app-core",
 ]);
 const checkOnly = process.argv.includes("--check");
