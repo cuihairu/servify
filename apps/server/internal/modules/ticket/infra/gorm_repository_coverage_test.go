@@ -276,8 +276,11 @@ func TestTicketCovGetTicketStats(t *testing.T) {
 
 	seedTicketCovUser(t, db, 1, "alice")
 	agentID := uint(2)
-	require.NoError(t, db.Create(&models.Ticket{ID: 1, Title: "a", CustomerID: 1, AgentID: &agentID, Status: "open", Priority: "high", TenantID: "t1", WorkspaceID: "w1", CreatedAt: time.Now().Add(-time.Hour)}).Error)
-	require.NoError(t, db.Create(&models.Ticket{ID: 2, Title: "b", CustomerID: 1, Status: "resolved", Priority: "low", TenantID: "t1", WorkspaceID: "w1", CreatedAt: time.Now().Add(-time.Hour)}).Error)
+	// TodayCreated 按「今天零点」统计：种子取今天中午，避免午夜前后 -1h 掉进昨天导致 flaky
+	now := time.Now()
+	todayNoon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+	require.NoError(t, db.Create(&models.Ticket{ID: 1, Title: "a", CustomerID: 1, AgentID: &agentID, Status: "open", Priority: "high", TenantID: "t1", WorkspaceID: "w1", CreatedAt: todayNoon}).Error)
+	require.NoError(t, db.Create(&models.Ticket{ID: 2, Title: "b", CustomerID: 1, Status: "resolved", Priority: "low", TenantID: "t1", WorkspaceID: "w1", CreatedAt: todayNoon}).Error)
 	require.NoError(t, db.Create(&models.Ticket{ID: 3, Title: "c", CustomerID: 1, Status: "resolved", Priority: "low", TenantID: "t2"}).Error)
 
 	stats, err := repo.GetTicketStats(ctx, nil)
