@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
 import { ProCard, StatisticCard } from '@ant-design/pro-components';
-import { Row, Col, DatePicker, Button, Result, Spin, Segmented, message } from 'antd';
+import { Col, DatePicker, Button, Result, Row, Segmented, Select, Space, Spin, Typography, message } from 'antd';
 import { Line } from '@ant-design/charts';
 import {
+  DownloadOutlined,
   TeamOutlined,
   UserOutlined,
   MessageOutlined,
@@ -15,14 +16,27 @@ import {
 } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import {
+  exportStatistics,
   getDashboardStats,
   getTimeRangeStats,
   getTicketCategoryStats,
   getTicketPriorityStats,
   getCustomerSourceStats,
+  type StatisticsExportType,
 } from '@/services/statistics';
+import { getErrorMessage } from '@/utils/error';
 
 const { RangePicker } = DatePicker;
+const { Text } = Typography;
+
+const EXPORT_TYPE_OPTIONS: { label: string; value: StatisticsExportType }[] = [
+  { label: '时间范围统计', value: 'time_range' },
+  { label: '客服绩效', value: 'agent_performance' },
+  { label: '工单分类', value: 'ticket_category' },
+  { label: '工单优先级', value: 'ticket_priority' },
+  { label: '客户来源', value: 'customer_source' },
+  { label: '满意度趋势', value: 'satisfaction' },
+];
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -35,6 +49,9 @@ const Dashboard: React.FC = () => {
     dayjs(),
   ]);
   const [preset, setPreset] = useState<string>('7天');
+  const [exportType, setExportType] = useState<StatisticsExportType>('time_range');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
+  const [exporting, setExporting] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -102,6 +119,30 @@ const Dashboard: React.FC = () => {
         start = end.subtract(7, 'day');
     }
     setDateRange([start, end]);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const blob = await exportStatistics({
+        type: exportType,
+        format: exportFormat,
+        from: dateRange[0].format('YYYY-MM-DD'),
+        to: dateRange[1].format('YYYY-MM-DD'),
+      });
+      const filename = `servify-${exportType}-${dayjs().format('YYYYMMDD_HHmmss')}.${exportFormat}`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.success('报表已导出');
+    } catch (err) {
+      message.error(getErrorMessage(err, '导出失败，请稍后重试'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (error) {
@@ -262,6 +303,38 @@ const Dashboard: React.FC = () => {
           <StatisticCard statistic={{ title: '已关闭工单', value: stats.closed_tickets }} />
         </Col>
       </Row>
+
+      {/* 报表导出（时间范围与趋势图共用选择器） */}
+      <ProCard title="报表导出" style={{ marginTop: 16 }}>
+        <Space wrap>
+          <Select
+            value={exportType}
+            options={EXPORT_TYPE_OPTIONS}
+            style={{ width: 168 }}
+            onChange={(val) => setExportType(val as StatisticsExportType)}
+          />
+          <Segmented
+            options={[
+              { label: 'CSV', value: 'csv' },
+              { label: 'Excel', value: 'xlsx' },
+            ]}
+            value={exportFormat}
+            onChange={(val) => setExportFormat(val as 'csv' | 'xlsx')}
+          />
+          <Text type="secondary">
+            时间范围 {dateRange[0].format('YYYY-MM-DD')} ~ {dateRange[1].format('YYYY-MM-DD')}
+            （与趋势图一致）
+          </Text>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={exporting}
+            onClick={handleExport}
+          >
+            导出
+          </Button>
+        </Space>
+      </ProCard>
 
       {/* 趋势图 */}
       <ProCard

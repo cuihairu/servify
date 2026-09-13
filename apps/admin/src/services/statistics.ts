@@ -68,3 +68,26 @@ export async function getCustomerSourceStats() {
 export async function getRemoteAssistTicketStats() {
   return request<API.RemoteAssistTicketStats>('/api/statistics/remote-assist-tickets');
 }
+
+/** 统计报表导出类型（与后端 /statistics/export 的 type 取值一致） */
+export type StatisticsExportType =
+  | 'time_range'
+  | 'agent_performance'
+  | 'ticket_category'
+  | 'ticket_priority'
+  | 'customer_source'
+  | 'satisfaction';
+
+/** 导出统计报表（CSV / Excel 二进制） */
+export async function exportStatistics(params: {
+  type: StatisticsExportType;
+  format: 'csv' | 'xlsx';
+  from: string;
+  to: string;
+}) {
+  return request<Blob>('/api/statistics/export', {
+    method: 'GET',
+    params: { type: params.type, format: params.format, from: params.from, to: params.to },
+    responseType: 'blob',
+  });
+}
