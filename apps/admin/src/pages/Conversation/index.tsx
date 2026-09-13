@@ -30,6 +30,8 @@ import {
 } from '@/services/conversation';
 import { createTicket } from '@/services/ticket';
 import { getWorkspaceOverview } from '@/services/workspace';
+import { endAssistSession, startAssistSession } from '@/services/remoteAssist';
+import AssistReviewPanel from './components/AssistReviewPanel';
 import { navigateTo, useQueryParam } from '@/lib/navigation';
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -131,6 +133,8 @@ const ConversationPage: React.FC = () => {
   const [remoteAssistError, setRemoteAssistError] = useState<string | null>(null);
   const [remoteAssistConnectionId, setRemoteAssistConnectionId] = useState<string | null>(null);
   const [remoteAssistHasStream, setRemoteAssistHasStream] = useState(false);
+  const [assistSessionId, setAssistSessionId] = useState<number | null>(null);
+  const [assistReviewSession, setAssistReviewSession] = useState<API.RemoteAssistSession | null>(null);
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [ticketCreating, setTicketCreating] = useState(false);
   const [assistSummary, setAssistSummary] = useState('');
@@ -143,6 +147,7 @@ const ConversationPage: React.FC = () => {
   const remoteAssistSocketRef = useRef<WebSocket | null>(null);
   const remoteAssistStreamRef = useRef<MediaStream | null>(null);
   const remoteAssistVideoRef = useRef<HTMLVideoElement | null>(null);
+  const assistSessionIdRef = useRef<number | null>(null);
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -356,6 +361,12 @@ const ConversationPage: React.FC = () => {
 
     try {
       teardownRemoteAssist('idle');
+      setAssistReviewSession(null);
+
+      // 先落协助记录，assist id 经 DataChannel 下发给访客（访客录制回写依赖它）
+      const assistSession = await startAssistSession({ conversation_session_id: selectedId });
+      assistSessionIdRef.current = assistSession.id;
+      setAssistSessionId(assistSession.id);
 
       const socket = new WebSocket(buildRemoteAssistWebSocketURL(selectedId));
       remoteAssistSocketRef.current = socket;
@@ -365,6 +376,11 @@ const ConversationPage: React.FC = () => {
         setRemoteAssistState('failed');
         setRemoteAssistError('远程协助信令连接失败');
         setRemoteAssistOperating(false);
+        // 信令没打通，协助记录兜底置 failed 避免 active 悬挂
+        const assistId = assistSessionIdRef.current;
+        if (assistId) {
+          void endAssistSession(assistId, 'failed').catch(() => undefined);
+        }
       };
 
       socket.onclose = () => {
@@ -383,6 +399,22 @@ const ConversationPage: React.FC = () => {
           remoteAssistPeerRef.current = peer;
 
           peer.createDataChannel('servify-admin-remote-assist');
+
+          // 访客 SDK 在自己的 DataChannel 上监听 assist-session 消息；
+          // 这里经 ondatachannel 拿到那条 channel，把 assist id 发过去
+          peer.ondatachannel = (event) => {
+            const inbound = event.channel;
+            const sendAssistId = () => {
+              const assistId = assistSessionIdRef.current;
+              if (assistId && inbound.readyState === 'open') {
+                inbound.send(JSON.stringify({ type: 'assist-session', assist_id: assistId }));
+              }
+            };
+            inbound.onopen = sendAssistId;
+            if (inbound.readyState === 'open') {
+              sendAssistId();
+            }
+          };
 
           peer.onicecandidate = (event) => {
             if (!event.candidate || socket.readyState !== WebSocket.OPEN) {
@@ -483,8 +515,22 @@ const ConversationPage: React.FC = () => {
     }
   }, [selectedId, teardownRemoteAssist]);
 
-  const handleEndRemoteAssist = useCallback(() => {
+  const handleEndRemoteAssist = useCallback(async () => {
     teardownRemoteAssist('ended');
+
+    const assistId = assistSessionIdRef.current;
+    if (!assistId) {
+      return;
+    }
+    assistSessionIdRef.current = null;
+    try {
+      // 访客录制经 /upload 上传后回写可能有延迟，end 后短暂等待再落回放
+      const ended = await endAssistSession(assistId);
+      setAssistReviewSession(ended);
+      setAssistSessionId(null);
+    } catch (error) {
+      message.error('结束协助记录失败: ' + (error as Error).message);
+    }
   }, [teardownRemoteAssist]);
 
   const sessions = overview?.recent_sessions || [];
@@ -603,6 +649,9 @@ const ConversationPage: React.FC = () => {
     teardownRemoteAssist('idle');
     setAssistResultPreset('manual');
     setAssistSummary('');
+    assistSessionIdRef.current = null;
+    setAssistSessionId(null);
+    setAssistReviewSession(null);
   }, [selectedId, teardownRemoteAssist]);
 
   const columns: ProColumns<ConversationRecord>[] = [
@@ -717,6 +766,9 @@ const ConversationPage: React.FC = () => {
                       {remoteAssistConnectionId && (
                         <span style={{ fontFamily: 'monospace' }}>连接 {remoteAssistConnectionId}</span>
                       )}
+                      {assistSessionId && (
+                        <span style={{ fontFamily: 'monospace' }}>协助 #{assistSessionId}</span>
+                      )}
                     </Space>
                   )}
                   description={(
@@ -796,6 +848,7 @@ const ConversationPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+                {assistReviewSession && <AssistReviewPanel session={assistReviewSession} />}
               </div>
             )}
             <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: '#fafafa', borderRadius: 8 }}>

@@ -743,4 +743,33 @@ declare namespace API {
     groups: API.AgentGroup[];
     total: number;
   }
+
+  /** 远程协助会话（media 面走既有 WS/RTC，此处为记录与录制元数据） */
+  interface RemoteAssistSession {
+    id: number;
+    tenant_id?: string;
+    workspace_id?: string;
+    conversation_session_id: string;
+    agent_user_id: number;
+    status: 'active' | 'ended' | 'failed' | string;
+    started_at: string;
+    ended_at?: string;
+    recording_key?: string;
+    recording_mime?: string;
+    recording_duration_ms?: number;
+    recording_size?: number;
+    created_at: string;
+    updated_at: string;
+  }
+
+  /** 远程协助标注；payload 为 JSON 文本（rect/freehand/arrow 归一化坐标） */
+  interface RemoteAssistAnnotation {
+    id: number;
+    assist_session_id: number;
+    timestamp_ms: number;
+    shape: 'rect' | 'freehand' | 'arrow' | string;
+    payload: string;
+    created_by: number;
+    created_at: string;
+  }
 }
