@@ -56,6 +56,7 @@ type Config struct {
 	Email      EmailConfig      `yaml:"email"`
 	Quality    QualityConfig    `yaml:"quality"`
 	Routing    RoutingConfig    `yaml:"routing"`
+	Automation AutomationConfig `yaml:"automation"`
 }
 
 type ServerConfig struct {
@@ -491,6 +492,15 @@ type RoutingConfig struct {
 	ClaimLeaseSeconds int `yaml:"claim_lease_seconds" json:"claim_lease_seconds,omitempty"`
 	// DispatchBatchSize 是单轮分派的最大认领条数
 	DispatchBatchSize int `yaml:"dispatch_batch_size" json:"dispatch_batch_size,omitempty"`
+}
+
+// AutomationConfig 是自动化触发器配置：delay 动作入队到期执行单，
+// 由 timer worker 按扫描间隔周期执行（多实例下乐观抢占保证恰好一次）。
+type AutomationConfig struct {
+	// TimerScanIntervalSeconds 是到期执行单的扫描间隔
+	TimerScanIntervalSeconds int `yaml:"timer_scan_interval_seconds" json:"timer_scan_interval_seconds,omitempty"`
+	// TimerBatchSize 是单轮扫描处理的执行单上限
+	TimerBatchSize int `yaml:"timer_batch_size" json:"timer_batch_size,omitempty"`
 }
 
 func Load() (*Config, error) {
@@ -960,6 +970,10 @@ func GetDefaultConfig() *Config {
 			DispatchIntervalSeconds: 30,
 			ClaimLeaseSeconds:       120,
 			DispatchBatchSize:       10,
+		},
+		Automation: AutomationConfig{
+			TimerScanIntervalSeconds: 30,
+			TimerBatchSize:           50,
 		},
 	}
 }

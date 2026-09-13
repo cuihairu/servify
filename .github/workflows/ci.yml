@@ -451,8 +451,8 @@ jobs:
         run: |
           state=$(docker compose -f infra/compose/docker-compose.yml exec -T postgres psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations")
           echo "schema_migrations: $state"
-          if [ "$state" != "6|f" ]; then
-            echo "expected schema_migrations version=6 dirty=false, got: $state"
+          if [ "$state" != "7|f" ]; then
+            echo "expected schema_migrations version=7 dirty=false, got: $state"
             exit 1
           fi
 

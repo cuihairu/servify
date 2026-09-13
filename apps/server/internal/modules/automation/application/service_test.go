@@ -2,9 +2,11 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"servify/apps/server/internal/models"
 )
@@ -34,6 +36,13 @@ type stubRepo struct {
 	fetched      []uint
 	tags         []string
 	comments     []string
+
+	timers         []models.AutomationTimer
+	dueTimers      []models.AutomationTimer
+	completeOnce   bool
+	completeDenied bool
+	completedIDs   []uint
+	lastErrors     []string
 }
 
 func (s *stubRepo) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
@@ -102,6 +111,31 @@ func (s *stubRepo) CreateTicketComment(ctx context.Context, ticketID uint, conte
 		return s.createCommentErr
 	}
 	s.comments = append(s.comments, content)
+	return nil
+}
+func (s *stubRepo) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+	timer.ID = uint(len(s.timers) + 1)
+	s.timers = append(s.timers, *timer)
+	return nil
+}
+func (s *stubRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
+	if len(s.dueTimers) > limit {
+		return s.dueTimers[:limit], nil
+	}
+	return s.dueTimers, nil
+}
+func (s *stubRepo) CompleteTimer(ctx context.Context, id uint, now time.Time) bool {
+	if s.completeDenied {
+		return false
+	}
+	if s.completeOnce && len(s.completedIDs) > 0 {
+		return false
+	}
+	s.completedIDs = append(s.completedIDs, id)
+	return true
+}
+func (s *stubRepo) UpdateTimerLastError(ctx context.Context, id uint, message string) error {
+	s.lastErrors = append(s.lastErrors, message)
 	return nil
 }
 
@@ -976,5 +1010,246 @@ func TestIsSupportedEvent(t *testing.T) {
 	}
 	if isSupportedEvent("bogus") {
 		t.Fatal("expected bogus event unsupported (internal)")
+	}
+}
+
+func delayTrigger(actions string) *stubRepo {
+	return &stubRepo{
+		triggers: []models.AutomationTrigger{{
+			ID:      7,
+			Name:    "delayed",
+			Event:   "ticket.updated",
+			Actions: actions,
+			Active:  true,
+		}},
+	}
+}
+
+func TestHandleEventDelaySchedulesTimer(t *testing.T) {
+	repo := delayTrigger(`[{"type":"delay","params":{"minutes":30,"actions":[{"type":"add_comment","params":{"content":"follow up"}}]}}]`)
+	svc := NewService(repo)
+	svc.HandleEvent(context.Background(), Event{Type: "ticket.updated", TicketID: 3})
+	if len(repo.timers) != 1 {
+		t.Fatalf("expected 1 timer, got %d", len(repo.timers))
+	}
+	timer := repo.timers[0]
+	if timer.TriggerID != 7 || timer.TicketID != 3 || timer.Status != TimerStatusPending {
+		t.Fatalf("unexpected timer: %+v", timer)
+	}
+	if timer.DueAt.Before(time.Now().Add(29 * time.Minute)) {
+		t.Fatalf("timer should be due in ~30 minutes, got %v", timer.DueAt)
+	}
+	want := `[{"type":"add_comment","params":{"content":"follow up"}}]`
+	if strings.ReplaceAll(timer.ActionsJSON, " ", "") != strings.ReplaceAll(want, " ", "") {
+		t.Fatalf("nested actions snapshot mismatch: %s", timer.ActionsJSON)
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "delayed" {
+		t.Fatalf("expected single delayed run, got %v", repo.runs)
+	}
+}
+
+func TestApplyTriggerDelayMustBeLastAction(t *testing.T) {
+	repo := delayTrigger(`[{"type":"delay","params":{"minutes":5,"actions":[{"type":"notify_log"}]}},{"type":"notify_log"}]`)
+	svc := NewService(repo)
+	svc.HandleEvent(context.Background(), Event{Type: "ticket.updated", TicketID: 3})
+	if len(repo.timers) != 0 {
+		t.Fatalf("no timer should be scheduled, got %d", len(repo.timers))
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "failed" {
+		t.Fatalf("expected failed run, got %v", repo.runs)
+	}
+}
+
+func TestApplyTriggerDelayInvalidParams(t *testing.T) {
+	cases := map[string]string{
+		"missing minutes": `[{"type":"delay","params":{"actions":[{"type":"notify_log"}]}}]`,
+		"zero minutes":    `[{"type":"delay","params":{"minutes":0,"actions":[{"type":"notify_log"}]}}]`,
+		"fractional":      `[{"type":"delay","params":{"minutes":1.5,"actions":[{"type":"notify_log"}]}}]`,
+		"missing actions": `[{"type":"delay","params":{"minutes":5}}]`,
+		"empty actions":   `[{"type":"delay","params":{"minutes":5,"actions":[]}}]`,
+		"nested delay":    `[{"type":"delay","params":{"minutes":5,"actions":[{"type":"delay","params":{"minutes":5,"actions":[{"type":"notify_log"}]}}]}}]`,
+	}
+	for name, actions := range cases {
+		repo := delayTrigger(actions)
+		svc := NewService(repo)
+		svc.HandleEvent(context.Background(), Event{Type: "ticket.updated", TicketID: 3})
+		if len(repo.timers) != 0 {
+			t.Fatalf("%s: no timer should be scheduled", name)
+		}
+		if len(repo.runs) != 1 || repo.runs[0] != "failed" {
+			t.Fatalf("%s: expected failed run, got %v", name, repo.runs)
+		}
+	}
+}
+
+func TestCreateTriggerValidatesDelay(t *testing.T) {
+	cases := map[string]struct {
+		actions string
+		wantErr string
+	}{
+		"valid": {
+			actions: `[{"type":"delay","params":{"minutes":10,"actions":[{"type":"add_tag","params":{"tag":"followed"}}]}}]`,
+		},
+		"not last": {
+			actions: `[{"type":"delay","params":{"minutes":10,"actions":[{"type":"notify_log"}]}},{"type":"notify_log"}]`,
+			wantErr: "delay must be the last action",
+		},
+		"nested delay": {
+			actions: `[{"type":"delay","params":{"minutes":10,"actions":[{"type":"delay","params":{"minutes":10,"actions":[{"type":"notify_log"}]}}]}}]`,
+			wantErr: "nested delay is not supported",
+		},
+		"missing minutes": {
+			actions: `[{"type":"delay","params":{"actions":[{"type":"notify_log"}]}}]`,
+			wantErr: "delay requires minutes param",
+		},
+		"empty nested": {
+			actions: `[{"type":"delay","params":{"minutes":10,"actions":[]}}]`,
+			wantErr: "delay actions must not be empty",
+		},
+	}
+	for name, tc := range cases {
+		repo := &stubRepo{}
+		svc := NewService(repo)
+		var actions []TriggerAction
+		if err := json.Unmarshal([]byte(tc.actions), &actions); err != nil {
+			t.Fatalf("%s: fixture broken: %v", name, err)
+		}
+		_, err := svc.CreateTrigger(context.Background(), TriggerRequest{Name: "t", Event: "ticket_created", Actions: actions})
+		if tc.wantErr == "" {
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			t.Fatalf("%s: expected error containing %q, got %v", name, tc.wantErr, err)
+		}
+		if repo.createdReq != nil {
+			t.Fatalf("%s: invalid trigger must not reach repo", name)
+		}
+	}
+}
+
+func TestProcessDueTimersExecutesNestedActions(t *testing.T) {
+	repo := &stubRepo{
+		dueTimers: []models.AutomationTimer{{
+			ID:          1,
+			TriggerID:   7,
+			TicketID:    3,
+			ActionsJSON: `[{"type":"add_tag","params":{"tag":"followed"}},{"type":"set_priority","params":{"priority":"high"}}]`,
+			Status:      TimerStatusPending,
+		}},
+	}
+	svc := NewService(repo)
+	n := svc.ProcessDueTimers(context.Background(), time.Now())
+	if n != 1 {
+		t.Fatalf("expected 1 processed, got %d", n)
+	}
+	if len(repo.completedIDs) != 1 || repo.completedIDs[0] != 1 {
+		t.Fatalf("expected timer 1 completed, got %v", repo.completedIDs)
+	}
+	if len(repo.tags) != 1 || repo.tags[0] != "base,followed" {
+		t.Fatalf("expected nested add_tag applied, got %v", repo.tags)
+	}
+	if repo.priority != "high" {
+		t.Fatalf("expected nested set_priority applied, got %q", repo.priority)
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "success" {
+		t.Fatalf("expected success run, got %v", repo.runs)
+	}
+}
+
+func TestProcessDueTimersRespectsClaimRace(t *testing.T) {
+	repo := &stubRepo{
+		completeOnce: true,
+		dueTimers: []models.AutomationTimer{
+			{ID: 1, TriggerID: 7, TicketID: 3, ActionsJSON: `[{"type":"notify_log"}]`},
+			{ID: 2, TriggerID: 7, TicketID: 3, ActionsJSON: `[{"type":"notify_log"}]`},
+		},
+	}
+	svc := NewService(repo)
+	n := svc.ProcessDueTimers(context.Background(), time.Now())
+	if n != 1 {
+		t.Fatalf("only the first claim should win, got %d", n)
+	}
+	if len(repo.completedIDs) != 1 || repo.completedIDs[0] != 1 {
+		t.Fatalf("expected only timer 1 completed, got %v", repo.completedIDs)
+	}
+}
+
+func TestProcessDueTimersFailureRecordsLastError(t *testing.T) {
+	repo := &stubRepo{
+		updatePriorityErr: errors.New("db write failed"),
+		dueTimers: []models.AutomationTimer{{
+			ID:          1,
+			TriggerID:   7,
+			TicketID:    3,
+			ActionsJSON: `[{"type":"set_priority","params":{"priority":"high"}}]`,
+			Status:      TimerStatusPending,
+		}},
+	}
+	svc := NewService(repo)
+	n := svc.ProcessDueTimers(context.Background(), time.Now())
+	if n != 1 {
+		t.Fatalf("claimed timer counts as processed even on failure, got %d", n)
+	}
+	if len(repo.lastErrors) != 1 || !strings.Contains(repo.lastErrors[0], "db write failed") {
+		t.Fatalf("expected last_error recorded, got %v", repo.lastErrors)
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "failed" {
+		t.Fatalf("expected failed run, got %v", repo.runs)
+	}
+}
+
+func TestProcessDueTimersRejectsNestedDelay(t *testing.T) {
+	repo := &stubRepo{
+		dueTimers: []models.AutomationTimer{{
+			ID:          1,
+			TriggerID:   7,
+			TicketID:    3,
+			ActionsJSON: `[{"type":"delay","params":{"minutes":5,"actions":[{"type":"notify_log"}]}}]`,
+			Status:      TimerStatusPending,
+		}},
+	}
+	svc := NewService(repo)
+	svc.ProcessDueTimers(context.Background(), time.Now())
+	if len(repo.timers) != 0 {
+		t.Fatalf("nested delay must not re-enqueue a timer, got %d", len(repo.timers))
+	}
+	if len(repo.lastErrors) != 1 || !strings.Contains(repo.lastErrors[0], "nested delay") {
+		t.Fatalf("expected nested delay defense, got %v", repo.lastErrors)
+	}
+}
+
+func TestProcessDueTimersEmptyAndError(t *testing.T) {
+	repo := &stubRepo{activeTriggersErr: errors.New("unused")}
+	svc := NewService(repo)
+	if n := svc.ProcessDueTimers(context.Background(), time.Now()); n != 0 {
+		t.Fatalf("empty claim list should process nothing, got %d", n)
+	}
+	// dueTimers 为空即无事发生，也不应写任何审计
+	if len(repo.runs) != 0 {
+		t.Fatalf("no runs expected, got %v", repo.runs)
+	}
+}
+
+func TestDelayTimerExecutesWebhookAction(t *testing.T) {
+	repo := &stubRepo{
+		dueTimers: []models.AutomationTimer{{
+			ID:          1,
+			TriggerID:   7,
+			TicketID:    3,
+			ActionsJSON: `[{"type":"call_webhook","params":{"url":"https://example.com/hook"}}]`,
+			Status:      TimerStatusPending,
+		}},
+	}
+	svc := NewService(repo)
+	svc.SetWebhookDispatcher(&recordingDispatcher{})
+	svc.ProcessDueTimers(context.Background(), time.Now())
+	if len(repo.lastErrors) != 0 {
+		t.Fatalf("expected webhook dispatch success, got %v", repo.lastErrors)
+	}
+	if len(repo.runs) != 1 || repo.runs[0] != "success" {
+		t.Fatalf("expected success run, got %v", repo.runs)
 	}
 }

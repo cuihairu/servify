@@ -333,6 +333,13 @@ embedding:
 #   # 单轮分派的最大认领条数
 #   dispatch_batch_size: 10
 
+# 自动化 delay 动作：入队到期执行单，timer worker 周期扫描执行（多实例下乐观抢占）
+# automation:
+#   # 到期执行单扫描间隔（秒）
+#   timer_scan_interval_seconds: 30
+#   # 单轮扫描处理的执行单上限
+#   timer_batch_size: 50
+
 # Knowledge base configuration
 knowledge:
   # Available providers: pgvector

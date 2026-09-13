@@ -35,6 +35,7 @@ type stubAutomationRepo struct {
 	commentErr    error
 	comments      []string
 	runsRecorded  []string
+	timers        []models.AutomationTimer
 }
 
 func (s *stubAutomationRepo) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
@@ -95,6 +96,21 @@ func (s *stubAutomationRepo) CreateTicketComment(ctx context.Context, ticketID u
 		return s.commentErr
 	}
 	s.comments = append(s.comments, content)
+	return nil
+}
+
+func (s *stubAutomationRepo) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+	timer.ID = uint(len(s.timers) + 1)
+	s.timers = append(s.timers, *timer)
+	return nil
+}
+func (s *stubAutomationRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
+	return nil, nil
+}
+func (s *stubAutomationRepo) CompleteTimer(ctx context.Context, id uint, now time.Time) bool {
+	return true
+}
+func (s *stubAutomationRepo) UpdateTimerLastError(ctx context.Context, id uint, message string) error {
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"servify/apps/server/internal/models"
 )
@@ -13,6 +14,7 @@ import (
 type Service struct {
 	repo              Repository
 	webhookDispatcher WebhookDispatcher
+	timerBatchSize    int
 }
 
 // WebhookDispatcher 由 webhook 模块实现：触发器命中时一次性外呼（不退避重试，
@@ -22,11 +24,18 @@ type WebhookDispatcher interface {
 }
 
 func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+	return &Service{repo: repo, timerBatchSize: 50}
 }
 
 // SetWebhookDispatcher 注入 call_webhook 动作的外呼实现（可选能力，未注入则该动作报错）。
 func (s *Service) SetWebhookDispatcher(d WebhookDispatcher) { s.webhookDispatcher = d }
+
+// SetTimerBatchSize 覆盖单轮 timer 扫描的执行单上限（默认 50）。
+func (s *Service) SetTimerBatchSize(n int) {
+	if n > 0 {
+		s.timerBatchSize = n
+	}
+}
 
 func (s *Service) HandleEvent(ctx context.Context, evt Event) {
 	triggers, err := s.repo.ListActiveTriggersByEvent(ctx, normalizeEvent(evt.Type))
@@ -63,6 +72,9 @@ func (s *Service) CreateTrigger(ctx context.Context, req TriggerRequest) (*model
 	req.Event = normalizeEvent(req.Event)
 	if !isSupportedEvent(req.Event) {
 		return nil, fmt.Errorf("unsupported event: %s", req.Event)
+	}
+	if err := validateDelayActions(req.Actions, false); err != nil {
+		return nil, err
 	}
 	return s.repo.CreateTrigger(ctx, req)
 }
@@ -152,7 +164,22 @@ func (s *Service) applyTrigger(ctx context.Context, trig models.AutomationTrigge
 			return false
 		}
 	}
-	for _, act := range actions {
+	for i, act := range actions {
+		if act.Type == "delay" {
+			// delay 只允许作为最后一个动作（配置期已校验，这里防历史脏数据）：
+			// 到期后的动作从嵌套列表快照执行，由 timer worker 驱动。
+			if i != len(actions)-1 {
+				_ = s.repo.RecordRun(ctx, trig.ID, evt.TicketID, "failed", "delay must be the last action")
+				return false
+			}
+			minutes, err := s.scheduleTimer(ctx, trig, evt, act)
+			if err != nil {
+				_ = s.repo.RecordRun(ctx, trig.ID, evt.TicketID, "failed", err.Error())
+				return false
+			}
+			_ = s.repo.RecordRun(ctx, trig.ID, evt.TicketID, "delayed", fmt.Sprintf("delayed: timer due in %d minutes", minutes))
+			return true
+		}
 		if err := s.executeAction(ctx, act, ticket); err != nil {
 			_ = s.repo.RecordRun(ctx, trig.ID, evt.TicketID, "failed", err.Error())
 			return false
@@ -160,6 +187,171 @@ func (s *Service) applyTrigger(ctx context.Context, trig models.AutomationTrigge
 	}
 	_ = s.repo.RecordRun(ctx, trig.ID, evt.TicketID, "success", "")
 	return true
+}
+
+// scheduleTimer 校验 delay 参数并入队到期执行单，返回延后分钟数。
+func (s *Service) scheduleTimer(ctx context.Context, trig models.AutomationTrigger, evt Event, act TriggerAction) (int, error) {
+	minutes, err := delayMinutes(act.Params)
+	if err != nil {
+		return 0, err
+	}
+	nested, err := decodeActions(act.Params["actions"])
+	if err != nil {
+		return 0, err
+	}
+	if len(nested) == 0 {
+		return 0, fmt.Errorf("delay actions must not be empty")
+	}
+	if err := validateDelayActions(nested, true); err != nil {
+		return 0, err
+	}
+	payload, err := json.Marshal(nested)
+	if err != nil {
+		return 0, fmt.Errorf("invalid delay actions: %w", err)
+	}
+	if err := s.repo.CreateTimer(ctx, &models.AutomationTimer{
+		TriggerID:   trig.ID,
+		TicketID:    evt.TicketID,
+		ActionsJSON: string(payload),
+		DueAt:       time.Now().Add(time.Duration(minutes) * time.Minute),
+		Status:      TimerStatusPending,
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		return 0, err
+	}
+	return minutes, nil
+}
+
+// ProcessDueTimers 扫描到期的 delay 执行单并执行，返回处理的条数。
+// 先用 CompleteTimer 把执行单从 pending 乐观翻转为 done，抢到才执行——
+// 多实例并发下恰好一次；执行失败不回滚，写 last_error 与 failed 审计供人工重放。
+func (s *Service) ProcessDueTimers(ctx context.Context, now time.Time) int {
+	limit := s.timerBatchSize
+	if limit <= 0 {
+		limit = 50
+	}
+	timers, err := s.repo.ClaimDueTimers(ctx, now, limit)
+	if err != nil || len(timers) == 0 {
+		return 0
+	}
+	processed := 0
+	for i := range timers {
+		timer := &timers[i]
+		if !s.repo.CompleteTimer(ctx, timer.ID, now) {
+			// 已被其他实例抢占执行
+			continue
+		}
+		processed++
+		s.runTimerActions(ctx, timer)
+	}
+	return processed
+}
+
+// runTimerActions 执行单张到期执行单快照里的嵌套动作；
+// 执行前重载工单——delay 期间优先级/标签可能已被其他自动化修改。
+func (s *Service) runTimerActions(ctx context.Context, timer *models.AutomationTimer) {
+	fail := func(err error) {
+		_ = s.repo.UpdateTimerLastError(ctx, timer.ID, err.Error())
+		_ = s.repo.RecordRun(ctx, timer.TriggerID, timer.TicketID, "failed", "delayed actions failed: "+err.Error())
+	}
+	actions := []TriggerAction{}
+	if err := json.Unmarshal([]byte(timer.ActionsJSON), &actions); err != nil {
+		fail(fmt.Errorf("invalid delayed actions: %w", err))
+		return
+	}
+	ticket, err := s.repo.GetTicket(ctx, timer.TicketID)
+	if err != nil {
+		fail(fmt.Errorf("ticket not found: %w", err))
+		return
+	}
+	for _, act := range actions {
+		if act.Type == "delay" {
+			// 配置期已拒绝嵌套 delay；历史脏数据到这里只报错不递归入队
+			fail(fmt.Errorf("nested delay is not supported"))
+			return
+		}
+		if err := s.executeAction(ctx, act, ticket); err != nil {
+			fail(err)
+			return
+		}
+	}
+	_ = s.repo.RecordRun(ctx, timer.TriggerID, timer.TicketID, "success", "delayed: actions executed")
+}
+
+// validateDelayActions 是 delay 动作的第一道闸（配置期）：delay 必须是最后一个
+// 顶层动作、参数完整、嵌套列表非空且不允许再嵌套 delay；其余动作类型仍放行
+// （未知类型沿用现状，留到执行期报错进 failed 审计）。nested=true 表示正在校验
+// delay 的嵌套列表。
+func validateDelayActions(actions []TriggerAction, nested bool) error {
+	for i, act := range actions {
+		if act.Type != "delay" {
+			continue
+		}
+		if nested {
+			return fmt.Errorf("nested delay is not supported")
+		}
+		if i != len(actions)-1 {
+			return fmt.Errorf("delay must be the last action")
+		}
+		if _, err := delayMinutes(act.Params); err != nil {
+			return err
+		}
+		kids, err := decodeActions(act.Params["actions"])
+		if err != nil {
+			return err
+		}
+		if len(kids) == 0 {
+			return fmt.Errorf("delay actions must not be empty")
+		}
+		if err := validateDelayActions(kids, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// delayMinutes 取 delay 的 minutes 参数；JSON 反序列化后数值一律是 float64，
+// Go 内部构造则可能是 int，两种都收且必须是正整数。
+func delayMinutes(params map[string]interface{}) (int, error) {
+	raw, ok := params["minutes"]
+	if !ok || raw == nil {
+		return 0, fmt.Errorf("delay requires minutes param")
+	}
+	switch v := raw.(type) {
+	case float64:
+		if v <= 0 || v != float64(int(v)) {
+			return 0, fmt.Errorf("delay minutes must be a positive integer")
+		}
+		return int(v), nil
+	case int:
+		if v <= 0 {
+			return 0, fmt.Errorf("delay minutes must be positive")
+		}
+		return v, nil
+	default:
+		return 0, fmt.Errorf("delay minutes must be a number")
+	}
+}
+
+// decodeActions 归一化 actions 参数：JSON 反序列化产物是 []interface{}，
+// Go 内部调用则是 []TriggerAction，两种都收。
+func decodeActions(raw interface{}) ([]TriggerAction, error) {
+	switch v := raw.(type) {
+	case []TriggerAction:
+		return v, nil
+	case []interface{}:
+		payload, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid delay actions: %w", err)
+		}
+		out := make([]TriggerAction, 0, len(v))
+		if err := json.Unmarshal(payload, &out); err != nil {
+			return nil, fmt.Errorf("invalid delay actions: %w", err)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("delay requires actions param")
+	}
 }
 
 func (s *Service) MatchTrigger(ctx context.Context, trig models.AutomationTrigger, evt Event, ticket *TicketView, dryRun bool) bool {

@@ -19,6 +19,13 @@ type TriggerAction struct {
 	Params map[string]interface{} `json:"params"`
 }
 
+// AutomationTimer 的状态机：pending →（worker 乐观翻转）done。
+// failed 不改状态，只写 last_error 与 AutomationRun 审计。
+const (
+	TimerStatusPending = "pending"
+	TimerStatusDone    = "done"
+)
+
 type TriggerRequest struct {
 	Name       string             `json:"name"`
 	Event      string             `json:"event"`

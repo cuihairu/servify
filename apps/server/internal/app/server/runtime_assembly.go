@@ -172,6 +172,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	rt.AutomationHandlerService = automationdelivery.NewHandlerService(rt.DB)
 	automationService.SetEventBus(rt.Bus)
 	slaService.SetAutomationService(automationService)
+	rt.automationSvc = automationService
+	automationService.SetTimerBatchSize(rt.Config.Automation.TimerBatchSize)
 
 	rt.CustomerHandlerService = customerdelivery.NewHandlerService(rt.DB)
 

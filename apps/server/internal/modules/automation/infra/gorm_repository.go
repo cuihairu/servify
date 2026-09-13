@@ -133,3 +133,32 @@ func (r *GormRepository) CreateTicketComment(ctx context.Context, ticketID uint,
 		CreatedAt: time.Now(),
 	}).Error
 }
+
+func (r *GormRepository) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+	return r.db.WithContext(ctx).Create(timer).Error
+}
+
+func (r *GormRepository) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
+	var timers []models.AutomationTimer
+	if err := r.db.WithContext(ctx).
+		Where("status = ? AND due_at <= ?", automationapp.TimerStatusPending, now).
+		Order("due_at, id").
+		Limit(limit).
+		Find(&timers).Error; err != nil {
+		return nil, err
+	}
+	return timers, nil
+}
+
+func (r *GormRepository) CompleteTimer(ctx context.Context, id uint, now time.Time) bool {
+	result := r.db.WithContext(ctx).Model(&models.AutomationTimer{}).
+		Where("id = ? AND status = ?", id, automationapp.TimerStatusPending).
+		Updates(map[string]interface{}{"status": automationapp.TimerStatusDone, "executed_at": now})
+	return result.Error == nil && result.RowsAffected > 0
+}
+
+func (r *GormRepository) UpdateTimerLastError(ctx context.Context, id uint, message string) error {
+	return r.db.WithContext(ctx).Model(&models.AutomationTimer{}).
+		Where("id = ?", id).
+		Update("last_error", message).Error
+}

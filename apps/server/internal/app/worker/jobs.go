@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	automationapp "servify/apps/server/internal/modules/automation/application"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -52,6 +53,7 @@ type RuntimeWorkerDependencies interface {
 	QualityScanForWorker() *qualityapp.QualityService
 	WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapter
 	SurveysForWorker() *services.SatisfactionService
+	AutomationTimersForWorker() automationapp.TimerProcessor
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -84,6 +86,11 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 
 	if surveyService := deps.SurveysForWorker(); surveyService != nil {
 		app.RegisterWorker(NewSurveyEmailWorker(surveyService, app.Logger))
+	}
+
+	if processor := deps.AutomationTimersForWorker(); processor != nil {
+		interval := time.Duration(cfg.Automation.TimerScanIntervalSeconds) * time.Second
+		app.RegisterWorker(NewAutomationTimerWorker(processor, interval, app.Logger))
 	}
 
 	if cfg.Security.Audit.Enabled && db != nil {

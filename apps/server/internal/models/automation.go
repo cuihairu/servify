@@ -19,8 +19,22 @@ type AutomationRun struct {
 	ID        uint              `gorm:"primaryKey" json:"id"`
 	TriggerID uint              `gorm:"index" json:"trigger_id"`
 	TicketID  uint              `gorm:"index" json:"ticket_id"`
-	Status    string            `gorm:"index" json:"status"` // success, skipped, failed
+	Status    string            `gorm:"index" json:"status"` // success, skipped, failed, delayed
 	Message   string            `gorm:"type:text" json:"message"`
 	CreatedAt time.Time         `json:"created_at"`
 	Trigger   AutomationTrigger `gorm:"foreignKey:TriggerID" json:"trigger,omitempty"`
+}
+
+// AutomationTimer 是 delay 动作产生的到期执行单：入队时快照嵌套动作，
+// 到期由 timer worker 乐观抢占执行（多实例下恰好一次），不回查触发器当前定义。
+type AutomationTimer struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	TriggerID   uint       `gorm:"index" json:"trigger_id"`
+	TicketID    uint       `gorm:"index" json:"ticket_id"`
+	ActionsJSON string     `gorm:"type:text" json:"actions_json"` // 到期执行的嵌套动作 JSON: [{type,params}]
+	DueAt       time.Time  `gorm:"index:idx_automation_timers_status_due_at,priority:2" json:"due_at"`
+	Status      string     `gorm:"index:idx_automation_timers_status_due_at,priority:1;default:pending" json:"status"` // pending, done
+	LastError   string     `gorm:"type:text" json:"last_error,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	ExecutedAt  *time.Time `json:"executed_at,omitempty"`
 }

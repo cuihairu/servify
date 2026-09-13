@@ -11,6 +11,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
+	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
@@ -90,6 +91,7 @@ type Runtime struct {
 	smtpSender        *emailinfra.GoSMTPSender
 	satisfactionSvc   *services.SatisfactionService
 	transferHandler   *routingdelivery.HandlerServiceAdapter
+	automationSvc     *services.AutomationService
 }
 
 type websocketRunner interface {
@@ -203,6 +205,16 @@ func (rt *Runtime) WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapte
 // Worker 自身对 mailer 为 nil 的服务是无操作（直接返回），无需开关判断。
 func (rt *Runtime) SurveysForWorker() *services.SatisfactionService {
 	return rt.satisfactionSvc
+}
+
+// AutomationTimersForWorker returns the delay-timer processor for worker use.
+// 返回门面持有的 module 实例——事件订阅与 webhook dispatcher 都装配在它上面，
+// delay 到期后的 call_webhook 动作依赖它。
+func (rt *Runtime) AutomationTimersForWorker() automationapp.TimerProcessor {
+	if rt.automationSvc == nil {
+		return nil
+	}
+	return rt.automationSvc.TimersForWorker()
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {

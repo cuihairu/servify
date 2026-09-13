@@ -58,6 +58,24 @@ func NewAutomationService(db *gorm.DB, logger *logrus.Logger) *AutomationService
 	}
 }
 
+// TimersForWorker 暴露 delay 执行单处理器给 timer worker。
+// 返回门面持有的 module 实例（事件订阅与 webhook dispatcher 都在它上面），
+// 而不是 delivery.HandlerServiceAdapter 背后的另一个实例。
+func (s *AutomationService) TimersForWorker() automationapp.TimerProcessor {
+	if s == nil || s.module == nil {
+		return nil
+	}
+	return s.module
+}
+
+// SetTimerBatchSize 覆盖单轮 timer 扫描的执行单上限。
+func (s *AutomationService) SetTimerBatchSize(n int) {
+	if s == nil || s.module == nil {
+		return
+	}
+	s.module.SetTimerBatchSize(n)
+}
+
 func (s *AutomationService) SetEventBus(bus eventbus.Bus) {
 	if s.subscriber != nil {
 		s.subscriber.Register(bus)

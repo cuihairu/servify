@@ -51,6 +51,7 @@ func MigrationModels() []interface{} {
 		&models.AgentGroupMember{},
 		&models.RemoteAssistSession{},
 		&models.RemoteAssistAnnotation{},
+		&models.AutomationTimer{},
 	}
 }
 

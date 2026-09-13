@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	automationapp "servify/apps/server/internal/modules/automation/application"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -97,6 +98,10 @@ func (f *fakeRuntimeWorkerDependencies) WaitingQueueForWorker() *routingdelivery
 }
 
 func (f *fakeRuntimeWorkerDependencies) SurveysForWorker() *services.SatisfactionService {
+	return nil
+}
+
+func (f *fakeRuntimeWorkerDependencies) AutomationTimersForWorker() automationapp.TimerProcessor {
 	return nil
 }
 
@@ -202,4 +207,35 @@ func TestRegisterDefaultWorkers(t *testing.T) {
 
 func TestRegisterDefaultWorkersWithNilArgs(t *testing.T) {
 	RegisterDefaultWorkers(nil, nil, nil, nil)
+}
+
+type fakeTimerProcessor struct{}
+
+func (fakeTimerProcessor) ProcessDueTimers(ctx context.Context, now time.Time) int { return 0 }
+
+func TestAutomationTimerWorkerLifecycle(t *testing.T) {
+	w := NewAutomationTimerWorker(fakeTimerProcessor{}, 50*time.Millisecond, nil)
+	if w.Name() != "automation-timer" {
+		t.Fatalf("unexpected name: %s", w.Name())
+	}
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := w.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	// 二次 Start/Stop 幂等（Stop 已清理状态）
+	if err := w.Start(); err != nil {
+		t.Fatalf("re-Start() error = %v", err)
+	}
+	if err := w.Stop(stopCtx); err != nil {
+		t.Fatalf("re-Stop() error = %v", err)
+	}
+	// service 为 nil 时 Start 是无操作
+	nilWorker := NewAutomationTimerWorker(nil, time.Second, nil)
+	if err := nilWorker.Start(); err != nil {
+		t.Fatalf("nil service Start() error = %v", err)
+	}
 }
