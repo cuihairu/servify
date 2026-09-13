@@ -110,6 +110,9 @@ func wireEmailRuntime(rt *Runtime, conversationService *conversationapp.Service)
 		Interval: time.Duration(cfg.PollIntervalSeconds) * time.Second,
 		Logger:   rt.Logger,
 	})
+
+	// 坐席回复按会话渠道出站：email 渠道启用时把 agent 消息回发访客邮箱
+	NewChannelOutboundDispatcher(rt.DB, rt.emailAdapter, rt.Logger).Register(rt.Bus)
 }
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
