@@ -10,6 +10,11 @@ const (
 	EventConversationMessageReceived = "conversation.message_received"
 	EventRoutingAgentAssigned        = "routing.agent_assigned"
 	EventRoutingTransferCompleted    = "routing.transfer_completed"
+	EventCallStarted                 = "call.started"
+	EventCallHeld                    = "call.held"
+	EventCallResumed                 = "call.resumed"
+	EventCallTransferred             = "call.transferred"
+	EventCallEnded                   = "call.ended"
 )
 
 // SupportedEvents 返回可订阅事件白名单（管理 API 校验与管理端下拉共用）。
@@ -22,6 +27,11 @@ func SupportedEvents() []string {
 		EventConversationMessageReceived,
 		EventRoutingAgentAssigned,
 		EventRoutingTransferCompleted,
+		EventCallStarted,
+		EventCallHeld,
+		EventCallResumed,
+		EventCallTransferred,
+		EventCallEnded,
 	}
 }
 

@@ -178,4 +178,15 @@ func (r *GormRepository) GetSessionSnapshot(ctx context.Context, sessionID strin
 	return &session, nil
 }
 
+func (r *GormRepository) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
+	var call models.VoiceCall
+	if err := r.db.WithContext(ctx).First(&call, "id = ?", callID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, application.ErrNotFound
+		}
+		return nil, err
+	}
+	return &call, nil
+}
+
 var _ application.Repository = (*GormRepository)(nil)

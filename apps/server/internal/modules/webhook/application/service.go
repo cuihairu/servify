@@ -122,7 +122,7 @@ func endpointSubscribes(ep *models.WebhookEndpoint, eventName string) bool {
 }
 
 // buildPayload 按 AggregateID 前缀回查快照并组装投递 envelope。
-// 前缀约定：ticket:<id> / conversation:<uuid> / routing:<sessionID>。
+// 前缀约定：ticket:<id> / conversation:<uuid> / routing:<sessionID> / voice:<callID>。
 func (s *Service) buildPayload(ctx context.Context, eventName, aggregateID, eventID string) (string, error) {
 	var data interface{}
 	switch {
@@ -144,6 +144,13 @@ func (s *Service) buildPayload(ctx context.Context, eventName, aggregateID, even
 			return "", fmt.Errorf("session snapshot %q: %w", sessionID, err)
 		}
 		data = session
+	case strings.HasPrefix(aggregateID, "voice:"):
+		callID := strings.TrimPrefix(aggregateID, "voice:")
+		call, err := s.repo.GetCallSnapshot(ctx, callID)
+		if err != nil {
+			return "", fmt.Errorf("call snapshot %q: %w", callID, err)
+		}
+		data = call
 	default:
 		return "", fmt.Errorf("unsupported aggregate id %q", aggregateID)
 	}

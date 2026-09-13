@@ -60,9 +60,10 @@ func (s *Service) TransferCall(ctx context.Context, cmd TransferCallCommand) (*C
 	return call, nil
 }
 
-func (s *Service) publish(ctx context.Context, name, aggregateID string, payload interface{}) {
+func (s *Service) publish(ctx context.Context, name, callID string, payload interface{}) {
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, NewVoiceEvent(name, aggregateID, payload))
+	// aggregateID 统一带 voice: 前缀，供 webhook 按 voice:<callID> 回查快照
+	_ = s.publisher.Publish(ctx, NewVoiceEvent(name, "voice:"+callID, payload))
 }

@@ -15,10 +15,12 @@ type fakeRepo struct {
 	deliveries []models.WebhookDelivery
 	ticket     *models.Ticket
 	session    *models.Session
+	call       *models.VoiceCall
 
 	listErr      error
 	ticketErr    error
 	sessionErr   error
+	callErr      error
 	createdCount int
 }
 
@@ -148,6 +150,16 @@ func (f *fakeRepo) GetSessionSnapshot(ctx context.Context, sessionID string) (*m
 		return nil, ErrNotFound
 	}
 	return f.session, nil
+}
+
+func (f *fakeRepo) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
+	if f.callErr != nil {
+		return nil, f.callErr
+	}
+	if f.call == nil {
+		return nil, ErrNotFound
+	}
+	return f.call, nil
 }
 
 type fakeDeliverer struct {
@@ -418,5 +430,31 @@ func TestGenerateSecretUniqueness(t *testing.T) {
 	b, _ := GenerateSecret()
 	if a == b {
 		t.Fatal("secrets must be unique")
+	}
+}
+
+func TestEnqueueEventVoicePrefix(t *testing.T) {
+	repo := &fakeRepo{call: &models.VoiceCall{ID: "call-9", SessionID: "sess-1", Status: "held"}}
+	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	svc := newTestService(repo, &fakeDeliverer{})
+
+	for _, name := range []string{EventCallStarted, EventCallHeld, EventCallResumed, EventCallTransferred, EventCallEnded} {
+		svc.EnqueueEvent(context.Background(), name, "voice:call-9", "evt-"+name)
+	}
+	if repo.createdCount != 5 {
+		t.Fatalf("all five voice events should enqueue, got %d", repo.createdCount)
+	}
+	if !strings.Contains(repo.deliveries[0].Payload, `"event":"call.started"`) {
+		t.Fatalf("payload missing event name: %s", repo.deliveries[0].Payload)
+	}
+	if !strings.Contains(repo.deliveries[0].Payload, `"session_id":"sess-1"`) {
+		t.Fatalf("payload missing call snapshot: %s", repo.deliveries[0].Payload)
+	}
+
+	// 事件在白名单内但快照缺失：跳过不落行
+	repo.callErr = errors.New("boom")
+	svc.EnqueueEvent(context.Background(), EventCallEnded, "voice:call-9", "evt-missing")
+	if repo.createdCount != 5 {
+		t.Fatalf("snapshot failure should skip enqueue, got %d", repo.createdCount)
 	}
 }

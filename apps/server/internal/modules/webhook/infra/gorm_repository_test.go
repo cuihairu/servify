@@ -34,11 +34,11 @@ func newWebhookUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.WebhookEndpoint{}, &models.WebhookDelivery{}, &models.Ticket{}, &models.Session{}); err != nil {
+	if err := db.AutoMigrate(&models.WebhookEndpoint{}, &models.WebhookDelivery{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.WebhookDelivery{}, &models.WebhookEndpoint{}, &models.Ticket{}, &models.Session{})
+		_ = db.Migrator().DropTable(&models.WebhookDelivery{}, &models.WebhookEndpoint{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{})
 	})
 	return db
 }
@@ -181,6 +181,9 @@ func TestSnapshotLookups(t *testing.T) {
 	if err := db.Create(&models.Session{ID: "sess-42"}).Error; err != nil {
 		t.Fatalf("seed session: %v", err)
 	}
+	if err := db.Create(&models.VoiceCall{ID: "call-42", SessionID: "sess-42", Status: "started", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {
+		t.Fatalf("seed call: %v", err)
+	}
 
 	ticket, err := repo.GetTicketSnapshot(ctx, 9)
 	if err != nil || ticket.Title != "printer on fire" {
@@ -190,7 +193,14 @@ func TestSnapshotLookups(t *testing.T) {
 	if err != nil || session.ID != "sess-42" {
 		t.Fatalf("session snapshot: %v %+v", err, session)
 	}
+	call, err := repo.GetCallSnapshot(ctx, "call-42")
+	if err != nil || call.ID != "call-42" || call.SessionID != "sess-42" {
+		t.Fatalf("call snapshot: %v %+v", err, call)
+	}
 	if _, err := repo.GetTicketSnapshot(ctx, 1); !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("missing ticket should be ErrNotFound, got %v", err)
+	}
+	if _, err := repo.GetCallSnapshot(ctx, "call-none"); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("missing call should be ErrNotFound, got %v", err)
 	}
 }

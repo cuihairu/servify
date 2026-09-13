@@ -56,6 +56,9 @@ func (s *stubWebhookRepo) GetTicketSnapshot(ctx context.Context, ticketID uint) 
 func (s *stubWebhookRepo) GetSessionSnapshot(ctx context.Context, sessionID string) (*models.Session, error) {
 	return &models.Session{ID: sessionID}, nil
 }
+func (s *stubWebhookRepo) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
+	return &models.VoiceCall{ID: callID}, nil
+}
 
 type recordingBus struct {
 	handlers map[string][]eventbus.Handler
@@ -92,8 +95,14 @@ func TestSubscriberRegistersWhitelistOnly(t *testing.T) {
 	if _, ok := bus.handlers["ticket.updated"]; ok {
 		t.Fatal("ticket.updated has no publisher and must not be subscribed")
 	}
-	if _, ok := bus.handlers["call.started"]; ok {
-		t.Fatal("voice events are out of the v1 whitelist")
+	// voice 事件已入白名单（call.* 五个都应被订阅）
+	for _, name := range []string{"call.started", "call.held", "call.resumed", "call.transferred", "call.ended"} {
+		if len(bus.handlers[name]) != 1 {
+			t.Fatalf("voice event %s should have exactly one handler", name)
+		}
+	}
+	if _, ok := bus.handlers["call.incoming"]; ok {
+		t.Fatal("call.incoming has no publisher and must not be subscribed")
 	}
 }
 
