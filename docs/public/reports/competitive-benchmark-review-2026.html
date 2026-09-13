@@ -241,7 +241,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
   <div class="sum-grid">
     <div class="sum-card">
       <h3><span class="k">完成度 · COMPLETENESS</span>定位内完成度高，定位外普遍未启动</h3>
-      <p>对照 V1 定位（Web 独立站智能客服），核心链路——AI 首答、人工接管、转人工队列、工单闭环、知识库——全部真实可用且质量扎实。缺口集中在定位之外：主动触达、质检运营完全缺失，全渠道仅 Web 一条真实通路。</p>
+      <p>对照 V1 定位（Web 独立站智能客服），核心链路——AI 首答、人工接管、转人工队列、工单闭环、知识库——全部真实可用且质量扎实。缺口集中在定位之外：主动触达、坐席考核联动未启动，全渠道仅 Web/Email 真实通路。质检运营（规则+LLM 打分+抽检工作台）、坐席组亲和路由、远程协助录制标注已于 2026-09 落地。</p>
       <div class="meter" aria-hidden="true">
         <i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i><i class="g"></i>
         <i class="m"></i><i class="m"></i><i class="m"></i><i class="m"></i><i class="m"></i>
@@ -282,7 +282,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
 <!-- ============ 03 雷达 ============ -->
 <section id="radar">
   <div class="sec-head"><span class="sec-no">03</span><h2>能力雷达</h2></div>
-  <p class="sec-sub">15 维度、0–5 分制。Servify（青色）呈现典型的「单脊梁」轮廓：安全、AI、会话、工单、知识、路由一条高脊，渠道、触达、质检、呼叫塌陷。Chatwoot（琥珀）广而平，Intercom（蓝灰）全维高位——这是 servify 不可比肩也不必比肩的形态。</p>
+  <p class="sec-sub">15 维度、0–5 分制。Servify（青色）呈现典型的「单脊梁」轮廓：安全、AI、会话、工单、知识、路由一条高脊，渠道、触达、呼叫塌陷。质检经规则+LLM 打分+抽检工作台落地后已从 0.5 升至 3，远程协助录制标注补齐后升至 3.5。Chatwoot（琥珀）广而平，Intercom（蓝灰）全维高位——这是 servify 不可比肩也不必比肩的形态。</p>
   <div class="radar-box">
     <div class="legend">
       <span><i class="sc"></i>Servify</span>
@@ -360,9 +360,9 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
         <span class="m-evid">SkillMatchPolicy / LoadBalancePolicy / AgentAvailabilityPolicy 三策略 + 等待队列 + 自动转接检查 + 转接历史</span>
         <span class="m-dots"><span class="dot p"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span></span>
       </summary><div class="m-detail">
-        <p><b>现状</b>：策略模型清晰、可组合，队列与转接历史完整，事件发布到 routing.* 总线。</p>
-        <p><b>对标</b>：缺「老客户找回原坐席」——历史会话归属优先，这是满意度相关的高价值规则。</p>
-        <p><b>建议</b>：assignment 历史数据已有，加一条亲和性策略即可。</p>
+        <p><b>现状</b>：策略模型清晰、可组合，队列与转接历史完整，事件发布到 routing.* 总线。「老客户找回原坐席」亲和命中、组内分配/溢出与等待队列自动分派 worker 已落地 <span class="tag">已落地 cb2f77a / ddd0839</span>。</p>
+        <p><b>对标</b>：历史会话归属优先（亲和路由）与组内溢出策略已补齐，达到国内三强的路由基线。</p>
+        <p><b>建议</b>：跨组级联溢出与基于技能权重的精细匹配可后续深化。</p>
       </div></details>
 
       <details class="mrow"><summary>
@@ -370,9 +370,9 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
         <span class="m-evid">档案/在线状态机/技能/负载评分/派单释放 + 排班 shifts + gamification 排行榜（解决量+CSAT+响应加权）</span>
         <span class="m-dots"><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span></span>
       </summary><div class="m-detail">
-        <p><b>现状</b>：坐席域完整，含双写运行时注册表（gorm + redis/inmemory）与 token 吊销；排班与游戏化榜单在列。</p>
-        <p><b>对标</b>：缺坐席组/团队层级与组内溢出策略——超过 10–20 个坐席后必需。</p>
-        <p><b>建议</b>：引入 AgentGroup 实体，让路由策略以组为单位分配。</p>
+        <p><b>现状</b>：坐席域完整，含双写运行时注册表（gorm + redis/inmemory）与 token 吊销；排班与游戏化榜单在列。AgentGroup 实体（组内分配/溢出策略/优先级）与管理面已落地 <span class="tag">已落地 cb2f77a / 1cbc29e</span>。</p>
+        <p><b>对标</b>：坐席组/团队层级与组内溢出策略已补齐——超过 10–20 个坐席后的组织化路由就绪。</p>
+        <p><b>建议</b>：组级报表与坐席考核联动 gamification 可后续深化。</p>
       </div></details>
 
       <details class="mrow"><summary>
@@ -417,12 +417,12 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
 
       <details class="mrow"><summary>
         <span class="m-dim">远程协助</span><span class="m-pill pill-mid">部分</span>
-        <span class="m-evid">pion/webrtc v4 PeerConnection + 访客端 getDisplayMedia + DataChannel + 连接统计 + admin 视频面板</span>
-        <span class="m-dots"><span class="dot n"></span><span class="dot p"></span><span class="dot n"></span><span class="dot n"></span><span class="dot p"></span><span class="dot p"></span><span class="dot p"></span></span>
+        <span class="m-evid">pion/webrtc v4 PeerConnection + 访客端 getDisplayMedia + DataChannel + 连接统计 + admin 视频面板；协助会话落库 + 访客端 MediaRecorder 录制上传 + 回放 Canvas 标注（rect/freehand/arrow）<span class="tag">已落地 b3ae7bd / 0612824 / 61b4f9a</span></span>
+        <span class="m-dots"><span class="dot n"></span><span class="dot p"></span><span class="dot p"></span><span class="dot n"></span><span class="dot p"></span><span class="dot p"></span><span class="dot p"></span></span>
       </summary><div class="m-detail">
-        <p><b>现状</b>：屏幕共享远程协助全链路真实可用（SDK 访客端 → WS 信令 → pion PeerConnection → admin 面板），有统计与生命周期钩子。</p>
+        <p><b>现状</b>：屏幕共享远程协助全链路真实可用（SDK 访客端 → WS 信令 → pion PeerConnection → admin 面板），有统计与生命周期钩子。协助记录/录制/标注服务端与访客端录制上传、admin 回放标注（时间戳 seek + 撤销/删除）均已落地。</p>
         <p><b>对标</b>：这是竞品普遍的弱项——仅 Intercom 有 Cobrowse。<b>servify 在此维反而领先多数对标对象</b>，是潜在的差异化卖点。</p>
-        <p><b>建议</b>：补会话录制回放与 Canvas 标注层，即可作为对外宣传点。</p>
+        <p><b>建议</b>：对外宣传点已成立；后续可补标注热区导出与协助质量报表。</p>
       </div></details>
 
       <details class="mrow"><summary>
@@ -446,13 +446,13 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
       </div></details>
 
       <details class="mrow"><summary>
-        <span class="m-dim">质检运营</span><span class="m-pill pill-miss">缺失</span>
-        <span class="m-evid">无会话质检评分、抽检工作台、坐席考核；gamification 仅一个排行榜 API</span>
-        <span class="m-dots"><span class="dot n"></span><span class="dot n"></span><span class="dot p"></span><span class="dot n"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span></span>
+        <span class="m-dim">质检运营</span><span class="m-pill pill-mid">部分</span>
+        <span class="m-evid">规则质检（违禁词/响应超时/首响时长）+ LLM 维度打分 + 抽检工作台（确认/人工覆盖分/重打分）已落地 <span class="tag">已落地 847e14f / 7a40b0a / 302bb31</span>；坐席考核联动 gamification 未做</span>
+        <span class="m-dots"><span class="dot p"></span><span class="dot p"></span><span class="dot p"></span><span class="dot p"></span><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span></span>
       </summary><div class="m-detail">
-        <p><b>现状</b>：完全缺失。消息全量入库，但没有任何消费侧的质检能力。</p>
-        <p><b>对标</b>：国内三强标配人机结合质检（规则初筛 + 人工抽检）；Zendesk QA 是收费模块——说明这是可货币化能力。</p>
-        <p><b>建议</b>：数据已就绪，先做规则质检（违禁词/响应超时/首次响应时长）+ 人工抽检工作台，随后接 LLM 打分——与现有 AI 编排天然衔接。</p>
+        <p><b>现状</b>：规则质检 + LLM 打分 + 抽检工作台全链路已落地——quality_reviews 单表承载、确定性抽样、CAS 闩防覆盖人工结论、失败退避重试，LLM 打分复用 platform/llm（openai/anthropic/mock）可降级 rules-only，扫描走后台 worker。</p>
+        <p><b>对标</b>：国内三强标配人机结合质检（规则初筛 + 人工抽检）；Zendesk QA 是收费模块——已补齐最小货币化能力。</p>
+        <p><b>建议</b>：坐席考核联动 gamification、质检结果驱动培训流程，可作为后续深化方向。</p>
       </div></details>
 
     </div>
@@ -487,7 +487,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
       <ul>
         <li><b>主动触达 / Campaign</b> <span class="tag">缓</span>　Intercom 的第二引擎、国内三强的商业化核心，但与 servify「服务台」定位正交。eventbus + 现有渠道随时可起步，不必现在做。</li>
         <li><b>呼叫中心真实通路</b> <span class="tag">缓</span>　voiceprotocol 架构已建，建议只验证不扩张：接一条托管 PSTN 通路证明设计成立即可，h323/FreeSWITCH 枚举可长期保持 reserved。</li>
-        <li><b>质检运营</b> <span class="tag">看市场</span>　国内市场交付几乎必问；国际市场可后置。规则质检成本低，LLM 打分可复用 AI 编排。</li>
+        <li><b>质检运营</b> <span class="tag">看市场</span>　国内市场交付几乎必问；国际市场可后置。规则质检成本低，LLM 打分可复用 AI 编排。 <span class="tag">已落地 847e14f / 7a40b0a / 302bb31</span></li>
         <li><b>移动端 SDK</b> <span class="tag">缓</span>　react/vue/vanilla 三绑定覆盖 Web；RN 绑定等有客户诉求再做，contracts 能力协商机制已为其预留。</li>
         <li><b>开放平台闭环</b> <span class="tag">P1–P2</span>　出站 Webhook + API Key 是最小闭环，做齐即可宣称「可集成」，不必追 Zendesk 市场规模。 <span class="tag">已落地 9aef039 / e1967cf / d004a15</span></li>
       </ul>
@@ -564,7 +564,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
         <li><b>Email 渠道</b>（IMAP/SMTP 适配器）<span class="tag">已落地 dde9c1f</span></li>
         <li><b>AI golden set + CI 回归</b>——效果可度量</li>
         <li><b>出站 Webhook + API Key</b>——开放平台最小闭环 <span class="tag">已落地 9aef039 / e1967cf / d004a15</span></li>
-        <li><b>规则质检 + 抽检工作台</b>——数据已就绪</li>
+        <li><b>规则质检 + 抽检工作台</b>——数据已就绪 <span class="tag">已落地 847e14f / 7a40b0a / 302bb31</span></li>
         <li><b>自动化表达力</b>：webhook/加标/升级动作 + timer 触发 <span class="tag">部分落地 3e5d67e（call_webhook 动作）</span></li>
         <li><b>报表导出</b>（CSV/Excel）</li>
       </ol>
@@ -572,12 +572,13 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
     <div class="road-col p2">
       <h3><small>P2 · 按市场信号</small>差异化与扩张</h3>
       <ol>
-        <li><b>远程协助录制 + 标注</b>——竞品普遍弱项，可做成卖点</li>
+        <li><b>远程协助录制 + 标注</b>——竞品普遍弱项，可做成卖点 <span class="tag">已落地 b3ae7bd / 0612824 / 61b4f9a</span></li>
         <li><b>托管 PSTN 通话通路</b>——验证 voiceprotocol 设计</li>
-        <li><b>LLM 质检打分</b>——复用 AI 编排</li>
-        <li><b>坐席组层级 + 亲和路由</b>——规模化前完成</li>
+        <li><b>LLM 质检打分</b>——复用 AI 编排 <span class="tag">已落地 7a40b0a</span></li>
+        <li><b>坐席组层级 + 亲和路由</b>——规模化前完成 <span class="tag">已落地 cb2f77a / ddd0839 / 1cbc29e</span></li>
         <li><b>SDK 契约包转正</b>（api-client / app-core）+ 移动绑定</li>
       </ol>
+      <p style="margin:10px 0 0; font-size:12.5px; line-height:1.7; color:var(--ink-2)">P1 遗留三小项搭车落地：CSAT 邮件真实投递 <span class="tag">已落地 641117d</span>、坐席回复按会话渠道出站 <span class="tag">已落地 fddc1fa</span>、voice 事件入 webhook 白名单 <span class="tag">已落地 dcdf9aa</span>。</p>
     </div>
   </div>
 </section>
@@ -604,7 +605,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
   "use strict";
   var DIMS = ["渠道","会话","AI","工单","知识","路由","坐席","报表","自动化","触达","呼叫","远程","安全","开放","质检"];
   var SERIES = [
-    { name:"Servify",  key:"sc", values:[1.5,4,4.5,4,4,4,3.5,3,3,0.5,1.5,3,4.5,2,0.5] },
+    { name:"Servify",  key:"sc", values:[1.5,4,4.5,4,4,4,3.5,3,3,1,1.5,3.5,4.5,2,3] },
     { name:"Chatwoot", key:"cw", values:[4.5,4.5,2.5,3,3,3.5,4,3.5,3,3.5,2,0.5,3.5,4,1] },
     { name:"Intercom", key:"ic", values:[4,5,5,4,4.5,4,4.5,4.5,4.5,5,1,1,4,5,3.5] }
   ];
