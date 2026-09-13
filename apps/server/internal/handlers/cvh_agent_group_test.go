@@ -183,10 +183,11 @@ func TestCvhAgentGroupCreateGroup(t *testing.T) {
 	})
 
 	t.Run("name required", func(t *testing.T) {
+		// 请求体必须能通过 binding，否则 400 来自 ShouldBindJSON 而非服务错误映射
 		svc := &cvhAgentGroupService{createErr: agentdelivery.ErrGroupNameRequired}
-		w := dxcDo(cvhAgentGroupRouter(svc), http.MethodPost, "/api/agents/groups", `{"name":""}`)
+		w := dxcDo(cvhAgentGroupRouter(svc), http.MethodPost, "/api/agents/groups", `{"name":"x"}`)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		assert.Contains(t, w.Body.String(), "Invalid request")
+		assert.Contains(t, w.Body.String(), "Failed to create agent group")
 	})
 
 	t.Run("duplicate", func(t *testing.T) {

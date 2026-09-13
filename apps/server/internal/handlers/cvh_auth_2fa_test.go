@@ -29,14 +29,17 @@ type cvh2FAService struct {
 	verify     *services.AuthResult
 	verifyErr  error
 
-	setupUID     uint
-	enableUID    uint
-	enableSecret string
-	enableCode   string
-	regenUID     uint
-	regenCode    string
-	verifyToken  string
-	verifyCode   string
+	setupUID      uint
+	enableUID     uint
+	disableUID    uint
+	enableSecret  string
+	disableSecret string
+	disableCode   string
+	enableCode    string
+	regenUID      uint
+	regenCode     string
+	verifyToken   string
+	verifyCode    string
 }
 
 func (s *cvh2FAService) SetupTwoFactor(_ context.Context, userID uint) (*services.TwoFactorSetup, error) {
@@ -52,7 +55,9 @@ func (s *cvh2FAService) EnableTwoFactor(_ context.Context, userID uint, secret, 
 }
 
 func (s *cvh2FAService) DisableTwoFactor(_ context.Context, userID uint, password, code string) error {
-	s.disableErr = s.disableErr
+	s.disableUID = userID
+	s.disableSecret = password
+	s.disableCode = code
 	return s.disableErr
 }
 

@@ -23,6 +23,10 @@ type SurveyEmailWorker struct {
 	service *services.SatisfactionService
 	logger  *logrus.Logger
 
+	// scanInterval/batchSize 供测试注入短间隔；零值取 surveyEmailScanInterval/batch 常量
+	scanInterval time.Duration
+	batchSize    int
+
 	mu     sync.Mutex
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -50,9 +54,17 @@ func (w *SurveyEmailWorker) Start() error {
 	done := make(chan struct{})
 	w.cancel = cancel
 	w.done = done
+	interval := w.scanInterval
+	if interval <= 0 {
+		interval = surveyEmailScanInterval
+	}
+	batchSize := w.batchSize
+	if batchSize <= 0 {
+		batchSize = surveyEmailBatchSize
+	}
 	go func() {
 		defer close(done)
-		initialDelay := jitter(surveyEmailScanInterval, 0.1)
+		initialDelay := jitter(interval, 0.1)
 		if initialDelay > 0 {
 			select {
 			case <-ctx.Done():
@@ -60,14 +72,14 @@ func (w *SurveyEmailWorker) Start() error {
 			case <-time.After(initialDelay):
 			}
 		}
-		ticker := time.NewTicker(surveyEmailScanInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				sent, err := w.service.ProcessPendingSurveyEmails(ctx, surveyEmailBatchSize)
+				sent, err := w.service.ProcessPendingSurveyEmails(ctx, batchSize)
 				if err != nil {
 					// 单轮失败不终止 worker（DB 抖动等），下一轮重试
 					if w.logger != nil {
