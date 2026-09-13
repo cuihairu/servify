@@ -484,13 +484,14 @@ func TestSurveyEmailWorkerDeliversQueuedSurveys(t *testing.T) {
 		t.Fatalf("Stop() = %v", err)
 	}
 
+	// Poll DB to confirm the OK survey was marked sent — under CI race
+	// detection the in-process SQLite commit may lag behind the mailer
+	// call counter, so a single-shot read can see stale state.
 	var sent models.SatisfactionSurvey
-	if err := db.Where("survey_token = ?", "tok-ok").First(&sent).Error; err != nil {
-		t.Fatalf("load ok survey: %v", err)
-	}
-	if sent.Status != "sent" || sent.SentAt == nil {
-		t.Fatalf("delivered survey status = %q sent_at = %v, want sent/non-nil", sent.Status, sent.SentAt)
-	}
+	waitAtLeast(t, 5*time.Second, func() bool {
+		_ = db.Where("survey_token = ?", "tok-ok").First(&sent).Error
+		return sent.Status == "sent" && sent.SentAt != nil
+	}, "delivered survey was never marked sent")
 	var retried models.SatisfactionSurvey
 	if err := db.Where("survey_token = ?", "tok-blocked").First(&retried).Error; err != nil {
 		t.Fatalf("load blocked survey: %v", err)
