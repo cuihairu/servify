@@ -66,6 +66,14 @@ func SecuritySurfaceCatalog(cfg *config.Config) []SecuritySurface {
 			Reason:                     "public survey token access and submission surface",
 		},
 		{
+			Name:                       "public-voice-pstn-webhook",
+			Path:                       "/public/voice/webhooks/",
+			MatchMode:                  securitySurfacePrefix,
+			Exposure:                   "public",
+			RequiresDedicatedRateLimit: true,
+			Reason:                     "hosted vendor voice webhook ingress (vendor-signature authenticated status callbacks)",
+		},
+		{
 			Name:                       "public-realtime",
 			Path:                       "/api/v1/ws",
 			MatchMode:                  securitySurfaceExact,

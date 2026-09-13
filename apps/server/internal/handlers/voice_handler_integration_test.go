@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	voiceapp "servify/apps/server/internal/modules/voice/application"
@@ -17,6 +19,7 @@ import (
 	"servify/apps/server/internal/platform/pstnprovider"
 	"servify/apps/server/internal/platform/sip"
 	"servify/apps/server/internal/platform/sipws"
+	twiliovoice "servify/apps/server/internal/platform/twiliovoice"
 	"servify/apps/server/internal/platform/voiceprotocol"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +42,7 @@ func newVoiceIntegrationFixture() voiceIntegrationFixture {
 	_ = registry.RegisterSignaling(sip.NewVoiceProtocolAdapter())
 	_ = registry.RegisterSignaling(sipws.NewAdapter())
 	_ = registry.RegisterSignaling(pstnprovider.NewAdapter())
+	_ = registry.RegisterSignaling(twiliovoice.NewAdapter("integration-test-token"))
 	_ = registry.RegisterMedia(voicedelivery.NewWebRTCAdapter(voiceapp.NewService(voiceinfra.NewInMemoryRepository(), bus)))
 	_ = registry.RegisterMedia(voicedelivery.NewRTPAdapter())
 	_ = registry.RegisterMedia(voicedelivery.NewSRTPAdapter())
@@ -46,6 +50,8 @@ func newVoiceIntegrationFixture() voiceIntegrationFixture {
 	router := gin.New()
 	api := router.Group("/api")
 	RegisterVoiceRoutes(api, NewVoiceHandler(coordinator, registry))
+	public := router.Group("/public")
+	RegisterPSTNWebhookRoutes(public, NewPSTNWebhookHandler(coordinator, twiliovoice.NewAdapter("integration-test-token"), true, "https://integration.example.com"))
 
 	return voiceIntegrationFixture{
 		router: router,
@@ -260,5 +266,53 @@ func TestVoiceHandlerCallControlSemanticsIntegration(t *testing.T) {
 	call, ok = fixture.repo.GetCall("call-semantics-1")
 	if !ok || call.Status != "transferred" {
 		t.Fatalf("expected dtmf not to mutate call state directly, got ok=%v call=%+v", ok, call)
+	}
+}
+
+// postPSTNForm posts a form-encoded vendor status callback carrying a valid
+// X-Twilio-Signature for the fixture's adapter token.
+func (f voiceIntegrationFixture) postPSTNForm(t *testing.T, form map[string]string, expected int) {
+	t.Helper()
+	values := url.Values{}
+	for key, value := range form {
+		values.Set(key, value)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/public/voice/webhooks/twilio", strings.NewReader(values.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Twilio-Signature", twilioTestSignature("integration-test-token", "https://integration.example.com/public/voice/webhooks/twilio", form))
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, req)
+	if resp.Code != expected {
+		t.Fatalf("pstn webhook expected %d, got %d, body=%s", expected, resp.Code, resp.Body.String())
+	}
+}
+
+func TestVoiceHandlerPSTNWebhookLifecycleIntegration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fixture := newVoiceIntegrationFixture()
+
+	fixture.postPSTNForm(t, map[string]string{"CallSid": "CA-tw-1", "CallStatus": "queued"}, http.StatusOK)
+	call, ok := fixture.repo.GetCall("CA-tw-1")
+	if !ok || call.Status != "started" {
+		t.Fatalf("expected started PSTN call, got ok=%v call=%+v", ok, call)
+	}
+
+	fixture.postPSTNForm(t, map[string]string{"CallSid": "CA-tw-1", "CallStatus": "in-progress"}, http.StatusOK)
+	call, _ = fixture.repo.GetCall("CA-tw-1")
+	if !ok || call.Status != "answered" {
+		t.Fatalf("expected answered PSTN call, got ok=%v call=%+v", ok, call)
+	}
+
+	fixture.postPSTNForm(t, map[string]string{"CallSid": "CA-tw-1", "CallStatus": "completed"}, http.StatusOK)
+	call, _ = fixture.repo.GetCall("CA-tw-1")
+	if !ok || call.Status != "ended" || call.EndedAt == nil {
+		t.Fatalf("expected ended PSTN call, got ok=%v call=%+v", ok, call)
+	}
+
+	// 迟到的重复 queued 回调:幂等短路,call 状态不再回退。
+	fixture.postPSTNForm(t, map[string]string{"CallSid": "CA-tw-1", "CallStatus": "queued"}, http.StatusOK)
+	call, _ = fixture.repo.GetCall("CA-tw-1")
+	if call.Status != "ended" {
+		t.Fatalf("expected duplicate invite to short-circuit, got %s", call.Status)
 	}
 }

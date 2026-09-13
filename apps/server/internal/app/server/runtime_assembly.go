@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"time"
 
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
@@ -33,6 +34,7 @@ import (
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/sip"
 	"servify/apps/server/internal/platform/sipws"
+	twiliovoice "servify/apps/server/internal/platform/twiliovoice"
 	"servify/apps/server/internal/platform/voiceprotocol"
 	"servify/apps/server/internal/services"
 )
@@ -157,6 +159,16 @@ func wireVoiceRuntime(rt *Runtime, webrtcService *services.WebRTCService) error 
 	_ = rt.VoiceProtocolRegistry.RegisterSignaling(sip.NewVoiceProtocolAdapter())
 	_ = rt.VoiceProtocolRegistry.RegisterSignaling(sipws.NewAdapter())
 	_ = rt.VoiceProtocolRegistry.RegisterSignaling(pstnprovider.NewAdapter())
+	// Hosted PSTN ingress: only mounted when explicitly configured; a missing
+	// auth token is a startup error rather than a silently unsigned webhook.
+	if rt.Config.Voice.PSTN.Provider == "twilio" {
+		if rt.Config.Voice.Twilio.AuthToken == "" {
+			return fmt.Errorf("voice.pstn.provider is twilio but voice.twilio.auth_token is empty")
+		}
+		if err := rt.VoiceProtocolRegistry.RegisterSignaling(twiliovoice.NewAdapter(rt.Config.Voice.Twilio.AuthToken)); err != nil {
+			return err
+		}
+	}
 	_ = rt.VoiceProtocolRegistry.RegisterMedia(voicedelivery.NewWebRTCAdapter(voiceService))
 	_ = rt.VoiceProtocolRegistry.RegisterMedia(voicedelivery.NewRTPAdapter())
 	_ = rt.VoiceProtocolRegistry.RegisterMedia(voicedelivery.NewSRTPAdapter())
