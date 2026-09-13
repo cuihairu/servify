@@ -612,3 +612,45 @@ func TestRetrieverSkipsBlankQuery(t *testing.T) {
 		t.Fatalf("expected nil hits, got %v", hits)
 	}
 }
+
+// 模型/温度必须从 AIRequest 透传到 provider（普通路径与 agent 工具路径都要覆盖），
+// 防止编排器在重构时静默退回 provider 默认值。
+func TestQueryOrchestratorPassesModelAndTemperatureThrough(t *testing.T) {
+	cases := []struct {
+		name       string
+		toolPolicy ToolPolicy
+	}{
+		{name: "plain chat path", toolPolicy: ToolPolicy{}},
+		{name: "tool loop path", toolPolicy: ToolPolicy{Enabled: true, MaxSteps: 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			llmProvider := &mockllm.Provider{
+				ChatResponse: llm.ChatResponse{Content: "answer", Model: "mock-model", FinishReason: "stop"},
+			}
+			orchestrator := NewQueryOrchestrator(llmProvider, nil)
+			_, err := orchestrator.Handle(context.Background(), AIRequest{
+				TaskType:    TaskTypeQA,
+				Query:       "billing",
+				Model:       "gpt-4.1-mini",
+				Temperature: 0.3,
+				ToolPolicy:  tc.toolPolicy,
+			})
+			if err != nil {
+				t.Fatalf("Handle() error = %v", err)
+			}
+			requests := llmProvider.RecordedRequests()
+			if len(requests) == 0 {
+				t.Fatalf("expected provider to receive chat requests")
+			}
+			for _, req := range requests {
+				if req.Model != "gpt-4.1-mini" {
+					t.Fatalf("chat request model = %q want gpt-4.1-mini", req.Model)
+				}
+				if req.Temperature != 0.3 {
+					t.Fatalf("chat request temperature = %v want 0.3", req.Temperature)
+				}
+			}
+		})
+	}
+}

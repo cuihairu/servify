@@ -42,6 +42,10 @@ type AIRequest struct {
 	Messages        []llm.ChatMessage
 	RetrievalPolicy RetrievalPolicy
 	ToolPolicy      ToolPolicy
+	// Model 指定聊天模型；空值走 provider 侧默认（不序列化到请求体）。
+	Model string
+	// Temperature 采样温度透传；零值不写入请求体，同样落回 provider 默认。
+	Temperature float64
 }
 
 // AIResponse is the vendor-neutral output model for AI orchestration.

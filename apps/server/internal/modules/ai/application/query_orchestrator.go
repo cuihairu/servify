@@ -120,7 +120,9 @@ func (o *QueryOrchestrator) Handle(ctx context.Context, req AIRequest) (*AIRespo
 		chatProvider = loopResult.provider
 	} else {
 		chatResp, err := o.llmProvider.Chat(ctx, llm.ChatRequest{
-			Messages: messages,
+			Model:       req.Model,
+			Messages:    messages,
+			Temperature: req.Temperature,
 		})
 		if err != nil {
 			o.metrics.RecordError("llm", "chat")
@@ -205,8 +207,10 @@ func (o *QueryOrchestrator) handleWithTools(ctx context.Context, req AIRequest, 
 
 	for step := 1; step <= maxSteps; step++ {
 		chatResp, err := o.llmProvider.Chat(ctx, llm.ChatRequest{
-			Messages: messages,
-			Tools:    tools,
+			Model:       req.Model,
+			Messages:    messages,
+			Tools:       tools,
+			Temperature: req.Temperature,
 		})
 		if err != nil {
 			span.RecordError(err)
