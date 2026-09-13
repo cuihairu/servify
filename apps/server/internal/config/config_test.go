@@ -31,6 +31,12 @@ func TestGetDefaultConfig(t *testing.T) {
 	if cfg.Voice.TranscriptProvider != "disabled" {
 		t.Fatalf("expected default voice transcript provider disabled, got %q", cfg.Voice.TranscriptProvider)
 	}
+	if cfg.Voice.PSTN.Provider != "disabled" {
+		t.Fatalf("expected default voice pstn provider disabled, got %q", cfg.Voice.PSTN.Provider)
+	}
+	if !cfg.Voice.PSTN.ValidateSignature {
+		t.Fatal("expected default voice pstn validate_signature true")
+	}
 	if cfg.JWT.Secret == "" {
 		t.Error("expected JWT.Secret to be set")
 	}
@@ -194,6 +200,8 @@ func TestLoad_VoiceProviderOverrides(t *testing.T) {
 
 	viper.Set("voice.recording_provider", "mock")
 	viper.Set("voice.transcript_provider", "mock")
+	viper.Set("voice.pstn.provider", "twilio")
+	viper.Set("voice.pstn.validate_signature", false)
 
 	cfg, err := Load()
 	if err != nil {
@@ -205,6 +213,12 @@ func TestLoad_VoiceProviderOverrides(t *testing.T) {
 	}
 	if cfg.Voice.TranscriptProvider != "mock" {
 		t.Fatalf("expected overridden voice transcript provider mock, got %q", cfg.Voice.TranscriptProvider)
+	}
+	if cfg.Voice.PSTN.Provider != "twilio" {
+		t.Fatalf("expected overridden voice pstn provider twilio, got %q", cfg.Voice.PSTN.Provider)
+	}
+	if cfg.Voice.PSTN.ValidateSignature {
+		t.Fatal("expected overridden voice pstn validate_signature false")
 	}
 }
 

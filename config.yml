@@ -37,6 +37,14 @@ voice:
   recording_provider: "disabled"
   # Available providers: disabled, mock, deepgram
   transcript_provider: "disabled"
+  # Hosted PSTN webhook ingress (Twilio Call/Recording Status Callbacks).
+  # Available providers: disabled, twilio. Auth token is shared with voice.twilio.
+  # The public webhook route only exists when provider is not disabled.
+  pstn:
+    provider: "disabled"
+    # Reject webhooks whose X-Twilio-Signature does not verify.
+    # Only disable for local debugging.
+    validate_signature: true
   # Twilio configuration (for recording_provider: twilio)
   twilio:
     account_sid: "${TWILIO_ACCOUNT_SID}"

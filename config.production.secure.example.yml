@@ -17,6 +17,11 @@ voice:
   twilio:
     account_sid: "${TWILIO_ACCOUNT_SID}"
     auth_token: "${TWILIO_AUTH_TOKEN}"
+  # Hosted PSTN webhook ingress; the auth token is voice.twilio.auth_token.
+  # Requires server.public_base_url to be set: Twilio signs the full URL.
+  pstn:
+    provider: "twilio"
+    validate_signature: true
   deepgram:
     api_key: "${DEEPGRAM_API_KEY}"
 

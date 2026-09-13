@@ -99,8 +99,20 @@ type WebRTCConfig struct {
 type VoiceConfig struct {
 	RecordingProvider  string         `yaml:"recording_provider"`
 	TranscriptProvider string         `yaml:"transcript_provider"`
+	PSTN               PSTNConfig     `yaml:"pstn"`
 	Twilio             TwilioConfig   `yaml:"twilio"`
 	Deepgram           DeepgramConfig `yaml:"deepgram"`
+}
+
+// PSTNConfig controls the hosted-vendor PSTN webhook ingress
+// (platform/twiliovoice). The auth token is shared with voice.twilio.
+type PSTNConfig struct {
+	// Provider selects the PSTN ingress: "disabled" (no public webhook route)
+	// or "twilio".
+	Provider string `yaml:"provider"`
+	// ValidateSignature rejects webhooks whose X-Twilio-Signature does not
+	// verify; only disable for local debugging.
+	ValidateSignature bool `yaml:"validate_signature"`
 }
 
 type TwilioConfig struct {
@@ -742,6 +754,10 @@ func GetDefaultConfig() *Config {
 		Voice: VoiceConfig{
 			RecordingProvider:  "disabled",
 			TranscriptProvider: "disabled",
+			PSTN: PSTNConfig{
+				Provider:          "disabled",
+				ValidateSignature: true,
+			},
 		},
 		AI: AIConfig{
 			OpenAI: OpenAIConfig{

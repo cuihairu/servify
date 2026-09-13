@@ -11,6 +11,9 @@ event_bus:
 voice:
   recording_provider: "disabled"
   transcript_provider: "disabled"
+  pstn:
+    provider: "disabled"
+    validate_signature: true
 
 jwt:
   secret: "${SERVIFY_JWT_SECRET}"
