@@ -1,0 +1,27 @@
+Voice PSTN acceptance summary
+servify_url=http://127.0.0.1:18098
+signature_ok=true
+duplicate_invite_ok=true
+answer_ok=true
+hangup_ok=true
+late_invite_short_circuit_ok=true
+recording_ok=true
+bad_signature_rejected=true
+missing_signature_rejected=true
+unknown_status_rejected=true
+db_call_asserted=true
+db_recording_asserted=true
+outbound_ok=true
+signature_ok=true
+duplicate_invite_ok=true
+answer_ok=true
+hangup_ok=true
+late_invite_short_circuit_ok=true
+recording_ok=true
+bad_signature_rejected=true
+missing_signature_rejected=true
+unknown_status_rejected=true
+db_call_asserted=true
+db_recording_asserted=true
+outbound_ok=true
+overall_status=passed
