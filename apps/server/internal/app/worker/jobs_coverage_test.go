@@ -12,9 +12,6 @@ import (
 	"servify/apps/server/internal/config"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestJitterBoundaries(t *testing.T) {
@@ -198,10 +195,7 @@ func TestRegisterDefaultWorkersWithRetentionWorkers(t *testing.T) {
 	cfg.Security.Audit.Enabled = true
 	cfg.Security.TokenRevocation.Enabled = true
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	db := openSQLiteMemDB(t)
 
 	RegisterDefaultWorkers(app, cfg, db, &fakeRuntimeWorkerDependencies{})
 	if len(app.Workers) != 4 {

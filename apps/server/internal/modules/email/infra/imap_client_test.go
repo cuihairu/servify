@@ -13,6 +13,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,18 +82,29 @@ func (f imapFixture) fetchResponse(seq uint32) string {
 
 // fakeIMAPServer 是仅覆盖 GoIMAPClient 所用命令子集的内存 IMAP 服务。
 type fakeIMAPServer struct {
-	ln          net.Listener
-	tlsCert     *tls.Certificate // 非空 = TLS 监听
-	loginOK     bool
-	examineOK   bool
-	searchOK    bool
-	fetchOK     bool
-	fetchEmpty  bool
-	uidValidity uint32
-	uids        []uint32
-	fixture     imapFixture
+	ln            net.Listener
+	tlsCert       *tls.Certificate // 非空 = TLS 监听
+	loginOK       bool
+	examineOK     bool
+	searchOK      bool
+	searchEsearch bool // 真则对 SEARCH 回带 correlator 的 ESEARCH（IMAP4rev2 风格）
+	fetchOK       bool
+	fetchEmpty    bool
+	uidValidity   uint32
+	uids          []uint32
+	fixture       imapFixture
 
 	tlsConfig *tls.Config // 客户端侧校验配置（tls.Dialer 用）
+
+	searchMu      sync.Mutex
+	lastSearchCmd string // 最近一条 SEARCH 命令的命令 token（如 "UID SEARCH"）
+}
+
+// lastSearch 返回最近一条 SEARCH 命令 token（并发安全）。
+func (s *fakeIMAPServer) lastSearch() string {
+	s.searchMu.Lock()
+	defer s.searchMu.Unlock()
+	return s.lastSearchCmd
 }
 
 func startFakeIMAPServer(t *testing.T, mutate func(*fakeIMAPServer)) *fakeIMAPServer {
@@ -200,21 +212,35 @@ func (s *fakeIMAPServer) serve(conn net.Conn) {
 				return
 			}
 		case "SEARCH":
+			cmdTokens := fields[1:]
+			if len(cmdTokens) > 2 {
+				cmdTokens = cmdTokens[:2]
+			}
+			s.searchMu.Lock()
+			s.lastSearchCmd = strings.ToUpper(strings.Join(cmdTokens, " "))
+			s.searchMu.Unlock()
 			if !s.searchOK {
 				if !s.writeLine(conn, tag+" NO search failed") {
 					return
 				}
 				continue
 			}
-			// 生产代码用 client.Search（非 UID SEARCH）+ AllUIDs()。
-			// go-imap v2 beta.8 的 ESEARCH 解析器要求带 search-correlator
-			// 且 tag 匹配 pending 命令，UID 标记才会让结果落进 UIDSet。
+			// RFC 3501：UID SEARCH 的应答是普通 "* SEARCH <n>..."，数字即
+			// UID（与序号无关）；假服务器固定回 s.uids，序号本应是 1..3，
+			// 客户端若误发普通 SEARCH 或按序号解释应答都得不到 [3 5 9]。
 			uids := make([]string, 0, len(s.uids))
 			for _, uid := range s.uids {
 				uids = append(uids, strconv.Itoa(int(uid)))
 			}
-			esearch := fmt.Sprintf("* ESEARCH (TAG %q) UID ALL %s", tag, strings.Join(uids, ","))
-			if !s.writeLine(conn, esearch) ||
+			var data string
+			if s.searchEsearch {
+				// IMAP4rev2/ESEARCH 服务器改用带 search-correlator 的应答；
+				// go-imap 要求 tag 匹配 pending 命令，且 "UID ALL" 才会落进 UIDSet。
+				data = fmt.Sprintf("* ESEARCH (TAG %q) UID ALL %s", tag, strings.Join(uids, ","))
+			} else {
+				data = "* SEARCH " + strings.Join(uids, " ")
+			}
+			if !s.writeLine(conn, data) ||
 				!s.writeLine(conn, tag+" OK search done") {
 				return
 			}
@@ -321,6 +347,50 @@ func TestGoIMAPClientHappyPathSelectSearchFetchClose(t *testing.T) {
 	// Close 幂等：client 已清空后直接返回 nil
 	if err := c.Close(); err != nil {
 		t.Fatalf("second close: %v", err)
+	}
+}
+
+// TestGoIMAPClientSearchSinceUIDSendsUIDSearch 是语义 bug 回归：
+// SearchSinceUID 必须发 UID SEARCH（client.UIDSearch）。旧实现发普通
+// SEARCH——应答数字是序号，落进 SeqSet 后 AllUIDs() 的类型断言失败
+// 静默返回空列表，轮询器永远看不到新邮件。
+func TestGoIMAPClientSearchSinceUIDSendsUIDSearch(t *testing.T) {
+	srv := startFakeIMAPServer(t, nil)
+	c := newTestIMAPClient(srv.clientConfig())
+	if _, err := c.Select(t.Context(), "INBOX"); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	uids, err := c.SearchSinceUID(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	// 假服务器 EXISTS=3（序号 1..3）但 UID 是 3/5/9：结果必须按 UID 解出
+	if len(uids) != 3 || uids[0] != 3 || uids[1] != 5 || uids[2] != 9 {
+		t.Fatalf("uids = %v, want [3 5 9]", uids)
+	}
+	if got := srv.lastSearch(); got != "UID SEARCH" {
+		t.Fatalf("wire command = %q, want %q", got, "UID SEARCH")
+	}
+}
+
+// TestGoIMAPClientSearchSinceUIDParsesEsearchResponse 覆盖 ESEARCH 应答
+// 变体：IMAP4rev2/ESEARCH 服务器以 "* ESEARCH (TAG ...) UID ALL ..." 回
+// UID SEARCH，客户端须按 correlator tag 关联命令并把结果落进 UIDSet。
+func TestGoIMAPClientSearchSinceUIDParsesEsearchResponse(t *testing.T) {
+	srv := startFakeIMAPServer(t, func(s *fakeIMAPServer) { s.searchEsearch = true })
+	c := newTestIMAPClient(srv.clientConfig())
+	if _, err := c.Select(t.Context(), "INBOX"); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+	uids, err := c.SearchSinceUID(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(uids) != 3 || uids[0] != 3 || uids[1] != 5 || uids[2] != 9 {
+		t.Fatalf("uids = %v, want [3 5 9]", uids)
+	}
+	if got := srv.lastSearch(); got != "UID SEARCH" {
+		t.Fatalf("wire command = %q, want %q", got, "UID SEARCH")
 	}
 }
 

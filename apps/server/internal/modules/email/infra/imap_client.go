@@ -110,6 +110,8 @@ func (c *GoIMAPClient) connect(ctx context.Context) error {
 }
 
 // SearchSinceUID 搜索 UID > sinceUID 的邮件；错误时丢弃连接（下次 Select 重建）。
+// 必须发 UID SEARCH：普通 SEARCH 的应答数字是序号，go-imap 把它落进
+// SeqSet，AllUIDs() 的类型断言失败会静默返回空列表（轮询从此失明）。
 func (c *GoIMAPClient) SearchSinceUID(ctx context.Context, sinceUID uint32) ([]uint32, error) {
 	if c.client == nil {
 		return nil, errors.New("imap search: not selected")
@@ -120,7 +122,7 @@ func (c *GoIMAPClient) SearchSinceUID(ctx context.Context, sinceUID uint32) ([]u
 	} else {
 		uidSet.AddRange(1, 0)
 	}
-	searchData, err := c.client.Search(&imap.SearchCriteria{UID: []imap.UIDSet{uidSet}}, nil).Wait()
+	searchData, err := c.client.UIDSearch(&imap.SearchCriteria{UID: []imap.UIDSet{uidSet}}, nil).Wait()
 	if err != nil {
 		c.dropConn()
 		return nil, fmt.Errorf("imap search: %w", err)

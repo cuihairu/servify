@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,27 @@ func discardLogger() *logrus.Logger {
 	l := logrus.New()
 	l.SetOutput(io.Discard)
 	return l
+}
+
+// workerMemDBSeq 给每个测试的内存库一个唯一名字，避免同名 shared-cache 库串台。
+var workerMemDBSeq atomic.Uint64
+
+// openSQLiteMemDB 打开测试用命名内存库：cache=shared + 单连接。裸 ":memory:"
+// 每个连接是独立空库——race 下 worker goroutine 与测试并发查询会迫使连接池
+// 开第二条连接，报 no such table（间歇性 flake）。
+func openSQLiteMemDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := "file:worker_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" + strconv.FormatUint(workerMemDBSeq.Add(1), 10) + "?mode=memory&cache=shared"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get sql db: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	return db
 }
 
 // preCancelledCtx 返回一个已取消的 context，配合「worker 循环卡住」的假象，
@@ -442,10 +464,7 @@ func TestSurveyEmailWorkerStopContextError(t *testing.T) {
 // 与 scan-failure 测试并行执行。
 func TestSurveyEmailWorkerDeliversQueuedSurveys(t *testing.T) {
 	t.Parallel()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	db := openSQLiteMemDB(t)
 	if err := db.AutoMigrate(&models.User{}, &models.SatisfactionSurvey{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
@@ -477,21 +496,20 @@ func TestSurveyEmailWorkerDeliversQueuedSurveys(t *testing.T) {
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() = %v", err)
 	}
-	waitAtLeast(t, 10*time.Second, func() bool { return mailer.calls.Load() >= 2 }, "worker never scanned pending surveys")
+	// 直接轮询 DB 等 tok-ok 被标记 sent。不能用 mailer.calls 计数做就绪信号：
+	// blocked 每轮 tick 都会重试并递增计数，race 调度下计数达标时 tok-ok 可能
+	// 尚未被扫到，提前 Stop 会把它永久卡在 queued。
+	var sent models.SatisfactionSurvey
+	waitAtLeast(t, 15*time.Second, func() bool {
+		_ = db.Where("survey_token = ?", "tok-ok").First(&sent).Error
+		return sent.Status == "sent" && sent.SentAt != nil
+	}, "delivered survey was never marked sent")
 	stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := w.Stop(stopCtx); err != nil {
 		t.Fatalf("Stop() = %v", err)
 	}
 
-	// Poll DB to confirm the OK survey was marked sent — under CI race
-	// detection the in-process SQLite commit may lag behind the mailer
-	// call counter, so a single-shot read can see stale state.
-	var sent models.SatisfactionSurvey
-	waitAtLeast(t, 5*time.Second, func() bool {
-		_ = db.Where("survey_token = ?", "tok-ok").First(&sent).Error
-		return sent.Status == "sent" && sent.SentAt != nil
-	}, "delivered survey was never marked sent")
 	var retried models.SatisfactionSurvey
 	if err := db.Where("survey_token = ?", "tok-blocked").First(&retried).Error; err != nil {
 		t.Fatalf("load blocked survey: %v", err)
@@ -525,10 +543,7 @@ func (b *lockedBuffer) String() string {
 // 告警（scan failed）并 continue 到下一轮 tick，循环本身不退出。与投递测试并行。
 func TestSurveyEmailWorkerLogsScanFailures(t *testing.T) {
 	t.Parallel()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	db := openSQLiteMemDB(t)
 	if err := db.AutoMigrate(&models.User{}, &models.SatisfactionSurvey{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
@@ -847,10 +862,7 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 	cfg.Security.Audit.Enabled = true
 	cfg.Security.TokenRevocation.Enabled = true
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	db := openSQLiteMemDB(t)
 
 	RegisterDefaultWorkers(app, cfg, db, fullRuntimeWorkerDeps{})
 
