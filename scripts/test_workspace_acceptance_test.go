@@ -147,11 +147,14 @@ func TestWorkspaceAcceptanceScriptWritesEvidence(t *testing.T) {
 			if err != nil || opcode != 0x1 {
 				return
 			}
+			// 与真实契约一致:内容在 data.content,顶层 content 会被服务端静默丢弃
 			var inbound struct {
-				Type    string `json:"type"`
-				Content string `json:"content"`
+				Type string `json:"type"`
+				Data struct {
+					Content string `json:"content"`
+				} `json:"data"`
 			}
-			if json.Unmarshal(payload, &inbound) != nil || inbound.Type != "text-message" {
+			if json.Unmarshal(payload, &inbound) != nil || inbound.Type != "text-message" || strings.TrimSpace(inbound.Data.Content) == "" {
 				return
 			}
 
@@ -164,7 +167,7 @@ func TestWorkspaceAcceptanceScriptWritesEvidence(t *testing.T) {
 					StartedAt: "2026-01-01T00:00:00Z",
 				}
 			}
-			ingestMessage(sessionID, "customer", inbound.Content)
+			ingestMessage(sessionID, "customer", inbound.Data.Content)
 			mu.Unlock()
 			wsIngress++
 

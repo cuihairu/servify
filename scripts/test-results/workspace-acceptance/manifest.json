@@ -1,0 +1,55 @@
+{
+  "checks": {
+    "admin_auth_ok": "true",
+    "agent_message_ok": "true",
+    "agent_message_persisted": "true",
+    "agents_ready": "true",
+    "assign_ok": "true",
+    "close_ok": "true",
+    "empty_message_rejected": "true",
+    "message_list_ok": "true",
+    "session_created": "true",
+    "session_detail_ok": "true",
+    "transfer_ok": "true",
+    "unauthenticated_rejected": "true",
+    "unknown_session_rejected": "true",
+    "visitor_ws_ingress_ok": "true",
+    "workspace_overview_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "agent-create-primary.json",
+    "agent-create-secondary.json",
+    "agent-message.json",
+    "agent-register-ws-acceptance-a-1789417359-3504.json",
+    "agent-register-ws-acceptance-a-1789417604-6152.json",
+    "agent-register-ws-acceptance-b-1789417359-3504.json",
+    "agent-register-ws-acceptance-b-1789417604-6152.json",
+    "empty-message.json",
+    "session-assigned.json",
+    "session-closed.json",
+    "session-detail.json",
+    "session-messages-after-agent.json",
+    "session-messages-visitor.json",
+    "session-transferred.json",
+    "summary.txt",
+    "unauthenticated-session.json",
+    "unknown-session.json",
+    "workspace-overview.json"
+  ],
+  "metrics": {
+    "agent_messages": "1",
+    "agent_primary_id": "12",
+    "agent_secondary_id": "13",
+    "session_id": "ws-acceptance-1789417604-6152",
+    "status_after_close": "closed",
+    "status_after_transfer": "transferred",
+    "visitor_messages": "1"
+  },
+  "mode": "real",
+  "provider": "workspace",
+  "servify_url": "http://localhost:8080",
+  "status": {
+    "overall": "passed"
+  }
+}

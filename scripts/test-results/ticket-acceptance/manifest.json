@@ -1,0 +1,49 @@
+{
+  "checks": {
+    "admin_auth_ok": "true",
+    "agents_ready": "true",
+    "close_ok": "true",
+    "closed_state_verified": "true",
+    "comment_added": "true",
+    "create_missing_title_rejected": "true",
+    "export_ok": "true",
+    "stats_ok": "true",
+    "ticket_created": "true",
+    "ticket_updated": "true",
+    "unauthenticated_rejected": "true",
+    "unknown_ticket_rejected": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "agent-create.json",
+    "summary.txt",
+    "ticket-agent.json",
+    "ticket-close.json",
+    "ticket-comment.json",
+    "ticket-create-missing-title.json",
+    "ticket-created.json",
+    "ticket-customer.json",
+    "ticket-detail-after-update.json",
+    "ticket-detail-closed.json",
+    "ticket-export.csv",
+    "ticket-stats.json",
+    "ticket-updated.json",
+    "unauthenticated-tickets.json",
+    "unknown-ticket.json"
+  ],
+  "metrics": {
+    "agent_id": "15",
+    "closed_at": "2026-09-14T20:26:58.455926606Z",
+    "comment_id": "1",
+    "customer_id": "14",
+    "export_bytes": "1094",
+    "stats_total": "11",
+    "ticket_id": "11"
+  },
+  "mode": "real",
+  "provider": "ticket",
+  "servify_url": "http://localhost:8080",
+  "status": {
+    "overall": "passed"
+  }
+}

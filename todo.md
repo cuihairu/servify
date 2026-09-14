@@ -295,7 +295,7 @@
 - 下一步：把 `scripts/test-results/auth-session-acceptance/real/manifest.json` 纳入 git，并继续推进 AI / Knowledge real 证据留档，避免验收闭环只停在 auth-session
 - 阻塞项：无代码阻塞；剩余是证据入库和 AI / Knowledge 外部依赖环境
 
-### [!] P1-3 会话工作台主操作补齐到“通过”
+### [x] P1-3 会话工作台主操作补齐到“通过”
 
 - 范围：
   - 会话详情
@@ -308,10 +308,12 @@
 - 验收标准：
   - 每个操作都有可回溯的真实请求结果与状态变化证据
   - 发布口径下不再仅依赖自动化通过
-- 状态：`[-]`
-- 最近进展：验收脚本 `scripts/test-workspace-acceptance.sh` 已按 auth-session 模式搭好——真实访客 WS 建会话（python3 stdlib 客户端）→ 详情/消息列表/坐席回复/接管/转接/关闭全链路 + 未知会话 404 / 空消息 400 / 未认证 401 三条拒绝路径，产出 15 个证据文件与 manifest；`scripts/validate-acceptance-manifest.sh` 已支持 `workspace` provider（含 `status_after_transfer=transferred`、`status_after_close=closed` 断言），mock 回归 `scripts/test_workspace_acceptance_test.go` 通过
-- 下一步：真实环境跑 `make workspace-acceptance` 留档 manifest，回填 `docs/acceptance-checklist.md` 后置为 `[x]`
-- 阻塞项：暂无
+- 状态：`[x]`
+- 完成证据：
+  - 代码文件：`scripts/test-workspace-acceptance.sh`、`scripts/test_workspace_acceptance_test.go`、`scripts/validate-acceptance-manifest.sh`（workspace provider）
+  - 测试命令：`make workspace-acceptance`（真实服务 `DB_DRIVER=sqlite`，2026-09-14）；`go test ./scripts -run TestWorkspaceAcceptance`
+  - 文档或验收回填位置：`scripts/test-results/workspace-acceptance/manifest.json` 已入库；`docs/acceptance-checklist.md` 会话工作台六项置“通过”并附真实留档链接，专项验证记录新增“会话工作台真实运行验收（P1-3）”
+- 附注：首轮真实运行暴露 `text-message` 契约差异（内容必须在 `data.content`，顶层 content 被服务端静默丢弃导致会话未创建），已修正脚本并收紧 mock 契约
 
 ### [!] P1-4 运行基线最小事实补齐
 
@@ -329,7 +331,7 @@
 - 下一步：先跑最小可复现命令并回填证据
 - 阻塞项：暂无
 
-### [ ] P1-5 Ticket 主闭环剩余高频操作补齐
+### [x] P1-5 Ticket 主闭环剩余高频操作补齐
 
 - 范围：
   - 更新工单
@@ -339,10 +341,11 @@
   - 导出
 - 验收标准：
   - 对应 API 从 `未验` 或 `部分通过` 推进到 `通过`
-- 状态：`[-]`
-- 最近进展：验收脚本 `scripts/test-ticket-acceptance.sh` 已按 auth-session 模式搭好——建单/更新（priority、agent、tags）/评论/关闭/统计/导出全链路 + 未知工单 404 / 缺标题 400 / 未认证 401 三条拒绝路径，产出 17 个证据文件（含 ticket-export.csv）与 manifest；`scripts/validate-acceptance-manifest.sh` 已支持 `ticket` provider，mock 回归 `scripts/test_ticket_acceptance_test.go` 通过
-- 下一步：真实环境跑 `make ticket-acceptance` 留档 manifest，回填 `docs/acceptance-checklist.md` 后置为 `[x]`
-- 阻塞项：暂无
+- 状态：`[x]`
+- 完成证据：
+  - 代码文件：`scripts/test-ticket-acceptance.sh`、`scripts/test_ticket_acceptance_test.go`、`scripts/validate-acceptance-manifest.sh`（ticket provider）
+  - 测试命令：`make ticket-acceptance`（真实服务 `DB_DRIVER=sqlite`，2026-09-14）；`go test ./scripts -run TestTicketAcceptance`
+  - 文档或验收回填位置：`scripts/test-results/ticket-acceptance/manifest.json` 与 `ticket-export.csv` 已入库；`docs/acceptance-checklist.md` 工单更新/评论/关闭/统计/导出行已附真实留档链接，专项验证记录新增“Ticket 高频操作真实运行验收（P1-5）”
 
 ---
 
@@ -548,7 +551,7 @@
 
 - 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`
 - 原因：本轮整体审核确认 P0 项均已收口，核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。下一阶段仍应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
-- 附注（2026-09-14）：`P1-3` / `P1-5` 的验收脚本与 mock 回归已就位（`make workspace-acceptance` / `make ticket-acceptance`），只差真实环境运行留档即可闭环
+- 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）；`P1-2` / `P1-4` 已有真实留档。P1 序列剩 `P1-1` 与 P1-4 遗留的 `make security-check` 真实配置留证
 - 如果本轮无法推进实现，至少先补：
   - 真实边界文档
   - 默认 prod 策略

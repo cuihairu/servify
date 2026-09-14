@@ -462,9 +462,10 @@ AGENTS_READY=true
 append_summary "agents_ready=$AGENTS_READY"
 
 # 3. 访客经真实 WS 入口建会话并留言
+# 契约:内容必须放在 data.content(WebSocketMessage.Data),顶层 content 会被服务端静默丢弃
 echo "💬 访客 WS 建会话..."
 visitor_ws_message "${SERVIFY_URL}/api/v1/ws?session_id=${SESSION_ID}" \
-  "$(printf '{"type":"text-message","content":"%s"}' "$VISITOR_CONTENT")"
+  "$(printf '{"type":"text-message","data":{"content":"%s"}}' "$VISITOR_CONTENT")"
 VISITOR_WS_INGRESS_OK=true
 append_summary "visitor_ws_ingress_ok=$VISITOR_WS_INGRESS_OK"
 

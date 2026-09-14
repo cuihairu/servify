@@ -1,0 +1,12 @@
+id,title,status,priority,category,customer_id,agent_id,tags,created_at,updated_at
+11,ticket-acceptance-1789417617-27158,closed,high,acceptance,14,15,"acceptance,p1-5",2026-09-14T20:26:58Z,2026-09-14T20:26:58Z
+10,发票申请,assigned,medium,发票,9,2,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+9,隐私设置咨询,assigned,low,隐私,8,4,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+8,配送延迟,assigned,high,物流,7,3,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+7,会员续费问题,assigned,medium,会员,6,2,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+6,API 调用报错,assigned,urgent,技术支持,5,4,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+5,支付失败,assigned,high,支付,9,3,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+4,功能建议,assigned,low,建议,8,2,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+3,产品使用咨询,assigned,medium,使用指导,7,4,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+2,退款申请,assigned,urgent,退款,6,3,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
+1,无法登录账号,assigned,high,账号问题,5,2,,2026-09-14T20:22:29Z,2026-09-14T20:22:29Z
