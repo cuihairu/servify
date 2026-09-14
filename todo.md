@@ -308,9 +308,9 @@
 - 验收标准：
   - 每个操作都有可回溯的真实请求结果与状态变化证据
   - 发布口径下不再仅依赖自动化通过
-- 状态：`[ ]`
-- 最近进展：当前已确认 `会话详情`、`消息列表`、`发送消息`、`指派会话`、`转接会话`、`关闭会话` 都有代码与自动化覆盖；`acceptance-checklist` 已按发布口径统一回调为 `部分通过`，因为剩余问题不再是“路由阻塞”，而是发布证据、异常路径和运行留档仍不足
-- 下一步：补齐工作台主操作的真实请求留档，并补至少一条失败/拒绝路径证据
+- 状态：`[-]`
+- 最近进展：验收脚本 `scripts/test-workspace-acceptance.sh` 已按 auth-session 模式搭好——真实访客 WS 建会话（python3 stdlib 客户端）→ 详情/消息列表/坐席回复/接管/转接/关闭全链路 + 未知会话 404 / 空消息 400 / 未认证 401 三条拒绝路径，产出 15 个证据文件与 manifest；`scripts/validate-acceptance-manifest.sh` 已支持 `workspace` provider（含 `status_after_transfer=transferred`、`status_after_close=closed` 断言），mock 回归 `scripts/test_workspace_acceptance_test.go` 通过
+- 下一步：真实环境跑 `make workspace-acceptance` 留档 manifest，回填 `docs/acceptance-checklist.md` 后置为 `[x]`
 - 阻塞项：暂无
 
 ### [!] P1-4 运行基线最小事实补齐
@@ -339,9 +339,9 @@
   - 导出
 - 验收标准：
   - 对应 API 从 `未验` 或 `部分通过` 推进到 `通过`
-- 状态：`[ ]`
-- 最近进展：工单主链路基础已通，但高频运营动作还未全部验收
-- 下一步：按验收矩阵逐项补证据
+- 状态：`[-]`
+- 最近进展：验收脚本 `scripts/test-ticket-acceptance.sh` 已按 auth-session 模式搭好——建单/更新（priority、agent、tags）/评论/关闭/统计/导出全链路 + 未知工单 404 / 缺标题 400 / 未认证 401 三条拒绝路径，产出 17 个证据文件（含 ticket-export.csv）与 manifest；`scripts/validate-acceptance-manifest.sh` 已支持 `ticket` provider，mock 回归 `scripts/test_ticket_acceptance_test.go` 通过
+- 下一步：真实环境跑 `make ticket-acceptance` 留档 manifest，回填 `docs/acceptance-checklist.md` 后置为 `[x]`
 - 阻塞项：暂无
 
 ---
@@ -548,6 +548,7 @@
 
 - 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`
 - 原因：本轮整体审核确认 P0 项均已收口，核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。下一阶段仍应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
+- 附注（2026-09-14）：`P1-3` / `P1-5` 的验收脚本与 mock 回归已就位（`make workspace-acceptance` / `make ticket-acceptance`），只差真实环境运行留档即可闭环
 - 如果本轮无法推进实现，至少先补：
   - 真实边界文档
   - 默认 prod 策略

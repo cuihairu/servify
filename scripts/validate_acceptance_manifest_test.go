@@ -231,6 +231,241 @@ func TestValidateAcceptanceManifestScriptAcceptsValidVoicePstnManifest(t *testin
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidWorkspaceManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                       "ok",
+		"admin-auth.json":                   "{}",
+		"agent-create-primary.json":         "{}",
+		"agent-create-secondary.json":       "{}",
+		"session-detail.json":               "{}",
+		"session-messages-visitor.json":     "{}",
+		"agent-message.json":                "{}",
+		"session-messages-after-agent.json": "{}",
+		"session-assigned.json":             "{}",
+		"session-transferred.json":          "{}",
+		"session-closed.json":               "{}",
+		"workspace-overview.json":           "{}",
+		"unknown-session.json":              "{}",
+		"empty-message.json":                "{}",
+		"unauthenticated-session.json":      "{}",
+		"manifest.json": `{
+  "provider": "workspace",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "agents_ready": "true",
+    "visitor_ws_ingress_ok": "true",
+    "session_created": "true",
+    "session_detail_ok": "true",
+    "message_list_ok": "true",
+    "agent_message_ok": "true",
+    "agent_message_persisted": "true",
+    "assign_ok": "true",
+    "transfer_ok": "true",
+    "close_ok": "true",
+    "workspace_overview_ok": "true",
+    "unknown_session_rejected": "true",
+    "empty_message_rejected": "true",
+    "unauthenticated_rejected": "true"
+  },
+  "metrics": {
+    "status_after_transfer": "transferred",
+    "status_after_close": "closed"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "agent-create-primary.json",
+    "agent-create-secondary.json",
+    "session-detail.json",
+    "session-messages-visitor.json",
+    "agent-message.json",
+    "session-messages-after-agent.json",
+    "session-assigned.json",
+    "session-transferred.json",
+    "session-closed.json",
+    "workspace-overview.json",
+    "unknown-session.json",
+    "empty-message.json",
+    "unauthenticated-session.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptAcceptsValidTicketManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                      "ok",
+		"admin-auth.json":                  "{}",
+		"ticket-customer.json":             "{}",
+		"ticket-agent.json":                "{}",
+		"agent-create.json":                "{}",
+		"ticket-created.json":              "{}",
+		"ticket-updated.json":              "{}",
+		"ticket-detail-after-update.json":  "{}",
+		"ticket-comment.json":              "{}",
+		"ticket-close.json":                "{}",
+		"ticket-detail-closed.json":        "{}",
+		"ticket-stats.json":                "{}",
+		"ticket-export.csv":                "id,title,status\n",
+		"unknown-ticket.json":              "{}",
+		"ticket-create-missing-title.json": "{}",
+		"unauthenticated-tickets.json":     "{}",
+		"manifest.json": `{
+  "provider": "ticket",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "agents_ready": "true",
+    "ticket_created": "true",
+    "ticket_updated": "true",
+    "comment_added": "true",
+    "close_ok": "true",
+    "closed_state_verified": "true",
+    "stats_ok": "true",
+    "export_ok": "true",
+    "unknown_ticket_rejected": "true",
+    "create_missing_title_rejected": "true",
+    "unauthenticated_rejected": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "ticket-customer.json",
+    "ticket-agent.json",
+    "agent-create.json",
+    "ticket-created.json",
+    "ticket-updated.json",
+    "ticket-detail-after-update.json",
+    "ticket-comment.json",
+    "ticket-close.json",
+    "ticket-detail-closed.json",
+    "ticket-stats.json",
+    "ticket-export.csv",
+    "unknown-ticket.json",
+    "ticket-create-missing-title.json",
+    "unauthenticated-tickets.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsWorkspaceWithoutCloseEvidence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                       "ok",
+		"admin-auth.json":                   "{}",
+		"agent-create-primary.json":         "{}",
+		"agent-create-secondary.json":       "{}",
+		"session-detail.json":               "{}",
+		"session-messages-visitor.json":     "{}",
+		"agent-message.json":                "{}",
+		"session-messages-after-agent.json": "{}",
+		"session-assigned.json":             "{}",
+		"session-transferred.json":          "{}",
+		"session-closed.json":               "{}",
+		"workspace-overview.json":           "{}",
+		"unknown-session.json":              "{}",
+		"empty-message.json":                "{}",
+		"unauthenticated-session.json":      "{}",
+		"manifest.json": `{
+  "provider": "workspace",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "agents_ready": "true",
+    "visitor_ws_ingress_ok": "true",
+    "session_created": "true",
+    "session_detail_ok": "true",
+    "message_list_ok": "true",
+    "agent_message_ok": "true",
+    "agent_message_persisted": "true",
+    "assign_ok": "true",
+    "transfer_ok": "true",
+    "close_ok": "true",
+    "workspace_overview_ok": "true",
+    "unknown_session_rejected": "true",
+    "empty_message_rejected": "true",
+    "unauthenticated_rejected": "true"
+  },
+  "metrics": {
+    "status_after_transfer": "transferred",
+    "status_after_close": "active"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "agent-create-primary.json",
+    "agent-create-secondary.json",
+    "session-detail.json",
+    "session-messages-visitor.json",
+    "agent-message.json",
+    "session-messages-after-agent.json",
+    "session-assigned.json",
+    "session-transferred.json",
+    "session-closed.json",
+    "workspace-overview.json",
+    "unknown-session.json",
+    "empty-message.json",
+    "unauthenticated-session.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, output=%s", string(output))
+	}
+	if !strings.Contains(string(output), "status_after_close") {
+		t.Fatalf("expected failure reason in output, got %s", string(output))
+	}
+}
+
 func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, body := range files {

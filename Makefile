@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -45,6 +45,8 @@ help:
 	@echo "  knowledge-provider-acceptance - Alias of weknora-acceptance for provider compatibility runs"
 	@echo "  knowledge-acceptance - Run the knowledge base acceptance script"
 	@echo "  auth-session-acceptance - Run the auth self-service session acceptance script"
+	@echo "  workspace-acceptance - Run the conversation workspace acceptance script"
+	@echo "  ticket-acceptance - Run the ticket high-frequency operations acceptance script"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
 	@echo "  check-acceptance-evidence - Validate all checked-in acceptance manifests under scripts/test-results"
 
@@ -267,6 +269,16 @@ auth-session-acceptance:
 	@echo "Running auth self-service session acceptance..."
 	chmod +x ./scripts/test-auth-session-acceptance.sh
 	./scripts/test-auth-session-acceptance.sh
+
+workspace-acceptance:
+	@echo "Running conversation workspace acceptance..."
+	chmod +x ./scripts/test-workspace-acceptance.sh
+	./scripts/test-workspace-acceptance.sh
+
+ticket-acceptance:
+	@echo "Running ticket high-frequency operations acceptance..."
+	chmod +x ./scripts/test-ticket-acceptance.sh
+	./scripts/test-ticket-acceptance.sh
 
 validate-acceptance-manifest:
 	@echo "Validating acceptance manifest..."
