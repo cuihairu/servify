@@ -34,6 +34,7 @@ type WeKnoraInterface interface {
 
 	// 文档管理
 	UploadDocument(ctx context.Context, kbID string, doc *Document) (*DocumentInfo, error)
+	DeleteDocument(ctx context.Context, kbID, docID string) error
 
 	// 检索功能
 	SearchKnowledge(ctx context.Context, req *SearchRequest) (*SearchResponse, error)
@@ -241,6 +242,34 @@ func (c *Client) UploadDocument(ctx context.Context, kbID string, doc *Document)
 	}
 
 	return &response.Data, nil
+}
+
+// DeleteDocument 删除文档
+func (c *Client) DeleteDocument(ctx context.Context, kbID, docID string) error {
+	if kbID == "" {
+		return fmt.Errorf("knowledge base ID is required")
+	}
+	if docID == "" {
+		return fmt.Errorf("document ID is required")
+	}
+
+	endpoint := fmt.Sprintf("/api/v1/knowledge/%s/documents/%s", kbID, docID)
+
+	var response struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+
+	err := c.doRequestWithRetry(ctx, "DELETE", endpoint, nil, &response)
+	if err != nil {
+		return fmt.Errorf("delete document: %w", err)
+	}
+
+	if !response.Success {
+		return fmt.Errorf("delete failed: %s", response.Message)
+	}
+
+	return nil
 }
 
 // CreateKnowledgeBase 创建知识库

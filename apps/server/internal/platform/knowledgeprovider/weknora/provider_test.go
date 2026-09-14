@@ -16,6 +16,7 @@ type mockClient struct {
 	searchResp *base.SearchResponse
 	searchErr  error
 	uploadErr  error
+	deleteErr  error
 	healthyErr error
 }
 
@@ -27,6 +28,9 @@ func (m *mockClient) GetKnowledgeBase(ctx context.Context, kbID string) (*base.K
 }
 func (m *mockClient) UploadDocument(ctx context.Context, kbID string, doc *base.Document) (*base.DocumentInfo, error) {
 	return &base.DocumentInfo{ID: "doc-1", Title: doc.Title, ProcessedAt: time.Now()}, m.uploadErr
+}
+func (m *mockClient) DeleteDocument(ctx context.Context, kbID, docID string) error {
+	return m.deleteErr
 }
 func (m *mockClient) SearchKnowledge(ctx context.Context, req *base.SearchRequest) (*base.SearchResponse, error) {
 	return m.searchResp, m.searchErr
@@ -87,20 +91,50 @@ func TestProviderUpsertDocumentReturnsExternalID(t *testing.T) {
 	}
 }
 
-func TestWeKnoraDescriptorDoesNotClaimDeletionSupport(t *testing.T) {
+func TestWeKnoraDescriptorClaimsDeletionSupport(t *testing.T) {
 	desc := knowledgeprovider.WeKnoraDescriptor(true, "kb-1")
+	found := false
 	for _, capability := range desc.Capabilities {
-		if capability.Name == aiprovider.CapabilityDeletion && capability.Enabled {
-			t.Fatalf("expected weknora deletion capability to be disabled, got %+v", desc)
+		if capability.Name == aiprovider.CapabilityDeletion {
+			found = true
+			if !capability.Enabled {
+				t.Fatalf("expected weknora deletion capability to be enabled, got %+v", desc)
+			}
 		}
+	}
+	if !found {
+		t.Fatalf("expected deletion capability to be declared, got %+v", desc)
 	}
 }
 
-func TestProviderDeleteDocumentUnsupported(t *testing.T) {
+func TestProviderDeleteDocument(t *testing.T) {
 	provider := NewProvider(&mockClient{}, "kb-1")
-	err := provider.DeleteDocument(context.Background(), "doc-1")
-	if !errors.Is(err, knowledgeprovider.ErrOperationNotSupported) {
-		t.Fatalf("expected unsupported operation error, got %v", err)
+	if err := provider.DeleteDocument(context.Background(), "doc-1"); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestProviderDeleteDocumentErrorBranches(t *testing.T) {
+	ctx := context.Background()
+
+	nilProvider := NewProvider(nil, "kb-1")
+	if err := nilProvider.DeleteDocument(ctx, "doc-1"); err == nil {
+		t.Fatal("nil client delete should fail")
+	}
+
+	noDoc := NewProvider(&mockClient{}, "kb-1")
+	if err := noDoc.DeleteDocument(ctx, ""); err == nil {
+		t.Fatal("missing document id delete should fail")
+	}
+
+	noKB := NewProvider(&mockClient{}, "")
+	if err := noKB.DeleteDocument(ctx, "doc-1"); err == nil {
+		t.Fatal("missing knowledge id delete should fail")
+	}
+
+	errProvider := NewProvider(&mockClient{deleteErr: errors.New("boom")}, "kb-1")
+	if err := errProvider.DeleteDocument(ctx, "doc-1"); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("delete error should propagate, got %v", err)
 	}
 }
 

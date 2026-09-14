@@ -76,7 +76,16 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 }
 
 func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
-	return knowledgeprovider.ErrOperationNotSupported
+	if p.client == nil {
+		return fmt.Errorf("weknora client is not configured")
+	}
+	if id == "" {
+		return fmt.Errorf("external document id is required")
+	}
+	if p.knowledgeID == "" {
+		return fmt.Errorf("knowledge base id is not configured")
+	}
+	return p.client.DeleteDocument(ctx, p.knowledgeID, id)
 }
 
 func (p *Provider) RebuildIndex(ctx context.Context, req knowledgeprovider.RebuildRequest) error {

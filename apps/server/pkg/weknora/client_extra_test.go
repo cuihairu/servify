@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -125,6 +126,64 @@ func TestClientValidationErrors(t *testing.T) {
 	}
 	if _, err := client.Chat(ctx, "sess", &ChatRequest{}); err == nil {
 		t.Fatal("expected missing message error")
+	}
+	if err := client.DeleteDocument(ctx, "", "doc"); err == nil {
+		t.Fatal("expected missing kb id error")
+	}
+	if err := client.DeleteDocument(ctx, "kb", ""); err == nil {
+		t.Fatal("expected missing document id error")
+	}
+}
+
+func TestDeleteDocument_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/knowledge/kb-123/documents/doc-456" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"Deleted successfully"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{BaseURL: server.URL, Timeout: 5 * time.Second}, nil)
+
+	if err := client.DeleteDocument(context.Background(), "kb-123", "doc-456"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDeleteDocument_ServerRejection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"success":false,"error":{"code":"not_found","message":"document not found"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{BaseURL: server.URL, Timeout: 5 * time.Second, MaxRetries: 0}, nil)
+
+	err := client.DeleteDocument(context.Background(), "kb-123", "missing")
+	if err == nil || !strings.Contains(err.Error(), "document not found") {
+		t.Fatalf("expected API error, got %v", err)
+	}
+}
+
+func TestDeleteDocument_UnsuccessfulResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":false,"message":"deletion is disabled"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{BaseURL: server.URL, Timeout: 5 * time.Second, MaxRetries: 0}, nil)
+
+	err := client.DeleteDocument(context.Background(), "kb-123", "doc-456")
+	if err == nil || !strings.Contains(err.Error(), "deletion is disabled") {
+		t.Fatalf("expected unsuccessful response error, got %v", err)
 	}
 }
 

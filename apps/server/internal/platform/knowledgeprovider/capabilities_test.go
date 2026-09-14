@@ -18,11 +18,8 @@ func TestWeKnoraDescriptor(t *testing.T) {
 	for _, cap := range desc.Capabilities {
 		found[cap.Name] = cap.Enabled
 	}
-	if !found[aiprovider.CapabilityRetrieval] || !found[aiprovider.CapabilityIndexing] || !found[aiprovider.CapabilityHealthCheck] {
-		t.Fatalf("expected retrieval/indexing/health enabled, got %+v", desc.Capabilities)
-	}
-	if found[aiprovider.CapabilityDeletion] {
-		t.Fatal("weknora deletion should be disabled")
+	if !found[aiprovider.CapabilityRetrieval] || !found[aiprovider.CapabilityIndexing] || !found[aiprovider.CapabilityDeletion] || !found[aiprovider.CapabilityHealthCheck] {
+		t.Fatalf("expected all knowledge capabilities enabled, got %+v", desc.Capabilities)
 	}
 	if desc.Fallback.Priority != 1 {
 		t.Fatalf("priority = %d", desc.Fallback.Priority)

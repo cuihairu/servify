@@ -62,6 +62,10 @@ func (m *MockWeKnoraClient) UploadDocument(ctx context.Context, kbID string, doc
 	}, nil
 }
 
+func (m *MockWeKnoraClient) DeleteDocument(ctx context.Context, kbID, docID string) error {
+	return nil
+}
+
 func (m *MockWeKnoraClient) CreateKnowledgeBase(ctx context.Context, req *weknora.CreateKBRequest) (*weknora.KnowledgeBase, error) {
 	return &weknora.KnowledgeBase{
 		ID:          "kb-123",
