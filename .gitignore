@@ -48,6 +48,10 @@ scripts/test-results/**/*.json
 !scripts/test-results/**/manifest.json
 scripts/test-results/**/*.jsonl
 scripts/test-results/**/*.txt
+# auth-session 与 voice-pstn 验收证据全量入库（快照含本地验收环境的
+# JWT/webhook secret，均为 127.0.0.1 + dev 密钥产物，作验收存档公开）
+!scripts/test-results/auth-session-acceptance/**
+!scripts/test-results/voice-pstn-acceptance/**
 
 # 缓存文件
 .cache/
