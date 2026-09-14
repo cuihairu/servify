@@ -46,6 +46,7 @@ scripts/test-results/*
 !scripts/test-results/**/
 scripts/test-results/**/*.json
 !scripts/test-results/**/manifest.json
+scripts/test-results/**/*.jsonl
 scripts/test-results/**/*.txt
 
 # 缓存文件
