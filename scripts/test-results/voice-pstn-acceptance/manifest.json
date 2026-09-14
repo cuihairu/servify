@@ -1,0 +1,32 @@
+{
+  "checks": {
+    "answer_ok": "true",
+    "bad_signature_rejected": "true",
+    "db_call_asserted": "true",
+    "db_recording_asserted": "true",
+    "duplicate_invite_ok": "true",
+    "hangup_ok": "true",
+    "late_invite_short_circuit_ok": "true",
+    "missing_signature_rejected": "true",
+    "outbound_ok": "true",
+    "recording_ok": "true",
+    "signature_ok": "true",
+    "unknown_status_rejected": "true"
+  },
+  "evidence_files": [
+    "receiver-payloads.jsonl",
+    "summary.txt",
+    "webhook-create.json"
+  ],
+  "metrics": {
+    "test_call_id": "CA-pstn-acceptance-1789316473",
+    "test_recording_id": "RE-pstn-acceptance-1789316473"
+  },
+  "mode": "twilio-signature",
+  "provider": "voice-pstn",
+  "servify_url": "http://127.0.0.1:18098",
+  "status": {
+    "exit_code": "0",
+    "overall": "passed"
+  }
+}

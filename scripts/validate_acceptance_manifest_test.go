@@ -181,6 +181,56 @@ func TestValidateAcceptanceManifestScriptRejectsInvalidWeKnoraManifest(t *testin
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidVoicePstnManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":             "ok",
+		"webhook-create.json":     "{}",
+		"receiver-payloads.jsonl": "{}",
+		"manifest.json": `{
+  "provider": "voice-pstn",
+  "mode": "twilio-signature",
+  "status": {
+    "exit_code": "0",
+    "overall": "passed"
+  },
+  "checks": {
+    "answer_ok": "true",
+    "signature_ok": "true",
+    "bad_signature_rejected": "true",
+    "missing_signature_rejected": "true",
+    "unknown_status_rejected": "true",
+    "late_invite_short_circuit_ok": "true",
+    "duplicate_invite_ok": "true",
+    "outbound_ok": "true",
+    "hangup_ok": "true",
+    "recording_ok": "true",
+    "db_call_asserted": "true",
+    "db_recording_asserted": "true"
+  },
+  "evidence_files": [
+    "receiver-payloads.jsonl",
+    "summary.txt",
+    "webhook-create.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
 func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, body := range files {

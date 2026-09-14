@@ -170,6 +170,24 @@ case "$PROVIDER" in
     require_file_listed "knowledge-upload.json"
     require_file_listed "knowledge-sync.json"
     ;;
+  voice-pstn)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.answer_ok // ""' "true"
+    require_equals '.checks.signature_ok // ""' "true"
+    require_equals '.checks.bad_signature_rejected // ""' "true"
+    require_equals '.checks.missing_signature_rejected // ""' "true"
+    require_equals '.checks.unknown_status_rejected // ""' "true"
+    require_equals '.checks.late_invite_short_circuit_ok // ""' "true"
+    require_equals '.checks.duplicate_invite_ok // ""' "true"
+    require_equals '.checks.outbound_ok // ""' "true"
+    require_equals '.checks.hangup_ok // ""' "true"
+    require_equals '.checks.recording_ok // ""' "true"
+    require_equals '.checks.db_call_asserted // ""' "true"
+    require_equals '.checks.db_recording_asserted // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "webhook-create.json"
+    require_file_listed "receiver-payloads.jsonl"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1
