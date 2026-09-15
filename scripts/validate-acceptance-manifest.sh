@@ -275,6 +275,21 @@ case "$PROVIDER" in
     require_file_listed "platforms.json"
     require_file_listed "platforms-unauthorized.json"
     ;;
+  ai-fallback)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.status_ok // ""' "true"
+    require_equals '.checks.query_fallback_ok // ""' "true"
+    require_equals '.checks.metrics_ok // ""' "true"
+    require_equals '.checks.log_evidence_ok // ""' "true"
+    require_equals '.checks.unauthenticated_rejected // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "ai-status.json"
+    require_file_listed "ai-query.json"
+    require_file_listed "ai-metrics.json"
+    require_file_listed "ai-query-unauthorized.json"
+    require_file_listed "server-log.txt"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1

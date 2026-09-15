@@ -119,6 +119,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 			if fbErr != nil {
 				return nil, fbErr
 			}
+			s.logger.Warnf("AI enhanced query failed, served by fallback (strategy=fallback, session_id=%s, error=%v)", sessionID, err)
 			s.metrics.FallbackUsageCount++
 			s.metrics.AverageLatency = time.Since(start)
 			return &EnhancedAIResponse{

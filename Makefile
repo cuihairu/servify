@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance security-acceptance runtime-baseline-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -47,6 +47,7 @@ help:
 	@echo "  auth-session-acceptance - Run the auth self-service session acceptance script"
 	@echo "  workspace-acceptance - Run the conversation workspace acceptance script"
 	@echo "  ticket-acceptance - Run the ticket high-frequency operations acceptance script"
+	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
 	@echo "  check-acceptance-evidence - Validate all checked-in acceptance manifests under scripts/test-results"
 
@@ -289,6 +290,11 @@ runtime-baseline-acceptance:
 	@echo "Running runtime baseline acceptance..."
 	chmod +x ./scripts/test-runtime-baseline-acceptance.sh
 	./scripts/test-runtime-baseline-acceptance.sh
+
+ai-fallback-acceptance:
+	@echo "Running AI fallback acceptance..."
+	chmod +x ./scripts/test-ai-fallback-acceptance.sh
+	./scripts/test-ai-fallback-acceptance.sh
 
 validate-acceptance-manifest:
 	@echo "Validating acceptance manifest..."

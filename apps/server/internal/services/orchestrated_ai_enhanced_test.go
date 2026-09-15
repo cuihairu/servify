@@ -1,7 +1,9 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -9,6 +11,8 @@ import (
 	mockkp "servify/apps/server/internal/platform/knowledgeprovider/mock"
 	"servify/apps/server/internal/platform/llm"
 	mockllm "servify/apps/server/internal/platform/llm/mock"
+
+	"github.com/sirupsen/logrus"
 )
 
 func TestOrchestratedEnhancedAIServiceProcessQueryEnhanced(t *testing.T) {
@@ -265,5 +269,40 @@ func TestOrchestratedEnhancedAIServiceFallbackAndReset(t *testing.T) {
 	cb = status["circuit_breaker"].(map[string]interface{})
 	if cb["failure_count"].(int) != 0 {
 		t.Fatalf("expected reset circuit breaker, got %+v", cb)
+	}
+}
+
+func TestOrchestratedEnhancedAIServiceFallbackLogsStrategy(t *testing.T) {
+	var buf bytes.Buffer
+	logger := logrus.New()
+	logger.Out = &buf
+	logger.Formatter = &logrus.TextFormatter{DisableColors: true}
+
+	base := NewAIService("", "")
+	base.InitializeKnowledgeBase()
+
+	svc := NewOrchestratedEnhancedAIService(
+		base,
+		&mockllm.Provider{ChatError: context.DeadlineExceeded},
+		&mockkp.Provider{},
+		"",
+		nil,
+		"kb-1",
+		logger,
+	)
+
+	resp, err := svc.ProcessQueryEnhanced(context.Background(), "Servify 是什么", "session-log-1")
+	if err != nil {
+		t.Fatalf("expected fallback response, got %v", err)
+	}
+	if resp.Strategy != "fallback" {
+		t.Fatalf("expected fallback strategy, got %s", resp.Strategy)
+	}
+
+	logs := buf.String()
+	for _, want := range []string{"strategy=fallback", "session_id=session-log-1", "level=warning"} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("expected %q in fallback log, got %s", want, logs)
+		}
 	}
 }

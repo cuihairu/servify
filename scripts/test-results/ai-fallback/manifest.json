@@ -1,0 +1,26 @@
+{
+  "provider": "ai-fallback",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18092",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "status_ok": "true",
+    "query_fallback_ok": "true",
+    "metrics_ok": "true",
+    "log_evidence_ok": "true",
+    "unauthenticated_rejected": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "ai-metrics.json",
+    "ai-query-unauthorized.json",
+    "ai-query.json",
+    "ai-status.json",
+    "build-output.txt",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}
