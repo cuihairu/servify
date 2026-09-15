@@ -13,12 +13,13 @@
 | --- | --- | --- | --- |
 | ai | `AIResponse` | `modules/ai/delivery/contract_types.go` | `services/ai.go` |
 | ai | `AIMetrics`、`EnhancedAIResponse` | `modules/ai/delivery/contract_types.go` | `services/ai_enhanced.go` |
-| customer | `CustomerCreateRequest` 等 9 个请求/响应类型 | `modules/customer/application/contract_types.go` | `services/customer_service.go` |
+| customer | `CustomerCreateRequest` 等 9 个请求/响应类型 | `modules/customer/api/contract_types.go`（package `customerapi`） | `services/customer_service.go` |
 | knowledge | `KnowledgeDocCreateRequest` 等 3 个请求类型 | `modules/knowledge/application/contract_types.go` | `services/knowledge_doc_service.go` |
 
 说明：
 
 - ai 的契约放在 delivery 而非 application，是因为 `modules/ai/application/types.go` 已有一个同名但 shape 不同的 `AIResponse`（orchestrator 内部用），避免重名冲突。
+- customer 的契约放在 `modules/customer/api`（package `customerapi`）而非 application，是因为 swag（API 文档生成）按**包声明名**索引注解里的类型限定符，`application` 在多个模块下重名会歧义；`customer_handler.go` 的注解直接写 `customerapi.CustomerX`，是唯一能让 swag 无 flag 解析成功的挂法（knowledge/ai 的 handler 无 swag 注解，不受此约束）。
 - 防回归门禁：`go test ./scripts -run TestModulesDoNotImportLegacyServices`（parser 级检查 import，含测试文件），已纳入 CI script-checks。
 
 ## 2. modules → internal/models（共享模型层）

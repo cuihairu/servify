@@ -1,4 +1,4 @@
-package application
+package customerapi
 
 import (
 	"servify/apps/server/internal/models"

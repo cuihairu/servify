@@ -265,6 +265,172 @@ definitions:
       title:
         type: string
     type: object
+  customerapi.CustomerActivity:
+    properties:
+      customer_id:
+        type: integer
+      recent_messages:
+        items:
+          $ref: '#/definitions/models.Message'
+        type: array
+      recent_sessions:
+        items:
+          $ref: '#/definitions/models.Session'
+        type: array
+      recent_tickets:
+        items:
+          $ref: '#/definitions/models.Ticket'
+        type: array
+    type: object
+  customerapi.CustomerCreateRequest:
+    properties:
+      company:
+        type: string
+      email:
+        type: string
+      industry:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      phone:
+        type: string
+      priority:
+        type: string
+      source:
+        type: string
+      tags:
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - username
+    type: object
+  customerapi.CustomerIndustryCount:
+    properties:
+      count:
+        type: integer
+      industry:
+        type: string
+    type: object
+  customerapi.CustomerInfo:
+    properties:
+      auth_sessions:
+        items:
+          $ref: '#/definitions/models.UserAuthSession'
+        type: array
+      avatar:
+        type: string
+      company:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      industry:
+        type: string
+      last_login:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      phone:
+        type: string
+      priority:
+        type: string
+      role:
+        description: customer, agent, admin
+        type: string
+      sessions:
+        description: 关联关系
+        items:
+          $ref: '#/definitions/models.Session'
+        type: array
+      source:
+        type: string
+      status:
+        description: active, inactive, banned
+        type: string
+      tags:
+        type: string
+      tickets:
+        items:
+          $ref: '#/definitions/models.Ticket'
+        type: array
+      token_valid_after:
+        type: string
+      token_version:
+        type: integer
+      totp_enabled:
+        type: boolean
+      totp_enabled_at:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  customerapi.CustomerPriorityCount:
+    properties:
+      count:
+        type: integer
+      priority:
+        type: string
+    type: object
+  customerapi.CustomerSourceCount:
+    properties:
+      count:
+        type: integer
+      source:
+        type: string
+    type: object
+  customerapi.CustomerStats:
+    properties:
+      active:
+        type: integer
+      by_industry:
+        items:
+          $ref: '#/definitions/customerapi.CustomerIndustryCount'
+        type: array
+      by_priority:
+        items:
+          $ref: '#/definitions/customerapi.CustomerPriorityCount'
+        type: array
+      by_source:
+        items:
+          $ref: '#/definitions/customerapi.CustomerSourceCount'
+        type: array
+      new_this_week:
+        type: integer
+      total:
+        type: integer
+    type: object
+  customerapi.CustomerUpdateRequest:
+    properties:
+      company:
+        type: string
+      industry:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      phone:
+        type: string
+      priority:
+        type: string
+      source:
+        type: string
+      status:
+        type: string
+      tags:
+        type: string
+    type: object
   handlers.AddAnnotationRequest:
     type: object
   handlers.AgentCreateRequest:
@@ -1317,172 +1483,6 @@ definitions:
       waiting_sessions:
         type: integer
     type: object
-  services.CustomerActivity:
-    properties:
-      customer_id:
-        type: integer
-      recent_messages:
-        items:
-          $ref: '#/definitions/models.Message'
-        type: array
-      recent_sessions:
-        items:
-          $ref: '#/definitions/models.Session'
-        type: array
-      recent_tickets:
-        items:
-          $ref: '#/definitions/models.Ticket'
-        type: array
-    type: object
-  services.CustomerCreateRequest:
-    properties:
-      company:
-        type: string
-      email:
-        type: string
-      industry:
-        type: string
-      name:
-        type: string
-      notes:
-        type: string
-      phone:
-        type: string
-      priority:
-        type: string
-      source:
-        type: string
-      tags:
-        type: string
-      username:
-        type: string
-    required:
-    - email
-    - username
-    type: object
-  services.CustomerIndustryCount:
-    properties:
-      count:
-        type: integer
-      industry:
-        type: string
-    type: object
-  services.CustomerInfo:
-    properties:
-      auth_sessions:
-        items:
-          $ref: '#/definitions/models.UserAuthSession'
-        type: array
-      avatar:
-        type: string
-      company:
-        type: string
-      created_at:
-        type: string
-      email:
-        type: string
-      id:
-        type: integer
-      industry:
-        type: string
-      last_login:
-        type: string
-      name:
-        type: string
-      notes:
-        type: string
-      phone:
-        type: string
-      priority:
-        type: string
-      role:
-        description: customer, agent, admin
-        type: string
-      sessions:
-        description: 关联关系
-        items:
-          $ref: '#/definitions/models.Session'
-        type: array
-      source:
-        type: string
-      status:
-        description: active, inactive, banned
-        type: string
-      tags:
-        type: string
-      tickets:
-        items:
-          $ref: '#/definitions/models.Ticket'
-        type: array
-      token_valid_after:
-        type: string
-      token_version:
-        type: integer
-      totp_enabled:
-        type: boolean
-      totp_enabled_at:
-        type: string
-      updated_at:
-        type: string
-      username:
-        type: string
-    type: object
-  services.CustomerPriorityCount:
-    properties:
-      count:
-        type: integer
-      priority:
-        type: string
-    type: object
-  services.CustomerSourceCount:
-    properties:
-      count:
-        type: integer
-      source:
-        type: string
-    type: object
-  services.CustomerStats:
-    properties:
-      active:
-        type: integer
-      by_industry:
-        items:
-          $ref: '#/definitions/services.CustomerIndustryCount'
-        type: array
-      by_priority:
-        items:
-          $ref: '#/definitions/services.CustomerPriorityCount'
-        type: array
-      by_source:
-        items:
-          $ref: '#/definitions/services.CustomerSourceCount'
-        type: array
-      new_this_week:
-        type: integer
-      total:
-        type: integer
-    type: object
-  services.CustomerUpdateRequest:
-    properties:
-      company:
-        type: string
-      industry:
-        type: string
-      name:
-        type: string
-      notes:
-        type: string
-      phone:
-        type: string
-      priority:
-        type: string
-      source:
-        type: string
-      status:
-        type: string
-      tags:
-        type: string
-    type: object
   services.SLAComplianceTrend:
     properties:
       compliance_rate:
@@ -2349,7 +2349,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/services.CustomerInfo'
+                    $ref: '#/definitions/customerapi.CustomerInfo'
                   type: array
               type: object
         "400":
@@ -2373,7 +2373,7 @@ paths:
         name: customer
         required: true
         schema:
-          $ref: '#/definitions/services.CustomerCreateRequest'
+          $ref: '#/definitions/customerapi.CustomerCreateRequest'
       produces:
       - application/json
       responses:
@@ -2436,7 +2436,7 @@ paths:
         name: customer
         required: true
         schema:
-          $ref: '#/definitions/services.CustomerUpdateRequest'
+          $ref: '#/definitions/customerapi.CustomerUpdateRequest'
       produces:
       - application/json
       responses:
@@ -2480,7 +2480,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.CustomerActivity'
+            $ref: '#/definitions/customerapi.CustomerActivity'
         "400":
           description: Bad Request
           schema:
@@ -2615,7 +2615,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.CustomerStats'
+            $ref: '#/definitions/customerapi.CustomerStats'
         "500":
           description: Internal Server Error
           schema:

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/services"
@@ -32,13 +33,13 @@ func NewCustomerHandler(customerService customerdelivery.HandlerService, logger 
 // @Tags 客户管理
 // @Accept json
 // @Produce json
-// @Param customer body services.CustomerCreateRequest true "客户信息"
+// @Param customer body customerapi.CustomerCreateRequest true "客户信息"
 // @Success 201 {object} models.User
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/customers [post]
 func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
-	var req services.CustomerCreateRequest
+	var req customerapi.CustomerCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid request body",
@@ -118,7 +119,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "客户ID"
-// @Param customer body services.CustomerUpdateRequest true "更新信息"
+// @Param customer body customerapi.CustomerUpdateRequest true "更新信息"
 // @Success 200 {object} models.User
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -135,7 +136,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	var req services.CustomerUpdateRequest
+	var req customerapi.CustomerUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid request body",
@@ -235,7 +236,7 @@ func (h *CustomerHandler) RevokeCustomerTokens(c *gin.Context) {
 // @Param tags query string false "标签过滤"
 // @Param sort_by query string false "排序字段"
 // @Param sort_order query string false "排序方向"
-// @Success 200 {object} PaginatedResponse{data=[]services.CustomerInfo}
+// @Success 200 {object} PaginatedResponse{data=[]customerapi.CustomerInfo}
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/customers [get]
@@ -277,7 +278,7 @@ func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 // @Produce json
 // @Param id path int true "客户ID"
 // @Param limit query int false "记录数量限制"
-// @Success 200 {object} services.CustomerActivity
+// @Success 200 {object} customerapi.CustomerActivity
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -478,7 +479,7 @@ func (h *CustomerHandler) setCustomerAuditSnapshot(c *gin.Context, customerID ui
 // @Tags 客户管理
 // @Accept json
 // @Produce json
-// @Success 200 {object} services.CustomerStats
+// @Success 200 {object} customerapi.CustomerStats
 // @Failure 500 {object} ErrorResponse
 // @Router /api/customers/stats [get]
 func (h *CustomerHandler) GetCustomerStats(c *gin.Context) {

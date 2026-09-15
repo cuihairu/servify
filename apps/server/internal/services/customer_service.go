@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerapp "servify/apps/server/internal/modules/customer/application"
 	customerinfra "servify/apps/server/internal/modules/customer/infra"
 
@@ -32,15 +33,15 @@ func NewCustomerService(db *gorm.DB, logger *logrus.Logger) *CustomerService {
 	}
 }
 
-// CustomerCreateRequest 创建客户请求。契约定义已迁至 modules/customer/application，
+// CustomerCreateRequest 创建客户请求。契约定义已迁至 modules/customer/api，
 // 此处保留类型别名供 legacy 引用方使用。
-type CustomerCreateRequest = customerapp.CustomerCreateRequest
+type CustomerCreateRequest = customerapi.CustomerCreateRequest
 
 // CustomerUpdateRequest 更新客户请求。
-type CustomerUpdateRequest = customerapp.CustomerUpdateRequest
+type CustomerUpdateRequest = customerapi.CustomerUpdateRequest
 
 // CustomerListRequest 客户列表请求。
-type CustomerListRequest = customerapp.CustomerListRequest
+type CustomerListRequest = customerapi.CustomerListRequest
 
 func (s *CustomerService) CreateCustomer(ctx context.Context, req *CustomerCreateRequest) (*models.User, error) {
 	return s.module.CreateCustomer(ctx, customerapp.CreateCustomerCommand{
@@ -136,19 +137,19 @@ func (s *CustomerService) RevokeCustomerTokens(ctx context.Context, customerID u
 }
 
 // CustomerInfo 客户信息（用于列表显示）。
-type CustomerInfo = customerapp.CustomerInfo
+type CustomerInfo = customerapi.CustomerInfo
 
 // CustomerActivity 客户活动记录。
-type CustomerActivity = customerapp.CustomerActivity
+type CustomerActivity = customerapi.CustomerActivity
 
 // CustomerStats 客户统计信息。
-type CustomerStats = customerapp.CustomerStats
+type CustomerStats = customerapi.CustomerStats
 
-type CustomerSourceCount = customerapp.CustomerSourceCount
+type CustomerSourceCount = customerapi.CustomerSourceCount
 
-type CustomerIndustryCount = customerapp.CustomerIndustryCount
+type CustomerIndustryCount = customerapi.CustomerIndustryCount
 
-type CustomerPriorityCount = customerapp.CustomerPriorityCount
+type CustomerPriorityCount = customerapi.CustomerPriorityCount
 
 func customerInfoFromDTO(dto customerapp.CustomerInfoDTO) CustomerInfo {
 	return CustomerInfo{

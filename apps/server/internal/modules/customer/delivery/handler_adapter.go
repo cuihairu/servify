@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerapp "servify/apps/server/internal/modules/customer/application"
 	customerinfra "servify/apps/server/internal/modules/customer/infra"
 
@@ -25,7 +26,7 @@ func NewHandlerServiceAdapter(service *customerapp.Service) *HandlerServiceAdapt
 	return &HandlerServiceAdapter{service: service}
 }
 
-func (a *HandlerServiceAdapter) CreateCustomer(ctx context.Context, req *customerapp.CustomerCreateRequest) (*models.User, error) {
+func (a *HandlerServiceAdapter) CreateCustomer(ctx context.Context, req *customerapi.CustomerCreateRequest) (*models.User, error) {
 	return a.service.CreateCustomer(ctx, customerapp.CreateCustomerCommand{
 		Username: req.Username,
 		Email:    req.Email,
@@ -44,7 +45,7 @@ func (a *HandlerServiceAdapter) GetCustomerByID(ctx context.Context, customerID 
 	return a.service.GetCustomerByID(ctx, customerID)
 }
 
-func (a *HandlerServiceAdapter) UpdateCustomer(ctx context.Context, customerID uint, req *customerapp.CustomerUpdateRequest) (*models.User, error) {
+func (a *HandlerServiceAdapter) UpdateCustomer(ctx context.Context, customerID uint, req *customerapi.CustomerUpdateRequest) (*models.User, error) {
 	cmd := customerapp.UpdateCustomerCommand{
 		Name:     req.Name,
 		Phone:    req.Phone,
@@ -62,7 +63,7 @@ func (a *HandlerServiceAdapter) UpdateCustomer(ctx context.Context, customerID u
 	return a.service.UpdateCustomer(ctx, customerID, cmd)
 }
 
-func (a *HandlerServiceAdapter) ListCustomers(ctx context.Context, req *customerapp.CustomerListRequest) ([]customerapp.CustomerInfo, int64, error) {
+func (a *HandlerServiceAdapter) ListCustomers(ctx context.Context, req *customerapi.CustomerListRequest) ([]customerapi.CustomerInfo, int64, error) {
 	items, total, err := a.service.ListCustomers(ctx, customerapp.ListCustomersQuery{
 		Page:      req.Page,
 		PageSize:  req.PageSize,
@@ -78,14 +79,14 @@ func (a *HandlerServiceAdapter) ListCustomers(ctx context.Context, req *customer
 	if err != nil {
 		return nil, 0, err
 	}
-	out := make([]customerapp.CustomerInfo, 0, len(items))
+	out := make([]customerapi.CustomerInfo, 0, len(items))
 	for _, item := range items {
 		out = append(out, customerInfoFromDTO(item))
 	}
 	return out, total, nil
 }
 
-func (a *HandlerServiceAdapter) GetCustomerActivity(ctx context.Context, customerID uint, limit int) (*customerapp.CustomerActivity, error) {
+func (a *HandlerServiceAdapter) GetCustomerActivity(ctx context.Context, customerID uint, limit int) (*customerapi.CustomerActivity, error) {
 	activity, err := a.service.GetCustomerActivity(ctx, customerID, limit)
 	if err != nil {
 		return nil, err
@@ -101,7 +102,7 @@ func (a *HandlerServiceAdapter) UpdateCustomerTags(ctx context.Context, customer
 	return a.service.UpdateTags(ctx, customerID, tags)
 }
 
-func (a *HandlerServiceAdapter) GetCustomerStats(ctx context.Context) (*customerapp.CustomerStats, error) {
+func (a *HandlerServiceAdapter) GetCustomerStats(ctx context.Context) (*customerapi.CustomerStats, error) {
 	stats, err := a.service.GetStats(ctx)
 	if err != nil {
 		return nil, err
@@ -113,8 +114,8 @@ func (a *HandlerServiceAdapter) RevokeCustomerTokens(ctx context.Context, custom
 	return a.service.RevokeCustomerTokens(ctx, customerID, time.Now().UTC())
 }
 
-func customerInfoFromDTO(dto customerapp.CustomerInfoDTO) customerapp.CustomerInfo {
-	return customerapp.CustomerInfo{
+func customerInfoFromDTO(dto customerapp.CustomerInfoDTO) customerapi.CustomerInfo {
+	return customerapi.CustomerInfo{
 		User:     dto.User,
 		Company:  dto.Company,
 		Industry: dto.Industry,
@@ -125,11 +126,11 @@ func customerInfoFromDTO(dto customerapp.CustomerInfoDTO) customerapp.CustomerIn
 	}
 }
 
-func customerActivityFromDTO(dto *customerapp.CustomerActivityDTO) *customerapp.CustomerActivity {
+func customerActivityFromDTO(dto *customerapp.CustomerActivityDTO) *customerapi.CustomerActivity {
 	if dto == nil {
 		return nil
 	}
-	return &customerapp.CustomerActivity{
+	return &customerapi.CustomerActivity{
 		CustomerID:     dto.CustomerID,
 		RecentSessions: dto.RecentSessions,
 		RecentTickets:  dto.RecentTickets,
@@ -137,11 +138,11 @@ func customerActivityFromDTO(dto *customerapp.CustomerActivityDTO) *customerapp.
 	}
 }
 
-func customerStatsFromDTO(dto *customerapp.CustomerStatsDTO) *customerapp.CustomerStats {
+func customerStatsFromDTO(dto *customerapp.CustomerStatsDTO) *customerapi.CustomerStats {
 	if dto == nil {
 		return nil
 	}
-	return &customerapp.CustomerStats{
+	return &customerapi.CustomerStats{
 		Total:       dto.Total,
 		Active:      dto.Active,
 		NewThisWeek: dto.NewThisWeek,
@@ -151,10 +152,10 @@ func customerStatsFromDTO(dto *customerapp.CustomerStatsDTO) *customerapp.Custom
 	}
 }
 
-func sourceCountsFromDTO(items []customerapp.SourceCount) []customerapp.CustomerSourceCount {
-	out := make([]customerapp.CustomerSourceCount, 0, len(items))
+func sourceCountsFromDTO(items []customerapp.SourceCount) []customerapi.CustomerSourceCount {
+	out := make([]customerapi.CustomerSourceCount, 0, len(items))
 	for _, item := range items {
-		out = append(out, customerapp.CustomerSourceCount{
+		out = append(out, customerapi.CustomerSourceCount{
 			Source: item.Source,
 			Count:  item.Count,
 		})
@@ -162,10 +163,10 @@ func sourceCountsFromDTO(items []customerapp.SourceCount) []customerapp.Customer
 	return out
 }
 
-func industryCountsFromDTO(items []customerapp.IndustryCount) []customerapp.CustomerIndustryCount {
-	out := make([]customerapp.CustomerIndustryCount, 0, len(items))
+func industryCountsFromDTO(items []customerapp.IndustryCount) []customerapi.CustomerIndustryCount {
+	out := make([]customerapi.CustomerIndustryCount, 0, len(items))
 	for _, item := range items {
-		out = append(out, customerapp.CustomerIndustryCount{
+		out = append(out, customerapi.CustomerIndustryCount{
 			Industry: item.Industry,
 			Count:    item.Count,
 		})
@@ -173,10 +174,10 @@ func industryCountsFromDTO(items []customerapp.IndustryCount) []customerapp.Cust
 	return out
 }
 
-func priorityCountsFromDTO(items []customerapp.PriorityCount) []customerapp.CustomerPriorityCount {
-	out := make([]customerapp.CustomerPriorityCount, 0, len(items))
+func priorityCountsFromDTO(items []customerapp.PriorityCount) []customerapi.CustomerPriorityCount {
+	out := make([]customerapi.CustomerPriorityCount, 0, len(items))
 	for _, item := range items {
-		out = append(out, customerapp.CustomerPriorityCount{
+		out = append(out, customerapi.CustomerPriorityCount{
 			Priority: item.Priority,
 			Count:    item.Count,
 		})

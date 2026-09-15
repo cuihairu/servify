@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerapp "servify/apps/server/internal/modules/customer/application"
 
 	"github.com/glebarez/sqlite"
@@ -41,7 +42,7 @@ func TestHandlerServiceAdapterRoundTrip(t *testing.T) {
 	adapter := NewHandlerService(db)
 	ctx := context.Background()
 
-	user, err := adapter.CreateCustomer(ctx, &customerapp.CustomerCreateRequest{
+	user, err := adapter.CreateCustomer(ctx, &customerapi.CustomerCreateRequest{
 		Username: "alice", Email: "alice@example.com", Name: "Alice", Phone: "123",
 		Company: "A Co", Industry: "tech", Source: "web", Tags: " vip , beta ", Notes: "note1", Priority: "high",
 	})
@@ -58,7 +59,7 @@ func TestHandlerServiceAdapterRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "alice", fetched.Username)
 
-	updated, err := adapter.UpdateCustomer(ctx, user.ID, &customerapp.CustomerUpdateRequest{
+	updated, err := adapter.UpdateCustomer(ctx, user.ID, &customerapi.CustomerUpdateRequest{
 		Name: strPtr("Alice2"), Phone: strPtr("456"), Company: strPtr("B Co"),
 		Industry: strPtr("fin"), Source: strPtr("referral"), Notes: strPtr("note2"),
 		Priority: strPtr("urgent"), Status: strPtr("inactive"), Tags: strPtr(" beta , gamma ,"),
@@ -71,10 +72,10 @@ func TestHandlerServiceAdapterRoundTrip(t *testing.T) {
 	assert.Equal(t, "beta,gamma", stored.Tags)
 
 	// Tag 为 nil 时不更新 tags
-	_, err = adapter.UpdateCustomer(ctx, user.ID, &customerapp.CustomerUpdateRequest{Name: strPtr("Alice3")})
+	_, err = adapter.UpdateCustomer(ctx, user.ID, &customerapi.CustomerUpdateRequest{Name: strPtr("Alice3")})
 	require.NoError(t, err)
 
-	items, total, err := adapter.ListCustomers(ctx, &customerapp.CustomerListRequest{
+	items, total, err := adapter.ListCustomers(ctx, &customerapi.CustomerListRequest{
 		Page: 1, PageSize: 20, Industry: []string{"fin"}, Source: []string{"referral"},
 		Priority: []string{"urgent"}, Status: []string{"inactive"}, SortBy: "created_at", SortOrder: "desc",
 	})
@@ -174,17 +175,17 @@ func TestHandlerServiceAdapterPropagatesErrors(t *testing.T) {
 	adapter := NewHandlerServiceAdapter(customerapp.NewService(&failingCustomerRepo{}))
 	ctx := context.Background()
 
-	_, err := adapter.CreateCustomer(ctx, &customerapp.CustomerCreateRequest{Username: "a", Email: "a@e.com"})
+	_, err := adapter.CreateCustomer(ctx, &customerapi.CustomerCreateRequest{Username: "a", Email: "a@e.com"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom-create")
 
 	_, err = adapter.GetCustomerByID(ctx, 1)
 	require.Error(t, err)
 
-	_, err = adapter.UpdateCustomer(ctx, 1, &customerapp.CustomerUpdateRequest{Name: strPtr("x")})
+	_, err = adapter.UpdateCustomer(ctx, 1, &customerapi.CustomerUpdateRequest{Name: strPtr("x")})
 	require.Error(t, err)
 
-	_, _, err = adapter.ListCustomers(ctx, &customerapp.CustomerListRequest{Page: 1, PageSize: 10})
+	_, _, err = adapter.ListCustomers(ctx, &customerapi.CustomerListRequest{Page: 1, PageSize: 10})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "boom-list")
 
@@ -240,7 +241,7 @@ func TestHandlerServiceAdapterNilDTOGuards(t *testing.T) {
 	require.Len(t, stats.ByPriority, 1)
 	assert.Equal(t, "high", stats.ByPriority[0].Priority)
 
-	assert.Equal(t, customerapp.CustomerInfo{
+	assert.Equal(t, customerapi.CustomerInfo{
 		User: models.User{ID: 9}, Company: "C", Industry: "I", Source: "S", Tags: "T", Notes: "N", Priority: "P",
 	}, customerInfoFromDTO(customerapp.CustomerInfoDTO{
 		User: models.User{ID: 9}, Company: "C", Industry: "I", Source: "S", Tags: "T", Notes: "N", Priority: "P",

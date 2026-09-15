@@ -989,7 +989,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/services.CustomerInfo"
+                                                "$ref": "#/definitions/customerapi.CustomerInfo"
                                             }
                                         }
                                     }
@@ -1030,7 +1030,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CustomerCreateRequest"
+                            "$ref": "#/definitions/customerapi.CustomerCreateRequest"
                         }
                     }
                 ],
@@ -1073,7 +1073,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.CustomerStats"
+                            "$ref": "#/definitions/customerapi.CustomerStats"
                         }
                     },
                     "500": {
@@ -1154,7 +1154,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.CustomerUpdateRequest"
+                            "$ref": "#/definitions/customerapi.CustomerUpdateRequest"
                         }
                     }
                 ],
@@ -1218,7 +1218,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.CustomerActivity"
+                            "$ref": "#/definitions/customerapi.CustomerActivity"
                         }
                     },
                     "400": {
@@ -5970,6 +5970,257 @@ const docTemplate = `{
                 }
             }
         },
+        "customerapi.CustomerActivity": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "integer"
+                },
+                "recent_messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Message"
+                    }
+                },
+                "recent_sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Session"
+                    }
+                },
+                "recent_tickets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Ticket"
+                    }
+                }
+            }
+        },
+        "customerapi.CustomerCreateRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "username"
+            ],
+            "properties": {
+                "company": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "industry": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "customerapi.CustomerIndustryCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "industry": {
+                    "type": "string"
+                }
+            }
+        },
+        "customerapi.CustomerInfo": {
+            "type": "object",
+            "properties": {
+                "auth_sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.UserAuthSession"
+                    }
+                },
+                "avatar": {
+                    "type": "string"
+                },
+                "company": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "industry": {
+                    "type": "string"
+                },
+                "last_login": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "customer, agent, admin",
+                    "type": "string"
+                },
+                "sessions": {
+                    "description": "关联关系",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Session"
+                    }
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "active, inactive, banned",
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "string"
+                },
+                "tickets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Ticket"
+                    }
+                },
+                "token_valid_after": {
+                    "type": "string"
+                },
+                "token_version": {
+                    "type": "integer"
+                },
+                "totp_enabled": {
+                    "type": "boolean"
+                },
+                "totp_enabled_at": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "customerapi.CustomerPriorityCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "string"
+                }
+            }
+        },
+        "customerapi.CustomerSourceCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "customerapi.CustomerStats": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "by_industry": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/customerapi.CustomerIndustryCount"
+                    }
+                },
+                "by_priority": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/customerapi.CustomerPriorityCount"
+                    }
+                },
+                "by_source": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/customerapi.CustomerSourceCount"
+                    }
+                },
+                "new_this_week": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "customerapi.CustomerUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "type": "string"
+                },
+                "industry": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.AddAnnotationRequest": {
             "type": "object"
         },
@@ -7515,257 +7766,6 @@ const docTemplate = `{
                 },
                 "waiting_sessions": {
                     "type": "integer"
-                }
-            }
-        },
-        "services.CustomerActivity": {
-            "type": "object",
-            "properties": {
-                "customer_id": {
-                    "type": "integer"
-                },
-                "recent_messages": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Message"
-                    }
-                },
-                "recent_sessions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Session"
-                    }
-                },
-                "recent_tickets": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Ticket"
-                    }
-                }
-            }
-        },
-        "services.CustomerCreateRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "username"
-            ],
-            "properties": {
-                "company": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "industry": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CustomerIndustryCount": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "industry": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CustomerInfo": {
-            "type": "object",
-            "properties": {
-                "auth_sessions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.UserAuthSession"
-                    }
-                },
-                "avatar": {
-                    "type": "string"
-                },
-                "company": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "industry": {
-                    "type": "string"
-                },
-                "last_login": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "role": {
-                    "description": "customer, agent, admin",
-                    "type": "string"
-                },
-                "sessions": {
-                    "description": "关联关系",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Session"
-                    }
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "active, inactive, banned",
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "string"
-                },
-                "tickets": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Ticket"
-                    }
-                },
-                "token_valid_after": {
-                    "type": "string"
-                },
-                "token_version": {
-                    "type": "integer"
-                },
-                "totp_enabled": {
-                    "type": "boolean"
-                },
-                "totp_enabled_at": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CustomerPriorityCount": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CustomerSourceCount": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "source": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.CustomerStats": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "integer"
-                },
-                "by_industry": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.CustomerIndustryCount"
-                    }
-                },
-                "by_priority": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.CustomerPriorityCount"
-                    }
-                },
-                "by_source": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.CustomerSourceCount"
-                    }
-                },
-                "new_this_week": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.CustomerUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "company": {
-                    "type": "string"
-                },
-                "industry": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "string"
                 }
             }
         },
