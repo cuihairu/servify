@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"testing"
 	"time"
 
@@ -11,37 +12,37 @@ import (
 )
 
 type stubWebhookRepo struct {
-	endpoints  []models.WebhookEndpoint
-	deliveries []models.WebhookDelivery
+	endpoints  []webhookdomain.WebhookEndpoint
+	deliveries []webhookdomain.WebhookDelivery
 }
 
-func (s *stubWebhookRepo) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (s *stubWebhookRepo) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return s.endpoints, nil
 }
-func (s *stubWebhookRepo) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error) {
+func (s *stubWebhookRepo) GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error) {
 	return nil, application.ErrNotFound
 }
-func (s *stubWebhookRepo) CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (s *stubWebhookRepo) CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	return nil
 }
-func (s *stubWebhookRepo) UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (s *stubWebhookRepo) UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	return nil
 }
 func (s *stubWebhookRepo) DeleteEndpoint(ctx context.Context, id uint) error { return nil }
-func (s *stubWebhookRepo) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (s *stubWebhookRepo) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	s.deliveries = append(s.deliveries, *d)
 	return nil
 }
-func (s *stubWebhookRepo) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (s *stubWebhookRepo) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return s.deliveries, int64(len(s.deliveries)), nil
 }
-func (s *stubWebhookRepo) GetDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (s *stubWebhookRepo) GetDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	return nil, application.ErrNotFound
 }
 func (s *stubWebhookRepo) ResetDeliveryForRedeliver(ctx context.Context, id uint) error {
 	return nil
 }
-func (s *stubWebhookRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
+func (s *stubWebhookRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
 	return nil, nil
 }
 func (s *stubWebhookRepo) MarkDeliverySuccess(ctx context.Context, id uint, httpStatus int, durationMs int64, deliveredAt time.Time) error {
@@ -108,7 +109,7 @@ func TestSubscriberRegistersWhitelistOnly(t *testing.T) {
 
 func TestSubscriberHandlerEnqueuesDelivery(t *testing.T) {
 	bus := newRecordingBus()
-	repo := &stubWebhookRepo{endpoints: []models.WebhookEndpoint{{ID: 1, Active: true}}}
+	repo := &stubWebhookRepo{endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}}
 	NewEventBusSubscriber(application.NewService(repo, nil)).Register(bus)
 
 	handler := bus.handlers["ticket.created"][0]

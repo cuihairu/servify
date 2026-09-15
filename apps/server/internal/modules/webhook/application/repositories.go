@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -17,18 +18,18 @@ type DeliveryListQuery struct {
 
 type Repository interface {
 	// 端点管理
-	ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error)
-	GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error)
-	CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error
-	UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error
+	ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error)
+	GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error)
+	CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error
+	UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error
 	DeleteEndpoint(ctx context.Context, id uint) error
 
 	// 投递日志
-	CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error
-	ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error)
-	GetDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error)
+	CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error
+	ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error)
+	GetDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error)
 	ResetDeliveryForRedeliver(ctx context.Context, id uint) error
-	ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error)
+	ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error)
 	MarkDeliverySuccess(ctx context.Context, id uint, httpStatus int, durationMs int64, deliveredAt time.Time) error
 	MarkDeliveryFailure(ctx context.Context, id uint, attempt int, httpStatus int, durationMs int64, lastError string, dead bool, nextRetryAt *time.Time) error
 

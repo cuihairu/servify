@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -67,7 +68,7 @@ func TestRotateEndpointSecretGenerationFailure(t *testing.T) {
 	newSecret = func() (string, error) { return "", errWebhookEntropy }
 	defer func() { newSecret = orig }()
 
-	repo := &fakeRepo{endpoints: []models.WebhookEndpoint{{ID: 3, Name: "ep", URL: "https://a.example.com"}}}
+	repo := &fakeRepo{endpoints: []webhookdomain.WebhookEndpoint{{ID: 3, Name: "ep", URL: "https://a.example.com"}}}
 	svc := newTestService(repo, nil)
 	ep, secret, err := svc.RotateEndpointSecret(context.Background(), 3)
 	if !errors.Is(err, errWebhookEntropy) {

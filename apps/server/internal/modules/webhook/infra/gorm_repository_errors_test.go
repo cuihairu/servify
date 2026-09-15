@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ func dropDeliveryTable(t *testing.T, db interface {
 	DropTable(values ...interface{}) error
 }) {
 	t.Helper()
-	if err := db.DropTable(&models.WebhookDelivery{}); err != nil {
+	if err := db.DropTable(&webhookdomain.WebhookDelivery{}); err != nil {
 		t.Fatalf("drop delivery table: %v", err)
 	}
 }
@@ -27,7 +28,7 @@ func dropDeliveryTable(t *testing.T, db interface {
 func TestRepoGetEndpointSurfacesNonNotFoundDBError(t *testing.T) {
 	db := newWebhookUnitTestDB(t)
 	repo := NewGormRepository(db)
-	if err := db.Migrator().DropTable(&models.WebhookEndpoint{}); err != nil {
+	if err := db.Migrator().DropTable(&webhookdomain.WebhookEndpoint{}); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
 	_, err := repo.GetEndpoint(context.Background(), 1)
@@ -39,7 +40,7 @@ func TestRepoGetEndpointSurfacesNonNotFoundDBError(t *testing.T) {
 func TestRepoDeleteEndpointSurfacesDBError(t *testing.T) {
 	db := newWebhookUnitTestDB(t)
 	repo := NewGormRepository(db)
-	if err := db.Migrator().DropTable(&models.WebhookEndpoint{}); err != nil {
+	if err := db.Migrator().DropTable(&webhookdomain.WebhookEndpoint{}); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
 	if err := repo.DeleteEndpoint(context.Background(), 1); err == nil || errors.Is(err, application.ErrNotFound) {

@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/webhook/application"
 )
 
@@ -21,18 +21,18 @@ func (a *HandlerServiceAdapter) Service() *application.Service {
 	return a.service
 }
 
-func (a *HandlerServiceAdapter) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (a *HandlerServiceAdapter) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return a.service.ListEndpoints(ctx)
 }
 
-func (a *HandlerServiceAdapter) CreateEndpoint(ctx context.Context, req *EndpointCreateRequest) (*models.WebhookEndpoint, string, error) {
+func (a *HandlerServiceAdapter) CreateEndpoint(ctx context.Context, req *EndpointCreateRequest) (*webhookdomain.WebhookEndpoint, string, error) {
 	if req == nil {
 		return nil, "", application.ErrNilRequest
 	}
 	return a.service.CreateEndpoint(ctx, *req)
 }
 
-func (a *HandlerServiceAdapter) UpdateEndpoint(ctx context.Context, id uint, req *EndpointUpdateRequest) (*models.WebhookEndpoint, error) {
+func (a *HandlerServiceAdapter) UpdateEndpoint(ctx context.Context, id uint, req *EndpointUpdateRequest) (*webhookdomain.WebhookEndpoint, error) {
 	if req == nil {
 		return nil, application.ErrNilRequest
 	}
@@ -43,19 +43,19 @@ func (a *HandlerServiceAdapter) DeleteEndpoint(ctx context.Context, id uint) err
 	return a.service.DeleteEndpoint(ctx, id)
 }
 
-func (a *HandlerServiceAdapter) RotateEndpointSecret(ctx context.Context, id uint) (*models.WebhookEndpoint, string, error) {
+func (a *HandlerServiceAdapter) RotateEndpointSecret(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, string, error) {
 	return a.service.RotateEndpointSecret(ctx, id)
 }
 
-func (a *HandlerServiceAdapter) TestEndpoint(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (a *HandlerServiceAdapter) TestEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	return a.service.TestEndpoint(ctx, id)
 }
 
-func (a *HandlerServiceAdapter) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (a *HandlerServiceAdapter) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return a.service.ListDeliveries(ctx, query)
 }
 
-func (a *HandlerServiceAdapter) RedeliverDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (a *HandlerServiceAdapter) RedeliverDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	return a.service.RedeliverDelivery(ctx, id)
 }
 

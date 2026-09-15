@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strings"
 	"testing"
 	"time"
@@ -13,15 +14,15 @@ import (
 
 // adapterRepo 是 application.Repository 的内存最小实现，专供 adapter 委托测试。
 type adapterRepo struct {
-	endpoints  []models.WebhookEndpoint
-	deliveries []models.WebhookDelivery
+	endpoints  []webhookdomain.WebhookEndpoint
+	deliveries []webhookdomain.WebhookDelivery
 }
 
-func (r *adapterRepo) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (r *adapterRepo) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return r.endpoints, nil
 }
 
-func (r *adapterRepo) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error) {
+func (r *adapterRepo) GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error) {
 	for i := range r.endpoints {
 		if r.endpoints[i].ID == id {
 			return &r.endpoints[i], nil
@@ -30,13 +31,13 @@ func (r *adapterRepo) GetEndpoint(ctx context.Context, id uint) (*models.Webhook
 	return nil, application.ErrNotFound
 }
 
-func (r *adapterRepo) CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (r *adapterRepo) CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	ep.ID = uint(len(r.endpoints) + 1)
 	r.endpoints = append(r.endpoints, *ep)
 	return nil
 }
 
-func (r *adapterRepo) UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (r *adapterRepo) UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	for i := range r.endpoints {
 		if r.endpoints[i].ID == ep.ID {
 			r.endpoints[i] = *ep
@@ -56,17 +57,17 @@ func (r *adapterRepo) DeleteEndpoint(ctx context.Context, id uint) error {
 	return application.ErrNotFound
 }
 
-func (r *adapterRepo) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (r *adapterRepo) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	d.ID = uint(len(r.deliveries) + 1)
 	r.deliveries = append(r.deliveries, *d)
 	return nil
 }
 
-func (r *adapterRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (r *adapterRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return r.deliveries, int64(len(r.deliveries)), nil
 }
 
-func (r *adapterRepo) GetDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (r *adapterRepo) GetDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	for i := range r.deliveries {
 		if r.deliveries[i].ID == id {
 			return &r.deliveries[i], nil
@@ -78,14 +79,14 @@ func (r *adapterRepo) GetDelivery(ctx context.Context, id uint) (*models.Webhook
 func (r *adapterRepo) ResetDeliveryForRedeliver(ctx context.Context, id uint) error {
 	for i := range r.deliveries {
 		if r.deliveries[i].ID == id {
-			r.deliveries[i].Status = models.WebhookDeliveryStatusPending
+			r.deliveries[i].Status = webhookdomain.WebhookDeliveryStatusPending
 			return nil
 		}
 	}
 	return application.ErrNotFound
 }
 
-func (r *adapterRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
+func (r *adapterRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
 	return nil, nil
 }
 
@@ -120,7 +121,7 @@ var _ application.Deliverer = pingDeliverer{}
 
 func newAdapterUnderTest(t *testing.T) (*HandlerServiceAdapter, *adapterRepo) {
 	t.Helper()
-	repo := &adapterRepo{endpoints: []models.WebhookEndpoint{
+	repo := &adapterRepo{endpoints: []webhookdomain.WebhookEndpoint{
 		{ID: 1, Name: "ops", URL: "https://ops.example.com", Secret: "s3cret", Active: true},
 	}}
 	svc := application.NewService(repo, nil)
@@ -175,7 +176,7 @@ func TestHandlerAdapterDelegatesLifecycleCalls(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	// 重新放入一个端点供 rotate / test 使用
-	repo.endpoints = append(repo.endpoints, models.WebhookEndpoint{ID: 2, Name: "again", URL: "https://a.example.com", Active: true})
+	repo.endpoints = append(repo.endpoints, webhookdomain.WebhookEndpoint{ID: 2, Name: "again", URL: "https://a.example.com", Active: true})
 
 	rotated, secret, err := adapter.RotateEndpointSecret(ctx, 2)
 	if err != nil || len(secret) != 64 || rotated.Secret != secret {
@@ -183,7 +184,7 @@ func TestHandlerAdapterDelegatesLifecycleCalls(t *testing.T) {
 	}
 
 	delivery, err := adapter.TestEndpoint(ctx, 2)
-	if err != nil || delivery.EventName != "ping" || delivery.Status != models.WebhookDeliveryStatusSuccess {
+	if err != nil || delivery.EventName != "ping" || delivery.Status != webhookdomain.WebhookDeliveryStatusSuccess {
 		t.Fatalf("test endpoint = (%+v, %v)", delivery, err)
 	}
 
@@ -193,7 +194,7 @@ func TestHandlerAdapterDelegatesLifecycleCalls(t *testing.T) {
 	}
 
 	redelivered, err := adapter.RedeliverDelivery(ctx, rows[0].ID)
-	if err != nil || redelivered.Status != models.WebhookDeliveryStatusPending {
+	if err != nil || redelivered.Status != webhookdomain.WebhookDeliveryStatusPending {
 		t.Fatalf("redeliver = (%+v, %v)", redelivered, err)
 	}
 }

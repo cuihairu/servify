@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strings"
 	"testing"
 	"time"
@@ -11,8 +12,8 @@ import (
 )
 
 type fakeRepo struct {
-	endpoints  []models.WebhookEndpoint
-	deliveries []models.WebhookDelivery
+	endpoints  []webhookdomain.WebhookEndpoint
+	deliveries []webhookdomain.WebhookDelivery
 	ticket     *models.Ticket
 	session    *models.Session
 	call       *models.VoiceCall
@@ -24,13 +25,13 @@ type fakeRepo struct {
 	createdCount int
 }
 
-func (f *fakeRepo) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (f *fakeRepo) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
 	return f.endpoints, nil
 }
-func (f *fakeRepo) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error) {
+func (f *fakeRepo) GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error) {
 	for i := range f.endpoints {
 		if f.endpoints[i].ID == id {
 			return &f.endpoints[i], nil
@@ -38,12 +39,12 @@ func (f *fakeRepo) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEnd
 	}
 	return nil, ErrNotFound
 }
-func (f *fakeRepo) CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (f *fakeRepo) CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	ep.ID = uint(len(f.endpoints) + 1)
 	f.endpoints = append(f.endpoints, *ep)
 	return nil
 }
-func (f *fakeRepo) UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (f *fakeRepo) UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	for i := range f.endpoints {
 		if f.endpoints[i].ID == ep.ID {
 			f.endpoints[i] = *ep
@@ -61,16 +62,16 @@ func (f *fakeRepo) DeleteEndpoint(ctx context.Context, id uint) error {
 	}
 	return ErrNotFound
 }
-func (f *fakeRepo) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (f *fakeRepo) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	f.createdCount++
 	d.ID = uint(len(f.deliveries) + 1)
 	f.deliveries = append(f.deliveries, *d)
 	return nil
 }
-func (f *fakeRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (f *fakeRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return f.deliveries, int64(len(f.deliveries)), nil
 }
-func (f *fakeRepo) GetDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (f *fakeRepo) GetDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	for i := range f.deliveries {
 		if f.deliveries[i].ID == id {
 			return &f.deliveries[i], nil
@@ -81,7 +82,7 @@ func (f *fakeRepo) GetDelivery(ctx context.Context, id uint) (*models.WebhookDel
 func (f *fakeRepo) ResetDeliveryForRedeliver(ctx context.Context, id uint) error {
 	for i := range f.deliveries {
 		if f.deliveries[i].ID == id {
-			f.deliveries[i].Status = models.WebhookDeliveryStatusPending
+			f.deliveries[i].Status = webhookdomain.WebhookDeliveryStatusPending
 			f.deliveries[i].Attempt = 0
 			f.deliveries[i].NextRetryAt = nil
 			return nil
@@ -89,10 +90,10 @@ func (f *fakeRepo) ResetDeliveryForRedeliver(ctx context.Context, id uint) error
 	}
 	return ErrNotFound
 }
-func (f *fakeRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
-	var out []models.WebhookDelivery
+func (f *fakeRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
+	var out []webhookdomain.WebhookDelivery
 	for _, d := range f.deliveries {
-		if d.Status != models.WebhookDeliveryStatusPending {
+		if d.Status != webhookdomain.WebhookDeliveryStatusPending {
 			continue
 		}
 		if d.NextRetryAt != nil && d.NextRetryAt.After(now) {
@@ -108,7 +109,7 @@ func (f *fakeRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit 
 func (f *fakeRepo) MarkDeliverySuccess(ctx context.Context, id uint, httpStatus int, durationMs int64, deliveredAt time.Time) error {
 	for i := range f.deliveries {
 		if f.deliveries[i].ID == id {
-			f.deliveries[i].Status = models.WebhookDeliveryStatusSuccess
+			f.deliveries[i].Status = webhookdomain.WebhookDeliveryStatusSuccess
 			f.deliveries[i].Attempt++
 			f.deliveries[i].HTTPStatus = httpStatus
 			return nil
@@ -123,9 +124,9 @@ func (f *fakeRepo) MarkDeliveryFailure(ctx context.Context, id uint, attempt int
 			f.deliveries[i].HTTPStatus = httpStatus
 			f.deliveries[i].LastError = lastError
 			if dead {
-				f.deliveries[i].Status = models.WebhookDeliveryStatusDead
+				f.deliveries[i].Status = webhookdomain.WebhookDeliveryStatusDead
 			} else {
-				f.deliveries[i].Status = models.WebhookDeliveryStatusPending
+				f.deliveries[i].Status = webhookdomain.WebhookDeliveryStatusPending
 				f.deliveries[i].NextRetryAt = nextRetryAt
 			}
 			return nil
@@ -187,7 +188,7 @@ func newTestService(repo *fakeRepo, deliverer Deliverer) *Service {
 
 func TestEnqueueEventCreatesPendingDeliveriesForMatchingEndpoints(t *testing.T) {
 	repo := &fakeRepo{ticket: &models.Ticket{ID: 7, Title: "t"}}
-	repo.endpoints = []models.WebhookEndpoint{
+	repo.endpoints = []webhookdomain.WebhookEndpoint{
 		{ID: 1, Name: "all", URL: "https://a.example.com", Secret: "s1", Active: true},
 		{ID: 2, Name: "scoped", URL: "https://b.example.com", Secret: "s2", Active: true, Events: EventTicketAssigned},
 		{ID: 3, Name: "inactive", URL: "https://c.example.com", Secret: "s3", Active: false},
@@ -198,7 +199,7 @@ func TestEnqueueEventCreatesPendingDeliveriesForMatchingEndpoints(t *testing.T) 
 	if repo.createdCount != 1 {
 		t.Fatalf("expected 1 delivery row, got %d", repo.createdCount)
 	}
-	if repo.deliveries[0].EndpointID != 1 || repo.deliveries[0].Status != models.WebhookDeliveryStatusPending {
+	if repo.deliveries[0].EndpointID != 1 || repo.deliveries[0].Status != webhookdomain.WebhookDeliveryStatusPending {
 		t.Fatalf("unexpected delivery: %+v", repo.deliveries[0])
 	}
 	if !strings.Contains(repo.deliveries[0].Payload, `"event":"ticket.created"`) {
@@ -216,7 +217,7 @@ func TestEnqueueEventIgnoresUnsupportedAndMissingSnapshots(t *testing.T) {
 	if repo.createdCount != 0 {
 		t.Fatalf("unsupported event should be ignored")
 	}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	repo.ticketErr = errors.New("boom")
 	svc.EnqueueEvent(context.Background(), EventTicketCreated, "ticket:1", "evt")
 	if repo.createdCount != 0 {
@@ -226,7 +227,7 @@ func TestEnqueueEventIgnoresUnsupportedAndMissingSnapshots(t *testing.T) {
 
 func TestEnqueueEventConversationAndRoutingPrefixes(t *testing.T) {
 	repo := &fakeRepo{session: &models.Session{ID: "sess-1"}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newTestService(repo, &fakeDeliverer{})
 	svc.EnqueueEvent(context.Background(), EventConversationMessageReceived, "conversation:sess-1", "evt-2")
 	if repo.createdCount != 1 {
@@ -240,9 +241,9 @@ func TestEnqueueEventConversationAndRoutingPrefixes(t *testing.T) {
 
 func TestProcessDueDeliveriesSuccessAndBackoff(t *testing.T) {
 	repo := &fakeRepo{
-		endpoints: []models.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}},
-		deliveries: []models.WebhookDelivery{
-			{ID: 1, EndpointID: 1, EventName: EventTicketCreated, Status: models.WebhookDeliveryStatusPending, Payload: "{}"},
+		endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}},
+		deliveries: []webhookdomain.WebhookDelivery{
+			{ID: 1, EndpointID: 1, EventName: EventTicketCreated, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}"},
 		},
 		ticket: &models.Ticket{ID: 1},
 	}
@@ -253,7 +254,7 @@ func TestProcessDueDeliveriesSuccessAndBackoff(t *testing.T) {
 	if processed != 1 {
 		t.Fatalf("expected 1 processed, got %d", processed)
 	}
-	if repo.deliveries[0].Status != models.WebhookDeliveryStatusSuccess || repo.deliveries[0].Attempt != 1 {
+	if repo.deliveries[0].Status != webhookdomain.WebhookDeliveryStatusSuccess || repo.deliveries[0].Attempt != 1 {
 		t.Fatalf("delivery should be success with attempt 1: %+v", repo.deliveries[0])
 	}
 	if deliverer.request[0].DeliveryID != 1 || deliverer.request[0].Secret != "s" {
@@ -263,9 +264,9 @@ func TestProcessDueDeliveriesSuccessAndBackoff(t *testing.T) {
 
 func TestProcessDueDeliveriesBackoffAndDead(t *testing.T) {
 	repo := &fakeRepo{
-		endpoints: []models.WebhookEndpoint{{ID: 1, Active: true}},
-		deliveries: []models.WebhookDelivery{
-			{ID: 1, EndpointID: 1, EventName: EventTicketCreated, Status: models.WebhookDeliveryStatusPending, Payload: "{}", Attempt: 1},
+		endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}},
+		deliveries: []webhookdomain.WebhookDelivery{
+			{ID: 1, EndpointID: 1, EventName: EventTicketCreated, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}", Attempt: 1},
 		},
 	}
 	now := time.Now()
@@ -273,7 +274,7 @@ func TestProcessDueDeliveriesBackoffAndDead(t *testing.T) {
 	svc.ProcessDueDeliveries(context.Background(), now)
 
 	d := repo.deliveries[0]
-	if d.Status != models.WebhookDeliveryStatusPending || d.Attempt != 2 {
+	if d.Status != webhookdomain.WebhookDeliveryStatusPending || d.Attempt != 2 {
 		t.Fatalf("retryable failure should bump attempt: %+v", d)
 	}
 	if d.NextRetryAt == nil || !d.NextRetryAt.After(now) {
@@ -285,32 +286,32 @@ func TestProcessDueDeliveriesBackoffAndDead(t *testing.T) {
 	}
 
 	// 410 Gone：不重试直接 dead。
-	repo.deliveries[0] = models.WebhookDelivery{ID: 1, EndpointID: 1, Status: models.WebhookDeliveryStatusPending, Payload: "{}"}
+	repo.deliveries[0] = webhookdomain.WebhookDelivery{ID: 1, EndpointID: 1, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}"}
 	svc2 := newTestService(repo, &fakeDeliverer{results: []DeliveryResult{{Success: false, StatusCode: 410}}})
 	svc2.ProcessDueDeliveries(context.Background(), now)
-	if repo.deliveries[0].Status != models.WebhookDeliveryStatusDead {
+	if repo.deliveries[0].Status != webhookdomain.WebhookDeliveryStatusDead {
 		t.Fatalf("410 should go straight to dead: %+v", repo.deliveries[0])
 	}
 
 	// 达到最大次数后 dead。
-	repo.deliveries[0] = models.WebhookDelivery{ID: 1, EndpointID: 1, Status: models.WebhookDeliveryStatusPending, Payload: "{}", Attempt: maxAttempts - 1}
+	repo.deliveries[0] = webhookdomain.WebhookDelivery{ID: 1, EndpointID: 1, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}", Attempt: maxAttempts - 1}
 	svc3 := newTestService(repo, &fakeDeliverer{results: []DeliveryResult{{Success: false, StatusCode: 500}}})
 	svc3.ProcessDueDeliveries(context.Background(), now)
-	if repo.deliveries[0].Status != models.WebhookDeliveryStatusDead {
+	if repo.deliveries[0].Status != webhookdomain.WebhookDeliveryStatusDead {
 		t.Fatalf("exhausted attempts should be dead: %+v", repo.deliveries[0])
 	}
 }
 
 func TestProcessDueDeliveriesDeadEndpoint(t *testing.T) {
 	repo := &fakeRepo{
-		endpoints: []models.WebhookEndpoint{{ID: 1, Active: false}},
-		deliveries: []models.WebhookDelivery{
-			{ID: 1, EndpointID: 1, Status: models.WebhookDeliveryStatusPending, Payload: "{}"},
+		endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Active: false}},
+		deliveries: []webhookdomain.WebhookDelivery{
+			{ID: 1, EndpointID: 1, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}"},
 		},
 	}
 	svc := newTestService(repo, &fakeDeliverer{})
 	svc.ProcessDueDeliveries(context.Background(), time.Now())
-	if repo.deliveries[0].Status != models.WebhookDeliveryStatusDead {
+	if repo.deliveries[0].Status != webhookdomain.WebhookDeliveryStatusDead {
 		t.Fatalf("inactive endpoint should dead-letter delivery: %+v", repo.deliveries[0])
 	}
 }
@@ -348,7 +349,7 @@ func TestEndpointCRUDValidation(t *testing.T) {
 }
 
 func TestTestEndpointDeliversPingSynchronously(t *testing.T) {
-	repo := &fakeRepo{endpoints: []models.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}}}
+	repo := &fakeRepo{endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}}}
 	deliverer := &fakeDeliverer{}
 	svc := newTestService(repo, deliverer)
 
@@ -356,7 +357,7 @@ func TestTestEndpointDeliversPingSynchronously(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test endpoint: %v", err)
 	}
-	if delivery.EventName != "ping" || delivery.Status != models.WebhookDeliveryStatusSuccess {
+	if delivery.EventName != "ping" || delivery.Status != webhookdomain.WebhookDeliveryStatusSuccess {
 		t.Fatalf("unexpected test delivery: %+v", delivery)
 	}
 	if !strings.Contains(delivery.Payload, `"event":"ping"`) {
@@ -368,7 +369,7 @@ func TestTestEndpointDeliversPingSynchronously(t *testing.T) {
 }
 
 func TestDeliverOneShotPersistsAuditRow(t *testing.T) {
-	repo := &fakeRepo{endpoints: []models.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}}}
+	repo := &fakeRepo{endpoints: []webhookdomain.WebhookEndpoint{{ID: 1, Name: "ep", URL: "https://a.example.com", Secret: "s", Active: true}}}
 	deliverer := &fakeDeliverer{}
 	svc := newTestService(repo, deliverer)
 
@@ -382,7 +383,7 @@ func TestDeliverOneShotPersistsAuditRow(t *testing.T) {
 	if repo.createdCount != 1 {
 		t.Fatal("automation delivery should be persisted for audit")
 	}
-	if got := repo.deliveries[0]; got.EndpointID != 0 || got.EventName != "automation.call_webhook" || got.Status != models.WebhookDeliveryStatusSuccess {
+	if got := repo.deliveries[0]; got.EndpointID != 0 || got.EventName != "automation.call_webhook" || got.Status != webhookdomain.WebhookDeliveryStatusSuccess {
 		t.Fatalf("unexpected audit row: %+v", got)
 	}
 }
@@ -398,7 +399,7 @@ func TestDeliverOneShotFailureReturnsError(t *testing.T) {
 	if repo.createdCount != 1 {
 		t.Fatal("failed delivery should still be persisted for audit")
 	}
-	if got := repo.deliveries[0]; got.Status != models.WebhookDeliveryStatusFailed {
+	if got := repo.deliveries[0]; got.Status != webhookdomain.WebhookDeliveryStatusFailed {
 		t.Fatalf("failed dispatch should be terminal failed, got %+v", got)
 	}
 }
@@ -411,13 +412,13 @@ func TestDeliverOneShotRequiresURL(t *testing.T) {
 }
 
 func TestRedeliverResetsDelivery(t *testing.T) {
-	repo := &fakeRepo{deliveries: []models.WebhookDelivery{{ID: 1, Status: models.WebhookDeliveryStatusDead, Attempt: 6}}}
+	repo := &fakeRepo{deliveries: []webhookdomain.WebhookDelivery{{ID: 1, Status: webhookdomain.WebhookDeliveryStatusDead, Attempt: 6}}}
 	svc := newTestService(repo, nil)
 	redelivered, err := svc.RedeliverDelivery(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("redeliver: %v", err)
 	}
-	if redelivered.Status != models.WebhookDeliveryStatusPending || redelivered.Attempt != 0 {
+	if redelivered.Status != webhookdomain.WebhookDeliveryStatusPending || redelivered.Attempt != 0 {
 		t.Fatalf("redeliver should reset: %+v", redelivered)
 	}
 }
@@ -435,7 +436,7 @@ func TestGenerateSecretUniqueness(t *testing.T) {
 
 func TestEnqueueEventVoicePrefix(t *testing.T) {
 	repo := &fakeRepo{call: &models.VoiceCall{ID: "call-9", SessionID: "sess-1", Status: "held"}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newTestService(repo, &fakeDeliverer{})
 
 	for _, name := range []string{EventCallStarted, EventCallHeld, EventCallResumed, EventCallTransferred, EventCallEnded} {

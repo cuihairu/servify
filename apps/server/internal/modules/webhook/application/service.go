@@ -8,12 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"servify/apps/server/internal/models"
 
 	"github.com/sirupsen/logrus"
 )
@@ -104,12 +103,12 @@ func (s *Service) EnqueueEvent(ctx context.Context, eventName, aggregateID, even
 		if !ep.Active || !endpointSubscribes(&ep, eventName) {
 			continue
 		}
-		delivery := &models.WebhookDelivery{
+		delivery := &webhookdomain.WebhookDelivery{
 			EndpointID:  ep.ID,
 			EventName:   eventName,
 			EventID:     eventID,
 			AggregateID: aggregateID,
-			Status:      models.WebhookDeliveryStatusPending,
+			Status:      webhookdomain.WebhookDeliveryStatusPending,
 			Payload:     payload,
 		}
 		if err := s.repo.CreateDelivery(ctx, delivery); err != nil {
@@ -119,7 +118,7 @@ func (s *Service) EnqueueEvent(ctx context.Context, eventName, aggregateID, even
 }
 
 // endpointSubscribes 判断端点是否订阅了该事件。events 为空 = 全部白名单事件。
-func endpointSubscribes(ep *models.WebhookEndpoint, eventName string) bool {
+func endpointSubscribes(ep *webhookdomain.WebhookEndpoint, eventName string) bool {
 	if strings.TrimSpace(ep.Events) == "" {
 		return true
 	}
@@ -231,15 +230,15 @@ func validateEndpointURL(raw string) error {
 	return nil
 }
 
-func (s *Service) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (s *Service) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return s.repo.ListEndpoints(ctx)
 }
 
-func (s *Service) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error) {
+func (s *Service) GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error) {
 	return s.repo.GetEndpoint(ctx, id)
 }
 
-func (s *Service) CreateEndpoint(ctx context.Context, req EndpointRequest) (*models.WebhookEndpoint, string, error) {
+func (s *Service) CreateEndpoint(ctx context.Context, req EndpointRequest) (*webhookdomain.WebhookEndpoint, string, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, "", fmt.Errorf("name required")
 	}
@@ -257,7 +256,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, req EndpointRequest) (*mod
 	if req.Active != nil {
 		active = *req.Active
 	}
-	ep := &models.WebhookEndpoint{
+	ep := &webhookdomain.WebhookEndpoint{
 		TenantID:    req.TenantID,
 		WorkspaceID: req.WorkspaceID,
 		Name:        req.Name,
@@ -273,7 +272,7 @@ func (s *Service) CreateEndpoint(ctx context.Context, req EndpointRequest) (*mod
 	return ep, secret, nil
 }
 
-func (s *Service) UpdateEndpoint(ctx context.Context, id uint, req EndpointRequest) (*models.WebhookEndpoint, error) {
+func (s *Service) UpdateEndpoint(ctx context.Context, id uint, req EndpointRequest) (*webhookdomain.WebhookEndpoint, error) {
 	ep, err := s.repo.GetEndpoint(ctx, id)
 	if err != nil {
 		return nil, err
@@ -319,7 +318,7 @@ func (s *Service) DeleteEndpoint(ctx context.Context, id uint) error {
 }
 
 // RotateEndpointSecret 轮换签名密钥，明文仅本次返回。
-func (s *Service) RotateEndpointSecret(ctx context.Context, id uint) (*models.WebhookEndpoint, string, error) {
+func (s *Service) RotateEndpointSecret(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, string, error) {
 	ep, err := s.repo.GetEndpoint(ctx, id)
 	if err != nil {
 		return nil, "", err
@@ -336,7 +335,7 @@ func (s *Service) RotateEndpointSecret(ctx context.Context, id uint) (*models.We
 }
 
 // TestEndpoint 用 ping 事件同步投递一次（不走 worker），结果直接返回给调用方。
-func (s *Service) TestEndpoint(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (s *Service) TestEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	ep, err := s.repo.GetEndpoint(ctx, id)
 	if err != nil {
 		return nil, err
@@ -351,12 +350,12 @@ func (s *Service) DeliverOneShot(ctx context.Context, url, secret, eventName, ag
 	if url == "" {
 		return ErrNilRequest
 	}
-	ep := &models.WebhookEndpoint{URL: url, Secret: secret}
+	ep := &webhookdomain.WebhookEndpoint{URL: url, Secret: secret}
 	delivery, err := s.deliverOnce(ctx, ep, eventName, "", aggregateID, payload, true)
 	if err != nil {
 		return err
 	}
-	if delivery.Status != models.WebhookDeliveryStatusSuccess {
+	if delivery.Status != webhookdomain.WebhookDeliveryStatusSuccess {
 		if delivery.LastError != "" {
 			return fmt.Errorf("webhook delivery failed: %s", delivery.LastError)
 		}
@@ -366,7 +365,7 @@ func (s *Service) DeliverOneShot(ctx context.Context, url, secret, eventName, ag
 }
 
 // ListDeliveries 分页查询投递日志。
-func (s *Service) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (s *Service) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	if query.Page <= 0 {
 		query.Page = 1
 	}
@@ -380,7 +379,7 @@ func (s *Service) ListDeliveries(ctx context.Context, query DeliveryListQuery) (
 }
 
 // RedeliverDelivery 将一条失败/死信投递重置为 pending 立即重投。
-func (s *Service) RedeliverDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (s *Service) RedeliverDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	delivery, err := s.repo.GetDelivery(ctx, id)
 	if err != nil {
 		return nil, err
@@ -388,7 +387,7 @@ func (s *Service) RedeliverDelivery(ctx context.Context, id uint) (*models.Webho
 	if err := s.repo.ResetDeliveryForRedeliver(ctx, id); err != nil {
 		return nil, err
 	}
-	delivery.Status = models.WebhookDeliveryStatusPending
+	delivery.Status = webhookdomain.WebhookDeliveryStatusPending
 	delivery.Attempt = 0
 	delivery.NextRetryAt = nil
 	delivery.LastError = ""
@@ -426,7 +425,7 @@ func (s *Service) ProcessDueDeliveries(ctx context.Context, now time.Time) int {
 	return len(due)
 }
 
-func (s *Service) processDelivery(ctx context.Context, delivery *models.WebhookDelivery, now time.Time) {
+func (s *Service) processDelivery(ctx context.Context, delivery *webhookdomain.WebhookDelivery, now time.Time) {
 	ep, err := s.repo.GetEndpoint(ctx, delivery.EndpointID)
 	if err != nil || ep == nil || !ep.Active {
 		s.logger.Warnf("webhook: endpoint %d unavailable, mark delivery %d dead", delivery.EndpointID, delivery.ID)
@@ -437,7 +436,7 @@ func (s *Service) processDelivery(ctx context.Context, delivery *models.WebhookD
 }
 
 // deliverOnceForDelivery 处理订阅路径的一条 pending 行。
-func (s *Service) deliverOnceForDelivery(ctx context.Context, ep *models.WebhookEndpoint, delivery *models.WebhookDelivery, now time.Time) {
+func (s *Service) deliverOnceForDelivery(ctx context.Context, ep *webhookdomain.WebhookEndpoint, delivery *webhookdomain.WebhookDelivery, now time.Time) {
 	result := s.deliverer.Deliver(ctx, DeliveryRequest{
 		URL:        ep.URL,
 		Secret:     ep.Secret,
@@ -464,7 +463,7 @@ func (s *Service) deliverOnceForDelivery(ctx context.Context, ep *models.Webhook
 }
 
 // deliverOnce 一次性同步投递（测试事件 / automation 动作），返回带终态的投递记录。
-func (s *Service) deliverOnce(ctx context.Context, ep *models.WebhookEndpoint, eventName, eventID, aggregateID string, data interface{}, persist bool) (*models.WebhookDelivery, error) {
+func (s *Service) deliverOnce(ctx context.Context, ep *webhookdomain.WebhookEndpoint, eventName, eventID, aggregateID string, data interface{}, persist bool) (*webhookdomain.WebhookDelivery, error) {
 	envelope := map[string]interface{}{
 		"id":         eventID,
 		"event":      eventName,
@@ -475,12 +474,12 @@ func (s *Service) deliverOnce(ctx context.Context, ep *models.WebhookEndpoint, e
 	if err != nil {
 		return nil, err
 	}
-	delivery := &models.WebhookDelivery{
+	delivery := &webhookdomain.WebhookDelivery{
 		EndpointID:  ep.ID,
 		EventName:   eventName,
 		EventID:     eventID,
 		AggregateID: aggregateID,
-		Status:      models.WebhookDeliveryStatusPending,
+		Status:      webhookdomain.WebhookDeliveryStatusPending,
 		Payload:     truncatePayload(body),
 	}
 	if s.deliverer == nil {
@@ -500,10 +499,10 @@ func (s *Service) deliverOnce(ctx context.Context, ep *models.WebhookEndpoint, e
 	delivery.DurationMs = result.DurationMs
 	delivery.LastError = result.Error
 	if result.Success {
-		delivery.Status = models.WebhookDeliveryStatusSuccess
+		delivery.Status = webhookdomain.WebhookDeliveryStatusSuccess
 		delivery.DeliveredAt = &now
 	} else {
-		delivery.Status = models.WebhookDeliveryStatusFailed
+		delivery.Status = webhookdomain.WebhookDeliveryStatusFailed
 	}
 	if persist {
 		if err := s.repo.CreateDelivery(ctx, delivery); err != nil {

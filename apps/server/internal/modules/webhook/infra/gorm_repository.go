@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -21,14 +22,14 @@ func NewGormRepository(db *gorm.DB) *GormRepository {
 	return &GormRepository{db: db}
 }
 
-func (r *GormRepository) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
-	var out []models.WebhookEndpoint
+func (r *GormRepository) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
+	var out []webhookdomain.WebhookEndpoint
 	err := r.db.WithContext(ctx).Order("id").Find(&out).Error
 	return out, err
 }
 
-func (r *GormRepository) GetEndpoint(ctx context.Context, id uint) (*models.WebhookEndpoint, error) {
-	var ep models.WebhookEndpoint
+func (r *GormRepository) GetEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, error) {
+	var ep webhookdomain.WebhookEndpoint
 	if err := r.db.WithContext(ctx).First(&ep, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, application.ErrNotFound
@@ -38,16 +39,16 @@ func (r *GormRepository) GetEndpoint(ctx context.Context, id uint) (*models.Webh
 	return &ep, nil
 }
 
-func (r *GormRepository) CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (r *GormRepository) CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	return r.db.WithContext(ctx).Create(ep).Error
 }
 
-func (r *GormRepository) UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (r *GormRepository) UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	return r.db.WithContext(ctx).Save(ep).Error
 }
 
 func (r *GormRepository) DeleteEndpoint(ctx context.Context, id uint) error {
-	res := r.db.WithContext(ctx).Delete(&models.WebhookEndpoint{}, id)
+	res := r.db.WithContext(ctx).Delete(&webhookdomain.WebhookEndpoint{}, id)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -57,12 +58,12 @@ func (r *GormRepository) DeleteEndpoint(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (r *GormRepository) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (r *GormRepository) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	return r.db.WithContext(ctx).Create(d).Error
 }
 
-func (r *GormRepository) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
-	db := r.db.WithContext(ctx).Model(&models.WebhookDelivery{})
+func (r *GormRepository) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
+	db := r.db.WithContext(ctx).Model(&webhookdomain.WebhookDelivery{})
 	if query.EndpointID != 0 {
 		db = db.Where("endpoint_id = ?", query.EndpointID)
 	}
@@ -73,14 +74,14 @@ func (r *GormRepository) ListDeliveries(ctx context.Context, query application.D
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	var out []models.WebhookDelivery
+	var out []webhookdomain.WebhookDelivery
 	offset := (query.Page - 1) * query.PageSize
 	err := db.Order("id DESC").Offset(offset).Limit(query.PageSize).Find(&out).Error
 	return out, total, err
 }
 
-func (r *GormRepository) GetDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
-	var d models.WebhookDelivery
+func (r *GormRepository) GetDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
+	var d webhookdomain.WebhookDelivery
 	if err := r.db.WithContext(ctx).First(&d, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, application.ErrNotFound
@@ -92,8 +93,8 @@ func (r *GormRepository) GetDelivery(ctx context.Context, id uint) (*models.Webh
 
 // ResetDeliveryForRedeliver 状态回 pending、attempt 归零并清空重试时间。
 func (r *GormRepository) ResetDeliveryForRedeliver(ctx context.Context, id uint) error {
-	res := r.db.WithContext(ctx).Model(&models.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":        models.WebhookDeliveryStatusPending,
+	res := r.db.WithContext(ctx).Model(&webhookdomain.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":        webhookdomain.WebhookDeliveryStatusPending,
 		"attempt":       0,
 		"last_error":    "",
 		"next_retry_at": nil,
@@ -107,17 +108,17 @@ func (r *GormRepository) ResetDeliveryForRedeliver(ctx context.Context, id uint)
 	return nil
 }
 
-func (r *GormRepository) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
-	var out []models.WebhookDelivery
+func (r *GormRepository) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
+	var out []webhookdomain.WebhookDelivery
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)", models.WebhookDeliveryStatusPending, now).
+		Where("status = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)", webhookdomain.WebhookDeliveryStatusPending, now).
 		Order("id").Limit(limit).Find(&out).Error
 	return out, err
 }
 
 func (r *GormRepository) MarkDeliverySuccess(ctx context.Context, id uint, httpStatus int, durationMs int64, deliveredAt time.Time) error {
-	res := r.db.WithContext(ctx).Model(&models.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":        models.WebhookDeliveryStatusSuccess,
+	res := r.db.WithContext(ctx).Model(&webhookdomain.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":        webhookdomain.WebhookDeliveryStatusSuccess,
 		"attempt":       gorm.Expr("attempt + 1"),
 		"http_status":   httpStatus,
 		"duration_ms":   durationMs,
@@ -135,11 +136,11 @@ func (r *GormRepository) MarkDeliverySuccess(ctx context.Context, id uint, httpS
 }
 
 func (r *GormRepository) MarkDeliveryFailure(ctx context.Context, id uint, attempt int, httpStatus int, durationMs int64, lastError string, dead bool, nextRetryAt *time.Time) error {
-	status := models.WebhookDeliveryStatusPending
+	status := webhookdomain.WebhookDeliveryStatusPending
 	if dead {
-		status = models.WebhookDeliveryStatusDead
+		status = webhookdomain.WebhookDeliveryStatusDead
 	}
-	res := r.db.WithContext(ctx).Model(&models.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
+	res := r.db.WithContext(ctx).Model(&webhookdomain.WebhookDelivery{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status":        status,
 		"attempt":       attempt,
 		"http_status":   httpStatus,

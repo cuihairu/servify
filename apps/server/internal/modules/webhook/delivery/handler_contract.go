@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/webhook/application"
 )
 
@@ -17,13 +17,13 @@ type DeliveryListQuery = application.DeliveryListQuery
 
 // HandlerService 面向 HTTP handlers 的 webhook 管理能力。
 type HandlerService interface {
-	ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error)
-	CreateEndpoint(ctx context.Context, req *EndpointCreateRequest) (*models.WebhookEndpoint, string, error)
-	UpdateEndpoint(ctx context.Context, id uint, req *EndpointUpdateRequest) (*models.WebhookEndpoint, error)
+	ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error)
+	CreateEndpoint(ctx context.Context, req *EndpointCreateRequest) (*webhookdomain.WebhookEndpoint, string, error)
+	UpdateEndpoint(ctx context.Context, id uint, req *EndpointUpdateRequest) (*webhookdomain.WebhookEndpoint, error)
 	DeleteEndpoint(ctx context.Context, id uint) error
-	RotateEndpointSecret(ctx context.Context, id uint) (*models.WebhookEndpoint, string, error)
-	TestEndpoint(ctx context.Context, id uint) (*models.WebhookDelivery, error)
-	ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error)
-	RedeliverDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error)
+	RotateEndpointSecret(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, string, error)
+	TestEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error)
+	ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error)
+	RedeliverDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error)
 	SupportedEvents() []string
 }

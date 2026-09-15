@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strings"
 	"testing"
 	"time"
@@ -25,21 +26,21 @@ type errFakeRepo struct {
 	lastDeliveryQuery *DeliveryListQuery
 }
 
-func (e *errFakeRepo) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (e *errFakeRepo) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	if e.createDeliveryErr != nil {
 		return e.createDeliveryErr
 	}
 	return e.fakeRepo.CreateDelivery(ctx, d)
 }
 
-func (e *errFakeRepo) CreateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (e *errFakeRepo) CreateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	if e.createEndpointErr != nil {
 		return e.createEndpointErr
 	}
 	return e.fakeRepo.CreateEndpoint(ctx, ep)
 }
 
-func (e *errFakeRepo) UpdateEndpoint(ctx context.Context, ep *models.WebhookEndpoint) error {
+func (e *errFakeRepo) UpdateEndpoint(ctx context.Context, ep *webhookdomain.WebhookEndpoint) error {
 	if e.updateEndpointErr != nil {
 		return e.updateEndpointErr
 	}
@@ -67,14 +68,14 @@ func (e *errFakeRepo) MarkDeliveryFailure(ctx context.Context, id uint, attempt 
 	return e.fakeRepo.MarkDeliveryFailure(ctx, id, attempt, httpStatus, durationMs, lastError, dead, nextRetryAt)
 }
 
-func (e *errFakeRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
+func (e *errFakeRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
 	if e.claimErr != nil {
 		return nil, e.claimErr
 	}
 	return e.fakeRepo.ClaimDueDeliveries(ctx, now, limit)
 }
 
-func (e *errFakeRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (e *errFakeRepo) ListDeliveries(ctx context.Context, query DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	e.lastDeliveryQuery = &query
 	return e.fakeRepo.ListDeliveries(ctx, query)
 }
@@ -89,7 +90,7 @@ func newErrService(repo *errFakeRepo, deliverer Deliverer) *Service {
 
 func TestSetClockDrivesEnvelopeTimestamp(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{ticket: &models.Ticket{ID: 3}}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newErrService(repo, &fakeDeliverer{})
 	fixed := time.Date(2026, 9, 13, 8, 30, 0, 0, time.UTC)
 	svc.SetClock(func() time.Time { return fixed })
@@ -117,7 +118,7 @@ func TestEnqueueEventSkipsEndpointWhenCreateDeliveryFails(t *testing.T) {
 		fakeRepo:          &fakeRepo{ticket: &models.Ticket{ID: 1}},
 		createDeliveryErr: errors.New("disk full"),
 	}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newErrService(repo, &fakeDeliverer{})
 	svc.EnqueueEvent(context.Background(), EventTicketCreated, "ticket:1", "evt-1")
 	if repo.createdCount != 0 {
@@ -127,7 +128,7 @@ func TestEnqueueEventSkipsEndpointWhenCreateDeliveryFails(t *testing.T) {
 
 func TestEnqueueEventMatchesSubscribedEventWithWhitespace(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{ticket: &models.Ticket{ID: 1}}}
-	repo.endpoints = []models.WebhookEndpoint{
+	repo.endpoints = []webhookdomain.WebhookEndpoint{
 		{ID: 1, Active: true, Events: " call.started , ticket.created "},
 		{ID: 2, Active: true, Events: "call.started"},
 	}
@@ -140,7 +141,7 @@ func TestEnqueueEventMatchesSubscribedEventWithWhitespace(t *testing.T) {
 
 func TestBuildPayloadRejectsMalformedAggregates(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{ticket: &models.Ticket{ID: 1}, sessionErr: errors.New("sess down")}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newErrService(repo, &fakeDeliverer{})
 
 	cases := []struct{ name, aggregate string }{
@@ -225,7 +226,7 @@ func TestCreateEndpointValidationMatrix(t *testing.T) {
 
 func TestUpdateEndpointFullMatrix(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Name: "old", URL: "https://old.example.com", Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Name: "old", URL: "https://old.example.com", Active: true}}
 	svc := newErrService(repo, nil)
 	ctx := context.Background()
 
@@ -266,7 +267,7 @@ func TestUpdateEndpointFullMatrix(t *testing.T) {
 
 func TestListGetDeleteEndpointPassThrough(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 2, Name: "two"}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 2, Name: "two"}}
 	svc := newErrService(repo, nil)
 	ctx := context.Background()
 
@@ -290,7 +291,7 @@ func TestListGetDeleteEndpointPassThrough(t *testing.T) {
 
 func TestRotateEndpointSecretErrors(t *testing.T) {
 	repo := &errFakeRepo{fakeRepo: &fakeRepo{}}
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Secret: "old"}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Secret: "old"}}
 	svc := newErrService(repo, nil)
 
 	if _, _, err := svc.RotateEndpointSecret(context.Background(), 404); !errors.Is(err, ErrNotFound) {
@@ -310,7 +311,7 @@ func TestTestEndpointSurfacesLookupAndPersistErrors(t *testing.T) {
 	}
 
 	repo.createDeliveryErr = errors.New("audit write refused")
-	repo.endpoints = []models.WebhookEndpoint{{ID: 1, Active: true}}
+	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	if _, err := svc.TestEndpoint(context.Background(), 1); err == nil || !strings.Contains(err.Error(), "audit write refused") {
 		t.Fatalf("persist failure must surface, got %v", err)
 	}
@@ -372,7 +373,7 @@ func TestListDeliveriesNormalizesPagination(t *testing.T) {
 }
 
 func TestRedeliverSurfacesLookupAndResetErrors(t *testing.T) {
-	repo := &errFakeRepo{fakeRepo: &fakeRepo{deliveries: []models.WebhookDelivery{{ID: 1}}}}
+	repo := &errFakeRepo{fakeRepo: &fakeRepo{deliveries: []webhookdomain.WebhookDelivery{{ID: 1}}}}
 	svc := newErrService(repo, nil)
 	if _, err := svc.RedeliverDelivery(context.Background(), 404); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("redeliver missing = %v", err)
@@ -405,8 +406,8 @@ func TestProcessDueDeliveriesGuards(t *testing.T) {
 func TestProcessDueDeliveriesRecordsMarkFailureError(t *testing.T) {
 	repo := &errFakeRepo{
 		fakeRepo: &fakeRepo{
-			endpoints:  []models.WebhookEndpoint{{ID: 1, Active: true}},
-			deliveries: []models.WebhookDelivery{{ID: 1, EndpointID: 1, Status: models.WebhookDeliveryStatusPending, Payload: "{}"}},
+			endpoints:  []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}},
+			deliveries: []webhookdomain.WebhookDelivery{{ID: 1, EndpointID: 1, Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}"}},
 		},
 		markErr: errors.New("failure write refused"),
 	}

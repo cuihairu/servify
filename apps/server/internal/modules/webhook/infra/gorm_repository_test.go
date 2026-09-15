@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -34,11 +35,11 @@ func newWebhookUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.WebhookEndpoint{}, &models.WebhookDelivery{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{}); err != nil {
+	if err := db.AutoMigrate(&webhookdomain.WebhookEndpoint{}, &webhookdomain.WebhookDelivery{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.WebhookDelivery{}, &models.WebhookEndpoint{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{})
+		_ = db.Migrator().DropTable(&webhookdomain.WebhookDelivery{}, &webhookdomain.WebhookEndpoint{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{})
 	})
 	return db
 }
@@ -48,7 +49,7 @@ func TestEndpointLifecycle(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
-	ep := &models.WebhookEndpoint{Name: "ops", URL: "https://ops.example.com/hook", Secret: "s", Active: true}
+	ep := &webhookdomain.WebhookEndpoint{Name: "ops", URL: "https://ops.example.com/hook", Secret: "s", Active: true}
 	if err := repo.CreateEndpoint(ctx, ep); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -81,10 +82,10 @@ func TestDeliveryClaimsAndResults(t *testing.T) {
 	ctx := context.Background()
 
 	future := time.Now().Add(time.Hour).UTC()
-	rows := []models.WebhookDelivery{
-		{EndpointID: 1, EventName: "ticket.created", Status: models.WebhookDeliveryStatusPending, Payload: "{}"},
-		{EndpointID: 1, EventName: "ticket.assigned", Status: models.WebhookDeliveryStatusPending, Payload: "{}", NextRetryAt: &future},
-		{EndpointID: 1, EventName: "ticket.closed", Status: models.WebhookDeliveryStatusDead, Payload: "{}"},
+	rows := []webhookdomain.WebhookDelivery{
+		{EndpointID: 1, EventName: "ticket.created", Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}"},
+		{EndpointID: 1, EventName: "ticket.assigned", Status: webhookdomain.WebhookDeliveryStatusPending, Payload: "{}", NextRetryAt: &future},
+		{EndpointID: 1, EventName: "ticket.closed", Status: webhookdomain.WebhookDeliveryStatusDead, Payload: "{}"},
 	}
 	for i := range rows {
 		if err := repo.CreateDelivery(ctx, &rows[i]); err != nil {
@@ -101,7 +102,7 @@ func TestDeliveryClaimsAndResults(t *testing.T) {
 		t.Fatalf("success: %v", err)
 	}
 	successRow, _ := repo.GetDelivery(ctx, rows[0].ID)
-	if successRow.Status != models.WebhookDeliveryStatusSuccess || successRow.Attempt != 1 || successRow.DeliveredAt == nil {
+	if successRow.Status != webhookdomain.WebhookDeliveryStatusSuccess || successRow.Attempt != 1 || successRow.DeliveredAt == nil {
 		t.Fatalf("unexpected success row: %+v", successRow)
 	}
 
@@ -118,7 +119,7 @@ func TestDeliveryClaimsAndResults(t *testing.T) {
 		t.Fatalf("dead: %v", err)
 	}
 	deadRow, _ := repo.GetDelivery(ctx, rows[2].ID)
-	if deadRow.Status != models.WebhookDeliveryStatusDead {
+	if deadRow.Status != webhookdomain.WebhookDeliveryStatusDead {
 		t.Fatalf("unexpected dead row: %+v", deadRow)
 	}
 }
@@ -128,7 +129,7 @@ func TestResetDeliveryForRedeliver(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
-	row := models.WebhookDelivery{EndpointID: 1, EventName: "e", Status: models.WebhookDeliveryStatusFailed, Attempt: 6, LastError: "x"}
+	row := webhookdomain.WebhookDelivery{EndpointID: 1, EventName: "e", Status: webhookdomain.WebhookDeliveryStatusFailed, Attempt: 6, LastError: "x"}
 	if err := repo.CreateDelivery(ctx, &row); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -136,7 +137,7 @@ func TestResetDeliveryForRedeliver(t *testing.T) {
 		t.Fatalf("reset: %v", err)
 	}
 	got, _ := repo.GetDelivery(ctx, row.ID)
-	if got.Status != models.WebhookDeliveryStatusPending || got.Attempt != 0 || got.NextRetryAt != nil || got.LastError != "" {
+	if got.Status != webhookdomain.WebhookDeliveryStatusPending || got.Attempt != 0 || got.NextRetryAt != nil || got.LastError != "" {
 		t.Fatalf("reset should clear retry state: %+v", got)
 	}
 	if err := repo.ResetDeliveryForRedeliver(ctx, 999); !errors.Is(err, application.ErrNotFound) {
@@ -150,17 +151,17 @@ func TestListDeliveriesFilterAndPage(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		status := models.WebhookDeliveryStatusSuccess
+		status := webhookdomain.WebhookDeliveryStatusSuccess
 		if i%2 == 0 {
-			status = models.WebhookDeliveryStatusPending
+			status = webhookdomain.WebhookDeliveryStatusPending
 		}
-		row := models.WebhookDelivery{EndpointID: uint(i + 1), EventName: "e", Status: status, Payload: "{}"}
+		row := webhookdomain.WebhookDelivery{EndpointID: uint(i + 1), EventName: "e", Status: status, Payload: "{}"}
 		if err := repo.CreateDelivery(ctx, &row); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
 	}
 
-	items, total, err := repo.ListDeliveries(ctx, application.DeliveryListQuery{Status: models.WebhookDeliveryStatusPending, Page: 1, PageSize: 2})
+	items, total, err := repo.ListDeliveries(ctx, application.DeliveryListQuery{Status: webhookdomain.WebhookDeliveryStatusPending, Page: 1, PageSize: 2})
 	if err != nil || total != 3 || len(items) != 2 {
 		t.Fatalf("filter: %v total=%d len=%d", err, total, len(items))
 	}

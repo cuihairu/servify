@@ -2,32 +2,32 @@ package delivery
 
 import (
 	"context"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	"strings"
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/automation/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 )
 
 type stubDispatcherRepo struct {
 	webhookapp.Repository
-	endpoints  []models.WebhookEndpoint
-	deliveries []models.WebhookDelivery
+	endpoints  []webhookdomain.WebhookEndpoint
+	deliveries []webhookdomain.WebhookDelivery
 }
 
-func (s *stubDispatcherRepo) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (s *stubDispatcherRepo) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return s.endpoints, nil
 }
 
-func (s *stubDispatcherRepo) CreateDelivery(ctx context.Context, d *models.WebhookDelivery) error {
+func (s *stubDispatcherRepo) CreateDelivery(ctx context.Context, d *webhookdomain.WebhookDelivery) error {
 	d.ID = uint(len(s.deliveries) + 1)
 	s.deliveries = append(s.deliveries, *d)
 	return nil
 }
 
-func (s *stubDispatcherRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]models.WebhookDelivery, error) {
+func (s *stubDispatcherRepo) ClaimDueDeliveries(ctx context.Context, now time.Time, limit int) ([]webhookdomain.WebhookDelivery, error) {
 	return nil, nil
 }
 
