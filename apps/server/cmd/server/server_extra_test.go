@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -139,6 +140,15 @@ func TestServerMainForcedShutdownTimeout(t *testing.T) {
 	_, err = stalled.Write([]byte("POST /health HTTP/1.1\r\nHost: " + addr +
 		"\r\nContent-Type: text/plain\r\nContent-Length: 100\r\n\r\nonly-ten-bytes"))
 	require.NoError(t, err)
+
+	// 等服务端确认已读到该请求（gin 访问日志打出 POST "/health"）再发 SIGTERM：
+	// 若 SIGTERM 先于服务端读请求头到达，该连接在服务端视角仍是 idle，
+	// Shutdown 会直接关闭它并优雅退出 exit 0，强制超时分支根本不触发
+	// （高负载 runner 上曾出现该竞态翻面）。
+	require.Eventually(t, func() bool {
+		return strings.Contains(out.String(), "| POST ")
+	}, 10*time.Second, 100*time.Millisecond,
+		"server did not acknowledge the stalled request: %s", out.String())
 
 	require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))
 	done := make(chan error, 1)
