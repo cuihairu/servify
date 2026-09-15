@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance security-acceptance runtime-baseline-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -134,7 +134,7 @@ clean:
 
 clean-runtime:
 	@echo "Cleaning runtime output..."
-	sh ./scripts/clean-runtime.sh
+	bash ./scripts/clean-runtime.sh
 
 # Build Docker image
 docker-build:
@@ -230,23 +230,23 @@ repo-hygiene:
 
 generated-assets:
 	@echo "Regenerating committed generated assets..."
-	sh ./scripts/regenerate-generated-assets.sh
+	bash ./scripts/regenerate-generated-assets.sh
 
 local-check:
 	@echo "Running local environment verification..."
-	sh ./scripts/check-local-environment.sh
+	bash ./scripts/check-local-environment.sh
 
 security-check:
 	@echo "Running security baseline validation..."
-	sh ./scripts/check-security-baseline.sh $(or $(CONFIG),config.yml)
+	bash ./scripts/check-security-baseline.sh $(or $(CONFIG),config.yml)
 
 observability-check:
 	@echo "Running observability baseline validation..."
-	sh ./scripts/check-observability-baseline.sh $(or $(CONFIG),config.yml)
+	bash ./scripts/check-observability-baseline.sh $(or $(CONFIG),config.yml)
 
 release-check:
 	@echo "Running release-readiness validation..."
-	sh ./scripts/check-release-readiness.sh $(or $(CONFIG),config.yml)
+	bash ./scripts/check-release-readiness.sh $(or $(CONFIG),config.yml)
 
 dify-acceptance:
 	@echo "Running Dify primary-path acceptance..."
@@ -280,13 +280,23 @@ ticket-acceptance:
 	chmod +x ./scripts/test-ticket-acceptance.sh
 	./scripts/test-ticket-acceptance.sh
 
+security-acceptance:
+	@echo "Running security baseline acceptance..."
+	chmod +x ./scripts/test-security-acceptance.sh
+	./scripts/test-security-acceptance.sh
+
+runtime-baseline-acceptance:
+	@echo "Running runtime baseline acceptance..."
+	chmod +x ./scripts/test-runtime-baseline-acceptance.sh
+	./scripts/test-runtime-baseline-acceptance.sh
+
 validate-acceptance-manifest:
 	@echo "Validating acceptance manifest..."
-	sh ./scripts/validate-acceptance-manifest.sh $(MANIFEST)
+	bash ./scripts/validate-acceptance-manifest.sh $(MANIFEST)
 
 check-acceptance-evidence:
 	@echo "Checking acceptance evidence manifests..."
-	sh ./scripts/check-acceptance-evidence.sh
+	bash ./scripts/check-acceptance-evidence.sh
 
 # Internal targets with ldflags (version info)
 VERSION ?= dev

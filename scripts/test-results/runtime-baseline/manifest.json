@@ -1,0 +1,25 @@
+{
+  "provider": "runtime-baseline",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18091",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "metrics_ok": "true",
+    "platforms_ok": "true",
+    "unauthenticated_rejected": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "build-output.txt",
+    "metrics.txt",
+    "platforms-unauthorized.json",
+    "platforms.json",
+    "ready.json",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

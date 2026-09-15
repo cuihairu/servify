@@ -1,0 +1,19 @@
+{
+  "provider": "security-baseline",
+  "mode": "real",
+  "config_template": "config.production.secure.example.yml",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "staging_example_rejected": "true",
+    "production_secure_ok": "true",
+    "default_config_strict_passed": "false"
+  },
+  "evidence_files": [
+    "security-default-config.txt",
+    "security-production-passed.txt",
+    "security-staging-rejected.txt",
+    "summary.txt"
+  ]
+}

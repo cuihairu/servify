@@ -316,7 +316,7 @@
   - 文档或验收回填位置：`scripts/test-results/workspace-acceptance/manifest.json` 已入库；`docs/acceptance-checklist.md` 会话工作台六项置“通过”并附真实留档链接，专项验证记录新增“会话工作台真实运行验收（P1-3）”
 - 附注：首轮真实运行暴露 `text-message` 契约差异（内容必须在 `data.content`，顶层 content 被服务端静默丢弃导致会话未创建），已修正脚本并收紧 mock 契约
 
-### [!] P1-4 运行基线最小事实补齐
+### [x] P1-4 运行基线最小事实补齐
 
 - 范围：
   - `GET /ready`
@@ -327,10 +327,12 @@
   - 这些能力未验会直接影响上线口径
 - 验收标准：
   - 全部回填到 `docs/acceptance-checklist.md`
-- 状态：`[ ]`
-- 最近进展：验收矩阵中仍有多个 `未验`
-- 下一步：先跑最小可复现命令并回填证据
-- 阻塞项：暂无
+- 状态：`[x]`
+- 完成证据：
+  - 代码文件：`scripts/test-security-acceptance.sh`、`scripts/test-runtime-baseline-acceptance.sh`、`scripts/test_runtime_baseline_acceptance_test.go`、`scripts/validate-acceptance-manifest.sh`（security-baseline / runtime-baseline provider）
+  - 测试命令：`make security-acceptance` 与 `make runtime-baseline-acceptance`（2026-09-15，本机真实执行；runtime-baseline 内含 `make build` + sqlite 真实服务）；`go test ./scripts -run "Test(Security|RuntimeBaseline)Acceptance"`
+  - 文档或验收回填位置：`scripts/test-results/security-baseline/manifest.json` 与 `scripts/test-results/runtime-baseline/manifest.json` 已入库；`docs/acceptance-checklist.md` 就绪检查 / Prometheus 指标 / CLI 标准构建 / 平台消息路由统计 / 安全基线严格校验五行补真实留档链接，专项验证记录新增“安全基线真实配置留证（P1-4）”与“运行基线真实运行验收（P1-4）”
+- 附注：前置修复 12 处 `sh` 调用 bash 语法脚本的问题（dash 下 `${BASH_SOURCE[0]}`/`[[` 直接报错，`make security-check`/`release-check`/`local-check` 此前在 Linux 本机无法执行）；并修正“staging 口径 release readiness 演练”旧记录——staging 示例配置含占位凭证，security-check/release-check 对其如实拒绝才是正确行为
 
 ### [x] P1-5 Ticket 主闭环剩余高频操作补齐
 
@@ -552,7 +554,8 @@
 
 - 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`
 - 原因：本轮整体审核确认 P0 项均已收口，核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。下一阶段仍应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
-- 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）；`P1-2` / `P1-4` 已有真实留档。P1 序列剩 `P1-1` 与 P1-4 遗留的 `make security-check` 真实配置留证
+- 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
+- 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。P1 序列只剩 `P1-1` 的真实 Dify/WeKnora 双路径运行证据（等外部环境）
 - 如果本轮无法推进实现，至少先补：
   - 真实边界文档
   - 默认 prod 策略

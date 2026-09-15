@@ -50,7 +50,7 @@ bash "$ROOT_DIR/scripts/check-repo-hygiene.sh" || failures=1
 
 echo
 echo "==> Checking generated assets manifest"
-sh "$ROOT_DIR/scripts/verify-generated-assets.sh" || failures=1
+bash "$ROOT_DIR/scripts/verify-generated-assets.sh" || failures=1
 
 echo
 echo "==> Checking git safe.directory status"

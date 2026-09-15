@@ -254,6 +254,27 @@ case "$PROVIDER" in
     require_file_listed "webhook-create.json"
     require_file_listed "receiver-payloads.jsonl"
     ;;
+  security-baseline)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.staging_example_rejected // ""' "true"
+    require_equals '.checks.production_secure_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "security-staging-rejected.txt"
+    require_file_listed "security-production-passed.txt"
+    ;;
+  runtime-baseline)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.ready_ok // ""' "true"
+    require_equals '.checks.metrics_ok // ""' "true"
+    require_equals '.checks.platforms_ok // ""' "true"
+    require_equals '.checks.unauthenticated_rejected // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "ready.json"
+    require_file_listed "metrics.txt"
+    require_file_listed "platforms.json"
+    require_file_listed "platforms-unauthorized.json"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1

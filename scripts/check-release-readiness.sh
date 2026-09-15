@@ -33,16 +33,16 @@ RUNTIME_DIR="$ROOT_DIR/.runtime"
 mkdir -p "$RUNTIME_DIR"
 
 echo "==> Local environment"
-sh "$ROOT_DIR/scripts/check-local-environment.sh"
+bash "$ROOT_DIR/scripts/check-local-environment.sh"
 
 echo
 echo "==> Security baseline"
 SERVIFY_JWT_SECRET="$RELEASE_CHECK_JWT_SECRET" OPENAI_API_KEY="$RELEASE_CHECK_OPENAI_API_KEY" \
-  sh "$ROOT_DIR/scripts/check-security-baseline.sh" "$CONFIG_PATH"
+  bash "$ROOT_DIR/scripts/check-security-baseline.sh" "$CONFIG_PATH"
 
 echo
 echo "==> Observability baseline"
-sh "$ROOT_DIR/scripts/check-observability-baseline.sh" "$CONFIG_PATH"
+bash "$ROOT_DIR/scripts/check-observability-baseline.sh" "$CONFIG_PATH"
 
 echo
 echo "==> Focused Go regression tests"
