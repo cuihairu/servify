@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"strings"
 	"testing"
 	"time"
@@ -24,11 +25,11 @@ func newAutomationUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &models.AutomationTrigger{}, &models.AutomationRun{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &automationdomain.AutomationTrigger{}, &automationdomain.AutomationRun{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.AutomationRun{}, &models.AutomationTrigger{}, &models.TicketComment{}, &models.Ticket{})
+		_ = db.Migrator().DropTable(&automationdomain.AutomationRun{}, &automationdomain.AutomationTrigger{}, &models.TicketComment{}, &models.Ticket{})
 	})
 	return db
 }
@@ -200,7 +201,7 @@ func TestGormRepositoryTriggerQueryErrors(t *testing.T) {
 	if _, err := repo.ListTriggers(ctx); err != nil {
 		t.Fatalf("list on empty table should succeed: %v", err)
 	}
-	if err := db.Migrator().DropTable(&models.AutomationTrigger{}); err != nil {
+	if err := db.Migrator().DropTable(&automationdomain.AutomationTrigger{}); err != nil {
 		t.Fatalf("drop table: %v", err)
 	}
 	if _, err := repo.ListTriggers(ctx); err == nil {
@@ -296,7 +297,7 @@ func TestGormRepositoryListRunsErrors(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
-	if err := db.Migrator().DropTable(&models.AutomationRun{}); err != nil {
+	if err := db.Migrator().DropTable(&automationdomain.AutomationRun{}); err != nil {
 		t.Fatalf("drop runs table: %v", err)
 	}
 	if _, _, err := repo.ListRuns(ctx, automationapp.RunListQuery{Page: 1, PageSize: 10}); err == nil {
@@ -315,7 +316,7 @@ func TestGormRepositoryListRunsPreloadError(t *testing.T) {
 	if err := repo.RecordRun(ctx, 1, 1, "success", ""); err != nil {
 		t.Fatalf("seed run: %v", err)
 	}
-	if err := db.Migrator().DropTable(&models.AutomationTrigger{}); err != nil {
+	if err := db.Migrator().DropTable(&automationdomain.AutomationTrigger{}); err != nil {
 		t.Fatalf("drop triggers table: %v", err)
 	}
 	runs, _, err := repo.ListRuns(ctx, automationapp.RunListQuery{Page: 1, PageSize: 10})

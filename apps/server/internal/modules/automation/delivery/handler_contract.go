@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 
-	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 )
 
@@ -14,9 +14,9 @@ type BatchRunResponse = automationapp.BatchRunResponse
 
 // HandlerService is the only automation contract that HTTP handlers should depend on.
 type HandlerService interface {
-	ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error)
-	CreateTrigger(ctx context.Context, req *TriggerRequest) (*models.AutomationTrigger, error)
+	ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error)
+	CreateTrigger(ctx context.Context, req *TriggerRequest) (*automationdomain.AutomationTrigger, error)
 	DeleteTrigger(ctx context.Context, id uint) error
-	ListRuns(ctx context.Context, req *RunListQuery) ([]models.AutomationRun, int64, error)
+	ListRuns(ctx context.Context, req *RunListQuery) ([]automationdomain.AutomationRun, int64, error)
 	BatchRun(ctx context.Context, req *BatchRunRequest) (*BatchRunResponse, error)
 }

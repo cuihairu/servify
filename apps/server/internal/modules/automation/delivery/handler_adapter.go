@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 
-	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationinfra "servify/apps/server/internal/modules/automation/infra"
 
@@ -23,11 +23,11 @@ func NewHandlerServiceAdapter(service *automationapp.Service) *HandlerServiceAda
 	return &HandlerServiceAdapter{service: service}
 }
 
-func (a *HandlerServiceAdapter) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
+func (a *HandlerServiceAdapter) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
 	return a.service.ListTriggers(ctx)
 }
 
-func (a *HandlerServiceAdapter) CreateTrigger(ctx context.Context, req *automationapp.TriggerRequest) (*models.AutomationTrigger, error) {
+func (a *HandlerServiceAdapter) CreateTrigger(ctx context.Context, req *automationapp.TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	if req == nil {
 		return nil, nil
 	}
@@ -38,7 +38,7 @@ func (a *HandlerServiceAdapter) DeleteTrigger(ctx context.Context, id uint) erro
 	return a.service.DeleteTrigger(ctx, id)
 }
 
-func (a *HandlerServiceAdapter) ListRuns(ctx context.Context, req *automationapp.RunListQuery) ([]models.AutomationRun, int64, error) {
+func (a *HandlerServiceAdapter) ListRuns(ctx context.Context, req *automationapp.RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	query := automationapp.RunListQuery{}
 	if req != nil {
 		query = *req

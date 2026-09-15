@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"strings"
 	"testing"
 	"time"
@@ -15,14 +16,14 @@ import (
 )
 
 type stubAutomationRepo struct {
-	triggers      []models.AutomationTrigger
+	triggers      []automationdomain.AutomationTrigger
 	listErr       error
 	listedEvents  []string
 	createErr     error
 	created       []*automationapp.TriggerRequest
 	deletedIDs    []uint
 	deleteErr     error
-	runs          []models.AutomationRun
+	runs          []automationdomain.AutomationRun
 	runsTotal     int64
 	runsErr       error
 	queries       []automationapp.RunListQuery
@@ -35,31 +36,31 @@ type stubAutomationRepo struct {
 	commentErr    error
 	comments      []string
 	runsRecorded  []string
-	timers        []models.AutomationTimer
+	timers        []automationdomain.AutomationTimer
 }
 
-func (s *stubAutomationRepo) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
+func (s *stubAutomationRepo) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
 	return s.triggers, nil
 }
-func (s *stubAutomationRepo) ListActiveTriggersByEvent(ctx context.Context, event string) ([]models.AutomationTrigger, error) {
+func (s *stubAutomationRepo) ListActiveTriggersByEvent(ctx context.Context, event string) ([]automationdomain.AutomationTrigger, error) {
 	s.listedEvents = append(s.listedEvents, event)
 	return s.triggers, nil
 }
-func (s *stubAutomationRepo) CreateTrigger(ctx context.Context, req automationapp.TriggerRequest) (*models.AutomationTrigger, error) {
+func (s *stubAutomationRepo) CreateTrigger(ctx context.Context, req automationapp.TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	s.created = append(s.created, &req)
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
-	return &models.AutomationTrigger{ID: 1, Name: req.Name, Event: req.Event}, nil
+	return &automationdomain.AutomationTrigger{ID: 1, Name: req.Name, Event: req.Event}, nil
 }
 func (s *stubAutomationRepo) DeleteTrigger(ctx context.Context, id uint) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteErr
 }
-func (s *stubAutomationRepo) ListRuns(ctx context.Context, query automationapp.RunListQuery) ([]models.AutomationRun, int64, error) {
+func (s *stubAutomationRepo) ListRuns(ctx context.Context, query automationapp.RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	s.queries = append(s.queries, query)
 	if s.runsErr != nil {
 		return nil, 0, s.runsErr
@@ -99,12 +100,12 @@ func (s *stubAutomationRepo) CreateTicketComment(ctx context.Context, ticketID u
 	return nil
 }
 
-func (s *stubAutomationRepo) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+func (s *stubAutomationRepo) CreateTimer(ctx context.Context, timer *automationdomain.AutomationTimer) error {
 	timer.ID = uint(len(s.timers) + 1)
 	s.timers = append(s.timers, *timer)
 	return nil
 }
-func (s *stubAutomationRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
+func (s *stubAutomationRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]automationdomain.AutomationTimer, error) {
 	return nil, nil
 }
 func (s *stubAutomationRepo) CompleteTimer(ctx context.Context, id uint, now time.Time) bool {
@@ -124,11 +125,11 @@ func newDeliveryTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &models.AutomationTrigger{}, &models.AutomationRun{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &automationdomain.AutomationTrigger{}, &automationdomain.AutomationRun{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.AutomationRun{}, &models.AutomationTrigger{}, &models.TicketComment{}, &models.Ticket{})
+		_ = db.Migrator().DropTable(&automationdomain.AutomationRun{}, &automationdomain.AutomationTrigger{}, &models.TicketComment{}, &models.Ticket{})
 	})
 	return db
 }
@@ -157,7 +158,7 @@ func TestNewHandlerServiceWithDB(t *testing.T) {
 }
 
 func TestHandlerAdapterListTriggers(t *testing.T) {
-	repo := &stubAutomationRepo{triggers: []models.AutomationTrigger{{ID: 2, Name: "t"}}}
+	repo := &stubAutomationRepo{triggers: []automationdomain.AutomationTrigger{{ID: 2, Name: "t"}}}
 	adapter := NewHandlerServiceAdapter(automationapp.NewService(repo))
 	got, err := adapter.ListTriggers(context.Background())
 	if err != nil {
@@ -217,7 +218,7 @@ func TestHandlerAdapterDeleteTrigger(t *testing.T) {
 }
 
 func TestHandlerAdapterListRuns(t *testing.T) {
-	repo := &stubAutomationRepo{runs: []models.AutomationRun{{ID: 1}}, runsTotal: 1}
+	repo := &stubAutomationRepo{runs: []automationdomain.AutomationRun{{ID: 1}}, runsTotal: 1}
 	adapter := NewHandlerServiceAdapter(automationapp.NewService(repo))
 
 	runs, total, err := adapter.ListRuns(context.Background(), nil)
@@ -250,7 +251,7 @@ func TestHandlerAdapterListRuns(t *testing.T) {
 
 func TestHandlerAdapterBatchRun(t *testing.T) {
 	repo := &stubAutomationRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:         9,
 			Event:      "ticket.updated",
 			Conditions: `[{"field":"ticket.priority","op":"eq","value":"normal"}]`,

@@ -2,10 +2,10 @@ package infra
 
 import (
 	"context"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 
 	"github.com/stretchr/testify/assert"
@@ -16,11 +16,11 @@ import (
 func newAutomationTimerUnitDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := newAutomationUnitTestDB(t)
-	if err := db.AutoMigrate(&models.AutomationTimer{}); err != nil {
+	if err := db.AutoMigrate(&automationdomain.AutomationTimer{}); err != nil {
 		t.Fatalf("automigrate timers: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.AutomationTimer{})
+		_ = db.Migrator().DropTable(&automationdomain.AutomationTimer{})
 	})
 	return db
 }
@@ -32,7 +32,7 @@ func TestGormRepositoryTimerLifecycle(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	timer := &models.AutomationTimer{
+	timer := &automationdomain.AutomationTimer{
 		TriggerID:   5,
 		TicketID:    9,
 		ActionsJSON: `[{"type":"add_tag","params":{"tag":"vip"}}]`,
@@ -44,7 +44,7 @@ func TestGormRepositoryTimerLifecycle(t *testing.T) {
 	require.NotZero(t, timer.ID)
 
 	// 未到期的不认领
-	future := &models.AutomationTimer{
+	future := &automationdomain.AutomationTimer{
 		TriggerID: 6, TicketID: 10, ActionsJSON: "[]",
 		DueAt: now.Add(time.Hour), Status: automationapp.TimerStatusPending, CreatedAt: now,
 	}
@@ -60,7 +60,7 @@ func TestGormRepositoryTimerLifecycle(t *testing.T) {
 	assert.True(t, repo.CompleteTimer(ctx, timer.ID, now))
 	assert.False(t, repo.CompleteTimer(ctx, timer.ID, now))
 
-	var stored models.AutomationTimer
+	var stored automationdomain.AutomationTimer
 	require.NoError(t, db.First(&stored, "id = ?", timer.ID).Error)
 	assert.Equal(t, automationapp.TimerStatusDone, stored.Status)
 	require.NotNil(t, stored.ExecutedAt)
@@ -71,7 +71,7 @@ func TestGormRepositoryTimerLifecycle(t *testing.T) {
 	assert.Equal(t, "boom: action failed", stored.LastError)
 
 	// 查询失败分支：表被删
-	require.NoError(t, db.Migrator().DropTable(&models.AutomationTimer{}))
+	require.NoError(t, db.Migrator().DropTable(&automationdomain.AutomationTimer{}))
 	_, err = repo.ClaimDueTimers(ctx, now, 10)
 	require.Error(t, err)
 }
@@ -84,7 +84,7 @@ func TestGormRepositoryClaimDueTimersLimitAndOrder(t *testing.T) {
 	now := time.Now()
 
 	for i := 3; i >= 1; i-- {
-		timer := &models.AutomationTimer{
+		timer := &automationdomain.AutomationTimer{
 			TriggerID: uint(i), TicketID: uint(i * 10), ActionsJSON: "[]",
 			DueAt:  now.Add(time.Duration(i) * -time.Minute),
 			Status: automationapp.TimerStatusPending, CreatedAt: now,

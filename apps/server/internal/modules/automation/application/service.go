@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"strconv"
 	"strings"
 	"time"
@@ -61,11 +62,11 @@ func (s *Service) HandleBusEvent(ctx context.Context, eventName string, aggregat
 	s.HandleEvent(ctx, Event{Type: eventName, TicketID: ticketID, Payload: payload})
 }
 
-func (s *Service) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
+func (s *Service) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
 	return s.repo.ListTriggers(ctx)
 }
 
-func (s *Service) CreateTrigger(ctx context.Context, req TriggerRequest) (*models.AutomationTrigger, error) {
+func (s *Service) CreateTrigger(ctx context.Context, req TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	if req.Name == "" {
 		return nil, fmt.Errorf("name required")
 	}
@@ -83,7 +84,7 @@ func (s *Service) DeleteTrigger(ctx context.Context, id uint) error {
 	return s.repo.DeleteTrigger(ctx, id)
 }
 
-func (s *Service) ListRuns(ctx context.Context, query RunListQuery) ([]models.AutomationRun, int64, error) {
+func (s *Service) ListRuns(ctx context.Context, query RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	if query.Page <= 0 {
 		query.Page = 1
 	}
@@ -97,7 +98,7 @@ func (s *Service) ListRuns(ctx context.Context, query RunListQuery) ([]models.Au
 }
 
 func (s *Service) BatchRun(ctx context.Context, req BatchRunRequest) (*BatchRunResponse, error) {
-	var triggers []models.AutomationTrigger
+	var triggers []automationdomain.AutomationTrigger
 	if req.TriggerID > 0 {
 		// 手动运行：按 ID 定位单个触发器（跳过事件白名单，事件取触发器自身定义）
 		all, err := s.repo.ListTriggers(ctx)
@@ -106,7 +107,7 @@ func (s *Service) BatchRun(ctx context.Context, req BatchRunRequest) (*BatchRunR
 		}
 		for _, trig := range all {
 			if trig.ID == req.TriggerID {
-				triggers = []models.AutomationTrigger{trig}
+				triggers = []automationdomain.AutomationTrigger{trig}
 				break
 			}
 		}
@@ -154,7 +155,7 @@ func (s *Service) BatchRun(ctx context.Context, req BatchRunRequest) (*BatchRunR
 	return resp, nil
 }
 
-func (s *Service) applyTrigger(ctx context.Context, trig models.AutomationTrigger, evt Event, ticket *TicketView, dryRun bool) bool {
+func (s *Service) applyTrigger(ctx context.Context, trig automationdomain.AutomationTrigger, evt Event, ticket *TicketView, dryRun bool) bool {
 	conds := []TriggerCondition{}
 	if trig.Conditions != "" {
 		if err := json.Unmarshal([]byte(trig.Conditions), &conds); err != nil {
@@ -210,7 +211,7 @@ func (s *Service) applyTrigger(ctx context.Context, trig models.AutomationTrigge
 }
 
 // scheduleTimer 校验 delay 参数并入队到期执行单，返回延后分钟数。
-func (s *Service) scheduleTimer(ctx context.Context, trig models.AutomationTrigger, evt Event, act TriggerAction) (int, error) {
+func (s *Service) scheduleTimer(ctx context.Context, trig automationdomain.AutomationTrigger, evt Event, act TriggerAction) (int, error) {
 	minutes, err := delayMinutes(act.Params)
 	if err != nil {
 		return 0, err
@@ -229,7 +230,7 @@ func (s *Service) scheduleTimer(ctx context.Context, trig models.AutomationTrigg
 	if err != nil {
 		return 0, fmt.Errorf("invalid delay actions: %w", err)
 	}
-	if err := s.repo.CreateTimer(ctx, &models.AutomationTimer{
+	if err := s.repo.CreateTimer(ctx, &automationdomain.AutomationTimer{
 		TriggerID:   trig.ID,
 		TicketID:    evt.TicketID,
 		ActionsJSON: string(payload),
@@ -269,7 +270,7 @@ func (s *Service) ProcessDueTimers(ctx context.Context, now time.Time) int {
 
 // runTimerActions 执行单张到期执行单快照里的嵌套动作；
 // 执行前重载工单——delay 期间优先级/标签可能已被其他自动化修改。
-func (s *Service) runTimerActions(ctx context.Context, timer *models.AutomationTimer) {
+func (s *Service) runTimerActions(ctx context.Context, timer *automationdomain.AutomationTimer) {
 	fail := func(err error) {
 		_ = s.repo.UpdateTimerLastError(ctx, timer.ID, err.Error())
 		_ = s.repo.RecordRun(ctx, timer.TriggerID, timer.TicketID, "failed", "delayed actions failed: "+err.Error())
@@ -374,7 +375,7 @@ func decodeActions(raw interface{}) ([]TriggerAction, error) {
 	}
 }
 
-func (s *Service) MatchTrigger(ctx context.Context, trig models.AutomationTrigger, evt Event, ticket *TicketView, dryRun bool) bool {
+func (s *Service) MatchTrigger(ctx context.Context, trig automationdomain.AutomationTrigger, evt Event, ticket *TicketView, dryRun bool) bool {
 	return s.applyTrigger(ctx, trig, evt, ticket, dryRun)
 }
 

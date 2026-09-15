@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"time"
 
 	"gorm.io/gorm"
@@ -20,23 +21,23 @@ func NewGormRepository(db *gorm.DB) *GormRepository {
 	return &GormRepository{db: db}
 }
 
-func (r *GormRepository) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
-	var triggers []models.AutomationTrigger
+func (r *GormRepository) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
+	var triggers []automationdomain.AutomationTrigger
 	if err := r.db.WithContext(ctx).Order("id DESC").Find(&triggers).Error; err != nil {
 		return nil, err
 	}
 	return triggers, nil
 }
 
-func (r *GormRepository) ListActiveTriggersByEvent(ctx context.Context, event string) ([]models.AutomationTrigger, error) {
-	var triggers []models.AutomationTrigger
+func (r *GormRepository) ListActiveTriggersByEvent(ctx context.Context, event string) ([]automationdomain.AutomationTrigger, error) {
+	var triggers []automationdomain.AutomationTrigger
 	if err := r.db.WithContext(ctx).Where("event = ? AND active = true", event).Order("id ASC").Find(&triggers).Error; err != nil {
 		return nil, err
 	}
 	return triggers, nil
 }
 
-func (r *GormRepository) CreateTrigger(ctx context.Context, req automationapp.TriggerRequest) (*models.AutomationTrigger, error) {
+func (r *GormRepository) CreateTrigger(ctx context.Context, req automationapp.TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	condJSON, err := json.Marshal(req.Conditions)
 	if err != nil {
 		return nil, fmt.Errorf("invalid conditions: %w", err)
@@ -49,7 +50,7 @@ func (r *GormRepository) CreateTrigger(ctx context.Context, req automationapp.Tr
 	if req.Active != nil {
 		active = *req.Active
 	}
-	trigger := &models.AutomationTrigger{
+	trigger := &automationdomain.AutomationTrigger{
 		Name:       req.Name,
 		Event:      req.Event,
 		Conditions: string(condJSON),
@@ -65,7 +66,7 @@ func (r *GormRepository) CreateTrigger(ctx context.Context, req automationapp.Tr
 }
 
 func (r *GormRepository) DeleteTrigger(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.AutomationTrigger{}, id)
+	result := r.db.WithContext(ctx).Delete(&automationdomain.AutomationTrigger{}, id)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -75,9 +76,9 @@ func (r *GormRepository) DeleteTrigger(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (r *GormRepository) ListRuns(ctx context.Context, query automationapp.RunListQuery) ([]models.AutomationRun, int64, error) {
+func (r *GormRepository) ListRuns(ctx context.Context, query automationapp.RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	offset := (query.Page - 1) * query.PageSize
-	q := r.db.WithContext(ctx).Model(&models.AutomationRun{}).Preload("Trigger")
+	q := r.db.WithContext(ctx).Model(&automationdomain.AutomationRun{}).Preload("Trigger")
 	if query.Status != "" {
 		q = q.Where("status = ?", query.Status)
 	}
@@ -91,7 +92,7 @@ func (r *GormRepository) ListRuns(ctx context.Context, query automationapp.RunLi
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	var runs []models.AutomationRun
+	var runs []automationdomain.AutomationRun
 	if err := q.Order("id DESC").Limit(query.PageSize).Offset(offset).Find(&runs).Error; err != nil {
 		return nil, 0, err
 	}
@@ -99,7 +100,7 @@ func (r *GormRepository) ListRuns(ctx context.Context, query automationapp.RunLi
 }
 
 func (r *GormRepository) RecordRun(ctx context.Context, triggerID uint, ticketID uint, status, message string) error {
-	return r.db.WithContext(ctx).Create(&models.AutomationRun{
+	return r.db.WithContext(ctx).Create(&automationdomain.AutomationRun{
 		TriggerID: triggerID,
 		TicketID:  ticketID,
 		Status:    status,
@@ -134,12 +135,12 @@ func (r *GormRepository) CreateTicketComment(ctx context.Context, ticketID uint,
 	}).Error
 }
 
-func (r *GormRepository) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+func (r *GormRepository) CreateTimer(ctx context.Context, timer *automationdomain.AutomationTimer) error {
 	return r.db.WithContext(ctx).Create(timer).Error
 }
 
-func (r *GormRepository) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
-	var timers []models.AutomationTimer
+func (r *GormRepository) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]automationdomain.AutomationTimer, error) {
+	var timers []automationdomain.AutomationTimer
 	if err := r.db.WithContext(ctx).
 		Where("status = ? AND due_at <= ?", automationapp.TimerStatusPending, now).
 		Order("due_at, id").
@@ -151,14 +152,14 @@ func (r *GormRepository) ClaimDueTimers(ctx context.Context, now time.Time, limi
 }
 
 func (r *GormRepository) CompleteTimer(ctx context.Context, id uint, now time.Time) bool {
-	result := r.db.WithContext(ctx).Model(&models.AutomationTimer{}).
+	result := r.db.WithContext(ctx).Model(&automationdomain.AutomationTimer{}).
 		Where("id = ? AND status = ?", id, automationapp.TimerStatusPending).
 		Updates(map[string]interface{}{"status": automationapp.TimerStatusDone, "executed_at": now})
 	return result.Error == nil && result.RowsAffected > 0
 }
 
 func (r *GormRepository) UpdateTimerLastError(ctx context.Context, id uint, message string) error {
-	return r.db.WithContext(ctx).Model(&models.AutomationTimer{}).
+	return r.db.WithContext(ctx).Model(&automationdomain.AutomationTimer{}).
 		Where("id = ?", id).
 		Update("last_error", message).Error
 }

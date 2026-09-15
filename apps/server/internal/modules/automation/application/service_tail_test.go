@@ -3,11 +3,10 @@ package application
 import (
 	"context"
 	"errors"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"strings"
 	"testing"
 	"time"
-
-	"servify/apps/server/internal/models"
 )
 
 // timerFailRepo 注入 CreateTimer 失败，覆盖 scheduleTimer 的入队错误分支。
@@ -16,7 +15,7 @@ type timerFailRepo struct {
 	timerErr error
 }
 
-func (r *timerFailRepo) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+func (r *timerFailRepo) CreateTimer(ctx context.Context, timer *automationdomain.AutomationTimer) error {
 	if r.timerErr != nil {
 		return r.timerErr
 	}
@@ -68,7 +67,7 @@ func TestScheduleTimerMarshalAndCreateErrors(t *testing.T) {
 
 	svc := NewService(&stubRepo{})
 	// 嵌套动作里含不可序列化值 -> 快照 JSON 失败
-	if _, err := svc.scheduleTimer(ctx, models.AutomationTrigger{ID: 1}, Event{TicketID: 1}, delay); err == nil || !strings.Contains(err.Error(), "invalid delay actions") {
+	if _, err := svc.scheduleTimer(ctx, automationdomain.AutomationTrigger{ID: 1}, Event{TicketID: 1}, delay); err == nil || !strings.Contains(err.Error(), "invalid delay actions") {
 		t.Fatalf("expected marshal error, got %v", err)
 	}
 
@@ -81,7 +80,7 @@ func TestScheduleTimerMarshalAndCreateErrors(t *testing.T) {
 			"actions": []TriggerAction{{Type: "add_tag", Params: map[string]interface{}{"tag": "vip"}}},
 		},
 	}
-	if _, err := svc.scheduleTimer(ctx, models.AutomationTrigger{ID: 1}, Event{TicketID: 1}, sane); err == nil || err.Error() != "timer insert down" {
+	if _, err := svc.scheduleTimer(ctx, automationdomain.AutomationTrigger{ID: 1}, Event{TicketID: 1}, sane); err == nil || err.Error() != "timer insert down" {
 		t.Fatalf("expected create timer error, got %v", err)
 	}
 }
@@ -90,7 +89,7 @@ func TestProcessDueTimersRunFailures(t *testing.T) {
 	ctx := context.Background()
 
 	// ActionsJSON 非法 -> 记录 last_error 与 failed 审计
-	repo := &stubRepo{dueTimers: []models.AutomationTimer{{
+	repo := &stubRepo{dueTimers: []automationdomain.AutomationTimer{{
 		ID: 1, TriggerID: 11, TicketID: 21, ActionsJSON: "{oops",
 	}}}
 	svc := NewService(repo)
@@ -107,7 +106,7 @@ func TestProcessDueTimersRunFailures(t *testing.T) {
 	// 工单重载失败 -> 同样进入失败审计
 	repo = &stubRepo{
 		getTicketErr: errors.New("ticket gone"),
-		dueTimers: []models.AutomationTimer{{
+		dueTimers: []automationdomain.AutomationTimer{{
 			ID: 2, TriggerID: 12, TicketID: 22,
 			ActionsJSON: `[{"type":"add_tag","params":{"tag":"vip"}}]`,
 		}},

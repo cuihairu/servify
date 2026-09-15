@@ -2,9 +2,9 @@ package delivery
 
 import (
 	"context"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	"servify/apps/server/internal/platform/eventbus"
 )
@@ -80,7 +80,7 @@ func TestSubscriberRegisterSubscribesAllEvents(t *testing.T) {
 func TestSubscriberHandlerDispatchesToService(t *testing.T) {
 	bus := newRecordingBus()
 	repo := &stubAutomationRepo{
-		triggers: []models.AutomationTrigger{{ID: 1, Event: "ticket.created", Active: true}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 1, Event: "ticket.created", Active: true}},
 	}
 	NewEventBusSubscriber(automationapp.NewService(repo)).Register(bus)
 

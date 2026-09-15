@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 type stubRepo struct {
-	triggers []models.AutomationTrigger
+	triggers []automationdomain.AutomationTrigger
 	runs     []string
 	priority string
 
@@ -21,7 +22,7 @@ type stubRepo struct {
 	createErr         error
 	deleteErr         error
 	listRunsErr       error
-	listRunsRuns      []models.AutomationRun
+	listRunsRuns      []automationdomain.AutomationRun
 	listRunsTotal     int64
 	getTicketErr      error
 	ticket            *models.Ticket
@@ -37,39 +38,39 @@ type stubRepo struct {
 	tags         []string
 	comments     []string
 
-	timers         []models.AutomationTimer
-	dueTimers      []models.AutomationTimer
+	timers         []automationdomain.AutomationTimer
+	dueTimers      []automationdomain.AutomationTimer
 	completeOnce   bool
 	completeDenied bool
 	completedIDs   []uint
 	lastErrors     []string
 }
 
-func (s *stubRepo) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
+func (s *stubRepo) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
 	return s.triggers, nil
 }
-func (s *stubRepo) ListActiveTriggersByEvent(ctx context.Context, event string) ([]models.AutomationTrigger, error) {
+func (s *stubRepo) ListActiveTriggersByEvent(ctx context.Context, event string) ([]automationdomain.AutomationTrigger, error) {
 	s.listedEvents = append(s.listedEvents, event)
 	if s.activeTriggersErr != nil {
 		return nil, s.activeTriggersErr
 	}
 	return s.triggers, nil
 }
-func (s *stubRepo) CreateTrigger(ctx context.Context, req TriggerRequest) (*models.AutomationTrigger, error) {
+func (s *stubRepo) CreateTrigger(ctx context.Context, req TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	s.createdReq = &req
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
-	return &models.AutomationTrigger{ID: 1, Name: req.Name, Event: req.Event}, nil
+	return &automationdomain.AutomationTrigger{ID: 1, Name: req.Name, Event: req.Event}, nil
 }
 func (s *stubRepo) DeleteTrigger(ctx context.Context, id uint) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteErr
 }
-func (s *stubRepo) ListRuns(ctx context.Context, query RunListQuery) ([]models.AutomationRun, int64, error) {
+func (s *stubRepo) ListRuns(ctx context.Context, query RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	s.queries = append(s.queries, query)
 	if s.listRunsErr != nil {
 		return nil, 0, s.listRunsErr
@@ -113,12 +114,12 @@ func (s *stubRepo) CreateTicketComment(ctx context.Context, ticketID uint, conte
 	s.comments = append(s.comments, content)
 	return nil
 }
-func (s *stubRepo) CreateTimer(ctx context.Context, timer *models.AutomationTimer) error {
+func (s *stubRepo) CreateTimer(ctx context.Context, timer *automationdomain.AutomationTimer) error {
 	timer.ID = uint(len(s.timers) + 1)
 	s.timers = append(s.timers, *timer)
 	return nil
 }
-func (s *stubRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]models.AutomationTimer, error) {
+func (s *stubRepo) ClaimDueTimers(ctx context.Context, now time.Time, limit int) ([]automationdomain.AutomationTimer, error) {
 	if len(s.dueTimers) > limit {
 		return s.dueTimers[:limit], nil
 	}
@@ -141,7 +142,7 @@ func (s *stubRepo) UpdateTimerLastError(ctx context.Context, id uint, message st
 
 func TestBatchRunDryRunMatches(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:         7,
 			Name:       "raise",
 			Event:      "ticket.updated",
@@ -193,7 +194,7 @@ func TestHandleEventNoTriggers(t *testing.T) {
 
 func TestHandleEventRunsMatchingTrigger(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:         4,
 			Name:       "raise",
 			Event:      "ticket.updated",
@@ -218,7 +219,7 @@ func TestHandleEventRunsMatchingTrigger(t *testing.T) {
 func TestHandleEventContinuesAfterActionFailure(t *testing.T) {
 	repo := &stubRepo{
 		updatePriorityErr: errors.New("update failed"),
-		triggers: []models.AutomationTrigger{
+		triggers: []automationdomain.AutomationTrigger{
 			{ID: 1, Event: "ticket.updated", Actions: `[{"type":"set_priority","params":{"priority":"high"}}]`},
 			{ID: 2, Event: "ticket.updated", Actions: `[{"type":"notify_log"}]`},
 		},
@@ -232,7 +233,7 @@ func TestHandleEventContinuesAfterActionFailure(t *testing.T) {
 
 func TestHandleEventWithoutTicketID(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{ID: 1, Event: "ticket.created", Actions: `[{"type":"notify_log"}]`}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 1, Event: "ticket.created", Actions: `[{"type":"notify_log"}]`}},
 	}
 	svc := NewService(repo)
 	svc.HandleEvent(context.Background(), Event{Type: "ticket.created"})
@@ -246,7 +247,7 @@ func TestHandleEventWithoutTicketID(t *testing.T) {
 
 func TestHandleBusEventParsesAggregateID(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{ID: 1, Event: "ticket.created", Active: true}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 1, Event: "ticket.created", Active: true}},
 	}
 	svc := NewService(repo)
 	svc.HandleBusEvent(context.Background(), "ticket_created", "42", nil)
@@ -260,7 +261,7 @@ func TestHandleBusEventParsesAggregateID(t *testing.T) {
 
 func TestHandleBusEventInvalidAggregateID(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{ID: 1, Event: "ticket.updated", Active: true}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 1, Event: "ticket.updated", Active: true}},
 	}
 	svc := NewService(repo)
 	svc.HandleBusEvent(context.Background(), "ticket.updated", "not-a-number", nil)
@@ -273,7 +274,7 @@ func TestHandleBusEventInvalidAggregateID(t *testing.T) {
 }
 
 func TestListTriggersPassthrough(t *testing.T) {
-	repo := &stubRepo{triggers: []models.AutomationTrigger{{ID: 3, Name: "t"}}}
+	repo := &stubRepo{triggers: []automationdomain.AutomationTrigger{{ID: 3, Name: "t"}}}
 	svc := NewService(repo)
 	got, err := svc.ListTriggers(context.Background())
 	if err != nil {
@@ -340,7 +341,7 @@ func TestDeleteTriggerPassthrough(t *testing.T) {
 }
 
 func TestListRunsDefaultsAndClamps(t *testing.T) {
-	repo := &stubRepo{listRunsRuns: []models.AutomationRun{{ID: 1}}, listRunsTotal: 1}
+	repo := &stubRepo{listRunsRuns: []automationdomain.AutomationRun{{ID: 1}}, listRunsTotal: 1}
 	svc := NewService(repo)
 	runs, total, err := svc.ListRuns(context.Background(), RunListQuery{})
 	if err != nil {
@@ -394,7 +395,7 @@ func TestBatchRunListError(t *testing.T) {
 func TestBatchRunSkipsUnloadedTickets(t *testing.T) {
 	repo := &stubRepo{
 		getTicketErr: errors.New("ticket missing"),
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:    1,
 			Event: "ticket.created",
 		}},
@@ -411,7 +412,7 @@ func TestBatchRunSkipsUnloadedTickets(t *testing.T) {
 
 func TestBatchRunCollectsMatches(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{
+		triggers: []automationdomain.AutomationTrigger{
 			{
 				ID:         1,
 				Event:      "ticket.updated",
@@ -452,7 +453,7 @@ func TestBatchRunCollectsMatches(t *testing.T) {
 func TestBatchRunActionFailureNotMatched(t *testing.T) {
 	repo := &stubRepo{
 		updatePriorityErr: errors.New("update failed"),
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:      1,
 			Event:   "ticket.updated",
 			Actions: `[{"type":"set_priority","params":{"priority":"high"}}]`,
@@ -477,7 +478,7 @@ func TestBatchRunActionFailureNotMatched(t *testing.T) {
 func TestMatchTriggerInvalidConditionsJSON(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Conditions: "{invalid"}
+	trig := automationdomain.AutomationTrigger{ID: 1, Conditions: "{invalid"}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected no match on invalid conditions json")
 	}
@@ -489,7 +490,7 @@ func TestMatchTriggerInvalidConditionsJSON(t *testing.T) {
 func TestMatchTriggerInvalidActionsJSON(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: "{invalid"}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: "{invalid"}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected no match on invalid actions json")
 	}
@@ -501,7 +502,7 @@ func TestMatchTriggerInvalidActionsJSON(t *testing.T) {
 func TestMatchTriggerDryRunSkipsActions(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: "{invalid"}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: "{invalid"}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, true) {
 		t.Fatal("expected dry run to match without parsing actions")
 	}
@@ -513,7 +514,7 @@ func TestMatchTriggerDryRunSkipsActions(t *testing.T) {
 func TestMatchTriggerConditionOnMissingField(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Conditions: `[{"field":"ticket.status","op":"eq","value":"open"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Conditions: `[{"field":"ticket.status","op":"eq","value":"open"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected no match when ticket attributes missing")
 	}
@@ -525,7 +526,7 @@ func TestMatchTriggerConditionOnMissingField(t *testing.T) {
 func TestMatchTriggerSLAViolationPayload(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{
+	trig := automationdomain.AutomationTrigger{
 		ID:         1,
 		Conditions: `[{"field":"violation.type","op":"eq","value":"resolution"}]`,
 		Actions:    `[{"type":"notify_log"}]`,
@@ -543,7 +544,7 @@ func TestMatchTriggerSLAViolationPayload(t *testing.T) {
 
 func TestMatchTriggerNonPointerPayloadIgnored(t *testing.T) {
 	svc := NewService(&stubRepo{})
-	trig := models.AutomationTrigger{
+	trig := automationdomain.AutomationTrigger{
 		ID:         1,
 		Conditions: `[{"field":"violation.type","op":"eq","value":"resolution"}]`,
 	}
@@ -556,7 +557,7 @@ func TestMatchTriggerNonPointerPayloadIgnored(t *testing.T) {
 func TestMatchTriggerSuccessRecordsRun(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 8, Actions: `[{"type":"notify_log"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 8, Actions: `[{"type":"notify_log"}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.created", TicketID: 3}, nil, false) {
 		t.Fatal("expected match")
 	}
@@ -568,7 +569,7 @@ func TestMatchTriggerSuccessRecordsRun(t *testing.T) {
 func TestExecuteActionSetPriorityRequiresTicket(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority","params":{"priority":"high"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority","params":{"priority":"high"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected failure without ticket")
 	}
@@ -580,7 +581,7 @@ func TestExecuteActionSetPriorityRequiresTicket(t *testing.T) {
 func TestExecuteActionSetPriorityRequiresParam(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without priority param")
 	}
@@ -592,7 +593,7 @@ func TestExecuteActionSetPriorityRequiresParam(t *testing.T) {
 func TestExecuteActionSetPriorityUpdatesTicket(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority","params":{"priority":"urgent"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"set_priority","params":{"priority":"urgent"}}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 6}, &TicketView{ID: 6}, false) {
 		t.Fatal("expected success")
 	}
@@ -604,7 +605,7 @@ func TestExecuteActionSetPriorityUpdatesTicket(t *testing.T) {
 func TestExecuteActionAddTagRequiresTicket(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"vip"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"vip"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected failure without ticket")
 	}
@@ -616,7 +617,7 @@ func TestExecuteActionAddTagRequiresTicket(t *testing.T) {
 func TestExecuteActionAddTagRequiresParam(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without tag param")
 	}
@@ -641,7 +642,7 @@ func TestExecuteActionAddTagVariants(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &stubRepo{}
 			svc := NewService(repo)
-			trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"` + tc.tag + `"}}]`}
+			trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"` + tc.tag + `"}}]`}
 			if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: tc.tags}, false) {
 				t.Fatal("expected success")
 			}
@@ -655,7 +656,7 @@ func TestExecuteActionAddTagVariants(t *testing.T) {
 func TestExecuteActionAddTagSkipsDuplicateToken(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"vip"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"vip"}}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: "base,vip"}, false) {
 		t.Fatal("expected success")
 	}
@@ -680,7 +681,7 @@ func TestExecuteActionAddTagSubstringNotConfused(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &stubRepo{}
 			svc := NewService(repo)
-			trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"` + tc.tag + `"}}]`}
+			trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_tag","params":{"tag":"` + tc.tag + `"}}]`}
 			if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: tc.tags}, false) {
 				t.Fatal("expected success")
 			}
@@ -709,7 +710,7 @@ func TestExecuteActionRemoveTagVariants(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &stubRepo{}
 			svc := NewService(repo)
-			trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"` + tc.tag + `"}}]`}
+			trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"` + tc.tag + `"}}]`}
 			if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Tags: tc.tags}, false) {
 				t.Fatal("expected success")
 			}
@@ -729,11 +730,11 @@ func TestExecuteActionRemoveTagVariants(t *testing.T) {
 func TestExecuteActionRemoveTagRequiresTicketAndParam(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"vip"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag","params":{"tag":"vip"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected failure without ticket")
 	}
-	trig = models.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag"}]`}
+	trig = automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"remove_tag"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without tag param")
 	}
@@ -767,7 +768,7 @@ func TestExecuteActionEscalatePriority(t *testing.T) {
 				actions += `,"params":{"wrap":true}`
 			}
 			actions += `}]`
-			trig := models.AutomationTrigger{ID: 1, Actions: actions}
+			trig := automationdomain.AutomationTrigger{ID: 1, Actions: actions}
 			matched := svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1, Priority: tc.from}, false)
 			if matched == tc.wantErr {
 				t.Fatalf("expected matched=%v", !tc.wantErr)
@@ -788,7 +789,7 @@ func TestExecuteActionEscalatePriority(t *testing.T) {
 func TestExecuteActionEscalatePriorityRequiresTicket(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"escalate_priority"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"escalate_priority"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected failure without ticket")
 	}
@@ -800,7 +801,7 @@ func TestExecuteActionEscalatePriorityRequiresTicket(t *testing.T) {
 func TestExecuteActionAddCommentRequiresTicket(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment","params":{"content":"hi"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment","params":{"content":"hi"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected failure without ticket")
 	}
@@ -812,7 +813,7 @@ func TestExecuteActionAddCommentRequiresTicket(t *testing.T) {
 func TestExecuteActionAddCommentRequiresContent(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without content")
 	}
@@ -824,7 +825,7 @@ func TestExecuteActionAddCommentRequiresContent(t *testing.T) {
 func TestExecuteActionAddCommentCreatesComment(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment","params":{"content":"auto note"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"add_comment","params":{"content":"auto note"}}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 2}, &TicketView{ID: 2}, false) {
 		t.Fatal("expected success")
 	}
@@ -836,7 +837,7 @@ func TestExecuteActionAddCommentCreatesComment(t *testing.T) {
 func TestExecuteActionNotifyLogNoop(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"notify_log"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"notify_log"}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, nil, false) {
 		t.Fatal("expected success")
 	}
@@ -848,7 +849,7 @@ func TestExecuteActionNotifyLogNoop(t *testing.T) {
 func TestExecuteActionUnsupportedType(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"explode"}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"explode"}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure on unsupported action")
 	}
@@ -874,7 +875,7 @@ func TestExecuteActionCallWebhookDispatches(t *testing.T) {
 	repo := &stubRepo{}
 	svc := NewService(repo)
 	svc.SetWebhookDispatcher(dispatcher)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://ops.example.com/hook","secret":"s3cret"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://ops.example.com/hook","secret":"s3cret"}}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 5}, &TicketView{ID: 5, Title: "printer", Priority: "high"}, false) {
 		t.Fatal("expected success with dispatcher configured")
 	}
@@ -890,7 +891,7 @@ func TestExecuteActionCallWebhookCustomPayload(t *testing.T) {
 	dispatcher := &recordingDispatcher{}
 	svc := NewService(&stubRepo{})
 	svc.SetWebhookDispatcher(dispatcher)
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com","payload":{"text":"escalated"}}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com","payload":{"text":"escalated"}}}]`}
 	if !svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated", TicketID: 5}, &TicketView{ID: 5}, false) {
 		t.Fatal("expected success")
 	}
@@ -902,7 +903,7 @@ func TestExecuteActionCallWebhookCustomPayload(t *testing.T) {
 func TestExecuteActionCallWebhookRequiresURL(t *testing.T) {
 	svc := NewService(&stubRepo{})
 	svc.SetWebhookDispatcher(&recordingDispatcher{})
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"secret":"s"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"secret":"s"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without url param")
 	}
@@ -910,7 +911,7 @@ func TestExecuteActionCallWebhookRequiresURL(t *testing.T) {
 
 func TestExecuteActionCallWebhookRequiresDispatcher(t *testing.T) {
 	svc := NewService(&stubRepo{})
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected failure without dispatcher")
 	}
@@ -919,7 +920,7 @@ func TestExecuteActionCallWebhookRequiresDispatcher(t *testing.T) {
 func TestExecuteActionCallWebhookDispatchErrorFailsRun(t *testing.T) {
 	svc := NewService(&stubRepo{})
 	svc.SetWebhookDispatcher(&recordingDispatcher{err: errors.New("boom")})
-	trig := models.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
+	trig := automationdomain.AutomationTrigger{ID: 1, Actions: `[{"type":"call_webhook","params":{"url":"https://x.example.com"}}]`}
 	if svc.MatchTrigger(context.Background(), trig, Event{Type: "ticket.updated"}, &TicketView{ID: 1}, false) {
 		t.Fatal("expected dispatch error to fail the trigger")
 	}
@@ -1015,7 +1016,7 @@ func TestIsSupportedEvent(t *testing.T) {
 
 func delayTrigger(actions string) *stubRepo {
 	return &stubRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:      7,
 			Name:    "delayed",
 			Event:   "ticket.updated",
@@ -1132,7 +1133,7 @@ func TestCreateTriggerValidatesDelay(t *testing.T) {
 
 func TestProcessDueTimersExecutesNestedActions(t *testing.T) {
 	repo := &stubRepo{
-		dueTimers: []models.AutomationTimer{{
+		dueTimers: []automationdomain.AutomationTimer{{
 			ID:          1,
 			TriggerID:   7,
 			TicketID:    3,
@@ -1162,7 +1163,7 @@ func TestProcessDueTimersExecutesNestedActions(t *testing.T) {
 func TestProcessDueTimersRespectsClaimRace(t *testing.T) {
 	repo := &stubRepo{
 		completeOnce: true,
-		dueTimers: []models.AutomationTimer{
+		dueTimers: []automationdomain.AutomationTimer{
 			{ID: 1, TriggerID: 7, TicketID: 3, ActionsJSON: `[{"type":"notify_log"}]`},
 			{ID: 2, TriggerID: 7, TicketID: 3, ActionsJSON: `[{"type":"notify_log"}]`},
 		},
@@ -1180,7 +1181,7 @@ func TestProcessDueTimersRespectsClaimRace(t *testing.T) {
 func TestProcessDueTimersFailureRecordsLastError(t *testing.T) {
 	repo := &stubRepo{
 		updatePriorityErr: errors.New("db write failed"),
-		dueTimers: []models.AutomationTimer{{
+		dueTimers: []automationdomain.AutomationTimer{{
 			ID:          1,
 			TriggerID:   7,
 			TicketID:    3,
@@ -1203,7 +1204,7 @@ func TestProcessDueTimersFailureRecordsLastError(t *testing.T) {
 
 func TestProcessDueTimersRejectsNestedDelay(t *testing.T) {
 	repo := &stubRepo{
-		dueTimers: []models.AutomationTimer{{
+		dueTimers: []automationdomain.AutomationTimer{{
 			ID:          1,
 			TriggerID:   7,
 			TicketID:    3,
@@ -1235,7 +1236,7 @@ func TestProcessDueTimersEmptyAndError(t *testing.T) {
 
 func TestDelayTimerExecutesWebhookAction(t *testing.T) {
 	repo := &stubRepo{
-		dueTimers: []models.AutomationTimer{{
+		dueTimers: []automationdomain.AutomationTimer{{
 			ID:          1,
 			TriggerID:   7,
 			TicketID:    3,
@@ -1256,7 +1257,7 @@ func TestDelayTimerExecutesWebhookAction(t *testing.T) {
 
 func TestBatchRunByTriggerID(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:      9,
 			Name:    "manual",
 			Event:   "ticket.updated",
@@ -1286,7 +1287,7 @@ func TestBatchRunByTriggerID(t *testing.T) {
 
 func TestBatchRunByTriggerIDNotFound(t *testing.T) {
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{ID: 9, Name: "manual", Event: "ticket.updated"}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 9, Name: "manual", Event: "ticket.updated"}},
 	}
 	svc := NewService(repo)
 	_, err := svc.BatchRun(context.Background(), BatchRunRequest{TriggerID: 404, TicketIDs: []uint{1}})
@@ -1298,7 +1299,7 @@ func TestBatchRunByTriggerIDNotFound(t *testing.T) {
 func TestBatchRunByTriggerIDInactiveStillRuns(t *testing.T) {
 	// 手动运行语义：停用的触发器也可按 ID 显式执行
 	repo := &stubRepo{
-		triggers: []models.AutomationTrigger{{
+		triggers: []automationdomain.AutomationTrigger{{
 			ID:      9,
 			Name:    "paused",
 			Event:   "ticket.updated",
@@ -1317,7 +1318,7 @@ func TestBatchRunByTriggerIDInactiveStillRuns(t *testing.T) {
 }
 
 func TestBatchRunByTriggerIDRequiresTickets(t *testing.T) {
-	svc := NewService(&stubRepo{triggers: []models.AutomationTrigger{{ID: 9}}})
+	svc := NewService(&stubRepo{triggers: []automationdomain.AutomationTrigger{{ID: 9}}})
 	_, err := svc.BatchRun(context.Background(), BatchRunRequest{TriggerID: 9})
 	if err == nil || !strings.Contains(err.Error(), "ticket_ids required") {
 		t.Fatalf("expected ticket_ids required, got %v", err)
