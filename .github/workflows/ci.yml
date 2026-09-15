@@ -322,10 +322,16 @@ jobs:
           fi
           bash -n "${files[@]}"
 
+      - name: Validate text encoding
+        timeout-minutes: 2
+        run: |
+          chmod +x scripts/check-text-encoding.sh
+          ./scripts/check-text-encoding.sh
+
       - name: Verify provider acceptance scripts
         timeout-minutes: 5
         run: |
-          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|ValidateAcceptanceManifestScript|CheckAcceptanceEvidenceScript)$"
+          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
 
       - name: Validate checked-in acceptance evidence
         timeout-minutes: 2

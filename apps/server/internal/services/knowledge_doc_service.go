@@ -29,29 +29,13 @@ func NewKnowledgeDocService(db *gorm.DB) *KnowledgeDocService {
 	}
 }
 
-type KnowledgeDocCreateRequest struct {
-	Title    string   `json:"title" binding:"required"`
-	Content  string   `json:"content" binding:"required"`
-	Category string   `json:"category"`
-	Tags     []string `json:"tags"`
-	IsPublic bool     `json:"is_public"`
-}
+// KnowledgeDoc 请求契约定义已迁至 modules/knowledge/application，
+// 此处保留类型别名供 legacy 引用方使用。
+type KnowledgeDocCreateRequest = knowledgeapp.KnowledgeDocCreateRequest
 
-type KnowledgeDocUpdateRequest struct {
-	Title    *string   `json:"title"`
-	Content  *string   `json:"content"`
-	Category *string   `json:"category"`
-	Tags     *[]string `json:"tags"`
-	IsPublic *bool     `json:"is_public"`
-}
+type KnowledgeDocUpdateRequest = knowledgeapp.KnowledgeDocUpdateRequest
 
-type KnowledgeDocListRequest struct {
-	Page       int    `form:"page"`
-	PageSize   int    `form:"page_size"`
-	Category   string `form:"category"`
-	Search     string `form:"search"`
-	PublicOnly bool   `form:"public_only"`
-}
+type KnowledgeDocListRequest = knowledgeapp.KnowledgeDocListRequest
 
 func (s *KnowledgeDocService) Create(ctx context.Context, req *KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
 	if req == nil {

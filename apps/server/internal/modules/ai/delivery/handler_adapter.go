@@ -5,12 +5,11 @@ import (
 	"fmt"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
 )
 
 // RuntimeService is the AI contract used by websocket/router/runtime glue.
 type RuntimeService interface {
-	ProcessQuery(ctx context.Context, query string, sessionID string) (*services.AIResponse, error)
+	ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error)
 	ShouldTransferToHuman(query string, sessionHistory []models.Message) bool
 	GetSessionSummary(messages []models.Message) (string, error)
 	GetStatus(ctx context.Context) map[string]interface{}
@@ -18,9 +17,9 @@ type RuntimeService interface {
 
 type EnhancedRuntimeService interface {
 	RuntimeService
-	ProcessQueryEnhanced(ctx context.Context, query string, sessionID string) (*services.EnhancedAIResponse, error)
+	ProcessQueryEnhanced(ctx context.Context, query string, sessionID string) (*EnhancedAIResponse, error)
 	UploadKnowledgeDocument(ctx context.Context, title, content string, tags []string) error
-	GetMetrics() *services.AIMetrics
+	GetMetrics() *AIMetrics
 	SetKnowledgeProviderEnabled(enabled bool)
 	ResetCircuitBreaker()
 	SyncKnowledgeBase(ctx context.Context) error
@@ -30,7 +29,7 @@ type EnhancedRuntimeService interface {
 type HandlerService interface {
 	ProcessQuery(ctx context.Context, query string, sessionID string) (interface{}, error)
 	GetStatus(ctx context.Context) map[string]interface{}
-	GetMetrics() (*services.AIMetrics, bool)
+	GetMetrics() (*AIMetrics, bool)
 	UploadKnowledgeDocument(ctx context.Context, title, content string, tags []string) error
 	SyncKnowledgeBase(ctx context.Context) error
 	SetKnowledgeProviderEnabled(enabled bool) bool
@@ -63,7 +62,7 @@ func (a *HandlerServiceAdapter) GetStatus(ctx context.Context) map[string]interf
 	return a.service.GetStatus(ctx)
 }
 
-func (a *HandlerServiceAdapter) GetMetrics() (*services.AIMetrics, bool) {
+func (a *HandlerServiceAdapter) GetMetrics() (*AIMetrics, bool) {
 	if a == nil || a.service == nil {
 		return nil, false
 	}

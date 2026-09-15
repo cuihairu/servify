@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 )
 
 type AIService struct {
@@ -53,11 +54,8 @@ type OpenAIResponse struct {
 	} `json:"error"`
 }
 
-type AIResponse struct {
-	Content    string  `json:"content"`
-	Confidence float64 `json:"confidence"`
-	Source     string  `json:"source"`
-}
+// AIResponse 契约定义已迁至 modules/ai/delivery，此处保留类型别名供 legacy 引用方使用。
+type AIResponse = aidelivery.AIResponse
 
 func NewAIService(apiKey, baseURL string) *AIService {
 	return &AIService{

@@ -10,7 +10,6 @@ import (
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	mockkp "servify/apps/server/internal/platform/knowledgeprovider/mock"
-	"servify/apps/server/internal/services"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -33,7 +32,7 @@ func TestHandlerServiceAdapterCRUD(t *testing.T) {
 	adapter := NewHandlerService(db)
 	ctx := context.Background()
 
-	created, err := adapter.Create(ctx, &services.KnowledgeDocCreateRequest{
+	created, err := adapter.Create(ctx, &knowledgeapp.KnowledgeDocCreateRequest{
 		Title:    " Billing ",
 		Content:  " Billing details ",
 		Category: "faq",
@@ -56,7 +55,7 @@ func TestHandlerServiceAdapterCRUD(t *testing.T) {
 		t.Fatalf("unexpected flags: %+v", created)
 	}
 
-	docs, total, err := adapter.List(ctx, &services.KnowledgeDocListRequest{
+	docs, total, err := adapter.List(ctx, &knowledgeapp.KnowledgeDocListRequest{
 		Page:       1,
 		PageSize:   10,
 		Category:   "faq",
@@ -89,7 +88,7 @@ func TestHandlerServiceAdapterCRUD(t *testing.T) {
 	newTitle := "Billing v2"
 	newTags := []string{" faq ", "  "}
 	newPublic := false
-	updated, err := adapter.Update(ctx, created.ID, &services.KnowledgeDocUpdateRequest{
+	updated, err := adapter.Update(ctx, created.ID, &knowledgeapp.KnowledgeDocUpdateRequest{
 		Title:    &newTitle,
 		Tags:     &newTags,
 		IsPublic: &newPublic,
@@ -115,7 +114,7 @@ func TestHandlerServiceAdapterWithProvider(t *testing.T) {
 	adapter := NewHandlerServiceWithProvider(db, provider)
 	ctx := context.Background()
 
-	created, err := adapter.Create(ctx, &services.KnowledgeDocCreateRequest{
+	created, err := adapter.Create(ctx, &knowledgeapp.KnowledgeDocCreateRequest{
 		Title:   "Synced",
 		Content: "Synced content",
 	})
@@ -142,13 +141,13 @@ func TestHandlerServiceAdapterRequestErrors(t *testing.T) {
 	if _, err := adapter.Update(ctx, 1, nil); err == nil || err.Error() != "request required" {
 		t.Fatalf("expected update request error, got %v", err)
 	}
-	if _, err := adapter.Create(ctx, &services.KnowledgeDocCreateRequest{Title: "", Content: "c"}); err == nil {
+	if _, err := adapter.Create(ctx, &knowledgeapp.KnowledgeDocCreateRequest{Title: "", Content: "c"}); err == nil {
 		t.Fatal("expected create validation error")
 	}
 	if _, err := adapter.Get(ctx, 9999); err == nil {
 		t.Fatal("expected get not found error")
 	}
-	if _, err := adapter.Update(ctx, 9999, &services.KnowledgeDocUpdateRequest{}); err == nil {
+	if _, err := adapter.Update(ctx, 9999, &knowledgeapp.KnowledgeDocUpdateRequest{}); err == nil {
 		t.Fatal("expected update not found error")
 	}
 	if err := adapter.Delete(ctx, 9999); err == nil {
@@ -215,19 +214,19 @@ func TestHandlerServiceAdapterInvalidDomainIDs(t *testing.T) {
 	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil))
 	ctx := context.Background()
 
-	if _, err := adapter.Create(ctx, &services.KnowledgeDocCreateRequest{Title: "t", Content: "c"}); err == nil {
+	if _, err := adapter.Create(ctx, &knowledgeapp.KnowledgeDocCreateRequest{Title: "t", Content: "c"}); err == nil {
 		t.Fatal("expected invalid document id error on create")
 	}
 
 	repo.seed(&knowledgedomain.Document{ID: "bad", Title: "t", Content: "c", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 	repo.docs["7"] = repo.docs["bad"]
-	if _, _, err := adapter.List(ctx, &services.KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil {
+	if _, _, err := adapter.List(ctx, &knowledgeapp.KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil {
 		t.Fatal("expected invalid document id error on list")
 	}
 	if _, err := adapter.Get(ctx, 7); err == nil {
 		t.Fatal("expected invalid document id error on get")
 	}
-	if _, err := adapter.Update(ctx, 7, &services.KnowledgeDocUpdateRequest{}); err == nil {
+	if _, err := adapter.Update(ctx, 7, &knowledgeapp.KnowledgeDocUpdateRequest{}); err == nil {
 		t.Fatal("expected invalid document id error on update")
 	}
 }
@@ -258,7 +257,7 @@ func TestHandlerServiceAdapterListServiceError(t *testing.T) {
 	repo := &stubDocRepo{listErr: fmt.Errorf("list boom")}
 	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil))
 
-	if _, _, err := adapter.List(context.Background(), &services.KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil || err.Error() != "list boom" {
+	if _, _, err := adapter.List(context.Background(), &knowledgeapp.KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil || err.Error() != "list boom" {
 		t.Fatalf("expected list error, got %v", err)
 	}
 }

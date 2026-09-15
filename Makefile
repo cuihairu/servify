@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -35,6 +35,7 @@ help:
 	@echo "  sdk-sync-versions - Sync SDK package versions from sdk/package.json"
 	@echo "  sdk-check-versions - Check SDK package versions without modifying files"
 	@echo "  repo-hygiene  - Validate runtime/build artifacts are not tracked"
+	@echo "  text-encoding-check - Validate tracked text files are UTF-8 without BOM or U+FFFD"
 	@echo "  generated-assets - Regenerate and verify committed generated assets"
 	@echo "  local-check   - Run the minimal local environment verification"
 	@echo "  security-check - Validate the config security baseline in strict mode"
@@ -228,6 +229,10 @@ sdk-check-versions:
 repo-hygiene:
 	@echo "Running repository hygiene checks..."
 	bash ./scripts/check-repo-hygiene.sh
+
+text-encoding-check:
+	@echo "Running text encoding checks..."
+	bash ./scripts/check-text-encoding.sh
 
 generated-assets:
 	@echo "Regenerating committed generated assets..."

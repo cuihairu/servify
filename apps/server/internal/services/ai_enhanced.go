@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"servify/apps/server/pkg/weknora"
 )
 
@@ -30,29 +31,11 @@ type EnhancedAIService struct {
 	logger *logrus.Logger
 }
 
-// AIMetrics AI 服务指标
-type AIMetrics struct {
-	QueryCount                  int64         `json:"query_count"`
-	SuccessCount                int64         `json:"success_count"`
-	KnowledgeProviderUsageCount int64         `json:"knowledge_provider_usage_count"`
-	DifyUsageCount              int64         `json:"dify_usage_count"`
-	WeKnoraUsageCount           int64         `json:"weknora_usage_count"`
-	FallbackUsageCount          int64         `json:"fallback_usage_count"`
-	AverageLatency              time.Duration `json:"average_latency"`
-	KnowledgeProviderLatency    time.Duration `json:"knowledge_provider_latency"`
-	WeKnoraLatency              time.Duration `json:"weknora_latency"`
-	OpenAILatency               time.Duration `json:"openai_latency"`
-	ActiveKnowledgeProvider     string        `json:"active_knowledge_provider,omitempty"`
-}
+// AIMetrics / EnhancedAIResponse 契约定义已迁至 modules/ai/delivery，
+// 此处保留类型别名供 legacy 引用方使用。
+type AIMetrics = aidelivery.AIMetrics
 
-// EnhancedAIResponse 增强的 AI 响应
-type EnhancedAIResponse struct {
-	*AIResponse
-	Sources    []weknora.SearchResult `json:"sources,omitempty"`
-	Strategy   string                 `json:"strategy"` // "weknora", "fallback", "hybrid"
-	Duration   time.Duration          `json:"duration"`
-	TokensUsed int                    `json:"tokens_used,omitempty"`
-}
+type EnhancedAIResponse = aidelivery.EnhancedAIResponse
 
 // NewEnhancedAIService 创建增强的 AI 服务
 func NewEnhancedAIService(

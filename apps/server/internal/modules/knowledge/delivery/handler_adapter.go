@@ -11,7 +11,6 @@ import (
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	knowledgeinfra "servify/apps/server/internal/modules/knowledge/infra"
 	"servify/apps/server/internal/platform/knowledgeprovider"
-	"servify/apps/server/internal/services"
 
 	"gorm.io/gorm"
 )
@@ -41,7 +40,7 @@ func NewHandlerServiceAdapter(service *knowledgeapp.Service) *HandlerServiceAdap
 	return &HandlerServiceAdapter{service: service}
 }
 
-func (a *HandlerServiceAdapter) List(ctx context.Context, req *services.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
+func (a *HandlerServiceAdapter) List(ctx context.Context, req *knowledgeapp.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
 	filter := knowledgeapp.ListDocumentsFilter{}
 	if req != nil {
 		filter.Page = req.Page
@@ -73,7 +72,7 @@ func (a *HandlerServiceAdapter) Get(ctx context.Context, id uint) (*models.Knowl
 	return knowledgeDocFromDomain(doc)
 }
 
-func (a *HandlerServiceAdapter) Create(ctx context.Context, req *services.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
+func (a *HandlerServiceAdapter) Create(ctx context.Context, req *knowledgeapp.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}
@@ -90,7 +89,7 @@ func (a *HandlerServiceAdapter) Create(ctx context.Context, req *services.Knowle
 	return knowledgeDocFromDomain(doc)
 }
 
-func (a *HandlerServiceAdapter) Update(ctx context.Context, id uint, req *services.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
+func (a *HandlerServiceAdapter) Update(ctx context.Context, id uint, req *knowledgeapp.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}

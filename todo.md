@@ -278,7 +278,7 @@
 - 下一步：使用真实 WeKnora 或 Dify 服务完成 upload/sync 端到端验收，并把成功/失败证据回填到 `docs/acceptance-checklist.md`，将 `知识上传`、`知识同步`、`AI 控制面人工运行验证第二轮/第三轮` 从 `部分通过` 推进到 `通过`
 - 阻塞项：真实 WeKnora / Dify 服务环境与凭证；当前 Windows 本机无法用 `go test ./scripts` 直接模拟 bash 脚本对 `httptest` 端口的访问，需要在 Linux/CI 或真实环境执行脚本留档
 
-### [!] P1-2 Auth 自助 session 链路补齐真实验收
+### [x] P1-2 Auth 自助 session 链路补齐真实验收
 
 - 范围：
   - `login`
@@ -553,10 +553,10 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`
-- 原因：本轮整体审核确认 P0 项均已收口，核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。下一阶段仍应优先把 AI / Knowledge 主链路从“部分通过”推进到可交付的真实验收闭环
+- 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`（剩余部分等外部 Dify/WeKnora 环境；等待期间按顺序推进 `P1-7 Modules 与 legacy services/models 的边界收口`，先输出依赖地图）
+- 原因：本轮整体审核确认 P0 项均已收口（含 2026-09-15 标题标记对齐），核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。P1-3/P1-4/P1-5/P1-8 已闭环，P1-1 的 fallback 三类证据已本地真实留证，仅剩真实 provider 双路径运行证据待外部环境
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
-- 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）
+- 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）
 - 如果本轮无法推进实现，至少先补：
   - 真实边界文档
   - 默认 prod 策略
@@ -577,7 +577,7 @@
 
 本节补充的是“全仓级”问题，不只覆盖 server，也覆盖 SDK、demo-sdk、管理端文本质量、启动脚本和架构收口情况。
 
-### [!] P0-6 SDK 与后端协议漂移收口
+### [x] P0-6 SDK 与后端协议漂移收口
 
 - 现状：
   - `sdk/packages/core/src/api.ts` 仍在调用旧接口：`/api/sessions`、`/api/messages`、`/api/ai/ask`、`/api/ai/status`、`/api/upload`、`/api/webrtc/call/*`、`/api/satisfaction`、`/api/queue/*`、`/api/customers/:id/tickets`
@@ -620,7 +620,7 @@
   - 验证命令：`npm -C sdk run test:core`
   - 验证命令：`npm -C sdk run test:examples`
 
-### [!] P0-7 SDK 工程门禁失效修复
+### [x] P0-7 SDK 工程门禁失效修复
 
 - 现状：
   - `sdk/package.json` 聚合了多个 workspace 的 `typecheck`
@@ -657,7 +657,7 @@
   - `sdk/packages/transport-websocket/package.json`
   - 测试命令：`npm -C sdk run typecheck`
 
-### [!] P0-8 网站与部署脚本路径失配
+### [x] P0-8 网站与部署脚本路径失配
 
 - 现状：
   - `Makefile` 的 `website-dev`、`website-deploy` 仍指向 `apps/website-worker`
@@ -713,7 +713,7 @@
 - 下一步：继续减少 legacy/compat 入口对具体 `internal/services` 的直连，优先处理 `P1-7 Modules 与 legacy services/models 的边界收口`
 - 阻塞项：暂无
 
-### [ ] P1-7 Modules 与 legacy services/models 的边界收口
+### [-] P1-7 Modules 与 legacy services/models 的边界收口
 
 - 现状：
   - 多个 `internal/modules/*` 仍直接依赖 `internal/models`
@@ -736,12 +736,12 @@
   - modules 对 `internal/services` 的直接依赖显著收缩
   - 共享模型、持久化模型、对外 DTO 三者边界清晰
   - 新增模块不再默认引用 legacy services/models
-- 状态：`[ ]`
-- 最近进展：已确认 `internal/modules` 下存在大量直连 `internal/models`，且部分 delivery 仍直连 `internal/services`
-- 下一步：先输出依赖地图，找出最值得先切的模块边界
-- 阻塞项：共享领域模型与持久化模型的拆分策略尚未定稿
+- 状态：`[-]`
+- 最近进展：**2026-09-15** 完成两件事：1) 依赖地图已输出到 [docs/modules-dependency-map.md](docs/modules-dependency-map.md)——modules→services 直连 5 文件（ai/customer/knowledge 的 delivery 层）、modules→models 直连 15 模块约 60 文件，类型按"共享领域核心 / 模块自有"分类并给出迁移顺序，**拆分策略已定稿**（共享核心保留 shared kernel、模块自有类型按引用面从小到大迁入模块、别名过渡、禁止新增），解除本条阻塞项；2) 第一刀已落地——modules 对 `internal/services` 的直连清零：契约类型下沉（`modules/ai/delivery/contract_types.go`、`modules/customer/application/contract_types.go`、`modules/knowledge/application/contract_types.go`），legacy `internal/services` 改为类型别名反向引用（`ai.go`/`ai_enhanced.go`/`customer_service.go`/`knowledge_doc_service.go`），两侧是同一 Go 类型，wire contract 与既有测试零漂移；新增 parser 级边界门禁 `TestModulesDoNotImportLegacyServices` 并纳入 CI；顺带修复 CI script-checks 的 `-run` 白名单历史缺口（security/runtime-baseline/ai-fallback/auth-session/workspace/ticket 的 mock 回归与 9 个 Validate/Check 变体此前从未在 CI 执行，现已全部命中，22/22）
+- 下一步：按依赖地图第 3 节顺序推进模块自有 models 类型迁移（voice → gamification → suggestion → webhook → automation → quality → assist）
+- 阻塞项：暂无（拆分策略已定稿）
 
-### [ ] P1-8 文本编码、对外文案与仓库可读性修复
+### [x] P1-8 文本编码、对外文案与仓库可读性修复
 
 - 现状：
   - 仓库存在多处乱码或编码异常，包括 `todo.md`、`README.md`、`apps/admin/config/routes.ts`、`apps/admin/src/pages/Login/index.tsx`、`apps/admin/src/app.tsx`
@@ -764,10 +764,15 @@
   - 高可见文档和管理端核心页面不再出现乱码
   - 新提交文本文件编码策略明确且可检查
   - 评审、编辑、补丁工具可稳定处理这些文件
-- 状态：`[ ]`
-- 最近进展：已确认管理端类型检查可过，但多个高可见文件存在文本质量问题
-- 下一步：先按“README -> todo.md -> admin 核心页面”顺序处理编码与文案
-- 阻塞项：需确认历史文件是编码损坏还是终端显示问题
+- 状态：`[x]`
+- 完成证据：
+  - 代码文件：`scripts/check-text-encoding.sh`（新增 `make text-encoding-check`，并已挂入 CI `script-checks` 的 `Validate text encoding` 步骤）
+  - 复核结论：历史记录中所列乱码文件（`todo.md` / `README.md` / admin `routes.ts` / Login 页 / `app.tsx`）在后续迭代中已被清理，2026-09-15 全仓库复扫 1464 个 tracked 文本文件：0 个非 UTF-8、0 个 UTF-8 BOM、0 个 U+FFFD；并已用 U+FFFD 负例验证门禁能真实拦截（拦截后清理恢复通过）
+  - 检查命令：`make text-encoding-check`（本地与 CI 同口径）
+  - 文档回填位置：`todo.md` 本条目
+- 最近进展：**2026-09-15** 乱码存量已在历史迭代中清零，本轮补上“编码策略明确且可检查”的缺口——新增仓库级文本编码门禁（tracked 文本文件必须 UTF-8、无 BOM、无 U+FFFD），纳入本地 Makefile 与 CI script-checks，防止评审/交接/补丁流程再次引入编码异常
+- 下一步：无
+- 阻塞项：暂无
 
 ### [ ] P1-9 demo-sdk 生成链路与源码一致性回归
 

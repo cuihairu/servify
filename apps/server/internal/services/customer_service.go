@@ -32,46 +32,15 @@ func NewCustomerService(db *gorm.DB, logger *logrus.Logger) *CustomerService {
 	}
 }
 
-// CustomerCreateRequest 创建客户请求。
-type CustomerCreateRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	Company  string `json:"company"`
-	Industry string `json:"industry"`
-	Source   string `json:"source"`
-	Tags     string `json:"tags"`
-	Notes    string `json:"notes"`
-	Priority string `json:"priority"`
-}
+// CustomerCreateRequest 创建客户请求。契约定义已迁至 modules/customer/application，
+// 此处保留类型别名供 legacy 引用方使用。
+type CustomerCreateRequest = customerapp.CustomerCreateRequest
 
 // CustomerUpdateRequest 更新客户请求。
-type CustomerUpdateRequest struct {
-	Name     *string `json:"name"`
-	Phone    *string `json:"phone"`
-	Company  *string `json:"company"`
-	Industry *string `json:"industry"`
-	Source   *string `json:"source"`
-	Tags     *string `json:"tags"`
-	Notes    *string `json:"notes"`
-	Priority *string `json:"priority"`
-	Status   *string `json:"status"`
-}
+type CustomerUpdateRequest = customerapp.CustomerUpdateRequest
 
 // CustomerListRequest 客户列表请求。
-type CustomerListRequest struct {
-	Page      int      `form:"page,default=1"`
-	PageSize  int      `form:"page_size,default=20"`
-	Search    string   `form:"search"`
-	Industry  []string `form:"industry"`
-	Source    []string `form:"source"`
-	Priority  []string `form:"priority"`
-	Status    []string `form:"status"`
-	Tags      string   `form:"tags"`
-	SortBy    string   `form:"sort_by,default=created_at"`
-	SortOrder string   `form:"sort_order,default=desc"`
-}
+type CustomerListRequest = customerapp.CustomerListRequest
 
 func (s *CustomerService) CreateCustomer(ctx context.Context, req *CustomerCreateRequest) (*models.User, error) {
 	return s.module.CreateCustomer(ctx, customerapp.CreateCustomerCommand{
@@ -167,48 +136,19 @@ func (s *CustomerService) RevokeCustomerTokens(ctx context.Context, customerID u
 }
 
 // CustomerInfo 客户信息（用于列表显示）。
-type CustomerInfo struct {
-	models.User
-	Company  string `json:"company"`
-	Industry string `json:"industry"`
-	Source   string `json:"source"`
-	Tags     string `json:"tags"`
-	Notes    string `json:"notes"`
-	Priority string `json:"priority"`
-}
+type CustomerInfo = customerapp.CustomerInfo
 
 // CustomerActivity 客户活动记录。
-type CustomerActivity struct {
-	CustomerID     uint             `json:"customer_id"`
-	RecentSessions []models.Session `json:"recent_sessions"`
-	RecentTickets  []models.Ticket  `json:"recent_tickets"`
-	RecentMessages []models.Message `json:"recent_messages"`
-}
+type CustomerActivity = customerapp.CustomerActivity
 
 // CustomerStats 客户统计信息。
-type CustomerStats struct {
-	Total       int64                   `json:"total"`
-	Active      int64                   `json:"active"`
-	NewThisWeek int64                   `json:"new_this_week"`
-	BySource    []CustomerSourceCount   `json:"by_source"`
-	ByIndustry  []CustomerIndustryCount `json:"by_industry"`
-	ByPriority  []CustomerPriorityCount `json:"by_priority"`
-}
+type CustomerStats = customerapp.CustomerStats
 
-type CustomerSourceCount struct {
-	Source string `json:"source"`
-	Count  int64  `json:"count"`
-}
+type CustomerSourceCount = customerapp.CustomerSourceCount
 
-type CustomerIndustryCount struct {
-	Industry string `json:"industry"`
-	Count    int64  `json:"count"`
-}
+type CustomerIndustryCount = customerapp.CustomerIndustryCount
 
-type CustomerPriorityCount struct {
-	Priority string `json:"priority"`
-	Count    int64  `json:"count"`
-}
+type CustomerPriorityCount = customerapp.CustomerPriorityCount
 
 func customerInfoFromDTO(dto customerapp.CustomerInfoDTO) CustomerInfo {
 	return CustomerInfo{
