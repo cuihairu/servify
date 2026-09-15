@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"github.com/glebarez/sqlite"
@@ -17,7 +16,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.VoiceCall{}, &models.VoiceRecording{}, &models.VoiceTranscript{}); err != nil {
+	if err := db.AutoMigrate(&VoiceCall{}, &VoiceRecording{}, &VoiceTranscript{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db

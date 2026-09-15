@@ -34,7 +34,7 @@
 | `AutomationTrigger` / `AutomationTimer` | 31~87 | 模块自有（automation） |
 | `QualityReview` | 62 | 模块自有（quality） |
 | `RemoteAssistSession` / `RemoteAssistAnnotation` | 33~46 | 模块自有（assist） |
-| `VoiceCall` | 25 | 模块自有（voice） |
+| `VoiceCall` | 25 | 模块自有（voice，**已迁入** `modules/voice/infra/models.go`，legacy 侧 `models.VoiceCall` 为别名） |
 | `KnowledgeDoc` | 32 | 模块自有（knowledge，已有 domain.Document 过渡层） |
 | `DailyStats` | 21 | 统计聚合（analytics 读写、其他模块只读） |
 
@@ -59,6 +59,7 @@
 
 1. **共享领域核心保留为 shared kernel**：`User` / `Ticket` / `Session` / `Agent` / `Message` / `Customer` 等跨模块高频类型不拆散到单一模块，维持在共享模型层（当前 `internal/models`），但对 modules 的引用收口为"只读领域形状"，持久化细节（GORM scope、hook）由各模块 infra 层负责。
 2. **模块自有类型逐步迁入所属模块**：webhook / automation / quality / assist / voice / knowledge 的自有模型，按"先 delivery/application 引用改为模块内类型 + legacy 别名过渡"的同一套切法迁移，优先级按"引用面小、无跨模块消费"排序：voice → gamification → suggestion → webhook → automation → quality → assist。
+   - **迁移日志**：①2026-09-15 voice 完成——`VoiceCall` / `VoiceRecording` / `VoiceTranscript` 三个 GORM 模型迁入 `modules/voice/infra/models.go`（infra 是 voice 模块内唯一消费方，直接定义在 infra 消掉映射层），`internal/models` 保留类型别名，`bootstrap/migrate.go` 的 AutoMigrate 注册与 webhook 的快照只读经别名零改动；voice/infra 六个文件（含测试）全部去掉 `internal/models` import。
 3. **契约类型已完成的迁移不再回退**：第 1 节的别名是过渡态，最终态是 legacy `internal/services` 里对应兼容层删除时别名一并删除（跟随 P3-2 services/modules 最终边界收口）。
 4. **禁止新增**：modules 新代码不得 import `internal/services`（CI 门禁强制）；新增模块默认不引用 `internal/models` 中"模块自有"分类的类型。
 

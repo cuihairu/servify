@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"github.com/glebarez/sqlite"
@@ -23,7 +22,7 @@ func setupSingleConnectionDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&models.VoiceCall{}, &models.VoiceRecording{}, &models.VoiceTranscript{}))
+	require.NoError(t, db.AutoMigrate(&VoiceCall{}, &VoiceRecording{}, &VoiceTranscript{}))
 	return db
 }
 
@@ -179,7 +178,7 @@ func TestGormTranscriptRepositoryListAll(t *testing.T) {
 
 func TestGormTranscriptRepositoryListAllCountError(t *testing.T) {
 	db := setupSingleConnectionDB(t)
-	require.NoError(t, db.Migrator().DropTable(&models.VoiceTranscript{}))
+	require.NoError(t, db.Migrator().DropTable(&VoiceTranscript{}))
 	repo := NewGormTranscriptRepository(db)
 
 	_, _, err := repo.ListAll(t.Context(), 1, 10)
@@ -191,7 +190,7 @@ func TestGormTranscriptRepositoryListAllQueryError(t *testing.T) {
 	db := setupSingleConnectionDB(t)
 	// The table still exists so Count succeeds, but ordering on the dropped
 	// column makes the paged query fail.
-	require.NoError(t, db.Migrator().DropColumn(&models.VoiceTranscript{}, "created_at"))
+	require.NoError(t, db.Migrator().DropColumn(&VoiceTranscript{}, "created_at"))
 	repo := NewGormTranscriptRepository(db)
 
 	_, _, err := repo.ListAll(t.Context(), 1, 10)
@@ -201,7 +200,7 @@ func TestGormTranscriptRepositoryListAllQueryError(t *testing.T) {
 
 func TestGormTranscriptRepositoryListByCallIDQueryError(t *testing.T) {
 	db := setupSingleConnectionDB(t)
-	require.NoError(t, db.Migrator().DropTable(&models.VoiceTranscript{}))
+	require.NoError(t, db.Migrator().DropTable(&VoiceTranscript{}))
 	repo := NewGormTranscriptRepository(db)
 
 	_, err := repo.ListByCallID(t.Context(), "c1")

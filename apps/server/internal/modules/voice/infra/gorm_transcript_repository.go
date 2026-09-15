@@ -3,7 +3,6 @@ package infra
 import (
 	"context"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"gorm.io/gorm"
@@ -21,7 +20,7 @@ func NewGormTranscriptRepository(db *gorm.DB) *GormTranscriptRepository {
 }
 
 func (r *GormTranscriptRepository) Append(ctx context.Context, transcript voiceapp.TranscriptDTO) error {
-	m := models.VoiceTranscript{
+	m := VoiceTranscript{
 		CallID:    transcript.CallID,
 		Content:   transcript.Content,
 		Language:  transcript.Language,
@@ -34,7 +33,7 @@ func (r *GormTranscriptRepository) Append(ctx context.Context, transcript voicea
 }
 
 func (r *GormTranscriptRepository) ListByCallID(ctx context.Context, callID string) ([]voiceapp.TranscriptDTO, error) {
-	var records []models.VoiceTranscript
+	var records []VoiceTranscript
 	if err := r.db.WithContext(ctx).
 		Where("call_id = ?", callID).
 		Order("created_at ASC").
@@ -55,10 +54,10 @@ func (r *GormTranscriptRepository) ListByCallID(ctx context.Context, callID stri
 }
 
 func (r *GormTranscriptRepository) ListAll(ctx context.Context, page, pageSize int) ([]voiceapp.TranscriptDTO, int64, error) {
-	var records []models.VoiceTranscript
+	var records []VoiceTranscript
 	var total int64
 
-	if err := r.db.WithContext(ctx).Model(&models.VoiceTranscript{}).Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&VoiceTranscript{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 

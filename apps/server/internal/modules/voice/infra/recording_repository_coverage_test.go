@@ -3,7 +3,6 @@ package infra
 import (
 	"testing"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"github.com/stretchr/testify/require"
@@ -44,7 +43,7 @@ func TestGormRecordingRepositoryUpsertCompleted(t *testing.T) {
 // TestGormRecordingRepositoryUpsertCompletedFindError 用删表触发查找错误分支。
 func TestGormRecordingRepositoryUpsertCompletedFindError(t *testing.T) {
 	db := setupTestDB(t)
-	require.NoError(t, db.Migrator().DropTable(&models.VoiceRecording{}))
+	require.NoError(t, db.Migrator().DropTable(&VoiceRecording{}))
 	err := NewGormRecordingRepository(db).UpsertCompleted(t.Context(), voiceapp.RecordingDTO{ID: "rec-1"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "find recording")

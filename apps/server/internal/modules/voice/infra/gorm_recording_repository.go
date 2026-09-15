@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"gorm.io/gorm"
@@ -23,7 +22,7 @@ func NewGormRecordingRepository(db *gorm.DB) *GormRecordingRepository {
 }
 
 func (r *GormRecordingRepository) Save(ctx context.Context, recording voiceapp.RecordingDTO) error {
-	m := models.VoiceRecording{
+	m := VoiceRecording{
 		ID:         recording.ID,
 		CallID:     recording.CallID,
 		Provider:   recording.Provider,
@@ -39,7 +38,7 @@ func (r *GormRecordingRepository) Save(ctx context.Context, recording voiceapp.R
 
 func (r *GormRecordingRepository) MarkStopped(ctx context.Context, recordingID string) error {
 	result := r.db.WithContext(ctx).
-		Model(&models.VoiceRecording{}).
+		Model(&VoiceRecording{}).
 		Where("id = ?", recordingID).
 		Update("status", "stopped")
 	if result.Error != nil {
@@ -52,7 +51,7 @@ func (r *GormRecordingRepository) MarkStopped(ctx context.Context, recordingID s
 }
 
 func (r *GormRecordingRepository) FindByID(ctx context.Context, recordingID string) (*voiceapp.RecordingDTO, error) {
-	var m models.VoiceRecording
+	var m VoiceRecording
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", recordingID).Error; err != nil {
 		return nil, fmt.Errorf("recording not found: %w", err)
 	}
@@ -70,10 +69,10 @@ func (r *GormRecordingRepository) FindByID(ctx context.Context, recordingID stri
 // UpsertCompleted 按录音 ID 落终态:存在则补 status/storage_uri(保留原
 // started_at),不存在则直接建完成态记录。同 ID 重复回调天然幂等。
 func (r *GormRecordingRepository) UpsertCompleted(ctx context.Context, recording voiceapp.RecordingDTO) error {
-	var m models.VoiceRecording
+	var m VoiceRecording
 	err := r.db.WithContext(ctx).First(&m, "id = ?", recording.ID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		m = models.VoiceRecording{
+		m = VoiceRecording{
 			ID:         recording.ID,
 			CallID:     recording.CallID,
 			Provider:   recording.Provider,

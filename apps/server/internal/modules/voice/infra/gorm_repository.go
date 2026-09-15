@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"servify/apps/server/internal/models"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 
 	"gorm.io/gorm"
@@ -28,7 +27,7 @@ func (r *GormRepository) StartCall(ctx context.Context, cmd voiceapp.StartCallCo
 		callID = cmd.ConnectionID
 	}
 	now := time.Now()
-	m := models.VoiceCall{
+	m := VoiceCall{
 		ID:        callID,
 		SessionID: cmd.SessionID,
 		Status:    "started",
@@ -41,7 +40,7 @@ func (r *GormRepository) StartCall(ctx context.Context, cmd voiceapp.StartCallCo
 }
 
 func (r *GormRepository) AnswerCall(ctx context.Context, cmd voiceapp.AnswerCallCommand) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", cmd.CallID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
@@ -55,7 +54,7 @@ func (r *GormRepository) AnswerCall(ctx context.Context, cmd voiceapp.AnswerCall
 }
 
 func (r *GormRepository) HoldCall(ctx context.Context, cmd voiceapp.HoldCallCommand) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", cmd.CallID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
@@ -69,7 +68,7 @@ func (r *GormRepository) HoldCall(ctx context.Context, cmd voiceapp.HoldCallComm
 }
 
 func (r *GormRepository) ResumeCall(ctx context.Context, cmd voiceapp.ResumeCallCommand) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", cmd.CallID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
@@ -83,7 +82,7 @@ func (r *GormRepository) ResumeCall(ctx context.Context, cmd voiceapp.ResumeCall
 }
 
 func (r *GormRepository) EndCall(ctx context.Context, cmd voiceapp.EndCallCommand) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", cmd.CallID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
@@ -97,7 +96,7 @@ func (r *GormRepository) EndCall(ctx context.Context, cmd voiceapp.EndCallComman
 }
 
 func (r *GormRepository) TransferCall(ctx context.Context, cmd voiceapp.TransferCallCommand) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", cmd.CallID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
@@ -110,14 +109,14 @@ func (r *GormRepository) TransferCall(ctx context.Context, cmd voiceapp.Transfer
 }
 
 func (r *GormRepository) GetCall(callID string) (*voiceapp.CallDTO, bool) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.First(&m, "id = ?", callID).Error; err != nil {
 		return nil, false
 	}
 	return callModelToDTO(&m), true
 }
 
-func callModelToDTO(m *models.VoiceCall) *voiceapp.CallDTO {
+func callModelToDTO(m *VoiceCall) *voiceapp.CallDTO {
 	return &voiceapp.CallDTO{
 		ID:              m.ID,
 		SessionID:       m.SessionID,
@@ -133,7 +132,7 @@ func callModelToDTO(m *models.VoiceCall) *voiceapp.CallDTO {
 
 // FindByID 供协调层状态守卫查询;未找到返回错误(与状态变更方法同风格)。
 func (r *GormRepository) FindByID(ctx context.Context, callID string) (*voiceapp.CallDTO, error) {
-	var m models.VoiceCall
+	var m VoiceCall
 	if err := r.db.WithContext(ctx).First(&m, "id = ?", callID).Error; err != nil {
 		return nil, fmt.Errorf("call not found: %w", err)
 	}
