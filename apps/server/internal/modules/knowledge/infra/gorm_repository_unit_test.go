@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	"servify/apps/server/internal/modules/knowledge/domain"
 	platformauth "servify/apps/server/internal/platform/auth"
@@ -22,7 +21,7 @@ func newKnowledgeUnitTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}, &models.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeDoc{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db
@@ -49,7 +48,7 @@ func TestGormDocumentRepositoryCRUDUnit(t *testing.T) {
 	if created.ID == "" {
 		t.Fatal("expected generated document id")
 	}
-	var stored models.KnowledgeDoc
+	var stored domain.KnowledgeDoc
 	if err := db.First(&stored, "id = ?", created.ID).Error; err != nil {
 		t.Fatalf("load stored doc: %v", err)
 	}
@@ -230,7 +229,7 @@ func TestGormDocumentRepositoryQueryErrors(t *testing.T) {
 		t.Fatalf("seed doc: %v", err)
 	}
 
-	if err := db.Migrator().DropTable(&models.KnowledgeDoc{}); err != nil {
+	if err := db.Migrator().DropTable(&domain.KnowledgeDoc{}); err != nil {
 		t.Fatalf("drop table: %v", err)
 	}
 
@@ -328,7 +327,7 @@ func TestGormIndexJobRepositoryUnit(t *testing.T) {
 		t.Fatalf("expected get not found, got %v", err)
 	}
 
-	if err := db.Migrator().DropTable(&models.KnowledgeIndexJob{}); err != nil {
+	if err := db.Migrator().DropTable(&domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("drop job table: %v", err)
 	}
 	if err := jobRepo.Create(ctx, &domain.IndexJob{ID: "x", DocumentID: doc.ID}); err == nil {

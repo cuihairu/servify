@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	"servify/apps/server/internal/modules/knowledge/domain"
 
@@ -22,7 +21,7 @@ func newKnowledgeInfraTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}, &models.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeDoc{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

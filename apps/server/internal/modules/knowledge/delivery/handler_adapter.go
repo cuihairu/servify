@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"servify/apps/server/internal/models"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	knowledgeinfra "servify/apps/server/internal/modules/knowledge/infra"
@@ -40,7 +39,7 @@ func NewHandlerServiceAdapter(service *knowledgeapp.Service) *HandlerServiceAdap
 	return &HandlerServiceAdapter{service: service}
 }
 
-func (a *HandlerServiceAdapter) List(ctx context.Context, req *knowledgeapp.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
+func (a *HandlerServiceAdapter) List(ctx context.Context, req *knowledgeapp.KnowledgeDocListRequest) ([]knowledgedomain.KnowledgeDoc, int64, error) {
 	filter := knowledgeapp.ListDocumentsFilter{}
 	if req != nil {
 		filter.Page = req.Page
@@ -53,7 +52,7 @@ func (a *HandlerServiceAdapter) List(ctx context.Context, req *knowledgeapp.Know
 	if err != nil {
 		return nil, 0, err
 	}
-	out := make([]models.KnowledgeDoc, 0, len(docs))
+	out := make([]knowledgedomain.KnowledgeDoc, 0, len(docs))
 	for _, doc := range docs {
 		model, err := knowledgeDocFromDomain(&doc)
 		if err != nil {
@@ -64,7 +63,7 @@ func (a *HandlerServiceAdapter) List(ctx context.Context, req *knowledgeapp.Know
 	return out, total, nil
 }
 
-func (a *HandlerServiceAdapter) Get(ctx context.Context, id uint) (*models.KnowledgeDoc, error) {
+func (a *HandlerServiceAdapter) Get(ctx context.Context, id uint) (*knowledgedomain.KnowledgeDoc, error) {
 	doc, err := a.service.GetDocument(ctx, strconv.FormatUint(uint64(id), 10))
 	if err != nil {
 		return nil, err
@@ -72,7 +71,7 @@ func (a *HandlerServiceAdapter) Get(ctx context.Context, id uint) (*models.Knowl
 	return knowledgeDocFromDomain(doc)
 }
 
-func (a *HandlerServiceAdapter) Create(ctx context.Context, req *knowledgeapp.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
+func (a *HandlerServiceAdapter) Create(ctx context.Context, req *knowledgeapp.KnowledgeDocCreateRequest) (*knowledgedomain.KnowledgeDoc, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}
@@ -89,7 +88,7 @@ func (a *HandlerServiceAdapter) Create(ctx context.Context, req *knowledgeapp.Kn
 	return knowledgeDocFromDomain(doc)
 }
 
-func (a *HandlerServiceAdapter) Update(ctx context.Context, id uint, req *knowledgeapp.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
+func (a *HandlerServiceAdapter) Update(ctx context.Context, id uint, req *knowledgeapp.KnowledgeDocUpdateRequest) (*knowledgedomain.KnowledgeDoc, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}
@@ -110,7 +109,7 @@ func (a *HandlerServiceAdapter) Delete(ctx context.Context, id uint) error {
 	return a.service.DeleteDocument(ctx, strconv.FormatUint(uint64(id), 10))
 }
 
-func knowledgeDocFromDomain(doc *knowledgedomain.Document) (*models.KnowledgeDoc, error) {
+func knowledgeDocFromDomain(doc *knowledgedomain.Document) (*knowledgedomain.KnowledgeDoc, error) {
 	if doc == nil {
 		return nil, nil
 	}
@@ -118,7 +117,7 @@ func knowledgeDocFromDomain(doc *knowledgedomain.Document) (*models.KnowledgeDoc
 	if err != nil {
 		return nil, fmt.Errorf("invalid document id: %w", err)
 	}
-	return &models.KnowledgeDoc{
+	return &knowledgedomain.KnowledgeDoc{
 		ID:        uint(id),
 		Title:     doc.Title,
 		Content:   doc.Content,

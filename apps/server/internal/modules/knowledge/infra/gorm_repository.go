@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"servify/apps/server/internal/models"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	"servify/apps/server/internal/modules/knowledge/domain"
 	platformauth "servify/apps/server/internal/platform/auth"
@@ -25,7 +24,7 @@ func NewGormDocumentRepository(db *gorm.DB) *GormDocumentRepository {
 func (r *GormDocumentRepository) Create(ctx context.Context, doc *domain.Document) error {
 	tenantID := platformauth.TenantIDFromContext(ctx)
 	workspaceID := platformauth.WorkspaceIDFromContext(ctx)
-	model := &models.KnowledgeDoc{
+	model := &domain.KnowledgeDoc{
 		TenantID:    tenantID,
 		WorkspaceID: workspaceID,
 		ProviderID:  doc.ProviderID,
@@ -50,7 +49,7 @@ func (r *GormDocumentRepository) Update(ctx context.Context, doc *domain.Documen
 	if err != nil {
 		return err
 	}
-	result := applyKnowledgeScope(r.db.WithContext(ctx).Model(&models.KnowledgeDoc{}), ctx).Where("id = ?", id).Updates(map[string]interface{}{
+	result := applyKnowledgeScope(r.db.WithContext(ctx).Model(&domain.KnowledgeDoc{}), ctx).Where("id = ?", id).Updates(map[string]interface{}{
 		"provider_id": doc.ProviderID,
 		"external_id": doc.ExternalID,
 		"title":       doc.Title,
@@ -74,7 +73,7 @@ func (r *GormDocumentRepository) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	result := applyKnowledgeScope(r.db.WithContext(ctx), ctx).Delete(&models.KnowledgeDoc{}, docID)
+	result := applyKnowledgeScope(r.db.WithContext(ctx), ctx).Delete(&domain.KnowledgeDoc{}, docID)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -89,7 +88,7 @@ func (r *GormDocumentRepository) Get(ctx context.Context, id string) (*domain.Do
 	if err != nil {
 		return nil, err
 	}
-	var model models.KnowledgeDoc
+	var model domain.KnowledgeDoc
 	if err := applyKnowledgeScope(r.db.WithContext(ctx), ctx).First(&model, docID).Error; err != nil {
 		return nil, err
 	}
@@ -97,7 +96,7 @@ func (r *GormDocumentRepository) Get(ctx context.Context, id string) (*domain.Do
 }
 
 func (r *GormDocumentRepository) List(ctx context.Context, filter knowledgeapp.ListDocumentsFilter) ([]domain.Document, int64, error) {
-	q := applyKnowledgeScope(r.db.WithContext(ctx).Model(&models.KnowledgeDoc{}), ctx)
+	q := applyKnowledgeScope(r.db.WithContext(ctx).Model(&domain.KnowledgeDoc{}), ctx)
 	if filter.PublicOnly {
 		q = q.Where("is_public = ?", true)
 	}
@@ -115,7 +114,7 @@ func (r *GormDocumentRepository) List(ctx context.Context, filter knowledgeapp.L
 	}
 
 	offset := (filter.Page - 1) * filter.PageSize
-	var rows []models.KnowledgeDoc
+	var rows []domain.KnowledgeDoc
 	if err := q.Order("created_at DESC").Limit(filter.PageSize).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
@@ -158,7 +157,7 @@ func (r *GormIndexJobRepository) Update(ctx context.Context, job *domain.IndexJo
 	if err != nil {
 		return err
 	}
-	result := r.db.WithContext(ctx).Model(&models.KnowledgeIndexJob{}).Where("id = ?", model.ID).Updates(map[string]interface{}{
+	result := r.db.WithContext(ctx).Model(&domain.KnowledgeIndexJob{}).Where("id = ?", model.ID).Updates(map[string]interface{}{
 		"document_id":  model.DocumentID,
 		"status":       model.Status,
 		"error":        model.Error,
@@ -175,7 +174,7 @@ func (r *GormIndexJobRepository) Update(ctx context.Context, job *domain.IndexJo
 }
 
 func (r *GormIndexJobRepository) Get(ctx context.Context, id string) (*domain.IndexJob, error) {
-	var model models.KnowledgeIndexJob
+	var model domain.KnowledgeIndexJob
 	if err := r.db.WithContext(ctx).First(&model, "id = ?", strings.TrimSpace(id)).Error; err != nil {
 		return nil, err
 	}
@@ -206,7 +205,7 @@ func (r *NoopIndexJobRepository) Get(ctx context.Context, id string) (*domain.In
 	return nil, fmt.Errorf("knowledge index jobs not configured")
 }
 
-func documentFromModel(model models.KnowledgeDoc) *domain.Document {
+func documentFromModel(model domain.KnowledgeDoc) *domain.Document {
 	return &domain.Document{
 		ID:         strconv.FormatUint(uint64(model.ID), 10),
 		ProviderID: model.ProviderID,
@@ -221,7 +220,7 @@ func documentFromModel(model models.KnowledgeDoc) *domain.Document {
 	}
 }
 
-func indexJobModelFromDomain(job *domain.IndexJob) (*models.KnowledgeIndexJob, error) {
+func indexJobModelFromDomain(job *domain.IndexJob) (*domain.KnowledgeIndexJob, error) {
 	if job == nil {
 		return nil, fmt.Errorf("index job required")
 	}
@@ -229,7 +228,7 @@ func indexJobModelFromDomain(job *domain.IndexJob) (*models.KnowledgeIndexJob, e
 	if err != nil {
 		return nil, err
 	}
-	return &models.KnowledgeIndexJob{
+	return &domain.KnowledgeIndexJob{
 		ID:          strings.TrimSpace(job.ID),
 		DocumentID:  documentID,
 		Status:      string(job.Status),
@@ -240,7 +239,7 @@ func indexJobModelFromDomain(job *domain.IndexJob) (*models.KnowledgeIndexJob, e
 	}, nil
 }
 
-func indexJobFromModel(model models.KnowledgeIndexJob) *domain.IndexJob {
+func indexJobFromModel(model domain.KnowledgeIndexJob) *domain.IndexJob {
 	return &domain.IndexJob{
 		ID:          model.ID,
 		DocumentID:  strconv.FormatUint(uint64(model.DocumentID), 10),

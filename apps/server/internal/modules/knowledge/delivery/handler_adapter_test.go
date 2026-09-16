@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	mockkp "servify/apps/server/internal/platform/knowledgeprovider/mock"
@@ -21,7 +20,7 @@ func newDeliveryTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}, &models.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

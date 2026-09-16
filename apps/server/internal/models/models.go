@@ -3,6 +3,7 @@ package models
 import (
 	"gorm.io/gorm"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"time"
@@ -299,37 +300,6 @@ type WaitingRecord struct {
 	CreatedAt     time.Time  `json:"created_at"`
 }
 
-// 知识库文档
-type KnowledgeDoc struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	TenantID    string `gorm:"index" json:"tenant_id"`
-	WorkspaceID string `gorm:"index" json:"workspace_id"`
-	ProviderID  string `gorm:"index" json:"provider_id"`
-	ExternalID  string `gorm:"index" json:"external_id"`
-	Title       string `json:"title"`
-	Content     string `gorm:"type:text" json:"content"`
-	Category    string `json:"category"`
-	Tags        string `json:"tags"`
-	IsPublic    bool   `gorm:"default:false;index" json:"is_public"`
-	// 新增字段 - pgvector 支持
-	Embedding  Embedding `gorm:"type:vector(1536)" json:"embedding,omitempty"`
-	ChunkIndex int       `gorm:"default:0" json:"chunk_index,omitempty"`
-	DocChunkID string    `gorm:"index" json:"doc_chunk_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
-}
-
-// 知识库索引任务
-type KnowledgeIndexJob struct {
-	ID          string     `gorm:"primaryKey" json:"id"`
-	DocumentID  uint       `gorm:"index;not null" json:"document_id"`
-	Status      string     `gorm:"index;not null" json:"status"`
-	Error       string     `gorm:"type:text" json:"error"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-}
-
 // WebRTC 连接信息
 type WebRTCConnection struct {
 	ID             string    `gorm:"primaryKey" json:"id"`
@@ -487,6 +457,15 @@ type RemoteAssistSession = assistdomain.RemoteAssistSession
 // RemoteAssistAnnotation 远程协助标注。定义已迁至 modules/assist/domain，
 // 此处保留类型别名供 legacy 引用方使用（assist_handler.go 的 swag 注解亦经此别名解析）。
 type RemoteAssistAnnotation = assistdomain.RemoteAssistAnnotation
+
+// KnowledgeDoc 知识库文档。定义已迁至 modules/knowledge/domain（向量列
+// 值对象 Embedding 一并随迁，见 embedding.go），此处保留类型别名供 legacy
+// 引用方（pgvector provider / services / migrate 注册）过渡使用。
+type KnowledgeDoc = knowledgedomain.KnowledgeDoc
+
+// KnowledgeIndexJob 知识库索引任务。定义已迁至 modules/knowledge/domain，
+// 此处保留类型别名供 legacy 引用方过渡使用。
+type KnowledgeIndexJob = knowledgedomain.KnowledgeIndexJob
 
 // TenantConfig stores tenant-scoped configuration overrides.
 type TenantConfig struct {
