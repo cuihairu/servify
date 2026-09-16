@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"sort"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 type fakeRepo struct {
 	sessions []models.Session
 	messages map[string][]models.Message
-	reviews  map[string]*models.QualityReview
+	reviews  map[string]*qualitydomain.QualityReview
 
 	scoredCalls  int
 	failedCalls  int
@@ -22,7 +23,7 @@ type fakeRepo struct {
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{messages: map[string][]models.Message{}, reviews: map[string]*models.QualityReview{}}
+	return &fakeRepo{messages: map[string][]models.Message{}, reviews: map[string]*qualitydomain.QualityReview{}}
 }
 
 func (f *fakeRepo) seedSession(id, status string, endedAt time.Time, msgs ...models.Message) {
@@ -54,8 +55,8 @@ func (f *fakeRepo) ListReviewCandidates(_ context.Context, lookback time.Time, l
 	return out, nil
 }
 
-func (f *fakeRepo) ListReviewsForRetry(_ context.Context, maxAttempts int, now time.Time, limit int) ([]models.QualityReview, error) {
-	var out []models.QualityReview
+func (f *fakeRepo) ListReviewsForRetry(_ context.Context, maxAttempts int, now time.Time, limit int) ([]qualitydomain.QualityReview, error) {
+	var out []qualitydomain.QualityReview
 	for _, r := range f.reviews {
 		if (r.Status == StatusPending || r.Status == StatusFailed) && r.AttemptCount < maxAttempts &&
 			(r.NextRetryAt == nil || !r.NextRetryAt.After(now)) {
@@ -71,7 +72,7 @@ func (f *fakeRepo) ListReviewsForRetry(_ context.Context, maxAttempts int, now t
 	return out, nil
 }
 
-func (f *fakeRepo) GetReviewBySession(_ context.Context, sessionID string) (*models.QualityReview, error) {
+func (f *fakeRepo) GetReviewBySession(_ context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	if r, ok := f.reviews[sessionID]; ok {
 		cp := *r
 		return &cp, nil
@@ -83,7 +84,7 @@ func (f *fakeRepo) ListMessages(_ context.Context, sessionID string) ([]models.M
 	return f.messages[sessionID], nil
 }
 
-func (f *fakeRepo) InsertReviewIfAbsent(_ context.Context, review *models.QualityReview) (bool, error) {
+func (f *fakeRepo) InsertReviewIfAbsent(_ context.Context, review *qualitydomain.QualityReview) (bool, error) {
 	if _, ok := f.reviews[review.SessionID]; ok {
 		return false, nil
 	}
@@ -136,8 +137,8 @@ func (f *fakeRepo) MarkReviewFailed(_ context.Context, sessionID string, allowed
 	return false, nil
 }
 
-func (f *fakeRepo) ListReviews(_ context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
-	var out []models.QualityReview
+func (f *fakeRepo) ListReviews(_ context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
+	var out []qualitydomain.QualityReview
 	for _, r := range f.reviews {
 		if query.Status == "" || r.Status == query.Status {
 			out = append(out, *r)

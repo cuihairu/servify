@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"hash/fnv"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func (s *scriptedQualityRepo) ListReviewCandidates(ctx context.Context, lookback
 	return s.fakeRepo.ListReviewCandidates(ctx, lookback, limit)
 }
 
-func (s *scriptedQualityRepo) ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]models.QualityReview, error) {
+func (s *scriptedQualityRepo) ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]qualitydomain.QualityReview, error) {
 	if s.retryErr != nil {
 		return nil, s.retryErr
 	}
@@ -49,7 +50,7 @@ func (s *scriptedQualityRepo) ListMessages(ctx context.Context, sessionID string
 	return s.fakeRepo.ListMessages(ctx, sessionID)
 }
 
-func (s *scriptedQualityRepo) InsertReviewIfAbsent(ctx context.Context, review *models.QualityReview) (bool, error) {
+func (s *scriptedQualityRepo) InsertReviewIfAbsent(ctx context.Context, review *qualitydomain.QualityReview) (bool, error) {
 	if s.insertErr != nil {
 		return false, s.insertErr
 	}
@@ -67,7 +68,7 @@ func (s *scriptedQualityRepo) MarkReviewFailed(ctx context.Context, sessionID st
 	return s.fakeRepo.MarkReviewFailed(ctx, sessionID, allowedFrom, attempts, nextRetry, lastErr)
 }
 
-func (s *scriptedQualityRepo) GetReviewBySession(ctx context.Context, sessionID string) (*models.QualityReview, error) {
+func (s *scriptedQualityRepo) GetReviewBySession(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
 	}
@@ -91,7 +92,7 @@ func (s *scriptedQualityRepo) RescheduleReview(ctx context.Context, sessionID st
 	return s.fakeRepo.RescheduleReview(ctx, sessionID, force)
 }
 
-func (s *scriptedQualityRepo) ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
+func (s *scriptedQualityRepo) ListReviews(ctx context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
@@ -237,7 +238,7 @@ func TestProcessCandidateRaceLost(t *testing.T) {
 func TestRescoreMessageListingError(t *testing.T) {
 	f := &scriptedQualityRepo{fakeRepo: newFakeRepo(), messagesErr: errors.New("messages boom")}
 	now := time.Now()
-	f.fakeRepo.reviews["s-retry-err"] = &models.QualityReview{
+	f.fakeRepo.reviews["s-retry-err"] = &qualitydomain.QualityReview{
 		SessionID: "s-retry-err", Status: StatusFailed, AttemptCount: 1, NextRetryAt: &now,
 	}
 	svc := NewQualityService(f, goodScorer(), testConfig(), nil)

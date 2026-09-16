@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -12,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// 质检记录状态（models.QualityReview.Status 的取值域）。
+// 质检记录状态（qualitydomain.QualityReview.Status 的取值域）。
 const (
 	StatusPending   = "pending"
 	StatusSkipped   = "skipped"
@@ -108,12 +109,12 @@ func (s *QualityService) RunScan(ctx context.Context) (int, error) {
 }
 
 // ListReviews 管理面分页查询质检记录。
-func (s *QualityService) ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
+func (s *QualityService) ListReviews(ctx context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
 	return s.repo.ListReviews(ctx, query)
 }
 
 // GetReviewBySession 按会话取单条质检记录。
-func (s *QualityService) GetReviewBySession(ctx context.Context, sessionID string) (*models.QualityReview, error) {
+func (s *QualityService) GetReviewBySession(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	return s.repo.GetReviewBySession(ctx, sessionID)
 }
 
@@ -186,7 +187,7 @@ func (s *QualityService) processCandidate(ctx context.Context, session *models.S
 }
 
 // rescore 复活一条 failed 记录：重读消息重新打分（规则违规沿用已落库值）。
-func (s *QualityService) rescore(ctx context.Context, review *models.QualityReview) error {
+func (s *QualityService) rescore(ctx context.Context, review *qualitydomain.QualityReview) error {
 	now := s.nowFn()
 	messages, err := s.repo.ListMessages(ctx, review.SessionID)
 	if err != nil {
@@ -232,7 +233,7 @@ func (s *QualityService) scoreAndPersist(ctx context.Context, sessionID string, 
 
 func (s *QualityService) insertSkipped(ctx context.Context, session *models.Session, now time.Time) error {
 	customerID := session.UserID
-	review := &models.QualityReview{
+	review := &qualitydomain.QualityReview{
 		TenantID:        session.TenantID,
 		WorkspaceID:     session.WorkspaceID,
 		SessionID:       session.ID,
@@ -248,10 +249,10 @@ func (s *QualityService) insertSkipped(ctx context.Context, session *models.Sess
 }
 
 // newReviewRow 组装 pending 记录（违规 JSON 化）。
-func newReviewRow(session *models.Session, messages []models.Message, violations []Violation, now time.Time) *models.QualityReview {
+func newReviewRow(session *models.Session, messages []models.Message, violations []Violation, now time.Time) *qualitydomain.QualityReview {
 	violationsJSON, _ := json.Marshal(violations) // []Violation 无不可序列化字段
 	customerID := session.UserID
-	return &models.QualityReview{
+	return &qualitydomain.QualityReview{
 		TenantID:        session.TenantID,
 		WorkspaceID:     session.WorkspaceID,
 		SessionID:       session.ID,

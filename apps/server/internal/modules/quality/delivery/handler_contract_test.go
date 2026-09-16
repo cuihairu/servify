@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 // contractRepo 内联仓储桩：内存实现 application.Repository，验证适配器透传。
 type contractRepo struct {
-	reviews map[string]*models.QualityReview
+	reviews map[string]*qualitydomain.QualityReview
 
 	getErr        error
 	confirmErr    error
@@ -22,18 +23,18 @@ type contractRepo struct {
 }
 
 func newContractRepo() *contractRepo {
-	return &contractRepo{reviews: map[string]*models.QualityReview{}}
+	return &contractRepo{reviews: map[string]*qualitydomain.QualityReview{}}
 }
 
 func (m *contractRepo) ListReviewCandidates(_ context.Context, _ time.Time, _ int) ([]models.Session, error) {
 	return nil, nil
 }
 
-func (m *contractRepo) ListReviewsForRetry(_ context.Context, _ int, _ time.Time, _ int) ([]models.QualityReview, error) {
+func (m *contractRepo) ListReviewsForRetry(_ context.Context, _ int, _ time.Time, _ int) ([]qualitydomain.QualityReview, error) {
 	return nil, nil
 }
 
-func (m *contractRepo) GetReviewBySession(_ context.Context, sessionID string) (*models.QualityReview, error) {
+func (m *contractRepo) GetReviewBySession(_ context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -49,7 +50,7 @@ func (m *contractRepo) ListMessages(_ context.Context, _ string) ([]models.Messa
 	return nil, nil
 }
 
-func (m *contractRepo) InsertReviewIfAbsent(_ context.Context, review *models.QualityReview) (bool, error) {
+func (m *contractRepo) InsertReviewIfAbsent(_ context.Context, review *qualitydomain.QualityReview) (bool, error) {
 	if _, ok := m.reviews[review.SessionID]; ok {
 		return false, nil
 	}
@@ -70,8 +71,8 @@ func (m *contractRepo) MarkReviewFailed(_ context.Context, _ string, _ []string,
 	return true, nil
 }
 
-func (m *contractRepo) ListReviews(_ context.Context, _ application.ReviewListQuery) ([]models.QualityReview, int64, error) {
-	out := make([]models.QualityReview, 0, len(m.reviews))
+func (m *contractRepo) ListReviews(_ context.Context, _ application.ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
+	out := make([]qualitydomain.QualityReview, 0, len(m.reviews))
 	for _, r := range m.reviews {
 		out = append(out, *r)
 	}
@@ -109,7 +110,7 @@ func newContractService(repo *contractRepo) *HandlerServiceAdapter {
 func TestHandlerServiceAdapterDelegates(t *testing.T) {
 	ctx := context.Background()
 	repo := newContractRepo()
-	repo.reviews["sess-1"] = &models.QualityReview{SessionID: "sess-1", Status: application.StatusScored}
+	repo.reviews["sess-1"] = &qualitydomain.QualityReview{SessionID: "sess-1", Status: application.StatusScored}
 	adapter := newContractService(repo)
 
 	// ListReviews

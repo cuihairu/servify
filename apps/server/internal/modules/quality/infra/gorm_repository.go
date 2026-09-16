@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -33,8 +34,8 @@ func (r *GormRepository) ListReviewCandidates(ctx context.Context, lookback time
 }
 
 // ListReviewsForRetry 扫 pending（含 rescore 重置与 worker 中断滞留）与 failed（退避到期）。
-func (r *GormRepository) ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]models.QualityReview, error) {
-	var out []models.QualityReview
+func (r *GormRepository) ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]qualitydomain.QualityReview, error) {
+	var out []qualitydomain.QualityReview
 	err := r.db.WithContext(ctx).
 		Where("status IN ? AND attempt_count < ? AND (next_retry_at IS NULL OR next_retry_at <= ?)",
 			[]string{application.StatusPending, application.StatusFailed}, maxAttempts, now).
@@ -44,8 +45,8 @@ func (r *GormRepository) ListReviewsForRetry(ctx context.Context, maxAttempts in
 	return out, err
 }
 
-func (r *GormRepository) GetReviewBySession(ctx context.Context, sessionID string) (*models.QualityReview, error) {
-	var review models.QualityReview
+func (r *GormRepository) GetReviewBySession(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
+	var review qualitydomain.QualityReview
 	if err := r.db.WithContext(ctx).Where("session_id = ?", sessionID).First(&review).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, application.ErrNotFound
@@ -64,7 +65,7 @@ func (r *GormRepository) ListMessages(ctx context.Context, sessionID string) ([]
 	return out, err
 }
 
-func (r *GormRepository) InsertReviewIfAbsent(ctx context.Context, review *models.QualityReview) (bool, error) {
+func (r *GormRepository) InsertReviewIfAbsent(ctx context.Context, review *qualitydomain.QualityReview) (bool, error) {
 	res := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "session_id"}}, DoNothing: true}).
 		Create(review)
@@ -75,7 +76,7 @@ func (r *GormRepository) InsertReviewIfAbsent(ctx context.Context, review *model
 }
 
 func (r *GormRepository) MarkReviewScored(ctx context.Context, sessionID string, allowedFrom []string, fields application.ScoredFields) (bool, error) {
-	res := r.db.WithContext(ctx).Model(&models.QualityReview{}).
+	res := r.db.WithContext(ctx).Model(&qualitydomain.QualityReview{}).
 		Where("session_id = ? AND status IN ?", sessionID, allowedFrom).
 		Updates(map[string]any{
 			"status":          "scored",
@@ -92,7 +93,7 @@ func (r *GormRepository) MarkReviewScored(ctx context.Context, sessionID string,
 }
 
 func (r *GormRepository) MarkReviewFailed(ctx context.Context, sessionID string, allowedFrom []string, attempts int, nextRetry time.Time, lastErr string) (bool, error) {
-	res := r.db.WithContext(ctx).Model(&models.QualityReview{}).
+	res := r.db.WithContext(ctx).Model(&qualitydomain.QualityReview{}).
 		Where("session_id = ? AND status IN ?", sessionID, allowedFrom).
 		Updates(map[string]any{
 			"status":        "failed",
@@ -103,8 +104,8 @@ func (r *GormRepository) MarkReviewFailed(ctx context.Context, sessionID string,
 	return res.RowsAffected > 0, res.Error
 }
 
-func (r *GormRepository) ListReviews(ctx context.Context, query application.ReviewListQuery) ([]models.QualityReview, int64, error) {
-	tx := r.db.WithContext(ctx).Model(&models.QualityReview{})
+func (r *GormRepository) ListReviews(ctx context.Context, query application.ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
+	tx := r.db.WithContext(ctx).Model(&qualitydomain.QualityReview{})
 	if query.Status != "" {
 		tx = tx.Where("status = ?", query.Status)
 	}
@@ -149,7 +150,7 @@ func (r *GormRepository) ListReviews(ctx context.Context, query application.Revi
 	if pageSize <= 0 || pageSize > 200 {
 		pageSize = 20
 	}
-	var out []models.QualityReview
+	var out []qualitydomain.QualityReview
 	err := tx.
 		Order("created_at DESC").
 		Offset((page - 1) * pageSize).
@@ -171,14 +172,14 @@ func (r *GormRepository) ConfirmReview(ctx context.Context, sessionID string, cm
 	if cmd.ManualScore != nil {
 		updates["manual_score"] = *cmd.ManualScore
 	}
-	res := r.db.WithContext(ctx).Model(&models.QualityReview{}).
+	res := r.db.WithContext(ctx).Model(&qualitydomain.QualityReview{}).
 		Where("session_id = ? AND status = ?", sessionID, application.StatusScored).
 		Updates(updates)
 	return res.RowsAffected > 0, res.Error
 }
 
 func (r *GormRepository) RescheduleReview(ctx context.Context, sessionID string, force bool) (bool, error) {
-	tx := r.db.WithContext(ctx).Model(&models.QualityReview{}).
+	tx := r.db.WithContext(ctx).Model(&qualitydomain.QualityReview{}).
 		Where("session_id = ?", sessionID)
 	if !force {
 		tx = tx.Where("status <> ?", application.StatusConfirmed)

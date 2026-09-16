@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -33,11 +34,11 @@ func newQualityUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.QualityReview{}, &models.Session{}, &models.Message{}); err != nil {
+	if err := db.AutoMigrate(&qualitydomain.QualityReview{}, &models.Session{}, &models.Message{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.QualityReview{}, &models.Session{}, &models.Message{})
+		_ = db.Migrator().DropTable(&qualitydomain.QualityReview{}, &models.Session{}, &models.Message{})
 	})
 	return db
 }
@@ -84,7 +85,7 @@ func TestRepositoryCandidateAndCASLifecycle(t *testing.T) {
 	}
 
 	// 插入 pending；重复插入被唯一键挡下
-	review := &models.QualityReview{SessionID: "sess-a", Status: "pending", Trigger: "worker"}
+	review := &qualitydomain.QualityReview{SessionID: "sess-a", Status: "pending", Trigger: "worker"}
 	if inserted, err := repo.InsertReviewIfAbsent(ctx, review); err != nil || !inserted {
 		t.Fatalf("first insert: inserted=%v err=%v", inserted, err)
 	}

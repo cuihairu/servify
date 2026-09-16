@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/quality/application"
 )
 
@@ -20,12 +20,12 @@ var (
 )
 
 // ReviewReviewResult rescore 触发后的当前记录。
-type ReviewReviewResult = models.QualityReview
+type ReviewReviewResult = qualitydomain.QualityReview
 
 // HandlerService 面向 HTTP handlers 的质检管理能力。
 type HandlerService interface {
-	ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error)
-	GetReview(ctx context.Context, sessionID string) (*models.QualityReview, error)
+	ListReviews(ctx context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error)
+	GetReview(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error)
 	ConfirmReview(ctx context.Context, sessionID string, cmd ConfirmCommand) error
 	RescoreReview(ctx context.Context, sessionID string, force bool) error
 	ScorerEnabled() bool
@@ -42,11 +42,11 @@ func NewHandlerServiceAdapter(svc *application.QualityService) *HandlerServiceAd
 	return &HandlerServiceAdapter{svc: svc}
 }
 
-func (a *HandlerServiceAdapter) ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error) {
+func (a *HandlerServiceAdapter) ListReviews(ctx context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
 	return a.svc.ListReviews(ctx, query)
 }
 
-func (a *HandlerServiceAdapter) GetReview(ctx context.Context, sessionID string) (*models.QualityReview, error) {
+func (a *HandlerServiceAdapter) GetReview(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	return a.svc.GetReviewBySession(ctx, sessionID)
 }
 

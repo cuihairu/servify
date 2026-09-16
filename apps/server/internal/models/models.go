@@ -2,6 +2,7 @@ package models
 
 import (
 	"gorm.io/gorm"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"time"
 )
@@ -527,39 +528,9 @@ type AuditLog struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// QualityReview 是单个已结束会话的质检记录：规则违规 + LLM 打分 + 人工复核。
-// session_id 唯一是 worker 幂等闩；JSON 列一律 type:text（sqlite/pg 双轨方言安全）。
-type QualityReview struct {
-	ID              uint       `gorm:"primaryKey" json:"id"`
-	TenantID        string     `gorm:"index:idx_quality_reviews_scope" json:"tenant_id"`
-	WorkspaceID     string     `gorm:"index:idx_quality_reviews_scope" json:"workspace_id"`
-	SessionID       string     `gorm:"uniqueIndex:uniq_quality_reviews_session;not null" json:"session_id"`
-	CustomerID      *uint      `gorm:"index" json:"customer_id"`
-	AgentID         *uint      `gorm:"index" json:"agent_id"`                                            // users.id，与 Session.AgentID 同语义
-	Status          string     `gorm:"index:idx_quality_reviews_status;default:'pending'" json:"status"` // pending|skipped|scored|failed|confirmed
-	Trigger         string     `gorm:"default:'worker'" json:"trigger"`                                  // worker|manual|rescore
-	MessageCount    int        `json:"message_count"`
-	DurationSeconds int        `json:"duration_seconds"`
-	ViolationsJSON  string     `gorm:"type:text" json:"violations_json"`
-	ViolationCount  int        `json:"violation_count"`
-	MaxSeverity     string     `gorm:"index" json:"max_severity"` // ''|low|medium|high
-	DimensionsJSON  string     `gorm:"type:text" json:"dimensions_json"`
-	LLMTotalScore   *float64   `json:"llm_total_score"`
-	LLMSummary      string     `gorm:"type:text" json:"llm_summary"`
-	LLMProvider     string     `json:"llm_provider"`
-	LLMModel        string     `json:"llm_model"`
-	AttemptCount    int        `json:"attempt_count"`
-	NextRetryAt     *time.Time `gorm:"index:idx_quality_reviews_retry" json:"next_retry_at"`
-	LastError       string     `gorm:"type:text" json:"last_error"`
-	ManualScore     *float64   `json:"manual_score"`
-	ManualResult    string     `json:"manual_result"` // ''|pass|violation
-	ReviewNote      string     `gorm:"type:text" json:"review_note"`
-	ReviewedBy      *uint      `json:"reviewed_by"`
-	ReviewedAt      *time.Time `json:"reviewed_at"`
-	ScoredAt        *time.Time `json:"scored_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-}
+// QualityReview 是单个已结束会话的质检记录。定义已迁至 modules/quality/domain，
+// 此处保留类型别名供 legacy 引用方使用（quality_handler.go 的 swag 注解亦经此别名解析）。
+type QualityReview = qualitydomain.QualityReview
 
 // AgentGroup 坐席组：组内分配 + 溢出策略（global 落全局池 / none 直接失败）。
 // agent_id 语义全链路统一 users.id；parent_id 预留列，本期不实现树语义。

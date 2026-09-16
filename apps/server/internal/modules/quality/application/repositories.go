@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -23,13 +24,13 @@ type Repository interface {
 	// ListReviewCandidates 返回 lookback 之后结束、且尚无质检记录的会话（按结束时间升序）。
 	ListReviewCandidates(ctx context.Context, lookback time.Time, limit int) ([]models.Session, error)
 	// ListReviewsForRetry 返回可重试的 pending/failed 记录（attempt<max 且退避到期）。
-	ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]models.QualityReview, error)
+	ListReviewsForRetry(ctx context.Context, maxAttempts int, now time.Time, limit int) ([]qualitydomain.QualityReview, error)
 	// GetReviewBySession 按会话取质检记录；不存在返回 ErrNotFound。
-	GetReviewBySession(ctx context.Context, sessionID string) (*models.QualityReview, error)
+	GetReviewBySession(ctx context.Context, sessionID string) (*qualitydomain.QualityReview, error)
 	// ListMessages 按时间升序返回会话全部消息。
 	ListMessages(ctx context.Context, sessionID string) ([]models.Message, error)
 	// InsertReviewIfAbsent 插入质检记录（session_id 冲突时跳过），返回是否实际插入。
-	InsertReviewIfAbsent(ctx context.Context, review *models.QualityReview) (bool, error)
+	InsertReviewIfAbsent(ctx context.Context, review *qualitydomain.QualityReview) (bool, error)
 	// MarkReviewScored CAS 更新为 scored：仅当当前 status 在 allowedFrom 内才写，
 	// 返回是否命中（绝不覆盖 confirmed 与人工字段）。
 	MarkReviewScored(ctx context.Context, sessionID string, allowedFrom []string, fields ScoredFields) (bool, error)
@@ -37,7 +38,7 @@ type Repository interface {
 	// 仅当当前 status 在 allowedFrom 内才写。
 	MarkReviewFailed(ctx context.Context, sessionID string, allowedFrom []string, attempts int, nextRetry time.Time, lastErr string) (bool, error)
 	// ListReviews 按筛选条件分页返回质检记录（管理面查询）。
-	ListReviews(ctx context.Context, query ReviewListQuery) ([]models.QualityReview, int64, error)
+	ListReviews(ctx context.Context, query ReviewListQuery) ([]qualitydomain.QualityReview, int64, error)
 	// ConfirmReview CAS 将 scored 记录置为 confirmed 并写入人工字段；未命中返回 false。
 	ConfirmReview(ctx context.Context, sessionID string, cmd ConfirmCommand) (bool, error)
 	// RescheduleReview 将记录重置为 pending 并清零 attempt（rescore），trigger 改为 rescore。

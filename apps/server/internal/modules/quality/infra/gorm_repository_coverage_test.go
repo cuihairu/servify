@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +14,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func seedScoredReview(t *testing.T, db *gorm.DB, sessionID string) *models.QualityReview {
+func seedScoredReview(t *testing.T, db *gorm.DB, sessionID string) *qualitydomain.QualityReview {
 	t.Helper()
-	review := &models.QualityReview{SessionID: sessionID, Status: application.StatusScored, Trigger: "worker"}
+	review := &qualitydomain.QualityReview{SessionID: sessionID, Status: application.StatusScored, Trigger: "worker"}
 	require.NoError(t, db.Create(review).Error)
 	return review
 }
@@ -54,7 +55,7 @@ func TestRepositoryListReviewsFiltersAndPaging(t *testing.T) {
 	noViolations := false
 	from := time.Now().Add(-24 * time.Hour)
 
-	rows := []*models.QualityReview{
+	rows := []*qualitydomain.QualityReview{
 		{SessionID: "r-1", Status: application.StatusScored, AgentID: &agentID, CustomerID: &customerID,
 			ViolationCount: 2, MaxSeverity: application.SeverityHigh, LLMTotalScore: &score, Trigger: "worker"},
 		{SessionID: "r-2", Status: application.StatusSkipped, Trigger: "worker"},
@@ -107,7 +108,7 @@ func TestRepositoryListReviewsFiltersAndPaging(t *testing.T) {
 // TestRepositoryListReviewsCountError 用删表触发 Count 错误分支。
 func TestRepositoryListReviewsCountError(t *testing.T) {
 	db := newQualityUnitTestDB(t)
-	require.NoError(t, db.Migrator().DropTable(&models.QualityReview{}))
+	require.NoError(t, db.Migrator().DropTable(&qualitydomain.QualityReview{}))
 	_, _, err := NewGormRepository(db).ListReviews(context.Background(), application.ReviewListQuery{})
 	require.Error(t, err)
 }
@@ -115,7 +116,7 @@ func TestRepositoryListReviewsCountError(t *testing.T) {
 // TestRepositoryErrorBranches 覆盖 GetReviewBySession / InsertReviewIfAbsent 的非 NotFound 错误分支。
 func TestRepositoryErrorBranches(t *testing.T) {
 	db := newQualityUnitTestDB(t)
-	require.NoError(t, db.Migrator().DropTable(&models.QualityReview{}))
+	require.NoError(t, db.Migrator().DropTable(&qualitydomain.QualityReview{}))
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
@@ -123,7 +124,7 @@ func TestRepositoryErrorBranches(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, strings.Contains(err.Error(), "no rows"), "dropped table must surface a real error, not NotFound")
 
-	_, err = repo.InsertReviewIfAbsent(ctx, &models.QualityReview{SessionID: "sess-a"})
+	_, err = repo.InsertReviewIfAbsent(ctx, &qualitydomain.QualityReview{SessionID: "sess-a"})
 	require.Error(t, err)
 }
 
@@ -134,7 +135,7 @@ func TestRepositoryConfirmReview(t *testing.T) {
 	ctx := context.Background()
 
 	seedScoredReview(t, db, "sess-confirm")
-	require.NoError(t, db.Create(&models.QualityReview{SessionID: "sess-pending", Status: application.StatusPending, Trigger: "worker"}).Error)
+	require.NoError(t, db.Create(&qualitydomain.QualityReview{SessionID: "sess-pending", Status: application.StatusPending, Trigger: "worker"}).Error)
 
 	// 未命中：pending 不可确认
 	manual := 7.5
@@ -168,7 +169,7 @@ func TestRepositoryConfirmReview(t *testing.T) {
 	require.True(t, ok)
 
 	// 错误分支：删表
-	require.NoError(t, db.Migrator().DropTable(&models.QualityReview{}))
+	require.NoError(t, db.Migrator().DropTable(&qualitydomain.QualityReview{}))
 	_, err = repo.ConfirmReview(ctx, "sess-confirm", application.ConfirmCommand{})
 	require.Error(t, err)
 }
@@ -180,7 +181,7 @@ func TestRepositoryRescheduleReview(t *testing.T) {
 	ctx := context.Background()
 
 	seedScoredReview(t, db, "sess-reschedule")
-	require.NoError(t, db.Create(&models.QualityReview{SessionID: "sess-confirmed", Status: application.StatusConfirmed, Trigger: "worker"}).Error)
+	require.NoError(t, db.Create(&qualitydomain.QualityReview{SessionID: "sess-confirmed", Status: application.StatusConfirmed, Trigger: "worker"}).Error)
 
 	// 非 force 不触碰 confirmed
 	ok, err := repo.RescheduleReview(ctx, "sess-confirmed", false)
@@ -209,7 +210,7 @@ func TestRepositoryRescheduleReview(t *testing.T) {
 	require.False(t, ok)
 
 	// 错误分支：删表
-	require.NoError(t, db.Migrator().DropTable(&models.QualityReview{}))
+	require.NoError(t, db.Migrator().DropTable(&qualitydomain.QualityReview{}))
 	_, err = repo.RescheduleReview(ctx, "sess-reschedule", true)
 	require.Error(t, err)
 }
