@@ -2,6 +2,7 @@ package models
 
 import (
 	"gorm.io/gorm"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"time"
@@ -478,6 +479,15 @@ type VoiceRecording = voiceinfra.VoiceRecording
 // VoiceTranscript 语音转写记录。定义已迁至 modules/voice/infra，此处保留类型别名供 legacy 引用方使用。
 type VoiceTranscript = voiceinfra.VoiceTranscript
 
+// RemoteAssistSession 远程协助会话。定义已迁至 modules/assist/domain，
+// 此处保留类型别名供 legacy 引用方使用（assist_handler.go /
+// assist_recording_handler.go 的 swag 注解亦经此别名解析）。
+type RemoteAssistSession = assistdomain.RemoteAssistSession
+
+// RemoteAssistAnnotation 远程协助标注。定义已迁至 modules/assist/domain，
+// 此处保留类型别名供 legacy 引用方使用（assist_handler.go 的 swag 注解亦经此别名解析）。
+type RemoteAssistAnnotation = assistdomain.RemoteAssistAnnotation
+
 // TenantConfig stores tenant-scoped configuration overrides.
 type TenantConfig struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
@@ -557,34 +567,4 @@ type AgentGroupMember struct {
 	GroupID     uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:1;index" json:"group_id"`
 	AgentUserID uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:2" json:"agent_user_id"`
 	CreatedAt   time.Time `json:"created_at"`
-}
-
-// RemoteAssistSession 远程协助会话（信令走 WS/RTC，本表承载审计、录制元数据与标注锚点）。
-type RemoteAssistSession struct {
-	ID                    uint       `gorm:"primaryKey" json:"id"`
-	TenantID              string     `json:"tenant_id"`
-	WorkspaceID           string     `json:"workspace_id"`
-	ConversationSessionID string     `gorm:"index" json:"conversation_session_id"`
-	AgentUserID           uint       `json:"agent_user_id"`
-	Status                string     `json:"status"` // active|ended|failed
-	StartedAt             time.Time  `json:"started_at"`
-	EndedAt               *time.Time `json:"ended_at,omitempty"`
-	// 录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息
-	RecordingKey        string    `json:"recording_key,omitempty"`
-	RecordingMime       string    `json:"recording_mime,omitempty"`
-	RecordingDurationMs int64     `json:"recording_duration_ms,omitempty"`
-	RecordingSize       int64     `json:"recording_size,omitempty"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
-}
-
-// RemoteAssistAnnotation 远程协助标注（Canvas 覆盖层逐笔落库，坐标 JSON）。
-type RemoteAssistAnnotation struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	AssistSessionID uint      `gorm:"not null;index:idx_assist_annotations_session" json:"assist_session_id"`
-	TimestampMs     int64     `json:"timestamp_ms"`
-	Shape           string    `json:"shape"` // rect|freehand|arrow
-	Payload         string    `gorm:"type:text" json:"payload"`
-	CreatedBy       uint      `json:"created_by"`
-	CreatedAt       time.Time `json:"created_at"`
 }

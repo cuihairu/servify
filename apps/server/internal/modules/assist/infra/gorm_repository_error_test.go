@@ -2,10 +2,9 @@ package infra
 
 import (
 	"context"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"strings"
 	"testing"
-
-	"servify/apps/server/internal/models"
 )
 
 // TestGormRepositoryGetAnnotationRoundTrip 覆盖 GetAnnotation 的命中与未命中分支。
@@ -18,7 +17,7 @@ func TestGormRepositoryGetAnnotationRoundTrip(t *testing.T) {
 		t.Fatalf("missing annotation error = %v, want record not found", err)
 	}
 
-	annotation := &models.RemoteAssistAnnotation{AssistSessionID: 1, Shape: "rect", Payload: "{}"}
+	annotation := &assistdomain.RemoteAssistAnnotation{AssistSessionID: 1, Shape: "rect", Payload: "{}"}
 	if err := repo.CreateAnnotation(ctx, annotation); err != nil {
 		t.Fatalf("CreateAnnotation() error = %v", err)
 	}
@@ -37,14 +36,14 @@ func TestGormRepositoryQueryErrorBranches(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
-	if err := db.Migrator().DropTable(&models.RemoteAssistSession{}); err != nil {
+	if err := db.Migrator().DropTable(&assistdomain.RemoteAssistSession{}); err != nil {
 		t.Fatalf("drop table: %v", err)
 	}
 	if _, err := repo.ListSessions(ctx, "", 10); err == nil {
 		t.Fatal("ListSessions() on dropped table should fail")
 	}
 
-	if err := db.Migrator().DropTable(&models.RemoteAssistAnnotation{}); err != nil {
+	if err := db.Migrator().DropTable(&assistdomain.RemoteAssistAnnotation{}); err != nil {
 		t.Fatalf("drop table: %v", err)
 	}
 	if _, err := repo.ListAnnotations(ctx, 1); err == nil {

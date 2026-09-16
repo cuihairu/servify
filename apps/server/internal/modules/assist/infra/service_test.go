@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -27,11 +28,11 @@ func newAssistUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.RemoteAssistSession{}, &models.RemoteAssistAnnotation{}, &models.Session{}); err != nil {
+	if err := db.AutoMigrate(&assistdomain.RemoteAssistSession{}, &assistdomain.RemoteAssistAnnotation{}, &models.Session{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&models.RemoteAssistSession{}, &models.RemoteAssistAnnotation{}, &models.Session{})
+		_ = db.Migrator().DropTable(&assistdomain.RemoteAssistSession{}, &assistdomain.RemoteAssistAnnotation{}, &models.Session{})
 		_ = sqlDB.Close()
 	})
 	return db

@@ -3,29 +3,29 @@ package delivery
 import (
 	"context"
 	"errors"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 )
 
 // adapterRepo 内联仓储桩：内存实现 assistapp.Repository，供适配器透传验证。
 type adapterRepo struct {
-	sessions    map[uint]*models.RemoteAssistSession
-	annotations map[uint]*models.RemoteAssistAnnotation
+	sessions    map[uint]*assistdomain.RemoteAssistSession
+	annotations map[uint]*assistdomain.RemoteAssistAnnotation
 	owners      map[string]uint
 	nextID      uint
 }
 
 func newAdapterRepo() *adapterRepo {
 	return &adapterRepo{
-		sessions:    map[uint]*models.RemoteAssistSession{},
-		annotations: map[uint]*models.RemoteAssistAnnotation{},
+		sessions:    map[uint]*assistdomain.RemoteAssistSession{},
+		annotations: map[uint]*assistdomain.RemoteAssistAnnotation{},
 		owners:      map[string]uint{"sess-1": 5},
 	}
 }
 
-func (m *adapterRepo) CreateSession(_ context.Context, session *models.RemoteAssistSession) error {
+func (m *adapterRepo) CreateSession(_ context.Context, session *assistdomain.RemoteAssistSession) error {
 	m.nextID++
 	session.ID = m.nextID
 	cp := *session
@@ -33,7 +33,7 @@ func (m *adapterRepo) CreateSession(_ context.Context, session *models.RemoteAss
 	return nil
 }
 
-func (m *adapterRepo) GetSession(_ context.Context, id uint) (*models.RemoteAssistSession, error) {
+func (m *adapterRepo) GetSession(_ context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
 	session, ok := m.sessions[id]
 	if !ok {
 		return nil, errors.New("record not found")
@@ -42,8 +42,8 @@ func (m *adapterRepo) GetSession(_ context.Context, id uint) (*models.RemoteAssi
 	return &cp, nil
 }
 
-func (m *adapterRepo) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]models.RemoteAssistSession, error) {
-	var out []models.RemoteAssistSession
+func (m *adapterRepo) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error) {
+	var out []assistdomain.RemoteAssistSession
 	for _, s := range m.sessions {
 		if conversationSessionID != "" && s.ConversationSessionID != conversationSessionID {
 			continue
@@ -53,7 +53,7 @@ func (m *adapterRepo) ListSessions(_ context.Context, conversationSessionID stri
 	return out, nil
 }
 
-func (m *adapterRepo) SaveSession(_ context.Context, session *models.RemoteAssistSession) error {
+func (m *adapterRepo) SaveSession(_ context.Context, session *assistdomain.RemoteAssistSession) error {
 	cp := *session
 	m.sessions[session.ID] = &cp
 	return nil
@@ -67,8 +67,8 @@ func (m *adapterRepo) GetConversationSessionOwner(_ context.Context, sessionID s
 	return owner, nil
 }
 
-func (m *adapterRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]models.RemoteAssistAnnotation, error) {
-	var out []models.RemoteAssistAnnotation
+func (m *adapterRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
+	var out []assistdomain.RemoteAssistAnnotation
 	for _, a := range m.annotations {
 		if a.AssistSessionID == assistSessionID {
 			out = append(out, *a)
@@ -77,7 +77,7 @@ func (m *adapterRepo) ListAnnotations(_ context.Context, assistSessionID uint) (
 	return out, nil
 }
 
-func (m *adapterRepo) CreateAnnotation(_ context.Context, annotation *models.RemoteAssistAnnotation) error {
+func (m *adapterRepo) CreateAnnotation(_ context.Context, annotation *assistdomain.RemoteAssistAnnotation) error {
 	m.nextID++
 	annotation.ID = m.nextID
 	cp := *annotation
@@ -85,7 +85,7 @@ func (m *adapterRepo) CreateAnnotation(_ context.Context, annotation *models.Rem
 	return nil
 }
 
-func (m *adapterRepo) GetAnnotation(_ context.Context, id uint) (*models.RemoteAssistAnnotation, error) {
+func (m *adapterRepo) GetAnnotation(_ context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error) {
 	annotation, ok := m.annotations[id]
 	if !ok {
 		return nil, errors.New("record not found")

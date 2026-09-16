@@ -2,8 +2,8 @@ package delivery
 
 import (
 	"context"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 
-	"servify/apps/server/internal/models"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 )
 
@@ -29,12 +29,12 @@ var (
 
 // HandlerService 远程协助管理/访客两面的服务契约。
 type HandlerService interface {
-	StartSession(ctx context.Context, cmd StartCommand) (*models.RemoteAssistSession, error)
-	EndSession(ctx context.Context, id uint, cmd EndCommand) (*models.RemoteAssistSession, error)
-	GetSession(ctx context.Context, id uint) (*models.RemoteAssistSession, error)
-	ListSessions(ctx context.Context, conversationSessionID string, limit int) ([]models.RemoteAssistSession, error)
-	AddAnnotation(ctx context.Context, assistSessionID uint, cmd AnnotationCommand) (*models.RemoteAssistAnnotation, error)
-	ListAnnotations(ctx context.Context, assistSessionID uint) ([]models.RemoteAssistAnnotation, error)
+	StartSession(ctx context.Context, cmd StartCommand) (*assistdomain.RemoteAssistSession, error)
+	EndSession(ctx context.Context, id uint, cmd EndCommand) (*assistdomain.RemoteAssistSession, error)
+	GetSession(ctx context.Context, id uint) (*assistdomain.RemoteAssistSession, error)
+	ListSessions(ctx context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error)
+	AddAnnotation(ctx context.Context, assistSessionID uint, cmd AnnotationCommand) (*assistdomain.RemoteAssistAnnotation, error)
+	ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error)
 	DeleteAnnotation(ctx context.Context, id uint) error
-	AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*models.RemoteAssistSession, error)
+	AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error)
 }

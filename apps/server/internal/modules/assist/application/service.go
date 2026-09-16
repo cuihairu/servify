@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"strings"
 	"time"
-
-	"servify/apps/server/internal/models"
 )
 
 // 远程协助应用层错误（delivery 侧映射 HTTP 状态）。
@@ -78,14 +77,14 @@ func NewAssistService(repo Repository) *Service {
 }
 
 // StartSession 发起一次远程协助（状态 active）。
-func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*models.RemoteAssistSession, error) {
+func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*assistdomain.RemoteAssistSession, error) {
 	if strings.TrimSpace(cmd.ConversationSessionID) == "" {
 		return nil, ErrAssistSessionRequired
 	}
 	if _, err := s.repo.GetConversationSessionOwner(ctx, cmd.ConversationSessionID); err != nil {
 		return nil, ErrAssistNotFound
 	}
-	session := &models.RemoteAssistSession{
+	session := &assistdomain.RemoteAssistSession{
 		TenantID:              cmd.TenantID,
 		WorkspaceID:           cmd.WorkspaceID,
 		ConversationSessionID: cmd.ConversationSessionID,
@@ -100,7 +99,7 @@ func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*models.R
 }
 
 // EndSession 结束协助并（可选）落录制元数据。
-func (s *Service) EndSession(ctx context.Context, id uint, cmd EndCommand) (*models.RemoteAssistSession, error) {
+func (s *Service) EndSession(ctx context.Context, id uint, cmd EndCommand) (*assistdomain.RemoteAssistSession, error) {
 	session, err := s.repo.GetSession(ctx, id)
 	if err != nil {
 		return nil, ErrAssistNotFound
@@ -128,7 +127,7 @@ func (s *Service) EndSession(ctx context.Context, id uint, cmd EndCommand) (*mod
 }
 
 // GetSession 查询单次协助。
-func (s *Service) GetSession(ctx context.Context, id uint) (*models.RemoteAssistSession, error) {
+func (s *Service) GetSession(ctx context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
 	if id == 0 {
 		return nil, ErrAssistNotFound
 	}
@@ -136,7 +135,7 @@ func (s *Service) GetSession(ctx context.Context, id uint) (*models.RemoteAssist
 }
 
 // ListSessions 按会话（可选）列出协助记录，默认上限 100。
-func (s *Service) ListSessions(ctx context.Context, conversationSessionID string, limit int) ([]models.RemoteAssistSession, error) {
+func (s *Service) ListSessions(ctx context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
@@ -144,7 +143,7 @@ func (s *Service) ListSessions(ctx context.Context, conversationSessionID string
 }
 
 // AttachRecording 访客面上传录制后回写元数据；校验协助会话归属该访客。
-func (s *Service) AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*models.RemoteAssistSession, error) {
+func (s *Service) AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error) {
 	session, err := s.repo.GetSession(ctx, id)
 	if err != nil {
 		return nil, ErrAssistNotFound
@@ -161,7 +160,7 @@ func (s *Service) AttachRecording(ctx context.Context, id uint, customerUserID u
 }
 
 // AddAnnotation 追加标注（shape 白名单 + payload 必须是 JSON object）。
-func (s *Service) AddAnnotation(ctx context.Context, assistSessionID uint, cmd AnnotationCommand) (*models.RemoteAssistAnnotation, error) {
+func (s *Service) AddAnnotation(ctx context.Context, assistSessionID uint, cmd AnnotationCommand) (*assistdomain.RemoteAssistAnnotation, error) {
 	if _, err := s.repo.GetSession(ctx, assistSessionID); err != nil {
 		return nil, ErrAssistNotFound
 	}
@@ -174,7 +173,7 @@ func (s *Service) AddAnnotation(ctx context.Context, assistSessionID uint, cmd A
 	if trimmed == "" || !json.Valid([]byte(trimmed)) || !strings.HasPrefix(trimmed, "{") {
 		return nil, ErrAssistPayloadInvalid
 	}
-	annotation := &models.RemoteAssistAnnotation{
+	annotation := &assistdomain.RemoteAssistAnnotation{
 		AssistSessionID: assistSessionID,
 		TimestampMs:     cmd.TimestampMs,
 		Shape:           cmd.Shape,
@@ -189,7 +188,7 @@ func (s *Service) AddAnnotation(ctx context.Context, assistSessionID uint, cmd A
 }
 
 // ListAnnotations 按协助会话列出全部标注（按时间戳升序）。
-func (s *Service) ListAnnotations(ctx context.Context, assistSessionID uint) ([]models.RemoteAssistAnnotation, error) {
+func (s *Service) ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	return s.repo.ListAnnotations(ctx, assistSessionID)
 }
 
@@ -201,7 +200,7 @@ func (s *Service) DeleteAnnotation(ctx context.Context, id uint) error {
 	return s.repo.DeleteAnnotation(ctx, id)
 }
 
-func applyRecording(session *models.RemoteAssistSession, meta RecordingMeta) {
+func applyRecording(session *assistdomain.RemoteAssistSession, meta RecordingMeta) {
 	if meta.Key != "" {
 		session.RecordingKey = meta.Key
 	}

@@ -3,15 +3,14 @@ package application
 import (
 	"context"
 	"errors"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"testing"
-
-	"servify/apps/server/internal/models"
 )
 
 // mockRepo 应用层内联仓储桩：内存实现 + 按方法注入错误。
 type mockRepo struct {
-	sessions    map[uint]*models.RemoteAssistSession
-	annotations map[uint]*models.RemoteAssistAnnotation
+	sessions    map[uint]*assistdomain.RemoteAssistSession
+	annotations map[uint]*assistdomain.RemoteAssistAnnotation
 	owners      map[string]uint
 	nextID      uint
 
@@ -31,13 +30,13 @@ type mockRepo struct {
 
 func newMockRepo() *mockRepo {
 	return &mockRepo{
-		sessions:    map[uint]*models.RemoteAssistSession{},
-		annotations: map[uint]*models.RemoteAssistAnnotation{},
+		sessions:    map[uint]*assistdomain.RemoteAssistSession{},
+		annotations: map[uint]*assistdomain.RemoteAssistAnnotation{},
 		owners:      map[string]uint{},
 	}
 }
 
-func (m *mockRepo) CreateSession(_ context.Context, session *models.RemoteAssistSession) error {
+func (m *mockRepo) CreateSession(_ context.Context, session *assistdomain.RemoteAssistSession) error {
 	if m.createErr != nil {
 		return m.createErr
 	}
@@ -48,7 +47,7 @@ func (m *mockRepo) CreateSession(_ context.Context, session *models.RemoteAssist
 	return nil
 }
 
-func (m *mockRepo) GetSession(_ context.Context, id uint) (*models.RemoteAssistSession, error) {
+func (m *mockRepo) GetSession(_ context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
 	if m.getSessionErr != nil {
 		return nil, m.getSessionErr
 	}
@@ -60,12 +59,12 @@ func (m *mockRepo) GetSession(_ context.Context, id uint) (*models.RemoteAssistS
 	return &cp, nil
 }
 
-func (m *mockRepo) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]models.RemoteAssistSession, error) {
+func (m *mockRepo) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error) {
 	if m.listSessionsErr != nil {
 		return nil, m.listSessionsErr
 	}
 	m.lastListLimit = limit
-	var out []models.RemoteAssistSession
+	var out []assistdomain.RemoteAssistSession
 	for _, s := range m.sessions {
 		if conversationSessionID != "" && s.ConversationSessionID != conversationSessionID {
 			continue
@@ -75,7 +74,7 @@ func (m *mockRepo) ListSessions(_ context.Context, conversationSessionID string,
 	return out, nil
 }
 
-func (m *mockRepo) SaveSession(_ context.Context, session *models.RemoteAssistSession) error {
+func (m *mockRepo) SaveSession(_ context.Context, session *assistdomain.RemoteAssistSession) error {
 	if m.saveErr != nil {
 		return m.saveErr
 	}
@@ -95,11 +94,11 @@ func (m *mockRepo) GetConversationSessionOwner(_ context.Context, sessionID stri
 	return owner, nil
 }
 
-func (m *mockRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]models.RemoteAssistAnnotation, error) {
+func (m *mockRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	if m.listAnnotErr != nil {
 		return nil, m.listAnnotErr
 	}
-	var out []models.RemoteAssistAnnotation
+	var out []assistdomain.RemoteAssistAnnotation
 	for _, a := range m.annotations {
 		if a.AssistSessionID == assistSessionID {
 			out = append(out, *a)
@@ -108,7 +107,7 @@ func (m *mockRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]m
 	return out, nil
 }
 
-func (m *mockRepo) CreateAnnotation(_ context.Context, annotation *models.RemoteAssistAnnotation) error {
+func (m *mockRepo) CreateAnnotation(_ context.Context, annotation *assistdomain.RemoteAssistAnnotation) error {
 	if m.createAnnotErr != nil {
 		return m.createAnnotErr
 	}
@@ -119,7 +118,7 @@ func (m *mockRepo) CreateAnnotation(_ context.Context, annotation *models.Remote
 	return nil
 }
 
-func (m *mockRepo) GetAnnotation(_ context.Context, id uint) (*models.RemoteAssistAnnotation, error) {
+func (m *mockRepo) GetAnnotation(_ context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error) {
 	annotation, ok := m.annotations[id]
 	if !ok {
 		return nil, errors.New("record not found")
@@ -139,10 +138,10 @@ func (m *mockRepo) DeleteAnnotation(_ context.Context, id uint) error {
 	return nil
 }
 
-func seedMockSession(t *testing.T, repo *mockRepo, id uint, status string) *models.RemoteAssistSession {
+func seedMockSession(t *testing.T, repo *mockRepo, id uint, status string) *assistdomain.RemoteAssistSession {
 	t.Helper()
 	repo.owners["sess-1"] = 5
-	session := &models.RemoteAssistSession{
+	session := &assistdomain.RemoteAssistSession{
 		ID: id, ConversationSessionID: "sess-1", AgentUserID: 9, Status: status,
 	}
 	repo.sessions[id] = session
@@ -439,7 +438,7 @@ func TestAssistAppListAndDeleteAnnotation(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepo()
 	seedMockSession(t, repo, 1, StatusActive)
-	repo.annotations[7] = &models.RemoteAssistAnnotation{ID: 7, AssistSessionID: 1, Shape: ShapeRect, Payload: "{}"}
+	repo.annotations[7] = &assistdomain.RemoteAssistAnnotation{ID: 7, AssistSessionID: 1, Shape: ShapeRect, Payload: "{}"}
 	svc := NewAssistService(repo)
 
 	items, err := svc.ListAnnotations(ctx, 1)
