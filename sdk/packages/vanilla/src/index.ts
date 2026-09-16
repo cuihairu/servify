@@ -9,6 +9,8 @@ import {
   type Ticket,
   type CustomerSatisfaction,
   type RemoteAssistStartOptions,
+  type InitialQuestionsResult,
+  type NextQuestionsResult,
 } from '@servify/core';
 
 /**
@@ -152,6 +154,20 @@ export class VanillaServifySDK {
    */
   async askAI(question: string): Promise<{ answer: string; confidence: number }> {
     return this.sdk.askAI(question);
+  }
+
+  /**
+   * 客户侧推荐问题（P2-0）：首屏热门，无需建立会话即可调用
+   */
+  async getInitialQuestions(limit?: number): Promise<InitialQuestionsResult> {
+    return this.sdk.getInitialQuestions(limit);
+  }
+
+  /**
+   * 客户侧推荐问题（P2-0）：基于最近一条消息的上下文联想
+   */
+  async getNextQuestions(query: string, options?: { sessionId?: string | number; limit?: number }): Promise<NextQuestionsResult> {
+    return this.sdk.getNextQuestions(query, options);
   }
 
   /**

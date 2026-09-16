@@ -466,6 +466,63 @@ func TestValidateAcceptanceManifestScriptRejectsWorkspaceWithoutCloseEvidence(t 
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidSuggestionManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                       "ok",
+		"admin-auth.json":                   "{}",
+		"doc-private.json":                  "{}",
+		"doc-public-billing.json":           "{}",
+		"doc-public-password.json":          "{}",
+		"doc-public-agent.json":             "{}",
+		"initial-questions.json":            "{}",
+		"next-questions-get.json":           "{}",
+		"next-questions-post.json":          "{}",
+		"next-questions-missing-query.json": "{}",
+		"manifest.json": `{
+  "provider": "suggestion",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "knowledge_docs_ok": "true",
+    "initial_questions_ok": "true",
+    "next_questions_get_ok": "true",
+    "next_questions_post_ok": "true",
+    "next_questions_reject_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "doc-private.json",
+    "doc-public-billing.json",
+    "doc-public-password.json",
+    "doc-public-agent.json",
+    "initial-questions.json",
+    "next-questions-get.json",
+    "next-questions-post.json",
+    "next-questions-missing-query.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
 func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, body := range files {

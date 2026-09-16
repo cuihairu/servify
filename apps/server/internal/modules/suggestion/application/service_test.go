@@ -18,6 +18,9 @@ type suggestionRepoStub struct {
 	docTokens          []string
 	ticketRows         []suggestionapp.TicketCandidate
 	docRows            []suggestionapp.KnowledgeDocCandidate
+	publicDocLimit     int
+	publicDocTokens    []string
+	publicDocRows      []suggestionapp.KnowledgeDocCandidate
 }
 
 func (r *suggestionRepoStub) FindTicketCandidates(ctx context.Context, tokens []string, candidateMax int) ([]suggestionapp.TicketCandidate, error) {
@@ -32,6 +35,20 @@ func (r *suggestionRepoStub) FindKnowledgeDocCandidates(ctx context.Context, tok
 	r.docTokens = append([]string(nil), tokens...)
 	out := make([]suggestionapp.KnowledgeDocCandidate, len(r.docRows))
 	copy(out, r.docRows)
+	return out, nil
+}
+
+func (r *suggestionRepoStub) FindPublicKnowledgeDocs(ctx context.Context, limit int) ([]suggestionapp.KnowledgeDocCandidate, error) {
+	r.publicDocLimit = limit
+	out := make([]suggestionapp.KnowledgeDocCandidate, len(r.publicDocRows))
+	copy(out, r.publicDocRows)
+	return out, nil
+}
+
+func (r *suggestionRepoStub) FindPublicKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
+	r.publicDocTokens = append([]string(nil), tokens...)
+	out := make([]suggestionapp.KnowledgeDocCandidate, len(r.publicDocRows))
+	copy(out, r.publicDocRows)
 	return out, nil
 }
 
@@ -160,6 +177,14 @@ func (r *suggestionRepoFailing) FindKnowledgeDocCandidates(ctx context.Context, 
 	if r.docErr {
 		return nil, errors.New("doc lookup failed")
 	}
+	return nil, nil
+}
+
+func (r *suggestionRepoFailing) FindPublicKnowledgeDocs(ctx context.Context, limit int) ([]suggestionapp.KnowledgeDocCandidate, error) {
+	return nil, nil
+}
+
+func (r *suggestionRepoFailing) FindPublicKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
 	return nil, nil
 }
 

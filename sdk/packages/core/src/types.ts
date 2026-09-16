@@ -264,3 +264,26 @@ export interface WebRTCCall {
   end_time?: string;
   duration?: number;
 }
+
+// 客户侧推荐问题（P2-0）：首屏热门 / 会话内上下文联想。
+// question 即可直接作为 query 发起提问的可点击文案。
+export interface RecommendedQuestion {
+  question: string;
+  source: 'knowledge_doc' | 'intent' | string;
+  source_id?: string;
+  category?: string;
+  score: number;
+}
+
+// 首屏推荐问题响应
+export interface InitialQuestionsResult {
+  questions: RecommendedQuestion[];
+  meta?: Record<string, unknown>;
+}
+
+// 上下文联想问题响应
+export interface NextQuestionsResult {
+  query: string;
+  questions: RecommendedQuestion[];
+  meta?: Record<string, unknown>;
+}

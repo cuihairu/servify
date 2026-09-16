@@ -140,3 +140,88 @@ func TestGormSuggestionFindKnowledgeDocCandidates(t *testing.T) {
 		t.Fatal("expected query error after dropping docs")
 	}
 }
+
+func TestGormSuggestionFindPublicKnowledgeDocs(t *testing.T) {
+	db := newSuggestionInfraTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 2, 9, 0, 0, 0, time.UTC)
+	docs := []models.KnowledgeDoc{
+		{ID: 1, Title: "private refund policy", ProviderID: "p", ExternalID: "e1", TenantID: "t1", IsPublic: false, CreatedAt: base, UpdatedAt: base.Add(time.Hour)},
+		{ID: 2, Title: "public billing faq", ProviderID: "p", ExternalID: "e2", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base},
+		{ID: 3, Title: "public account faq", ProviderID: "p", ExternalID: "e3", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base.Add(2 * time.Hour)},
+	}
+	if err := db.Create(&docs).Error; err != nil {
+		t.Fatalf("seed docs: %v", err)
+	}
+
+	// 仅公开文档，updated_at 新近优先
+	rows, err := repo.FindPublicKnowledgeDocs(ctx, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 2 || rows[0].ID != 3 || rows[1].ID != 2 {
+		t.Fatalf("expected public docs by recency, got %+v", rows)
+	}
+
+	// limit 截断
+	rows, err = repo.FindPublicKnowledgeDocs(ctx, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != 3 {
+		t.Fatalf("expected limit 1 newest, got %+v", rows)
+	}
+
+	// 租户隔离
+	scoped := platformauth.ContextWithScope(ctx, "t-other", "")
+	rows, err = repo.FindPublicKnowledgeDocs(scoped, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected no cross-tenant docs, got %+v", rows)
+	}
+}
+
+func TestGormSuggestionFindPublicKnowledgeDocCandidates(t *testing.T) {
+	db := newSuggestionInfraTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	base := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
+	docs := []models.KnowledgeDoc{
+		{ID: 1, Title: "refund guide", Content: "how to refund", ProviderID: "p", ExternalID: "e1", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base},
+		{ID: 2, Title: "secret refund policy", Content: "internal only", ProviderID: "p", ExternalID: "e2", TenantID: "t1", IsPublic: false, CreatedAt: base, UpdatedAt: base},
+	}
+	if err := db.Create(&docs).Error; err != nil {
+		t.Fatalf("seed docs: %v", err)
+	}
+
+	// 空 token 直接空集（不扫表）
+	rows, err := repo.FindPublicKnowledgeDocCandidates(ctx, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected empty result for empty tokens, got %+v", rows)
+	}
+
+	// 命中仅限公开文档
+	rows, err = repo.FindPublicKnowledgeDocCandidates(ctx, []string{"refund"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != 1 {
+		t.Fatalf("expected only public doc, got %+v", rows)
+	}
+
+	// 工作区隔离
+	scoped := platformauth.ContextWithScope(ctx, "", "ws-404")
+	rows, err = repo.FindPublicKnowledgeDocCandidates(scoped, []string{"refund"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("expected no cross-workspace docs, got %+v", rows)
+	}
+}

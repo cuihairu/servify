@@ -12,6 +12,7 @@ func registerPublicRoutes(r *gin.Engine, deps Dependencies) {
 	public := r.Group("/public")
 	handlers.RegisterCSATSurveyRoutes(public, handlers.NewCSATSurveyHandler(deps.SatisfactionService))
 	handlers.RegisterPublicKnowledgeBaseRoutes(public, handlers.NewKnowledgeDocHandler(deps.KnowledgeDocHandler))
+	handlers.RegisterPublicSuggestionRoutes(public, handlers.NewSuggestionHandler(deps.SuggestionService))
 	portalResolver := configscope.NewResolver(
 		deps.Config,
 		configscope.WithTenantPortalProvider(configscope.NewGormTenantConfigProvider(deps.DB)),

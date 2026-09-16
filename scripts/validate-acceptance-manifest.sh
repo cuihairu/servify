@@ -290,6 +290,25 @@ case "$PROVIDER" in
     require_file_listed "ai-query-unauthorized.json"
     require_file_listed "server-log.txt"
     ;;
+  suggestion)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.knowledge_docs_ok // ""' "true"
+    require_equals '.checks.initial_questions_ok // ""' "true"
+    require_equals '.checks.next_questions_get_ok // ""' "true"
+    require_equals '.checks.next_questions_post_ok // ""' "true"
+    require_equals '.checks.next_questions_reject_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "admin-auth.json"
+    require_file_listed "doc-private.json"
+    require_file_listed "doc-public-billing.json"
+    require_file_listed "doc-public-password.json"
+    require_file_listed "doc-public-agent.json"
+    require_file_listed "initial-questions.json"
+    require_file_listed "next-questions-get.json"
+    require_file_listed "next-questions-post.json"
+    require_file_listed "next-questions-missing-query.json"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1

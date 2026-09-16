@@ -26,4 +26,12 @@ func (a *HandlerServiceAdapter) Suggest(ctx context.Context, req *suggestioncont
 	return a.service.Suggest(ctx, req)
 }
 
+func (a *HandlerServiceAdapter) InitialQuestions(ctx context.Context, req *suggestioncontract.InitialQuestionsRequest) (*suggestioncontract.InitialQuestionsResponse, error) {
+	return a.service.InitialQuestions(ctx, req)
+}
+
+func (a *HandlerServiceAdapter) NextQuestions(ctx context.Context, req *suggestioncontract.NextQuestionsRequest) (*suggestioncontract.NextQuestionsResponse, error) {
+	return a.service.NextQuestions(ctx, req)
+}
+
 var _ HandlerService = (*HandlerServiceAdapter)(nil)

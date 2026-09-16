@@ -25,6 +25,14 @@ func (s *dxcSuggestionRecorder) Suggest(ctx context.Context, req *suggestioncont
 	return s.resp, nil
 }
 
+func (s *dxcSuggestionRecorder) InitialQuestions(ctx context.Context, req *suggestioncontract.InitialQuestionsRequest) (*suggestioncontract.InitialQuestionsResponse, error) {
+	return nil, nil
+}
+
+func (s *dxcSuggestionRecorder) NextQuestions(ctx context.Context, req *suggestioncontract.NextQuestionsRequest) (*suggestioncontract.NextQuestionsResponse, error) {
+	return nil, nil
+}
+
 func TestDxcNewSuggestionHandler(t *testing.T) {
 	svc := &dxcSuggestionRecorder{}
 	h := NewSuggestionHandler(svc)

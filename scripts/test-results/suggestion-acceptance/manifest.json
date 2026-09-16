@@ -1,0 +1,31 @@
+{
+  "provider": "suggestion",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18095",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "knowledge_docs_ok": "true",
+    "initial_questions_ok": "true",
+    "next_questions_get_ok": "true",
+    "next_questions_post_ok": "true",
+    "next_questions_reject_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "build-output.txt",
+    "doc-private.json",
+    "doc-public-agent.json",
+    "doc-public-billing.json",
+    "doc-public-password.json",
+    "initial-questions.json",
+    "manifest.json",
+    "next-questions-get.json",
+    "next-questions-missing-query.json",
+    "next-questions-post.json",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

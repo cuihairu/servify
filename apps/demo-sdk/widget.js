@@ -165,8 +165,14 @@
 
     inputArea.appendChild(input);
     inputArea.appendChild(sendBtn);
+    var suggests = el('div', 'sw-suggests');
+    var suggestHint = el('div', 'sw-suggest-hint', '猜你想问');
+    var suggestChips = el('div', 'sw-suggest-chips');
+    suggests.appendChild(suggestHint);
+    suggests.appendChild(suggestChips);
     panel.appendChild(header);
     panel.appendChild(msgs);
+    panel.appendChild(suggests);
     panel.appendChild(inputArea);
     wrap.appendChild(btn);
     wrap.appendChild(panel);
@@ -186,6 +192,7 @@
     var client = new WSClient({ wsUrl: wsUrl, sessionId: sessionId });
     var panelOpen = false;
     var connected = false;
+    var initialSuggestsLoaded = false;
 
     function togglePanel() {
       panelOpen = !panelOpen;
@@ -195,6 +202,10 @@
         btn.style.borderRadius = '50%';
         input.focus();
         if (!connected) client.connect();
+        if (!initialSuggestsLoaded) {
+          initialSuggestsLoaded = true;
+          loadInitialSuggests();
+        }
       } else {
         panel.classList.remove('open');
         btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -220,6 +231,50 @@
       addMsg('user', text);
       input.value = '';
       client.send(text);
+      refreshSuggests(text);
+    }
+
+    // ── 客户侧推荐问题（P2-0）────────────────────────────────
+    // 首屏 = 公开知识库热门问题；发送后 = 基于刚发内容的上下文联想。
+    // 公开路由失败时静默隐藏，绝不阻塞聊天主链路。
+    function fetchSuggestQuestions(path) {
+      if (!root.fetch) return Promise.resolve([]);
+      return root.fetch(baseUrl + path)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (body) {
+          var data = body && body.success && body.data;
+          return (data && data.questions) || [];
+        })
+        .catch(function () { return []; });
+    }
+
+    function renderSuggests(questions, hintText) {
+      suggestChips.innerHTML = '';
+      if (!questions.length) {
+        suggests.style.display = 'none';
+        return;
+      }
+      suggests.style.display = 'block';
+      suggestHint.textContent = hintText;
+      questions.forEach(function (q) {
+        var chip = el('button', 'sw-suggest-chip', q.question);
+        chip.type = 'button';
+        chip.addEventListener('click', function () {
+          input.value = q.question;
+          sendMsg();
+        });
+        suggestChips.appendChild(chip);
+      });
+    }
+
+    function loadInitialSuggests() {
+      fetchSuggestQuestions('/public/suggestions/initial?limit=6')
+        .then(function (qs) { renderSuggests(qs, '猜你想问'); });
+    }
+
+    function refreshSuggests(query) {
+      fetchSuggestQuestions('/public/suggestions/next?query=' + encodeURIComponent(query) + '&limit=6')
+        .then(function (qs) { renderSuggests(qs, '接下来可能想问'); });
     }
 
     sendBtn.addEventListener('click', sendMsg);
@@ -300,6 +355,11 @@
 .servify-widget .sw-msg-user .sw-bubble { background:' + color + '; color:#fff; border-bottom-right-radius:4px; }\
 .servify-widget .sw-msg-bot { align-self:flex-start; }\
 .servify-widget .sw-msg-bot .sw-bubble { background:#f0f0f0; color:#333; border-bottom-left-radius:4px; }\
+.servify-widget .sw-suggests { display:none; padding:8px 12px 0; background:#fff; }\
+.servify-widget .sw-suggest-hint { font-size:11px; color:#999; margin-bottom:6px; }\
+.servify-widget .sw-suggest-chips { display:flex; flex-wrap:wrap; gap:6px; }\
+.servify-widget .sw-suggest-chip { padding:5px 10px; border:1px solid #e0e0e0; border-radius:14px; background:#fff; color:#555; font-size:12px; cursor:pointer; transition:all .15s; text-align:left; }\
+.servify-widget .sw-suggest-chip:hover { border-color:' + color + '; color:' + color + '; }\
 .servify-widget .sw-input-area { padding:12px; border-top:1px solid #eee; display:flex; gap:8px; background:#fff; }\
 .servify-widget .sw-input { flex:1; padding:10px 14px; border:1px solid #ddd; border-radius:20px; font-size:14px; outline:none; transition:border-color .2s; }\
 .servify-widget .sw-input:focus { border-color:' + color + '; }\

@@ -19,6 +19,8 @@ import {
   ServifyRTCIceServer,
   ServifyRTCSessionDescriptionInit,
   ServifyRTCIceCandidateInit,
+  InitialQuestionsResult,
+  NextQuestionsResult,
 } from './types';
 
 export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientSession<Record<string, unknown>, ServifyEventMap> {
@@ -426,6 +428,24 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       throw new Error(response.error || 'Failed to get AI response');
     }
 
+    return response.data;
+  }
+
+  // 客户侧推荐问题（P2-0）：公开路由，无需登录态；首屏在会话建立前后
+  // 均可调用，上下文联想以客户最近一条消息为 query。
+  async getInitialQuestions(limit?: number): Promise<InitialQuestionsResult> {
+    const response = await this.api.getInitialQuestions(limit);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to get initial questions');
+    }
+    return response.data;
+  }
+
+  async getNextQuestions(query: string, options?: { sessionId?: string | number; limit?: number }): Promise<NextQuestionsResult> {
+    const response = await this.api.getNextQuestions(query, options);
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to get next questions');
+    }
     return response.data;
   }
 

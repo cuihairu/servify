@@ -66,6 +66,14 @@ func SecuritySurfaceCatalog(cfg *config.Config) []SecuritySurface {
 			Reason:                     "public survey token access and submission surface",
 		},
 		{
+			Name:                       "public-suggestions",
+			Path:                       "/public/suggestions/",
+			MatchMode:                  securitySurfacePrefix,
+			Exposure:                   "public",
+			RequiresDedicatedRateLimit: true,
+			Reason:                     "anonymous customer-side suggested questions surface (P2-0; serves public knowledge docs only)",
+		},
+		{
 			Name:                       "public-voice-pstn-webhook",
 			Path:                       "/public/voice/webhooks/",
 			MatchMode:                  securitySurfacePrefix,

@@ -1,4 +1,4 @@
-import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction } from './types';
+import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult } from './types';
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -183,6 +183,27 @@ export class ApiClient {
 
   async getAIStatus(): Promise<ApiResponse<{ status: string; models: string[] }>> {
     return this.request('GET', '/api/v1/ai/status');
+  }
+
+  // 客户侧推荐问题（P2-0）：公开路由，无需登录态
+  async getInitialQuestions(limit?: number): Promise<ApiResponse<InitialQuestionsResult>> {
+    const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : '';
+    return this.request<InitialQuestionsResult>('GET', `/public/suggestions/initial${query}`);
+  }
+
+  async getNextQuestions(query: string, options?: { sessionId?: string | number; limit?: number }): Promise<ApiResponse<NextQuestionsResult>> {
+    const params = new URLSearchParams();
+    const q = query.trim();
+    if (q) {
+      params.set('query', q);
+    }
+    if (options?.sessionId) {
+      params.set('session_id', String(options.sessionId));
+    }
+    if (options?.limit && options.limit > 0) {
+      params.set('limit', String(options.limit));
+    }
+    return this.request<NextQuestionsResult>('GET', `/public/suggestions/next?${params.toString()}`);
   }
 
   // 工单相关 API

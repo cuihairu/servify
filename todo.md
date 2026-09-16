@@ -357,37 +357,40 @@
 
 这些不是当前最紧急代码缺陷，但属于“距离企业级项目”的重点 backlog。
 
-### [ ] P2-0 客户侧推荐问题与上下文联想问题
+### [-] P2-0 客户侧推荐问题与上下文联想问题（核心链路已落地，RQ-5 埋点待做）
 
 - 当前判断：
-  - 已有后台辅助推荐接口 `GET/POST /api/assist/suggest`
-  - 当前返回能力主要是 `intent`、`similar_tickets`、`knowledge_docs`
-  - 该能力挂在 management `assist` 权限路由下，更像后台辅助检索，不是客户咨询入口的正式产品能力
-  - 当前未看到 Web 客户侧 / SDK / demo 已接入“首屏推荐问题”或“基于上下文的下一问联想”
+  - 已有后台辅助推荐接口 `GET/POST /api/assist/suggest`（保留，坐席辅助定位）
+  - 新增客户侧公开接口 `GET /public/suggestions/initial` 与 `GET|POST /public/suggestions/next`，匿名可用，仅返回公开知识文档标题
+  - 推荐策略定为“规则+公开知识库”（不依赖外部 AI）：首屏按 recency 逆序，下一问按 token 命中评分排序（`ScoreText`），meta 携带 intent/tokens/doc_candidates
+  - 隐私边界：`is_public=false` 知识文档与工单标题不出现在客户侧响应（工单候选仅进入 meta 计数）
 - 代码证据：
-  - `apps/server/internal/handlers/suggestion_handler.go`
-  - `apps/server/internal/services/suggestion_service.go`
-  - `apps/server/internal/app/server/router.go`
-  - `sdk/packages/core/src/sdk.ts`
+  - `apps/server/internal/modules/suggestion/application/customer_questions.go`（InitialQuestions / NextQuestions）
+  - `apps/server/internal/modules/suggestion/infra/gorm_repository.go`（FindPublicKnowledgeDocs / FindPublicKnowledgeDocCandidates，均带 is_public 过滤）
+  - `apps/server/internal/handlers/suggestion_handler.go`（RegisterPublicSuggestionRoutes）
+  - `apps/server/internal/app/server/router_public.go` + `security_surface.go`（public-suggestions 目录项）
+  - `sdk/packages/core/src/sdk.ts`（getInitialQuestions / getNextQuestions）、`sdk/packages/vanilla/src/index.ts`
+  - `apps/demo-sdk/widget.js`（“猜你想问” chips，点击即发送，发送后刷新联想）
+  - `scripts/test-suggestion-acceptance.sh` + `scripts/test-results/suggestion-acceptance/manifest.json`
 - 产品目标：
   - 客户刚进入咨询页时，能看到可点击的推荐问题
   - 客户发起几轮对话后，系统可基于当前上下文动态联想下一问
   - 推荐问题可与知识库、历史工单、热门问题、AI 意图识别联动
 - 建议拆分：
-  - `RQ-1` 首屏热门问题推荐
-  - `RQ-2` 会话内上下文联想问题
-  - `RQ-3` 客户侧推荐接口与权限边界
-  - `RQ-4` Web SDK / demo / 官网接入
-  - `RQ-5` 埋点、点击率、转化率与验收口径
+  - `RQ-1` 首屏热门问题推荐 ✅ initial 接口 + 首屏 chips
+  - `RQ-2` 会话内上下文联想问题 ✅ next 接口（query=客户最近一条消息）
+  - `RQ-3` 客户侧推荐接口与权限边界 ✅ 公开路由 + security surface + 仅公开文档
+  - `RQ-4` Web SDK / demo / 官网接入 ✅ core/vanilla SDK + demo widget
+  - `RQ-5` 埋点、点击率、转化率与验收口径 ⬜ 未做（接口 meta 已留扩展位）
 - 验收标准：
-  - 客户未输入前可拿到一组推荐问题
-  - 客户输入后可拿到一组基于上下文变化的联想问题
-  - 推荐项可点击进入提问，不只是展示静态文案
-  - 前后端、SDK、验收文档有统一口径
-- 状态：`[ ]`
-- 最近进展：已确认当前只有后台辅助推荐接口，没有完整客户侧链路
-- 下一步：先决定推荐策略走“规则+知识库”还是“AI 生成+规则兜底”
-- 阻塞项：产品策略、推荐来源与客户侧接口边界尚未定稿
+  - 客户未输入前可拿到一组推荐问题 ✅ initial（recency 逆序，验收断言顺序）
+  - 客户输入后可拿到一组基于上下文变化的联想问题 ✅ next GET/POST（评分命中，验收断言唯一命中）
+  - 推荐项可点击进入提问，不只是展示静态文案 ✅ demo widget 点击即填入并发送
+  - 前后端、SDK、验收文档有统一口径 ✅ 脚本断言 meta.strategy 两态
+- 状态：`[-]`（核心链路收口；RQ-5 埋点转 P2 backlog）
+- 最近进展：后端公开接口 + core/vanilla SDK + demo widget + 真实验收脚本（sqlite 自起，断言公开/私有隔离、recency 顺序、GET/POST 命中、400 拒绝路径）全部通过，manifest 已留档
+- 下一步：RQ-5 埋点（点击/曝光/转化）需产品口径定稿后再做
+- 阻塞项：无
 
 ### [ ] P2-1 多实例与高可用边界明确化
 

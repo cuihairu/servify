@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
@@ -60,6 +61,80 @@ func RegisterSuggestionRoutes(r *gin.RouterGroup, handler *SuggestionHandler) {
 	{
 		assist.GET("/suggest", handler.Suggest)
 		assist.POST("/suggest", handler.SuggestPost)
+	}
+}
+
+// InitialQuestions 客户侧首屏推荐问题（P2-0 RQ-1）：客户未输入前可点击
+// 的热门问题，公开路由（无鉴权），数据面仅公开知识文档。
+func (h *SuggestionHandler) InitialQuestions(c *gin.Context) {
+	limit := parseIntDefault(c.Query("limit"), 8)
+	resp, err := h.service.InitialQuestions(c.Request.Context(), &suggestioncontract.InitialQuestionsRequest{
+		Limit: limit,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to suggest initial questions", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
+}
+
+// NextQuestions 客户侧上下文联想（P2-0 RQ-2）：以客户最近一条消息为
+// query 联想下一问，公开路由（无鉴权），数据面仅公开知识文档。
+func (h *SuggestionHandler) NextQuestions(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("query"))
+	if query == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: "query is required"})
+		return
+	}
+	resp, err := h.service.NextQuestions(c.Request.Context(), &suggestioncontract.NextQuestionsRequest{
+		Query:     query,
+		SessionID: c.Query("session_id"),
+		Limit:     parseIntDefault(c.Query("limit"), 8),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to suggest next questions", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
+}
+
+// NextQuestionsPost 是 NextQuestions 的 POST 版（query 放 body，适配
+// 客户侧 SDK 在长 query 场景下的调用习惯）。
+func (h *SuggestionHandler) NextQuestionsPost(c *gin.Context) {
+	var req suggestioncontract.NextQuestionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
+		return
+	}
+	if strings.TrimSpace(req.Query) == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: "query is required"})
+		return
+	}
+	resp, err := h.service.NextQuestions(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to suggest next questions", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
+}
+
+// RegisterPublicSuggestionRoutes 挂载客户侧推荐问题公开路由（P2-0）：
+// 与 CSAT / 知识库公开路由同模式，无鉴权；服务端只吐公开知识文档。
+func RegisterPublicSuggestionRoutes(r *gin.RouterGroup, handler *SuggestionHandler) {
+	suggestions := r.Group("/suggestions")
+	{
+		suggestions.GET("/initial", handler.InitialQuestions)
+		suggestions.GET("/next", handler.NextQuestions)
+		suggestions.POST("/next", handler.NextQuestionsPost)
 	}
 }
 

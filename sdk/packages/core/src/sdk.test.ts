@@ -275,3 +275,86 @@ describe('ServifySDK remote assist recording', () => {
     expect(requests[1].url).toContain('/api/v1/remote-assist/7/recording');
   });
 });
+
+describe('ServifySDK suggested questions', () => {
+  const initialPayload = {
+    success: true,
+    data: {
+      questions: [
+        { question: '如何重置密码', source: 'knowledge_doc', source_id: '3', category: 'account', score: 1 },
+        { question: '如何导出账单', source: 'knowledge_doc', source_id: '2', category: 'billing', score: 0.5 },
+      ],
+      meta: { strategy: 'public_knowledge_recency' },
+    },
+  };
+  const nextPayload = {
+    success: true,
+    data: {
+      query: '密码',
+      questions: [{ question: '如何重置密码', source: 'knowledge_doc', source_id: '3', score: 1 }],
+      meta: { strategy: 'public_knowledge_scored', intent: 'general' },
+    },
+  };
+
+  function installSuggestionFetch(): RecordedRequest[] {
+    const requests: RecordedRequest[] = [];
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+      requests.push({ url: urlText, method: init?.method || 'GET', body: init?.body });
+      if (urlText.includes('/public/suggestions/initial')) {
+        return jsonResponse(initialPayload);
+      }
+      return jsonResponse(nextPayload);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return requests;
+  }
+
+  function createPlainSDK(): ServifySDK {
+    return new ServifySDK({ apiUrl: 'http://localhost:8080', autoConnect: false, customerId: '1' });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('fetches initial questions without auth and forwards limit', async () => {
+    const requests = installSuggestionFetch();
+    const sdk = createPlainSDK();
+
+    const result = await sdk.getInitialQuestions(5);
+
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0].question).toBe('如何重置密码');
+    expect(requests[0].url).toBe('http://localhost:8080/public/suggestions/initial?limit=5');
+  });
+
+  it('fetches next questions with query, session id and limit', async () => {
+    const requests = installSuggestionFetch();
+    const sdk = createPlainSDK();
+
+    const result = await sdk.getNextQuestions('密码', { sessionId: 42, limit: 3 });
+
+    expect(result.query).toBe('密码');
+    expect(result.questions[0].source).toBe('knowledge_doc');
+    const url = new URL(requests[0].url);
+    expect(url.pathname).toBe('/public/suggestions/next');
+    expect(url.searchParams.get('query')).toBe('密码');
+    expect(url.searchParams.get('session_id')).toBe('42');
+    expect(url.searchParams.get('limit')).toBe('3');
+  });
+
+  it('throws when the initial questions request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false, error: 'boom' }) }) as unknown as Response));
+    const sdk = createPlainSDK();
+
+    await expect(sdk.getInitialQuestions()).rejects.toThrow('boom');
+  });
+
+  it('throws when the next questions request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ success: false, error: 'boom' }) }) as unknown as Response));
+    const sdk = createPlainSDK();
+
+    await expect(sdk.getNextQuestions('密码')).rejects.toThrow('boom');
+  });
+});
