@@ -8,6 +8,8 @@ import (
 
 	appbootstrap "servify/apps/server/internal/app/bootstrap"
 	appworker "servify/apps/server/internal/app/worker"
+	"servify/apps/server/internal/observability/async"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/logger"
@@ -41,6 +43,15 @@ func main() {
 		logrus.Fatalf("Failed to build app: %v", err)
 	}
 	appLogger := app.Logger
+
+	// 事件总线观测接线：发布/订阅/失败/死信全量打点（monitoring 关闭时
+	// collector 注册在进程级 registry，/metrics 未挂载即无暴露面，无副作用）。
+	app.EventBus = async.NewObservableBus(
+		app.EventBus,
+		async.NewBusMetrics(svcmetrics.DefaultRegistry),
+		async.NewInMemoryDeadLetterRecorder(1000),
+		appLogger,
+	)
 
 	if err := appbootstrap.SetupObservability(context.Background(), cfg, app); err != nil {
 		appLogger.Warnf("init tracing: %v", err)

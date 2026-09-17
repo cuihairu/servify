@@ -13,6 +13,8 @@ import (
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/observability/async"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/usersecurity"
 	"servify/apps/server/internal/services"
@@ -107,6 +109,24 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 			app.Logger,
 		))
 	}
+	// 后台 worker 观测接线：全部注册完成后统一包装，
+	// worker_jobs_total{worker_name, outcome} 与 worker_active_jobs{worker_name}。
+	// collector 挂进程级 registry，同进程内只注册一次（测试会多次装配）。
+	for i := range app.Workers {
+		app.Workers[i] = async.NewObservableWorker(app.Workers[i], sharedWorkerMetrics())
+	}
+}
+
+var (
+	workerMetricsOnce sync.Once
+	workerMetrics     *async.WorkerMetrics
+)
+
+func sharedWorkerMetrics() *async.WorkerMetrics {
+	workerMetricsOnce.Do(func() {
+		workerMetrics = async.NewWorkerMetrics(svcmetrics.DefaultRegistry)
+	})
+	return workerMetrics
 }
 
 func NewStatisticsWorker(service statisticsService, interval time.Duration, logger *logrus.Logger) bootstrap.Worker {

@@ -15,14 +15,7 @@
 
 <!-- 行格式：- metric: <指标名>，行内可附计划说明 -->
 
-- metric: eventbus_published_total — 计划 P2-4 第三刀：BusMetrics 已有设施，装配处接线
-- metric: eventbus_handled_total — 计划 P2-4 第三刀：同上（async.BusMiddleware）
-- metric: eventbus_failed_total — 计划 P2-4 第三刀：同上
-- metric: eventbus_handle_duration_seconds — 计划 P2-4 第三刀：同上
-- metric: eventbus_dead_letter_total — 计划 P2-4 第三刀：死信计数器尚未注册
-- metric: worker_jobs_total — 计划 P2-4 第三刀：ObservableWorker/TrackJob 已有设施，装配处接线
-- metric: worker_job_duration_seconds — 计划 P2-4 第三刀：同上
-- metric: worker_active_jobs — 计划 P2-4 第三刀：同上
+- metric: worker_job_duration_seconds — ObservableWorker 只记启动计数与活跃 gauge；duration 需周期 job 级 TrackJob 接线（后续刀）
 - metric: errors_total — 计划 P2-4 第四刀：errors.RecordError 已有，需在错误统一出口调用
 
 ## 已接线指标
@@ -47,3 +40,20 @@
 - `routing_decisions_total{tenant_id, strategy, outcome}` — strategy ∈
   handoff（入队等待）/ assign（定向指派）/ transfer（等待队列转出）
 - business dashboard 的 Conversations/Tickets/Routing 三面板已随之恢复
+
+### 第三刀（事件总线与 worker 观测接线）
+
+- `eventbus_published_total{event_type, outcome}` — ObservableBus 装饰
+  总线 Publish（cmd/server/main.go 一处接线覆盖所有发布方）；
+  同步总线口径：outcome=error 表示分发未成功（含 handler 失败）
+- `eventbus_handled_total{event_type}` / `eventbus_failed_total{event_type}`
+  / `eventbus_handle_duration_seconds{event_type}` — ObservableBus
+  Subscribe 时经 WrapHandler 包装全部订阅方
+- `eventbus_dead_letter_total{event_type}` — 死信落库成功时计数
+  （InMemoryDeadLetterRecorder，容量 1000）
+- `worker_jobs_total{worker_name, outcome}` /
+  `worker_active_jobs{worker_name}` — RegisterDefaultWorkers 注册完成后
+  统一用 ObservableWorker 包装（sync.Once 保证 collector 进程级单例）
+- service dashboard 的 Event Bus Throughput / Worker Jobs 面板与
+  EventBusHandlerFailures / EventBusDeadLetters / WorkerJobFailures
+  告警已随之恢复

@@ -454,7 +454,22 @@
       业务服务接线 BusinessMetrics（链式 AttachBusinessMetrics，nil 安全）
     - tenant 体系尚未落地，tenant_id 标签暂记 default
     - business dashboard 的 Conversations/Tickets/Routing 三面板恢复
-  - 第三刀（eventbus/worker middleware 装配接线 + 异步失败告警恢复）⬜
+  - 第三刀（eventbus/worker middleware 装配接线 + 异步失败告警恢复）✅
+    - ObservableBus 装饰总线：cmd/server/main.go 一处接线，Subscribe 经
+      WrapHandler 覆盖全部订阅方（handled/failed/duration），Publish 记
+      published{event_type, outcome}；同步总线口径 outcome=error 含
+      handler 失败（另有 failed_total 单独计数）
+    - 死信计数补齐：`eventbus_dead_letter_total{event_type}`，死信落库
+      成功时计数（BusMiddleware 挂 InMemoryDeadLetterRecorder，容量 1000）
+    - worker 接线：RegisterDefaultWorkers 注册完成后统一 ObservableWorker
+      包装（jobs_total{worker_name, outcome} + active_jobs）；
+      sync.Once 保证 collector 进程级单例（测试多次装配不撞注册）
+    - 接线点选 cmd/server/main.go + app/worker：server→async→bootstrap
+      依赖循环使 bootstrap 内无法装配 worker
+    - 恢复 3 条异步告警（EventBusHandlerFailures/EventBusDeadLetters/
+      WorkerJobFailures）+ service dashboard 事件总线/Worker 两面板；
+      known-gaps 只剩 errors_total（第四刀）与 worker_job_duration_seconds
+      （需周期 job 级 TrackJob，留后续）
   - 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）⬜
 
 ### [ ] P2-5 安全治理继续收口到首批企业交付标准

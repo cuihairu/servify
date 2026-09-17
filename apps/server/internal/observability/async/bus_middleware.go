@@ -16,10 +16,11 @@ import (
 
 // BusMetrics holds Prometheus collectors for event bus observability.
 type BusMetrics struct {
-	published *prometheus.CounterVec
-	handled   *prometheus.CounterVec
-	failed    *prometheus.CounterVec
-	duration  *prometheus.HistogramVec
+	published  *prometheus.CounterVec
+	handled    *prometheus.CounterVec
+	failed     *prometheus.CounterVec
+	duration   *prometheus.HistogramVec
+	deadLetter *prometheus.CounterVec
 }
 
 // NewBusMetrics creates and registers event bus metric collectors.
@@ -42,9 +43,12 @@ func NewBusMetrics(reg *metrics.Registry) *BusMetrics {
 			Help:    "Event handler execution duration in seconds.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{telemetry.LabelEventType}),
+		deadLetter: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: telemetry.MetricEventBusDeadLetter,
+			Help: "Total number of events dead-lettered.",
+		}, []string{telemetry.LabelEventType}),
 	}
-
-	reg.MustRegister(m.published, m.handled, m.failed, m.duration)
+	reg.MustRegister(m.published, m.handled, m.failed, m.duration, m.deadLetter)
 	return m
 }
 
@@ -52,6 +56,13 @@ func NewBusMetrics(reg *metrics.Registry) *BusMetrics {
 func (m *BusMetrics) RecordPublished(eventType, outcome string) {
 	if m != nil && m.published != nil {
 		m.published.WithLabelValues(eventType, outcome).Inc()
+	}
+}
+
+// RecordDeadLetter increments the dead letter counter.
+func (m *BusMetrics) RecordDeadLetter(eventType string) {
+	if m != nil && m.deadLetter != nil {
+		m.deadLetter.WithLabelValues(eventType).Inc()
 	}
 }
 
@@ -103,6 +114,8 @@ func (m *BusMiddleware) Handle(ctx context.Context, event eventbus.Event) error 
 			})
 			if dlErr != nil && m.logger != nil {
 				m.logger.WithError(dlErr).Warn("failed to record dead letter entry")
+			} else if dlErr == nil {
+				m.metrics.RecordDeadLetter(eventType)
 			}
 		}
 		return err

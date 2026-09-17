@@ -22,8 +22,8 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 | `http_` | HTTP request metrics |
 | `ai_` | AI/LLM interactions |
 | `ratelimit_` | Rate-limited (429) requests |
-| `eventbus_` | Event bus processing（known gap，见 known-gaps.md） |
-| `worker_` | Background job processing（known gap，见 known-gaps.md） |
+| `eventbus_` | Event bus processing |
+| `worker_` | Background job processing（`worker_job_duration_seconds` 见 known-gaps.md） |
 | `errors_` | Classified errors（known gap，见 known-gaps.md） |
 
 ## Alert Runbooks
@@ -87,6 +87,42 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 - Leak in a handler: fix the missing cancel/defer, redeploy
 - Load-driven: scale horizontally
 
+### EventBusHandlerFailures
+
+**Severity**: Warning | **Threshold**: any handler failures for 5 minutes
+
+**Investigation**:
+1. Check "Event Bus Throughput" panel: `eventbus_failed_total` by `event_type`
+2. Check dead letter entries via the in-memory recorder
+3. Review handler code for the failing event type
+
+**Resolution**:
+- Transient errors: events will be retried or dead-lettered
+- Persistent errors: fix handler code and redeploy
+- Use replay interface to reprocess dead-lettered events
+
+### EventBusDeadLetters
+
+**Severity**: Info | **Threshold**: dead-lettered events for 10 minutes
+
+**Investigation**:
+1. Check `eventbus_dead_letter_total` by `event_type`
+2. List dead letter entries (in-memory recorder, up to 1000) to see the error text
+3. Correlate with `eventbus_failed_total` — dead letters are the persisted tail of failures
+
+**Resolution**:
+- Fix the underlying handler error, then replay dead-lettered events
+- If a poison event loops, disable the subscriber and quarantine it
+
+### WorkerJobFailures
+
+**Severity**: Warning | **Threshold**: any worker start failures for 10 minutes
+
+**Investigation**:
+1. Check "Worker Jobs" panel: `worker_jobs_total` by `worker_name` and `outcome`
+2. Check `worker_active_jobs` — a gauge stuck at 0 means the worker never came up
+3. Review worker-specific logs
+
 ### AIProviderDegraded
 
 **Severity**: Critical | **Threshold**: >20% failure rate for 5 minutes
@@ -133,7 +169,7 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 
 ## Known Gaps
 
-部分指标已定义但尚未接线（eventbus_\*、worker_\*、errors_total），
+部分指标已定义但尚未接线（`errors_total`、`worker_job_duration_seconds`），
 对应告警与面板已摘除。当前清单与接线计划见
 `deploy/observability/known-gaps.md`；接线完成前不要在告警规则或
 dashboard 中引用这些指标。
@@ -201,9 +237,21 @@ POST /api/v1/ai/circuit-breaker/reset
 | `tickets_resolved_total` | Counter | tenant_id, outcome | Tickets moved to resolved |
 | `routing_decisions_total` | Counter | tenant_id, strategy, outcome | Routing decisions; strategy ∈ handoff / assign / transfer |
 
+### Async Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `eventbus_published_total` | Counter | event_type, outcome | Events published; outcome ∈ success / error（同步总线含 handler 失败） |
+| `eventbus_handled_total` | Counter | event_type | Events handled successfully |
+| `eventbus_failed_total` | Counter | event_type | Handler failures |
+| `eventbus_handle_duration_seconds` | Histogram | event_type | Handler duration |
+| `eventbus_dead_letter_total` | Counter | event_type | Events dead-lettered |
+| `worker_jobs_total` | Counter | worker_name, outcome | Worker starts; outcome ∈ success / failure |
+| `worker_active_jobs` | Gauge | worker_name | Currently active workers |
+
 ### Infrastructure Metrics
 
 `go_*` / `process_*` 由 Prometheus runtime collectors 直接产出。
 
-其余业务与异步指标（conversations/tickets/routing/eventbus/worker/errors）
-处于未接线状态，见 `deploy/observability/known-gaps.md`。
+`errors_total` 与 `worker_job_duration_seconds` 仍处未接线状态，
+见 `deploy/observability/known-gaps.md`。

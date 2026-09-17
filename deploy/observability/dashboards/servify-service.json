@@ -80,13 +80,104 @@
       }
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 300,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(eventbus_published_total[5m])) by (event_type, outcome)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(eventbus_handled_total[5m])) by (event_type)",
+          "legendFormat": "__auto",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(eventbus_failed_total[5m])) by (event_type)",
+          "legendFormat": "__auto",
+          "refId": "C"
+        }
+      ],
+      "title": "Event Bus Throughput",
+      "type": "timeseries",
+      "description": "事件总线吞吐（published/handled/failed）"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 301,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(worker_jobs_total[5m])) by (worker_name, outcome)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        },
+        {
+          "expr": "worker_active_jobs",
+          "legendFormat": "__auto",
+          "refId": "B"
+        }
+      ],
+      "title": "Worker Jobs",
+      "type": "timeseries",
+      "description": "后台 worker 启动计数与活跃实例"
+    },
+    {
       "title": "Go Runtime",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 16
       },
       "targets": [
         {

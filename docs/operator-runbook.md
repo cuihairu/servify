@@ -460,7 +460,7 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 
 | Dashboard | 文件 | 内容 |
 |-----------|------|------|
-| 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、限流丢弃、Go Runtime |
+| 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、限流丢弃、事件总线吞吐、Worker 任务、Go Runtime |
 | 业务面板 | `servify-business.json` | 会话、工单、路由、AI 请求量（含 strategy 维度）/延迟/Token、策略分布、降级占比 |
 
 ### 8.3 告警规则
@@ -473,6 +473,9 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 | HighP99Latency | Warning | P99 > 5s 持续 10 分钟 | 30 分钟内响应 |
 | HighRateLimitDrops | Info | 限流丢弃速率 > 10/s 持续 5 分钟 | 当班关注 |
 | HighGoroutineCount | Warning | goroutines > 10000 持续 10 分钟 | 30 分钟内响应 |
+| EventBusHandlerFailures | Warning | 事件 handler 失败速率 > 0 持续 5 分钟 | 30 分钟内响应 |
+| EventBusDeadLetters | Info | 出现死信事件持续 10 分钟 | 当班关注 |
+| WorkerJobFailures | Warning | Worker 失败速率 > 0 持续 10 分钟 | 30 分钟内响应 |
 | AIProviderDegraded | Critical | AI 失败率 > 20% 持续 5 分钟 | 立即响应 |
 | AIHighLatency | Warning | AI P95 > 10s 持续 10 分钟 | 30 分钟内响应 |
 | AIFallbackRatioHigh | Warning | AI fallback 占比 > 50% 持续 10 分钟（不含转人工） | 30 分钟内响应 |
