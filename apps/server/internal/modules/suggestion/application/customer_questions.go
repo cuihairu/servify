@@ -101,11 +101,11 @@ func (s *Service) NextQuestions(ctx context.Context, req *suggestioncontract.Nex
 		}
 		seen[question] = struct{}{}
 		questions = append(questions, suggestioncontract.RecommendedQuestion{
-			Question:  question,
-			Source:    "knowledge_doc",
-			SourceID:  strconv.FormatUint(uint64(r.ID), 10),
-			Category:  r.Category,
-			Score:     score,
+			Question: question,
+			Source:   "knowledge_doc",
+			SourceID: strconv.FormatUint(uint64(r.ID), 10),
+			Category: r.Category,
+			Score:    score,
 		})
 	}
 

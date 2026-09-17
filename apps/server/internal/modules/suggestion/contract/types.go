@@ -45,11 +45,11 @@ type SuggestionRequest struct {
 // question 即可点击直接发起提问的文案；source 标明来源（knowledge_doc /
 // intent），客户侧只吐公开知识文档，绝不外发工单标题（隐私边界）。
 type RecommendedQuestion struct {
-	Question  string  `json:"question"`
-	Source    string  `json:"source"`
-	SourceID  string  `json:"source_id,omitempty"`
-	Category  string  `json:"category,omitempty"`
-	Score     float64 `json:"score"`
+	Question string  `json:"question"`
+	Source   string  `json:"source"`
+	SourceID string  `json:"source_id,omitempty"`
+	Category string  `json:"category,omitempty"`
+	Score    float64 `json:"score"`
 }
 
 // InitialQuestionsRequest 首屏推荐问题请求（客户未输入任何内容）。
@@ -59,7 +59,7 @@ type InitialQuestionsRequest struct {
 
 // InitialQuestionsResponse 首屏推荐问题响应。
 type InitialQuestionsResponse struct {
-	Questions []RecommendedQuestion `json:"questions"`
+	Questions []RecommendedQuestion  `json:"questions"`
 	Meta      map[string]interface{} `json:"meta,omitempty"`
 }
 
@@ -73,7 +73,7 @@ type NextQuestionsRequest struct {
 
 // NextQuestionsResponse 上下文联想问题响应。
 type NextQuestionsResponse struct {
-	Query     string                `json:"query"`
-	Questions []RecommendedQuestion `json:"questions"`
+	Query     string                 `json:"query"`
+	Questions []RecommendedQuestion  `json:"questions"`
 	Meta      map[string]interface{} `json:"meta,omitempty"`
 }
