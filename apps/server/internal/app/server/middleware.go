@@ -6,6 +6,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/middleware"
+	svcerrors "servify/apps/server/internal/observability/errors"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/observability/telemetry"
 
@@ -29,6 +30,9 @@ func registerBaseMiddleware(r *gin.Engine, cfg *config.Config, httpMetrics *svcm
 	}
 	if httpMetrics != nil {
 		r.Use(httpMetrics.Middleware())
+		// errors_total 统一出口：与 HTTPMetrics 同一挂载条件（监控启用），
+		// 覆盖全部路由的 5xx 错误分类打点。
+		r.Use(svcerrors.StatusMiddleware())
 	}
 }
 

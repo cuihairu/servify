@@ -427,7 +427,7 @@
 - 验收标准：
   - 至少一轮备份恢复演练证据
 
-### [-] P2-4 可观测性从“有指标”升级到“可运维”
+### [-] P2-4 可观测性从“有指标”升级到“可运维”（四刀全部完成，验收口径见下）
 
 - 范围：
   - 关键业务 SLI/SLO
@@ -470,7 +470,23 @@
       WorkerJobFailures）+ service dashboard 事件总线/Worker 两面板；
       known-gaps 只剩 errors_total（第四刀）与 worker_job_duration_seconds
       （需周期 job 级 TrackJob，留后续）
-  - 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）⬜
+  - 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）✅
+    - `errors_total{severity, error_category, error_module}` 接线：
+      `observability/errors` 新增 `StatusMiddleware`，与 HTTPMetrics 中间件
+      同一挂载条件（监控启用时），响应完成后按最终状态码对 5xx 打点——
+      502/504 归 dependency/network（上游依赖语义），其余 5xx 归
+      system/internal；2xx/4xx 不计数（限流 429 已有
+      ratelimit_dropped_total，避免双计）。`RegisterErrorMetrics` 加
+      sync.Once 保证多次装配不重复注册（runtime_assembly.go 一处调用）
+    - SLO 首批定稿（`deploy/observability/slo.md`）：availability 99.9%
+      （30d，坏事件=5xx）、latency 99% 请求 <2s；Google SRE 多窗 burn
+      rate 告警三条（SLOAvailabilityFastBurn 14.4x 1h+5m / 
+      SLOAvailabilitySlowBurn 6x 6h+30m / SLOLatencyFastBurn 14.4x 1h+5m），
+      与 HighHTTP5xxRate/HighP99Latency 症状告警分层（预算告警+症状告警）
+    - service dashboard 新增 SLO Error Budget 面板（30d 两类预算剩余）；
+      runbook 新增三条处置段；known-gaps 摘除 errors_total，只剩
+      worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
+    - 一致性门禁自动覆盖全部新增资产（四类文件一致性测试全绿）
 
 ### [ ] P2-5 安全治理继续收口到首批企业交付标准
 
@@ -589,8 +605,9 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：`P1-1 AI / Knowledge 验收闭环`（剩余部分等外部 Dify/WeKnora 环境；等待期间按顺序推进 `P1-7 Modules 与 legacy services/models 的边界收口`，先输出依赖地图）
-- 原因：本轮整体审核确认 P0 项均已收口（含 2026-09-15 标题标记对齐），核心后端包与模块包测试通过；同时发现并修复了 voice 管理路由复用 `assist` 权限的治理错配。P1-3/P1-4/P1-5/P1-8 已闭环，P1-1 的 fallback 三类证据已本地真实留证，仅剩真实 provider 双路径运行证据待外部环境
+- 当前优先恢复任务：`P2-1 多实例与高可用边界明确化`（P2 序列下一个未开工项；P2-4 四刀已于 2026-09-17 全部完成，验收标准“告警规则、dashboard、runbook 三者一致”由一致性门禁持续强制）
+- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）
 - 如果本轮无法推进实现，至少先补：

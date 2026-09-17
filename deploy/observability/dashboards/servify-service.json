@@ -194,6 +194,33 @@
           "unit": "bytes"
         }
       }
+    },
+    {
+      "title": "SLO Error Budget (30d remaining)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "1 - (sum(increase(http_requests_total{status_code=~\"5..\"}[30d])) / sum(increase(http_requests_total[30d]))) / 0.001",
+          "legendFormat": "availability budget (99.9%)"
+        },
+        {
+          "expr": "1 - (1 - sum(increase(http_request_duration_seconds_bucket{le=\"2\"}[30d])) / sum(increase(http_request_duration_seconds_count[30d]))) / 0.01",
+          "legendFormat": "latency budget (99% <2s)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1
+        }
+      }
     }
   ],
   "schemaVersion": 39,

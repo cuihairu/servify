@@ -24,7 +24,7 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 | `ratelimit_` | Rate-limited (429) requests |
 | `eventbus_` | Event bus processing |
 | `worker_` | Background job processing（`worker_job_duration_seconds` 见 known-gaps.md） |
-| `errors_` | Classified errors（known gap，见 known-gaps.md） |
+| `errors_` | Classified errors（HTTP 5xx 统一出口打点） |
 
 ## Alert Runbooks
 
@@ -167,9 +167,65 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 - 编排层持续失败：按日志 error 修复（常见为 WeKnora/Dify 凭证或网络）
 - 熔断开启：等半开恢复或 `POST /api/v1/ai/circuit-breaker/reset`
 
+### SLOAvailabilityFastBurn
+
+**Severity**: Critical | **Threshold**: 5xx 错误率 > 0.144%（14.4x 预算燃烧率），1h 与 5m 双窗同时成立
+
+含义：按此速度 1 小时烧掉约 2% 的 30 天可用性预算（99.9% SLO，见
+`deploy/observability/slo.md`）。这是 page 级告警，需要立即响应。
+
+**Investigation**:
+1. 先看症状告警（HighHTTP5xxRate）是否同时触发——触发则按其 runbook 处理现场
+2. Service dashboard "SLO Error Budget" 面板确认预算消耗趋势；
+   "HTTP Request Rate" 面板按 status_code 拆分定位 5xx 来源
+3. 若症状告警未触发（错误率 0.15%~5% 之间）：查 `errors_total` 按
+   severity/error_category 拆分——dependency 类看外部依赖健康，
+   system 类看应用日志（按 request_id）
+
+**Resolution**:
+- 外部依赖降级：启用对应 fallback（AI 链路见 AIFallbackRatioHigh）
+- 应用缺陷：考虑回滚最近发布，止血优先于根因
+- 无法立即修复：接受预算烧穿，但停止非关键发布直到预算回正
+
+### SLOAvailabilitySlowBurn
+
+**Severity**: Warning | **Threshold**: 5xx 错误率 > 0.06%（6x），6h 与 30m 双窗同时成立
+
+含义：6 小时烧掉约 5% 的 30 天预算。票务级告警，工作时间处理即可。
+
+**Investigation**:
+1. "SLO Error Budget" 面板看 30d 预算剩余——剩余 < 50% 时提高处理优先级
+2. 对比 6h 窗内是否有间歇性 5xx（低水平持续漏损）：按 path 拆分
+   `http_requests_total{status_code=~"5.."}`，找占比最高的路径
+3. 查该路径近期变更（发布记录、配置调整、依赖版本）
+
+**Resolution**:
+- 定位到单一路径：按路径所属模块排查（通常是边界输入未覆盖的 500）
+- 全局低水平漏损：检查依赖超时配置与重试策略是否产生长尾 502/504
+- 预算充足且已定位 backlog 项：转工单跟踪，不需即时响应
+
+### SLOLatencyFastBurn
+
+**Severity**: Critical | **Threshold**: 慢于 2s 的请求 > 14.4%（14.4x 预算燃烧率），1h 与 5m 双窗同时成立
+
+含义：按此速度 1 小时烧掉约 2% 的 30 天延迟预算（99% 请求 < 2s 的 SLO，
+见 `deploy/observability/slo.md`）。
+
+**Investigation**:
+1. 先看 HighP99Latency 是否同时触发——触发则按其 runbook 处理
+2. "HTTP Request Latency" 面板对比 P50/P95/P99：P50 也在涨 → 全局资源
+   问题（DB、连接池、CPU）；只有 P99 涨 → 长尾问题（慢查询、依赖超时）
+3. 注意口径差异：本告警按"请求慢于 2s 的比例"计算，AI 生成类慢请求
+   会直接推高比例——先看 "AI Request Duration" 面板排除 AI 流量占比变化
+
+**Resolution**:
+- 资源瓶颈：扩容或提高连接池，参照 HighP99Latency 处置
+- AI 流量导致：确认 SLO 是否需要按路由分组（AI 路径单列），
+  属口径问题则提 SLO 修订，不是故障
+
 ## Known Gaps
 
-部分指标已定义但尚未接线（`errors_total`、`worker_job_duration_seconds`），
+部分指标已定义但尚未接线（`worker_job_duration_seconds`），
 对应告警与面板已摘除。当前清单与接线计划见
 `deploy/observability/known-gaps.md`；接线完成前不要在告警规则或
 dashboard 中引用这些指标。
@@ -219,6 +275,7 @@ POST /api/v1/ai/circuit-breaker/reset
 | `http_request_duration_seconds` | Histogram | method, path | Request latency |
 | `http_response_size_bytes` | Histogram | method, path | Request response size |
 | `ratelimit_dropped_total` | Counter | path | HTTP 429 responses due to rate limiting |
+| `errors_total` | Counter | severity, error_category, error_module | Classified server errors (HTTP 5xx via unified exit; 502/504 → dependency/network, other 5xx → system/internal) |
 
 ### AI Metrics
 
@@ -253,5 +310,6 @@ POST /api/v1/ai/circuit-breaker/reset
 
 `go_*` / `process_*` 由 Prometheus runtime collectors 直接产出。
 
-`errors_total` 与 `worker_job_duration_seconds` 仍处未接线状态，
-见 `deploy/observability/known-gaps.md`。
+`worker_job_duration_seconds` 仍处未接线状态，
+见 `deploy/observability/known-gaps.md`。SLO 语义与 burn rate
+告警口径见 `deploy/observability/slo.md`。

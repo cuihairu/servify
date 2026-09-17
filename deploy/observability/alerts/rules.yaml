@@ -103,3 +103,59 @@ groups:
         annotations:
           summary: "AI fallback ratio exceeds 50%"
           description: "Share of AI answers served by the degraded fallback path is {{ $value | humanizePercentage }}; transfers excluded."
+
+  - name: servify.slo
+    rules:
+      - alert: SLOAvailabilityFastBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[1h]))
+            / sum(rate(http_requests_total[1h]))
+          ) > (14.4 * 0.001)
+          and
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m]))
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Availability SLO fast burn (14.4x, ~2% of 30d budget in 1h)"
+          description: "5xx ratio is {{ $value | humanizePercentage }} against a 99.9% availability SLO; page immediately."
+
+      - alert: SLOAvailabilitySlowBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[6h]))
+            / sum(rate(http_requests_total[6h]))
+          ) > (6 * 0.001)
+          and
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[30m]))
+            / sum(rate(http_requests_total[30m]))
+          ) > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Availability SLO slow burn (6x, ~5% of 30d budget in 6h)"
+          description: "5xx ratio is {{ $value | humanizePercentage }} against a 99.9% availability SLO; investigate during business hours."
+
+      - alert: SLOLatencyFastBurn
+        expr: |
+          (
+            1 - sum(rate(http_request_duration_seconds_bucket{le="2"}[1h]))
+            / sum(rate(http_request_duration_seconds_count[1h]))
+          ) > (14.4 * 0.01)
+          and
+          (
+            1 - sum(rate(http_request_duration_seconds_bucket{le="2"}[5m]))
+            / sum(rate(http_request_duration_seconds_count[5m]))
+          ) > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Latency SLO fast burn (14.4x, ~2% of 30d budget in 1h)"
+          description: "Requests slower than 2s are {{ $value | humanizePercentage }} against a 99% latency SLO (<2s)."

@@ -16,7 +16,6 @@
 <!-- 行格式：- metric: <指标名>，行内可附计划说明 -->
 
 - metric: worker_job_duration_seconds — ObservableWorker 只记启动计数与活跃 gauge；duration 需周期 job 级 TrackJob 接线（后续刀）
-- metric: errors_total — 计划 P2-4 第四刀：errors.RecordError 已有，需在错误统一出口调用
 
 ## 已接线指标
 
@@ -57,3 +56,16 @@
 - service dashboard 的 Event Bus Throughput / Worker Jobs 面板与
   EventBusHandlerFailures / EventBusDeadLetters / WorkerJobFailures
   告警已随之恢复
+
+### 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）
+
+- `errors_total{severity, error_category, error_module}` — 统一出口为
+  HTTP 层 `observability/errors` 的 StatusMiddleware（与 HTTPMetrics 中间件
+  同一挂载条件），响应完成后按最终状态码对 5xx 打点：502/504 归
+  dependency/network（上游依赖失败语义），其余 5xx 归 system/internal，
+  module 固定 http、code 为状态码；2xx/4xx 不计数（限流已有
+  ratelimit_dropped_total 单独计数，避免双计）
+- SLO 语义见 [slo.md](slo.md)：availability 99.9%（30d），latency
+  99% 请求 < 2s；burn rate 告警 SLOAvailabilityFastBurn /
+  SLOAvailabilitySlowBurn / SLOLatencyFastBurn 与 service dashboard 的
+  SLO Error Budget 面板已随之恢复

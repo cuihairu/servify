@@ -29,6 +29,7 @@ import (
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 	webhookinfra "servify/apps/server/internal/modules/webhook/infra"
+	svcerrors "servify/apps/server/internal/observability/errors"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/pstnprovider"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -53,6 +54,9 @@ func initializeObservability(rt *Runtime) {
 	}
 	svcmetrics.DefaultRegistry.RegisterGoCollector()
 	svcmetrics.DefaultRegistry.RegisterProcessCollector()
+	// errors_total 统一出口：先注册计数器，registerBaseMiddleware 才能挂
+	// StatusMiddleware 对全部路由的 5xx 打点。
+	svcerrors.RegisterErrorMetrics(svcmetrics.DefaultRegistry)
 	rt.HTTPMetrics = svcmetrics.NewHTTPMetrics(svcmetrics.DefaultRegistry)
 	rt.BusinessMetrics = svcmetrics.NewBusinessMetrics(svcmetrics.DefaultRegistry)
 }
