@@ -325,7 +325,17 @@ metadata:
   labels:
     app: servify
 spec:
-  replicas: 2
+  # Servify 当前为单实例优先交付（见 docs/multi-instance-boundary.md）：
+  # WebSocket/WebRTC 实时路由、进程内限流、webhook/automation worker
+  # 认领都是单实例约束面，多副本会产生重复副作用或实时推送丢失。
+  # 高可用通过进程级重启恢复（worker 状态在 DB、事件在 Redis stream、
+  # agent presence TTL 自动收敛）+ 滚动重启满足，不通过多副本满足。
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: servify

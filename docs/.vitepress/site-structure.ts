@@ -36,6 +36,7 @@ const operationsPages = [
   '/configuration-scopes',
   '/token-lifecycle-and-key-rotation',
   '/public-surface-security-checklist',
+  '/multi-instance-boundary',
 ];
 
 const appendixPages = [
