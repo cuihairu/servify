@@ -38,21 +38,9 @@ run_baseline_strict() {
     > "$EVIDENCE_DIR/$evidence_name" 2>&1 || BASELINE_RC=$?
 }
 
-# build_production_secure_config 基于生产安全模板生成"真实部署配置"副本:
-# 模板刻意不携带 database 段(不提交真实凭证),部署时由操作员补齐——
-# 这里同样只注入非默认的开发占位凭证,再由 ${ENV} 展开注入其余字段。
-build_production_secure_config() {
-  local target=$1
-  cp "$CONFIG_TEMPLATE" "$target"
-  cat >> "$target" <<'EOF'
-
-# Deployment-provided database section (acceptance-only values, never committed)
-database:
-  driver: "sqlite"
-  dsn: "file:security-acceptance.db"
-  password: "security-acceptance-only-password"
-EOF
-}
+# 生产安全模板的 database 节自 P2-2 起显式存在(${DB_*} 占位符,由配置
+# 模板漂移门禁强制)——部署语义是纯环境变量注入,不再追加 deployment 段
+# (追加会产生重复 yaml 键)。此处只注入非默认的 acceptance 占位凭证。
 
 write_manifest() {
   MANIFEST_MODE="${SECURITY_ACCEPTANCE_MODE:-unknown}" \
@@ -97,26 +85,36 @@ if [ ! -f "$CONFIG_TEMPLATE" ]; then
   exit 1
 fi
 
-# 1) 负例:staging 示例配置(占位凭证)在 strict 模式必须被拒绝
+# 1) 负例:staging 示例配置必须被 strict 拒绝。注入基础设施凭证(${DB_*}/
+#    ${SERVIFY_JWT_SECRET})让占位符过启动校验,但不注入 AI provider 凭证——
+#    空的 ai.openai.api_key / dify.api_key / dify.dataset_id 被基线检查点名,
+#    证明示例模板未经完整凭证注入不允许上预生产。
 append_summary "step=staging_example_strict"
-run_baseline_strict "$STAGING_CONFIG" "security-staging-rejected.txt"
-if [ "$BASELINE_RC" -ne 0 ] && grep -q "Security baseline check found" "$EVIDENCE_DIR/security-staging-rejected.txt"; then
+run_baseline_strict "$STAGING_CONFIG" "security-staging-rejected.txt" \
+  "SERVIFY_JWT_SECRET=${SERVIFY_JWT_SECRET:-security-acceptance-jwt-secret}" \
+  "DB_HOST=${DB_HOST:-db.internal}" \
+  "DB_USER=${DB_USER:-servify}" \
+  "DB_NAME=${DB_NAME:-servify}" \
+  "DB_PASSWORD=${DB_PASSWORD:-security-acceptance-only-password}"
+if [ "$BASELINE_RC" -ne 0 ] && grep -qE "config validation failed|Security baseline check found" "$EVIDENCE_DIR/security-staging-rejected.txt"; then
   STAGING_REJECTED=true
   append_summary "staging_example_rejected=true"
 else
   append_summary "staging_example_rejected=false"
 fi
 
-# 2) 正例:生产安全模板 + 部署段补齐 + 环境变量注入,strict 必须通过
+# 2) 正例:生产安全模板 + ${DB_*}/${SERVIFY_JWT_SECRET} 等环境变量注入,
+#    strict 必须通过(与模板 ${ENV} 占位符一一对应,不改动配置文件本身)
 append_summary "step=production_secure_strict"
-TMP_SECURE_CONFIG="$(mktemp "${TMPDIR:-/tmp}/servify-security-acceptance-XXXXXX")"
-trap 'rm -f "$TMP_SECURE_CONFIG"; write_manifest' EXIT
-build_production_secure_config "$TMP_SECURE_CONFIG"
-run_baseline_strict "$TMP_SECURE_CONFIG" "security-production-passed.txt" \
+run_baseline_strict "$CONFIG_TEMPLATE" "security-production-passed.txt" \
   "SERVIFY_JWT_SECRET=${SERVIFY_JWT_SECRET:-security-acceptance-jwt-secret}" \
   "OPENAI_API_KEY=${OPENAI_API_KEY:-security-acceptance-openai-key}" \
   "DIFY_API_KEY=${DIFY_API_KEY:-security-acceptance-dify-key}" \
-  "DIFY_DATASET_ID=${DIFY_DATASET_ID:-security-acceptance-dataset-id}"
+  "DIFY_DATASET_ID=${DIFY_DATASET_ID:-security-acceptance-dataset-id}" \
+  "DB_HOST=${DB_HOST:-db.internal}" \
+  "DB_USER=${DB_USER:-servify}" \
+  "DB_NAME=${DB_NAME:-servify}" \
+  "DB_PASSWORD=${DB_PASSWORD:-security-acceptance-only-password}"
 if [ "$BASELINE_RC" -eq 0 ] && grep -q "Security baseline check passed" "$EVIDENCE_DIR/security-production-passed.txt"; then
   PRODUCTION_SECURE_OK=true
   append_summary "production_secure_ok=true"
@@ -133,9 +131,6 @@ if [ -f "$DEFAULT_CONFIG" ]; then
   fi
   append_summary "default_config_strict_passed=$DEFAULT_CONFIG_STRICT_PASSED"
 fi
-
-rm -f "$TMP_SECURE_CONFIG"
-trap 'write_manifest' EXIT
 
 if [ "$STAGING_REJECTED" != "true" ] || [ "$PRODUCTION_SECURE_OK" != "true" ]; then
   append_summary "overall_status=failed"

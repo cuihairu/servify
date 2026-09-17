@@ -427,6 +427,7 @@
   - 代码文件：`apps/server/internal/config/config_template_lint_test.go`（新增）、`apps/server/internal/config/config.go`（canonicalEnvironment + Validate 严格度）、`apps/server/internal/config/config_test.go`（staging 严格度 / 别名归一 / prod 别名经 Load 拒绝三组回归）、`config.staging.example.yml` 与 `config.production.secure.example.yml`（补 database 节）、`docs/configuration-scopes.md`
   - 测试命令：`go test -count=1 ./internal/config`；受影响的 staging 环境消费包 `go test -count=1 ./internal/platform/configscope ./internal/handlers`
   - 端到端验证：两模板注入 env 后 `check-security-baseline --strict` 均通过（`go run ./cmd -c config.staging.example.yml check-security-baseline --strict` + DB/SERVIFY_JWT_SECRET/OPENAI/DIFY 环境变量）；不注入时按预期拒绝（`database.password is empty or using a default value`），证明补 database 节后模板真实可用
+  - acceptance 脚本适配：`scripts/test-security-acceptance.sh` 原设计前提是"模板不带 database 段、脚本追加 deployment 段"——P2-2 后模板显式带 `${DB_*}` 占位 database 节，追加会产生 yaml duplicate key；改为纯环境变量注入（production 正例注入 DB_*/JWT/AI 凭证 strict 通过；staging 负例注入基础设施凭证过启动校验、空 AI 凭证被基线检查点名拒绝），`go test ./scripts` 全包绿
   - 文档回填位置：`docs/configuration-scopes.md` + 本条目
 
 ### [ ] P2-3 数据恢复、备份与迁移演练
