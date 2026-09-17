@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -9,7 +11,12 @@
     {
       "title": "HTTP Request Rate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[5m])) by (status_code)",
@@ -17,13 +24,20 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       }
     },
     {
       "title": "HTTP Request Latency",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
@@ -39,81 +53,41 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
-    },
-    {
-      "title": "Error Rate by Category",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "targets": [
-        {
-          "expr": "sum(rate(errors_total[5m])) by (error_category)",
-          "legendFormat": "{{error_category}}"
+        "defaults": {
+          "unit": "s"
         }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "errors/s" }
       }
     },
     {
       "title": "Rate Limit Drops",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "targets": [
         {
-          "expr": "sum(rate(ratelimit_dropped_total[5m])) by (prefix)",
+          "expr": "sum(rate(ratelimit_dropped_total[5m])) by (path)",
           "legendFormat": "{{prefix}}"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "drops/s" }
-      }
-    },
-    {
-      "title": "Event Bus Throughput",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "targets": [
-        {
-          "expr": "sum(rate(eventbus_published_total[5m])) by (event_type, outcome)",
-          "legendFormat": "published/{{event_type}}/{{outcome}}"
-        },
-        {
-          "expr": "sum(rate(eventbus_handled_total[5m])) by (event_type)",
-          "legendFormat": "handled/{{event_type}}"
-        },
-        {
-          "expr": "sum(rate(eventbus_failed_total[5m])) by (event_type)",
-          "legendFormat": "failed/{{event_type}}"
+        "defaults": {
+          "unit": "drops/s"
         }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "ops/s" }
-      }
-    },
-    {
-      "title": "Worker Jobs",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "targets": [
-        {
-          "expr": "sum(rate(worker_jobs_total[5m])) by (worker_name, outcome)",
-          "legendFormat": "{{worker_name}}/{{outcome}}"
-        },
-        {
-          "expr": "worker_active_jobs",
-          "legendFormat": "active/{{worker_name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "jobs/s" }
       }
     },
     {
       "title": "Go Runtime",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
       "targets": [
         {
           "expr": "go_goroutines",
@@ -125,14 +99,24 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": {
+          "unit": "bytes"
+        }
       }
     }
   ],
   "schemaVersion": 39,
-  "tags": ["servify", "infrastructure"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "servify",
+    "infrastructure"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "title": "Servify - Infrastructure",
   "uid": "servify-infrastructure"
 }

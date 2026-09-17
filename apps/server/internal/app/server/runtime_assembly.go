@@ -54,6 +54,7 @@ func initializeObservability(rt *Runtime) {
 	svcmetrics.DefaultRegistry.RegisterGoCollector()
 	svcmetrics.DefaultRegistry.RegisterProcessCollector()
 	rt.HTTPMetrics = svcmetrics.NewHTTPMetrics(svcmetrics.DefaultRegistry)
+	rt.BusinessMetrics = svcmetrics.NewBusinessMetrics(svcmetrics.DefaultRegistry)
 }
 
 func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
@@ -61,8 +62,8 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	if err != nil {
 		return nil, err
 	}
-	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService)
-	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service)
+	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics)
+	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, rt.BusinessMetrics)
 	return aiAssembly, nil
 }
 

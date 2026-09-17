@@ -18,12 +18,12 @@ import (
 )
 
 func TestScopedAIServicesNilLoggerFallback(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
 	if _, ok := handler.GetMetrics(); !ok {
 		t.Fatal("expected fallback metrics with nil logger")
 	}
 
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubRuntimeFallback{})
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubRuntimeFallback{}, nil)
 	if got, err := runtimeSvc.GetSessionSummary(nil); err != nil || got != "summary" {
 		t.Fatalf("GetSessionSummary() = (%q, %v)", got, err)
 	}
@@ -43,7 +43,7 @@ func TestScopedAIHandlerServiceNilReceiverBranches(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigNilLogger(t *testing.T) {
-	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, nil)
+	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, nil, nil)
 	if svc == nil {
 		t.Fatal("expected default runtime service with nil logger")
 	}

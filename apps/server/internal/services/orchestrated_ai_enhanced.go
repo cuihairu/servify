@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	aimodule "servify/apps/server/internal/modules/ai/application"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	"servify/apps/server/internal/platform/llm"
 	baseweknora "servify/apps/server/pkg/weknora"
@@ -28,8 +29,28 @@ type OrchestratedEnhancedAIService struct {
 	fallbackEnabled          bool
 	circuitBreaker           *CircuitBreaker
 	metrics                  *AIMetrics
+	promMetrics              *svcmetrics.BusinessMetrics
 	logger                   *logrus.Logger
 	toolExecutor             *aimodule.ToolExecutor
+}
+
+// AttachBusinessMetrics 注入进程级 Prometheus 业务指标（nil 安全，可链式）。
+// 记录维度：ai_requests_total{provider,outcome,strategy}（primary/fallback/transfer）、
+// ai_request_duration_seconds、ai_llm_tokens_total。
+func (s *OrchestratedEnhancedAIService) AttachBusinessMetrics(m *svcmetrics.BusinessMetrics) *OrchestratedEnhancedAIService {
+	if s == nil {
+		return s
+	}
+	s.promMetrics = m
+	return s
+}
+
+// aiProviderLabel 返回打点用的 provider 标签；未启用外部 provider 时记 "none"。
+func (s *OrchestratedEnhancedAIService) aiProviderLabel() string {
+	if id := s.activeKnowledgeProviderID(); id != "" {
+		return id
+	}
+	return "none"
 }
 
 func NewOrchestratedEnhancedAIService(
@@ -83,6 +104,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 	start := time.Now()
 	s.metrics.QueryCount++
 	if s.ShouldTransferToHuman(query, nil) {
+		s.promMetrics.RecordAIRequest("internal", "", "success", "transfer", time.Since(start).Seconds())
 		return &EnhancedAIResponse{
 			AIResponse: &AIResponse{
 				Content:    "我来为您转接人工客服，请稍等...",
@@ -117,17 +139,20 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		if s.fallbackEnabled {
 			fallback, fbErr := s.base.ProcessQuery(ctx, query, sessionID)
 			if fbErr != nil {
+				s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "failure", "fallback", time.Since(start).Seconds())
 				return nil, fbErr
 			}
 			s.logger.Warnf("AI enhanced query failed, served by fallback (strategy=fallback, session_id=%s, error=%v)", sessionID, err)
 			s.metrics.FallbackUsageCount++
 			s.metrics.AverageLatency = time.Since(start)
+			s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", "fallback", time.Since(start).Seconds())
 			return &EnhancedAIResponse{
 				AIResponse: fallback,
 				Strategy:   "fallback",
 				Duration:   time.Since(start),
 			}, nil
 		}
+		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "failure", "primary", time.Since(start).Seconds())
 		return nil, err
 	}
 	if s.knowledgeProviderEnabled {
@@ -137,6 +162,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 	s.metrics.AverageLatency = result.Latency
 	s.metrics.OpenAILatency = result.Latency
 
+	recordedStrategy := "primary"
 	enhanced := &EnhancedAIResponse{
 		AIResponse: &AIResponse{
 			Content:    result.Content,
@@ -160,9 +186,13 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		}
 	} else {
 		s.metrics.FallbackUsageCount++
+		recordedStrategy = "fallback"
 	}
+	s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", recordedStrategy, result.Latency.Seconds())
 	if result.TokenUsage != nil {
 		enhanced.TokensUsed = result.TokenUsage.TotalTokens
+		s.promMetrics.RecordAILLMTokens(s.aiProviderLabel(), "input", result.TokenUsage.InputTokens)
+		s.promMetrics.RecordAILLMTokens(s.aiProviderLabel(), "output", result.TokenUsage.OutputTokens)
 	}
 	return enhanced, nil
 }

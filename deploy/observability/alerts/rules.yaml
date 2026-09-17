@@ -29,7 +29,7 @@ groups:
           severity: info
         annotations:
           summary: "High rate of rate-limited requests"
-          description: "Rate limit drops at {{ $value }}/s for prefix {{ $labels.prefix }}."
+          description: "Rate limit drops at {{ $value }}/s on path {{ $labels.path }}."
 
       - alert: HighGoroutineCount
         expr: go_goroutines > 10000
@@ -39,56 +39,6 @@ groups:
         annotations:
           summary: "Goroutine count exceeds 10000"
           description: "Current goroutine count is {{ $value }}."
-
-  - name: servify.errors
-    rules:
-      - alert: HighSystemErrorRate
-        expr: sum(rate(errors_total{severity="system"}[5m])) > 0.01
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "High system error rate in module {{ $labels.error_module }}"
-          description: "System errors in {{ $labels.error_module }} at {{ $value }}/s."
-
-      - alert: HighDependencyErrorRate
-        expr: sum(rate(errors_total{severity="dependency"}[5m])) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High dependency error rate in {{ $labels.error_module }}"
-          description: "Dependency errors in {{ $labels.error_module }} at {{ $value }}/s."
-
-  - name: servify.eventbus
-    rules:
-      - alert: EventBusHandlerFailures
-        expr: sum(rate(eventbus_failed_total[5m])) > 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Event bus handler failures for {{ $labels.event_type }}"
-          description: "Event handler failures at {{ $value }}/s."
-
-      - alert: EventBusDeadLetters
-        expr: sum(rate(eventbus_dead_letter_total[5m])) > 0
-        for: 10m
-        labels:
-          severity: info
-        annotations:
-          summary: "Events being dead-lettered for {{ $labels.event_type }}"
-
-  - name: servify.workers
-    rules:
-      - alert: WorkerJobFailures
-        expr: sum(rate(worker_jobs_total{outcome="failure"}[5m])) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Worker {{ $labels.worker_name }} is failing"
-          description: "Worker failure rate at {{ $value }}/s."
 
   - name: servify.ai
     rules:
@@ -111,3 +61,14 @@ groups:
           severity: warning
         annotations:
           summary: "AI provider {{ $labels.provider }} P95 latency exceeds 10s"
+
+      - alert: AIFallbackRatioHigh
+        expr: |
+          sum(rate(ai_requests_total{strategy="fallback"}[10m]))
+          / sum(rate(ai_requests_total{strategy=~"primary|fallback"}[10m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI fallback ratio exceeds 50%"
+          description: "Share of AI answers served by the degraded fallback path is {{ $value | humanizePercentage }}; transfers excluded."

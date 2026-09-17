@@ -12,14 +12,19 @@ import (
 
 // HTTPMetrics holds Prometheus instruments for HTTP request observability.
 type HTTPMetrics struct {
-	requestsTotal   *prometheus.CounterVec
-	requestDuration *prometheus.HistogramVec
-	responseSize    *prometheus.HistogramVec
+	requestsTotal    *prometheus.CounterVec
+	requestDuration  *prometheus.HistogramVec
+	responseSize     *prometheus.HistogramVec
+	rateLimitDropped *prometheus.CounterVec
 }
 
 // NewHTTPMetrics creates and registers HTTP metric collectors.
 func NewHTTPMetrics(reg *Registry) *HTTPMetrics {
 	m := &HTTPMetrics{
+		rateLimitDropped: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: telemetry.MetricRateLimitDropped,
+			Help: "Total HTTP 429 responses due to rate limiting.",
+		}, []string{telemetry.LabelPath}),
 		requestsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: telemetry.MetricHTTPRequestTotal,
 			Help: "Total number of HTTP requests processed.",
@@ -36,7 +41,7 @@ func NewHTTPMetrics(reg *Registry) *HTTPMetrics {
 		}, []string{telemetry.LabelMethod, telemetry.LabelPath}),
 	}
 
-	reg.MustRegister(m.requestsTotal, m.requestDuration, m.responseSize)
+	reg.MustRegister(m.requestsTotal, m.requestDuration, m.responseSize, m.rateLimitDropped)
 	return m
 }
 
@@ -60,5 +65,9 @@ func (m *HTTPMetrics) Middleware() gin.HandlerFunc {
 		m.requestsTotal.WithLabelValues(method, path, status).Inc()
 		m.requestDuration.WithLabelValues(method, path).Observe(duration)
 		m.responseSize.WithLabelValues(method, path).Observe(size)
+		// 429 视为限流丢弃，单独计数供 HighRateLimitDrops 告警使用。
+		if status == "429" {
+			m.rateLimitDropped.WithLabelValues(path).Inc()
+		}
 	}
 }

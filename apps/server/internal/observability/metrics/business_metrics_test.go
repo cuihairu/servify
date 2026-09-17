@@ -32,7 +32,7 @@ func TestBusinessMetrics_RecordAIRequest(t *testing.T) {
 	reg := NewRegistry()
 	bm := NewBusinessMetrics(reg)
 
-	bm.RecordAIRequest("openai", "gpt-4", "success", 0.5)
+	bm.RecordAIRequest("openai", "gpt-4", "success", "primary", 0.5)
 
 	mfs, _ := reg.Gatherer().Gather()
 	foundCount := false

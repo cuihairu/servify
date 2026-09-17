@@ -76,7 +76,7 @@ func TestScopedAIHandlerServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	resp, err := handler.ProcessQuery(ctx, "hello", "session-1")
 	if err != nil {
@@ -101,7 +101,7 @@ func TestScopedAIHandlerServiceGetStatusUsesWorkspaceWeKnoraOverride(t *testing.
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	status := handler.GetStatus(ctx)
 	if enabled, _ := status["knowledge_provider_enabled"].(bool); !enabled {
@@ -113,7 +113,7 @@ func TestScopedAIHandlerServiceGetStatusUsesWorkspaceWeKnoraOverride(t *testing.
 }
 
 func TestScopedAIHandlerServiceGetMetricsFallsBackToBaseHandler(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
 	metrics, ok := handler.GetMetrics()
 	if !ok || metrics == nil {
 		t.Fatal("expected fallback metrics")
@@ -121,7 +121,7 @@ func TestScopedAIHandlerServiceGetMetricsFallsBackToBaseHandler(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigWithoutWeKnora(t *testing.T) {
-	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{APIKey: "", BaseURL: ""}, config.DifyConfig{}, config.WeKnoraConfig{}, logrus.New())
+	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{APIKey: "", BaseURL: ""}, config.DifyConfig{}, config.WeKnoraConfig{}, logrus.New(), nil)
 	status := service.GetStatus(context.Background())
 	if typ, _ := status["type"].(string); typ == "" {
 		t.Fatalf("expected service status type, got %+v", status)
@@ -136,7 +136,7 @@ func TestRuntimeServiceFromResolvedConfigWithWeKnoraScopedKnowledgeBase(t *testi
 		TenantID:        "tenant-a",
 		KnowledgeBaseID: "kb-scoped",
 		Timeout:         time.Second,
-	}, logrus.New())
+	}, logrus.New(), nil)
 	status := service.GetStatus(context.Background())
 	if enabled, _ := status["knowledge_provider_enabled"].(bool); !enabled {
 		t.Fatalf("expected knowledge provider enabled, got %+v", status)
@@ -147,7 +147,7 @@ func TestRuntimeServiceFromResolvedConfigWithWeKnoraScopedKnowledgeBase(t *testi
 }
 
 func TestScopedAIHandlerServiceSetKnowledgeProviderEnabledAppliesToFutureRequests(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
 
 	if !handler.SetKnowledgeProviderEnabled(true) {
 		t.Fatal("expected enable to succeed")
@@ -178,7 +178,7 @@ func TestScopedAIHandlerServiceUploadUsesRuntimeKnowledgeProviderOverride(t *tes
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{})
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
 	if !handler.SetKnowledgeProviderEnabled(true) {
 		t.Fatal("expected enable to succeed")
 	}

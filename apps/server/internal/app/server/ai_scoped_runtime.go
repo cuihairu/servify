@@ -6,6 +6,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/services"
 
@@ -14,13 +15,14 @@ import (
 )
 
 type scopedAIRuntimeService struct {
-	cfg      *config.Config
-	logger   *logrus.Logger
-	resolver *configscope.Resolver
-	fallback aidelivery.RuntimeService
+	cfg           *config.Config
+	logger        *logrus.Logger
+	resolver      *configscope.Resolver
+	fallback      aidelivery.RuntimeService
+	businessMeter *svcmetrics.BusinessMetrics
 }
 
-func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService) aidelivery.RuntimeService {
+func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -33,7 +35,7 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantWeKnoraProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceWeKnoraProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback}
+	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
 }
 
 func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string, sessionID string) (*services.AIResponse, error) {
@@ -73,5 +75,5 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
-	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger)
+	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger, s.businessMeter)
 }

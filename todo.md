@@ -427,7 +427,7 @@
 - 验收标准：
   - 至少一轮备份恢复演练证据
 
-### [ ] P2-4 可观测性从“有指标”升级到“可运维”
+### [-] P2-4 可观测性从“有指标”升级到“可运维”
 
 - 范围：
   - 关键业务 SLI/SLO
@@ -438,6 +438,20 @@
   - 运维能在故障时快速定位，不依赖人工翻日志
 - 验收标准：
   - 告警规则、dashboard、runbook 三者一致
+- 进展（分刀推进）：
+  - 第一刀（AI/provider 失败分类 + 三者一致门禁）✅
+    - `ai_requests_total` 增加 strategy 标签（primary/fallback/transfer），
+      provider 取值 dify/weknora/internal/none；编排服务五条路径全打点，
+      token 与时长指标接线（`orchestrated_ai_enhanced.go`）
+    - HTTP 中间件对 429 计数，`ratelimit_dropped_total{path}` 真正进入
+      scrape 面（原指标只存在于 legacy 手写 exposition，主路径不可见）
+    - 一致性门禁 `consistency_test.go`：rules.yaml / dashboard JSON /
+      runbook 告警段三者对齐，未接线指标（known-gaps.md）禁止出现在
+      任何 PromQL 中；摘除 6 条永真沉默的死告警与对应死面板
+    - 新增 AIFallbackRatioHigh 告警 + AI 策略分布/降级占比面板与处置条目
+  - 第二刀（conversations/tickets/routing 埋点 + business 面板恢复）⬜
+  - 第三刀（eventbus/worker middleware 装配接线 + 异步失败告警恢复）⬜
+  - 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）⬜
 
 ### [ ] P2-5 安全治理继续收口到首批企业交付标准
 

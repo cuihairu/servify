@@ -101,6 +101,44 @@ func TestHTTPMetrics_Middleware_404(t *testing.T) {
 	t.Fatal("expected unknown path label for unmatched route")
 }
 
+func TestHTTPMetrics_Middleware_RateLimitDrop(t *testing.T) {
+	reg := NewRegistry()
+	hm := NewHTTPMetrics(reg)
+
+	r := gin.New()
+	r.Use(hm.Middleware())
+	r.GET("/limited/:id", func(c *gin.Context) {
+		c.String(http.StatusTooManyRequests, "slow down")
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/limited/7", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", w.Code)
+	}
+
+	mfs, _ := reg.Gatherer().Gather()
+	for _, mf := range mfs {
+		if mf.GetName() != "ratelimit_dropped_total" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			if m.GetCounter().GetValue() != 1 {
+				t.Fatalf("expected drop counter 1, got %v", m.GetCounter().GetValue())
+			}
+			for _, l := range m.GetLabel() {
+				if l.GetName() == "path" && l.GetValue() == "/limited/:id" {
+					return // OK
+				}
+			}
+		}
+		t.Fatal("expected path label /limited/:id on ratelimit_dropped_total")
+	}
+	t.Fatal("expected ratelimit_dropped_total metric")
+}
+
 func TestPrometheusHandler(t *testing.T) {
 	reg := NewRegistry()
 	reg.RegisterGoCollector()

@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -7,69 +9,35 @@
   "links": [],
   "panels": [
     {
-      "title": "Conversations Created",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "targets": [
-        {
-          "expr": "sum(rate(conversations_created_total[5m])) by (channel)",
-          "legendFormat": "{{channel}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "ops/s" }
-      }
-    },
-    {
-      "title": "Tickets: Created vs Resolved",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "targets": [
-        {
-          "expr": "sum(rate(tickets_created_total[5m]))",
-          "legendFormat": "created"
-        },
-        {
-          "expr": "sum(rate(tickets_resolved_total[5m]))",
-          "legendFormat": "resolved"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "ops/s" }
-      }
-    },
-    {
-      "title": "Routing Decisions",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "targets": [
-        {
-          "expr": "sum(rate(routing_decisions_total[5m])) by (strategy, outcome)",
-          "legendFormat": "{{strategy}}/{{outcome}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "ops/s" }
-      }
-    },
-    {
       "title": "AI Request Volume",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
-          "expr": "sum(rate(ai_requests_total[5m])) by (provider, outcome)",
+          "expr": "sum(rate(ai_requests_total[5m])) by (provider, strategy)",
           "legendFormat": "{{provider}}/{{outcome}}"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "ops/s" }
+        "defaults": {
+          "unit": "ops/s"
+        }
       }
     },
     {
       "title": "AI Request Latency",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le, provider))",
@@ -81,13 +49,20 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s"
+        }
       }
     },
     {
       "title": "LLM Token Consumption",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "targets": [
         {
           "expr": "sum(rate(ai_llm_tokens_total[1h])) by (provider, token_type)",
@@ -95,14 +70,100 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "tokens/h" }
+        "defaults": {
+          "unit": "tokens/h"
+        }
       }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 124,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ai_requests_total[5m])) by (strategy)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Strategy Breakdown",
+      "type": "timeseries",
+      "description": "AI 答复策略分布（primary=知识源命中，fallback=降级，transfer=转人工）"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 136,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ai_requests_total{strategy=\"fallback\"}[10m])) / sum(rate(ai_requests_total{strategy=~\"primary|fallback\"}[10m]))",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Fallback Ratio",
+      "type": "timeseries",
+      "description": "降级答复占比（不含转人工）；持续高于 50% 触发 AIFallbackRatioHigh"
     }
   ],
   "schemaVersion": 39,
-  "tags": ["servify", "business"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "tags": [
+    "servify",
+    "business"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "title": "Servify - Business Metrics",
   "uid": "servify-business"
 }

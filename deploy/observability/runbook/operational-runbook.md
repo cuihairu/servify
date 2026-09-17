@@ -8,6 +8,11 @@ Servify exposes metrics at `/metrics` in Prometheus format. The stack:
 - **Jaeger** receives traces via OTel Collector (OTLP gRPC on :4317)
 - **Grafana** queries Prometheus for dashboards and alerts
 
+一致性门禁：`apps/server/internal/observability/metrics/consistency_test.go`
+保证本文件的告警段落、`deploy/observability/alerts/rules.yaml`、两个
+Grafana dashboard 三者引用的指标与告警名完全一致；未接线指标登记在
+`deploy/observability/known-gaps.md`，禁止出现在任何 PromQL 表达式中。
+
 ### Metric Naming
 
 All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
@@ -15,13 +20,11 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 | Prefix | Domain |
 |--------|--------|
 | `http_` | HTTP request metrics |
-| `conversations_` | Conversation events |
-| `tickets_` | Ticket lifecycle |
-| `routing_` | Routing decisions |
 | `ai_` | AI/LLM interactions |
-| `eventbus_` | Event bus processing |
-| `worker_` | Background job processing |
-| `errors_` | Classified errors |
+| `ratelimit_` | Rate-limited (429) requests |
+| `eventbus_` | Event bus processing（known gap，见 known-gaps.md） |
+| `worker_` | Background job processing（known gap，见 known-gaps.md） |
+| `errors_` | Classified errors（known gap，见 known-gaps.md） |
 
 ## Alert Runbooks
 
@@ -30,10 +33,9 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 **Severity**: Critical | **Threshold**: >5% 5xx rate for 5 minutes
 
 **Investigation**:
-1. Check Grafana "Infrastructure" dashboard for which endpoints are failing
-2. Check `errors_total{severity="system"}` for classified errors
-3. Review application logs filtered by `request_id` from the dashboard
-4. Check if a recent deployment coincides with the error spike
+1. Check Grafana "Servify Service" dashboard: which `path` labels drive the 5xx
+2. Review application logs filtered by `request_id` from the dashboard
+3. Check if a recent deployment coincides with the error spike
 
 **Common causes**:
 - Database connection pool exhaustion
@@ -45,33 +47,45 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 - External deps: check circuit breaker state, enable fallback mode
 - Config: verify environment variables and config.yml
 
-### HighSystemErrorRate
+### HighP99Latency
 
-**Severity**: Critical | **Threshold**: system errors > 0.01/s for 5 minutes
-
-**Investigation**:
-1. Filter `errors_total` by `error_module` label to find the source
-2. Check logs for stack traces matching the module
-3. Look for patterns: nil pointer, index out of range, type assertion
-
-**Common causes**:
-- Code bug triggered by new request pattern
-- Missing validation on new fields
-- Concurrency issue under load
-
-### EventBusHandlerFailures
-
-**Severity**: Warning | **Threshold**: any handler failures for 5 minutes
+**Severity**: Warning | **Threshold**: P99 HTTP latency > 5s for 10 minutes
 
 **Investigation**:
-1. Check `eventbus_failed_total` by `event_type`
-2. Check dead letter entries via the in-memory recorder
-3. Review handler code for the failing event type
+1. Check "HTTP Request Latency" panel (P50/P95/P99) on the service dashboard
+2. Correlate with "HTTP Request Rate" — a traffic spike is the usual trigger
+3. Check `ai_request_duration_seconds` to rule out slow AI dependencies
 
 **Resolution**:
-- Transient errors: events will be retried or dead-lettered
-- Persistent errors: fix handler code and redeploy
-- Use replay interface to reprocess dead-lettered events
+- Traffic spike: raise rate limits or scale out
+- Slow dependency: check downstream latency, tighten timeouts
+- Persistent single-path latency: profile the handler for that `path`
+
+### HighRateLimitDrops
+
+**Severity**: Info | **Threshold**: >10 rate-limited requests/s for 5 minutes
+
+**Investigation**:
+1. Check "Rate Limit Drops" panel, group by `path` to find the offending route
+2. Determine whether traffic is legitimate growth or abuse (per-IP patterns)
+
+**Resolution**:
+- Legitimate growth: raise `security.rate_limiting.requests_per_minute`
+- Abuse: block at the reverse proxy / WAF before it reaches the app
+- Per-path tuning: add an entry under `security.rate_limiting.paths`
+
+### HighGoroutineCount
+
+**Severity**: Warning | **Threshold**: goroutines > 10000 for 10 minutes
+
+**Investigation**:
+1. Check "Go Runtime" panel for a monotonic climb vs. a step change
+2. Correlate with connection count and worker restarts
+3. Capture `curl http://<host>/debug/pprof/goroutine?debug=1` for a snapshot
+
+**Resolution**:
+- Leak in a handler: fix the missing cancel/defer, redeploy
+- Load-driven: scale horizontally
 
 ### AIProviderDegraded
 
@@ -102,14 +116,27 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 - Switch to fallback mode when latency makes the product flow unusable
 - Validate provider-side latency before increasing timeouts
 
-### WorkerJobFailures
+### AIFallbackRatioHigh
 
-**Severity**: Warning | **Threshold**: any failures for 10 minutes
+**Severity**: Warning | **Threshold**: fallback share > 50% for 10 minutes (transfers excluded)
 
 **Investigation**:
-1. Check `worker_jobs_total` by `worker_name` and `outcome`
-2. Check `worker_job_duration_seconds` for slow jobs
-3. Review worker-specific logs
+1. Check "AI Strategy Breakdown" / "AI Fallback Ratio" panels on the business dashboard
+2. fallback 占比高但 failure 低：知识源无命中（内容覆盖不足）或编排层
+   持续报错被静默降级——看应用日志里 "served by fallback" 的 error 字段
+3. Check circuit breaker state in `GET /api/v1/ai/status`
+
+**Resolution**:
+- 知识覆盖不足：补充知识文档，观察 primary 占比回升
+- 编排层持续失败：按日志 error 修复（常见为 WeKnora/Dify 凭证或网络）
+- 熔断开启：等半开恢复或 `POST /api/v1/ai/circuit-breaker/reset`
+
+## Known Gaps
+
+部分指标已定义但尚未接线（eventbus_\*、worker_\*、errors_total、
+conversations/tickets/routing 系列），对应告警与面板已摘除。
+当前清单与接线计划见 `deploy/observability/known-gaps.md`；
+接线完成前不要在告警规则或 dashboard 中引用这些指标。
 
 ## Common Operations
 
@@ -154,30 +181,20 @@ POST /api/v1/ai/circuit-breaker/reset
 |--------|------|--------|-------------|
 | `http_requests_total` | Counter | method, path, status_code | Total HTTP requests |
 | `http_request_duration_seconds` | Histogram | method, path | Request latency |
-| `http_response_size_bytes` | Histogram | method, path | Response size |
+| `http_response_size_bytes` | Histogram | method, path | Request response size |
+| `ratelimit_dropped_total` | Counter | path | HTTP 429 responses due to rate limiting |
 
-### Business Metrics
+### AI Metrics
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `conversations_created_total` | Counter | tenant_id, channel | New conversations |
-| `tickets_created_total` | Counter | tenant_id, priority | New tickets |
-| `tickets_resolved_total` | Counter | tenant_id, outcome | Resolved tickets |
-| `routing_decisions_total` | Counter | tenant_id, strategy, outcome | Routing outcomes |
-| `ai_requests_total` | Counter | provider, model, outcome | AI requests |
+| `ai_requests_total` | Counter | provider, model, outcome, strategy | AI requests; strategy ∈ primary / fallback / transfer |
 | `ai_request_duration_seconds` | Histogram | provider, model | AI latency |
 | `ai_llm_tokens_total` | Counter | provider, token_type | Token consumption |
 
 ### Infrastructure Metrics
 
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `eventbus_published_total` | Counter | event_type, outcome | Events published |
-| `eventbus_handled_total` | Counter | event_type | Events handled |
-| `eventbus_failed_total` | Counter | event_type | Handler failures |
-| `eventbus_handle_duration_seconds` | Histogram | event_type | Handler duration |
-| `eventbus_dead_letter_total` | Counter | event_type | Dead-lettered events |
-| `worker_jobs_total` | Counter | worker_name, outcome | Worker jobs |
-| `worker_job_duration_seconds` | Histogram | worker_name | Job duration |
-| `worker_active_jobs` | Gauge | worker_name | Active jobs |
-| `errors_total` | Counter | severity, error_category, error_module | Classified errors |
+`go_*` / `process_*` 由 Prometheus runtime collectors 直接产出。
+
+其余业务与异步指标（conversations/tickets/routing/eventbus/worker/errors）
+处于未接线状态，见 `deploy/observability/known-gaps.md`。

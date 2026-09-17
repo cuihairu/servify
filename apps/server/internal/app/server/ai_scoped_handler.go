@@ -6,6 +6,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
 	difykp "servify/apps/server/internal/platform/knowledgeprovider/dify"
 	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
@@ -19,16 +20,17 @@ import (
 )
 
 type scopedAIHandlerService struct {
-	cfg      *config.Config
-	logger   *logrus.Logger
-	resolver *configscope.Resolver
-	fallback aidelivery.HandlerService
+	cfg           *config.Config
+	logger        *logrus.Logger
+	resolver      *configscope.Resolver
+	fallback      aidelivery.HandlerService
+	businessMeter *svcmetrics.BusinessMetrics
 
 	mu                       sync.RWMutex
 	knowledgeProviderEnabled *bool
 }
 
-func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.HandlerService) aidelivery.HandlerService {
+func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.HandlerService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.HandlerService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -41,7 +43,7 @@ func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantWeKnoraProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceWeKnoraProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback}
+	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
 }
 
 func (s *scopedAIHandlerService) ProcessQuery(ctx context.Context, query string, sessionID string) (interface{}, error) {
@@ -96,20 +98,22 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 		return nil
 	}
 	if s.resolver == nil {
-		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, s.logger))
+		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, s.logger, s.businessMeter))
 	}
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
-	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger))
+	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger, s.businessMeter))
 }
 
-func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger) aidelivery.RuntimeService {
+func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
 	baseAI := services.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
+	// AttachBusinessMetrics 把进程级业务指标挂上（nil 安全），AI 请求打点
+	// 见 OrchestratedEnhancedAIService.ProcessQueryEnhanced。
 	defaultService := services.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
@@ -118,7 +122,7 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 		nil,
 		"",
 		logger,
-	)
+	).AttachBusinessMetrics(businessMeter)
 	if difyConfig.Enabled {
 		client := dify.NewClient(&dify.Config{
 			BaseURL: difyConfig.BaseURL,
@@ -138,7 +142,7 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 			nil,
 			difyConfig.DatasetID,
 			logger,
-		)
+		).AttachBusinessMetrics(businessMeter)
 	}
 	if !weKnoraConfig.Enabled {
 		return defaultService
@@ -158,7 +162,7 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 		client,
 		weKnoraConfig.KnowledgeBaseID,
 		logger,
-	)
+	).AttachBusinessMetrics(businessMeter)
 }
 
 func (s *scopedAIHandlerService) applyRuntimeOverrides(service aidelivery.RuntimeService) aidelivery.RuntimeService {

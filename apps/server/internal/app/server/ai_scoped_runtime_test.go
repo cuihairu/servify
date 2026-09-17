@@ -51,7 +51,7 @@ func TestScopedAIRuntimeServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 		t.Fatalf("seed: %v", err)
 	}
 
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{})
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	resp, err := runtimeSvc.ProcessQuery(ctx, "hello", "session-1")
 	if err != nil {
@@ -63,7 +63,7 @@ func TestScopedAIRuntimeServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 }
 
 func TestScopedAIRuntimeServiceDelegatesTransferAndSummaryToFallback(t *testing.T) {
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubRuntimeFallback{})
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubRuntimeFallback{}, nil)
 	if !runtimeSvc.ShouldTransferToHuman("transfer", nil) {
 		t.Fatal("expected fallback transfer decision")
 	}

@@ -81,6 +81,7 @@ type Runtime struct {
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
+	BusinessMetrics          *svcmetrics.BusinessMetrics
 
 	// Private fields for worker access only
 	statisticsService *services.StatisticsService

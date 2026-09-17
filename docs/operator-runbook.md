@@ -460,8 +460,8 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 
 | Dashboard | 文件 | 内容 |
 |-----------|------|------|
-| 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、错误率、事件总线、Worker、Go Runtime |
-| 业务面板 | `servify-business.json` | 会话、工单、路由、AI 请求量/延迟/Token |
+| 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、限流丢弃、Go Runtime |
+| 业务面板 | `servify-business.json` | AI 请求量（含 strategy 维度）/延迟/Token、策略分布、降级占比 |
 
 ### 8.3 告警规则
 
@@ -473,18 +473,18 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 | HighP99Latency | Warning | P99 > 5s 持续 10 分钟 | 30 分钟内响应 |
 | HighRateLimitDrops | Info | 限流丢弃速率 > 10/s 持续 5 分钟 | 当班关注 |
 | HighGoroutineCount | Warning | goroutines > 10000 持续 10 分钟 | 30 分钟内响应 |
-| HighSystemErrorRate | Critical | 系统错误 > 0.01/s 持续 5 分钟 | 立即响应 |
-| HighDependencyErrorRate | Warning | 依赖错误 > 0.1/s 持续 5 分钟 | 30 分钟内响应 |
-| EventBusHandlerFailures | Warning | 事件处理失败持续 5 分钟 | 30 分钟内响应 |
-| EventBusDeadLetters | Info | dead letter 持续 10 分钟 | 当班关注 |
 | AIProviderDegraded | Critical | AI 失败率 > 20% 持续 5 分钟 | 立即响应 |
 | AIHighLatency | Warning | AI P95 > 10s 持续 10 分钟 | 30 分钟内响应 |
-| WorkerJobFailures | Warning | Worker 失败持续 10 分钟 | 1 小时内响应 |
+| AIFallbackRatioHigh | Warning | AI fallback 占比 > 50% 持续 10 分钟（不含转人工） | 30 分钟内响应 |
 
 生产口径补充：
 
 - 上述阈值以 `deploy/observability/alerts/rules.yaml` 为准，runbook 只做解释和响应优先级说明
 - 若 staging 演练需要更宽阈值，应在告警平台或环境级 Prometheus 规则中调整，不要直接改写 production baseline 文件
+- 告警规则、Grafana dashboard、`deploy/observability/runbook/operational-runbook.md`
+  三者由 CI 一致性测试（`apps/server/internal/observability/metrics/consistency_test.go`）
+  保证一致；已定义但未接线的指标登记在 `deploy/observability/known-gaps.md`，
+  其对应告警与面板已摘除，接线完成后恢复
 - `config.production.secure.example.yml` 现已显式给出 `monitoring.metrics_path` 与 tracing 基线，避免生产模板只靠代码默认值通过 strict 检查
 
 ### 8.4 告警排查详细手册
@@ -607,6 +607,9 @@ curl -s http://localhost:8080/metrics | grep ai_requests_total
 
 # 检查 API Key 有效性
 curl -s http://localhost:8080/metrics | grep ai_requests_total.*outcome
+
+# 检查答复策略分布（primary=知识源命中 / fallback=降级 / transfer=转人工）
+curl -s http://localhost:8080/metrics | grep ai_requests_total.*strategy
 
 # 重置 circuit breaker
 curl -X POST http://localhost:8080/api/v1/ai/circuit-breaker/reset \
