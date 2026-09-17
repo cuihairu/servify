@@ -7,16 +7,29 @@ import (
 	"time"
 
 	"servify/apps/server/internal/modules/routing/domain"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 )
 
 type Service struct {
 	repo      RoutingRepository
 	publisher EventPublisher
 	now       func() time.Time
+	metrics   *svcmetrics.BusinessMetrics
 }
 
 func NewService(repo RoutingRepository, publisher EventPublisher) *Service {
 	return &Service{repo: repo, publisher: publisher, now: time.Now}
+}
+
+// AttachBusinessMetrics 注入进程级业务指标（nil 安全，可链式）。
+// 路由决策计数 routing_decisions_total{tenant_id, strategy, outcome}：
+// strategy ∈ handoff（入队等待）/ assign（定向指派）/ transfer（等待队列转出）。
+func (s *Service) AttachBusinessMetrics(m *svcmetrics.BusinessMetrics) *Service {
+	if s == nil {
+		return s
+	}
+	s.metrics = m
+	return s
 }
 
 func (s *Service) RequestHumanHandoff(ctx context.Context, cmd RequestHumanHandoffCommand) (*QueueEntryDTO, error) {
@@ -71,6 +84,7 @@ func (s *Service) AssignAgent(ctx context.Context, cmd AssignAgentCommand) (*Ass
 	if err := s.repo.CreateAssignment(ctx, item); err != nil {
 		return nil, err
 	}
+	s.metrics.RecordRoutingDecision("default", "assign", "success")
 	s.publish(ctx, RoutingAgentAssignedEventName, cmd.SessionID, MapAssignment(*item))
 	s.publish(ctx, RoutingTransferCompletedEventName, cmd.SessionID, MapAssignment(*item))
 	dto := MapAssignment(*item)
@@ -124,6 +138,7 @@ func (s *Service) AddToWaitingQueue(ctx context.Context, cmd AddToWaitingQueueCo
 	if err := s.repo.CreateQueueEntry(ctx, item); err != nil {
 		return nil, err
 	}
+	s.metrics.RecordRoutingDecision("default", "handoff", "queued")
 	dto := MapQueueEntry(*item)
 	return &dto, nil
 }
@@ -192,6 +207,7 @@ func (s *Service) MarkWaitingTransferred(ctx context.Context, cmd MarkWaitingTra
 	if err != nil {
 		return nil, err
 	}
+	s.metrics.RecordRoutingDecision("default", "transfer", "transferred")
 	dto := MapQueueEntry(*item)
 	return &dto, nil
 }

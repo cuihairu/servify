@@ -11,15 +11,10 @@
 ## 未接线指标
 
 未接线指标对应的告警规则与 dashboard 面板已一并摘除，接线完成后随条目
-删除一并恢复（business dashboard 的 Conversations/Tickets/Routing 三面板
-在第二刀恢复）。
+删除一并恢复。
 
 <!-- 行格式：- metric: <指标名>，行内可附计划说明 -->
 
-- metric: conversations_created_total — 计划 P2-4 第二刀：会话创建埋点
-- metric: tickets_created_total — 计划 P2-4 第二刀：工单生命周期埋点
-- metric: tickets_resolved_total — 计划 P2-4 第二刀：工单生命周期埋点
-- metric: routing_decisions_total — 计划 P2-4 第二刀：路由决策埋点
 - metric: eventbus_published_total — 计划 P2-4 第三刀：BusMetrics 已有设施，装配处接线
 - metric: eventbus_handled_total — 计划 P2-4 第三刀：同上（async.BusMiddleware）
 - metric: eventbus_failed_total — 计划 P2-4 第三刀：同上
@@ -30,7 +25,9 @@
 - metric: worker_active_jobs — 计划 P2-4 第三刀：同上
 - metric: errors_total — 计划 P2-4 第四刀：errors.RecordError 已有，需在错误统一出口调用
 
-## 已接线指标（本刀完成）
+## 已接线指标
+
+### 第一刀（AI/provider 失败分类 + 三者一致门禁）
 
 - `ai_requests_total{provider, model, outcome, strategy}` — strategy 取值
   primary（编排命中知识源）/ fallback（降级到基础问答）/ transfer（转人工）；
@@ -40,3 +37,13 @@
 - `ratelimit_dropped_total{path}` — HTTP 中间件对 429 响应计数
   （原 `servify_ratelimit_dropped_total` 手写 exposition 仅存在于
   HTTPMetrics 未装配的 legacy 端点，已不作为告警数据源）
+
+### 第二刀（会话/工单/路由业务埋点）
+
+- `conversations_created_total{tenant_id, channel}` — 会话创建成功计数
+  （tenant 体系尚未落地，暂记 default）
+- `tickets_created_total{tenant_id, priority}` — 工单创建成功计数
+- `tickets_resolved_total{tenant_id, outcome}` — 状态迁移到 resolved 时计数
+- `routing_decisions_total{tenant_id, strategy, outcome}` — strategy ∈
+  handoff（入队等待）/ assign（定向指派）/ transfer（等待队列转出）
+- business dashboard 的 Conversations/Tickets/Routing 三面板已随之恢复

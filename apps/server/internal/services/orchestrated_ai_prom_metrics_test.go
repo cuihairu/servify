@@ -187,6 +187,13 @@ func TestOrchestratedAI_PromMetricsFallbackFailureUsesNoneProvider(t *testing.T)
 	}
 }
 
+func TestOrchestratedAI_PromMetricsNilReceiverAttach(t *testing.T) {
+	var svc *OrchestratedEnhancedAIService
+	if got := svc.AttachBusinessMetrics(nil); got != nil {
+		t.Fatalf("nil receiver Attach 应返回 nil，got %v", got)
+	}
+}
+
 func TestOrchestratedAI_PromMetricsNilMeterNoop(t *testing.T) {
 	// 未 Attach 指标（nil）时全部打点路径静默降级，不 panic。
 	base := NewAIService("", "")

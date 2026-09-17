@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"servify/apps/server/internal/modules/conversation/domain"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 )
 
 type Service struct {
 	repo      ConversationRepository
 	publisher EventPublisher
 	now       func() time.Time
+	metrics   *svcmetrics.BusinessMetrics
 }
 
 func NewService(repo ConversationRepository, publisher EventPublisher) *Service {
@@ -21,6 +23,16 @@ func NewService(repo ConversationRepository, publisher EventPublisher) *Service 
 		publisher: publisher,
 		now:       time.Now,
 	}
+}
+
+// AttachBusinessMetrics 注入进程级业务指标（nil 安全，可链式）。
+// 会话创建成功后计数 conversations_created_total{tenant_id, channel}。
+func (s *Service) AttachBusinessMetrics(m *svcmetrics.BusinessMetrics) *Service {
+	if s == nil {
+		return s
+	}
+	s.metrics = m
+	return s
 }
 
 func (s *Service) CreateConversation(ctx context.Context, cmd CreateConversationCommand) (*ConversationDTO, error) {
@@ -40,6 +52,8 @@ func (s *Service) CreateConversation(ctx context.Context, cmd CreateConversation
 	if err := s.repo.CreateConversation(ctx, conversation); err != nil {
 		return nil, err
 	}
+	// tenant 体系尚未落到会话模型，先按单租户口径记 default。
+	s.metrics.RecordConversationCreated("default", cmd.Channel.Channel)
 	s.publish(ctx, ConversationCreatedEventName, conversation.ID, MapConversation(*conversation))
 	dto := MapConversation(*conversation)
 	return &dto, nil

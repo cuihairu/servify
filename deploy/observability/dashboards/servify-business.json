@@ -9,13 +9,132 @@
   "links": [],
   "panels": [
     {
-      "title": "AI Request Volume",
-      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
         "y": 0
+      },
+      "id": 200,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(conversations_created_total[5m])) by (channel)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "Conversations Created",
+      "type": "timeseries",
+      "description": "新会话创建速率（按渠道）"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 201,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(tickets_created_total[5m]))",
+          "legendFormat": "__auto",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(tickets_resolved_total[5m]))",
+          "legendFormat": "__auto",
+          "refId": "B"
+        }
+      ],
+      "title": "Tickets: Created vs Resolved",
+      "type": "timeseries",
+      "description": "工单创建 vs 解决速率"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 202,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(routing_decisions_total[5m])) by (strategy, outcome)",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "Routing Decisions",
+      "type": "timeseries",
+      "description": "路由决策（strategy: handoff/assign/transfer）"
+    },
+    {
+      "title": "AI Request Volume",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
       "targets": [
         {
@@ -35,8 +154,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 0
+        "x": 0,
+        "y": 16
       },
       "targets": [
         {
@@ -60,8 +179,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 8
+        "x": 12,
+        "y": 16
       },
       "targets": [
         {
@@ -89,8 +208,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 8
+        "x": 0,
+        "y": 24
       },
       "id": 124,
       "options": {
@@ -127,8 +246,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 16
+        "x": 12,
+        "y": 24
       },
       "id": 136,
       "options": {

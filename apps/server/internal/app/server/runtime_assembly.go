@@ -76,7 +76,7 @@ func wireRealtimeRuntime(rt *Runtime) *services.WebSocketHub {
 
 func wireConversationRuntime(rt *Runtime, wsHub *services.WebSocketHub) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
-	conversationService := conversationapp.NewService(conversationRepo, rt.Bus)
+	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
 	wsHub.SetConversationMessageWriter(conversationdelivery.NewWebSocketMessageAdapter(conversationService))
 	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。
@@ -120,7 +120,7 @@ func wireEmailRuntime(rt *Runtime, conversationService *conversationapp.Service)
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
 	routingRepo := routinginfra.NewGormRepository(rt.DB)
-	return routingapp.NewService(routingRepo, rt.Bus)
+	return routingapp.NewService(routingRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 }
 
 func wireRealtimeGateways(rt *Runtime, wsHub *services.WebSocketHub) *services.WebRTCService {
@@ -234,7 +234,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 		Bus:          rt.Bus,
 		SLA:          slaService,
 		Satisfaction: satisfactionService,
-	})
+	}).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.TicketReaderService = ticketdelivery.NewReaderServiceAdapter(rt.DB)
 
 	// 出站 Webhook：订阅 bus 事件入队（同步、只落库），投递与重试全部走后台 worker。

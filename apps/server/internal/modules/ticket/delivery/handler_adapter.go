@@ -10,6 +10,7 @@ import (
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
 	ticketinfra "servify/apps/server/internal/modules/ticket/infra"
 	ticketorchestration "servify/apps/server/internal/modules/ticket/orchestration"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 )
 
 // HandlerServiceAdapter bridges HTTP handlers to the modular ticket stack.
@@ -19,6 +20,18 @@ type HandlerServiceAdapter struct {
 	cmd          *ticketapp.CommandService
 	orchestrator *ticketorchestration.TicketOrchestrator
 	db           *gorm.DB
+	metrics      *svcmetrics.BusinessMetrics
+}
+
+// AttachBusinessMetrics 注入进程级业务指标（nil 安全，可链式）。
+// 工单创建计数 tickets_created_total{tenant_id, priority}；状态迁到
+// resolved 时计数 tickets_resolved_total{tenant_id, outcome}。
+func (a *HandlerServiceAdapter) AttachBusinessMetrics(m *svcmetrics.BusinessMetrics) *HandlerServiceAdapter {
+	if a == nil {
+		return a
+	}
+	a.metrics = m
+	return a
 }
 
 // HandlerService is the only ticket contract that HTTP handlers should depend on.
@@ -68,6 +81,8 @@ func (a *HandlerServiceAdapter) CreateTicket(ctx context.Context, req *ticketcon
 	if err := a.repo.CreateTicketModelWithCustomFieldsAndStatus(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus); err != nil {
 		return nil, err
 	}
+	// tenant 体系尚未落到工单模型，先按单租户口径记 default。
+	a.metrics.RecordTicketCreated("default", prepared.Ticket.Priority)
 	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
 }
 
@@ -98,6 +113,9 @@ func (a *HandlerServiceAdapter) UpdateTicket(ctx context.Context, ticketID uint,
 		upserts,
 	); err != nil {
 		return nil, err
+	}
+	if prepared.StatusChange != nil && prepared.StatusChange.ToStatus == "resolved" {
+		a.metrics.RecordTicketResolved("default", "resolved")
 	}
 	return a.orchestrator.ApplyUpdateTicketSideEffects(ctx, prepared, ticketID)
 }

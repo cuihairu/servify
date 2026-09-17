@@ -449,7 +449,11 @@
       runbook 告警段三者对齐，未接线指标（known-gaps.md）禁止出现在
       任何 PromQL 中；摘除 6 条永真沉默的死告警与对应死面板
     - 新增 AIFallbackRatioHigh 告警 + AI 策略分布/降级占比面板与处置条目
-  - 第二刀（conversations/tickets/routing 埋点 + business 面板恢复）⬜
+  - 第二刀（conversations/tickets/routing 埋点 + business 面板恢复）✅
+    - 会话创建、工单创建/解决、路由决策（handoff/assign/transfer）三处
+      业务服务接线 BusinessMetrics（链式 AttachBusinessMetrics，nil 安全）
+    - tenant 体系尚未落地，tenant_id 标签暂记 default
+    - business dashboard 的 Conversations/Tickets/Routing 三面板恢复
   - 第三刀（eventbus/worker middleware 装配接线 + 异步失败告警恢复）⬜
   - 第四刀（errors_total 统一出口 + SLI/SLO burn rate 告警）⬜
 

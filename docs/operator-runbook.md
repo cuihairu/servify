@@ -461,7 +461,7 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 | Dashboard | 文件 | 内容 |
 |-----------|------|------|
 | 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、限流丢弃、Go Runtime |
-| 业务面板 | `servify-business.json` | AI 请求量（含 strategy 维度）/延迟/Token、策略分布、降级占比 |
+| 业务面板 | `servify-business.json` | 会话、工单、路由、AI 请求量（含 strategy 维度）/延迟/Token、策略分布、降级占比 |
 
 ### 8.3 告警规则
 

@@ -133,10 +133,10 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 
 ## Known Gaps
 
-部分指标已定义但尚未接线（eventbus_\*、worker_\*、errors_total、
-conversations/tickets/routing 系列），对应告警与面板已摘除。
-当前清单与接线计划见 `deploy/observability/known-gaps.md`；
-接线完成前不要在告警规则或 dashboard 中引用这些指标。
+部分指标已定义但尚未接线（eventbus_\*、worker_\*、errors_total），
+对应告警与面板已摘除。当前清单与接线计划见
+`deploy/observability/known-gaps.md`；接线完成前不要在告警规则或
+dashboard 中引用这些指标。
 
 ## Common Operations
 
@@ -191,6 +191,15 @@ POST /api/v1/ai/circuit-breaker/reset
 | `ai_requests_total` | Counter | provider, model, outcome, strategy | AI requests; strategy ∈ primary / fallback / transfer |
 | `ai_request_duration_seconds` | Histogram | provider, model | AI latency |
 | `ai_llm_tokens_total` | Counter | provider, token_type | Token consumption |
+
+### Business Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `conversations_created_total` | Counter | tenant_id, channel | New conversations |
+| `tickets_created_total` | Counter | tenant_id, priority | New tickets |
+| `tickets_resolved_total` | Counter | tenant_id, outcome | Tickets moved to resolved |
+| `routing_decisions_total` | Counter | tenant_id, strategy, outcome | Routing decisions; strategy ∈ handoff / assign / transfer |
 
 ### Infrastructure Metrics
 
