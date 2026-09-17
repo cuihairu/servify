@@ -90,8 +90,8 @@ func TestStatusMiddlewareClassifiesServerErrorStatuses(t *testing.T) {
 
 	series := gatherErrorSeries(t, reg)
 	expected := map[string]float64{
-		"system|internal|http":       2, // 500 x2
-		"dependency|network|http":    2, // 502 + 504
+		"system|internal|http":    2, // 500 x2
+		"dependency|network|http": 2, // 502 + 504
 	}
 	if len(series) != len(expected) {
 		t.Fatalf("expected %d series, got %v", len(expected), series)
