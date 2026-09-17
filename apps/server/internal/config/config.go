@@ -640,6 +640,21 @@ type ValidateResult struct {
 	Valid    bool
 }
 
+// canonicalEnvironment 把 environment 的常见别名归一到规范值，
+// 防止 "prod" 这类拼写绕过 production 严格校验（P2-2）。
+func canonicalEnvironment(env string) string {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case "prod", "production":
+		return "production"
+	case "stage", "staging":
+		return "staging"
+	case "dev", "development":
+		return "development"
+	default:
+		return strings.TrimSpace(env)
+	}
+}
+
 // Validate checks for insecure default values that should not be used in production
 // Returns ValidateResult with warnings and validity. Caller is responsible for logging.
 func Validate(cfg *Config) ValidateResult {
@@ -648,8 +663,9 @@ func Validate(cfg *Config) ValidateResult {
 		return ValidateResult{Valid: true}
 	}
 
-	// In production, any insecure default is invalid
-	if cfg.Server.Environment == "production" {
+	// production 与 staging（预生产）对已知不安全默认值零容忍：
+	// 占位凭证 / dev 默认值不允许随配置进入任何对外环境（P2-2）。
+	if cfg.Server.Environment == "production" || cfg.Server.Environment == "staging" {
 		return ValidateResult{
 			Warnings: warnings,
 			Valid:    false,
@@ -665,6 +681,8 @@ func Validate(cfg *Config) ValidateResult {
 
 func normalizeConfig(cfg *Config) {
 	expandEnvPlaceholders(reflect.ValueOf(cfg))
+	// environment 可能经 ${ENV} 注入，展开后再归一别名。
+	cfg.Server.Environment = canonicalEnvironment(cfg.Server.Environment)
 
 	knowledgeBaseConfigured := viper.IsSet("fallback.knowledge_base_enabled")
 	legacyConfigured := viper.IsSet("fallback.legacy_kb_enabled")

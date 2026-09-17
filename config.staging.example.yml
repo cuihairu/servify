@@ -8,6 +8,16 @@ event_bus:
   # For staging, you can use "inmemory" for simplicity or "redis" for production parity.
   provider: "redis"
 
+# 数据库必须显式配置：缺失会回退代码默认 dev 密码并被启动校验拒绝。
+database:
+  host: "${DB_HOST}"
+  port: 5432
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  name: "${DB_NAME}"
+  max_open_conns: 50
+  max_idle_conns: 10
+
 voice:
   recording_provider: "disabled"
   transcript_provider: "disabled"

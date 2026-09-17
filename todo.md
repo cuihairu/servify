@@ -410,7 +410,7 @@
   - 测试命令：`go test -count=1 -race ./internal/platform/eventbus`
   - 文档回填位置：本文条目 + `docs/multi-instance-boundary.md`
 
-### [ ] P2-2 配置治理与环境分层强化
+### [x] P2-2 配置治理与环境分层强化
 
 - 范围：
   - dev/staging/prod 配置模板
@@ -421,6 +421,13 @@
   - 防止示例配置、开发默认值和生产配置混用
 - 验收标准：
   - 配置加载、校验、模板、文档完全对齐
+- 状态：`[x]`
+- 最近进展：**2026-09-17** 审计四个模板与校验链路后三处收口：1) **模板漂移门禁**——新增 `config/config_template_lint_test.go`：反射 Config 结构生成 yaml schema 树（map 键通配、slice-of-struct 元素继续校验），四个模板（config.yml / staging / production.secure / weknora）逐一比对，未知键（typo、残留键被 viper 静默忽略）CI 显式失败；审计结论是现有四个模板均无未知键，此前"模板漂移"实为有意省略 + 缺失；2) **实锤缺口修复**——staging 与 production 模板此前**均无 database 节**，回退 GetDefaultConfig 的 dev 密码（`dev-password-change-in-production` 在 InsecureDatabasePasswords 黑名单）→ 两个模板按原样根本无法通过启动校验（模板不可用）；已为两模板补 `database` 节（`${DB_*}` 占位符），门禁同时断言 staging/production 的 `database.password` 与 `jwt.secret` 必须显式 `${ENV}` 占位、递归拒绝疑似明文凭证叶子键（password/secret/api_key/auth_token/access_key 等）、environment 声明与文件用途一致；3) **环境严格度收口**——`server.environment` 此前是自由字符串且只有 `== "production"` 才硬校验，写 "prod" 即绕过；新增 `canonicalEnvironment`（prod/PROD/Production → production，stage/staging → staging，dev/development → development）在 normalizeConfig 归一；staging（预生产）提升为与 production 同等严格度——不安全默认值直接拒绝启动（占位凭证未注入展开为空同样被拒，属预期行为）；4) 顺手修正 production 模板 event_bus 注释与 P2-1 边界文档冲突的"multi-instance deployment"表述；5) 文档对齐——`docs/configuration-scopes.md` 新增"模板治理与环境严格度（P2-2）"节（门禁规则、严格度分级、凭证注入链路）
+- 完成证据：
+  - 代码文件：`apps/server/internal/config/config_template_lint_test.go`（新增）、`apps/server/internal/config/config.go`（canonicalEnvironment + Validate 严格度）、`apps/server/internal/config/config_test.go`（staging 严格度 / 别名归一 / prod 别名经 Load 拒绝三组回归）、`config.staging.example.yml` 与 `config.production.secure.example.yml`（补 database 节）、`docs/configuration-scopes.md`
+  - 测试命令：`go test -count=1 ./internal/config`；受影响的 staging 环境消费包 `go test -count=1 ./internal/platform/configscope ./internal/handlers`
+  - 端到端验证：两模板注入 env 后 `check-security-baseline --strict` 均通过（`go run ./cmd -c config.staging.example.yml check-security-baseline --strict` + DB/SERVIFY_JWT_SECRET/OPENAI/DIFY 环境变量）；不注入时按预期拒绝（`database.password is empty or using a default value`），证明补 database 节后模板真实可用
+  - 文档回填位置：`docs/configuration-scopes.md` + 本条目
 
 ### [ ] P2-3 数据恢复、备份与迁移演练
 
@@ -611,8 +618,8 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：`P2-2 配置治理与环境分层强化`（P2 序列下一个未开工项；P2-1 已于 2026-09-17 闭环——单实例优先边界定稿，见 docs/multi-instance-boundary.md）
-- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 当前优先恢复任务：`P2-3 数据恢复、备份与迁移演练`（P2 序列下一个未开工项；P2-2 已于 2026-09-17 闭环——模板漂移门禁 + 环境严格度收口）
+- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）

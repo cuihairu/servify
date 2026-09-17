@@ -751,3 +751,46 @@ func TestValidate_ProductionRejectsInsecureDefaults(t *testing.T) {
 		})
 	}
 }
+
+// P2-2：staging 与 production 同等严格——预生产不允许占位凭证或 dev 默认值。
+func TestValidate_StagingRejectsInsecureDefaults(t *testing.T) {
+	cfg := GetDefaultConfig()
+	cfg.Server.Environment = "staging"
+	// 保留全部不安全默认值（dev JWT secret / dev 数据库密码）。
+
+	result := Validate(cfg)
+	if result.Valid {
+		t.Fatalf("staging must reject insecure defaults, warnings: %v", result.Warnings)
+	}
+}
+
+// P2-2：environment 常见别名归一，防止 "prod" 绕过 production 严格校验。
+func TestCanonicalEnvironment(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"prod", "production"},
+		{"PROD", "production"},
+		{" Production ", "production"},
+		{"stage", "staging"},
+		{"dev", "development"},
+		{"DEVELOPMENT", "development"},
+		{"custom-env", "custom-env"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := canonicalEnvironment(tc.in); got != tc.want {
+			t.Errorf("canonicalEnvironment(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// P2-2：Load 链路上别名归一生效——写 "prod" 的配置按 production 严格度校验。
+func TestLoad_ProdAliasGetsProductionStrictness(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	viper.Set("server.environment", "prod")
+	// 默认 JWT secret / 数据库密码是不安全默认值，production 严格度必须拒绝。
+	if _, err := Load(); err == nil {
+		t.Fatal(`expected Load() to reject environment "prod" with insecure defaults (alias normalization)`)
+	}
+}

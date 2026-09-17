@@ -301,6 +301,37 @@
 - AI / knowledge / routing 的 tenant/workspace override 目前规则已定义，但尚未统一实现
 - `DailyStats` 仍是系统级全局聚合，不带 tenant/workspace 维度
 
+## 模板治理与环境严格度（P2-2）
+
+**模板漂移门禁**：`apps/server/internal/config/config_template_lint_test.go`
+把仓库四个模板（`config.yml`、`config.staging.example.yml`、
+`config.production.secure.example.yml`、`config.weknora.yml`）与
+`Config` 结构的 yaml schema 对齐：
+
+1. **未知键直接失败**——viper 对 schema 外的键静默忽略，typo 会无声
+   回退默认值；本门禁使其在 CI 阶段显式失败。新增配置项时改结构、
+   改模板，测试自动覆盖。
+2. **staging / production 模板的 `database` 节与 `jwt.secret` 必须显式
+   存在且走 `${ENV}` 占位符**——模板缺失会回退代码默认 dev 值并被
+   启动校验拒绝，模板失去可用性；明文凭证不允许进任何模板。
+3. 模板有意省略的非敏感键（走 `GetDefaultConfig` 默认值）是允许的。
+
+**环境严格度**：`server.environment` 支持 `dev/development`、
+`stage/staging`、`prod/production` 及大小写别名，加载时归一
+（`canonicalEnvironment`），防止拼写绕过严格校验。
+
+- `development`：已知不安全默认值（dev JWT secret、dev 数据库密码、
+  WeKnora default key）仅产生警告，本地可运行。
+- `staging` 与 `production`：任何不安全默认值直接拒绝启动——占位
+  凭证（`${ENV}` 未注入时展开为空）同样会被拒绝，这是预期行为：
+  预生产与生产不允许带占位凭证起服务。
+
+**凭证注入路径**：模板中的 secrets 一律 `${ENV_VAR}` 占位，加载链为
+`expandEnvVarsInConfig`（读取前展开）→ viper 解析 → `normalizeConfig`
+（含 environment 归一）→ `Validate` 严格度分级 → `applyConfigEnvOverrides`
+（OPENAI_API_KEY 等显式环境覆盖）。环境变量覆盖只用于系统级配置，
+不承载 tenant/workspace 策略（见"作用域模型"）。
+
 ## 后续实现顺序
 
 1. 新增 `TenantConfig` / `WorkspaceConfig` 文档化数据模型
