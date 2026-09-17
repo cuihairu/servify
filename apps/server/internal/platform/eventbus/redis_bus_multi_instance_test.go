@@ -47,8 +47,25 @@ func TestRedisBusBroadcastsToEverySubscribingInstance(t *testing.T) {
 	busA.Subscribe(event.Name(), handler(receivedA))
 	busB.Subscribe(event.Name(), handler(receivedB))
 
-	waitForSubscription(t, busA)
-	waitForSubscription(t, busB)
+	// 不能用 waitUntilReady：它走 PUBSUB NUMSUB 口径，只保证"channel 上已有
+	// 订阅者"，不区分是哪个连接——busB 的 ready 可能被 busA 的订阅满足，
+	// Publish 会跑在 busB 的 SUBSCRIBE 被 server 处理之前，广播通知被丢弃
+	//（CI 慢环境下必现的订阅竞态）。这里直接轮询到 channel 上出现两个
+	// 订阅者，即两个实例的 SUBSCRIBE 都被 server 确认后再发布。
+	subscribeDeadline := time.Now().Add(5 * time.Second)
+	for {
+		subs, err := client.PubSubNumSub(context.Background(), eventPubSubChannel).Result()
+		if err != nil {
+			t.Fatalf("pubsub numsub: %v", err)
+		}
+		if subs[eventPubSubChannel] >= 2 {
+			break
+		}
+		if time.Now().After(subscribeDeadline) {
+			t.Fatalf("timed out waiting for both instances to subscribe: %v", subs)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 
 	if err := busA.Publish(context.Background(), event); err != nil {
 		t.Fatalf("publish failed: %v", err)
