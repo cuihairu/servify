@@ -28,14 +28,22 @@ func authPolicies(db *gorm.DB) []platformauth.TokenPolicy {
 
 func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	auth := r.Group("/api/v1/auth")
+	// auth 公开面审计（P2-5 第二刀）：登录/注册/刷新/2FA 挑战/登出成败均
+	// 留痕（4xx 一并记录，凭据字段由审计层 redact）。
+	auth.Use(middleware.AuditMiddlewareWithFailures(deps.DB))
 	sessionRiskResolver := configscope.NewResolver(
 		deps.Config,
 		configscope.WithTenantSessionRiskProvider(configscope.NewGormTenantConfigProvider(deps.DB)),
 		configscope.WithWorkspaceSessionRiskProvider(configscope.NewGormWorkspaceConfigProvider(deps.DB)),
 	)
-	authHandler := handlers.NewAuthHandler(services.NewAuthService(deps.DB, deps.Config)).WithSessionRiskResolver(sessionRiskResolver)
+	authService := services.NewAuthService(deps.DB, deps.Config)
+	authHandler := handlers.NewAuthHandler(authService).WithSessionRiskResolver(sessionRiskResolver)
 	if provider := sessionIPIntelligenceFromConfig(deps.Config); provider != nil {
 		authHandler = authHandler.WithSessionIPIntelligence(provider)
+		// 登录风险执行：情报源就位时按 login_enforcement 档位启用
+		// （off/未配置时注入等价 no-op，登录行为不变）。WithLoginRiskEnforcement
+		// 原地修改并返回同指针，上方 handler 持有的 authService 同步生效。
+		authService.WithLoginRiskEnforcement(provider, deps.Config.Security.SessionRisk.LoginEnforcement)
 	}
 
 	auth.POST("/register", authHandler.Register)

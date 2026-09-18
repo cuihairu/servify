@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -82,6 +83,16 @@ func (p *HTTPSessionIPIntelligence) DescribeIP(ip string) sessionIPDescription {
 		NetworkLabel:  payload.NetworkLabel,
 		LocationLabel: payload.LocationLabel,
 	}
+}
+
+// LoginNetworkLabel 使 HTTPSessionIPIntelligence 满足 services.LoginRiskIntel
+// （P2-5 第二刀登录风险执行）。ctx 未下沉到 DescribeIP：查询超时由内部
+// client 自带 timeout 兜底。
+func (p *HTTPSessionIPIntelligence) LoginNetworkLabel(ctx context.Context, ip string) string {
+	if p == nil {
+		return ""
+	}
+	return p.DescribeIP(ip).NetworkLabel
 }
 
 func (p *HTTPSessionIPIntelligence) lookupURL(ip string) string {

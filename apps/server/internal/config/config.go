@@ -317,6 +317,14 @@ type SessionRiskPolicyConfig struct {
 	HotRefreshFamilyThreshold  int `yaml:"hot_refresh_family_threshold" json:"hot_refresh_family_threshold,omitempty"`
 	MediumRiskScore            int `yaml:"medium_risk_score" json:"medium_risk_score,omitempty"`
 	HighRiskScore              int `yaml:"high_risk_score" json:"high_risk_score,omitempty"`
+	// LoginEnforcement 控制登录风险执行档位（P2-5 第二刀）：
+	//   "" / off — 不执行（默认，保持既有行为）
+	//   step_up  — 高风险来源强制第二因子（已绑定 TOTP 走挑战步，未绑定拒绝）
+	//   block    — 高风险来源直接拒绝
+	// 风险判定依赖 security.session_ip_intelligence 的情报标签：内建启发式
+	// 分类（public/private/loopback/unknown）不算高风险，接入外部情报源后
+	// 出现的其他标签（hosting/proxy/tor/…）视为高风险。
+	LoginEnforcement string `yaml:"login_enforcement" json:"login_enforcement,omitempty"`
 }
 
 type SessionIPIntelligenceConfig struct {

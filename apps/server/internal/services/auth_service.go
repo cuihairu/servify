@@ -23,7 +23,23 @@ import (
 type AuthService struct {
 	db     *gorm.DB
 	config *config.Config
+	// 登录风险执行（P2-5 第二刀）：riskIntel 提供登录来源 IP 的网络标签，
+	// loginEnforcement 取 ""/"off"/"step_up"/"block"。两者均未注入时登录
+	// 流程与既有行为完全一致。
+	riskIntel        LoginRiskIntel
+	loginEnforcement string
 }
+
+// LoginRiskIntel 抽象登录来源 IP 情报：返回网络标签。handlers 包的
+// HTTPSessionIPIntelligence 经适配器注入；nil 表示未配置情报源。
+type LoginRiskIntel interface {
+	LoginNetworkLabel(ctx context.Context, ip string) string
+}
+
+// LoginRiskHighRiskNetworkLabels：情报标签不在该集合内即视为高风险来源。
+// 内建启发式分类器只产出这四个标签（public/private/loopback/unknown），
+// 接入真实情报源后出现的任何富标签（hosting/proxy/tor/…）都构成风险信号。
+var LoginRiskHighRiskNetworkLabels = []string{"public", "private", "loopback", "unknown", ""}
 
 type RegisterInput struct {
 	Username string
@@ -56,6 +72,39 @@ type AuthResult struct {
 
 func NewAuthService(db *gorm.DB, cfg *config.Config) *AuthService {
 	return &AuthService{db: db, config: cfg}
+}
+
+// WithLoginRiskEnforcement 注入登录风险情报源与执行档位（P2-5 第二刀）。
+// enforcement 归一化为小写；非 step_up/block 的取值（含空串）一律视为 off。
+func (s *AuthService) WithLoginRiskEnforcement(intel LoginRiskIntel, enforcement string) *AuthService {
+	if s == nil {
+		return s
+	}
+	s.riskIntel = intel
+	switch strings.ToLower(strings.TrimSpace(enforcement)) {
+	case "step_up":
+		s.loginEnforcement = "step_up"
+	case "block":
+		s.loginEnforcement = "block"
+	default:
+		s.loginEnforcement = ""
+	}
+	return s
+}
+
+// loginRiskHighRisk 判定登录来源是否高风险：未注入情报源、来源 IP 为空
+// 或标签落在已知安全集合内均不算高风险——默认部署永不拦截。
+func (s *AuthService) loginRiskHighRisk(ctx context.Context, ip string) bool {
+	if s == nil || s.riskIntel == nil || strings.TrimSpace(ip) == "" {
+		return false
+	}
+	label := strings.ToLower(strings.TrimSpace(s.riskIntel.LoginNetworkLabel(ctx, ip)))
+	for _, safe := range LoginRiskHighRiskNetworkLabels {
+		if label == safe {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta AuthSessionMetadata) (*AuthResult, error) {
@@ -133,6 +182,27 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, ErrAuthInvalidCredentials
+	}
+	// 登录风险执行（P2-5 第二刀）：凭据验证通过后、发放会话前评估来源风险。
+	//   block：高风险来源直接拒绝；
+	//   step_up：高风险来源强制第二因子——已绑定 TOTP 的用户进入挑战步
+	//   （即使 2FA kill-switch 关闭），未绑定的用户无第二因子可用，拒绝。
+	if s.loginRiskHighRisk(ctx, meta.ClientIP) {
+		switch s.loginEnforcement {
+		case "block":
+			return nil, ErrLoginBlockedByRisk
+		case "step_up":
+			if !user.TotpEnabled {
+				return nil, ErrLoginBlockedByRisk
+			}
+			if !s.twoFactorChallengeEnabled(s.config, &user) {
+				token, expiresIn, err := s.createChallengeToken(&user, meta)
+				if err != nil {
+					return nil, err
+				}
+				return &LoginOutcome{TwoFactorRequired: true, ChallengeToken: token, ExpiresIn: expiresIn}, nil
+			}
+		}
 	}
 	if s.twoFactorChallengeEnabled(s.config, &user) {
 		token, expiresIn, err := s.createChallengeToken(&user, meta)

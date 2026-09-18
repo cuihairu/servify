@@ -216,6 +216,9 @@ security:
     # Risk score cutoffs for low / medium / high classification.
     medium_risk_score: 2
     high_risk_score: 4
+    # 登录风险执行档位（P2-5 第二刀）：off / step_up / block。风险判定依赖
+    # session_ip_intelligence 情报标签（内建启发式分类不算高风险）。默认 off。
+    login_enforcement: "off"
   # TOTP 两步验证：登录密码通过后进入挑战步（认证器验证码或恢复码）
   two_factor:
     # 总开关（kill-switch）：关闭时已启用用户降级为单因子直登，setup/enable 拒绝

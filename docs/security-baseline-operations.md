@@ -80,6 +80,17 @@
 - 管理面写请求默认记录 actor、principal、tenant、workspace、resource、request metadata
 - 审计查询接口：`GET /api/audit/logs`
 - 审计中间件现已对 `password`、`secret`、`api_key`、`token` 等敏感字段做统一脱敏，避免把明文 secrets 写入审计库
+- auth 公开面（`/api/v1/auth/*`：登录、注册、refresh、2FA 挑战、登出）统一挂载含失败留痕的审计中间件：成功与 4xx/5xx 一并落库（`success=false` + 真实 status_code），失败登录、被风险策略拦截的登录都可对账；凭据字段沿用同一脱敏规则
+
+### 登录风险执行（P2-5 第二刀）
+
+风险判定依赖 `security.session_ip_intelligence` 情报源返回的网络标签：内建启发式只产 `public` / `private` / `loopback` / `unknown` 四类安全标签，永不构成高风险；只有接入外部情报源、来源被标注为 `hosting`、`proxy` 等富标签时才判定为高风险来源。`security.session_risk.login_enforcement` 档位：
+
+- `off`（默认）：不执行，登录行为与既有版本完全一致
+- `step_up`：高风险来源登录强制第二因子——已绑定 TOTP 的用户进入挑战步（即使 2FA 总开关关闭）；未绑定 TOTP 的用户直接拒绝
+- `block`：高风险来源登录凭据验证通过后仍拒绝（403，响应不回显判定依据）
+
+情报源未启用或档位未配置时零行为变化。真实运行验收：`make auth-audit-acceptance`（stub 情报源标注 hosting → block 阶段 403 拦截、错误密码 401；off 阶段同库重启正常登录 200；经 `GET /api/audit/logs` 对账三类登录行与 `[REDACTED]` 脱敏）。
 
 ### 速率限制
 

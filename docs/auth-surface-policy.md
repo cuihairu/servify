@@ -39,6 +39,8 @@
 - 匿名入口必须具备独立路径级限流
 - 已登录自助入口只允许操作自己的认证状态，不复用 management surface 的资源写权限
 - 不承载跨用户、跨租户的后台管理动作
+- 整个 auth 组挂载含失败留痕的审计中间件（成功与 4xx/5xx 一并落库，凭据字段脱敏），失败登录与被风险策略拦截的登录可经 `GET /api/audit/logs` 对账
+- 可选登录风险执行（`security.session_risk.login_enforcement`，默认 `off`）：接入 `session_ip_intelligence` 情报源后，高风险网络来源按档位强制第二因子（`step_up`）或直接拒绝（`block`）；内建启发式标签永不触发
 
 当前路由：
 

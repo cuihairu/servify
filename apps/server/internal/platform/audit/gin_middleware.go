@@ -20,7 +20,18 @@ const (
 	requestMetaKey  = "audit.request_metadata"
 )
 
+// Options 控制 audit 中间件的记录面。
+type Options struct {
+	// AuditFailures 为 true 时 4xx/5xx 响应同样落审计（安全面需要失败
+	// 登录等事件留痕）；默认 false 保持管理面"只记成功写操作"的既有行为。
+	AuditFailures bool
+}
+
 func Middleware(recorder Recorder) gin.HandlerFunc {
+	return MiddlewareWithOptions(recorder, Options{})
+}
+
+func MiddlewareWithOptions(recorder Recorder, opts Options) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if recorder == nil || !shouldAuditMethod(c.Request.Method) {
 			c.Next()
@@ -30,7 +41,7 @@ func Middleware(recorder Recorder) gin.HandlerFunc {
 		requestJSON := captureRequestBody(c)
 		c.Next()
 
-		if c.Writer.Status() >= http.StatusBadRequest {
+		if c.Writer.Status() >= http.StatusBadRequest && !opts.AuditFailures {
 			return
 		}
 

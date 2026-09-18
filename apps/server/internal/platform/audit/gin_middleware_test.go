@@ -550,3 +550,51 @@ func TestMergeRequestJSONMarshalFailures(t *testing.T) {
 		t.Fatalf("conflict marshal error = %q want raw", got)
 	}
 }
+
+// TestMiddlewareWithOptionsAuditFailures：AuditFailures=true 时 4xx 响应
+// 同样落审计（auth 公开面的失败登录必须留痕）；false（默认）保持跳过。
+func TestMiddlewareWithOptionsAuditFailures(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	newRouter := func(recorder Recorder, opts Options) *gin.Engine {
+		r := gin.New()
+		r.Use(MiddlewareWithOptions(recorder, opts))
+		r.POST("/api/v1/auth/login", func(c *gin.Context) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "bad credentials"})
+		})
+		return r
+	}
+
+	failing := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"u","password":"p"}`))
+
+	t.Run("audit failures records 4xx", func(t *testing.T) {
+		recorder := &stubRecorder{}
+		w := httptest.NewRecorder()
+		newRouter(recorder, Options{AuditFailures: true}).ServeHTTP(w, failing)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 got %d", w.Code)
+		}
+		if len(recorder.entries) != 1 {
+			t.Fatalf("expected 1 audit entry for failed login, got %d", len(recorder.entries))
+		}
+		entry := recorder.entries[0]
+		if entry.Success {
+			t.Fatal("failed login must be recorded as success=false")
+		}
+		if entry.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status_code = %d want 401", entry.StatusCode)
+		}
+		if !strings.Contains(entry.RequestJSON, "[REDACTED]") {
+			t.Fatalf("expected password redacted in request json, got %q", entry.RequestJSON)
+		}
+	})
+
+	t.Run("default options skip 4xx", func(t *testing.T) {
+		recorder := &stubRecorder{}
+		w := httptest.NewRecorder()
+		newRouter(recorder, Options{}).ServeHTTP(w, failing)
+		if len(recorder.entries) != 0 {
+			t.Fatalf("expected no audit entry for failed write with default options, got %d", len(recorder.entries))
+		}
+	})
+}

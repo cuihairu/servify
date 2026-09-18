@@ -1,0 +1,31 @@
+{
+  "provider": "auth-audit",
+  "mode": "runtime-risk-enforcement",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "risky_login_blocked_403": "true",
+    "risky_login_audited": "true",
+    "bad_credentials_rejected_401": "true",
+    "bad_credentials_audited": "true",
+    "clean_login_ok": "true",
+    "clean_login_audited": "true",
+    "credentials_redacted_in_audit": "true",
+    "register_audited": "true"
+  },
+  "evidence_files": [
+    "audit-logins.txt",
+    "audit-registers.txt",
+    "build-output.txt",
+    "login-bad-credentials.txt",
+    "login-blocked.txt",
+    "login-clean.txt",
+    "ready.txt",
+    "register.txt",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

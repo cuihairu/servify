@@ -141,6 +141,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		case errors.Is(err, services.ErrAuthUserDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "账号已被禁用"})
+		case errors.Is(err, services.ErrLoginBlockedByRisk):
+			// 高风险来源登录被拦截（P2-5 第二刀）：不回显判定依据，
+			// 审计留痕由 auth 面审计中间件（含失败）负责。
+			c.JSON(http.StatusForbidden, gin.H{"error": "登录已被风险策略拦截"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败"})
 		}

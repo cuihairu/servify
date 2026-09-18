@@ -745,3 +745,109 @@ func TestValidateAcceptanceManifestScriptRejectsPublicSurfaceWithoutWSOriginChec
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidAuthAuditManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":              "ok",
+		"login-blocked.txt":        "HTTP/1.1 403",
+		"login-bad-credentials.txt": "HTTP/1.1 401",
+		"login-clean.txt":          "HTTP/1.1 200",
+		"audit-logins.txt":         "HTTP/1.1 200",
+		"audit-registers.txt":      "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "auth-audit",
+  "mode": "runtime-risk-enforcement",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "risky_login_blocked_403": "true",
+    "risky_login_audited": "true",
+    "bad_credentials_rejected_401": "true",
+    "bad_credentials_audited": "true",
+    "clean_login_ok": "true",
+    "clean_login_audited": "true",
+    "credentials_redacted_in_audit": "true",
+    "register_audited": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "login-blocked.txt",
+    "login-bad-credentials.txt",
+    "login-clean.txt",
+    "audit-logins.txt",
+    "audit-registers.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsAuthAuditWithoutRedactionCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":               "ok",
+		"login-blocked.txt":         "HTTP/1.1 403",
+		"login-bad-credentials.txt": "HTTP/1.1 401",
+		"login-clean.txt":           "HTTP/1.1 200",
+		"audit-logins.txt":          "HTTP/1.1 200",
+		"audit-registers.txt":       "HTTP/1.1 200",
+		// 缺 credentials_redacted_in_audit:审计未对账凭据脱敏不算数。
+		"manifest.json": `{
+  "provider": "auth-audit",
+  "mode": "runtime-risk-enforcement",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "risky_login_blocked_403": "true",
+    "risky_login_audited": "true",
+    "bad_credentials_rejected_401": "true",
+    "bad_credentials_audited": "true",
+    "clean_login_ok": "true",
+    "clean_login_audited": "true",
+    "register_audited": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "login-blocked.txt",
+    "login-bad-credentials.txt",
+    "login-clean.txt",
+    "audit-logins.txt",
+    "audit-registers.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "credentials_redacted_in_audit") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}

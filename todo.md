@@ -554,6 +554,23 @@
     （安全头/CORS echo+拒绝+预检/413/429/uploads 文件+目录 404/WS 403+101），
     manifest provider=public-surface 入库留档，validate-acceptance-manifest
     正反 case 齐备；文档 public-surface-security-checklist 同步落地章节
+- 进展（2026-09-18，第二刀：auth 审计与登录风险执行）：
+  - audit 平台扩展 Options.AuditFailures：4xx/5xx 一并落库（success=false
+    + 真实 status_code），MiddlewareWithOptions 保持管理面默认行为不变；
+    auth 组挂载含失败留痕的审计中间件（登录/注册/refresh/2FA/登出成败
+    全留痕，凭据字段沿用 [REDACTED] 脱敏）
+  - 登录风险执行下沉 service 层：LoginRiskIntel 接口依赖反转，HTTP 情报
+    provider 直接实现；高风险判定=富网络标签（内建四类安全标签永不触发，
+    接入外部情报源标注 hosting/proxy 才构成）；档位 off（默认零行为变化）/
+    step_up（已绑 TOTP 强制挑战绕 kill-switch、未绑定拒绝）/block（403
+    不回显判定依据）；`security.session_risk.login_enforcement` 配置，
+    生产/staging 模板 step_up、开发模板 off
+  - 真实验收：scripts/test-auth-audit-acceptance.sh stub 情报源标注
+    hosting → block 阶段正确凭据 403、错误密码 401；off 阶段同库重启
+    正常登录 200；admin token 经 GET /api/audit/logs 对账 blocked/bad/
+    clean 三类登录行与 [REDACTED] 脱敏且无明文泄漏、register 行留痕；
+    manifest provider=auth-audit 入库留档，validate 正反 case 齐备；
+    文档 security-baseline-operations 与 auth-surface-policy 同步
 
 ### [ ] P2-6 管理端产品化收尾
 

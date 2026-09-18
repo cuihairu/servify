@@ -165,6 +165,25 @@ case "$PROVIDER" in
     require_file_listed "ws-reject.txt"
     require_file_listed "ws-admit.txt"
     ;;
+  auth-audit)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.ready_ok // ""' "true"
+    require_equals '.checks.risky_login_blocked_403 // ""' "true"
+    require_equals '.checks.risky_login_audited // ""' "true"
+    require_equals '.checks.bad_credentials_rejected_401 // ""' "true"
+    require_equals '.checks.bad_credentials_audited // ""' "true"
+    require_equals '.checks.clean_login_ok // ""' "true"
+    require_equals '.checks.clean_login_audited // ""' "true"
+    require_equals '.checks.credentials_redacted_in_audit // ""' "true"
+    require_equals '.checks.register_audited // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "login-blocked.txt"
+    require_file_listed "login-bad-credentials.txt"
+    require_file_listed "login-clean.txt"
+    require_file_listed "audit-logins.txt"
+    require_file_listed "audit-registers.txt"
+    ;;
   dify)
     require_equals '.status.knowledge_provider // ""' "dify"
     require_equals '.status.knowledge_provider_enabled // ""' "true"

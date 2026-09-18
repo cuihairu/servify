@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -50,6 +50,7 @@ help:
 	@echo "  ticket-acceptance - Run the ticket high-frequency operations acceptance script"
 	@echo "  backup-restore-acceptance - Run the backup & restore drill acceptance script"
 	@echo "  public-surface-acceptance - Run the public surface runtime security acceptance"
+	@echo "  auth-audit-acceptance - Run the auth audit & login risk enforcement acceptance"
 	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  suggestion-acceptance - Run the customer-side suggested questions acceptance script"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
@@ -303,6 +304,11 @@ public-surface-acceptance:
 	@echo "Running public surface runtime security acceptance..."
 	chmod +x ./scripts/test-public-surface-acceptance.sh
 	./scripts/test-public-surface-acceptance.sh
+
+auth-audit-acceptance:
+	@echo "Running auth audit & login risk enforcement acceptance..."
+	chmod +x ./scripts/test-auth-audit-acceptance.sh
+	./scripts/test-auth-audit-acceptance.sh
 
 runtime-baseline-acceptance:
 	@echo "Running runtime baseline acceptance..."

@@ -27,6 +27,8 @@ type stubAuthService struct {
 	revokeCount  int
 	refreshResp  *services.AuthResult
 	refreshErr   error
+	loginOutcome *services.LoginOutcome
+	loginErr     error
 }
 
 type stubAuthSessionRiskProvider struct {
@@ -54,6 +56,9 @@ func (s *stubAuthService) Register(ctx context.Context, req services.RegisterInp
 
 func (s *stubAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error) {
 	s.meta = meta
+	if s.loginErr != nil || s.loginOutcome != nil {
+		return s.loginOutcome, s.loginErr
+	}
 	return nil, errors.New("not implemented")
 }
 

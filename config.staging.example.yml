@@ -135,6 +135,9 @@ security:
     hot_refresh_family_threshold: 2
     medium_risk_score: 2
     high_risk_score: 5
+    # P2-5 second slice: mirrors production (risky-source logins require
+    # a second factor; needs session_ip_intelligence enabled).
+    login_enforcement: "step_up"
   session_risk_profiles:
     staging:
       hot_refresh_window_minutes: 10
