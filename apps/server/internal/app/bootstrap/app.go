@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	appserver "servify/apps/server/internal/app/server"
 	"servify/apps/server/internal/config"
@@ -206,31 +205,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func BuildEmbeddingProvider(cfg *config.Config) (embedding.Provider, error) {
-	if cfg == nil {
-		return nil, nil
-	}
-	provider := strings.TrimSpace(cfg.Embedding.Provider)
-	if provider == "" {
-		return nil, nil
-	}
-	embeddingProvider, err := embedding.NewProvider(embedding.FactoryConfig{
-		Provider: provider,
-		OpenAI: embedding.OpenAIProviderConfig{
-			APIKey:  cfg.Embedding.OpenAI.APIKey,
-			BaseURL: cfg.Embedding.OpenAI.BaseURL,
-			Model:   cfg.Embedding.OpenAI.Model,
-		},
-		TEI: embedding.TEIProviderConfig{
-			BaseURL: cfg.Embedding.TEI.BaseURL,
-			Model:   cfg.Embedding.TEI.Model,
-		},
-		Xinference: embedding.XinferenceProviderConfig{
-			BaseURL:  cfg.Embedding.Xinference.BaseURL,
-			ModelUID: cfg.Embedding.Xinference.ModelUID,
-		},
-	})
-	if err != nil && provider == "openai" && strings.TrimSpace(cfg.Embedding.OpenAI.APIKey) == "" {
-		return nil, nil
-	}
-	return embeddingProvider, err
+	// 实现已下沉到 app/server（pgvector 装配同包复用，app/server 不能反向
+	// import bootstrap）；保持本签名以兼容 bootstrap 内既有调用与测试。
+	return appserver.BuildEmbeddingProviderFromConfig(cfg)
 }

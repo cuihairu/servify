@@ -2404,3 +2404,156 @@ func TestValidateAcceptanceManifestScriptRejectsAutomationGamificationWithoutNeg
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidPgvectorManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	names := []string{
+		"summary.txt",
+		"server-log.txt",
+		"unauthenticated-ai-status.txt",
+		"register-admin.txt",
+		"login-admin.txt",
+		"ai-status.txt",
+		"knowledge-provider-enable.txt",
+		"ai-status-enabled.parsed",
+		"upload-printer.txt",
+		"upload-refund.txt",
+		"upload-account.txt",
+		"psql-extension.txt",
+		"psql-docs.txt",
+		"psql-dims.txt",
+		"psql-schema-migrations.txt",
+		"query-printer.parsed",
+		"query-unrelated.parsed",
+	}
+	checks := []string{
+		"build_ok",
+		"embedding_mock_ok",
+		"ready_ok",
+		"pg_prepared",
+		"unauthenticated_ai_status_rejected_401",
+		"admin_registered",
+		"ai_status_reports_pgvector",
+		"knowledge_provider_enabled_healthy",
+		"documents_uploaded_and_indexed",
+		"knowledge_sync_attempted",
+		"psql_vector_extension_present",
+		"psql_docs_indexed_with_embeddings",
+		"psql_embedding_dims_1536",
+		"psql_schema_migrations_applied",
+		"semantic_query_hits_expected_doc",
+		"unrelated_query_filtered_out",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "pgvector",
+  "mode": "runtime-pgvector-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsPgvectorWithoutDataPlaneEvidence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 psql_vector_extension_present / psql_embedding_dims_1536 /
+	// psql_schema_migrations_applied：没有数据面证据（vector 扩展、向量维度、
+	// 迁移版本）不能算 pgvector 链路闭环。证据文件全部保留，只去 checks。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                   "ok",
+		"server-log.txt":                "log",
+		"unauthenticated-ai-status.txt": "HTTP/1.1 401",
+		"register-admin.txt":            "HTTP/1.1 201",
+		"login-admin.txt":               "HTTP/1.1 200",
+		"ai-status.txt":                 "HTTP/1.1 200",
+		"knowledge-provider-enable.txt": "HTTP/1.1 200",
+		"ai-status-enabled.parsed":      "provider=pgvector",
+		"upload-printer.txt":            "HTTP/1.1 200",
+		"upload-refund.txt":             "HTTP/1.1 200",
+		"upload-account.txt":            "HTTP/1.1 200",
+		"psql-extension.txt":            "ext=vector=0.8.6",
+		"psql-docs.txt":                 "docs_indexed=4",
+		"psql-dims.txt":                 "dims=1536",
+		"psql-schema-migrations.txt":    "schema_migrations=8|false",
+		"query-printer.parsed":          "title=打印机故障排查指南",
+		"query-unrelated.parsed":        "",
+		"manifest.json": `{
+  "provider": "pgvector",
+  "mode": "runtime-pgvector-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "embedding_mock_ok": "true",
+    "ready_ok": "true",
+    "pg_prepared": "true",
+    "unauthenticated_ai_status_rejected_401": "true",
+    "admin_registered": "true",
+    "ai_status_reports_pgvector": "true",
+    "knowledge_provider_enabled_healthy": "true",
+    "documents_uploaded_and_indexed": "true",
+    "psql_docs_indexed_with_embeddings": "true",
+    "semantic_query_hits_expected_doc": "true",
+    "unrelated_query_filtered_out": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "server-log.txt",
+    "unauthenticated-ai-status.txt",
+    "register-admin.txt",
+    "login-admin.txt",
+    "ai-status.txt",
+    "knowledge-provider-enable.txt",
+    "ai-status-enabled.parsed",
+    "upload-printer.txt",
+    "upload-refund.txt",
+    "upload-account.txt",
+    "psql-extension.txt",
+    "psql-docs.txt",
+    "psql-dims.txt",
+    "psql-schema-migrations.txt",
+    "query-printer.parsed",
+    "query-unrelated.parsed"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "psql_vector_extension_present") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}

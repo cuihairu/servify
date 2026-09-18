@@ -9,6 +9,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/services"
 
@@ -70,5 +71,21 @@ func TestScopedAIRuntimeServiceDelegatesTransferAndSummaryToFallback(t *testing.
 	summary, err := runtimeSvc.GetSessionSummary(nil)
 	if err != nil || summary != "summary" {
 		t.Fatalf("summary = %q err=%v", summary, err)
+	}
+}
+
+func TestScopedAIRuntimeServiceBuildServiceNilReceiverAndPgvectorShortcut(t *testing.T) {
+	var nilSvc *scopedAIRuntimeService
+	if got := nilSvc.buildService(context.Background()); got != nil {
+		t.Fatalf("nil receiver should return nil, got %#v", got)
+	}
+
+	// knowledge.provider=pgvector 时直通 fallback（启动装配的全局实例）。
+	cfg := config.GetDefaultConfig()
+	cfg.Knowledge.Provider = "pgvector"
+	fallback := stubRuntimeFallback{}
+	svc := &scopedAIRuntimeService{cfg: cfg, fallback: fallback}
+	if got := svc.buildService(context.Background()); got != aidelivery.RuntimeService(fallback) {
+		t.Fatalf("expected fallback passthrough for pgvector, got %#v", got)
 	}
 }

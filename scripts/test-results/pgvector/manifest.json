@@ -1,0 +1,57 @@
+{
+  "provider": "pgvector",
+  "mode": "runtime-pgvector-chain",
+  "generated_at": "2026-09-18T17:55:31.605708",
+  "env": {
+    "pg": "192.168.5.5:5433/servify",
+    "embedding": "openai-compatible-mock (topic-embedding 1536d)",
+    "psql_mode": "ssh"
+  },
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "embedding_mock_ok": "true",
+    "ready_ok": "true",
+    "pg_prepared": "true",
+    "unauthenticated_ai_status_rejected_401": "true",
+    "admin_registered": "true",
+    "ai_status_reports_pgvector": "true",
+    "knowledge_provider_enabled_healthy": "true",
+    "documents_uploaded_and_indexed": "true",
+    "knowledge_sync_attempted": "true",
+    "psql_vector_extension_present": "true",
+    "psql_docs_indexed_with_embeddings": "true",
+    "psql_embedding_dims_1536": "true",
+    "psql_schema_migrations_applied": "true",
+    "semantic_query_hits_expected_doc": "true",
+    "unrelated_query_filtered_out": "true"
+  },
+  "evidence_files": [
+    "ai-status-enabled.parsed",
+    "ai-status-enabled.txt",
+    "ai-status.txt",
+    "build-output.txt",
+    "embedding-mock-log.txt",
+    "knowledge-provider-enable.txt",
+    "knowledge-sync.txt",
+    "login-admin.txt",
+    "psql-dims.txt",
+    "psql-docs.txt",
+    "psql-extension.txt",
+    "psql-schema-migrations.txt",
+    "query-printer.parsed",
+    "query-printer.txt",
+    "query-unrelated.parsed",
+    "query-unrelated.txt",
+    "ready.txt",
+    "register-admin.txt",
+    "server-log.txt",
+    "summary.txt",
+    "unauthenticated-ai-status.txt",
+    "upload-account.txt",
+    "upload-printer.txt",
+    "upload-refund.txt"
+  ]
+}

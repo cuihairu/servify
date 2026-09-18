@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	mgpostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"gorm.io/driver/postgres"
 
 	"github.com/golang-migrate/migrate/v4"
 	"gorm.io/gorm"
@@ -86,12 +88,26 @@ var (
 // behind db. It is idempotent: an up-to-date database yields migrate.ErrNoChange,
 // which is treated as success. A dirty migration state fails loudly so a
 // broken rollout is never silently ignored.
+//
+// 迁移在专用连接上执行：golang-migrate 的 postgres driver.Close() 会连带关闭
+// 传入的 *sql.DB——若直接传主连接池，迁移一结束服务主池就被关掉（表现为
+// "sql: database is closed"）。专用连接从 dialector 里的 DSN 重建，跑完即弃；
+// dialector 不携带 DSN 时（测试桩/非 postgres 方言）保持直接使用 db 的旧路径。
 func RunMigrations(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("migrations: get sql.DB: %w", err)
 	}
-	driver, err := mgpostgres.WithInstance(sqlDB, &mgpostgres.Config{})
+	target := sqlDB
+	if dsn := postgresDSNFromDialector(db); dsn != "" {
+		dedicated, err := openDedicatedMigrationsConn(dsn)
+		if err != nil {
+			return fmt.Errorf("migrations: open dedicated connection: %w", err)
+		}
+		defer dedicated.Close()
+		target = dedicated
+	}
+	driver, err := mgpostgres.WithInstance(target, &mgpostgres.Config{})
 	if err != nil {
 		return fmt.Errorf("migrations: build driver: %w", err)
 	}
@@ -109,6 +125,29 @@ func RunMigrations(db *gorm.DB) error {
 		return fmt.Errorf("migrations: %w", err)
 	}
 	return nil
+}
+
+// postgresDSNFromDialector 从 gorm postgres dialector 提取原始 DSN；方言不
+// 匹配时返回空（调用方回退到直接使用传入的连接池）。
+func postgresDSNFromDialector(db *gorm.DB) string {
+	if db == nil || db.Config == nil || db.Config.Dialector == nil {
+		return ""
+	}
+	if pg, ok := db.Config.Dialector.(*postgres.Dialector); ok {
+		return pg.DSN
+	}
+	return ""
+}
+
+// openDedicatedMigrationsConn 是 seam（默认即生产实现），测试注入以覆盖
+// 专用连接的错误分支而不依赖真实 PG。DisableAutomaticPing 跳过 Open 时的
+// 探活——紧随其后的迁移首条 SQL 自会建立连接，连不上会在 migrate.Up 报错。
+var openDedicatedMigrationsConn = func(dsn string) (*sql.DB, error) {
+	dedicated, err := gorm.Open(postgres.Open(dsn), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		return nil, err
+	}
+	return dedicated.DB()
 }
 
 func truthyEnv(key string) bool {

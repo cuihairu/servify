@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"servify/apps/server/internal/config"
@@ -24,13 +25,14 @@ type scopedAIHandlerService struct {
 	logger        *logrus.Logger
 	resolver      *configscope.Resolver
 	fallback      aidelivery.HandlerService
+	startup       aidelivery.RuntimeService
 	businessMeter *svcmetrics.BusinessMetrics
 
 	mu                       sync.RWMutex
 	knowledgeProviderEnabled *bool
 }
 
-func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.HandlerService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.HandlerService {
+func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.HandlerService, startup aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.HandlerService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -43,7 +45,7 @@ func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantWeKnoraProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceWeKnoraProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
+	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, startup: startup, businessMeter: businessMeter}
 }
 
 func (s *scopedAIHandlerService) ProcessQuery(ctx context.Context, query string, sessionID string) (interface{}, error) {
@@ -96,6 +98,12 @@ func (s *scopedAIHandlerService) ResetCircuitBreaker() bool {
 func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.RuntimeService {
 	if s == nil {
 		return nil
+	}
+	// knowledge.provider=pgvector 是全局配置（自建知识库，复用主库连接），
+	// 请求级重建不认识它；与 BuildAIAssembly 的优先级一致——pgvector 声明时
+	// 直接使用启动装配好的全局实例。
+	if s.cfg != nil && strings.TrimSpace(s.cfg.Knowledge.Provider) == "pgvector" && s.startup != nil {
+		return s.applyRuntimeOverrides(s.startup)
 	}
 	if s.resolver == nil {
 		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, s.logger, s.businessMeter))

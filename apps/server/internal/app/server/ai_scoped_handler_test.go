@@ -76,7 +76,7 @@ func TestScopedAIHandlerServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	resp, err := handler.ProcessQuery(ctx, "hello", "session-1")
 	if err != nil {
@@ -101,7 +101,7 @@ func TestScopedAIHandlerServiceGetStatusUsesWorkspaceWeKnoraOverride(t *testing.
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	status := handler.GetStatus(ctx)
 	if enabled, _ := status["knowledge_provider_enabled"].(bool); !enabled {
@@ -113,7 +113,7 @@ func TestScopedAIHandlerServiceGetStatusUsesWorkspaceWeKnoraOverride(t *testing.
 }
 
 func TestScopedAIHandlerServiceGetMetricsFallsBackToBaseHandler(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
 	metrics, ok := handler.GetMetrics()
 	if !ok || metrics == nil {
 		t.Fatal("expected fallback metrics")
@@ -147,7 +147,7 @@ func TestRuntimeServiceFromResolvedConfigWithWeKnoraScopedKnowledgeBase(t *testi
 }
 
 func TestScopedAIHandlerServiceSetKnowledgeProviderEnabledAppliesToFutureRequests(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
 
 	if !handler.SetKnowledgeProviderEnabled(true) {
 		t.Fatal("expected enable to succeed")
@@ -178,7 +178,7 @@ func TestScopedAIHandlerServiceUploadUsesRuntimeKnowledgeProviderOverride(t *tes
 		t.Fatalf("seed: %v", err)
 	}
 
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil, nil)
 	if !handler.SetKnowledgeProviderEnabled(true) {
 		t.Fatal("expected enable to succeed")
 	}
@@ -197,3 +197,15 @@ func TestScopedAIHandlerServiceUploadUsesRuntimeKnowledgeProviderOverride(t *tes
 }
 
 var _ aidelivery.HandlerService = (*scopedAIHandlerService)(nil)
+
+// pgvector 是全局配置：请求级重建不认识它，声明时必须直通启动装配的全局实例，
+// 否则 HTTP 面的 ai/status 恒报 disabled（第八刀修复的第二装配缺口）。
+func TestScopedAIHandlerServiceBuildServicePrefersStartupForPgvector(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	cfg.Knowledge.Provider = "pgvector"
+	startup := stubRuntimeFallback{}
+	handler := &scopedAIHandlerService{cfg: cfg, logger: logrus.New(), fallback: stubFallbackAIHandler{}, startup: startup}
+	if got := handler.buildService(context.Background()); got != aidelivery.RuntimeService(startup) {
+		t.Fatalf("expected startup instance passthrough, got %#v", got)
+	}
+}

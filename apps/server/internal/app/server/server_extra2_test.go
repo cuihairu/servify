@@ -18,7 +18,7 @@ import (
 )
 
 func TestScopedAIServicesNilLoggerFallback(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
 	if _, ok := handler.GetMetrics(); !ok {
 		t.Fatal("expected fallback metrics with nil logger")
 	}

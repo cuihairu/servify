@@ -382,7 +382,7 @@ func TestAIAssemblyNilReceiverKnowledgeProvider(t *testing.T) {
 }
 
 func TestScopedAIHandlerServiceNilFallbackBranches(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), nil, nil, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), nil, nil, nil, nil)
 
 	if _, ok := handler.GetMetrics(); ok {
 		t.Fatal("expected GetMetrics unavailable without fallback")

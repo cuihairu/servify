@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
@@ -69,7 +70,15 @@ func (s *scopedAIRuntimeService) GetStatus(ctx context.Context) map[string]inter
 }
 
 func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.RuntimeService {
-	if s == nil || s.resolver == nil {
+	if s == nil {
+		return nil
+	}
+	// knowledge.provider=pgvector 是全局配置，请求级重建不认识它；与
+	// BuildAIAssembly 的优先级一致——pgvector 声明时用启动装配的全局实例。
+	if s.cfg != nil && strings.TrimSpace(s.cfg.Knowledge.Provider) == "pgvector" && s.fallback != nil {
+		return s.fallback
+	}
+	if s.resolver == nil {
 		return s.fallback
 	}
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)

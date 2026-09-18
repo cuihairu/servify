@@ -62,12 +62,12 @@ func initializeObservability(rt *Runtime) {
 }
 
 func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
-	aiAssembly, err := BuildAIAssembly(rt.Config, rt.Logger, AIAssemblyOptions{})
+	aiAssembly, err := BuildAIAssembly(rt.Config, rt.Logger, AIAssemblyOptions{DB: rt.DB})
 	if err != nil {
 		return nil, err
 	}
 	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics)
-	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, rt.BusinessMetrics)
+	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics)
 	return aiAssembly, nil
 }
 

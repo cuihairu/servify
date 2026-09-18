@@ -19,7 +19,8 @@ func TestEmbeddingConfigDefaults(t *testing.T) {
 func TestKnowledgeConfigDefaults(t *testing.T) {
 	cfg := GetDefaultConfig()
 
-	assert.Equal(t, "pgvector", cfg.Knowledge.Provider)
+	// Provider 默认空：pgvector 需显式声明（见 SetDefaults 注释）。
+	assert.Empty(t, cfg.Knowledge.Provider)
 	assert.Equal(t, 5, cfg.Knowledge.Pgvector.Search.TopK)
 	assert.Equal(t, 0.7, cfg.Knowledge.Pgvector.Search.Threshold)
 	assert.Equal(t, "semantic", cfg.Knowledge.Pgvector.Search.Strategy)
@@ -116,7 +117,9 @@ func TestConfigLoadWithEmbeddingAndKnowledge(t *testing.T) {
 
 	// Verify knowledge config exists
 	assert.NotNil(t, cfg.Knowledge)
-	assert.NotEmpty(t, cfg.Knowledge.Provider)
+	// Provider 默认留空：pgvector 需在配置文件显式声明（依赖 pg 扩展与
+	// embedding 服务），空默认避免劫持显式配置的 dify/weknora。
+	assert.Empty(t, cfg.Knowledge.Provider)
 
 	// Verify pgvector config
 	assert.NotNil(t, cfg.Knowledge.Pgvector)

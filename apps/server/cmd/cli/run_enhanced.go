@@ -84,6 +84,7 @@ func run(cmd *cobra.Command, args []string) {
 		RequireWeKnoraHealthy: false,
 		SyncKnowledgeBase:     cfg.Upload.AutoIndex,
 		HealthCheckTimeout:    10 * time.Second,
+		DB:                    db,
 	})
 	if err != nil {
 		appLogger.Fatalf("❌ Failed to initialize AI assembly: %v", err)

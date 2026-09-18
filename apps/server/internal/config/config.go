@@ -1001,7 +1001,9 @@ func GetDefaultConfig() *Config {
 			},
 		},
 		Knowledge: KnowledgeConfig{
-			Provider: "pgvector",
+			// 默认不启用任何自建知识源；pgvector 需在配置文件显式声明
+			// provider: "pgvector"（需要 pg+pgvector 扩展与 embedding 服务）。
+			Provider: "",
 			Pgvector: PgvectorConfig{
 				Search: SearchConfig{
 					TopK:      5,

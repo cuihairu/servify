@@ -235,7 +235,7 @@ func TestSurveyEmailMailerComposeErrorAndSend(t *testing.T) {
 // ---- scoped AI handler 的 ResetCircuitBreaker 委托分支 ----
 
 func TestScopedAIHandlerResetCircuitBreakerDelegates(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
 	if !handler.ResetCircuitBreaker() {
 		t.Fatal("expected fallback circuit breaker reset to succeed")
 	}

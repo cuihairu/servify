@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/glebarez/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -186,5 +187,79 @@ func TestRunMigrationsDirtyStateFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "migrations:") {
 		t.Fatalf("expected migrations error, got %v", err)
+	}
+}
+
+// ---- 专用迁移连接：golang-migrate driver.Close() 不能关到服务主池 ----
+
+func TestPostgresDSNFromDialector(t *testing.T) {
+	if got := postgresDSNFromDialector(nil); got != "" {
+		t.Fatalf("nil db: want empty DSN, got %q", got)
+	}
+	if got := postgresDSNFromDialector(&gorm.DB{}); got != "" {
+		t.Fatalf("nil dialector: want empty DSN, got %q", got)
+	}
+	sqliteDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if got := postgresDSNFromDialector(sqliteDB); got != "" {
+		t.Fatalf("sqlite dialector: want empty DSN, got %q", got)
+	}
+}
+
+func TestRunMigrationsDedicatedConnOpenError(t *testing.T) {
+	prev := openDedicatedMigrationsConn
+	t.Cleanup(func() { openDedicatedMigrationsConn = prev })
+	openDedicatedMigrationsConn = func(string) (*sql.DB, error) {
+		return nil, errors.New("boom")
+	}
+	db, err := gorm.Open(postgres.Open("postgres://127.0.0.1:1/servify"), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open postgres dialector: %v", err)
+	}
+	err = RunMigrations(db)
+	if err == nil || !strings.Contains(err.Error(), "open dedicated connection") {
+		t.Fatalf("expected dedicated connection error, got %v", err)
+	}
+}
+
+func TestRunMigrationsDedicatedConnIsUsedForDriver(t *testing.T) {
+	// 专用连接被切换为迁移 target：注入 sqlite 专用连接后，postgres driver
+	// 构建必然失败（build driver），证明迁移不再使用主池。
+	prev := openDedicatedMigrationsConn
+	t.Cleanup(func() { openDedicatedMigrationsConn = prev })
+	openDedicatedMigrationsConn = func(string) (*sql.DB, error) {
+		dedicated, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+		if err != nil {
+			return nil, err
+		}
+		return dedicated.DB()
+	}
+	db, err := gorm.Open(postgres.Open("postgres://127.0.0.1:1/servify"), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open postgres dialector: %v", err)
+	}
+	err = RunMigrations(db)
+	if err == nil || !strings.Contains(err.Error(), "build driver") {
+		t.Fatalf("expected build driver error against sqlite dedicated conn, got %v", err)
+	}
+}
+
+// openDedicatedMigrationsConn 生产实现：合法 DSN 建池成功（惰性不拨号），
+// 非法 DSN 在 dialector 初始化时报错；错误传播路径由 seam 注入的
+// TestRunMigrationsDedicatedConnOpenError 覆盖。
+func TestOpenDedicatedMigrationsConnProduction(t *testing.T) {
+	sqlDB, err := openDedicatedMigrationsConn("postgres://127.0.0.1:1/servify")
+	if err != nil {
+		t.Fatalf("open dedicated conn: %v", err)
+	}
+	if sqlDB == nil {
+		t.Fatal("expected non-nil sql.DB")
+	}
+	_ = sqlDB.Close()
+
+	if _, err := openDedicatedMigrationsConn("this is not a valid dsn"); err == nil {
+		t.Fatal("expected invalid dsn to fail")
 	}
 }
