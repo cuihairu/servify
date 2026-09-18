@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -59,6 +59,7 @@ help:
 	@echo "  statistics-acceptance - Run the statistics & shift acceptance"
 	@echo "  macro-integration-customfield-acceptance - Run the macro/integration/custom-field ops acceptance"
 	@echo "  remote-assist-acceptance - Run the remote assist & suggestion acceptance"
+	@echo "  automation-gamification-acceptance - Run the automation & gamification acceptance"
 	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  suggestion-acceptance - Run the customer-side suggested questions acceptance script"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
@@ -357,6 +358,11 @@ remote-assist-acceptance:
 	@echo "Running remote assist & suggestion acceptance..."
 	chmod +x ./scripts/test-remote-assist-acceptance.sh
 	./scripts/test-remote-assist-acceptance.sh
+
+automation-gamification-acceptance:
+	@echo "Running automation & gamification acceptance..."
+	chmod +x ./scripts/test-automation-gamification-acceptance.sh
+	./scripts/test-automation-gamification-acceptance.sh
 
 runtime-baseline-acceptance:
 	@echo "Running runtime baseline acceptance..."

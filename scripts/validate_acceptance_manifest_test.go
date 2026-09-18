@@ -2163,3 +2163,244 @@ func TestValidateAcceptanceManifestScriptRejectsRemoteAssistWithoutNegativeGuard
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidAutomationGamificationManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-automations.txt",
+		"register-admin.txt",
+		"agent-create-a1.txt",
+		"agent-create-a2.txt",
+		"agent-a1-online.txt",
+		"agent-a2-online.txt",
+		"customer-create-op.txt",
+		"customer-create-a.txt",
+		"customer-create-b.txt",
+		"automation-baseline.txt",
+		"automation-create.txt",
+		"automation-unsupported-event.txt",
+		"automation-empty-name.txt",
+		"automation-delay-misplaced.txt",
+		"automation-list.txt",
+		"ticket-op-create.txt",
+		"automation-dry-run.txt",
+		"ticket-op-after-dry-run.txt",
+		"automation-run-real.txt",
+		"ticket-op-after-run.txt",
+		"automation-runs-list.txt",
+		"automation-run-missing-trigger.txt",
+		"automation-delete.txt",
+		"automation-list-after-delete.txt",
+		"automation-delete-missing.txt",
+		"gamification-unauthenticated.txt",
+		"ticket-a1-create.txt",
+		"ticket-a1-assign.txt",
+		"ticket-a1-resolve.txt",
+		"satisfaction-a1-create.txt",
+		"ticket-a3-create.txt",
+		"satisfaction-a3-create.txt",
+		"ticket-b1-create.txt",
+		"ticket-b1-assign.txt",
+		"ticket-b1-resolve.txt",
+		"satisfaction-b1-create.txt",
+		"leaderboard-days.txt",
+		"leaderboard-date-range.txt",
+		"leaderboard-bad-date.txt",
+		"leaderboard-dept-filter.txt",
+		"leaderboard-dept-nomatch.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_automations_rejected_401",
+		"agents_and_customers_prepared",
+		"automation_baseline_empty",
+		"automation_created_with_normalized_event",
+		"automation_unsupported_event_rejected_400",
+		"automation_empty_name_rejected_400",
+		"automation_delay_misplaced_rejected_400",
+		"automation_listed",
+		"automation_dry_run_matched_without_side_effect",
+		"automation_run_applied_to_ticket",
+		"automation_runs_listed",
+		"automation_run_missing_trigger_rejected_400",
+		"automation_deleted_and_gone",
+		"automation_delete_missing_rejected_404",
+		"gamification_unauthenticated_rejected_401",
+		"leaderboard_reconciled_with_scores",
+		"leaderboard_date_range_reconciled",
+		"leaderboard_bad_date_rejected_400",
+		"leaderboard_department_filtered",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "automation-gamification",
+  "mode": "runtime-automation-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsAutomationGamificationWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 automation_unsupported_event_rejected_400 /
+	// automation_empty_name_rejected_400 /
+	// automation_delay_misplaced_rejected_400 /
+	// automation_run_missing_trigger_rejected_400 /
+	// automation_delete_missing_rejected_404 /
+	// leaderboard_bad_date_rejected_400:负例守卫不全不算自动化链路闭环。
+	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                        "ok",
+		"unauthenticated-automations.txt":    "HTTP/1.1 401",
+		"register-admin.txt":                 "HTTP/1.1 201",
+		"agent-create-a1.txt":                "HTTP/1.1 201",
+		"agent-create-a2.txt":                "HTTP/1.1 201",
+		"agent-a1-online.txt":                "HTTP/1.1 200",
+		"agent-a2-online.txt":                "HTTP/1.1 200",
+		"customer-create-op.txt":             "HTTP/1.1 201",
+		"customer-create-a.txt":              "HTTP/1.1 201",
+		"customer-create-b.txt":              "HTTP/1.1 201",
+		"automation-baseline.txt":            "HTTP/1.1 200",
+		"automation-create.txt":              "HTTP/1.1 201",
+		"automation-unsupported-event.txt":   "HTTP/1.1 400",
+		"automation-empty-name.txt":          "HTTP/1.1 400",
+		"automation-delay-misplaced.txt":     "HTTP/1.1 400",
+		"automation-list.txt":                "HTTP/1.1 200",
+		"ticket-op-create.txt":               "HTTP/1.1 201",
+		"automation-dry-run.txt":             "HTTP/1.1 200",
+		"ticket-op-after-dry-run.txt":        "HTTP/1.1 200",
+		"automation-run-real.txt":            "HTTP/1.1 200",
+		"ticket-op-after-run.txt":            "HTTP/1.1 200",
+		"automation-runs-list.txt":           "HTTP/1.1 200",
+		"automation-run-missing-trigger.txt": "HTTP/1.1 400",
+		"automation-delete.txt":              "HTTP/1.1 200",
+		"automation-list-after-delete.txt":   "HTTP/1.1 200",
+		"automation-delete-missing.txt":      "HTTP/1.1 404",
+		"gamification-unauthenticated.txt":   "HTTP/1.1 401",
+		"ticket-a1-create.txt":               "HTTP/1.1 201",
+		"ticket-a1-assign.txt":               "HTTP/1.1 200",
+		"ticket-a1-resolve.txt":              "HTTP/1.1 200",
+		"satisfaction-a1-create.txt":         "HTTP/1.1 201",
+		"ticket-a3-create.txt":               "HTTP/1.1 201",
+		"satisfaction-a3-create.txt":         "HTTP/1.1 201",
+		"ticket-b1-create.txt":               "HTTP/1.1 201",
+		"ticket-b1-assign.txt":               "HTTP/1.1 200",
+		"ticket-b1-resolve.txt":              "HTTP/1.1 200",
+		"satisfaction-b1-create.txt":         "HTTP/1.1 201",
+		"leaderboard-days.txt":               "HTTP/1.1 200",
+		"leaderboard-date-range.txt":         "HTTP/1.1 200",
+		"leaderboard-bad-date.txt":           "HTTP/1.1 400",
+		"leaderboard-dept-filter.txt":        "HTTP/1.1 200",
+		"leaderboard-dept-nomatch.txt":       "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "automation-gamification",
+  "mode": "runtime-automation-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_automations_rejected_401": "true",
+    "agents_and_customers_prepared": "true",
+    "automation_baseline_empty": "true",
+    "automation_created_with_normalized_event": "true",
+    "automation_listed": "true",
+    "automation_dry_run_matched_without_side_effect": "true",
+    "automation_run_applied_to_ticket": "true",
+    "automation_runs_listed": "true",
+    "automation_deleted_and_gone": "true",
+    "gamification_unauthenticated_rejected_401": "true",
+    "leaderboard_reconciled_with_scores": "true",
+    "leaderboard_date_range_reconciled": "true",
+    "leaderboard_department_filtered": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-automations.txt",
+    "register-admin.txt",
+    "agent-create-a1.txt",
+    "agent-create-a2.txt",
+    "agent-a1-online.txt",
+    "agent-a2-online.txt",
+    "customer-create-op.txt",
+    "customer-create-a.txt",
+    "customer-create-b.txt",
+    "automation-baseline.txt",
+    "automation-create.txt",
+    "automation-unsupported-event.txt",
+    "automation-empty-name.txt",
+    "automation-delay-misplaced.txt",
+    "automation-list.txt",
+    "ticket-op-create.txt",
+    "automation-dry-run.txt",
+    "ticket-op-after-dry-run.txt",
+    "automation-run-real.txt",
+    "ticket-op-after-run.txt",
+    "automation-runs-list.txt",
+    "automation-run-missing-trigger.txt",
+    "automation-delete.txt",
+    "automation-list-after-delete.txt",
+    "automation-delete-missing.txt",
+    "gamification-unauthenticated.txt",
+    "ticket-a1-create.txt",
+    "ticket-a1-assign.txt",
+    "ticket-a1-resolve.txt",
+    "satisfaction-a1-create.txt",
+    "ticket-a3-create.txt",
+    "satisfaction-a3-create.txt",
+    "ticket-b1-create.txt",
+    "ticket-b1-assign.txt",
+    "ticket-b1-resolve.txt",
+    "satisfaction-b1-create.txt",
+    "leaderboard-days.txt",
+    "leaderboard-date-range.txt",
+    "leaderboard-bad-date.txt",
+    "leaderboard-dept-filter.txt",
+    "leaderboard-dept-nomatch.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "automation_unsupported_event_rejected_400") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
