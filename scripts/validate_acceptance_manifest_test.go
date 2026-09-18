@@ -1792,3 +1792,197 @@ func TestValidateAcceptanceManifestScriptRejectsStatisticsWithoutShiftGuards(t *
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidMacroIntegrationCustomFieldManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-macros.txt",
+		"macro-baseline.txt",
+		"macro-create.txt",
+		"macro-list.txt",
+		"macro-update.txt",
+		"macro-apply.txt",
+		"macro-apply-missing-ticket.txt",
+		"macro-apply-inactive.txt",
+		"macro-delete.txt",
+		"macro-list-after-delete.txt",
+		"integration-create.txt",
+		"integration-list.txt",
+		"integration-duplicate.txt",
+		"integration-search.txt",
+		"integration-search-nomatch.txt",
+		"integration-delete.txt",
+		"integration-list-after-delete.txt",
+		"customfield-create.txt",
+		"customfield-get.txt",
+		"customfield-list.txt",
+		"customfield-negative-key.txt",
+		"customfield-negative-type.txt",
+		"customfield-negative-resource.txt",
+		"customfield-get-after-delete.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_rejected_401",
+		"macro_baseline_empty",
+		"macro_created",
+		"macro_listed",
+		"macro_updated",
+		"macro_applied_to_ticket",
+		"macro_apply_missing_ticket_rejected_404",
+		"macro_inactive_apply_rejected_400",
+		"macro_deleted_and_gone",
+		"integration_created",
+		"integration_listed",
+		"integration_duplicate_slug_rejected_409",
+		"integration_updated_enabled",
+		"integration_search_reconciled",
+		"integration_deleted_and_gone",
+		"custom_field_created",
+		"custom_field_listed",
+		"custom_field_invalid_key_rejected_400",
+		"custom_field_invalid_type_rejected_400",
+		"custom_field_unsupported_resource_rejected_400",
+		"custom_field_updated",
+		"custom_field_deleted_gone_404",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "macro-integration-customfield",
+  "mode": "runtime-ops-tooling-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsMacroIntegrationCustomFieldWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 macro_apply_missing_ticket_rejected_404 / macro_inactive_apply_rejected_400 /
+	// integration_duplicate_slug_rejected_409 / custom_field_invalid_key_rejected_400 /
+	// custom_field_invalid_type_rejected_400 /
+	// custom_field_unsupported_resource_rejected_400 /
+	// custom_field_deleted_gone_404:负例守卫不全不算运营工具链路闭环。
+	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                       "ok",
+		"unauthenticated-macros.txt":        "HTTP/1.1 401",
+		"macro-baseline.txt":                "HTTP/1.1 200",
+		"macro-create.txt":                  "HTTP/1.1 201",
+		"macro-list.txt":                    "HTTP/1.1 200",
+		"macro-update.txt":                  "HTTP/1.1 200",
+		"macro-apply.txt":                   "HTTP/1.1 200",
+		"macro-apply-missing-ticket.txt":    "HTTP/1.1 404",
+		"macro-apply-inactive.txt":          "HTTP/1.1 400",
+		"macro-delete.txt":                  "HTTP/1.1 200",
+		"macro-list-after-delete.txt":       "HTTP/1.1 200",
+		"integration-create.txt":            "HTTP/1.1 201",
+		"integration-list.txt":              "HTTP/1.1 200",
+		"integration-duplicate.txt":         "HTTP/1.1 409",
+		"integration-search.txt":            "HTTP/1.1 200",
+		"integration-search-nomatch.txt":    "HTTP/1.1 200",
+		"integration-delete.txt":            "HTTP/1.1 200",
+		"integration-list-after-delete.txt": "HTTP/1.1 200",
+		"customfield-create.txt":            "HTTP/1.1 201",
+		"customfield-get.txt":               "HTTP/1.1 200",
+		"customfield-list.txt":              "HTTP/1.1 200",
+		"customfield-negative-key.txt":      "HTTP/1.1 400",
+		"customfield-negative-type.txt":     "HTTP/1.1 400",
+		"customfield-negative-resource.txt": "HTTP/1.1 400",
+		"customfield-get-after-delete.txt":  "HTTP/1.1 404",
+		"manifest.json": `{
+  "provider": "macro-integration-customfield",
+  "mode": "runtime-ops-tooling-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "macro_baseline_empty": "true",
+    "macro_created": "true",
+    "macro_listed": "true",
+    "macro_updated": "true",
+    "macro_applied_to_ticket": "true",
+    "macro_deleted_and_gone": "true",
+    "integration_created": "true",
+    "integration_listed": "true",
+    "integration_updated_enabled": "true",
+    "integration_search_reconciled": "true",
+    "integration_deleted_and_gone": "true",
+    "custom_field_created": "true",
+    "custom_field_listed": "true",
+    "custom_field_updated": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-macros.txt",
+    "macro-baseline.txt",
+    "macro-create.txt",
+    "macro-list.txt",
+    "macro-update.txt",
+    "macro-apply.txt",
+    "macro-apply-missing-ticket.txt",
+    "macro-apply-inactive.txt",
+    "macro-delete.txt",
+    "macro-list-after-delete.txt",
+    "integration-create.txt",
+    "integration-list.txt",
+    "integration-duplicate.txt",
+    "integration-search.txt",
+    "integration-search-nomatch.txt",
+    "integration-delete.txt",
+    "integration-list-after-delete.txt",
+    "customfield-create.txt",
+    "customfield-get.txt",
+    "customfield-list.txt",
+    "customfield-negative-key.txt",
+    "customfield-negative-type.txt",
+    "customfield-negative-resource.txt",
+    "customfield-get-after-delete.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "macro_apply_missing_ticket_rejected_404") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
