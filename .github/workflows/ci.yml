@@ -520,10 +520,11 @@ jobs:
           pg "DELETE FROM users"
           echo "users before restore (at backup point): $before"
 
-          # 3) 恢复:服务占着连接,DROP 用 WITH (FORCE)(pg13+),pg_restore 全量回灌
+          # 3) 恢复:服务占着连接,DROP 用 WITH (FORCE)(pg13+)。dump 在 runner
+          #    侧文件系统,经 stdin 进容器回灌(备份产物不落库主机,同文档口径)
           $COMPOSE exec -T postgres psql -U postgres -d postgres -c "DROP DATABASE servify WITH (FORCE)"
           $COMPOSE exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE servify"
-          $COMPOSE exec -T postgres pg_restore -U postgres -d servify --no-owner /tmp/servify-drill.dump
+          $COMPOSE exec -T postgres pg_restore -U postgres -d servify --no-owner < /tmp/servify-drill.dump
 
           # 4) 对账:迁移水位与播种行数随备份回来(损坏被回滚)
           state=$(pg "SELECT version, dirty FROM schema_migrations")
