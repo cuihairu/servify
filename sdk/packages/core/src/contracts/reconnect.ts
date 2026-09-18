@@ -1,10 +1,5 @@
 import type { ReconnectPolicy } from './transport';
 
-export interface LegacyReconnectOptions {
-  reconnectAttempts?: number;
-  reconnectDelay?: number;
-}
-
 export interface ReconnectDecision {
   attempt: number;
   isManualClose: boolean;
@@ -17,13 +12,10 @@ const DEFAULT_RECONNECT_POLICY: ReconnectPolicy = {
   maxDelayMs: 30000,
 };
 
-export function normalizeReconnectPolicy(
-  policy?: Partial<ReconnectPolicy>,
-  legacy?: LegacyReconnectOptions,
-): ReconnectPolicy {
+export function normalizeReconnectPolicy(policy?: Partial<ReconnectPolicy>): ReconnectPolicy {
   return {
-    maxAttempts: policy?.maxAttempts ?? legacy?.reconnectAttempts ?? DEFAULT_RECONNECT_POLICY.maxAttempts,
-    baseDelayMs: policy?.baseDelayMs ?? legacy?.reconnectDelay ?? DEFAULT_RECONNECT_POLICY.baseDelayMs,
+    maxAttempts: policy?.maxAttempts ?? DEFAULT_RECONNECT_POLICY.maxAttempts,
+    baseDelayMs: policy?.baseDelayMs ?? DEFAULT_RECONNECT_POLICY.baseDelayMs,
     backoffFactor: policy?.backoffFactor ?? DEFAULT_RECONNECT_POLICY.backoffFactor,
     maxDelayMs: policy?.maxDelayMs ?? DEFAULT_RECONNECT_POLICY.maxDelayMs,
   };

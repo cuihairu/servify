@@ -211,16 +211,6 @@ func (h *AIHandler) DisableKnowledgeProvider(c *gin.Context) {
 	})
 }
 
-// EnableWeKnora preserves the legacy endpoint handler name.
-func (h *AIHandler) EnableWeKnora(c *gin.Context) {
-	h.EnableKnowledgeProvider(c)
-}
-
-// DisableWeKnora preserves the legacy endpoint handler name.
-func (h *AIHandler) DisableWeKnora(c *gin.Context) {
-	h.DisableKnowledgeProvider(c)
-}
-
 // ResetCircuitBreaker 重置熔断器
 func (h *AIHandler) ResetCircuitBreaker(c *gin.Context) {
 	if !h.aiService.ResetCircuitBreaker() {

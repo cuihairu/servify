@@ -59,8 +59,6 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
 
     this.config = {
       autoConnect: true,
-      reconnectAttempts: 5,
-      reconnectDelay: 1000,
       debug: false,
       ...config
     };
@@ -117,8 +115,6 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
 
     this.ws = new WebSocketManager({
       url: `${wsUrl}?session_id=${encodeURIComponent(realtimeSessionID)}`,
-      reconnectAttempts: this.config.reconnectAttempts!,
-      reconnectDelay: this.config.reconnectDelay!,
       reconnectPolicy: this.config.reconnectPolicy,
       authProvider: this.config.authProvider,
       onTokenRefreshRequired: this.config.onTokenRefreshRequired,

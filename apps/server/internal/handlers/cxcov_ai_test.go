@@ -60,30 +60,30 @@ func TestCxcAIHandlerProcessQueryServiceError(t *testing.T) {
 	}
 }
 
-func TestCxcAIHandlerWeKnoraAliases(t *testing.T) {
+func TestCxcAIHandlerKnowledgeProviderToggle(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	enabled := &unitAIService{enableOK: true}
 	h := NewAIHandler(enabled)
 	r := gin.New()
-	r.POST("/ai/weknora/enable", h.EnableWeKnora)
-	r.POST("/ai/weknora/disable", h.DisableWeKnora)
+	r.POST("/ai/knowledge-provider/enable", h.EnableKnowledgeProvider)
+	r.POST("/ai/knowledge-provider/disable", h.DisableKnowledgeProvider)
 
-	if w := cxcPerform(r, http.MethodPost, "/ai/weknora/enable", nil, ""); w.Code != http.StatusOK {
+	if w := cxcPerform(r, http.MethodPost, "/ai/knowledge-provider/enable", nil, ""); w.Code != http.StatusOK {
 		t.Fatalf("enable expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	if w := cxcPerform(r, http.MethodPost, "/ai/weknora/disable", nil, ""); w.Code != http.StatusOK {
+	if w := cxcPerform(r, http.MethodPost, "/ai/knowledge-provider/disable", nil, ""); w.Code != http.StatusOK {
 		t.Fatalf("disable expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 
 	disabled := &unitAIService{enableOK: false}
 	h2 := NewAIHandler(disabled)
 	r2 := gin.New()
-	r2.POST("/ai/weknora/enable", h2.EnableWeKnora)
-	r2.POST("/ai/weknora/disable", h2.DisableWeKnora)
-	if w := cxcPerform(r2, http.MethodPost, "/ai/weknora/enable", nil, ""); w.Code != http.StatusServiceUnavailable {
+	r2.POST("/ai/knowledge-provider/enable", h2.EnableKnowledgeProvider)
+	r2.POST("/ai/knowledge-provider/disable", h2.DisableKnowledgeProvider)
+	if w := cxcPerform(r2, http.MethodPost, "/ai/knowledge-provider/enable", nil, ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("enable expected 503, got %d", w.Code)
 	}
-	if w := cxcPerform(r2, http.MethodPost, "/ai/weknora/disable", nil, ""); w.Code != http.StatusServiceUnavailable {
+	if w := cxcPerform(r2, http.MethodPost, "/ai/knowledge-provider/disable", nil, ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("disable expected 503, got %d", w.Code)
 	}
 }

@@ -12,8 +12,6 @@ export interface ServifyConfig {
   sessionId?: string;
   debug?: boolean;
   autoConnect?: boolean;
-  reconnectAttempts?: number;
-  reconnectDelay?: number;
   reconnectPolicy?: ReconnectPolicy;
   authProvider?: AuthProvider;
   onTokenRefreshRequired?: () => Promise<void>;

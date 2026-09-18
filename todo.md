@@ -464,7 +464,7 @@
     （provider=backup-restore，五 checks 全 true，db 44 表 10 行 + 上传
     2 文件对账归零）
 
-### [-] P2-4 可观测性从“有指标”升级到“可运维”（四刀全部完成，验收口径见下）
+### [x] P2-4 可观测性从“有指标”升级到“可运维”（四刀全部完成，验收口径见下）
 
 - 范围：
   - 关键业务 SLI/SLO
@@ -614,7 +614,7 @@
     执行 + refresh reuse 家族吊销 + 审批回滚链路真实验收，四份真实运行
     证据入库，达到"对应安全面能力均有真实验收，不只靠单测"的验收标准
 
-### [-] P2-6 管理端产品化收尾
+### [x] P2-6 管理端产品化收尾（八刀全部完成，2026-09-18）
 
 - 范围：
   - Satisfaction
@@ -675,10 +675,16 @@
 
 ## P3 架构与技术债清理
 
-### [ ] P3-1 清理公开语义中的 legacy/compat 混名
+### [-] P3-1 清理公开语义中的 legacy/compat 混名
 
 - 目标：
   - 内部兼容层继续保留，但对外命名统一到产品语义
+- 实施清单（摸底后收敛为三类，2026-09-18）：
+  - [x] A. SDK reconnect 旧选项清理：删 `ServifyConfig`/`WebSocketManagerOptions` 的 `reconnectAttempts`/`reconnectDelay`（`reconnectPolicy` 早已并存）、`LegacyReconnectOptions` 与 `normalizeReconnectPolicy` legacy 参数；内部计数器改名 `reconnectAttemptCount` 防误读；测试改纯 policy 用例；SDK 未发布 npm、仓库内无旧选项消费者，不构成对外 breaking
+  - [x] B. handler 包装清理：删 `EnableWeKnora`/`DisableWeKnora`（无生产路由挂载的 legacy 方法名包装），测试改直测 `EnableKnowledgeProvider`/`DisableKnowledgeProvider`（保留 200/503 两分支覆盖）
+  - [x] E. 保留登记：新增 `docs/surface-naming.md`——`weknora.*` 配置键（provider 实名，P0-5 裁决）、`weknora_usage_count`/`weknora_latency`/`servify_ai_weknora_usage_total`（per-provider 子维度非新旧名，与总量字段是父子关系）、`service_type='weknora'`、`servify_weknora_mappings` 表、`fallback.legacy_kb_enabled`、configscope section key 等保留理由与判定口径；`sdk/SURFACE_GOVERNANCE.md` 按 Breaking Change Checklist 登记移除项
+  - 摸底修正：原计划删 JSON 字段旧名/指标改名（C/D 类），查证后发现 `WeKnoraUsageCount` 等是按 active provider 分派的子策略计数（orchestrated 同一处先 ++ 总量再分派 dify/weknora），删除会丢观测维度——归入 E 类保留
+  - 验证：SDK typecheck/test/test:examples/test:governance/version:check、examples vite build、regenerate-generated-assets（demo 产物同步）、全仓库 gofmt、handlers vet+测试全绿
 
 ### [ ] P3-2 收拢 services 与 modules 的最终边界
 
@@ -962,7 +968,7 @@
 - 下一步：无
 - 阻塞项：暂无
 
-### [ ] P1-9 demo-sdk 生成链路与源码一致性回归
+### [x] P1-9 demo-sdk 生成链路与源码一致性回归
 
 - 现状：
   - `apps/demo-sdk` 目录内存在 `servify-sdk.esm.js`、`servify-sdk.umd.js`、`widget.js` 等产物

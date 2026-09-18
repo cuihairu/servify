@@ -26,6 +26,27 @@
 - confirm still-reserved packages remain design-time only unless explicitly promoted
 - add migration notes before changing transport/auth/session contracts
 
+## Legacy Naming Cleanup (P3-1, 2026-09)
+
+Removed from the public surface (was a legacy alias pair for the same behavior,
+replaced by `ServifyConfig.reconnectPolicy` since P2):
+
+- `ServifyConfig.reconnectAttempts` / `ServifyConfig.reconnectDelay`
+  (config fields; use `reconnectPolicy` — defaults are unchanged: 5 attempts, 1s base delay)
+- `LegacyReconnectOptions` and the second parameter of
+  `normalizeReconnectPolicy` (internal contract module, not exported from
+  `src/index.ts`)
+
+Internal rename with no API impact: `WebSocketManager`'s private retry counter
+is now `reconnectAttemptCount` to avoid confusion with the removed config
+fields.
+
+Deliberately retained (provider real name or storage contract, not legacy
+naming — server-side counterparts recorded in `docs/surface-naming.md`):
+`weknora.*` configuration keys, `weknora_usage_count` / `weknora_latency`
+metrics fields (per-provider sub-counters alongside
+`knowledge_provider_usage_count`), and the `service_type='weknora'` enum.
+
 ## Example And README Alignment
 
 - every implemented surface package must have a `README.md`

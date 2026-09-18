@@ -12,8 +12,6 @@ import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeSt
 export interface WebSocketManagerOptions {
   url: string;
   protocols?: string | string[];
-  reconnectAttempts?: number;
-  reconnectDelay?: number;
   heartbeatInterval?: number;
   debug?: boolean;
   reconnectPolicy?: ReconnectPolicy;
@@ -45,7 +43,7 @@ type NormalizedWebSocketManagerOptions = Omit<
 export class WebSocketManager extends EventEmitter<ServifyEventMap> implements Transport<WSMessage, WSMessage> {
   private ws: WebSocket | null = null;
   private options: NormalizedWebSocketManagerOptions;
-  private reconnectAttempts = 0;
+  private reconnectAttemptCount = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
@@ -56,15 +54,10 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   constructor(options: WebSocketManagerOptions) {
     super();
 
-    const reconnectPolicy = normalizeReconnectPolicy(options.reconnectPolicy, {
-      reconnectAttempts: options.reconnectAttempts,
-      reconnectDelay: options.reconnectDelay,
-    });
+    const reconnectPolicy = normalizeReconnectPolicy(options.reconnectPolicy);
 
     this.options = {
       protocols: [],
-      reconnectAttempts: 5,
-      reconnectDelay: 1000,
       heartbeatInterval: 30000,
       debug: false,
       reconnectPolicy,
@@ -100,7 +93,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
 
       this.ws.onopen = () => {
         this.log('WebSocket 连接成功');
-        this.reconnectAttempts = 0;
+        this.reconnectAttemptCount = 0;
         this.state = 'connected';
         this.startHeartbeat();
         this.emit('connected');
@@ -125,7 +118,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
 
         if (shouldReconnect(
           {
-            attempt: this.reconnectAttempts,
+            attempt: this.reconnectAttemptCount,
             isManualClose: this.isManualClose,
           },
           this.options.reconnectPolicy,
@@ -302,11 +295,11 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   }
 
   private scheduleReconnect(): void {
-    this.reconnectAttempts++;
-    this.emit('reconnecting', this.reconnectAttempts);
+    this.reconnectAttemptCount++;
+    this.emit('reconnecting', this.reconnectAttemptCount);
 
-    const delay = computeReconnectDelay(this.options.reconnectPolicy, this.reconnectAttempts);
-    this.log(`${delay}ms 后重连 (第 ${this.reconnectAttempts}/${this.options.reconnectPolicy.maxAttempts} 次)`);
+    const delay = computeReconnectDelay(this.options.reconnectPolicy, this.reconnectAttemptCount);
+    this.log(`${delay}ms 后重连 (第 ${this.reconnectAttemptCount}/${this.options.reconnectPolicy.maxAttempts} 次)`);
 
     this.reconnectTimer = setTimeout(() => {
       this.connect().catch(() => {

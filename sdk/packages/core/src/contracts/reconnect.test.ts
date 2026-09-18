@@ -7,7 +7,7 @@ import {
 } from './reconnect';
 
 describe('reconnect helpers', () => {
-  it('normalizes reconnect policy from explicit and legacy options', () => {
+  it('normalizes reconnect policy with defaults and overrides', () => {
     expect(normalizeReconnectPolicy()).toEqual({
       maxAttempts: 5,
       baseDelayMs: 1000,
@@ -16,8 +16,7 @@ describe('reconnect helpers', () => {
     });
 
     expect(normalizeReconnectPolicy(
-      { maxAttempts: 8, maxDelayMs: 5000 },
-      { reconnectAttempts: 3, reconnectDelay: 250 },
+      { maxAttempts: 8, baseDelayMs: 250, maxDelayMs: 5000 },
     )).toEqual({
       maxAttempts: 8,
       baseDelayMs: 250,
