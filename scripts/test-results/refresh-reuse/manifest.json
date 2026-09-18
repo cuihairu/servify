@@ -1,0 +1,35 @@
+{
+  "provider": "refresh-reuse",
+  "mode": "runtime-family-revocation",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "off_reuse_rejected_401": "true",
+    "off_session_still_alive": "true",
+    "revoke_reuse_rejected_401": "true",
+    "revoke_family_latest_token_dead": "true",
+    "revoke_relogin_ok": "true",
+    "audit_refresh_rejections_audited": "true",
+    "audit_refresh_success_audited": "true"
+  },
+  "evidence_files": [
+    "audit-refresh.txt",
+    "build-output.txt",
+    "off-login.txt",
+    "off-refresh-1.txt",
+    "off-refresh-alive.txt",
+    "off-refresh-reuse.txt",
+    "ready.txt",
+    "register.txt",
+    "revoke-login.txt",
+    "revoke-refresh-1.txt",
+    "revoke-refresh-latest.txt",
+    "revoke-refresh-reuse.txt",
+    "revoke-relogin.txt",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

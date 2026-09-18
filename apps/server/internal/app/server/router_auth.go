@@ -37,6 +37,9 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 		configscope.WithWorkspaceSessionRiskProvider(configscope.NewGormWorkspaceConfigProvider(deps.DB)),
 	)
 	authService := services.NewAuthService(deps.DB, deps.Config)
+	// refresh token 重放处置档位（P2-5 第三刀）：不依赖情报源，无条件注入
+	// （off/未配置时等价 no-op，刷新行为不变）。
+	authService.WithRefreshReusePolicy(deps.Config.Security.SessionRisk.RefreshReusePolicy)
 	authHandler := handlers.NewAuthHandler(authService).WithSessionRiskResolver(sessionRiskResolver)
 	if provider := sessionIPIntelligenceFromConfig(deps.Config); provider != nil {
 		authHandler = authHandler.WithSessionIPIntelligence(provider)

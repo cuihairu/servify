@@ -851,3 +851,112 @@ func TestValidateAcceptanceManifestScriptRejectsAuthAuditWithoutRedactionCheck(t
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidRefreshReuseManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":               "ok",
+		"off-refresh-reuse.txt":     "HTTP/1.1 401",
+		"off-refresh-alive.txt":     "HTTP/1.1 200",
+		"revoke-refresh-reuse.txt":  "HTTP/1.1 401",
+		"revoke-refresh-latest.txt": "HTTP/1.1 401",
+		"revoke-relogin.txt":        "HTTP/1.1 200",
+		"audit-refresh.txt":         "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "refresh-reuse",
+  "mode": "runtime-family-revocation",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "off_reuse_rejected_401": "true",
+    "off_session_still_alive": "true",
+    "revoke_reuse_rejected_401": "true",
+    "revoke_family_latest_token_dead": "true",
+    "revoke_relogin_ok": "true",
+    "audit_refresh_rejections_audited": "true",
+    "audit_refresh_success_audited": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "off-refresh-reuse.txt",
+    "off-refresh-alive.txt",
+    "revoke-refresh-reuse.txt",
+    "revoke-refresh-latest.txt",
+    "revoke-relogin.txt",
+    "audit-refresh.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsRefreshReuseWithoutFamilyDeadCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":               "ok",
+		"off-refresh-reuse.txt":     "HTTP/1.1 401",
+		"off-refresh-alive.txt":     "HTTP/1.1 200",
+		"revoke-refresh-reuse.txt":  "HTTP/1.1 401",
+		"revoke-refresh-latest.txt": "HTTP/1.1 401",
+		"revoke-relogin.txt":        "HTTP/1.1 200",
+		"audit-refresh.txt":         "HTTP/1.1 200",
+		// 缺 revoke_family_latest_token_dead:没验证"家族最新 token 一并
+		// 失效"就不算家族吊销闭环。
+		"manifest.json": `{
+  "provider": "refresh-reuse",
+  "mode": "runtime-family-revocation",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "off_reuse_rejected_401": "true",
+    "off_session_still_alive": "true",
+    "revoke_reuse_rejected_401": "true",
+    "revoke_relogin_ok": "true",
+    "audit_refresh_rejections_audited": "true",
+    "audit_refresh_success_audited": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "off-refresh-reuse.txt",
+    "off-refresh-alive.txt",
+    "revoke-refresh-reuse.txt",
+    "revoke-refresh-latest.txt",
+    "revoke-relogin.txt",
+    "audit-refresh.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "revoke_family_latest_token_dead") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}

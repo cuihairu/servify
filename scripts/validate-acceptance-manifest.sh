@@ -184,6 +184,25 @@ case "$PROVIDER" in
     require_file_listed "audit-logins.txt"
     require_file_listed "audit-registers.txt"
     ;;
+  refresh-reuse)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.ready_ok // ""' "true"
+    require_equals '.checks.off_reuse_rejected_401 // ""' "true"
+    require_equals '.checks.off_session_still_alive // ""' "true"
+    require_equals '.checks.revoke_reuse_rejected_401 // ""' "true"
+    require_equals '.checks.revoke_family_latest_token_dead // ""' "true"
+    require_equals '.checks.revoke_relogin_ok // ""' "true"
+    require_equals '.checks.audit_refresh_rejections_audited // ""' "true"
+    require_equals '.checks.audit_refresh_success_audited // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "off-refresh-reuse.txt"
+    require_file_listed "off-refresh-alive.txt"
+    require_file_listed "revoke-refresh-reuse.txt"
+    require_file_listed "revoke-refresh-latest.txt"
+    require_file_listed "revoke-relogin.txt"
+    require_file_listed "audit-refresh.txt"
+    ;;
   dify)
     require_equals '.status.knowledge_provider // ""' "dify"
     require_equals '.status.knowledge_provider_enabled // ""' "true"

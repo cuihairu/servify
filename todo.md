@@ -571,6 +571,22 @@
     clean 三类登录行与 [REDACTED] 脱敏且无明文泄漏、register 行留痕；
     manifest provider=auth-audit 入库留档，validate 正反 case 齐备；
     文档 security-baseline-operations 与 auth-surface-policy 同步
+- 进展（2026-09-18，第三刀：refresh reuse 家族吊销）：
+  - refresh token 重放处置下沉 service 层：WithRefreshReusePolicy 档位
+    （off / revoke_family）；rotateRefreshSession 的版本不匹配分支细分——
+    token 声明版本 < 库内当前版本（即已轮换旧 token 重放）且档位开启时
+    吊销整个会话（家族），最新 token 一并失效迫使重新登录；版本大于库内
+    的伪造 token 只拒绝不吊销；吊销 UPDATE 失败 fail-closed（仍拒绝）；
+    对外统一 401 不回显吊销状态与版本差异
+  - `security.session_risk.refresh_reuse_policy` 配置，生产/staging 模板
+    revoke_family、开发模板 off；off 档位行为与既有版本完全一致（拒绝但
+    会话存活）
+  - 真实验收：scripts/test-refresh-reuse-acceptance.sh 两阶段同库对比——
+    off 阶段旧 token 重放 401 且最新 token 继续刷新 200（会话存活）；
+    revoke_family 阶段重放 401 且家族最新 token 一并 401、重新登录 200；
+    经 GET /api/audit/logs?action=auth.refresh 对账拒绝行（3 次 401）与
+    成功行；manifest provider=refresh-reuse 入库留档，validate 正反 case
+    齐备；文档 security-baseline-operations 与 auth-surface-policy 同步
 
 ### [ ] P2-6 管理端产品化收尾
 
@@ -677,8 +693,8 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：P2-5 剩余三刀（auth 审计与风险执行 → refresh reuse 家族吊销 → 审批回滚链路真实验收）或按用户指示推进下一项（第一刀公开接口运行时安全基线已于 2026-09-18 落地，见 P2-5 进展）
-- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 第一刀（公开接口运行时安全基线）完成——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + public-surface 真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 当前优先恢复任务：P2-5 最后一刀（审批回滚链路真实验收）或按用户指示推进下一项（第一刀公开接口运行时安全基线、第二刀 auth 审计与登录风险执行、第三刀 refresh reuse 家族吊销均已落地，见 P2-5 进展）
+- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 前三刀（公开接口运行时安全基线、auth 审计与登录风险执行、refresh reuse 家族吊销）完成——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销，三份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）

@@ -41,6 +41,7 @@
 - 不承载跨用户、跨租户的后台管理动作
 - 整个 auth 组挂载含失败留痕的审计中间件（成功与 4xx/5xx 一并落库，凭据字段脱敏），失败登录与被风险策略拦截的登录可经 `GET /api/audit/logs` 对账
 - 可选登录风险执行（`security.session_risk.login_enforcement`，默认 `off`）：接入 `session_ip_intelligence` 情报源后，高风险网络来源按档位强制第二因子（`step_up`）或直接拒绝（`block`）；内建启发式标签永不触发
+- refresh token 重放处置（`security.session_risk.refresh_reuse_policy`，默认 `off`）：`revoke_family` 档位下检测到已轮换旧 token 重放即吊销整个会话家族（最新 token 一并失效），迫使重新登录；重放拒绝经审计留痕
 
 当前路由：
 

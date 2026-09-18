@@ -154,6 +154,9 @@ security:
     # Requires security.session_ip_intelligence to be enabled; built-in
     # heuristic labels (public/private/loopback/unknown) never trip it.
     login_enforcement: "step_up"
+    # P2-5 third slice: a replayed (already-rotated) refresh token revokes the
+    # whole session family, forcing re-login on every device in that family.
+    refresh_reuse_policy: "revoke_family"
   session_risk_profiles:
     production:
       hot_refresh_window_minutes: 10

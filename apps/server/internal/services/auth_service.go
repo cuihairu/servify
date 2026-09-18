@@ -28,6 +28,9 @@ type AuthService struct {
 	// 流程与既有行为完全一致。
 	riskIntel        LoginRiskIntel
 	loginEnforcement string
+	// refresh token 重放处置档位（P2-5 第三刀）：true 时检测到已轮换旧
+	// token 重放即吊销整个会话家族；false 保持"拒绝但不吊销"的既有行为。
+	refreshReuseRevocation bool
 }
 
 // LoginRiskIntel 抽象登录来源 IP 情报：返回网络标签。handlers 包的
@@ -89,6 +92,17 @@ func (s *AuthService) WithLoginRiskEnforcement(intel LoginRiskIntel, enforcement
 	default:
 		s.loginEnforcement = ""
 	}
+	return s
+}
+
+// WithRefreshReusePolicy 注入 refresh token 重放处置档位（P2-5 第三刀）。
+// 仅 "revoke_family" 开启家族吊销，其余取值（含空串）视为 off——拒绝但
+// 不吊销的既有行为。
+func (s *AuthService) WithRefreshReusePolicy(policy string) *AuthService {
+	if s == nil {
+		return s
+	}
+	s.refreshReuseRevocation = strings.ToLower(strings.TrimSpace(policy)) == "revoke_family"
 	return s
 }
 
@@ -443,6 +457,23 @@ func (s *AuthService) rotateRefreshSession(ctx context.Context, userID uint, ses
 		return nil, ErrAuthInvalidRefreshToken
 	}
 	if session.TokenVersion != expectedVersion {
+		// refresh token 重放（reuse，P2-5 第三刀）：token 声明的版本小于库内
+		// 当前版本，说明它已被轮换过——正常客户端不会持有，属会话泄漏信号。
+		// revoke_family 档位下吊销整个家族（该 session 的所有轮换代——包括
+		// 重放者与合法用户手里的"最新"token——一并失效，迫使重新登录）。
+		// 对外统一 401，不回显是否吊销、不回显版本差异。
+		if s.refreshReuseRevocation && expectedVersion < session.TokenVersion {
+			now := time.Now().UTC()
+			if err := s.db.WithContext(ctx).Model(&models.UserAuthSession{}).
+				Where("id = ? AND user_id = ? AND status = ?", sessionID, userID, "active").
+				Updates(map[string]any{
+					"status":        "revoked",
+					"revoked_at":    now,
+					"token_version": gorm.Expr("COALESCE(token_version, 0) + 1"),
+				}).Error; err != nil {
+				return nil, err
+			}
+		}
 		return nil, ErrAuthInvalidRefreshToken
 	}
 

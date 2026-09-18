@@ -138,6 +138,9 @@ security:
     # P2-5 second slice: mirrors production (risky-source logins require
     # a second factor; needs session_ip_intelligence enabled).
     login_enforcement: "step_up"
+    # P2-5 third slice: mirrors production (replayed refresh tokens revoke
+    # the whole session family).
+    refresh_reuse_policy: "revoke_family"
   session_risk_profiles:
     staging:
       hot_refresh_window_minutes: 10

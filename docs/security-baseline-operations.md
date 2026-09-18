@@ -92,6 +92,15 @@
 
 情报源未启用或档位未配置时零行为变化。真实运行验收：`make auth-audit-acceptance`（stub 情报源标注 hosting → block 阶段 403 拦截、错误密码 401；off 阶段同库重启正常登录 200；经 `GET /api/audit/logs` 对账三类登录行与 `[REDACTED]` 脱敏）。
 
+### refresh token 重放处置（P2-5 第三刀）
+
+refresh token 每次刷新即轮换（session 行 `token_version` 递增），旧 token 一律拒绝。`security.session_risk.refresh_reuse_policy` 档位决定重放（reuse）的处置深度：
+
+- `off`（默认）：旧 token 重放被拒绝但会话保留，合法客户端的最新 token 可继续刷新（既有行为）
+- `revoke_family`：重放是会话泄漏信号——检测到"token 声明的版本小于库内当前版本"时吊销整个会话（家族），该家族内包括合法客户端手里的最新 token 一并失效，迫使重新登录；重放者与被攻击者无差别处置（fail-closed）
+
+一个 session 即一个家族：登录后所有 refresh 轮换共享同一 session 行。版本大于库内当前值的伪造/异常 token 只被拒绝，不触发吊销；吊销失败的请求同样拒绝（不静默放过）。对外统一 401，不回显吊销状态与版本差异；重放拒绝经 auth 面 audit 中间件留痕。真实运行验收：`make refresh-reuse-acceptance`（off 阶段重放 401 且会话存活；revoke_family 阶段重放 401 且家族最新 token 一并 401、重新登录正常；经 `GET /api/audit/logs?action=auth.refresh` 对账拒绝行与成功行）。
+
 ### 速率限制
 
 - `registerBaseMiddleware` 已统一挂载 `RateLimitMiddlewareFromConfig`

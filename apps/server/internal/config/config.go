@@ -325,6 +325,13 @@ type SessionRiskPolicyConfig struct {
 	// 分类（public/private/loopback/unknown）不算高风险，接入外部情报源后
 	// 出现的其他标签（hosting/proxy/tor/…）视为高风险。
 	LoginEnforcement string `yaml:"login_enforcement" json:"login_enforcement,omitempty"`
+	// RefreshReusePolicy 控制 refresh token 重放（reuse）处置档位（P2-5 第三刀）：
+	//   "" / off           — 旧 token 重放仍被拒绝但不吊销会话（默认，既有行为）
+	//   revoke_family      — 检测到已轮换 token 重放时吊销整个会话（家族），
+	//                        该家族内包括最新 token 在内的所有 refresh 一律失效，
+	//                        迫使重新登录
+	// 一个 session 即一个家族：登录后所有 refresh 轮换共享同一 session 行。
+	RefreshReusePolicy string `yaml:"refresh_reuse_policy" json:"refresh_reuse_policy,omitempty"`
 }
 
 type SessionIPIntelligenceConfig struct {
