@@ -202,7 +202,7 @@ cat > "$PROJECT_ROOT/data/sample-docs/troubleshooting.md" << 'EOF'
 
 ## 联系支持
 如果问题仍未解决，请联系技术支持：
-- 邮箱: support@servify.cloud
+- 邮箱: support@servify.cuihairu.site
 - 电话: 400-xxx-xxxx
 - 在线客服: 点击右下角客服按钮
 EOF

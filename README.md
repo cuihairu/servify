@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/timebeau/servify/ci.yml?branch=main&label=CI)](https://github.com/timebeau/servify/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/timebeau/servify?style=social)](https://github.com/timebeau/servify)
-[![Website](https://img.shields.io/badge/website-servify.cloud-6366f1?logo=cloudflare)](https://www.servify.cloud/)
+[![Website](https://img.shields.io/badge/website-servify.cuihairu.site-6366f1?logo=cloudflare)](https://servify.cuihairu.site/)
 
 </div>
 
@@ -476,7 +476,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ## 🌐 官网部署
 
-**[www.servify.cloud](https://www.servify.cloud/)** — 托管在 Cloudflare Pages，通过 GitHub Actions 自动部署。
+**[servify.cuihairu.site](https://servify.cuihairu.site/)** — 托管在 Cloudflare Pages，通过 GitHub Actions 自动部署。（原 servify.cloud 域名未续费已过期）
 
 ### 首次设置
 
@@ -491,7 +491,7 @@ Jaeger 默认地址：`http://localhost:16686`
      - 构建输出目录：`apps/website`
 
 2. **配置自定义域名**
-   - 在 Pages 项目设置中添加 `www.servify.cloud` 和 `servify.cloud`
+   - 在 Pages 项目设置中添加 `servify.cuihairu.site`
    - Cloudflare 会自动配置 DNS 和 SSL 证书
 
 ### 🚀 自动部署
