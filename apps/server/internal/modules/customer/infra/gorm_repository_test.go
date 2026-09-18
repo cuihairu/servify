@@ -294,20 +294,53 @@ func TestCustomerRepoListCustomersFiltersPagingAndScope(t *testing.T) {
 	assert.Equal(t, uint(1), items[1].ID)
 }
 
-func TestCustomerRepoListCustomersTagAndSearchUseILIKE(t *testing.T) {
+func TestCustomerRepoListCustomersTagAndSearchFilters(t *testing.T) {
+	db := newCustomerRepoTestDB(t)
+	repo := NewGormRepository(db)
+	seedCustomerListRows(t, db, time.Now())
+	require.NoError(t, db.Model(&models.Customer{}).Where("user_id = ?", 1).Update("tags", "vip,enterprise").Error)
+
+	// LOWER(col) LIKE LOWER(?) 跨方言筛选：sqlite 与 pg 行为一致。
+	tagged, total, err := repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
+		Page: 1, PageSize: 20, Tags: []string{"vip"}, SortBy: "created_at", SortOrder: "desc",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, tagged, 1)
+	assert.Equal(t, uint(1), tagged[0].ID)
+
+	found, total, err := repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
+		Page: 1, PageSize: 20, Search: "C1", SortBy: "created_at", SortOrder: "desc",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, found, 1)
+	assert.Equal(t, uint(1), found[0].ID)
+
+	// search 大小写不敏感（LOWER 语义）。
+	found, total, err = repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
+		Page: 1, PageSize: 20, Search: "u1@E.COM", SortBy: "created_at", SortOrder: "desc",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, found, 1)
+	assert.Equal(t, uint(1), found[0].ID)
+}
+
+func TestCustomerRepoListCustomersCountError(t *testing.T) {
 	db := newCustomerRepoTestDB(t)
 	repo := NewGormRepository(db)
 	seedCustomerListRows(t, db, time.Now())
 
-	// sqlite 不支持 ILIKE：tag / search 条件会触发 count 失败分支
-	_, _, err := repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
-		Page: 1, PageSize: 20, Tags: []string{"vip"}, SortBy: "created_at", SortOrder: "desc",
+	// 注入第 1 次 SELECT 失败（List 的 count 阶段），覆盖 count 错误分支。
+	var calls int32
+	_ = db.Callback().Query().Before("gorm:query").Register("fail_first_count", func(tx *gorm.DB) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			_ = tx.AddError(errors.New("forced count failure"))
+		}
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to count customers")
-
-	_, _, err = repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
-		Page: 1, PageSize: 20, Search: "alice", SortBy: "created_at", SortOrder: "desc",
+	_, _, err := repo.ListCustomers(context.Background(), customerapp.ListCustomersQuery{
+		Page: 1, PageSize: 20, SortBy: "created_at", SortOrder: "desc",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to count customers")

@@ -165,11 +165,11 @@ func (r *GormRepository) ListCustomers(ctx context.Context, query customerapp.Li
 		db = db.Where("users.status IN ?", query.Status)
 	}
 	for _, tag := range query.Tags {
-		db = db.Where("customers.tags ILIKE ?", "%"+tag+"%")
+		db = db.Where("LOWER(customers.tags) LIKE LOWER(?)", "%"+tag+"%")
 	}
 	if query.Search != "" {
 		search := "%" + query.Search + "%"
-		db = db.Where("users.name ILIKE ? OR users.email ILIKE ? OR users.username ILIKE ? OR customers.company ILIKE ?", search, search, search, search)
+		db = db.Where("LOWER(users.name) LIKE LOWER(?) OR LOWER(users.email) LIKE LOWER(?) OR LOWER(users.username) LIKE LOWER(?) OR LOWER(customers.company) LIKE LOWER(?)", search, search, search, search)
 	}
 
 	var total int64

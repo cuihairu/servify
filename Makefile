@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -55,6 +55,7 @@ help:
 	@echo "  approval-rollback-acceptance - Run the scoped config approval/rollback chain acceptance"
 	@echo "  session-transfer-acceptance - Run the session transfer chain acceptance"
 	@echo "  satisfaction-acceptance - Run the customer satisfaction chain acceptance"
+	@echo "  customer-agent-acceptance - Run the customer & agent management acceptance"
 	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  suggestion-acceptance - Run the customer-side suggested questions acceptance script"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
@@ -333,6 +334,11 @@ satisfaction-acceptance:
 	@echo "Running customer satisfaction chain acceptance..."
 	chmod +x ./scripts/test-satisfaction-acceptance.sh
 	./scripts/test-satisfaction-acceptance.sh
+
+customer-agent-acceptance:
+	@echo "Running customer & agent management acceptance..."
+	chmod +x ./scripts/test-customer-agent-acceptance.sh
+	./scripts/test-customer-agent-acceptance.sh
 
 runtime-baseline-acceptance:
 	@echo "Running runtime baseline acceptance..."

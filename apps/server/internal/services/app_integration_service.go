@@ -97,7 +97,7 @@ func (s *AppIntegrationService) List(ctx context.Context, req *AppIntegrationLis
 	}
 	if req.Search != "" {
 		term := "%" + req.Search + "%"
-		query = query.Where("name ILIKE ? OR vendor ILIKE ? OR summary ILIKE ?", term, term, term)
+		query = query.Where("LOWER(name) LIKE LOWER(?) OR LOWER(vendor) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?)", term, term, term)
 	}
 	if len(req.Status) == 1 {
 		if req.Status[0] == "enabled" {

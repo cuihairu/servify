@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -65,9 +66,20 @@ func TestAppIntegrationService_Lifecycle(t *testing.T) {
 	}
 	svc.List(ctx, &AppIntegrationListRequest{Status: []string{"weird"}})
 
-	// sqlite has no ILIKE: search path surfaces the count error
-	if _, _, err := svc.List(ctx, &AppIntegrationListRequest{Search: "zap"}); err == nil {
-		t.Fatal("expected ILIKE error on sqlite")
+	// search spans name/vendor/summary via LOWER LIKE, consistent on sqlite and pg
+	zapItems, zapTotal, err := svc.List(ctx, &AppIntegrationListRequest{Search: "zap"})
+	if err != nil {
+		t.Fatalf("List search: %v", err)
+	}
+	if zapTotal != 1 || len(zapItems) != 1 || zapItems[0].Slug != "zapier-tools" {
+		t.Fatalf("expected 1 zapier match, got %d/%d", zapTotal, len(zapItems))
+	}
+
+	// forced first-SELECT failure covers the List count error branch
+	errDB := newServicesTestDB(t, &models.AppIntegration{})
+	failNthQuery(errDB, 1)
+	if _, _, err := NewAppIntegrationService(errDB, nil).List(ctx, &AppIntegrationListRequest{Page: 1, PageSize: 20}); err == nil || !strings.Contains(err.Error(), "failed to count integrations") {
+		t.Fatalf("expected count integrations error, got %v", err)
 	}
 
 	updated, err := svc.Update(ctx, created.ID, &AppIntegrationUpdateRequest{

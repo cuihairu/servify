@@ -1469,3 +1469,164 @@ func TestValidateAcceptanceManifestScriptRejectsSatisfactionWithoutNegativeGuard
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidCustomerAgentManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-list.txt",
+		"customer-list.txt",
+		"customer-list-search.txt",
+		"customer-activity-c1.txt",
+		"customer-activity-c2.txt",
+		"agent-create-a1.txt",
+		"agent-create-a2.txt",
+		"agent-create-duplicate.txt",
+		"find-available-empty.txt",
+		"find-available-skills.txt",
+		"online-after-assign.txt",
+		"online-after-release.txt",
+		"assign-s1.txt",
+		"assign-overcapacity.txt",
+		"release-s1.txt",
+		"release-unassigned.txt",
+		"assign-missing-session.txt",
+		"assign-missing-agent.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_rejected_401",
+		"customer_created",
+		"customer_listed_with_filter",
+		"customer_activity_reconciled",
+		"agent_created",
+		"duplicate_agent_rejected_409",
+		"find_available_empty_rejected_404",
+		"find_available_selected_with_skills",
+		"assigned_session_load_increased",
+		"assign_overcapacity_rejected",
+		"released_session_load_decreased",
+		"release_unassigned_rejected_404",
+		"assign_missing_session_rejected_404",
+		"assign_missing_agent_rejected_404",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "customer-agent",
+  "mode": "runtime-customer-agent-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsCustomerAgentWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 find_available_empty_rejected_404 / assign_overcapacity_rejected /
+	// release_unassigned_rejected_404:负例守卫不全不算客服链路闭环。
+	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                "ok",
+		"unauthenticated-list.txt":   "HTTP/1.1 401",
+		"customer-list.txt":          "HTTP/1.1 200",
+		"customer-list-search.txt":   "HTTP/1.1 200",
+		"customer-activity-c1.txt":   "HTTP/1.1 200",
+		"customer-activity-c2.txt":   "HTTP/1.1 200",
+		"agent-create-a1.txt":        "HTTP/1.1 201",
+		"agent-create-a2.txt":        "HTTP/1.1 201",
+		"agent-create-duplicate.txt": "HTTP/1.1 409",
+		"find-available-empty.txt":   "HTTP/1.1 404",
+		"find-available-skills.txt":  "HTTP/1.1 200",
+		"online-after-assign.txt":    "HTTP/1.1 200",
+		"online-after-release.txt":   "HTTP/1.1 200",
+		"assign-s1.txt":              "HTTP/1.1 200",
+		"assign-overcapacity.txt":    "HTTP/1.1 500",
+		"release-s1.txt":             "HTTP/1.1 200",
+		"release-unassigned.txt":     "HTTP/1.1 404",
+		"assign-missing-session.txt": "HTTP/1.1 404",
+		"assign-missing-agent.txt":   "HTTP/1.1 404",
+		"manifest.json": `{
+  "provider": "customer-agent",
+  "mode": "runtime-customer-agent-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "customer_created": "true",
+    "customer_listed_with_filter": "true",
+    "customer_activity_reconciled": "true",
+    "agent_created": "true",
+    "duplicate_agent_rejected_409": "true",
+    "find_available_selected_with_skills": "true",
+    "assigned_session_load_increased": "true",
+    "released_session_load_decreased": "true",
+    "assign_missing_session_rejected_404": "true",
+    "assign_missing_agent_rejected_404": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-list.txt",
+    "customer-list.txt",
+    "customer-list-search.txt",
+    "customer-activity-c1.txt",
+    "customer-activity-c2.txt",
+    "agent-create-a1.txt",
+    "agent-create-a2.txt",
+    "agent-create-duplicate.txt",
+    "find-available-empty.txt",
+    "find-available-skills.txt",
+    "online-after-assign.txt",
+    "online-after-release.txt",
+    "assign-s1.txt",
+    "assign-overcapacity.txt",
+    "release-s1.txt",
+    "release-unassigned.txt",
+    "assign-missing-session.txt",
+    "assign-missing-agent.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "find_available_empty_rejected_404") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
