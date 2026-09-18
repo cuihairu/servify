@@ -753,12 +753,12 @@ func TestValidateAcceptanceManifestScriptAcceptsValidAuthAuditManifest(t *testin
 
 	dir := t.TempDir()
 	writeAcceptanceFixture(t, dir, map[string]string{
-		"summary.txt":              "ok",
-		"login-blocked.txt":        "HTTP/1.1 403",
+		"summary.txt":               "ok",
+		"login-blocked.txt":         "HTTP/1.1 403",
 		"login-bad-credentials.txt": "HTTP/1.1 401",
-		"login-clean.txt":          "HTTP/1.1 200",
-		"audit-logins.txt":         "HTTP/1.1 200",
-		"audit-registers.txt":      "HTTP/1.1 200",
+		"login-clean.txt":           "HTTP/1.1 200",
+		"audit-logins.txt":          "HTTP/1.1 200",
+		"audit-registers.txt":       "HTTP/1.1 200",
 		"manifest.json": `{
   "provider": "auth-audit",
   "mode": "runtime-risk-enforcement",
