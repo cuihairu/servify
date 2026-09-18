@@ -1630,3 +1630,165 @@ func TestValidateAcceptanceManifestScriptRejectsCustomerAgentWithoutNegativeGuar
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidStatisticsManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-dashboard.txt",
+		"stats-category.txt",
+		"stats-priority.txt",
+		"stats-agent-perf.txt",
+		"stats-agent-perf-missing-dates.txt",
+		"stats-source.txt",
+		"daily-update.txt",
+		"daily-update-default.txt",
+		"shift-create.txt",
+		"shift-create-missing-agent.txt",
+		"shift-create-invalid-time.txt",
+		"shift-list.txt",
+		"shift-update.txt",
+		"shift-update-missing.txt",
+		"shift-stats-active.txt",
+		"shift-delete.txt",
+		"shift-stats-after-delete.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_rejected_401",
+		"ticket_category_stats_reconciled",
+		"ticket_priority_stats_reconciled",
+		"agent_performance_stats_reconciled",
+		"agent_performance_missing_dates_rejected_400",
+		"customer_source_stats_reconciled",
+		"daily_stats_updated",
+		"daily_stats_idempotent",
+		"shift_created",
+		"shift_missing_agent_rejected_400",
+		"shift_invalid_time_rejected_400",
+		"shift_listed",
+		"shift_updated_active",
+		"shift_stats_reconciled",
+		"shift_deleted_and_gone",
+		"shift_missing_update_rejected_404",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "statistics",
+  "mode": "runtime-statistics-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsStatisticsWithoutShiftGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 shift_missing_agent_rejected_400 / shift_invalid_time_rejected_400 /
+	// shift_missing_update_rejected_404:排班负例守卫不全不算统计链路闭环。
+	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                        "ok",
+		"unauthenticated-dashboard.txt":      "HTTP/1.1 401",
+		"stats-category.txt":                 "HTTP/1.1 200",
+		"stats-priority.txt":                 "HTTP/1.1 200",
+		"stats-agent-perf.txt":               "HTTP/1.1 200",
+		"stats-agent-perf-missing-dates.txt": "HTTP/1.1 400",
+		"stats-source.txt":                   "HTTP/1.1 200",
+		"daily-update.txt":                   "HTTP/1.1 200",
+		"daily-update-default.txt":           "HTTP/1.1 200",
+		"shift-create.txt":                   "HTTP/1.1 201",
+		"shift-create-missing-agent.txt":     "HTTP/1.1 400",
+		"shift-create-invalid-time.txt":      "HTTP/1.1 400",
+		"shift-list.txt":                     "HTTP/1.1 200",
+		"shift-update.txt":                   "HTTP/1.1 200",
+		"shift-update-missing.txt":           "HTTP/1.1 404",
+		"shift-stats-active.txt":             "HTTP/1.1 200",
+		"shift-delete.txt":                   "HTTP/1.1 200",
+		"shift-stats-after-delete.txt":       "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "statistics",
+  "mode": "runtime-statistics-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "ticket_category_stats_reconciled": "true",
+    "ticket_priority_stats_reconciled": "true",
+    "agent_performance_stats_reconciled": "true",
+    "agent_performance_missing_dates_rejected_400": "true",
+    "customer_source_stats_reconciled": "true",
+    "daily_stats_updated": "true",
+    "daily_stats_idempotent": "true",
+    "shift_created": "true",
+    "shift_listed": "true",
+    "shift_updated_active": "true",
+    "shift_stats_reconciled": "true",
+    "shift_deleted_and_gone": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-dashboard.txt",
+    "stats-category.txt",
+    "stats-priority.txt",
+    "stats-agent-perf.txt",
+    "stats-agent-perf-missing-dates.txt",
+    "stats-source.txt",
+    "daily-update.txt",
+    "daily-update-default.txt",
+    "shift-create.txt",
+    "shift-create-missing-agent.txt",
+    "shift-create-invalid-time.txt",
+    "shift-list.txt",
+    "shift-update.txt",
+    "shift-update-missing.txt",
+    "shift-stats-active.txt",
+    "shift-delete.txt",
+    "shift-stats-after-delete.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "shift_missing_agent_rejected_400") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
