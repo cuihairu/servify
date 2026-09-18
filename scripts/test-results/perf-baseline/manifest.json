@@ -2,7 +2,7 @@
   "provider": "perf",
   "mode": "runtime-baseline",
   "scale": "full",
-  "generated_at": "2026-09-18T20:01:12.843844",
+  "generated_at": "2026-09-18T21:08:06.181379",
   "status": {
     "overall": "passed"
   },

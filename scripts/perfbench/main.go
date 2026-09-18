@@ -496,8 +496,11 @@ func runWSConnections(base, token string, profile loadProfile) Result {
 		}
 		roundtrips = append(roundtrips, float64(time.Since(t0).Microseconds())/1000.0)
 	}
-	// 服务端对账：/api/v1/ws/stats 的 connected_clients。
-	if reported, err := wsServerReported(base, token); err == nil {
+	// 服务端对账：/api/v1/ws/stats 的 connected_clients。hub 对连接的登记在
+	// 握手 101 之后异步完成（h.register 是 channel，hub 循环稍后消费），慢机
+	// 上客户端判定建连时服务端 map 可能尚未收全（CI 上 20 连接读到 19）；
+	// 登记 only 增、断连 only 减，峰值即建连数。到位即提前返回。
+	if reported, err := wsServerReported(base, token, maxConns); err == nil {
 		serverReported = reported
 	}
 
@@ -528,27 +531,42 @@ func wsURLFromBase(base string) string {
 	return "ws://" + s + "/api/v1/ws"
 }
 
-func wsServerReported(base, token string) (int, error) {
+// wsServerReported 轮询 stats 端点取 connected_clients 峰值：到位（≥
+// minExpected）提前返回，最多 10 次 × 200ms。
+func wsServerReported(base, token string, minExpected int) (int, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", base+"/api/v1/ws/stats", nil)
-	if err != nil {
-		return 0, err
+	best := 0
+	for attempt := 0; attempt < 10; attempt++ {
+		if attempt > 0 {
+			time.Sleep(200 * time.Millisecond)
+		}
+		req, err := http.NewRequest("GET", base+"/api/v1/ws/stats", nil)
+		if err != nil {
+			return 0, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			return 0, err
+		}
+		var parsed struct {
+			Data struct {
+				ConnectedClients int `json:"connected_clients"`
+			} `json:"data"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&parsed)
+		resp.Body.Close()
+		if decodeErr != nil {
+			return 0, decodeErr
+		}
+		if parsed.Data.ConnectedClients > best {
+			best = parsed.Data.ConnectedClients
+		}
+		if minExpected > 0 && best >= minExpected {
+			break
+		}
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-	var parsed struct {
-		Data struct {
-			ConnectedClients int `json:"connected_clients"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return 0, err
-	}
-	return parsed.Data.ConnectedClients, nil
+	return best, nil
 }
 
 // ---- 最小 WS 客户端（标准库） ----

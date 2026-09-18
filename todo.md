@@ -666,9 +666,10 @@
 - 进展（2026-09-18 完成）：
   - 压测引擎 `scripts/perfbench`（Go 标准库、零三方压测依赖）：四场景负载器（ticket 创建/评论/列表混读、AI 查询、multipart 文件上传+知识文档上传/同步、WebSocket 阶梯建连+text-message 往返）+ 手写 RFC 6455 客户端（握手/帧编解码/关闭帧）+ 延迟分位数统计（p50/p95/p99/max）+ fail-soft 容量口径（WS 到顶记 note）；附 `-gen-config` 从生产 config.yml 派生压测配置（yaml Node API 保留注释与 ${ENV} 占位符：限流放宽 100000/10000、upload=local、AI 指 mock、knowledge.provider 置空=默认态口径）
   - 编排脚本 `scripts/test-perf-baseline.sh`（smoke/full 两档）：构建→内嵌 mock LLM（OpenAI 兼容 chat/completions）→派生配置→sqlite 起服→401 负例→首用户 admin→四场景→结果校验（errors=0、ws_max_conns==ws_target、服务端 /api/v1/ws/stats 对账）→manifest 写入（provider=perf，11 项 checks）；无外部依赖（CI 可真跑）
-  - full 档容量基线（2026-09-18，sqlite+mock LLM，入库 scripts/test-results/perf-baseline/）：tickets-mixed 1800 ops 并发 16 全 0 错误 p50 23.86ms/p95 250ms/p99 718ms 221 ops/s；ai-query 200 ops 0 错误 p95 1.02s（mock 下游亚毫秒仍达 1s——AI 管线自身成本下限）；upload-knowledge 200 ops 0 错误 p99 38ms 1452 ops/s；ws-connections 200/200 建连、stats 对账 200==200、握手 p50 3.59ms、往返 6.08ms。结论与解读见 docs/perf-baseline.md
+  - full 档容量基线（2026-09-18，sqlite+mock LLM，入库 scripts/test-results/perf-baseline/）：tickets-mixed 1800 ops 并发 16 全 0 错误 p50 23.75ms/p95 267ms/p99 831ms 208 ops/s；ai-query 200 ops 0 错误 p95 1.03s（mock 下游亚毫秒仍达 1s——AI 管线自身成本下限）；upload-knowledge 200 ops 0 错误 p99 36ms 1213 ops/s；ws-connections 200/200 建连、stats 对账 200==200、握手 p50 4.83ms、往返 6.41ms。结论与解读见 docs/perf-baseline.md
   - 配套：CI 驱动测试 `TestPerfBaselineScriptWritesEvidence`（smoke 档真跑全链路入库 script-checks 白名单，步骤超时 5→10 分钟）；validate-acceptance-manifest.sh 新增 provider=perf case + 正反测试；`make perf-baseline`（PERF_SCALE ?= smoke）；docs/perf-baseline.md（容量基线与压测结论）；acceptance-checklist.md 新增 §13 性能与容量基线（六项全通过）
   - 调试中修的两个 perfbench 缺陷：Sec-WebSocket-Key 必须解码后恰 16 字节（gorilla 严格校验，32 字节 hex 被 400 拒绝——dial 失败现记 first_dial_error 留证）；knowledge/upload 无 provider 503 是默认态预期（httpDo 返回状态码区分，503 计延迟不计错误并记 note）
+  - 首轮 CI（run 35390734446）Script Checks 失败修复：WS stats 对账在 CI 慢机读到 19/20——hub 对连接的登记在握手 101 之后异步完成（h.register 经 hub 循环消费），客户端判定建连≠服务端已登记；wsServerReported 改峰值轮询（登记 only 增、断连 only 减，峰值即建连数，到位提前返回），本地 smoke/full 复验后重新入库基线三件套
 
 ---
 

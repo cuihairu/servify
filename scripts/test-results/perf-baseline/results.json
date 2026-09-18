@@ -5,11 +5,11 @@
     "ops": 1800,
     "concurrency": 16,
     "errors": 0,
-    "p50_ms": 23.863,
-    "p95_ms": 250.012,
-    "p99_ms": 718.175,
-    "max_ms": 2398.288,
-    "ops_per_sec": 220.91007189540994
+    "p50_ms": 23.745,
+    "p95_ms": 267.469,
+    "p99_ms": 831.483,
+    "max_ms": 1886.447,
+    "ops_per_sec": 208.09769665226264
   },
   {
     "scenario": "ai-query",
@@ -17,11 +17,11 @@
     "ops": 200,
     "concurrency": 16,
     "errors": 0,
-    "p50_ms": 11.482,
-    "p95_ms": 1017.892,
-    "p99_ms": 1061.403,
-    "max_ms": 2095.126,
-    "ops_per_sec": 92.17794504305749
+    "p50_ms": 18.481,
+    "p95_ms": 1033.034,
+    "p99_ms": 1259.938,
+    "max_ms": 2075.326,
+    "ops_per_sec": 83.46181128102567
   },
   {
     "scenario": "upload-knowledge",
@@ -29,11 +29,11 @@
     "ops": 200,
     "concurrency": 16,
     "errors": 0,
-    "p50_ms": 8.311,
-    "p95_ms": 20.524,
-    "p99_ms": 38.032,
-    "max_ms": 41.411,
-    "ops_per_sec": 1451.8904590172738,
+    "p50_ms": 8.592,
+    "p95_ms": 32.007,
+    "p99_ms": 35.887,
+    "max_ms": 38.193,
+    "ops_per_sec": 1213.0211929783225,
     "notes": [
       "knowledge_upload=not-enabled (expected without external provider)",
       "knowledge_sync=not-enabled (expected without external provider)"
@@ -45,14 +45,14 @@
     "ops": 200,
     "concurrency": 0,
     "errors": 0,
-    "p50_ms": 3.589,
-    "p95_ms": 10.21,
-    "p99_ms": 12.546,
-    "max_ms": 15.95,
+    "p50_ms": 4.827,
+    "p95_ms": 9.262,
+    "p99_ms": 10.899,
+    "max_ms": 13.256,
     "ops_per_sec": 0,
     "ws_max_conns": 200,
     "ws_server_reported": 200,
-    "ws_roundtrip_ms": 6.079,
+    "ws_roundtrip_ms": 6.406,
     "ws_target": 200
   }
 ]
