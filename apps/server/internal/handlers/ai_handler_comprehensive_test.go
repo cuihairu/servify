@@ -24,8 +24,8 @@ type MockEnhancedAIService struct {
 	syncErr        error
 }
 
-func (m *MockEnhancedAIService) ProcessQueryEnhanced(ctx context.Context, query, sessionID string) (*services.EnhancedAIResponse, error) {
-	return &services.EnhancedAIResponse{
+func (m *MockEnhancedAIService) ProcessQueryEnhanced(ctx context.Context, query, sessionID string) (*aidelivery.EnhancedAIResponse, error) {
+	return &aidelivery.EnhancedAIResponse{
 		AIResponse: &services.AIResponse{
 			Content:    "Mock enhanced response",
 			Confidence: 0.9,

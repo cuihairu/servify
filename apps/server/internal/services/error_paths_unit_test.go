@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -70,36 +69,6 @@ func TestAIService_ShTransferToHuman_HistoryLength(t *testing.T) {
 	history := make([]models.Message, 6)
 	if !svc.ShouldTransferToHuman("plain question", history) {
 		t.Fatal("expected long history to trigger transfer")
-	}
-}
-
-func TestEnhancedAIService_RetrieveErrorContinues(t *testing.T) {
-	base := NewAIService("", "")
-	base.InitializeKnowledgeBase()
-	enh := NewEnhancedAIService(base, nil, "kb", logrus.New())
-	enh.SetWeKnoraEnabled(false)
-	enh.SetFallbackEnabled(false)
-
-	resp, err := enh.ProcessQueryEnhanced(context.Background(), "普通问题", "s")
-	if err != nil {
-		t.Fatalf("expected graceful fallback, got %v", err)
-	}
-	if resp.Strategy != "fallback" {
-		t.Fatalf("expected fallback strategy, got %q", resp.Strategy)
-	}
-	if resp.Content == "" {
-		t.Fatal("expected non-empty fallback content")
-	}
-}
-
-func TestEnhancedAIService_SyncKnowledgeBase_UploadError(t *testing.T) {
-	base := NewAIService("", "")
-	base.InitializeKnowledgeBase()
-	client := &MockWeKnoraClient{uploadError: errors.New("upload failed")}
-	enh := NewEnhancedAIService(base, client, "kb", logrus.New())
-
-	if err := enh.SyncKnowledgeBase(context.Background()); err == nil {
-		t.Fatal("expected sync error when uploads fail")
 	}
 }
 

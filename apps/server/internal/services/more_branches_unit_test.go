@@ -61,43 +61,6 @@ func TestAIService_NewRequestError(t *testing.T) {
 	}
 }
 
-func TestEnhancedAIService_OpenAIFailureWithWeknoraDocs(t *testing.T) {
-	server := httptest.NewServer(nil)
-	url := server.URL
-	server.Close()
-
-	base := NewAIService("key", url)
-	base.InitializeKnowledgeBase()
-	enh := NewEnhancedAIService(base, &MockWeKnoraClient{}, "kb", logrus.New())
-
-	resp, err := enh.ProcessQueryEnhanced(context.Background(), "billing", "s")
-	if err != nil {
-		t.Fatalf("ProcessQueryEnhanced: %v", err)
-	}
-	if resp.Strategy != "fallback" {
-		t.Fatalf("expected fallback after OpenAI failure, got %q", resp.Strategy)
-	}
-	if resp.Content == "" {
-		t.Fatal("expected fallback content")
-	}
-	if enh.GetMetrics().SuccessCount != 0 {
-		t.Fatal("expected no success metric")
-	}
-}
-
-func TestEnhancedAIService_ConfidenceDocBonusClamp(t *testing.T) {
-	base := NewAIService("", "")
-	enh := NewEnhancedAIService(base, nil, "kb", nil)
-	docs := make([]models.KnowledgeDoc, 5)
-	// 5 docs * 0.05 = 0.25 -> clamped to 0.15
-	if got := enh.calculateConfidence(docs, "weknora"); got != 0.95 {
-		t.Fatalf("expected clamped confidence 0.95, got %v", got)
-	}
-	if got := enh.calculateConfidence(docs[:4], "fallback"); got != 0.75 {
-		t.Fatalf("expected 0.6+0.15 clamp, got %v", got)
-	}
-}
-
 func TestAppIntegrationService_MoreBranches(t *testing.T) {
 	db := newServicesTestDB(t, &models.AppIntegration{})
 	svc := NewAppIntegrationService(db, nil)

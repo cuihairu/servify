@@ -54,8 +54,12 @@ type OpenAIResponse struct {
 	} `json:"error"`
 }
 
-// AIResponse 契约定义已迁至 modules/ai/delivery，此处保留类型别名供 legacy 引用方使用。
+// AIResponse / AIMetrics / EnhancedAIResponse 契约定义已迁至 modules/ai/delivery，
+// 此处保留类型别名供 legacy 引用方使用（EnhancedAIService 已随 P3-2 移除）。
 type AIResponse = aidelivery.AIResponse
+type AIMetrics = aidelivery.AIMetrics
+
+type EnhancedAIResponse = aidelivery.EnhancedAIResponse
 
 func NewAIService(apiKey, baseURL string) *AIService {
 	return &AIService{
