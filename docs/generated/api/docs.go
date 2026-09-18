@@ -3060,7 +3060,7 @@ const docTemplate = `{
         },
         "/api/session-transfer/history": {
             "get": {
-                "description": "鑾峰彇鏈€杩戠殑浼氳瘽杞帴璁板綍",
+                "description": "获取最近的会话转接记录",
                 "consumes": [
                     "application/json"
                 ],
@@ -3068,13 +3068,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "浼氳瘽杞帴"
+                    "会话转接"
                 ],
-                "summary": "鑾峰彇杩戞湡杞帴鍘嗗彶",
+                "summary": "获取近期转接历史",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "杩斿洖鏉℃暟锛堥粯璁?50锛屾渶澶?200锛?",
+                        "description": "返回条数（默认 50，最大 200）",
                         "name": "limit",
                         "in": "query"
                     }

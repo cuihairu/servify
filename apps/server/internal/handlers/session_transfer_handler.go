@@ -132,13 +132,13 @@ func (h *SessionTransferHandler) GetTransferHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, history)
 }
 
-// ListRecentTransferHistory 鑾峰彇杩戞湡杞帴鍘嗗彶
-// @Summary 鑾峰彇杩戞湡杞帴鍘嗗彶
-// @Description 鑾峰彇鏈€杩戠殑浼氳瘽杞帴璁板綍
-// @Tags 浼氳瘽杞帴
+// ListRecentTransferHistory 获取近期转接历史
+// @Summary 获取近期转接历史
+// @Description 获取最近的会话转接记录
+// @Tags 会话转接
 // @Accept json
 // @Produce json
-// @Param limit query int false "杩斿洖鏉℃暟锛堥粯璁?50锛屾渶澶?200锛?"
+// @Param limit query int false "返回条数（默认 50，最大 200）"
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} ErrorResponse
 // @Router /api/session-transfer/history [get]

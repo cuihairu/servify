@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1122,4 +1123,186 @@ func TestValidateAcceptanceManifestScriptRejectsApprovalRollbackWithoutReviewerA
 	if !strings.Contains(string(output), "reviewer_approval_rollback_ok") {
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
+}
+
+func TestValidateAcceptanceManifestScriptAcceptsValidSessionTransferManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	evidence := map[string]string{
+		"summary.txt":                   "ok",
+		"unauthenticated-waiting.txt":   "HTTP/1.1 401",
+		"agents-online-list.txt":        "HTTP/1.1 200",
+		"to-human-direct.txt":           "HTTP/1.1 200",
+		"history-s1.txt":                "HTTP/1.1 200",
+		"to-human-queued.txt":           "HTTP/1.1 200",
+		"waiting-list.txt":              "HTTP/1.1 200",
+		"to-human-duplicate.txt":        "HTTP/1.1 200",
+		"process-queue.txt":             "HTTP/1.1 200",
+		"waiting-list-after.txt":        "HTTP/1.1 200",
+		"to-agent-offline-rejected.txt": "HTTP/1.1 500",
+		"to-agent-direct.txt":           "HTTP/1.1 200",
+		"cancel-waiting.txt":            "HTTP/1.1 200",
+		"cancel-waiting-again.txt":      "HTTP/1.1 200",
+		"waiting-list-cancelled.txt":    "HTTP/1.1 200",
+		"check-auto.txt":                "HTTP/1.1 200",
+		"history-recent.txt":            "HTTP/1.1 200",
+		"to-human-unknown-session.txt":  "HTTP/1.1 500",
+	}
+	names := make([]string, 0, len(evidence))
+	for _, name := range []string{
+		"summary.txt",
+		"unauthenticated-waiting.txt",
+		"agents-online-list.txt",
+		"to-human-direct.txt",
+		"history-s1.txt",
+		"to-human-queued.txt",
+		"waiting-list.txt",
+		"to-human-duplicate.txt",
+		"process-queue.txt",
+		"waiting-list-after.txt",
+		"to-agent-offline-rejected.txt",
+		"to-agent-direct.txt",
+		"cancel-waiting.txt",
+		"cancel-waiting-again.txt",
+		"waiting-list-cancelled.txt",
+		"check-auto.txt",
+		"history-recent.txt",
+		"to-human-unknown-session.txt",
+	} {
+		names = append(names, name)
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "session-transfer",
+  "mode": "runtime-transfer-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "agents_ready": "true",
+    "agent_online_toggled": "true",
+    "visitor_session_created": "true",
+    "transfer_to_human_direct_ok": "true",
+    "transfer_history_retrievable": "true",
+    "transfer_to_waiting_queued": "true",
+    "waiting_queue_listed": "true",
+    "duplicate_transfer_idempotent": "true",
+    "process_queue_dispatched": "true",
+    "transfer_to_agent_ok": "true",
+    "cancel_waiting_ok": "true",
+    "check_auto_ok": "true",
+    "recent_history_listed": "true",
+    "unknown_session_rejected": "true",
+    "offline_target_rejected": "true"
+  },
+  "evidence_files": [%s]
+}`, quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsSessionTransferWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 unknown_session_rejected / offline_target_rejected:没有负例拒绝
+	// 证据就不算转接链路闭环。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                   "ok",
+		"unauthenticated-waiting.txt":   "HTTP/1.1 401",
+		"agents-online-list.txt":        "HTTP/1.1 200",
+		"to-human-direct.txt":           "HTTP/1.1 200",
+		"history-s1.txt":                "HTTP/1.1 200",
+		"to-human-queued.txt":           "HTTP/1.1 200",
+		"waiting-list.txt":              "HTTP/1.1 200",
+		"to-human-duplicate.txt":        "HTTP/1.1 200",
+		"process-queue.txt":             "HTTP/1.1 200",
+		"waiting-list-after.txt":        "HTTP/1.1 200",
+		"to-agent-offline-rejected.txt": "HTTP/1.1 500",
+		"to-agent-direct.txt":           "HTTP/1.1 200",
+		"cancel-waiting.txt":            "HTTP/1.1 200",
+		"cancel-waiting-again.txt":      "HTTP/1.1 200",
+		"waiting-list-cancelled.txt":    "HTTP/1.1 200",
+		"check-auto.txt":                "HTTP/1.1 200",
+		"history-recent.txt":            "HTTP/1.1 200",
+		"to-human-unknown-session.txt":  "HTTP/1.1 500",
+		"manifest.json": `{
+  "provider": "session-transfer",
+  "mode": "runtime-transfer-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "agents_ready": "true",
+    "agent_online_toggled": "true",
+    "visitor_session_created": "true",
+    "transfer_to_human_direct_ok": "true",
+    "transfer_history_retrievable": "true",
+    "transfer_to_waiting_queued": "true",
+    "waiting_queue_listed": "true",
+    "duplicate_transfer_idempotent": "true",
+    "process_queue_dispatched": "true",
+    "transfer_to_agent_ok": "true",
+    "cancel_waiting_ok": "true",
+    "check_auto_ok": "true",
+    "recent_history_listed": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-waiting.txt",
+    "agents-online-list.txt",
+    "to-human-direct.txt",
+    "history-s1.txt",
+    "to-human-queued.txt",
+    "waiting-list.txt",
+    "to-human-duplicate.txt",
+    "process-queue.txt",
+    "waiting-list-after.txt",
+    "to-agent-offline-rejected.txt",
+    "to-agent-direct.txt",
+    "cancel-waiting.txt",
+    "cancel-waiting-again.txt",
+    "waiting-list-cancelled.txt",
+    "check-auto.txt",
+    "history-recent.txt",
+    "to-human-unknown-session.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "unknown_session_rejected") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
+
+// quotedJSONList 把证据文件名序列化成 manifest fixture 里的 JSON 数组条目。
+func quotedJSONList(names ...string) string {
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, fmt.Sprintf("%q", name))
+	}
+	return strings.Join(quoted, ",\n    ")
 }
