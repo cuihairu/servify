@@ -53,6 +53,7 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 - [架构重设计计划](/architecture-redesign-plan)
 - [远程协助](/remote-assistance)
 - [部署指南](/deployment)
+- [WebRTC/远程协助部署指南](/webrtc-deployment)
 - [本地开发](/local-development)
 
 ### 深入运行与安全

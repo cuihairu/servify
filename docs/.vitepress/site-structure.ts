@@ -28,6 +28,7 @@ const productPages = [
   '/architecture-redesign-plan',
   '/remote-assistance',
   '/deployment',
+  '/webrtc-deployment',
   '/local-development',
 ];
 
