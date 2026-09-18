@@ -1,0 +1,51 @@
+{
+  "provider": "satisfaction",
+  "mode": "runtime-satisfaction-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "customer_created": "true",
+    "ticket_created": "true",
+    "ticket_closed_survey_scheduled": "true",
+    "satisfaction_created": "true",
+    "duplicate_satisfaction_rejected_409": "true",
+    "non_owner_satisfaction_rejected_403": "true",
+    "satisfaction_listed": "true",
+    "satisfaction_stats_reconciled": "true",
+    "surveys_listed": "true",
+    "survey_resent": "true",
+    "satisfaction_detail_retrievable": "true",
+    "satisfaction_comment_updated": "true",
+    "satisfaction_by_ticket_retrievable": "true",
+    "satisfaction_deleted_and_gone": "true"
+  },
+  "evidence_files": [
+    "build-output.txt",
+    "customer-create-other.txt",
+    "customer-create.txt",
+    "ready.txt",
+    "register-admin.txt",
+    "satisfaction-by-ticket-after-delete.txt",
+    "satisfaction-by-ticket.txt",
+    "satisfaction-create.txt",
+    "satisfaction-delete.txt",
+    "satisfaction-detail-after-delete.txt",
+    "satisfaction-detail.txt",
+    "satisfaction-duplicate.txt",
+    "satisfaction-list.txt",
+    "satisfaction-non-owner.txt",
+    "satisfaction-stats.txt",
+    "satisfaction-update.txt",
+    "server-log.txt",
+    "summary.txt",
+    "survey-resend.txt",
+    "surveys-list.txt",
+    "ticket-close.txt",
+    "ticket-create.txt",
+    "unauthenticated-list.txt"
+  ]
+}

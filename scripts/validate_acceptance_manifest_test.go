@@ -1306,3 +1306,166 @@ func quotedJSONList(names ...string) string {
 	}
 	return strings.Join(quoted, ",\n    ")
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidSatisfactionManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-list.txt",
+		"customer-create.txt",
+		"ticket-create.txt",
+		"ticket-close.txt",
+		"satisfaction-create.txt",
+		"satisfaction-duplicate.txt",
+		"satisfaction-non-owner.txt",
+		"satisfaction-list.txt",
+		"satisfaction-detail.txt",
+		"satisfaction-update.txt",
+		"satisfaction-by-ticket.txt",
+		"satisfaction-stats.txt",
+		"surveys-list.txt",
+		"survey-resend.txt",
+		"satisfaction-delete.txt",
+		"satisfaction-by-ticket-after-delete.txt",
+		"satisfaction-detail-after-delete.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_rejected_401",
+		"customer_created",
+		"ticket_created",
+		"ticket_closed_survey_scheduled",
+		"satisfaction_created",
+		"duplicate_satisfaction_rejected_409",
+		"non_owner_satisfaction_rejected_403",
+		"satisfaction_listed",
+		"satisfaction_stats_reconciled",
+		"surveys_listed",
+		"survey_resent",
+		"satisfaction_detail_retrievable",
+		"satisfaction_comment_updated",
+		"satisfaction_by_ticket_retrievable",
+		"satisfaction_deleted_and_gone",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	evidence["satisfaction-delete.txt"] = "HTTP/1.1 204"
+	evidence["satisfaction-by-ticket-after-delete.txt"] = "HTTP/1.1 204"
+	evidence["satisfaction-detail-after-delete.txt"] = "HTTP/1.1 404"
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "satisfaction",
+  "mode": "runtime-satisfaction-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsSatisfactionWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 duplicate_satisfaction_rejected_409 / non_owner_satisfaction_rejected_403:
+	// 没有负例拒绝证据就不算满意度链路闭环。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                             "ok",
+		"unauthenticated-list.txt":                "HTTP/1.1 401",
+		"customer-create.txt":                     "HTTP/1.1 201",
+		"ticket-create.txt":                       "HTTP/1.1 201",
+		"ticket-close.txt":                        "HTTP/1.1 200",
+		"satisfaction-create.txt":                 "HTTP/1.1 201",
+		"satisfaction-duplicate.txt":              "HTTP/1.1 409",
+		"satisfaction-non-owner.txt":              "HTTP/1.1 403",
+		"satisfaction-list.txt":                   "HTTP/1.1 200",
+		"satisfaction-detail.txt":                 "HTTP/1.1 200",
+		"satisfaction-update.txt":                 "HTTP/1.1 200",
+		"satisfaction-by-ticket.txt":              "HTTP/1.1 200",
+		"satisfaction-stats.txt":                  "HTTP/1.1 200",
+		"surveys-list.txt":                        "HTTP/1.1 200",
+		"survey-resend.txt":                       "HTTP/1.1 200",
+		"satisfaction-delete.txt":                 "HTTP/1.1 204",
+		"satisfaction-by-ticket-after-delete.txt": "HTTP/1.1 204",
+		"satisfaction-detail-after-delete.txt":    "HTTP/1.1 404",
+		"manifest.json": `{
+  "provider": "satisfaction",
+  "mode": "runtime-satisfaction-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "customer_created": "true",
+    "ticket_created": "true",
+    "ticket_closed_survey_scheduled": "true",
+    "satisfaction_created": "true",
+    "satisfaction_listed": "true",
+    "satisfaction_stats_reconciled": "true",
+    "surveys_listed": "true",
+    "survey_resent": "true",
+    "satisfaction_detail_retrievable": "true",
+    "satisfaction_comment_updated": "true",
+    "satisfaction_by_ticket_retrievable": "true",
+    "satisfaction_deleted_and_gone": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-list.txt",
+    "customer-create.txt",
+    "ticket-create.txt",
+    "ticket-close.txt",
+    "satisfaction-create.txt",
+    "satisfaction-duplicate.txt",
+    "satisfaction-non-owner.txt",
+    "satisfaction-list.txt",
+    "satisfaction-detail.txt",
+    "satisfaction-update.txt",
+    "satisfaction-by-ticket.txt",
+    "satisfaction-stats.txt",
+    "surveys-list.txt",
+    "survey-resend.txt",
+    "satisfaction-delete.txt",
+    "satisfaction-by-ticket-after-delete.txt",
+    "satisfaction-detail-after-delete.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "duplicate_satisfaction_rejected_409") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
