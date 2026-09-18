@@ -251,13 +251,13 @@ func (r *hscovCustomerRepo) GetStats(ctx context.Context) (*customerapp.Customer
 
 func TestHSSeamsCustomerModuleErrors(t *testing.T) {
 	repo := &hscovCustomerRepo{activityErr: errors.New("boom: activity"), statsErr: errors.New("boom: stats")}
-	svc := &CustomerService{module: customerapp.NewService(repo), logger: newTestLogger()}
+	svc := customerapp.NewService(repo)
 	ctx := context.Background()
 
 	if _, err := svc.GetCustomerActivity(ctx, 1, 5); err == nil || !strings.Contains(err.Error(), "activity") {
 		t.Fatalf("expected activity module error, got %v", err)
 	}
-	if _, err := svc.GetCustomerStats(ctx); err == nil || !strings.Contains(err.Error(), "stats") {
+	if _, err := svc.GetStats(ctx); err == nil || !strings.Contains(err.Error(), "stats") {
 		t.Fatalf("expected stats module error, got %v", err)
 	}
 }
@@ -286,15 +286,6 @@ type hscovDocRepo struct {
 
 func (r *hscovDocRepo) List(ctx context.Context, filter knowledgeapp.ListDocumentsFilter) ([]knowledgedomain.Document, int64, error) {
 	return r.docs, int64(len(r.docs)), nil
-}
-
-func TestHSSeamsKnowledgeListInvalidDomainDoc(t *testing.T) {
-	repo := &hscovDocRepo{docs: []knowledgedomain.Document{{ID: "not-a-number", Title: "bad"}}}
-	svc := &KnowledgeDocService{module: knowledgeapp.NewService(repo, nil, nil)}
-	_, _, err := svc.List(context.Background(), &KnowledgeDocListRequest{})
-	if err == nil || !strings.Contains(err.Error(), "invalid document id") {
-		t.Fatalf("expected invalid document id error, got %v", err)
-	}
 }
 
 // --- WebRTC：CreateAnswer / SetLocalDescription / Close 错误 ---

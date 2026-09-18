@@ -26,9 +26,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewSLAService(db, nil) == nil {
 		t.Fatal("expected SLA service")
 	}
-	if NewCustomerService(db, nil) == nil {
-		t.Fatal("expected customer service")
-	}
 	if NewStatisticsService(db, nil) == nil {
 		t.Fatal("expected statistics service")
 	}
@@ -159,30 +156,6 @@ func TestCustomFieldService_DroppedTableErrors(t *testing.T) {
 	}
 	if err := svc.Delete(ctx, 1); err == nil {
 		t.Fatal("expected delete error with missing table")
-	}
-}
-
-// ---- knowledge doc error branches ----
-
-func TestKnowledgeDocService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.KnowledgeDoc{}, &models.KnowledgeIndexJob{})
-	svc := NewKnowledgeDocService(db)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, &KnowledgeDocCreateRequest{Title: "T", Content: "C"}); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if _, err := svc.Create(ctx, &KnowledgeDocCreateRequest{Title: "", Content: ""}); err == nil {
-		t.Fatal("expected validation error from module")
-	}
-	if _, err := svc.Update(ctx, 999, &KnowledgeDocUpdateRequest{Title: stringPtr("x")}); err == nil {
-		t.Fatal("expected update error for missing doc")
-	}
-	if err := db.Migrator().DropTable("knowledge_docs"); err != nil {
-		t.Fatalf("drop: %v", err)
-	}
-	if _, _, err := svc.List(ctx, &KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil {
-		t.Fatal("expected list error with missing table")
 	}
 }
 

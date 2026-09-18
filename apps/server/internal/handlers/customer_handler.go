@@ -7,7 +7,6 @@ import (
 	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -241,7 +240,7 @@ func (h *CustomerHandler) RevokeCustomerTokens(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/customers [get]
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
-	var req services.CustomerListRequest
+	var req customerapi.CustomerListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid query parameters",

@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +23,7 @@ func NewPublicKnowledgeDocHandler(service knowledgedelivery.HandlerService) *Kno
 }
 
 func (h *KnowledgeDocHandler) List(c *gin.Context) {
-	var req services.KnowledgeDocListRequest
+	var req knowledgedelivery.KnowledgeDocListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid query parameters", Message: err.Error()})
 		return
@@ -72,7 +71,7 @@ func (h *KnowledgeDocHandler) Get(c *gin.Context) {
 }
 
 func (h *KnowledgeDocHandler) Create(c *gin.Context) {
-	var req services.KnowledgeDocCreateRequest
+	var req knowledgedelivery.KnowledgeDocCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
@@ -91,7 +90,7 @@ func (h *KnowledgeDocHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: err.Error()})
 		return
 	}
-	var req services.KnowledgeDocUpdateRequest
+	var req knowledgedelivery.KnowledgeDocUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return

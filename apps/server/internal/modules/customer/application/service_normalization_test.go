@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -251,4 +252,22 @@ func TestNormalizeHelpers(t *testing.T) {
 	assert.Equal(t, "asc", normalizeSortOrder("asc"))
 	assert.Equal(t, "desc", normalizeSortOrder(""))
 	assert.Equal(t, "desc", normalizeSortOrder("bogus"))
+}
+
+type failingListRepo struct {
+	captureRepo
+	err error
+}
+
+func (f *failingListRepo) ListCustomers(ctx context.Context, query ListCustomersQuery) ([]CustomerInfoDTO, int64, error) {
+	return nil, 0, f.err
+}
+
+func TestListCustomersPropagatesRepoError(t *testing.T) {
+	// 等价覆盖自 legacy services.TestCustomerService_ModuleQueryError（facade 删除后迁入）：
+	// 归一化之后仍透传 repo 错误。
+	svc := NewService(&failingListRepo{err: errors.New("list boom")})
+	_, _, err := svc.ListCustomers(context.Background(), ListCustomersQuery{Page: 2, PageSize: 10})
+	require.Error(t, err)
+	assert.Equal(t, "list boom", err.Error())
 }

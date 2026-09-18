@@ -11,8 +11,10 @@ import (
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	customerapi "servify/apps/server/internal/modules/customer/api"
 	gamificationcontract "servify/apps/server/internal/modules/gamification/contract"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
+	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
@@ -106,9 +108,9 @@ func (s *unitAgentService) GetAgentStats(ctx context.Context, agentID *uint) (*a
 
 type unitCustomerService struct {
 	customer    *models.User
-	customers   []services.CustomerInfo
-	activity    *services.CustomerActivity
-	stats       *services.CustomerStats
+	customers   []customerapi.CustomerInfo
+	activity    *customerapi.CustomerActivity
+	stats       *customerapi.CustomerStats
 	revokeVer   int
 	createErr   error
 	getErr      error
@@ -121,7 +123,7 @@ type unitCustomerService struct {
 	revokeErr   error
 }
 
-func (s *unitCustomerService) CreateCustomer(ctx context.Context, req *services.CustomerCreateRequest) (*models.User, error) {
+func (s *unitCustomerService) CreateCustomer(ctx context.Context, req *customerapi.CustomerCreateRequest) (*models.User, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
@@ -135,21 +137,21 @@ func (s *unitCustomerService) GetCustomerByID(ctx context.Context, customerID ui
 	return s.customer, nil
 }
 
-func (s *unitCustomerService) UpdateCustomer(ctx context.Context, customerID uint, req *services.CustomerUpdateRequest) (*models.User, error) {
+func (s *unitCustomerService) UpdateCustomer(ctx context.Context, customerID uint, req *customerapi.CustomerUpdateRequest) (*models.User, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}
 	return s.customer, nil
 }
 
-func (s *unitCustomerService) ListCustomers(ctx context.Context, req *services.CustomerListRequest) ([]services.CustomerInfo, int64, error) {
+func (s *unitCustomerService) ListCustomers(ctx context.Context, req *customerapi.CustomerListRequest) ([]customerapi.CustomerInfo, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.customers, int64(len(s.customers)), nil
 }
 
-func (s *unitCustomerService) GetCustomerActivity(ctx context.Context, customerID uint, limit int) (*services.CustomerActivity, error) {
+func (s *unitCustomerService) GetCustomerActivity(ctx context.Context, customerID uint, limit int) (*customerapi.CustomerActivity, error) {
 	if s.activityErr != nil {
 		return nil, s.activityErr
 	}
@@ -164,7 +166,7 @@ func (s *unitCustomerService) UpdateCustomerTags(ctx context.Context, customerID
 	return s.tagsErr
 }
 
-func (s *unitCustomerService) GetCustomerStats(ctx context.Context) (*services.CustomerStats, error) {
+func (s *unitCustomerService) GetCustomerStats(ctx context.Context) (*customerapi.CustomerStats, error) {
 	if s.statsErr != nil {
 		return nil, s.statsErr
 	}
@@ -282,7 +284,7 @@ type unitKnowledgeService struct {
 	deleteErr error
 }
 
-func (s *unitKnowledgeService) List(ctx context.Context, req *services.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
+func (s *unitKnowledgeService) List(ctx context.Context, req *knowledgedelivery.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
@@ -296,14 +298,14 @@ func (s *unitKnowledgeService) Get(ctx context.Context, id uint) (*models.Knowle
 	return s.doc, nil
 }
 
-func (s *unitKnowledgeService) Create(ctx context.Context, req *services.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
+func (s *unitKnowledgeService) Create(ctx context.Context, req *knowledgedelivery.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.doc, nil
 }
 
-func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *services.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
+func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *knowledgedelivery.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}

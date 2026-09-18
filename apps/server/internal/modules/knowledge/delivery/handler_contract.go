@@ -15,3 +15,11 @@ type HandlerService interface {
 	Update(ctx context.Context, id uint, req *knowledgeapp.KnowledgeDocUpdateRequest) (*knowledgedomain.KnowledgeDoc, error)
 	Delete(ctx context.Context, id uint) error
 }
+
+// Request contract aliases: handlers may not import the application package
+// directly (module-boundaries), so they consume these delivery-level names.
+type (
+	KnowledgeDocCreateRequest = knowledgeapp.KnowledgeDocCreateRequest
+	KnowledgeDocUpdateRequest = knowledgeapp.KnowledgeDocUpdateRequest
+	KnowledgeDocListRequest   = knowledgeapp.KnowledgeDocListRequest
+)

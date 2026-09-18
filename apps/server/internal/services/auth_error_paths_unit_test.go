@@ -124,20 +124,6 @@ func TestAppIntegrationService_UpdateUniqueViolation(t *testing.T) {
 	}
 }
 
-func TestCustomerService_ModuleQueryError(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Session{}, &models.Ticket{}, &models.Message{},
-	)
-	svc := NewCustomerService(db, nil)
-	if err := db.Migrator().DropTable("customers"); err != nil {
-		t.Fatalf("drop customers: %v", err)
-	}
-	if _, _, err := svc.ListCustomers(context.Background(), &CustomerListRequest{Page: 1, PageSize: 10}); err == nil {
-		t.Fatal("expected list customers error")
-	}
-}
-
 func TestSatisfactionService_CreateInsertError(t *testing.T) {
 	db := newServicesTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},

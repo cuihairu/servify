@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	customerapi "servify/apps/server/internal/modules/customer/api"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -142,7 +142,7 @@ func TestCustomerHandlerUnitRevokeTokens(t *testing.T) {
 
 func TestCustomerHandlerUnitList(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		svc := &unitCustomerService{customers: []services.CustomerInfo{{User: models.User{ID: 1}}}}
+		svc := &unitCustomerService{customers: []customerapi.CustomerInfo{{User: models.User{ID: 1}}}}
 		r, _ := newCustomerUnitRouter(svc)
 		w := customerUnitRequest(r, http.MethodGet, "/customers?page=2&page_size=5", "")
 		if w.Code != http.StatusOK {
@@ -174,9 +174,9 @@ func TestCustomerHandlerUnitActivity(t *testing.T) {
 		path string
 		want int
 	}{
-		{"success default limit", &unitCustomerService{activity: &services.CustomerActivity{CustomerID: 15}}, "/customers/15/activity", http.StatusOK},
-		{"bad limit falls back", &unitCustomerService{activity: &services.CustomerActivity{}}, "/customers/15/activity?limit=zzz", http.StatusOK},
-		{"explicit limit", &unitCustomerService{activity: &services.CustomerActivity{}}, "/customers/15/activity?limit=3", http.StatusOK},
+		{"success default limit", &unitCustomerService{activity: &customerapi.CustomerActivity{CustomerID: 15}}, "/customers/15/activity", http.StatusOK},
+		{"bad limit falls back", &unitCustomerService{activity: &customerapi.CustomerActivity{}}, "/customers/15/activity?limit=zzz", http.StatusOK},
+		{"explicit limit", &unitCustomerService{activity: &customerapi.CustomerActivity{}}, "/customers/15/activity?limit=3", http.StatusOK},
 		{"bad id", &unitCustomerService{}, "/customers/bad/activity", http.StatusBadRequest},
 		{"not found", &unitCustomerService{activityErr: errors.New("customer not found")}, "/customers/15/activity", http.StatusNotFound},
 		{"internal", &unitCustomerService{activityErr: errors.New("boom")}, "/customers/15/activity", http.StatusInternalServerError},
@@ -317,7 +317,7 @@ func TestCustomerHandlerUnitNotesAndTags(t *testing.T) {
 
 func TestCustomerHandlerUnitStats(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		r, _ := newCustomerUnitRouter(&unitCustomerService{stats: &services.CustomerStats{Total: 4}})
+		r, _ := newCustomerUnitRouter(&unitCustomerService{stats: &customerapi.CustomerStats{Total: 4}})
 		w := customerUnitRequest(r, http.MethodGet, "/customers/stats", "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d", w.Code)

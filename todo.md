@@ -687,10 +687,16 @@
   - 验证：SDK typecheck/test/test:examples/test:governance/version:check、examples vite build、regenerate-generated-assets（demo 产物同步）、全仓库 gofmt、handlers vet+测试全绿
 - 完成记录（2026-09-18，e6928a6，CI 35399443798 全绿）：A/B/E 三类落地，C/D 类经查证改判保留（子维度非混名）；本地门禁 coverage 100% + race 全量通过
 
-### [ ] P3-2 收拢 services 与 modules 的最终边界
+### [-] P3-2 收拢 services 与 modules 的最终边界
 
 - 目标：
   - 继续减少 glue code 和 facade 长期滞留
+- 摸底结论（2026-09-18，Explore 全量调查）：services 33 非测试文件/8496 行 = facade/glue 10（其中纯死代码 6 约 900 行：customer_service 238、knowledge_doc_service 143、ai_enhanced 400、agent_legacy_runtime_adapter 32、agent_runtime_cache 41、session_transfer_notifier 44、automation_handler_adapter 40）+ 真实业务 17（auth 1176、sla 1034、satisfaction 836、realtime 三件 1532 等）+ 装配工具 6；关键缺陷：automation 双实例 split-brain（runtime_assembly.go:188-189 两个 automationapp.Service，eventbus/timer/webhook 配置只作用于 facade 实例）、handoff 启发式双份（services/ai.go:277 vs modules/ai/application/handoff_policy.go:21）、remote-assist 统计 SQL 分裂在 services.StatisticsService、门禁对 services 包零规则
+- 分刀计划（沿 P1-7 七步模板，每刀独立提交）：
+  - 第一梯队（纯死代码删除）：刀1 customer/knowledge facade 删除；刀2 ai_enhanced.go 400 行删除（测试切 orchestrated/aidelivery）；刀3 agent_legacy_runtime_adapter+agent_runtime_cache+session_transfer_notifier+automation_handler_adapter 删除
+  - 第二梯队（活 facade 去 concrete）：刀4 automation 双实例合并（BuildAutomationAssembly 单实例+SLA 窄接口）；刀5 agent 契约实现下沉 module delivery（AgentInfo/AgentRuntimeDTO 合一）；刀6 analytics 契约实现下沉（remote-assist SQL 搬 infra）+ 删 StatisticsService
+  - 第三梯队（新 module 真实迁移，小到大）：api_key→macro→custom_field→workspace→shift→app_integration→auth（oidc_handler concrete 先切窄接口）→satisfaction→sla（需先解 ticket orchestration 对 legacy 的窄接口依赖）；realtime 三件按"运行态硬化"持续收窄不套模板
+  - 收尾：每刀在 module-boundaries.rules 补 forbid 防回潮；最终可加全局 forbid handlers import services
 
 ### [ ] P3-3 清理 demo/mock/in-memory 资产的默认暴露面
 
