@@ -297,6 +297,15 @@ func TestStartHTTPServerServesTraffic(t *testing.T) {
 }
 
 func TestStartHTTPServerFatalOnListenError(t *testing.T) {
+	// 先真实占住一个 127.0.0.1 端口再让 server 去绑同一地址，得到立即返回的
+	// EADDRINUSE。不要用不可解析的主机名注入失败：那依赖 runner 的 DNS 行为，
+	// 解析偶发变慢时会撑爆等待预算（CI 上已实际发生 2s 超时挂掉）。
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("blocker listen: %v", err)
+	}
+	defer func() { _ = blocker.Close() }()
+
 	logger := logrus.New()
 	exited := make(chan struct{})
 	// ExitFunc normally terminates the process; replacing it lets the test
@@ -309,12 +318,12 @@ func TestStartHTTPServerFatalOnListenError(t *testing.T) {
 		}
 	}
 
-	server := &http.Server{Addr: "listen-failure:0"}
+	server := &http.Server{Addr: blocker.Addr().String()}
 	StartHTTPServer(server, logger, "")
 
 	select {
 	case <-exited:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("expected Fatalf exit for listen failure")
 	}
 }
