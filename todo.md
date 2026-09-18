@@ -525,7 +525,7 @@
       worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
     - 一致性门禁自动覆盖全部新增资产（四类文件一致性测试全绿）
 
-### [-] P2-5 安全治理继续收口到首批企业交付标准
+### [x] P2-5 安全治理继续收口到首批企业交付标准
 
 - 范围：
   - session 风险策略
@@ -587,6 +587,32 @@
     经 GET /api/audit/logs?action=auth.refresh 对账拒绝行（3 次 401）与
     成功行；manifest provider=refresh-reuse 入库留档，validate 正反 case
     齐备；文档 security-baseline-operations 与 auth-surface-policy 同步
+- 进展（2026-09-18，第四刀：审批回滚链路真实验收，P2-5 收口刀）：
+  - scoped config 治理能力面此前已齐备（PUT/rollback/approve/verify 全链
+    change control 强制、rollback 一律高风险需独立审批、审批人/验证人职责
+    分离 403、verify 模板 required checks、history 快照元数据），本刀补
+    真实运行验收而非补能力
+  - 真实验收：scripts/test-approval-rollback-acceptance.sh 起真实服务
+    （sqlite），种子式预置双管理员（第二个注册请求 role=admin 被降级
+    customer 的注册收敛本身即验收点；DB 提权后重新登录，等价生产预置互
+    审管理员流程），走完整链路——未认证 PUT 401；PUT 缺 change_ref 400；
+    两次 update medium 落库 change_ref 回显一致；rollback 无审批 400；
+    operator 自审后回滚 403 职责分离；reviewer 审批后 operator 携
+    ?confirm=true 回滚 200；GET 确认恢复目标快照完整 AfterJSON（threshold
+    9+step_up 而非中间版 99）；operator 对自己执行的 update/rollback 提交
+    verify 均 403，reviewer verify（动态取 history 模板 required checks
+    全 passed+evidence）200；history 对账 operation/can_rollback/
+    verification_status；审计对账 scoped_config.tenant.{update,rollback,
+    approve,verify} 成功行计数、resource_type=scoped_config、actor 区分
+    操作人/审批人/验证人
+  - manifest provider=approval-rollback（mode=runtime-governance-evidence）
+    14 项 checks 入库留档，validate 正反 case（缺
+    reviewer_approval_rollback_ok 拒绝）齐备；驱动测试纳入 CI script-checks
+    白名单；Makefile approval-rollback-acceptance target；文档
+    security-baseline-operations 补 scoped config 审批回滚链路章节
+  - **P2-5 四刀全部闭环**：公开接口运行时安全基线 + auth 审计与登录风险
+    执行 + refresh reuse 家族吊销 + 审批回滚链路真实验收，四份真实运行
+    证据入库，达到"对应安全面能力均有真实验收，不只靠单测"的验收标准
 
 ### [ ] P2-6 管理端产品化收尾
 
@@ -693,8 +719,8 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：P2-5 最后一刀（审批回滚链路真实验收）或按用户指示推进下一项（第一刀公开接口运行时安全基线、第二刀 auth 审计与登录风险执行、第三刀 refresh reuse 家族吊销均已落地，见 P2-5 进展）
-- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 前三刀（公开接口运行时安全基线、auth 审计与登录风险执行、refresh reuse 家族吊销）完成——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销，三份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 当前优先恢复任务：按用户指示推进下一项。P2-5 四刀全部闭环（第一刀公开接口运行时安全基线、第二刀 auth 审计与登录风险执行、第三刀 refresh reuse 家族吊销、第四刀审批回滚链路真实验收，见 P2-5 进展），"对应安全面能力均有真实验收"的验收标准达成；下一步候选 P2-6 管理端产品化收尾
+- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）

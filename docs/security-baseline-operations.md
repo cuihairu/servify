@@ -101,6 +101,19 @@ refresh token 每次刷新即轮换（session 行 `token_version` 递增），�
 
 一个 session 即一个家族：登录后所有 refresh 轮换共享同一 session 行。版本大于库内当前值的伪造/异常 token 只被拒绝，不触发吊销；吊销失败的请求同样拒绝（不静默放过）。对外统一 401，不回显吊销状态与版本差异；重放拒绝经 auth 面 audit 中间件留痕。真实运行验收：`make refresh-reuse-acceptance`（off 阶段重放 401 且会话存活；revoke_family 阶段重放 401 且家族最新 token 一并 401、重新登录正常；经 `GET /api/audit/logs?action=auth.refresh` 对账拒绝行与成功行）。
 
+### scoped config 审批回滚链路（P2-5 第四刀）
+
+scoped config（tenant/workspace 作用域配置文档）的写路径已有完整治理语义：PUT/rollback/approve/verify 全部强制 change control（`change_ref` + `reason`，JSON body 或对应 header）；rollback 一律判定高风险，要求独立审批（`validateScopedConfigApproval`：审批人 ≠ 执行人，否则 403）；verify 要求验证人 ≠ 原操作人（403），且 `passed` 结论必须覆盖 verify 模板全部 `required` checks 并附 evidence。能力面早已存在，第四刀补的是**真实运行验收**：
+
+- `make approval-rollback-acceptance` 起真实服务（sqlite），以"预置双管理员"的种子流程构造 operator 与 reviewer（第二个注册请求 `role=admin` 被降级 `customer` 的注册收敛逻辑本身即验收点；提权动作走种子式 DB 更新后重新登录，等价生产环境预置互审管理员的运维流程），然后走完整治理链路：
+  - 未认证 PUT → 401；PUT 缺 `change_ref` → 400 `Change control required`
+  - 两次 update（medium，无需审批）落库，`change_control.change_ref` 回显一致
+  - rollback 未携带审批 → 400；operator 自审后回滚 → 403 `Approval reviewer separation required`
+  - reviewer 记录审批 → operator 携审批执行 `?confirm=true` 回滚 → 200；GET 确认恢复的是目标快照的完整 AfterJSON（而非中间版本）
+  - operator 对自己执行的 update/rollback 提交 verify → 403 `Verification reviewer separation required`；reviewer verify（动态取 history 模板的 required checks 全部 passed + evidence）→ 200
+  - history 对账：operation/`can_rollback`/`verification_status` 元数据收口；审计对账：`scoped_config.tenant.{update,rollback,approve,verify}` 成功行计数、`resource_type=scoped_config`、actor_user_id 区分操作人/审批人/验证人
+- manifest 按 `provider=approval-rollback` 校验 14 项 checks 与证据文件（`scripts/validate-acceptance-manifest.sh`）
+
 ### 速率限制
 
 - `registerBaseMiddleware` 已统一挂载 `RateLimitMiddlewareFromConfig`
@@ -170,6 +183,7 @@ refresh token 每次刷新即轮换（session 行 `token_version` 递增），�
   - 高风险回滚必须提交 `approval_ref`，且审批人与执行人分离
   - 执行后还要补 `verify` 结论，确认 portal / provider / session risk 等受影响路径已经恢复
 - 运营值班在执行 rollback 前后，至少要留存三类证据：source audit ID、rollback audit ID、verification audit ID
+- 治理链路的端到端真实验收入口：`make approval-rollback-acceptance`（P2-5 第四刀，见上文 scoped config 审批回滚链路一节）
 
 ## 代码落点
 

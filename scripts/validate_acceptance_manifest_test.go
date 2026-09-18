@@ -960,3 +960,166 @@ func TestValidateAcceptanceManifestScriptRejectsRefreshReuseWithoutFamilyDeadChe
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidApprovalRollbackManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                  "ok",
+		"unauthenticated-write.txt":    "HTTP/1.1 401",
+		"register-operator.txt":        "HTTP/1.1 201",
+		"register-reviewer.txt":        "HTTP/1.1 201",
+		"reviewer-promote.txt":         "promoted_rows=1",
+		"put-no-change-control.txt":    "HTTP/1.1 400",
+		"put-update-1.txt":             "HTTP/1.1 200",
+		"rollback-no-approval.txt":     "HTTP/1.1 400",
+		"rollback-self-approval.txt":   "HTTP/1.1 403",
+		"approve-reviewer.txt":         "HTTP/1.1 200",
+		"rollback-restore.txt":         "HTTP/1.1 200",
+		"config-after-rollback.txt":    "HTTP/1.1 200",
+		"verify-update-same-actor.txt": "HTTP/1.1 403",
+		"verify-update-cross.txt":      "HTTP/1.1 200",
+		"verify-rollback-cross.txt":    "HTTP/1.1 200",
+		"history-final.txt":            "HTTP/1.1 200",
+		"audit-approve.txt":            "HTTP/1.1 200",
+		"audit-verify.txt":             "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "approval-rollback",
+  "mode": "runtime-governance-evidence",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_write_rejected_401": "true",
+    "second_admin_registration_degraded": "true",
+    "put_change_control_enforced_400": "true",
+    "update_change_control_recorded": "true",
+    "rollback_requires_approval_400": "true",
+    "self_approval_rollback_rejected_403": "true",
+    "reviewer_approval_rollback_ok": "true",
+    "rollback_snapshot_restored": "true",
+    "verify_same_actor_rejected_403": "true",
+    "cross_reviewer_verify_ok": "true",
+    "history_reconciliation_ok": "true",
+    "audit_scoped_config_reconciled": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-write.txt",
+    "register-operator.txt",
+    "register-reviewer.txt",
+    "reviewer-promote.txt",
+    "put-no-change-control.txt",
+    "put-update-1.txt",
+    "rollback-no-approval.txt",
+    "rollback-self-approval.txt",
+    "approve-reviewer.txt",
+    "rollback-restore.txt",
+    "config-after-rollback.txt",
+    "verify-update-same-actor.txt",
+    "verify-update-cross.txt",
+    "verify-rollback-cross.txt",
+    "history-final.txt",
+    "audit-approve.txt",
+    "audit-verify.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsApprovalRollbackWithoutReviewerApproval(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                  "ok",
+		"unauthenticated-write.txt":    "HTTP/1.1 401",
+		"register-operator.txt":        "HTTP/1.1 201",
+		"register-reviewer.txt":        "HTTP/1.1 201",
+		"reviewer-promote.txt":         "promoted_rows=1",
+		"put-no-change-control.txt":    "HTTP/1.1 400",
+		"put-update-1.txt":             "HTTP/1.1 200",
+		"rollback-no-approval.txt":     "HTTP/1.1 400",
+		"rollback-self-approval.txt":   "HTTP/1.1 403",
+		"approve-reviewer.txt":         "HTTP/1.1 200",
+		"rollback-restore.txt":         "HTTP/1.1 200",
+		"config-after-rollback.txt":    "HTTP/1.1 200",
+		"verify-update-same-actor.txt": "HTTP/1.1 403",
+		"verify-update-cross.txt":      "HTTP/1.1 200",
+		"verify-rollback-cross.txt":    "HTTP/1.1 200",
+		"history-final.txt":            "HTTP/1.1 200",
+		"audit-approve.txt":            "HTTP/1.1 200",
+		"audit-verify.txt":             "HTTP/1.1 200",
+		// 缺 reviewer_approval_rollback_ok:没有"独立审批人放行后回滚
+		// 成功"的证据就不算职责分离闭环。
+		"manifest.json": `{
+  "provider": "approval-rollback",
+  "mode": "runtime-governance-evidence",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_write_rejected_401": "true",
+    "second_admin_registration_degraded": "true",
+    "put_change_control_enforced_400": "true",
+    "update_change_control_recorded": "true",
+    "rollback_requires_approval_400": "true",
+    "self_approval_rollback_rejected_403": "true",
+    "rollback_snapshot_restored": "true",
+    "verify_same_actor_rejected_403": "true",
+    "cross_reviewer_verify_ok": "true",
+    "history_reconciliation_ok": "true",
+    "audit_scoped_config_reconciled": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-write.txt",
+    "register-operator.txt",
+    "register-reviewer.txt",
+    "reviewer-promote.txt",
+    "put-no-change-control.txt",
+    "put-update-1.txt",
+    "rollback-no-approval.txt",
+    "rollback-self-approval.txt",
+    "approve-reviewer.txt",
+    "rollback-restore.txt",
+    "config-after-rollback.txt",
+    "verify-update-same-actor.txt",
+    "verify-update-cross.txt",
+    "verify-rollback-cross.txt",
+    "history-final.txt",
+    "audit-approve.txt",
+    "audit-verify.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "reviewer_approval_rollback_ok") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
