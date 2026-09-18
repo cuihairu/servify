@@ -1986,3 +1986,180 @@ func TestValidateAcceptanceManifestScriptRejectsMacroIntegrationCustomFieldWitho
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidRemoteAssistManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 证据文件与 checks 同名单（fixture 里 content 无关紧要，validator 只校验存在性）。
+	names := []string{
+		"summary.txt",
+		"unauthenticated-assist.txt",
+		"register-admin.txt",
+		"customer-create.txt",
+		"ticket-create.txt",
+		"assist-start-missing-conversation.txt",
+		"assist-start.txt",
+		"assist-list.txt",
+		"assist-get.txt",
+		"annotation-add-1.txt",
+		"annotation-add-2.txt",
+		"annotation-list.txt",
+		"annotation-shape-invalid.txt",
+		"annotation-delete.txt",
+		"annotation-list-after-delete.txt",
+		"annotation-delete-missing.txt",
+		"assist-end.txt",
+		"assist-reend-conflict.txt",
+		"assist-end-missing.txt",
+		"suggest-unauthenticated.txt",
+		"suggest-get.txt",
+		"suggest-post.txt",
+	}
+	checks := []string{
+		"build_ok",
+		"ready_ok",
+		"unauthenticated_rejected_401",
+		"visitor_session_created",
+		"assist_start_missing_conversation_rejected_404",
+		"assist_started",
+		"assist_listed",
+		"assist_get_reconciled",
+		"annotation_added",
+		"annotation_listed_ascending",
+		"annotation_shape_invalid_rejected_400",
+		"annotation_deleted_and_gone",
+		"annotation_missing_delete_rejected_500",
+		"assist_ended_with_recording",
+		"assist_reend_conflict_rejected_409",
+		"assist_end_missing_rejected_404",
+		"suggest_unauthenticated_rejected_401",
+		"suggest_get_ticket_reconciled",
+		"suggest_post_ticket_reconciled",
+		"suggest_intent_present",
+	}
+	evidence := map[string]string{}
+	for _, name := range names {
+		evidence[name] = "HTTP/1.1 200"
+	}
+	checkLines := make([]string, 0, len(checks))
+	for _, check := range checks {
+		checkLines = append(checkLines, fmt.Sprintf("    %q: \"true\"", check))
+	}
+	evidence["manifest.json"] = fmt.Sprintf(`{
+  "provider": "remote-assist",
+  "mode": "runtime-assist-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+%s
+  },
+  "evidence_files": [%s]
+}`, strings.Join(checkLines, ",\n"), quotedJSONList(names...))
+
+	writeAcceptanceFixture(t, dir, evidence)
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsRemoteAssistWithoutNegativeGuards(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	// 缺 assist_start_missing_conversation_rejected_404 /
+	// annotation_shape_invalid_rejected_400 / annotation_missing_delete_rejected_500 /
+	// assist_reend_conflict_rejected_409 / assist_end_missing_rejected_404 /
+	// suggest_unauthenticated_rejected_401:负例守卫不全不算协助链路闭环。
+	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                           "ok",
+		"unauthenticated-assist.txt":            "HTTP/1.1 401",
+		"register-admin.txt":                    "HTTP/1.1 201",
+		"customer-create.txt":                   "HTTP/1.1 201",
+		"ticket-create.txt":                     "HTTP/1.1 201",
+		"assist-start-missing-conversation.txt": "HTTP/1.1 404",
+		"assist-start.txt":                      "HTTP/1.1 201",
+		"assist-list.txt":                       "HTTP/1.1 200",
+		"assist-get.txt":                        "HTTP/1.1 200",
+		"annotation-add-1.txt":                  "HTTP/1.1 201",
+		"annotation-add-2.txt":                  "HTTP/1.1 201",
+		"annotation-list.txt":                   "HTTP/1.1 200",
+		"annotation-shape-invalid.txt":          "HTTP/1.1 400",
+		"annotation-delete.txt":                 "HTTP/1.1 200",
+		"annotation-list-after-delete.txt":      "HTTP/1.1 200",
+		"annotation-delete-missing.txt":         "HTTP/1.1 500",
+		"assist-end.txt":                        "HTTP/1.1 200",
+		"assist-reend-conflict.txt":             "HTTP/1.1 409",
+		"assist-end-missing.txt":                "HTTP/1.1 404",
+		"suggest-unauthenticated.txt":           "HTTP/1.1 401",
+		"suggest-get.txt":                       "HTTP/1.1 200",
+		"suggest-post.txt":                      "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "remote-assist",
+  "mode": "runtime-assist-chain",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_rejected_401": "true",
+    "visitor_session_created": "true",
+    "assist_started": "true",
+    "assist_listed": "true",
+    "assist_get_reconciled": "true",
+    "annotation_added": "true",
+    "annotation_listed_ascending": "true",
+    "annotation_deleted_and_gone": "true",
+    "assist_ended_with_recording": "true",
+    "suggest_get_ticket_reconciled": "true",
+    "suggest_post_ticket_reconciled": "true",
+    "suggest_intent_present": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "unauthenticated-assist.txt",
+    "register-admin.txt",
+    "customer-create.txt",
+    "ticket-create.txt",
+    "assist-start-missing-conversation.txt",
+    "assist-start.txt",
+    "assist-list.txt",
+    "assist-get.txt",
+    "annotation-add-1.txt",
+    "annotation-add-2.txt",
+    "annotation-list.txt",
+    "annotation-shape-invalid.txt",
+    "annotation-delete.txt",
+    "annotation-list-after-delete.txt",
+    "annotation-delete-missing.txt",
+    "assist-end.txt",
+    "assist-reend-conflict.txt",
+    "assist-end-missing.txt",
+    "suggest-unauthenticated.txt",
+    "suggest-get.txt",
+    "suggest-post.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "assist_start_missing_conversation_rejected_404") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
