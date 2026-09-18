@@ -423,7 +423,7 @@ case "$PROVIDER" in
     require_equals '.checks.annotation_listed_ascending // ""' "true"
     require_equals '.checks.annotation_shape_invalid_rejected_400 // ""' "true"
     require_equals '.checks.annotation_deleted_and_gone // ""' "true"
-    require_equals '.checks.annotation_missing_delete_rejected_500 // ""' "true"
+    require_equals '.checks.annotation_missing_delete_rejected_404 // ""' "true"
     require_equals '.checks.assist_ended_with_recording // ""' "true"
     require_equals '.checks.assist_reend_conflict_rejected_409 // ""' "true"
     require_equals '.checks.assist_end_missing_rejected_404 // ""' "true"

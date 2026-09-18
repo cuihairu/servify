@@ -19,12 +19,13 @@ type (
 
 // 错误转发（handler 侧映射 HTTP 状态用）。
 var (
-	ErrAssistNotFound        = assistapp.ErrAssistNotFound
-	ErrAssistSessionRequired = assistapp.ErrAssistSessionRequired
-	ErrAssistShapeInvalid    = assistapp.ErrAssistShapeInvalid
-	ErrAssistPayloadInvalid  = assistapp.ErrAssistPayloadInvalid
-	ErrAssistForbidden       = assistapp.ErrAssistForbidden
-	ErrAssistAlreadyEnded    = assistapp.ErrAssistAlreadyEnded
+	ErrAssistNotFound           = assistapp.ErrAssistNotFound
+	ErrAssistAnnotationNotFound = assistapp.ErrAssistAnnotationNotFound
+	ErrAssistSessionRequired    = assistapp.ErrAssistSessionRequired
+	ErrAssistShapeInvalid       = assistapp.ErrAssistShapeInvalid
+	ErrAssistPayloadInvalid     = assistapp.ErrAssistPayloadInvalid
+	ErrAssistForbidden          = assistapp.ErrAssistForbidden
+	ErrAssistAlreadyEnded       = assistapp.ErrAssistAlreadyEnded
 )
 
 // HandlerService 远程协助管理/访客两面的服务契约。

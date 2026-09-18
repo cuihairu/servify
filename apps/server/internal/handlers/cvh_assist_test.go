@@ -388,6 +388,7 @@ func TestCvhAssistDeleteAnnotation(t *testing.T) {
 		{"session required", &cvhAssistService{deleteErr: assistdelivery.ErrAssistSessionRequired}, "5", http.StatusBadRequest},
 		{"forbidden", &cvhAssistService{deleteErr: assistdelivery.ErrAssistForbidden}, "5", http.StatusForbidden},
 		{"not found", &cvhAssistService{deleteErr: assistdelivery.ErrAssistNotFound}, "5", http.StatusNotFound},
+		{"annotation not found", &cvhAssistService{deleteErr: assistdelivery.ErrAssistAnnotationNotFound}, "5", http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

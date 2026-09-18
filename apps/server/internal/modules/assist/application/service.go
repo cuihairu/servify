@@ -11,12 +11,13 @@ import (
 
 // 远程协助应用层错误（delivery 侧映射 HTTP 状态）。
 var (
-	ErrAssistNotFound        = errors.New("remote assist session not found")
-	ErrAssistSessionRequired = errors.New("conversation session id required")
-	ErrAssistShapeInvalid    = errors.New("annotation shape must be one of rect|freehand|arrow")
-	ErrAssistPayloadInvalid  = errors.New("annotation payload must be a valid JSON object")
-	ErrAssistForbidden       = errors.New("remote assist session does not belong to this customer")
-	ErrAssistAlreadyEnded    = errors.New("remote assist session already ended")
+	ErrAssistNotFound           = errors.New("remote assist session not found")
+	ErrAssistAnnotationNotFound = errors.New("remote assist annotation not found")
+	ErrAssistSessionRequired    = errors.New("conversation session id required")
+	ErrAssistShapeInvalid       = errors.New("annotation shape must be one of rect|freehand|arrow")
+	ErrAssistPayloadInvalid     = errors.New("annotation payload must be a valid JSON object")
+	ErrAssistForbidden          = errors.New("remote assist session does not belong to this customer")
+	ErrAssistAlreadyEnded       = errors.New("remote assist session already ended")
 )
 
 // 可选标注形状（Canvas 覆盖层）。

@@ -2,7 +2,6 @@ package infra
 
 import (
 	"context"
-	"errors"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 
 	"servify/apps/server/internal/models"
@@ -87,7 +86,7 @@ func (r *GormRepository) DeleteAnnotation(ctx context.Context, id uint) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("annotation not found")
+		return assistapp.ErrAssistAnnotationNotFound
 	}
 	return nil
 }

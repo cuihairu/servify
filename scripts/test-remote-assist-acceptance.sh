@@ -255,7 +255,7 @@ payload = {
         "annotation_listed_ascending": os.environ.get("MANIFEST_ANNOTATION_LISTED", "false"),
         "annotation_shape_invalid_rejected_400": os.environ.get("MANIFEST_ANNOTATION_SHAPE_INVALID", "false"),
         "annotation_deleted_and_gone": os.environ.get("MANIFEST_ANNOTATION_DELETED", "false"),
-        "annotation_missing_delete_rejected_500": os.environ.get("MANIFEST_ANNOTATION_MISSING_DELETE", "false"),
+        "annotation_missing_delete_rejected_404": os.environ.get("MANIFEST_ANNOTATION_MISSING_DELETE", "false"),
         "assist_ended_with_recording": os.environ.get("MANIFEST_ASSIST_ENDED", "false"),
         "assist_reend_conflict_rejected_409": os.environ.get("MANIFEST_ASSIST_REEND_CONFLICT", "false"),
         "assist_end_missing_rejected_404": os.environ.get("MANIFEST_ASSIST_END_MISSING", "false"),
@@ -475,13 +475,13 @@ fi
 append_summary "annotation_total_after_delete=$ANN_AFTER_TOTAL"
 append_summary "annotation_deleted_and_gone=$ANNOTATION_DELETED_AND_GONE"
 
-# 负例：删除不存在的标注 → 500（repo 返回裸 "annotation not found"，未映射
-# ErrAssistNotFound，assistErrorStatus 落 default —— 已知 REST 语义缺陷，如实留档）。
+# 负例：删除不存在的标注 → 404（repo 返回 ErrAssistAnnotationNotFound，
+# assistErrorStatus 映射 404，REST 语义正确）。
 request_capture "annotation-delete-missing" -X DELETE -H "$AUTH" "$ASSIST_BASE/annotations/999999"
-if [ "$RESPONSE_STATUS" = "500" ] && printf '%s' "$RESPONSE_RAW" | grep -q "annotation not found"; then
+if [ "$RESPONSE_STATUS" = "404" ] && printf '%s' "$RESPONSE_RAW" | grep -q "remote assist annotation not found"; then
   ANNOTATION_MISSING_DELETE_REJECTED=true
 fi
-append_summary "annotation_missing_delete_rejected_500=$ANNOTATION_MISSING_DELETE_REJECTED"
+append_summary "annotation_missing_delete_rejected_404=$ANNOTATION_MISSING_DELETE_REJECTED"
 
 # 6) 结束链路：带录制元数据结束 → 重复结束 409 → 不存在 404。
 append_summary "step=assist_end_chain"

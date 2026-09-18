@@ -162,8 +162,8 @@ func TestAssistService_Annotations(t *testing.T) {
 	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID); err != nil {
 		t.Fatalf("DeleteAnnotation() error = %v", err)
 	}
-	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID); err == nil {
-		t.Fatal("deleting missing annotation should fail")
+	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
+		t.Fatalf("deleting missing annotation error = %v, want assistapp.ErrAssistAnnotationNotFound", err)
 	}
 	remaining, _ := svc.ListAnnotations(context.Background(), session.ID)
 	if len(remaining) != 1 {

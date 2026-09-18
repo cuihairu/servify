@@ -2031,7 +2031,7 @@ func TestValidateAcceptanceManifestScriptAcceptsValidRemoteAssistManifest(t *tes
 		"annotation_listed_ascending",
 		"annotation_shape_invalid_rejected_400",
 		"annotation_deleted_and_gone",
-		"annotation_missing_delete_rejected_500",
+		"annotation_missing_delete_rejected_404",
 		"assist_ended_with_recording",
 		"assist_reend_conflict_rejected_409",
 		"assist_end_missing_rejected_404",
@@ -2077,7 +2077,7 @@ func TestValidateAcceptanceManifestScriptRejectsRemoteAssistWithoutNegativeGuard
 
 	dir := t.TempDir()
 	// 缺 assist_start_missing_conversation_rejected_404 /
-	// annotation_shape_invalid_rejected_400 / annotation_missing_delete_rejected_500 /
+	// annotation_shape_invalid_rejected_400 / annotation_missing_delete_rejected_404 /
 	// assist_reend_conflict_rejected_409 / assist_end_missing_rejected_404 /
 	// suggest_unauthenticated_rejected_401:负例守卫不全不算协助链路闭环。
 	// 证据文件全部保留,只从 checks 里去掉目标项（validator 先校验证据覆盖）。

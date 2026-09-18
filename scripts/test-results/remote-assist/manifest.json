@@ -17,7 +17,7 @@
     "annotation_listed_ascending": "true",
     "annotation_shape_invalid_rejected_400": "true",
     "annotation_deleted_and_gone": "true",
-    "annotation_missing_delete_rejected_500": "true",
+    "annotation_missing_delete_rejected_404": "true",
     "assist_ended_with_recording": "true",
     "assist_reend_conflict_rejected_409": "true",
     "assist_end_missing_rejected_404": "true",

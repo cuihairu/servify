@@ -250,7 +250,8 @@ func (h *AssistHandler) DeleteAnnotation(c *gin.Context) {
 // assistErrorStatus 把 assist 服务错误映射到 HTTP 状态码。
 func assistErrorStatus(err error) int {
 	switch {
-	case errors.Is(err, assistdelivery.ErrAssistNotFound):
+	case errors.Is(err, assistdelivery.ErrAssistNotFound),
+		errors.Is(err, assistdelivery.ErrAssistAnnotationNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, assistdelivery.ErrAssistSessionRequired),
 		errors.Is(err, assistdelivery.ErrAssistShapeInvalid),
