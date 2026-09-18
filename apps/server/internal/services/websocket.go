@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -67,9 +68,43 @@ type WebSocketHub struct {
 	rtcService websocketRTCService
 }
 
+// websocketAllowedOrigins 是 WS 建连的 Origin 白名单（P2-5 第一刀）。
+// 空列表保持既有"放行所有来源"的行为（匿名访客来源不可枚举，如原生
+// WebView）；配置了白名单后，带 Origin 头且不在名单内的建连一律拒绝。
+// 经 SetWebsocketAllowedOrigins 注入；包级状态用 atomic 承载——测试与
+// 多 router 装配可能并发读写，不能裸写。
+var websocketAllowedOrigins atomic.Value // []string
+
+// SetWebsocketAllowedOrigins 注入 WS 建连 Origin 白名单。
+func SetWebsocketAllowedOrigins(origins []string) {
+	websocketAllowedOrigins.Store(origins)
+}
+
+func websocketOriginsSnapshot() []string {
+	if v := websocketAllowedOrigins.Load(); v != nil {
+		return v.([]string)
+	}
+	return nil
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 生产环境需要验证源
+		allowed := websocketOriginsSnapshot()
+		if len(allowed) == 0 {
+			return true
+		}
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			// 无 Origin 头的非浏览器客户端不携带来源，无从校验，
+			// 交由后续 token/租户校验兜底。
+			return true
+		}
+		for _, o := range allowed {
+			if origin == o {
+				return true
+			}
+		}
+		return false
 	},
 }
 

@@ -251,6 +251,23 @@ type SecurityConfig struct {
 	SessionRiskProfiles   map[string]SessionRiskPolicyConfig `yaml:"session_risk_profiles"`
 	SessionIPIntelligence SessionIPIntelligenceConfig        `yaml:"session_ip_intelligence"`
 	TwoFactor             TwoFactorConfig                    `yaml:"two_factor"`
+	// P2-5 第一刀：运行时暴露面基线。默认全部关闭以保持既有部署行为不变，
+	// 生产模板经 security.headers 节显式开启。
+	Headers                 SecurityHeadersConfig `yaml:"headers"`
+	MaxBodyBytes            int64                 `yaml:"max_body_bytes"`
+	WebsocketAllowedOrigins []string              `yaml:"websocket_allowed_origins"`
+}
+
+// SecurityHeadersConfig 控制统一安全响应头。HSTS 默认关闭：TLS 通常在
+// 反向代理终结，由代理注入；仅当服务直连 TLS 时开启。
+type SecurityHeadersConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	HSTSEnabled    bool   `yaml:"hsts_enabled"`
+	HSTSMaxAge     int    `yaml:"hsts_max_age_seconds"`
+	FrameOptions   string `yaml:"frame_options"`
+	ReferrerPolicy string `yaml:"referrer_policy"`
+	// ContentSecurityPolicy 为空时不发送 CSP 头（SPA/文档站按需配置）
+	ContentSecurityPolicy string `yaml:"content_security_policy"`
 }
 
 // TwoFactorConfig 是 TOTP 两步验证配置。

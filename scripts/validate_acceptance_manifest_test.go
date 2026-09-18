@@ -615,3 +615,133 @@ func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 		}
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidPublicSurfaceManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":        "ok",
+		"headers-health.txt": "HTTP/1.1 200",
+		"cors-echo.txt":      "HTTP/1.1 200",
+		"cors-reject.txt":    "HTTP/1.1 200",
+		"cors-preflight.txt": "HTTP/1.1 204",
+		"body-413.txt":       "HTTP/1.1 413",
+		"rate-limit-8.txt":   "HTTP/1.1 429",
+		"uploads-file.txt":   "HTTP/1.1 200",
+		"uploads-dir.txt":    "HTTP/1.1 404",
+		"ws-reject.txt":      "HTTP/1.1 403",
+		"ws-admit.txt":       "HTTP/1.1 101",
+		"manifest.json": `{
+  "provider": "public-surface",
+  "mode": "runtime-security-baseline",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "security_headers_ok": "true",
+    "cors_allowlisted_origin_echoed": "true",
+    "cors_foreign_origin_rejected": "true",
+    "cors_preflight_vary_origin": "true",
+    "oversized_body_rejected_413": "true",
+    "rate_limit_enforced_429": "true",
+    "uploads_file_served": "true",
+    "uploads_directory_404": "true",
+    "websocket_foreign_origin_rejected": "true",
+    "websocket_allowlisted_origin_admitted": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "headers-health.txt",
+    "cors-echo.txt",
+    "cors-reject.txt",
+    "cors-preflight.txt",
+    "body-413.txt",
+    "rate-limit-8.txt",
+    "uploads-file.txt",
+    "uploads-dir.txt",
+    "ws-reject.txt",
+    "ws-admit.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsPublicSurfaceWithoutWSOriginCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":        "ok",
+		"headers-health.txt": "HTTP/1.1 200",
+		"cors-echo.txt":      "HTTP/1.1 200",
+		"cors-reject.txt":    "HTTP/1.1 200",
+		"cors-preflight.txt": "HTTP/1.1 204",
+		"body-413.txt":       "HTTP/1.1 413",
+		"rate-limit-8.txt":   "HTTP/1.1 429",
+		"uploads-file.txt":   "HTTP/1.1 200",
+		"uploads-dir.txt":    "HTTP/1.1 404",
+		"ws-reject.txt":      "HTTP/1.1 403",
+		"ws-admit.txt":       "HTTP/1.1 101",
+		// 缺 websocket_foreign_origin_rejected:WS 建连没做拒绝对账不算数。
+		"manifest.json": `{
+  "provider": "public-surface",
+  "mode": "runtime-security-baseline",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "security_headers_ok": "true",
+    "cors_allowlisted_origin_echoed": "true",
+    "cors_foreign_origin_rejected": "true",
+    "cors_preflight_vary_origin": "true",
+    "oversized_body_rejected_413": "true",
+    "rate_limit_enforced_429": "true",
+    "uploads_file_served": "true",
+    "uploads_directory_404": "true",
+    "websocket_allowlisted_origin_admitted": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "headers-health.txt",
+    "cors-echo.txt",
+    "cors-reject.txt",
+    "cors-preflight.txt",
+    "body-413.txt",
+    "rate-limit-8.txt",
+    "uploads-file.txt",
+    "uploads-dir.txt",
+    "ws-reject.txt",
+    "ws-admit.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "websocket_foreign_origin_rejected") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}

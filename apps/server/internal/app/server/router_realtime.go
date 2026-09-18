@@ -3,11 +3,14 @@ package server
 import (
 	"servify/apps/server/internal/handlers"
 	"servify/apps/server/internal/middleware"
+	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
+	// WS 建连 Origin 白名单（P2-5 第一刀）：空配置保持放行所有来源。
+	services.SetWebsocketAllowedOrigins(deps.Config.Security.WebsocketAllowedOrigins)
 	wsHandler := handlers.NewWebSocketHandler(deps.RealtimeGateway)
 	publicV1 := r.Group("/api/v1")
 	publicV1.GET("/ws", wsHandler.HandleWebSocket)

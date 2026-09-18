@@ -142,7 +142,36 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 		r.GET("/uploads/*filepath", uploadsPresignRedirect(provider, cfg.S3))
 		return
 	}
-	r.Static("/uploads", cfg.StoragePath)
+	// 本地模式不走 gin Static（底层 http.FileServer 会列目录）：公开面只
+	// 允许命中具体文件，目录与缺失一律 404（P2-5 第一刀）。
+	uploadsHandler := r.Group("/uploads")
+	uploadsHandler.GET("/*filepath", uploadsLocalFileHandler(cfg.StoragePath))
+	uploadsHandler.HEAD("/*filepath", uploadsLocalFileHandler(cfg.StoragePath))
+}
+
+// uploadsLocalFileHandler 提供本地上传文件的只读访问：经 http.Dir 解析
+// （内部拒绝 `..` 逃逸），目录与不存在路径统一 404，不暴露存储拓扑。
+func uploadsLocalFileHandler(root string) gin.HandlerFunc {
+	fileSystem := http.Dir(root)
+	return func(c *gin.Context) {
+		rel := strings.TrimPrefix(c.Param("filepath"), "/")
+		if rel == "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		raw, err := fileSystem.Open("/" + rel)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		defer raw.Close()
+		info, err := raw.Stat()
+		if err != nil || !info.Mode().IsRegular() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		http.ServeContent(c.Writer, c.Request, info.Name(), info.ModTime(), raw)
+	}
 }
 
 // uploadsPresignRedirect serves stable /uploads/<key> links against object storage.

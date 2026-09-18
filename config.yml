@@ -118,6 +118,18 @@ security:
     allowed_methods: ["GET","POST","PUT","DELETE","OPTIONS"]
     # Be specific with headers instead of wildcard
     allowed_headers: ["Content-Type","Authorization","X-Session-ID","X-Request-ID"]
+  # P2-5 first slice: public-surface runtime baseline. All three knobs default
+  # to off/empty so existing deployments keep their behavior; the secure
+  # environment templates turn them on explicitly.
+  headers:
+    enabled: false
+    hsts_enabled: false # only when TLS terminates on the app itself
+    hsts_max_age_seconds: 31536000
+    frame_options: "DENY"
+    referrer_policy: "strict-origin-when-cross-origin"
+    content_security_policy: ""
+  max_body_bytes: 0 # 0 disables the global request-body cap
+  websocket_allowed_origins: [] # empty admits all origins (WebView guests)
   rbac:
     enabled: true
     roles:

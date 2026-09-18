@@ -1,0 +1,44 @@
+{
+  "provider": "public-surface",
+  "mode": "runtime-security-baseline",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "security_headers_ok": "true",
+    "cors_allowlisted_origin_echoed": "true",
+    "cors_foreign_origin_rejected": "true",
+    "cors_preflight_vary_origin": "true",
+    "oversized_body_rejected_413": "true",
+    "rate_limit_enforced_429": "true",
+    "uploads_file_served": "true",
+    "uploads_directory_404": "true",
+    "websocket_foreign_origin_rejected": "true",
+    "websocket_allowlisted_origin_admitted": "true"
+  },
+  "evidence_files": [
+    "body-413.txt",
+    "build-output.txt",
+    "cors-echo.txt",
+    "cors-preflight.txt",
+    "cors-reject.txt",
+    "headers-health.txt",
+    "rate-limit-1.txt",
+    "rate-limit-2.txt",
+    "rate-limit-3.txt",
+    "rate-limit-4.txt",
+    "rate-limit-5.txt",
+    "rate-limit-6.txt",
+    "rate-limit-7.txt",
+    "rate-limit-8.txt",
+    "ready.txt",
+    "server-log.txt",
+    "summary.txt",
+    "uploads-dir.txt",
+    "uploads-file.txt",
+    "ws-admit.txt",
+    "ws-reject.txt"
+  ]
+}
