@@ -18,7 +18,7 @@ const sdkReadme = mustRead("README.md");
 const reactReadme = mustRead("packages/react/README.md");
 const vueReadme = mustRead("packages/vue/README.md");
 const vanillaReadme = mustRead("packages/vanilla/README.md");
-const reactExamplePackage = mustRead("examples/react/package.json");
+const reactExampleViteConfig = mustRead("examples/react/vite.config.ts");
 const vanillaExample = mustRead("examples/vanilla/index.html");
 
 assertIncludes(governance, "@servify/core", "sdk/SURFACE_GOVERNANCE.md");
@@ -26,7 +26,8 @@ assertIncludes(governance, "Breaking Change Checklist", "sdk/SURFACE_GOVERNANCE.
 assertIncludes(sdkReadme, "Reserved packages now include stable design-time contracts", "sdk/README.md");
 
 assertIncludes(reactReadme, "@servify/react", "sdk/packages/react/README.md");
-assertIncludes(reactExamplePackage, "\"@servify/react\"", "sdk/examples/react/package.json");
+// 示例经 vite alias 消费 monorepo 发布物（@servify/* 未发布到 npm registry）。
+assertIncludes(reactExampleViteConfig, "@servify/react", "sdk/examples/react/vite.config.ts");
 
 assertIncludes(vueReadme, "@servify/vue", "sdk/packages/vue/README.md");
 assertIncludes(vanillaReadme, "@servify/vanilla", "sdk/packages/vanilla/README.md");

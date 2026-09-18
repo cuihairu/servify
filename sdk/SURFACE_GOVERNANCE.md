@@ -31,3 +31,13 @@
 - every implemented surface package must have a `README.md`
 - every example must reference the same package name shown in the matching README
 - CI should run `npm -C sdk run test:governance` together with surface smoke tests
+
+## Example Build Strategy
+
+- `@servify/*` packages are not published to the npm registry; example apps must
+  consume them through a vite `resolve.alias` pointing at the built
+  `packages/*/dist/index.esm.js` — never through a `dependencies` entry
+  (an `npm install` with `"@servify/*"` in dependencies fails with 404)
+- examples that ship a `package.json` must commit their `package-lock.json`
+- CI builds every example (`vite build`) after `npm -C sdk run build`, so an
+  example that stops compiling against the published entrypoint fails CI

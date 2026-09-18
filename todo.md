@@ -632,7 +632,7 @@
   - **第二刀：满意度真实验收（2026-09-18）**。`make satisfaction-acceptance` 自起服（sqlite，端口 18099）走通完整评价链路：`POST /api/customers` 一次创建 user+customer（注册接口不自动建 customers 行），建工单后 `POST /api/tickets/:id/close` 关闭工单触发编排器自动调度 CSAT 调查（mailer 未注入时直接置 sent），验收 17 项 checks：未认证 401、满意度评价创建、重复评价 409（already exists）、非所有者客户评价 403（not the owner）、列表分页、详情查询、评论更新回显、按工单查询、统计对账（total_ratings=1、average_rating=5、rating_distribution rating5=1 与样本完全一致）、调查列表（status=sent 且 ticket 匹配）、调查重发重新生成 token、删除 204 后按工单查 204 + 详情 404 的数据证据；23 份证据文件 + manifest 入库（scripts/test-results/satisfaction/）。验收清单 §8 九项全部从未验转通过。
   - **第一刀：会话转接真实验收（2026-09-18）**。`make session-transfer-acceptance` 自起服（sqlite，端口 18098）走通真实访客链路：python3 标准库最小 WS 客户端经 `/api/v1/ws` 建 4 个会话（消息内容避开"人工/客服"等转人工关键词——关键词命中会触发服务端异步自动 TransferToHuman，污染转接状态编排），注册 admin 与两个 agent 用户，`POST /api/agents` 建客服实体（target_agent_id 与 online/offline 的 :id 语义都是 user_id），验收 18 项 checks：未认证 401、客服上下线切换与在线列表、转人工直转（success=true 且 new_agent_id 为在线客服）、无可用客服自动入队（is_waiting=true）、重复转接幂等、process-queue 派发后队列清空、指定客服转接、离线目标 500 拒绝、取消等待幂等重放后队列清空、check-auto 返回 should_transfer 布尔、单会话与近期转接历史对账、不存在会话 500 拒绝；31 份证据文件 + manifest 入库（scripts/test-results/session-transfer/）。验收清单 §7 七项全部从未验转通过。顺手修复 session_transfer_handler.go 的 GBK 乱码 swag 注解并再生成 docs/generated/api（三产物一致）。
 
-### [ ] P2-7 SDK 与多端 contract 稳定性治理
+### [x] P2-7 SDK 与多端 contract 稳定性治理
 
 - 范围：
   - `sdk/packages/*`
@@ -643,6 +643,13 @@
   - 防止 API 面和 SDK 面发生漂移
 - 验收标准：
   - SDK smoke test、example smoke test、surface governance 全绿
+- 完成记录（2026-09-18）：
+  - 实质缺口：examples/react、examples/vue 的 `package.json` 声明 `"@servify/*": "^1.0.0"`，而 `@servify/*` 从未发布到 npm registry（`npm view` 404）——`npm install` 必然 ERESOLVE/404，**两个示例此前从未真实构建过**；治理脚本仅做字符串包含断言，未覆盖这一点
+  - 修复：examples 依赖声明去掉 `@servify/*`，vite.config.ts 加 `resolve.alias` 指向 monorepo 发布物 `packages/*/dist/index.esm.js`（与 vanilla 示例消费 dist 的既有模式一致；react 包构建产物已 bundle `@servify/core`，一跳即可）；`@vitejs/plugin-react` ^4 peer 不支持 vite 8，升 ^6（vue 插件同升 ^6）；examples `package-lock.json` 入库
+  - 治理升级：`run-example-smoke-tests.mjs` 从"字符串存在"升级为锁定 alias 构建策略（断言 vite.config alias 指向 `packages/*/dist` + package.json **不得**再声明 `@servify/*`，防 404 回归）；`check-surface-governance.mjs` 同步改断言；`SURFACE_GOVERNANCE.md` 新增 "Example Build Strategy" 节
+  - CI 兑现治理承诺：sdk-checks job 此前从未执行 `test:surfaces`/`test:governance`/`version:check`（治理文档自己写了 "CI should run test:governance" 却未落地）——新增 "SDK surface, governance and version checks"（fail-closed）与 "Build SDK examples"（react/vue 经 `npm ci` + `vite build` 真实构建，lockfile 进 cache-dependency-path）
+  - smoke fail-open 修复：`run-smoke-tests.sh` 的 SDK Examples 段原为 `npm ... || echo skip` 静默吞失败，改为 sdk 目录存在即必须通过
+  - 本地全绿复验：`test:surfaces`/`test:examples`/`test:governance`/`version:check` 通过；`npm -C sdk/examples/{react,vue} ci && npm run build` 均真实构建成功（react 183KB / vue 102KB 产物）
 
 ### [ ] P2-8 性能、容量与压测基线
 

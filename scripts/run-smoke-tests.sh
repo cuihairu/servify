@@ -42,7 +42,12 @@ go test -tags=integration ./apps/server/internal/services -run 'TestOrchestrated
 
 echo
 echo "=== SDK Examples ==="
-npm -C sdk run test:examples 2>/dev/null || echo "(SDK tests skipped — no sdk or no test:examples script)"
+if [ -d sdk/scripts ]; then
+  # fail-closed：sdk 在就必须过（治理断言失败不允许被静默吞掉）。
+  npm -C sdk run test:examples
+else
+  echo "(SDK examples skipped — no sdk/scripts directory)"
+fi
 
 echo
 echo "=== All smoke tests passed ==="

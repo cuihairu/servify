@@ -189,7 +189,10 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: sdk/package-lock.json
+          cache-dependency-path: |
+            sdk/package-lock.json
+            sdk/examples/react/package-lock.json
+            sdk/examples/vue/package-lock.json
 
       - name: Install SDK dependencies
         timeout-minutes: 5
@@ -210,6 +213,22 @@ jobs:
       - name: Test SDK
         timeout-minutes: 10
         run: npm -C sdk run test
+
+      - name: SDK surface, governance and version checks
+        timeout-minutes: 5
+        run: |
+          npm -C sdk run test:surfaces
+          npm -C sdk run test:examples
+          npm -C sdk run test:governance
+          npm -C sdk run version:check
+
+      - name: Build SDK examples
+        timeout-minutes: 15
+        run: |
+          npm -C sdk/examples/react ci --no-audit --no-fund
+          npm -C sdk/examples/react run build
+          npm -C sdk/examples/vue ci --no-audit --no-fund
+          npm -C sdk/examples/vue run build
 
       - name: Sync SDK to demo-sdk
         timeout-minutes: 2
