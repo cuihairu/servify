@@ -323,7 +323,7 @@ jobs:
   script-checks:
     name: Script Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -348,9 +348,10 @@ jobs:
           ./scripts/check-text-encoding.sh
 
       - name: Verify provider acceptance scripts
-        timeout-minutes: 5
+        # perf 基线驱动测试真跑 smoke 档（内含 make build），冷缓存下较慢。
+        timeout-minutes: 10
         run: |
-          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
+          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
 
       - name: Validate checked-in acceptance evidence
         timeout-minutes: 2

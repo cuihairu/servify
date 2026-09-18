@@ -734,6 +734,28 @@ case "$PROVIDER" in
     require_file_listed "platforms.json"
     require_file_listed "platforms-unauthorized.json"
     ;;
+  perf)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.server_ready // ""' "true"
+    require_equals '.checks.mock_llm_ok // ""' "true"
+    require_equals '.checks.unauthenticated_tickets_rejected_401 // ""' "true"
+    require_equals '.checks.admin_ready // ""' "true"
+    require_equals '.checks.perfbench_ok // ""' "true"
+    require_equals '.checks.tickets_scenario_passed // ""' "true"
+    require_equals '.checks.ai_query_scenario_passed // ""' "true"
+    require_equals '.checks.upload_knowledge_scenario_passed // ""' "true"
+    require_equals '.checks.ws_connections_passed // ""' "true"
+    require_equals '.checks.ws_stats_reconciled // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "results.json"
+    require_file_listed "perfbench-output.txt"
+    require_file_listed "server-log.txt"
+    require_file_listed "mock-log.txt"
+    require_file_listed "unauthenticated-tickets.txt"
+    require_file_listed "register-admin.txt"
+    require_file_listed "login-admin.txt"
+    ;;
   ai-fallback)
     require_equals '.status.overall // ""' "passed"
     require_equals '.checks.build_ok // ""' "true"

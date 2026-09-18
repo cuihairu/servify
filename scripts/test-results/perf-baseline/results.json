@@ -1,0 +1,58 @@
+[
+  {
+    "scenario": "tickets-mixed",
+    "scale": "full",
+    "ops": 1800,
+    "concurrency": 16,
+    "errors": 0,
+    "p50_ms": 23.863,
+    "p95_ms": 250.012,
+    "p99_ms": 718.175,
+    "max_ms": 2398.288,
+    "ops_per_sec": 220.91007189540994
+  },
+  {
+    "scenario": "ai-query",
+    "scale": "full",
+    "ops": 200,
+    "concurrency": 16,
+    "errors": 0,
+    "p50_ms": 11.482,
+    "p95_ms": 1017.892,
+    "p99_ms": 1061.403,
+    "max_ms": 2095.126,
+    "ops_per_sec": 92.17794504305749
+  },
+  {
+    "scenario": "upload-knowledge",
+    "scale": "full",
+    "ops": 200,
+    "concurrency": 16,
+    "errors": 0,
+    "p50_ms": 8.311,
+    "p95_ms": 20.524,
+    "p99_ms": 38.032,
+    "max_ms": 41.411,
+    "ops_per_sec": 1451.8904590172738,
+    "notes": [
+      "knowledge_upload=not-enabled (expected without external provider)",
+      "knowledge_sync=not-enabled (expected without external provider)"
+    ]
+  },
+  {
+    "scenario": "ws-connections",
+    "scale": "full",
+    "ops": 200,
+    "concurrency": 0,
+    "errors": 0,
+    "p50_ms": 3.589,
+    "p95_ms": 10.21,
+    "p99_ms": 12.546,
+    "max_ms": 15.95,
+    "ops_per_sec": 0,
+    "ws_max_conns": 200,
+    "ws_server_reported": 200,
+    "ws_roundtrip_ms": 6.079,
+    "ws_target": 200
+  }
+]

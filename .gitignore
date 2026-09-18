@@ -52,6 +52,14 @@ scripts/test-results/**/*.txt
 # JWT/webhook secret，均为 127.0.0.1 + dev 密钥产物，作验收存档公开）
 !scripts/test-results/auth-session-acceptance/**
 !scripts/test-results/voice-pstn-acceptance/**
+# perf 基线入库三件：manifest（check-acceptance-evidence 校验入口）、
+# results.json（P2-8 容量基线数据，docs/perf-baseline.md 引用）、summary.txt
+# （人读摘要）。其余原始证据（含 Authorization 头的 .headers 等）不入库。
+!scripts/test-results/perf-baseline/results.json
+!scripts/test-results/perf-baseline/summary.txt
+scripts/test-results/perf-baseline/*.body
+scripts/test-results/perf-baseline/*.headers
+scripts/test-results/perf-baseline/*.log
 
 # 缓存文件
 .cache/

@@ -1,0 +1,20 @@
+perf_scale=full
+servify_port=18107
+mock_port=18108
+build_ok=true
+mock_llm_ok=true
+server_ready=true
+unauthenticated_tickets_rejected_401=true
+admin_ready=true
+login_role=admin
+perfbench_ok=true
+scenario=tickets-mixed ops=1800 concurrency=16 errors=0 p50_ms=23.86 p95_ms=250.01 p99_ms=718.17 max_ms=2398.29 ops_per_sec=220.91
+scenario=ai-query ops=200 concurrency=16 errors=0 p50_ms=11.48 p95_ms=1017.89 p99_ms=1061.40 max_ms=2095.13 ops_per_sec=92.18
+scenario=upload-knowledge ops=200 concurrency=16 errors=0 p50_ms=8.31 p95_ms=20.52 p99_ms=38.03 max_ms=41.41 ops_per_sec=1451.89
+scenario=ws-connections ops=200 concurrency=0 errors=0 p50_ms=3.59 p95_ms=10.21 p99_ms=12.55 max_ms=15.95 ops_per_sec=0.00
+ws_max_conns=200 ws_target=200 ws_server_reported=200 ws_roundtrip_ms=6.08
+scale=full
+overall_status=passed
+step=scenario_checks
+step=manifest
+overall_status=passed

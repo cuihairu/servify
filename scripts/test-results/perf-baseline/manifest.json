@@ -1,0 +1,39 @@
+{
+  "provider": "perf",
+  "mode": "runtime-baseline",
+  "scale": "full",
+  "generated_at": "2026-09-18T20:01:12.843844",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "server_ready": "true",
+    "mock_llm_ok": "true",
+    "unauthenticated_tickets_rejected_401": "true",
+    "admin_ready": "true",
+    "perfbench_ok": "true",
+    "tickets_scenario_passed": "true",
+    "ai_query_scenario_passed": "true",
+    "upload_knowledge_scenario_passed": "true",
+    "ws_connections_passed": "true",
+    "ws_stats_reconciled": "true"
+  },
+  "evidence_files": [
+    "build-output.txt",
+    "login-admin.body",
+    "login-admin.headers",
+    "login-admin.txt",
+    "mock-log.txt",
+    "perfbench-output.txt",
+    "register-admin.body",
+    "register-admin.headers",
+    "register-admin.txt",
+    "results.json",
+    "server-log.txt",
+    "summary.txt",
+    "unauthenticated-tickets.body",
+    "unauthenticated-tickets.headers",
+    "unauthenticated-tickets.txt"
+  ]
+}

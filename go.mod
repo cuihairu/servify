@@ -2,7 +2,10 @@ module servify
 
 go 1.25.0
 
-require github.com/swaggo/swag v1.16.6
+require (
+	github.com/swaggo/swag v1.16.6
+	gopkg.in/yaml.v3 v3.0.1
+)
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
@@ -17,7 +20,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect

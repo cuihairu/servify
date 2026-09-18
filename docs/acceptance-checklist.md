@@ -393,6 +393,20 @@ go test -tags weknora ./apps/server/cmd ./apps/server/internal/handlers ./apps/s
 | 转写追加 | `POST /api/voice/transcripts` | 追加语音转写片段 | 转写被保存 | [transcript_service_test.go](/Users/cui/Workspaces/servify/apps/server/internal/modules/voice/application/transcript_service_test.go) | 通过 |
 | 转写列表 | `GET /api/voice/transcripts` | 追加后查询 | 返回转写内容 | [transcript_service_test.go](/Users/cui/Workspaces/servify/apps/server/internal/modules/voice/application/transcript_service_test.go) | 通过 |
 
+### 13. 性能与容量基线
+
+P2-8：从"能跑"提升到"知道能承受多少负载"。基线口径与结论详见 [perf-baseline.md](./perf-baseline.md)；
+证据与 manifest 在 [scripts/test-results/perf-baseline/](../scripts/test-results/perf-baseline/)（provider=perf）。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ticket 高并发读写 | `perfbench -scenario tickets`（`POST /api/tickets` + 评论 + 列表，并发 16，1800 ops） | full 档压测 | 0 错误，p50/p95/p99 记录在 results.json | [test-perf-baseline.sh](../scripts/test-perf-baseline.sh) + [perfbench](../scripts/perfbench/main.go) | 通过 |
+| AI 查询延迟 | `perfbench -scenario ai`（`POST /api/v1/ai/query`，并发 16，200 ops） | full 档压测（mock LLM） | 0 错误，延迟分布入基线 | 同上 | 通过 |
+| 文件上传与知识同步 | `perfbench -scenario upload`（multipart 上传 + knowledge upload/sync） | full 档压测 | 0 错误；无 provider 时 503 按预期记 note | 同上 | 通过 |
+| WebSocket 连接数 | `perfbench -scenario ws`（200 连接阶梯建连 + text-message 往返） | full 档压测 | 200/200 建连，`/api/v1/ws/stats` 对账一致 | 同上 | 通过 |
+| 压测链路守护 | `TestPerfBaselineScriptWritesEvidence`（CI script-checks） | smoke 档真跑全链路 | manifest 全 true、overall=passed | [test_perf_baseline_test.go](../scripts/test_perf_baseline_test.go) | 通过 |
+| 基线 manifest 校验 | `validate-acceptance-manifest.sh`（provider=perf case） | 对入库 manifest 复验 | 校验通过 | [validate_acceptance_manifest_test.go](../scripts/validate_acceptance_manifest_test.go) 正反例 | 通过 |
+
 ## 权限与异常路径必须额外验
 
 即使主流程通过，也不能直接判定完成，还必须补下面这些：

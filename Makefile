@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance perf-baseline validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -63,6 +63,7 @@ help:
 	@echo "  pgvector-acceptance - Run the pgvector knowledge base acceptance (requires reachable pg+pgvector)"
 	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  suggestion-acceptance - Run the customer-side suggested questions acceptance script"
+	@echo "  perf-baseline - Run the performance/capacity baseline (PERF_SCALE=smoke|full, default smoke)"
 	@echo "  validate-acceptance-manifest - Validate a generated acceptance manifest"
 	@echo "  check-acceptance-evidence - Validate all checked-in acceptance manifests under scripts/test-results"
 
@@ -384,6 +385,12 @@ suggestion-acceptance:
 	@echo "Running customer-side suggested questions acceptance..."
 	chmod +x ./scripts/test-suggestion-acceptance.sh
 	./scripts/test-suggestion-acceptance.sh
+
+perf-baseline: PERF_SCALE ?= smoke
+perf-baseline:
+	@echo "Running performance/capacity baseline (PERF_SCALE=$(PERF_SCALE))..."
+	chmod +x ./scripts/test-perf-baseline.sh
+	PERF_SCALE=$(PERF_SCALE) ./scripts/test-perf-baseline.sh
 
 validate-acceptance-manifest:
 	@echo "Validating acceptance manifest..."

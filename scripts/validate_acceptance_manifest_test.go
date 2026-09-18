@@ -2557,3 +2557,117 @@ func TestValidateAcceptanceManifestScriptRejectsPgvectorWithoutDataPlaneEvidence
 		t.Fatalf("expected missing check named in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidPerfManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                 "perf_scale=smoke\noverall_status=passed",
+		"results.json":                "[]",
+		"perfbench-output.txt":        "[]",
+		"server-log.txt":              "ok",
+		"mock-log.txt":                "ok",
+		"unauthenticated-tickets.txt": "HTTP/1.1 401",
+		"register-admin.txt":          "HTTP/1.1 201",
+		"login-admin.txt":             "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "perf",
+  "mode": "runtime-baseline",
+  "scale": "smoke",
+  "status": {"overall": "passed"},
+  "checks": {
+    "build_ok": "true",
+    "server_ready": "true",
+    "mock_llm_ok": "true",
+    "unauthenticated_tickets_rejected_401": "true",
+    "admin_ready": "true",
+    "perfbench_ok": "true",
+    "tickets_scenario_passed": "true",
+    "ai_query_scenario_passed": "true",
+    "upload_knowledge_scenario_passed": "true",
+    "ws_connections_passed": "true",
+    "ws_stats_reconciled": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "results.json",
+    "perfbench-output.txt",
+    "server-log.txt",
+    "mock-log.txt",
+    "unauthenticated-tickets.txt",
+    "register-admin.txt",
+    "login-admin.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "provider=perf") {
+		t.Fatalf("expected provider=perf in output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsPerfManifestWithoutWSReconciliation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                 "perf_scale=smoke\noverall_status=passed",
+		"results.json":                "[]",
+		"perfbench-output.txt":        "[]",
+		"server-log.txt":              "ok",
+		"mock-log.txt":                "ok",
+		"unauthenticated-tickets.txt": "HTTP/1.1 401",
+		"register-admin.txt":          "HTTP/1.1 201",
+		"login-admin.txt":             "HTTP/1.1 200",
+		"manifest.json": `{
+  "provider": "perf",
+  "mode": "runtime-baseline",
+  "scale": "smoke",
+  "status": {"overall": "passed"},
+  "checks": {
+    "build_ok": "true",
+    "server_ready": "true",
+    "mock_llm_ok": "true",
+    "unauthenticated_tickets_rejected_401": "true",
+    "admin_ready": "true",
+    "perfbench_ok": "true",
+    "tickets_scenario_passed": "true",
+    "ai_query_scenario_passed": "true",
+    "upload_knowledge_scenario_passed": "true",
+    "ws_connections_passed": "true",
+    "ws_stats_reconciled": "false"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "results.json",
+    "perfbench-output.txt",
+    "server-log.txt",
+    "mock-log.txt",
+    "unauthenticated-tickets.txt",
+    "register-admin.txt",
+    "login-admin.txt"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, output=%s", string(output))
+	}
+	if !strings.Contains(string(output), "ws_stats_reconciled") {
+		t.Fatalf("expected failure reason in output, got %s", string(output))
+	}
+}

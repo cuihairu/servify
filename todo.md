@@ -652,7 +652,7 @@
   - smoke fail-open 修复：`run-smoke-tests.sh` 的 SDK Examples 段原为 `npm ... || echo skip` 静默吞失败，改为 sdk 目录存在即必须通过
   - 本地全绿复验：`test:surfaces`/`test:examples`/`test:governance`/`version:check` 通过；`npm -C sdk/examples/{react,vue} ci && npm run build` 均真实构建成功（react 183KB / vue 102KB 产物）
 
-### [ ] P2-8 性能、容量与压测基线
+### [x] P2-8 性能、容量与压测基线
 
 - 范围：
   - WebSocket 连接数
@@ -663,6 +663,12 @@
   - 从“能跑”提升到“知道能承受多少负载”
 - 验收标准：
   - 至少有一版容量基线和压测结论
+- 进展（2026-09-18 完成）：
+  - 压测引擎 `scripts/perfbench`（Go 标准库、零三方压测依赖）：四场景负载器（ticket 创建/评论/列表混读、AI 查询、multipart 文件上传+知识文档上传/同步、WebSocket 阶梯建连+text-message 往返）+ 手写 RFC 6455 客户端（握手/帧编解码/关闭帧）+ 延迟分位数统计（p50/p95/p99/max）+ fail-soft 容量口径（WS 到顶记 note）；附 `-gen-config` 从生产 config.yml 派生压测配置（yaml Node API 保留注释与 ${ENV} 占位符：限流放宽 100000/10000、upload=local、AI 指 mock、knowledge.provider 置空=默认态口径）
+  - 编排脚本 `scripts/test-perf-baseline.sh`（smoke/full 两档）：构建→内嵌 mock LLM（OpenAI 兼容 chat/completions）→派生配置→sqlite 起服→401 负例→首用户 admin→四场景→结果校验（errors=0、ws_max_conns==ws_target、服务端 /api/v1/ws/stats 对账）→manifest 写入（provider=perf，11 项 checks）；无外部依赖（CI 可真跑）
+  - full 档容量基线（2026-09-18，sqlite+mock LLM，入库 scripts/test-results/perf-baseline/）：tickets-mixed 1800 ops 并发 16 全 0 错误 p50 23.86ms/p95 250ms/p99 718ms 221 ops/s；ai-query 200 ops 0 错误 p95 1.02s（mock 下游亚毫秒仍达 1s——AI 管线自身成本下限）；upload-knowledge 200 ops 0 错误 p99 38ms 1452 ops/s；ws-connections 200/200 建连、stats 对账 200==200、握手 p50 3.59ms、往返 6.08ms。结论与解读见 docs/perf-baseline.md
+  - 配套：CI 驱动测试 `TestPerfBaselineScriptWritesEvidence`（smoke 档真跑全链路入库 script-checks 白名单，步骤超时 5→10 分钟）；validate-acceptance-manifest.sh 新增 provider=perf case + 正反测试；`make perf-baseline`（PERF_SCALE ?= smoke）；docs/perf-baseline.md（容量基线与压测结论）；acceptance-checklist.md 新增 §13 性能与容量基线（六项全通过）
+  - 调试中修的两个 perfbench 缺陷：Sec-WebSocket-Key 必须解码后恰 16 字节（gorilla 严格校验，32 字节 hex 被 400 拒绝——dial 失败现记 first_dial_error 留证）；knowledge/upload 无 provider 503 是默认态预期（httpDo 返回状态码区分，503 计延迟不计错误并记 note）
 
 ---
 
@@ -733,7 +739,7 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：按用户指示推进下一项。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；下一步候选 P2-8 性能压测基线；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
+- 当前优先恢复任务：按用户指示推进下一项。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
 - 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
