@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "db_restore_matches_backup": "true",
+    "db_sequence_no_collision": "true",
+    "db_survives_post_backup_damage": "true",
+    "files_restore_matches_backup": "true",
+    "files_verify_detects_tamper": "true"
+  },
+  "evidence_files": [
+    "db-manifest.json",
+    "files-manifest.json",
+    "summary.txt"
+  ],
+  "mode": "drill-sqlite",
+  "provider": "backup-restore",
+  "status": {
+    "overall": "passed"
+  }
+}

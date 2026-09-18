@@ -130,6 +130,17 @@ case "$PROVIDER" in
     require_file_listed "auth-logout-current.json"
     require_file_listed "auth-sessions-after-logout-current.json"
     ;;
+  backup-restore)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.db_restore_matches_backup // ""' "true"
+    require_equals '.checks.db_survives_post_backup_damage // ""' "true"
+    require_equals '.checks.db_sequence_no_collision // ""' "true"
+    require_equals '.checks.files_restore_matches_backup // ""' "true"
+    require_equals '.checks.files_verify_detects_tamper // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "db-manifest.json"
+    require_file_listed "files-manifest.json"
+    ;;
   dify)
     require_equals '.status.knowledge_provider // ""' "dify"
     require_equals '.status.knowledge_provider_enabled // ""' "true"

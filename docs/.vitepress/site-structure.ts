@@ -37,6 +37,7 @@ const operationsPages = [
   '/token-lifecycle-and-key-rotation',
   '/public-surface-security-checklist',
   '/multi-instance-boundary',
+  '/backup-and-recovery',
 ];
 
 const appendixPages = [
@@ -60,6 +61,7 @@ export const docsNav = [
       { text: '配置作用域', link: '/configuration-scopes' },
       { text: 'Token 生命周期', link: '/token-lifecycle-and-key-rotation' },
       { text: '开放接口安全清单', link: '/public-surface-security-checklist' },
+      { text: '备份与恢复', link: '/backup-and-recovery' },
     ],
   },
   {

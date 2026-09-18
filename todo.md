@@ -430,7 +430,7 @@
   - acceptance 脚本适配：`scripts/test-security-acceptance.sh` 原设计前提是"模板不带 database 段、脚本追加 deployment 段"——P2-2 后模板显式带 `${DB_*}` 占位 database 节，追加会产生 yaml duplicate key；改为纯环境变量注入（production 正例注入 DB_*/JWT/AI 凭证 strict 通过；staging 负例注入基础设施凭证过启动校验、空 AI 凭证被基线检查点名拒绝），`go test ./scripts` 全包绿
   - 文档回填位置：`docs/configuration-scopes.md` + 本条目
 
-### [ ] P2-3 数据恢复、备份与迁移演练
+### [x] P2-3 数据恢复、备份与迁移演练（2026-09-18 闭环）
 
 - 范围：
   - 数据库迁移回滚
@@ -440,6 +440,29 @@
   - 从“可迁移”升级到“可恢复”
 - 验收标准：
   - 至少一轮备份恢复演练证据
+- 进展（2026-09-18）：
+  - `internal/platform/recovery` 包（100% 覆盖，race ×5）：数据库逻辑备份
+    （JSONL 逐表 + manifest sha256 + 自增序列位置）、事务内整体校验恢复
+    （单连接 + 单事务，PRAGMA foreign_keys 连接级状态固定）、上传文件
+    tar.gz 归档与字节级校验恢复/对账（VerifyFiles）
+  - `cmd/dbrecovery` 运维入口（100% 覆盖）：db-backup / db-restore /
+    files-backup / files-restore 四子命令；db 子命令在连接前显式拒绝
+    postgres 方言（pg 形态走 pg_dump SOP，防 sqlite 逻辑备份误灌生产库）
+  - 迁移回滚口径定稿：迁移无 down，回滚 = 恢复备份；postgres 演练落 CI
+    Integration job（pg_dump -Fc → 删光 users → DROP WITH (FORCE) →
+    pg_restore → schema_migrations=8|f 与行数随备份回来）
+  - sqlite 演练脚本 `scripts/test-backup-restore.sh`（make
+    backup-restore-acceptance）：播种关键表 → 备份 → 注入迁移窗口增量 +
+    损坏 → 恢复 → 逐表行数/内容/序列对账；上传分支篡改+删除+新增检测与
+    字节级恢复；evidence 留档 `scripts/test-results/backup-restore/`，
+    manifest 经 validate-acceptance-manifest.sh 新 case 校验，纳入
+    script-checks 门禁
+  - 文档 `docs/backup-and-recovery.md`：双轨定位、RPO/RTO、关键表清单、
+    知识文档外部 provider 边界（Dify/WeKnora 内容不在 servify 备份范围）、
+    失败迁移处置；已注册站点结构
+  - 演练证据：`scripts/test-results/backup-restore/manifest.json`
+    （provider=backup-restore，五 checks 全 true，db 44 表 10 行 + 上传
+    2 文件对账归零）
 
 ### [-] P2-4 可观测性从“有指标”升级到“可运维”（四刀全部完成，验收口径见下）
 
@@ -619,8 +642,8 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：`P2-3 数据恢复、备份与迁移演练`（P2 序列下一个未开工项；P2-2 已于 2026-09-17 闭环——模板漂移门禁 + 环境严格度收口）
-- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 当前优先恢复任务：`P2-4 可观测性`遗留的 worker_job_duration_seconds（周期 job 级 TrackJob，独立遗留项）或按用户指示推进下一项（P2-3 已于 2026-09-18 闭环——备份恢复双轨演练 + 迁移回滚口径定稿）
+- 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）

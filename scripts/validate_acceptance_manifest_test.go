@@ -523,6 +523,90 @@ func TestValidateAcceptanceManifestScriptAcceptsValidSuggestionManifest(t *testi
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidBackupRestoreManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":         "ok",
+		"db-manifest.json":    "{}",
+		"files-manifest.json": "{}",
+		"manifest.json": `{
+  "provider": "backup-restore",
+  "mode": "drill-sqlite",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "db_restore_matches_backup": "true",
+    "db_survives_post_backup_damage": "true",
+    "db_sequence_no_collision": "true",
+    "files_restore_matches_backup": "true",
+    "files_verify_detects_tamper": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "db-manifest.json",
+    "files-manifest.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsBackupRestoreWithoutDamageCheck(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":         "ok",
+		"db-manifest.json":    "{}",
+		"files-manifest.json": "{}",
+		// 缺 db_survives_post_backup_damage:没有损坏注入对账的演练不算数。
+		"manifest.json": `{
+  "provider": "backup-restore",
+  "mode": "drill-sqlite",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "db_restore_matches_backup": "true",
+    "db_sequence_no_collision": "true",
+    "files_restore_matches_backup": "true",
+    "files_verify_detects_tamper": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "db-manifest.json",
+    "files-manifest.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "db_survives_post_backup_damage") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
+
 func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, body := range files {

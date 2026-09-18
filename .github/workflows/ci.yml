@@ -331,7 +331,7 @@ jobs:
       - name: Verify provider acceptance scripts
         timeout-minutes: 5
         run: |
-          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
+          go test ./scripts -run "Test(WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
 
       - name: Validate checked-in acceptance evidence
         timeout-minutes: 2
@@ -502,6 +502,43 @@ jobs:
             echo "expected schema_migrations version=8 dirty=false, got: $state"
             exit 1
           fi
+
+      - name: Backup & restore drill (pg_dump/pg_restore)
+        timeout-minutes: 5
+        run: |
+          COMPOSE="docker compose -f infra/compose/docker-compose.yml"
+          pg() { $COMPOSE exec -T postgres psql -U postgres -d servify -tAc "$1"; }
+
+          # P2-3 postgres 演练:迁移回滚 = 恢复备份(migrations 无 down)。
+          # 1) 播种关键表并全量备份(-Fc;schema_migrations 随系统目录进备份)
+          pg "INSERT INTO users (username, email, password, role, status, created_at, updated_at) VALUES ('drill-user-1', 'drill1@example.com', 'drill-only', 'customer', 'active', NOW(), NOW()), ('drill-user-2', 'drill2@example.com', 'drill-only', 'customer', 'active', NOW(), NOW())"
+          $COMPOSE exec -T postgres pg_dump -U postgres -Fc servify > /tmp/servify-drill.dump
+          echo "dump bytes: $(wc -c < /tmp/servify-drill.dump)"
+
+          # 2) 破坏:删光 users,并记录备份时刻的行数作为恢复对账基准
+          before=$(pg "SELECT count(*) FROM users")
+          pg "DELETE FROM users"
+          echo "users before restore (at backup point): $before"
+
+          # 3) 恢复:服务占着连接,DROP 用 WITH (FORCE)(pg13+),pg_restore 全量回灌
+          $COMPOSE exec -T postgres psql -U postgres -d postgres -c "DROP DATABASE servify WITH (FORCE)"
+          $COMPOSE exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE servify"
+          $COMPOSE exec -T postgres pg_restore -U postgres -d servify --no-owner /tmp/servify-drill.dump
+
+          # 4) 对账:迁移水位与播种行数随备份回来(损坏被回滚)
+          state=$(pg "SELECT version, dirty FROM schema_migrations")
+          echo "schema_migrations after restore: $state"
+          if [ "$state" != "8|f" ]; then
+            echo "expected schema_migrations version=8 dirty=false after restore, got: $state"
+            exit 1
+          fi
+          after=$(pg "SELECT count(*) FROM users")
+          echo "users after restore: $after"
+          if [ "$after" != "$before" ] || [ "$after" -lt 1 ]; then
+            echo "expected users restored to $before, got: $after"
+            exit 1
+          fi
+          echo "✅ pg backup/restore drill passed"
 
       - name: Restart server (idempotent startup over migrated schema)
         timeout-minutes: 5
