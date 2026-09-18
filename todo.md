@@ -675,7 +675,7 @@
 
 ## P3 架构与技术债清理
 
-### [-] P3-1 清理公开语义中的 legacy/compat 混名
+### [x] P3-1 清理公开语义中的 legacy/compat 混名（2026-09-18）
 
 - 目标：
   - 内部兼容层继续保留，但对外命名统一到产品语义
@@ -685,6 +685,7 @@
   - [x] E. 保留登记：新增 `docs/surface-naming.md`——`weknora.*` 配置键（provider 实名，P0-5 裁决）、`weknora_usage_count`/`weknora_latency`/`servify_ai_weknora_usage_total`（per-provider 子维度非新旧名，与总量字段是父子关系）、`service_type='weknora'`、`servify_weknora_mappings` 表、`fallback.legacy_kb_enabled`、configscope section key 等保留理由与判定口径；`sdk/SURFACE_GOVERNANCE.md` 按 Breaking Change Checklist 登记移除项
   - 摸底修正：原计划删 JSON 字段旧名/指标改名（C/D 类），查证后发现 `WeKnoraUsageCount` 等是按 active provider 分派的子策略计数（orchestrated 同一处先 ++ 总量再分派 dify/weknora），删除会丢观测维度——归入 E 类保留
   - 验证：SDK typecheck/test/test:examples/test:governance/version:check、examples vite build、regenerate-generated-assets（demo 产物同步）、全仓库 gofmt、handlers vet+测试全绿
+- 完成记录（2026-09-18，e6928a6，CI 35399443798 全绿）：A/B/E 三类落地，C/D 类经查证改判保留（子维度非混名）；本地门禁 coverage 100% + race 全量通过
 
 ### [ ] P3-2 收拢 services 与 modules 的最终边界
 
@@ -746,7 +747,7 @@
 
 ## 当前恢复点
 
-- 当前优先恢复任务：按用户指示推进下一项。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
+- 当前优先恢复任务：按用户指示推进下一项。P3-1 已完成（2026-09-18，e6928a6）——SDK reconnect 旧配置字段与 legacy shim 删除、EnableWeKnora/DisableWeKnora handler 包装删除，保留决策（weknora provider 实名/子维度指标/DB 契约）登记于 docs/surface-naming.md 与 sdk/SURFACE_GOVERNANCE.md，CI 全绿；下一项 P3-2 收拢 services 与 modules 的最终边界。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
 - 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
