@@ -15,7 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	macroapp "servify/apps/server/internal/modules/macro/application"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
+	macroinfra "servify/apps/server/internal/modules/macro/infra"
 )
 
 func newMacroHandlerTestDB(t *testing.T) *gorm.DB {
@@ -36,7 +38,7 @@ func TestMacroHandler_List_Empty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -59,7 +61,7 @@ func TestMacroHandler_List_WithData(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	// Create test macro
@@ -91,7 +93,7 @@ func TestMacroHandler_Create_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -118,7 +120,7 @@ func TestMacroHandler_Create_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -137,7 +139,7 @@ func TestMacroHandler_Update_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	// Create test macro
@@ -170,7 +172,7 @@ func TestMacroHandler_Update_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -189,7 +191,7 @@ func TestMacroHandler_Update_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -209,7 +211,7 @@ func TestMacroHandler_Delete_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	// Create test macro
@@ -241,7 +243,7 @@ func TestMacroHandler_Delete_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -259,7 +261,7 @@ func TestMacroHandler_Apply_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	// Create test macro and ticket
@@ -301,7 +303,7 @@ func TestMacroHandler_Apply_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -320,7 +322,7 @@ func TestMacroHandler_Apply_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 	handler := NewMacroHandler(svc)
 
 	router := gin.New()
@@ -338,7 +340,7 @@ func TestMacroHandler_Apply_NotFound(t *testing.T) {
 
 func TestNewMacroHandler(t *testing.T) {
 	db := newMacroHandlerTestDB(t)
-	svc := services.NewMacroService(db)
+	svc := macrodelivery.NewHandlerServiceAdapter(macroapp.NewService(macroinfra.NewGormRepository(db)))
 
 	handler := NewMacroHandler(svc)
 
