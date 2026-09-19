@@ -146,3 +146,10 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.CustomField
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.WorkspaceService|Runtime must not depend on the concrete workspace service; use workspacedelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.ShiftService|Runtime must not depend on the concrete shift service; use shiftdelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AppIntegrationService|Runtime must not depend on the concrete app integration service; use appintegrationdelivery contracts.
+handler|Auth|apps/server/internal/handlers/auth_handler.go|service|authdelivery\.HandlerService|func NewAuthHandler\(service authdelivery\.HandlerService\)|services\.Auth
+handler|Auth 2FA|apps/server/internal/handlers/auth_2fa_handler.go|service|authdelivery\.TwoFactorService|func NewAuth2FAHandler\(service authdelivery\.TwoFactorService\)|services\.Auth
+handler|OIDC|apps/server/internal/handlers/oidc_handler.go|auth|authdelivery\.HandlerService|func NewOIDCHandler\(provider \*oidcplatform\.Provider, cfg config\.OIDCConfig, authService authdelivery\.HandlerService, environment string\)|\*services\.AuthService
+require|apps/server/internal/app/server/router_auth.go|authService[[:space:]]*:=[[:space:]]*authapp\.NewService\(deps\.DB, deps\.Config\)|Auth assembly must construct the single module instance shared by all auth handlers.
+forbid|apps/server/internal/app/server/router_auth.go|services\.NewAuthService|Router auth must not construct the legacy service.
+forbid|apps/server/internal/app/server/runtime.go|services\.AuthService|Runtime must not expose the concrete auth service; use authdelivery contracts.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AuthService|Runtime assembly must not depend on the concrete auth service.

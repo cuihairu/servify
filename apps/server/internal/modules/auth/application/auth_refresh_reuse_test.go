@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func newRefreshReuseService(t *testing.T, policy string) *AuthService {
 	if err := db.Create(user).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	svc.WithRefreshReusePolicy(policy)
 	return svc
 }
@@ -79,7 +79,7 @@ func TestWithRefreshReusePolicyNormalization(t *testing.T) {
 		"block":           false,
 		"bogus":           false,
 	} {
-		svc := NewAuthService(newAuthServiceTestDB(t), testAuthConfig())
+		svc := NewService(newAuthServiceTestDB(t), testAuthConfig())
 		svc.WithRefreshReusePolicy(raw)
 		if svc.refreshReuseRevocation != want {
 			t.Fatalf("policy %q revocation = %v, want %v", raw, svc.refreshReuseRevocation, want)

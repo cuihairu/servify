@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -73,7 +73,7 @@ type AuthResult struct {
 	SessionID        string
 }
 
-func NewAuthService(db *gorm.DB, cfg *config.Config) *AuthService {
+func NewService(db *gorm.DB, cfg *config.Config) *AuthService {
 	return &AuthService{db: db, config: cfg}
 }
 

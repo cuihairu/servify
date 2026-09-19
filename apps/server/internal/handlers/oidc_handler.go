@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"servify/apps/server/internal/config"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
@@ -28,13 +28,13 @@ const (
 type OIDCHandler struct {
 	provider *oidcplatform.Provider // nil when SSO disabled
 	cfg      config.OIDCConfig
-	auth     *services.AuthService
+	auth     authdelivery.HandlerService
 	secure   bool // Secure cookie flag (production)
 }
 
 // NewOIDCHandler wires the handler. provider may be nil (SSO disabled) —
 // Status keeps answering so the frontend button logic works.
-func NewOIDCHandler(provider *oidcplatform.Provider, cfg config.OIDCConfig, authService *services.AuthService, environment string) *OIDCHandler {
+func NewOIDCHandler(provider *oidcplatform.Provider, cfg config.OIDCConfig, authService authdelivery.HandlerService, environment string) *OIDCHandler {
 	return &OIDCHandler{
 		provider: provider,
 		cfg:      cfg,
@@ -137,13 +137,13 @@ func (h *OIDCHandler) resolveCallback(c *gin.Context) (target, errCode string) {
 		return "", "oidc_failed"
 	}
 
-	result, err := h.auth.LoginWithOIDC(ctx, services.OIDCIdentity{
+	result, err := h.auth.LoginWithOIDC(ctx, authdelivery.OIDCIdentity{
 		Subject:       claims.Subject,
 		Email:         claims.Email,
 		EmailVerified: claims.EmailVerified,
 		Name:          claims.Name,
 		Roles:         claims.Roles,
-	}, services.AuthSessionMetadata{
+	}, authdelivery.AuthSessionMetadata{
 		UserAgent: c.Request.UserAgent(),
 		ClientIP:  c.ClientIP(),
 	})

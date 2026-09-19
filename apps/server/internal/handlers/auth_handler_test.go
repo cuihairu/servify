@@ -10,24 +10,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/configscope"
-	"servify/apps/server/internal/services"
-
-	"github.com/gin-gonic/gin"
 )
 
 type stubAuthService struct {
 	refreshToken string
-	meta         services.AuthSessionMetadata
+	meta         authdelivery.AuthSessionMetadata
 	sessions     []models.UserAuthSession
 	revoked      *models.UserAuthSession
 	revokeCount  int
-	refreshResp  *services.AuthResult
+	refreshResp  *authdelivery.AuthResult
 	refreshErr   error
-	loginOutcome *services.LoginOutcome
+	loginOutcome *authdelivery.LoginOutcome
 	loginErr     error
 }
 
@@ -49,12 +48,12 @@ func (s stubAuthSessionRiskProvider) LoadSessionRiskConfig(ctx context.Context) 
 	return s.value, s.ok, s.err
 }
 
-func (s *stubAuthService) Register(ctx context.Context, req services.RegisterInput, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *stubAuthService) Register(ctx context.Context, req authdelivery.RegisterInput, meta authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	s.meta = meta
 	return nil, errors.New("not implemented")
 }
 
-func (s *stubAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error) {
+func (s *stubAuthService) Login(ctx context.Context, req authdelivery.LoginInput, meta authdelivery.AuthSessionMetadata) (*authdelivery.LoginOutcome, error) {
 	s.meta = meta
 	if s.loginErr != nil || s.loginOutcome != nil {
 		return s.loginOutcome, s.loginErr
@@ -81,9 +80,15 @@ func (s *stubAuthService) RevokeOtherSessions(ctx context.Context, userID uint, 
 	return s.revokeCount, nil
 }
 
-func (s *stubAuthService) RefreshToken(ctx context.Context, refreshToken string, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *stubAuthService) RefreshToken(ctx context.Context, refreshToken string, meta authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	s.refreshToken = refreshToken
 	s.meta = meta
+	return s.refreshResp, s.refreshErr
+}
+
+// LoginWithOIDC 补齐 delivery.HandlerService 契约（OIDC SSO 用例走
+// oidc_handler_test.go 的真实 service 装配；此处 stub 复用 refresh 字段）。
+func (s *stubAuthService) LoginWithOIDC(_ context.Context, _ authdelivery.OIDCIdentity, _ authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	return s.refreshResp, s.refreshErr
 }
 
@@ -92,7 +97,7 @@ func TestAuthHandlerRefreshToken(t *testing.T) {
 
 	t.Run("accepts refresh token from body", func(t *testing.T) {
 		svc := &stubAuthService{
-			refreshResp: &services.AuthResult{
+			refreshResp: &authdelivery.AuthResult{
 				Token:            "access-2",
 				ExpiresIn:        3600,
 				RefreshToken:     "refresh-2",
@@ -129,7 +134,7 @@ func TestAuthHandlerRefreshToken(t *testing.T) {
 
 	t.Run("falls back to bearer token", func(t *testing.T) {
 		svc := &stubAuthService{
-			refreshResp: &services.AuthResult{
+			refreshResp: &authdelivery.AuthResult{
 				Token:            "access-2",
 				ExpiresIn:        3600,
 				RefreshToken:     "refresh-2",
@@ -155,7 +160,7 @@ func TestAuthHandlerRefreshToken(t *testing.T) {
 	})
 
 	t.Run("invalid refresh token returns unauthorized", func(t *testing.T) {
-		svc := &stubAuthService{refreshErr: services.ErrAuthInvalidRefreshToken}
+		svc := &stubAuthService{refreshErr: authdelivery.ErrAuthInvalidRefreshToken}
 		handler := NewAuthHandler(svc)
 		r := gin.New()
 		r.POST("/api/v1/auth/refresh", handler.RefreshToken)

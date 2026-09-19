@@ -12,32 +12,22 @@ import (
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 	"servify/apps/server/internal/platform/configscope"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	service  authService
+	service  authdelivery.HandlerService
 	policy   sessionRiskPolicy
 	resolver *configscope.Resolver
 	ipIntel  sessionIPIntelligence
 }
 
-type authService interface {
-	Register(ctx context.Context, req services.RegisterInput, meta services.AuthSessionMetadata) (*services.AuthResult, error)
-	Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error)
-	GetCurrentUser(ctx context.Context, userID uint) (*models.User, error)
-	ListAuthSessions(ctx context.Context, userID uint) ([]models.UserAuthSession, error)
-	RevokeCurrentSession(ctx context.Context, userID uint, sessionID string) (*models.UserAuthSession, error)
-	RevokeOtherSessions(ctx context.Context, userID uint, currentSessionID string) (int, error)
-	RefreshToken(ctx context.Context, refreshToken string, meta services.AuthSessionMetadata) (*services.AuthResult, error)
-}
-
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(service authService) *AuthHandler {
+func NewAuthHandler(service authdelivery.HandlerService) *AuthHandler {
 	return &AuthHandler{service: service, policy: defaultSessionRiskPolicy(), ipIntel: heuristicSessionIPIntelligence{}}
 }
 
@@ -86,7 +76,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	result, err := h.service.Register(c.Request.Context(), services.RegisterInput{
+	result, err := h.service.Register(c.Request.Context(), authdelivery.RegisterInput{
 		Username: req.Username,
 		Email:    req.Email,
 		Password: req.Password,
@@ -96,9 +86,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}, authSessionMetadataFromRequest(c))
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrInvalidAuthInput):
+		case errors.Is(err, authdelivery.ErrInvalidAuthInput):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "用户名、邮箱和密码不能为空"})
-		case errors.Is(err, services.ErrAuthUserAlreadyExists):
+		case errors.Is(err, authdelivery.ErrAuthUserAlreadyExists):
 			c.JSON(http.StatusConflict, gin.H{"error": "用户名或邮箱已存在"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
@@ -131,17 +121,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	outcome, err := h.service.Login(c.Request.Context(), services.LoginInput{
+	outcome, err := h.service.Login(c.Request.Context(), authdelivery.LoginInput{
 		Username: req.Username,
 		Password: req.Password,
 	}, authSessionMetadataFromRequest(c))
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrAuthInvalidCredentials):
+		case errors.Is(err, authdelivery.ErrAuthInvalidCredentials):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
-		case errors.Is(err, services.ErrAuthUserDisabled):
+		case errors.Is(err, authdelivery.ErrAuthUserDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "账号已被禁用"})
-		case errors.Is(err, services.ErrLoginBlockedByRisk):
+		case errors.Is(err, authdelivery.ErrLoginBlockedByRisk):
 			// 高风险来源登录被拦截（P2-5 第二刀）：不回显判定依据，
 			// 审计留痕由 auth 面审计中间件（含失败）负责。
 			c.JSON(http.StatusForbidden, gin.H{"error": "登录已被风险策略拦截"})
@@ -209,9 +199,9 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	result, err := h.service.RefreshToken(c.Request.Context(), refreshToken, authSessionMetadataFromRequest(c))
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrAuthInvalidRefreshToken):
+		case errors.Is(err, authdelivery.ErrAuthInvalidRefreshToken):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的 refresh token"})
-		case errors.Is(err, services.ErrAuthUserDisabled):
+		case errors.Is(err, authdelivery.ErrAuthUserDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "账号已被禁用"})
 		default:
 			c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
@@ -381,11 +371,11 @@ func extractRefreshToken(c *gin.Context) string {
 	return ""
 }
 
-func authSessionMetadataFromRequest(c *gin.Context) services.AuthSessionMetadata {
+func authSessionMetadataFromRequest(c *gin.Context) authdelivery.AuthSessionMetadata {
 	if c == nil {
-		return services.AuthSessionMetadata{}
+		return authdelivery.AuthSessionMetadata{}
 	}
-	return services.AuthSessionMetadata{
+	return authdelivery.AuthSessionMetadata{
 		DeviceFingerprint: authDeviceFingerprint(c),
 		UserAgent:         strings.TrimSpace(c.GetHeader("User-Agent")),
 		ClientIP:          strings.TrimSpace(c.ClientIP()),

@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func TestTwoFactorNilDBGuards(t *testing.T) {
 // TestTwoFactorSetupAccountAndGenerateError 覆盖 account 回退与 otpauth 生成失败。
 func TestTwoFactorSetupAccountAndGenerateError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 
 	// email 为空 -> 回退 username
 	if err := db.Create(&models.User{ID: 41, Username: "no-email", Status: "active"}).Error; err != nil {
@@ -77,7 +77,7 @@ func TestTwoFactorSetupAccountAndGenerateError(t *testing.T) {
 // （users.email/username 有唯一索引，空值行必须独占一库）。
 func TestTwoFactorSetupEmptyAccount(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	if err := db.Create(&models.User{ID: 42, Status: "active"}).Error; err != nil {
 		t.Fatalf("seed user 42: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestTwoFactorSetupEmptyAccount(t *testing.T) {
 // TestTwoFactorEnableValidation 覆盖启用流程的输入校验与用户校验分支。
 func TestTwoFactorEnableValidation(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 43, "enable-user")
 	ctx := context.Background()
 
@@ -115,7 +115,7 @@ func TestTwoFactorEnableValidation(t *testing.T) {
 // TestTwoFactorPersistErrors 覆盖落库失败：users 更新失败与恢复码写入失败。
 func TestTwoFactorPersistErrors(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 44, "persist-a") // 未启用
 	seedTOTPUser(t, db, 45, "persist-b")
 	enrollTwoFactor(t, svc, 45) // 45 先正常启用
@@ -140,7 +140,7 @@ func TestTwoFactorPersistErrors(t *testing.T) {
 
 	// 恢复码表缺失 -> replaceRecoveryCodes 事务失败
 	db2 := newAuthServiceTestDB(t)
-	svc2 := NewAuthService(db2, twoFactorTestConfig(true))
+	svc2 := NewService(db2, twoFactorTestConfig(true))
 	seedTOTPUser(t, db2, 46, "rc-fail")
 	if err := db2.Migrator().DropTable("user_recovery_codes"); err != nil {
 		t.Fatalf("drop recovery codes: %v", err)
@@ -157,7 +157,7 @@ func TestTwoFactorPersistErrors(t *testing.T) {
 // TestTwoFactorRegenerateValidation 覆盖重发恢复码的用户/状态/校验码分支。
 func TestTwoFactorRegenerateValidation(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 47, "regen-user")
 	ctx := context.Background()
 
@@ -180,7 +180,7 @@ func TestTwoFactorRegenerateValidation(t *testing.T) {
 // TestTwoFactorVerifyChallengePaths 覆盖挑战步的各拒绝分支与会话创建失败。
 func TestTwoFactorVerifyChallengePaths(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 48, "verify-user")
 	seedTOTPUser(t, db, 49, "noverify-user") // 不启用 2FA
 	meta := AuthSessionMetadata{UserAgent: "ua-verify", ClientIP: "198.51.100.8"}
@@ -250,7 +250,7 @@ func TestTwoFactorVerifyChallengePaths(t *testing.T) {
 // TestTwoFactorVerifySessionCreateError 覆盖挑战通过后会话创建失败。
 func TestTwoFactorVerifySessionCreateError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 50, "verify-sess")
 	meta := AuthSessionMetadata{UserAgent: "ua-sess", ClientIP: "198.51.100.8"}
 	ctx := context.Background()
@@ -271,7 +271,7 @@ func TestTwoFactorVerifySessionCreateError(t *testing.T) {
 // TestTwoFactorDisableMissingUser 覆盖解绑时用户缺失分支。
 func TestTwoFactorDisableMissingUser(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	if err := svc.DisableTwoFactor(context.Background(), 424242, "pw", "123456"); err == nil {
 		t.Fatal("expected error for missing user")
 	}

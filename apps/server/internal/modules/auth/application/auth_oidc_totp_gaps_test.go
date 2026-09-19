@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // TestLoginWithOIDCLookupError 覆盖首查非 NotFound 错误的透传分支。
 func TestLoginWithOIDCLookupError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(nil))
+	svc := NewService(db, oidcTestConfig(nil))
 	if err := db.Callback().Query().Before("gorm:query").Register("test:fail_oidc_lookup", func(tx *gorm.DB) {
 		if tx.Statement != nil && tx.Statement.Table == "users" {
 			_ = tx.AddError(errors.New("boom oidc lookup"))
@@ -35,7 +35,7 @@ func TestLoginWithOIDCLookupError(t *testing.T) {
 // TestLoginWithOIDCSessionCreateError 覆盖建号成功但会话创建失败。
 func TestLoginWithOIDCSessionCreateError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 	if err := db.Migrator().DropTable("user_auth_sessions"); err != nil {
 		t.Fatalf("drop sessions: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestOIDCHelpersFallbacks(t *testing.T) {
 // TestValidateChallengeTokenZeroUser 覆盖挑战 token 中 user_id 为 0 的拒绝分支。
 func TestValidateChallengeTokenZeroUser(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 
 	token, err := createHS256JWT(map[string]interface{}{
 		"exp":       time.Now().Add(time.Minute).Unix(),

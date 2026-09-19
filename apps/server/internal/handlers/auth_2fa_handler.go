@@ -1,33 +1,21 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
-	"servify/apps/server/internal/services"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
-// auth2FAService 是 TOTP 两步验证端点的窄服务面（AuthHandler 的 authService
-// 已覆盖 Login；这里补绑定/解绑/恢复码与挑战步换取会话）。
-type auth2FAService interface {
-	SetupTwoFactor(ctx context.Context, userID uint) (*services.TwoFactorSetup, error)
-	EnableTwoFactor(ctx context.Context, userID uint, secret, code string) ([]string, error)
-	DisableTwoFactor(ctx context.Context, userID uint, password, code string) error
-	RegenerateRecoveryCodes(ctx context.Context, userID uint, code string) ([]string, error)
-	RecoveryCodesRemaining(ctx context.Context, userID uint) (int64, error)
-	VerifyTwoFactorLogin(ctx context.Context, req services.TwoFactorVerifyInput, meta services.AuthSessionMetadata) (*services.AuthResult, error)
-}
-
 // Auth2FAHandler 处理 TOTP 两步验证端点。
 type Auth2FAHandler struct {
-	service auth2FAService
+	service authdelivery.TwoFactorService
 }
 
 // NewAuth2FAHandler creates a new Auth2FAHandler.
-func NewAuth2FAHandler(service auth2FAService) *Auth2FAHandler {
+func NewAuth2FAHandler(service authdelivery.TwoFactorService) *Auth2FAHandler {
 	return &Auth2FAHandler{service: service}
 }
 
@@ -65,17 +53,17 @@ func (h *Auth2FAHandler) VerifyLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
 		return
 	}
-	result, err := h.service.VerifyTwoFactorLogin(c.Request.Context(), services.TwoFactorVerifyInput{
+	result, err := h.service.VerifyTwoFactorLogin(c.Request.Context(), authdelivery.TwoFactorVerifyInput{
 		ChallengeToken: req.ChallengeToken,
 		Code:           req.Code,
 	}, authSessionMetadataFromRequest(c))
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrAuthInvalid2FAChallenge):
+		case errors.Is(err, authdelivery.ErrAuthInvalid2FAChallenge):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "登录挑战已失效，请重新登录"})
-		case errors.Is(err, services.ErrAuthInvalid2FACode):
+		case errors.Is(err, authdelivery.ErrAuthInvalid2FACode):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "验证码错误"})
-		case errors.Is(err, services.ErrAuthUserDisabled):
+		case errors.Is(err, authdelivery.ErrAuthUserDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "账号已被禁用"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "验证失败"})
@@ -96,7 +84,7 @@ func (h *Auth2FAHandler) VerifyLogin(c *gin.Context) {
 // @Tags auth
 // @Security BearerAuth
 // @Produce json
-// @Success 200 {object} services.TwoFactorSetup
+// @Success 200 {object} authdelivery.TwoFactorSetup
 // @Failure 400 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Router /api/v1/auth/2fa/setup [post]
@@ -170,11 +158,11 @@ func (h *Auth2FAHandler) Disable(c *gin.Context) {
 	}
 	if err := h.service.DisableTwoFactor(c.Request.Context(), userID, req.Password, req.Code); err != nil {
 		switch {
-		case errors.Is(err, services.ErrTwoFactorNotEnabled):
+		case errors.Is(err, authdelivery.ErrTwoFactorNotEnabled):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "尚未启用两步验证"})
-		case errors.Is(err, services.ErrAuthInvalidCredentials):
+		case errors.Is(err, authdelivery.ErrAuthInvalidCredentials):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "密码错误"})
-		case errors.Is(err, services.ErrAuthInvalid2FACode):
+		case errors.Is(err, authdelivery.ErrAuthInvalid2FACode):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "验证码错误"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "解绑失败"})
@@ -230,11 +218,11 @@ func (h *Auth2FAHandler) RegenerateRecoveryCodes(c *gin.Context) {
 	codes, err := h.service.RegenerateRecoveryCodes(c.Request.Context(), userID, req.Code)
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrTwoFactorNotEnabled):
+		case errors.Is(err, authdelivery.ErrTwoFactorNotEnabled):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "尚未启用两步验证"})
-		case errors.Is(err, services.ErrAuthInvalid2FACode):
+		case errors.Is(err, authdelivery.ErrAuthInvalid2FACode):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "验证码错误"})
-		case errors.Is(err, services.ErrTwoFactorDisabled):
+		case errors.Is(err, authdelivery.ErrTwoFactorDisabled):
 			c.JSON(http.StatusForbidden, gin.H{"error": "两步验证已被管理员关闭"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "重置失败"})
@@ -246,13 +234,13 @@ func (h *Auth2FAHandler) RegenerateRecoveryCodes(c *gin.Context) {
 
 func (h *Auth2FAHandler) writeSetupError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, services.ErrTwoFactorDisabled):
+	case errors.Is(err, authdelivery.ErrTwoFactorDisabled):
 		c.JSON(http.StatusForbidden, gin.H{"error": "两步验证已被管理员关闭"})
-	case errors.Is(err, services.ErrTwoFactorAlreadyEnabled):
+	case errors.Is(err, authdelivery.ErrTwoFactorAlreadyEnabled):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "已启用两步验证"})
-	case errors.Is(err, services.ErrAuthInvalid2FACode):
+	case errors.Is(err, authdelivery.ErrAuthInvalid2FACode):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "验证码错误"})
-	case errors.Is(err, services.ErrInvalidAuthInput):
+	case errors.Is(err, authdelivery.ErrInvalidAuthInput):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效"})
 	default:
 		// 用户不存在与其他存储层错误统一走这里（与 AuthHandler.GetCurrentUser 口径一致）

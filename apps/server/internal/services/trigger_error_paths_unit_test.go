@@ -155,38 +155,6 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 	}
 }
 
-func TestAuthService_RotateTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	cfg := testAuthConfig()
-	svc := NewAuthService(db, cfg)
-
-	hash, err := bcryptHash("pw123456")
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
-	if err := db.Create(&models.User{
-		ID: 71, Username: "u71", Email: "u71@x.com", Password: hash, Status: "active",
-	}).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.UserAuthSession{ID: "sess-71", UserID: 71, Status: "active", TokenVersion: 0}).Error; err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_sess BEFORE UPDATE ON user_auth_sessions BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-
-	tok, err := createHS256JWT(map[string]interface{}{
-		"token_use": "refresh", "user_id": float64(71), "session_id": "sess-71",
-		"session_token_version": float64(0), "token_version": float64(0),
-		"iat": float64(time.Now().Unix()),
-	}, cfg.JWT.Secret)
-	if err != nil {
-		t.Fatalf("token: %v", err)
-	}
-	if _, err := svc.RefreshToken(context.Background(), tok, AuthSessionMetadata{}); err != ErrAuthInvalidRefreshToken {
-		t.Fatalf("expected rotate update failure, got %v", err)
-	}
-}
-
 func TestSLA_ResolveTicketNonNotFound(t *testing.T) {
 	db := newSLAErrorDB(t)
 	svc := NewSLAService(db, logrus.New())

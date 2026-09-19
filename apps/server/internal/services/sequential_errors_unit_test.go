@@ -292,54 +292,6 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 	}
 }
 
-func TestAuthService_SequentialErrors(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now().UTC()
-
-	// RevokeCurrentSession: reload after update fails
-	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
-	if err := db.Create(&models.User{ID: 91, Username: "u91", Email: "u91@x.com", Password: "x", Status: "active"}).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.UserAuthSession{ID: "s91", UserID: 91, Status: "active", LastSeenAt: &now}).Error; err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	failNthQuery(db, 1)
-	if _, err := svc.RevokeCurrentSession(ctx, 91, "s91"); err == nil {
-		t.Fatal("expected reload error after revoke")
-	}
-
-	// RefreshToken: rotate reload fails (3rd query: user lookup, session load, reload)
-	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	cfg := testAuthConfig()
-	svc2 := NewAuthService(db2, cfg)
-	hash, err := bcryptHash("pw123456")
-	if err != nil {
-		t.Fatalf("hash: %v", err)
-	}
-	if err := db2.Create(&models.User{
-		ID: 92, Username: "u92", Email: "u92@x.com", Password: hash, Status: "active",
-	}).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db2.Create(&models.UserAuthSession{ID: "s92", UserID: 92, Status: "active", TokenVersion: 0}).Error; err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	failNthQuery(db2, 3)
-	tok, err := createHS256JWT(map[string]interface{}{
-		"token_use": "refresh", "user_id": float64(92), "session_id": "s92",
-		"session_token_version": float64(0), "token_version": float64(0),
-		"iat": float64(time.Now().Unix()),
-	}, cfg.JWT.Secret)
-	if err != nil {
-		t.Fatalf("token: %v", err)
-	}
-	if _, err := svc2.RefreshToken(ctx, tok, AuthSessionMetadata{}); err != ErrAuthInvalidRefreshToken {
-		t.Fatalf("expected rotate reload failure, got %v", err)
-	}
-}
-
 func TestRouter_EnsureSessionNoopUpdate(t *testing.T) {
 	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
 	if err := db.Create(&models.Session{ID: "blank", Status: "active", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {

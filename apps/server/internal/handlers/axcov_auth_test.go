@@ -9,17 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
-
-	"github.com/gin-gonic/gin"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 )
 
 type axcAuthService struct {
-	registerResp *services.AuthResult
+	registerResp *authdelivery.AuthResult
 	registerErr  error
-	loginResp    *services.AuthResult
+	loginResp    *authdelivery.AuthResult
 	loginErr     error
 	currentUser  *models.User
 	currentErr   error
@@ -29,24 +28,24 @@ type axcAuthService struct {
 	revokeCurErr error
 	revokeOther  int
 	revokeOthErr error
-	refreshResp  *services.AuthResult
+	refreshResp  *authdelivery.AuthResult
 	refreshErr   error
 	refreshTok   string
-	loginInput   services.LoginInput
-	regInput     services.RegisterInput
+	loginInput   authdelivery.LoginInput
+	regInput     authdelivery.RegisterInput
 }
 
-func (s *axcAuthService) Register(ctx context.Context, req services.RegisterInput, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *axcAuthService) Register(ctx context.Context, req authdelivery.RegisterInput, meta authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	s.regInput = req
 	return s.registerResp, s.registerErr
 }
 
-func (s *axcAuthService) Login(ctx context.Context, req services.LoginInput, meta services.AuthSessionMetadata) (*services.LoginOutcome, error) {
+func (s *axcAuthService) Login(ctx context.Context, req authdelivery.LoginInput, meta authdelivery.AuthSessionMetadata) (*authdelivery.LoginOutcome, error) {
 	s.loginInput = req
 	if s.loginResp == nil {
 		return nil, s.loginErr
 	}
-	return &services.LoginOutcome{Result: s.loginResp}, s.loginErr
+	return &authdelivery.LoginOutcome{Result: s.loginResp}, s.loginErr
 }
 
 func (s *axcAuthService) GetCurrentUser(ctx context.Context, userID uint) (*models.User, error) {
@@ -71,9 +70,14 @@ func (s *axcAuthService) RevokeOtherSessions(ctx context.Context, userID uint, c
 	return s.revokeOther, s.revokeOthErr
 }
 
-func (s *axcAuthService) RefreshToken(ctx context.Context, refreshToken string, meta services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *axcAuthService) RefreshToken(ctx context.Context, refreshToken string, meta authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	s.refreshTok = refreshToken
 	return s.refreshResp, s.refreshErr
+}
+
+// LoginWithOIDC 补齐 delivery.HandlerService 契约（复用 register 字段）。
+func (s *axcAuthService) LoginWithOIDC(_ context.Context, _ authdelivery.OIDCIdentity, _ authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
+	return s.registerResp, s.registerErr
 }
 
 type axcFixedIPIntel struct {
@@ -84,8 +88,8 @@ func (p axcFixedIPIntel) DescribeIP(ip string) sessionIPDescription {
 	return p.desc
 }
 
-func axcAuthResult() *services.AuthResult {
-	return &services.AuthResult{
+func axcAuthResult() *authdelivery.AuthResult {
+	return &authdelivery.AuthResult{
 		Token:            "tok-1",
 		ExpiresIn:        3600,
 		RefreshToken:     "rt-1",
@@ -154,8 +158,8 @@ func TestAxcAuthRegister(t *testing.T) {
 			body: `{"username":"  axc-user  ","email":" axc@example.com ","password":"p","name":"n","phone":"1","role":"admin"}`,
 			want: http.StatusCreated, wantIn: `"token":"tok-1"`,
 		},
-		{name: "invalid input err", svc: &axcAuthService{registerErr: services.ErrInvalidAuthInput}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusBadRequest},
-		{name: "already exists", svc: &axcAuthService{registerErr: services.ErrAuthUserAlreadyExists}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusConflict},
+		{name: "invalid input err", svc: &axcAuthService{registerErr: authdelivery.ErrInvalidAuthInput}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusBadRequest},
+		{name: "already exists", svc: &axcAuthService{registerErr: authdelivery.ErrAuthUserAlreadyExists}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusConflict},
 		{name: "internal err", svc: &axcAuthService{registerErr: context.DeadlineExceeded}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
@@ -194,8 +198,8 @@ func TestAxcAuthLogin(t *testing.T) {
 	}{
 		{name: "invalid json", svc: &axcAuthService{}, body: "{", want: http.StatusBadRequest},
 		{name: "success", svc: &axcAuthService{loginResp: axcAuthResult()}, body: `{"username":"u","password":"p"}`, want: http.StatusOK},
-		{name: "bad credentials", svc: &axcAuthService{loginErr: services.ErrAuthInvalidCredentials}, body: `{"username":"u","password":"p"}`, want: http.StatusUnauthorized},
-		{name: "disabled", svc: &axcAuthService{loginErr: services.ErrAuthUserDisabled}, body: `{"username":"u","password":"p"}`, want: http.StatusForbidden},
+		{name: "bad credentials", svc: &axcAuthService{loginErr: authdelivery.ErrAuthInvalidCredentials}, body: `{"username":"u","password":"p"}`, want: http.StatusUnauthorized},
+		{name: "disabled", svc: &axcAuthService{loginErr: authdelivery.ErrAuthUserDisabled}, body: `{"username":"u","password":"p"}`, want: http.StatusForbidden},
 		{name: "internal err", svc: &axcAuthService{loginErr: context.Canceled}, body: `{"username":"u","password":"p"}`, want: http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
@@ -269,7 +273,7 @@ func TestAxcAuthRefreshTokenBranches(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("disabled returns forbidden", func(t *testing.T) {
-		svc := &axcAuthService{refreshErr: services.ErrAuthUserDisabled}
+		svc := &axcAuthService{refreshErr: authdelivery.ErrAuthUserDisabled}
 		w := axcDo(axcAuthRouter(NewAuthHandler(svc)), http.MethodPost, "/auth/refresh", `{"refresh_token":"r"}`, nil)
 		if w.Code != http.StatusForbidden {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -515,13 +519,13 @@ func TestAxcAuthHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("authSessionMetadataFromRequest nil context", func(t *testing.T) {
-		if got := authSessionMetadataFromRequest(nil); got != (services.AuthSessionMetadata{}) {
+		if got := authSessionMetadataFromRequest(nil); got != (authdelivery.AuthSessionMetadata{}) {
 			t.Fatalf("expected zero metadata, got %+v", got)
 		}
 	})
 
 	t.Run("authSessionMetadataFromRequest captures headers", func(t *testing.T) {
-		var captured services.AuthSessionMetadata
+		var captured authdelivery.AuthSessionMetadata
 		r2 := gin.New()
 		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"username":"u","password":"p"}`))
 		req.Header.Set("Content-Type", "application/json")

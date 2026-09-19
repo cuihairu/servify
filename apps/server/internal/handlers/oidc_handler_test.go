@@ -11,15 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/models"
-	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
-	"servify/apps/server/internal/services"
-
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
+	"servify/apps/server/internal/config"
+	"servify/apps/server/internal/models"
+	authapp "servify/apps/server/internal/modules/auth/application"
+	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 )
 
 // stubOIDCVerifier replays fixed claims so handler tests need no signing chain.
@@ -93,7 +92,7 @@ func newOIDCHandler(t *testing.T, mutate func(*config.OIDCConfig, *stubOIDCVerif
 			TokenURL: tokenSrv.URL + "/token",
 		},
 	}, nil)
-	authSvc := services.NewAuthService(newOIDCHandlerTestDB(t), cfg)
+	authSvc := authapp.NewService(newOIDCHandlerTestDB(t), cfg)
 	return NewOIDCHandler(provider, cfg.OIDC, authSvc, cfg.Server.Environment), cfg
 }
 

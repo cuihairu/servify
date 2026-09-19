@@ -9,17 +9,16 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
-
 	"github.com/gin-gonic/gin"
+	"servify/apps/server/internal/models"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 )
 
 // TestAuthHandlerLoginBlockedByRisk：风险策略拦截映射为 403 且不回显判定
 // 依据；审计留痕由 auth 面 audit 中间件（含失败）负责。
 func TestAuthHandlerLoginBlockedByRisk(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	svc := &stubAuthService{loginErr: services.ErrLoginBlockedByRisk}
+	svc := &stubAuthService{loginErr: authdelivery.ErrLoginBlockedByRisk}
 	handler := NewAuthHandler(svc)
 	r := gin.New()
 	r.POST("/api/v1/auth/login", handler.Login)
@@ -46,8 +45,8 @@ func TestAuthHandlerLoginBlockedByRisk(t *testing.T) {
 // 结果（风险执行不改变成功响应形状）。
 func TestAuthHandlerLoginDirectOutcome(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	svc := &stubAuthService{loginOutcome: &services.LoginOutcome{
-		Result: &services.AuthResult{
+	svc := &stubAuthService{loginOutcome: &authdelivery.LoginOutcome{
+		Result: &authdelivery.AuthResult{
 			Token:            "access-1",
 			ExpiresIn:        3600,
 			RefreshToken:     "refresh-1",
@@ -74,7 +73,7 @@ func TestAuthHandlerLoginDirectOutcome(t *testing.T) {
 	}
 }
 
-// TestHTTPSessionIPIntelligenceLoginNetworkLabel：适配 services.LoginRiskIntel
+// TestHTTPSessionIPIntelligenceLoginNetworkLabel：适配 authdelivery.LoginRiskIntel
 // 的方法——nil receiver 返回空串（安全标签，永不拦截），正常路径透传
 // 情报标签。
 func TestHTTPSessionIPIntelligenceLoginNetworkLabel(t *testing.T) {

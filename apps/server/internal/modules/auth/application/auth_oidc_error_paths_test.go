@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -20,7 +20,7 @@ func TestLoginWithOIDCGuards(t *testing.T) {
 	}
 
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(nil))
+	svc := NewService(db, oidcTestConfig(nil))
 	if _, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
 		Email: "a@x.com", EmailVerified: true, Subject: "",
 	}, AuthSessionMetadata{}); !errors.Is(err, ErrInvalidAuthInput) {
@@ -31,7 +31,7 @@ func TestLoginWithOIDCGuards(t *testing.T) {
 // TestLoginWithOIDCProvisionCreateError 覆盖首次登录建号失败透传。
 func TestLoginWithOIDCProvisionCreateError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 	if err := db.Callback().Create().Before("gorm:create").Register("test:fail_user_create", func(tx *gorm.DB) {
 		if tx.Statement != nil && tx.Statement.Table == "users" {
 			_ = tx.AddError(errors.New("boom user create"))
@@ -51,7 +51,7 @@ func TestLoginWithOIDCProvisionCreateError(t *testing.T) {
 // TestLoginWithOIDCProvisionDuplicateFallback 覆盖并发首登下唯一键冲突回落查询的路径。
 func TestLoginWithOIDCProvisionDuplicateFallback(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	existing := &models.User{ID: 71, Username: "ssouser", Email: "dup@x.com", Password: "x", Status: "active", Role: "agent"}
 	if err := db.Create(existing).Error; err != nil {
@@ -94,7 +94,7 @@ func TestLoginWithOIDCProvisionDuplicateFallback(t *testing.T) {
 // TestLoginWithOIDCProvisionNameFallback 覆盖 Name 为空时回退 email。
 func TestLoginWithOIDCProvisionNameFallback(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	result, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
 		Subject: "sub-2", Email: "noname@x.com", EmailVerified: true, Name: "   ",

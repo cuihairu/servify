@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func newLoginRiskService(t *testing.T, intel LoginRiskIntel, enforcement string,
 	}
 	cfg := testAuthConfig()
 	cfg.Security.TwoFactor.Enabled = twoFactorKillSwitch
-	svc := NewAuthService(db, cfg)
+	svc := NewService(db, cfg)
 	svc.WithLoginRiskEnforcement(intel, enforcement)
 	return svc
 }
@@ -72,7 +72,7 @@ func TestLoginRiskEnforcementNormalization(t *testing.T) {
 		"  BLOCK  ": "block",
 	}
 	for raw, want := range cases {
-		svc := NewAuthService(newAuthServiceTestDB(t), testAuthConfig())
+		svc := NewService(newAuthServiceTestDB(t), testAuthConfig())
 		svc.WithLoginRiskEnforcement(stubLoginRiskIntel{label: "public"}, raw)
 		if svc.loginEnforcement != want {
 			t.Fatalf("enforcement %q normalized to %q, want %q", raw, svc.loginEnforcement, want)
@@ -83,7 +83,7 @@ func TestLoginRiskEnforcementNormalization(t *testing.T) {
 // TestLoginRiskHighRiskClassification：风险判定——nil 情报源、空 IP 与
 // 内建启发式四类标签都不是高风险；其余标签（hosting/proxy/…）是。
 func TestLoginRiskHighRiskClassification(t *testing.T) {
-	svc := NewAuthService(newAuthServiceTestDB(t), testAuthConfig())
+	svc := NewService(newAuthServiceTestDB(t), testAuthConfig())
 
 	if svc.loginRiskHighRisk(context.Background(), loginRiskMetaIP) {
 		t.Fatal("nil intel must not be high risk")
@@ -197,7 +197,7 @@ func TestWithLoginRiskEnforcementNilReceiver(t *testing.T) {
 // 失败原样透传，不得降级为直登。
 func TestLoginStepUpChallengeSignError(t *testing.T) {
 	svc := newLoginRiskService(t, stubLoginRiskIntel{label: "hosting"}, "step_up", true, false)
-	hscovSetSeam(t, &hookCreateHS256JWT, func(map[string]interface{}, string) (string, error) {
+	setSeam(t, &hookCreateHS256JWT, func(map[string]interface{}, string) (string, error) {
 		return "", errors.New("boom: risk challenge sign")
 	})
 	_, err := svc.Login(context.Background(), loginRiskInput(), loginRiskMeta())

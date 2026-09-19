@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -60,7 +60,7 @@ func enrollTwoFactor(t *testing.T, svc *AuthService, userID uint) (secret string
 func TestTwoFactorEnrollmentAndChallengeLogin(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	cfg := twoFactorTestConfig(true)
-	svc := NewAuthService(db, cfg)
+	svc := NewService(db, cfg)
 	seedTOTPUser(t, db, 91, "totp-user")
 	meta := AuthSessionMetadata{DeviceFingerprint: "fp-2fa", UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
@@ -122,7 +122,7 @@ func TestTwoFactorEnrollmentAndChallengeLogin(t *testing.T) {
 
 func TestTwoFactorRecoveryCodeSingleUse(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 92, "rc-user")
 	meta := AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
@@ -179,7 +179,7 @@ func dbSecret(t *testing.T, db *gorm.DB, userID uint) string {
 func TestTwoFactorKillSwitch(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	// kill-switch 关闭（默认）
-	svc := NewAuthService(db, twoFactorTestConfig(false))
+	svc := NewService(db, twoFactorTestConfig(false))
 	seedTOTPUser(t, db, 93, "ks-user")
 	meta := AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
@@ -191,7 +191,7 @@ func TestTwoFactorKillSwitch(t *testing.T) {
 	}
 
 	// 已启用用户在开关关闭时降级单因子直登
-	enabledSvc := NewAuthService(db, twoFactorTestConfig(true))
+	enabledSvc := NewService(db, twoFactorTestConfig(true))
 	enrollTwoFactor(t, enabledSvc, 93)
 	directLogin, err := svc.Login(context.Background(), LoginInput{Username: "ks-user", Password: "password123"}, meta)
 	if err != nil {
@@ -224,7 +224,7 @@ func TestTwoFactorKillSwitch(t *testing.T) {
 
 func TestTwoFactorDisableGuards(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, twoFactorTestConfig(true))
+	svc := NewService(db, twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 94, "dg-user")
 	enrollTwoFactor(t, svc, 94)
 	secret := dbSecret(t, db, 94)

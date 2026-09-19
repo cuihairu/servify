@@ -1,31 +1,21 @@
-package services
+package application
+
+// Register/Login/session 内部错误分支（自 services/auth_error_paths_unit_test.go 下沉；
+// satisfaction/AI 段留在 services 包）。
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
-	"time"
 
-	"servify/apps/server/internal/models"
-	mockllm "servify/apps/server/internal/platform/llm/mock"
-
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+	"servify/apps/server/internal/models"
 )
-
-func newTestLogger() *logrus.Logger {
-	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
-	return logger
-}
-
-func timeNow() time.Time { return time.Now() }
 
 func TestAuthService_RegisterInternalErrors(t *testing.T) {
 	// bcrypt rejects passwords longer than 72 bytes
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	if _, err := svc.Register(context.Background(), RegisterInput{
 		Username: "long-pw", Email: "long@x.com", Password: strings.Repeat("x", 100),
 	}, AuthSessionMetadata{}); err == nil {
@@ -34,7 +24,7 @@ func TestAuthService_RegisterInternalErrors(t *testing.T) {
 
 	// session creation failure surfaces
 	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc2 := NewAuthService(db2, testAuthConfig())
+	svc2 := NewService(db2, testAuthConfig())
 	if err := db2.Create(&models.User{
 		ID: 61, Username: "u61", Email: "u61@x.com", Password: "x", Status: "active",
 	}).Error; err != nil {
@@ -60,7 +50,7 @@ func TestAuthService_RegisterInternalErrors(t *testing.T) {
 func TestAuthService_LoginInternalErrors(t *testing.T) {
 	// user lookup error (not found variant)
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	if err := db.Migrator().DropTable("users"); err != nil {
 		t.Fatalf("drop users: %v", err)
 	}
@@ -71,7 +61,7 @@ func TestAuthService_LoginInternalErrors(t *testing.T) {
 
 	// session creation failure during login
 	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc2 := NewAuthService(db2, testAuthConfig())
+	svc2 := NewService(db2, testAuthConfig())
 	if err := db2.Create(&models.User{
 		ID: 62, Username: "u62", Email: "u62@x.com", Password: "pw123456", Status: "active",
 	}).Error; err != nil {
@@ -87,7 +77,7 @@ func TestAuthService_LoginInternalErrors(t *testing.T) {
 
 func TestAuthService_SessionQueryErrors(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	ctx := context.Background()
 
 	if err := db.Migrator().DropTable("user_auth_sessions"); err != nil {
@@ -104,73 +94,5 @@ func TestAuthService_SessionQueryErrors(t *testing.T) {
 	}
 	if _, err := svc.RefreshToken(ctx, "x", AuthSessionMetadata{}); err == nil {
 		t.Fatal("expected refresh error")
-	}
-}
-
-func TestSatisfactionService_CreateInsertError(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, nil)
-	ctx := context.Background()
-
-	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
-	if err := db.Create(customer).Error; err != nil {
-		t.Fatalf("seed customer: %v", err)
-	}
-	if err := db.Create(&models.Customer{UserID: customer.ID}).Error; err != nil {
-		t.Fatalf("seed profile: %v", err)
-	}
-	ticket := &models.Ticket{Title: "T", CustomerID: customer.ID, CreatedAt: timeNow(), UpdatedAt: timeNow()}
-	if err := db.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	if err := db.Migrator().DropTable("customer_satisfactions"); err != nil {
-		t.Fatalf("drop satisfactions: %v", err)
-	}
-	// duplicate-check query errors, insert then also fails
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
-		TicketID: ticket.ID, CustomerID: customer.ID, Rating: 5,
-	}); err == nil {
-		t.Fatal("expected insert error")
-	}
-}
-
-func TestSatisfactionService_ScheduleSurveyExistingLoadError(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, nil)
-	ticket := &models.Ticket{Title: "T", CreatedAt: timeNow(), UpdatedAt: timeNow()}
-	if err := db.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	if err := db.Migrator().DropTable("satisfaction_surveys"); err != nil {
-		t.Fatalf("drop surveys: %v", err)
-	}
-	// existing-survey lookup errors (non-notfound)
-	if _, err := svc.ScheduleSurvey(context.Background(), ticket); err == nil {
-		t.Fatal("expected existing survey load error")
-	}
-}
-
-func TestOrchestratedAI_ProcessQueryError(t *testing.T) {
-	base := NewAIService("", "")
-	base.InitializeKnowledgeBase()
-	svc := NewOrchestratedEnhancedAIService(
-		base,
-		&mockllm.Provider{ChatError: errors.New("llm unavailable")},
-		nil,
-		"",
-		nil,
-		"",
-		nil,
-	)
-	// no provider + no fallback configured -> orchestrator error surfaces when LLM fails
-	svc.SetFallbackEnabled(false)
-	if _, err := svc.ProcessQuery(context.Background(), "普通问题", "sess"); err == nil {
-		t.Fatal("expected ProcessQuery error")
 	}
 }

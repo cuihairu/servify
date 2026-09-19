@@ -9,11 +9,12 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/handlers"
 	"servify/apps/server/internal/middleware"
+	authapp "servify/apps/server/internal/modules/auth/application"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/storage"
 	storagefactory "servify/apps/server/internal/platform/storage/factory"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -36,7 +37,7 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 		configscope.WithTenantSessionRiskProvider(configscope.NewGormTenantConfigProvider(deps.DB)),
 		configscope.WithWorkspaceSessionRiskProvider(configscope.NewGormWorkspaceConfigProvider(deps.DB)),
 	)
-	authService := services.NewAuthService(deps.DB, deps.Config)
+	authService := authapp.NewService(deps.DB, deps.Config)
 	// refresh token 重放处置档位（P2-5 第三刀）：不依赖情报源，无条件注入
 	// （off/未配置时等价 no-op，刷新行为不变）。
 	authService.WithRefreshReusePolicy(deps.Config.Security.SessionRisk.RefreshReusePolicy)
@@ -45,7 +46,7 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 		authHandler = authHandler.WithSessionIPIntelligence(provider)
 		// 登录风险执行：情报源就位时按 login_enforcement 档位启用
 		// （off/未配置时注入等价 no-op，登录行为不变）。WithLoginRiskEnforcement
-		// 原地修改并返回同指针，上方 handler 持有的 authService 同步生效。
+		// 原地修改并返回同指针，2FA/OIDC handler 共享的本实例同步生效。
 		authService.WithLoginRiskEnforcement(provider, deps.Config.Security.SessionRisk.LoginEnforcement)
 	}
 
@@ -55,7 +56,7 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 
 	// TOTP 两步验证：挑战步换会话在 public 组（限流沿用 auth 前缀 25rpm）；
 	// 绑定/解绑/恢复码自服务走 authMe 组。
-	auth2FA := handlers.NewAuth2FAHandler(services.NewAuthService(deps.DB, deps.Config))
+	auth2FA := handlers.NewAuth2FAHandler(authService)
 	auth.POST("/2fa/verify", auth2FA.VerifyLogin)
 
 	authMe := auth.Group("")
@@ -70,19 +71,19 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 	authMe.GET("/2fa/recovery-codes", auth2FA.RecoveryCodes)
 	authMe.POST("/2fa/recovery-codes/regenerate", auth2FA.RegenerateRecoveryCodes)
 
-	registerOIDCRoutes(r, deps)
+	registerOIDCRoutes(r, deps, authService)
 	registerUploadRoutes(r, deps)
 }
 
 // registerOIDCRoutes wires the admin SSO endpoints. /api/v1/auth/oidc/* stays
 // inside the auth-public surface (rate limit + catalog), so the security
 // surface catalog needs no changes.
-func registerOIDCRoutes(r *gin.Engine, deps Dependencies) {
+func registerOIDCRoutes(r *gin.Engine, deps Dependencies, authService authdelivery.HandlerService) {
 	if deps.OIDCProvider != nil {
 		oidcHandler := handlers.NewOIDCHandler(
 			deps.OIDCProvider,
 			deps.Config.OIDC,
-			services.NewAuthService(deps.DB, deps.Config),
+			authService,
 			deps.Config.Server.Environment,
 		)
 		oidcGroup := r.Group("/api/v1/auth/oidc")

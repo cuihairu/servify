@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 func TestAuthService_Register(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	ctx := context.Background()
 
 	result, err := svc.Register(ctx, RegisterInput{
@@ -70,7 +70,7 @@ func TestAuthService_Register(t *testing.T) {
 
 func TestAuthService_LoginValidation(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	ctx := context.Background()
 
 	hash, hashErr := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.MinCost)
@@ -111,7 +111,7 @@ func TestAuthService_LoginValidation(t *testing.T) {
 
 func TestAuthService_GetCurrentUserAndGuards(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	ctx := context.Background()
 
 	if err := db.Create(&models.User{ID: 41, Username: "u41", Email: "u41@x.com", Password: "x", Status: "active"}).Error; err != nil {
@@ -148,7 +148,7 @@ func TestAuthService_GetCurrentUserAndGuards(t *testing.T) {
 
 func TestAuthService_RevokeValidation(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	ctx := context.Background()
 
 	if _, err := svc.RevokeCurrentSession(ctx, 0, "s"); err == nil {
@@ -176,7 +176,7 @@ func TestAuthService_RevokeValidation(t *testing.T) {
 func TestAuthService_RefreshToken_ErrorPaths(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	cfg := testAuthConfig()
-	svc := NewAuthService(db, cfg)
+	svc := NewService(db, cfg)
 	ctx := context.Background()
 
 	secret := cfg.JWT.Secret
@@ -380,7 +380,7 @@ func TestAuthService_BuildersAndHelpers(t *testing.T) {
 
 func TestAuthService_RegisterFirstAdmin(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 
 	adminResult, err := svc.Register(context.Background(), RegisterInput{
 		Username: "root", Email: "root@x.com", Password: "pw123456", Role: "admin",

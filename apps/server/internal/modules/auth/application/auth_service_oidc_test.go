@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -36,7 +36,7 @@ func oidcIdentity(email string, verified bool, roles ...string) OIDCIdentity {
 
 func TestLoginWithOIDCRequiresVerifiedEmail(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(nil))
+	svc := NewService(db, oidcTestConfig(nil))
 
 	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("a@example.com", false), AuthSessionMetadata{}); err != ErrOIDCUnverifiedEmail {
 		t.Fatalf("unverified email: got %v, want ErrOIDCUnverifiedEmail", err)
@@ -48,7 +48,7 @@ func TestLoginWithOIDCRequiresVerifiedEmail(t *testing.T) {
 
 func TestLoginWithOIDCRejectsUnknownWithoutAutoProvision(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(nil))
+	svc := NewService(db, oidcTestConfig(nil))
 
 	_, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("new@example.com", true), AuthSessionMetadata{})
 	if err != ErrOIDCAutoProvisionDisabled {
@@ -58,7 +58,7 @@ func TestLoginWithOIDCRejectsUnknownWithoutAutoProvision(t *testing.T) {
 
 func TestLoginWithOIDCProvisionsAndReusesAccount(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	first, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("provision@example.com", true, "idp-admins"), AuthSessionMetadata{})
 	if err != nil {
@@ -93,7 +93,7 @@ func TestLoginWithOIDCProvisionsAndReusesAccount(t *testing.T) {
 
 func TestLoginWithOIDCProvisionedPasswordIsUnusable(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("nopass@example.com", true), AuthSessionMetadata{}); err != nil {
 		t.Fatalf("provision login: %v", err)
@@ -113,7 +113,7 @@ func TestLoginWithOIDCProvisionedPasswordIsUnusable(t *testing.T) {
 
 func TestLoginWithOIDCDefaultRole(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("agent-role@example.com", true, "unknown-group"), AuthSessionMetadata{})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestLoginWithOIDCDefaultRole(t *testing.T) {
 
 func TestLoginWithOIDCDomainAllowlist(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) {
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) {
 		c.AutoProvision = true
 		c.AllowedDomains = []string{"corp.example.com"}
 	}))
@@ -150,7 +150,7 @@ func TestLoginWithOIDCBannedUserRejected(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed banned user: %v", err)
 	}
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("banned@example.com", true), AuthSessionMetadata{}); err != ErrAuthUserDisabled {
 		t.Fatalf("got %v, want ErrAuthUserDisabled", err)
@@ -172,7 +172,7 @@ func TestLoginWithOIDCIgnoresIdPRoleForExistingUser(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	svc := NewAuthService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("plain@example.com", true, "idp-admins"), AuthSessionMetadata{})
 	if err != nil {
@@ -187,7 +187,7 @@ func TestLoginWithOIDCSessionRefreshable(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	cfg := oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true })
 	cfg.JWT.RefreshExpiresIn = time.Hour
-	svc := NewAuthService(db, cfg)
+	svc := NewService(db, cfg)
 
 	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("refresh@example.com", true), AuthSessionMetadata{})
 	if err != nil {

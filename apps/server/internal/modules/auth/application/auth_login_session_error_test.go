@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // 再以缺失的会话表驱动 Login 的会话创建失败分支。
 func TestAuthServiceLoginSessionCreateError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 	hash, err := bcrypt.GenerateFromPassword([]byte("pw123456"), bcrypt.MinCost)
 	if err != nil {
 		t.Fatalf("hash password: %v", err)

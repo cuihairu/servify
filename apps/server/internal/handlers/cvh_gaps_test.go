@@ -9,20 +9,21 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/models"
-	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
-	conversationapp "servify/apps/server/internal/modules/conversation/application"
-	"servify/apps/server/internal/modules/webhook/delivery"
-	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
-	"servify/apps/server/internal/services"
-
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
+	"servify/apps/server/internal/config"
+	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
+	authapp "servify/apps/server/internal/modules/auth/application"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
+	"servify/apps/server/internal/modules/webhook/delivery"
+	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
+	"servify/apps/server/internal/services"
 )
 
 // ---------------------------------------------------------------------------
@@ -451,8 +452,8 @@ type cvhTwoFactorLoginService struct {
 	*stubAuthService
 }
 
-func (s *cvhTwoFactorLoginService) Login(context.Context, services.LoginInput, services.AuthSessionMetadata) (*services.LoginOutcome, error) {
-	return &services.LoginOutcome{TwoFactorRequired: true, ChallengeToken: "ch-42", ExpiresIn: 300}, nil
+func (s *cvhTwoFactorLoginService) Login(context.Context, authdelivery.LoginInput, authdelivery.AuthSessionMetadata) (*authdelivery.LoginOutcome, error) {
+	return &authdelivery.LoginOutcome{TwoFactorRequired: true, ChallengeToken: "ch-42", ExpiresIn: 300}, nil
 }
 
 func TestCvhAuthLoginTwoFactorChallenge(t *testing.T) {
@@ -547,7 +548,7 @@ func TestCvhOIDCCallbackFlowCookieGaps(t *testing.T) {
 				TokenURL: "http://127.0.0.1:1/token", // 无监听端口 → 交换必败
 			},
 		}, nil)
-		authSvc := services.NewAuthService(newOIDCHandlerTestDB(t), cfg)
+		authSvc := authapp.NewService(newOIDCHandlerTestDB(t), cfg)
 		h := NewOIDCHandler(provider, cfg.OIDC, authSvc, "dev")
 
 		cookie := oidcFlowCookieFor(t, "st-x", "n-x", "v-x")

@@ -16,44 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestAuthService_RegisterInsertTrigger(t *testing.T) {
-	// dup-flavoured insert error maps to ErrAuthUserAlreadyExists
-	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
-	execTrigger(t, db, "CREATE TRIGGER blk_u1 BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT, 'unique violation simulation'); END;")
-	if _, err := svc.Register(context.Background(), RegisterInput{
-		Username: "u", Email: "u@x.com", Password: "pw123456",
-	}, AuthSessionMetadata{}); err != ErrAuthUserAlreadyExists {
-		t.Fatalf("expected duplicate-style error, got %v", err)
-	}
-
-	// plain insert error surfaces as-is
-	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc2 := NewAuthService(db2, testAuthConfig())
-	execTrigger(t, db2, "CREATE TRIGGER blk_u2 BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT, 'blocked'); END;")
-	if _, err := svc2.Register(context.Background(), RegisterInput{
-		Username: "u", Email: "u@x.com", Password: "pw123456",
-	}, AuthSessionMetadata{}); err == nil || err == ErrAuthUserAlreadyExists {
-		t.Fatalf("expected plain insert error, got %v", err)
-	}
-}
-
-func TestAuthService_RevokeOtherTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewAuthService(db, testAuthConfig())
-	now := time.Now().UTC()
-	if err := db.Create(&models.User{ID: 81, Username: "u81", Email: "u81@x.com", Password: "x", Status: "active"}).Error; err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := db.Create(&models.UserAuthSession{ID: "s81", UserID: 81, Status: "active", LastSeenAt: &now}).Error; err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_s81 BEFORE UPDATE ON user_auth_sessions BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.RevokeOtherSessions(context.Background(), 81, "current"); err == nil {
-		t.Fatal("expected revoke others update error")
-	}
-}
-
 func TestAIService_NewRequestError(t *testing.T) {
 	svc := NewAIService("key", "http://127.0.0.1:1\x7f")
 	if _, err := svc.callOpenAI(context.Background(), "p"); err == nil {

@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 
 	loginResult, err := svc.Login(context.Background(), LoginInput{
 		Username: "auth-user",
@@ -185,7 +185,7 @@ func TestAuthServiceSelfManageSessions(t *testing.T) {
 		t.Fatalf("seed sessions: %v", err)
 	}
 
-	svc := NewAuthService(db, testAuthConfig())
+	svc := NewService(db, testAuthConfig())
 
 	sessions, err := svc.ListAuthSessions(context.Background(), 88)
 	if err != nil {

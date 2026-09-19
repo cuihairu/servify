@@ -6,18 +6,17 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
-
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"servify/apps/server/internal/models"
+	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 )
 
-var _ auth2FAService = (*cvh2FAService)(nil)
+var _ authdelivery.TwoFactorService = (*cvh2FAService)(nil)
 
 // cvh2FAService 两步验证服务 inline mock。
 type cvh2FAService struct {
-	setup      *services.TwoFactorSetup
+	setup      *authdelivery.TwoFactorSetup
 	setupErr   error
 	enable     []string
 	enableErr  error
@@ -26,7 +25,7 @@ type cvh2FAService struct {
 	regenErr   error
 	remaining  int64
 	remainErr  error
-	verify     *services.AuthResult
+	verify     *authdelivery.AuthResult
 	verifyErr  error
 
 	setupUID      uint
@@ -42,7 +41,7 @@ type cvh2FAService struct {
 	verifyCode    string
 }
 
-func (s *cvh2FAService) SetupTwoFactor(_ context.Context, userID uint) (*services.TwoFactorSetup, error) {
+func (s *cvh2FAService) SetupTwoFactor(_ context.Context, userID uint) (*authdelivery.TwoFactorSetup, error) {
 	s.setupUID = userID
 	return s.setup, s.setupErr
 }
@@ -71,7 +70,7 @@ func (s *cvh2FAService) RecoveryCodesRemaining(_ context.Context, userID uint) (
 	return s.remaining, s.remainErr
 }
 
-func (s *cvh2FAService) VerifyTwoFactorLogin(_ context.Context, req services.TwoFactorVerifyInput, _ services.AuthSessionMetadata) (*services.AuthResult, error) {
+func (s *cvh2FAService) VerifyTwoFactorLogin(_ context.Context, req authdelivery.TwoFactorVerifyInput, _ authdelivery.AuthSessionMetadata) (*authdelivery.AuthResult, error) {
 	s.verifyToken = req.ChallengeToken
 	s.verifyCode = req.Code
 	return s.verify, s.verifyErr
@@ -93,8 +92,8 @@ func cvh2FARouter(svc *cvh2FAService, authed bool) *gin.Engine {
 	return r
 }
 
-func cvh2FAVerifyResult() *services.AuthResult {
-	return &services.AuthResult{
+func cvh2FAVerifyResult() *authdelivery.AuthResult {
+	return &authdelivery.AuthResult{
 		Token:            "tok-2fa",
 		ExpiresIn:        3600,
 		RefreshToken:     "rt-2fa",
@@ -143,9 +142,9 @@ func TestCvh2FAVerifyLogin(t *testing.T) {
 		want int
 		msg  string
 	}{
-		{"invalid challenge", services.ErrAuthInvalid2FAChallenge, http.StatusUnauthorized, "登录挑战已失效"},
-		{"invalid code", services.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
-		{"user disabled", services.ErrAuthUserDisabled, http.StatusForbidden, "账号已被禁用"},
+		{"invalid challenge", authdelivery.ErrAuthInvalid2FAChallenge, http.StatusUnauthorized, "登录挑战已失效"},
+		{"invalid code", authdelivery.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
+		{"user disabled", authdelivery.ErrAuthUserDisabled, http.StatusForbidden, "账号已被禁用"},
 		{"generic", errors.New("boom"), http.StatusInternalServerError, "验证失败"},
 	}
 	for _, tc := range errorCases {
@@ -166,7 +165,7 @@ func TestCvh2FASetup(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc := &cvh2FAService{setup: &services.TwoFactorSetup{Secret: "S3CRET", OTPAuthURI: "otpauth://totp/x"}}
+		svc := &cvh2FAService{setup: &authdelivery.TwoFactorSetup{Secret: "S3CRET", OTPAuthURI: "otpauth://totp/x"}}
 		w := dxcDo(cvh2FARouter(svc, true), http.MethodPost, "/2fa/setup", "")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, uint(7), svc.setupUID)
@@ -180,8 +179,8 @@ func TestCvh2FASetup(t *testing.T) {
 		want int
 		msg  string
 	}{
-		{"disabled by admin", services.ErrTwoFactorDisabled, http.StatusForbidden, "两步验证已被管理员关闭"},
-		{"already enabled", services.ErrTwoFactorAlreadyEnabled, http.StatusBadRequest, "已启用两步验证"},
+		{"disabled by admin", authdelivery.ErrTwoFactorDisabled, http.StatusForbidden, "两步验证已被管理员关闭"},
+		{"already enabled", authdelivery.ErrTwoFactorAlreadyEnabled, http.StatusBadRequest, "已启用两步验证"},
 		{"generic", errors.New("boom"), http.StatusInternalServerError, "操作失败"},
 	}
 	for _, tc := range errorCases {
@@ -225,8 +224,8 @@ func TestCvh2FAEnable(t *testing.T) {
 		want int
 		msg  string
 	}{
-		{"invalid code", services.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
-		{"invalid input", services.ErrInvalidAuthInput, http.StatusBadRequest, "请求参数无效"},
+		{"invalid code", authdelivery.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
+		{"invalid input", authdelivery.ErrInvalidAuthInput, http.StatusBadRequest, "请求参数无效"},
 		{"generic", errors.New("boom"), http.StatusInternalServerError, "操作失败"},
 	}
 	for _, tc := range errorCases {
@@ -265,9 +264,9 @@ func TestCvh2FADisable(t *testing.T) {
 		want int
 		msg  string
 	}{
-		{"not enabled", services.ErrTwoFactorNotEnabled, http.StatusBadRequest, "尚未启用两步验证"},
-		{"wrong password", services.ErrAuthInvalidCredentials, http.StatusUnauthorized, "密码错误"},
-		{"wrong code", services.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
+		{"not enabled", authdelivery.ErrTwoFactorNotEnabled, http.StatusBadRequest, "尚未启用两步验证"},
+		{"wrong password", authdelivery.ErrAuthInvalidCredentials, http.StatusUnauthorized, "密码错误"},
+		{"wrong code", authdelivery.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
 		{"generic", errors.New("boom"), http.StatusInternalServerError, "解绑失败"},
 	}
 	for _, tc := range errorCases {
@@ -329,9 +328,9 @@ func TestCvh2FARegenerateRecoveryCodes(t *testing.T) {
 		want int
 		msg  string
 	}{
-		{"not enabled", services.ErrTwoFactorNotEnabled, http.StatusBadRequest, "尚未启用两步验证"},
-		{"invalid code", services.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
-		{"disabled by admin", services.ErrTwoFactorDisabled, http.StatusForbidden, "两步验证已被管理员关闭"},
+		{"not enabled", authdelivery.ErrTwoFactorNotEnabled, http.StatusBadRequest, "尚未启用两步验证"},
+		{"invalid code", authdelivery.ErrAuthInvalid2FACode, http.StatusUnauthorized, "验证码错误"},
+		{"disabled by admin", authdelivery.ErrTwoFactorDisabled, http.StatusForbidden, "两步验证已被管理员关闭"},
 		{"generic", errors.New("boom"), http.StatusInternalServerError, "重置失败"},
 	}
 	for _, tc := range errorCases {
