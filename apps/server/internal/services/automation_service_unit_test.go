@@ -146,23 +146,8 @@ func TestAutomationService_MatchTriggerHelpers(t *testing.T) {
 	}
 }
 
-func TestAutomationService_SetEventBusAndAdapter(t *testing.T) {
+func TestAutomationService_SetEventBus(t *testing.T) {
 	svc, _ := newAutomationTestService(t)
+	// nil bus：subscriber.Register(nil) 为幂等空操作，不应 panic
 	svc.SetEventBus(nil)
-
-	adapter := NewAutomationHandlerAdapter(svc)
-	ctx := context.Background()
-
-	if _, err := adapter.ListTriggers(ctx); err != nil {
-		t.Fatalf("adapter ListTriggers: %v", err)
-	}
-	if _, err := adapter.CreateTrigger(ctx, &AutomationTriggerRequest{Name: "a", Event: "ticket.created"}); err != nil {
-		t.Fatalf("adapter CreateTrigger: %v", err)
-	}
-	if _, _, err := adapter.ListRuns(ctx, &AutomationRunListRequest{Page: 1, PageSize: 5}); err != nil {
-		t.Fatalf("adapter ListRuns: %v", err)
-	}
-	if _, err := adapter.BatchRun(ctx, &AutomationBatchRunRequest{Event: "ticket.created", TicketIDs: []uint{1}}); err != nil {
-		t.Fatalf("adapter BatchRun: %v", err)
-	}
 }

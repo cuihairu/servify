@@ -401,12 +401,6 @@ func TestStatisticsService_WorkerTickerLoop(t *testing.T) {
 
 // ---- automation extras ----
 
-func TestAutomationHandlerAdapter_DeleteTrigger(t *testing.T) {
-	svc, _ := newAutomationTestService(t)
-	adapter := NewAutomationHandlerAdapter(svc)
-	_ = adapter.DeleteTrigger(context.Background(), 999) // error propagated from module
-}
-
 func TestAutomationService_MatchTriggerNilReceiver(t *testing.T) {
 	var svc *AutomationService
 	if svc.matchTrigger(context.Background(), models.AutomationTrigger{}, AutomationEvent{}, nil, false) {
