@@ -28,7 +28,7 @@ func NewHandlerServiceAdapter(module *agentapp.Service, logger *logrus.Logger) *
 }
 
 var (
-	_ HandlerService   = (*HandlerServiceAdapter)(nil)
+	_ HandlerService    = (*HandlerServiceAdapter)(nil)
 	_ AgentGroupService = (*HandlerServiceAdapter)(nil)
 )
 

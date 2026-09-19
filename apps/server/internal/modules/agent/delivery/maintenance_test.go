@@ -172,7 +172,8 @@ func (r *maintenanceTestRegistry) ReleaseSession(userID uint, sessionID string) 
 	return agentapp.AgentRuntimeDTO{}, false
 }
 
-func (r *maintenanceTestRegistry) ApplyTransfer(sessionID string, fromAgentID *uint, toAgentID uint) {}
+func (r *maintenanceTestRegistry) ApplyTransfer(sessionID string, fromAgentID *uint, toAgentID uint) {
+}
 
 func (r *maintenanceTestRegistry) Get(userID uint) (agentapp.AgentRuntimeDTO, bool) {
 	item, ok := r.items[userID]
