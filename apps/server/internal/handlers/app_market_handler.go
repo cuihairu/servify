@@ -1,35 +1,27 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/services"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AppMarketHandler 应用市场管理
 type AppMarketHandler struct {
-	service AppMarketService
-}
-
-type AppMarketService interface {
-	List(ctx context.Context, req *services.AppIntegrationListRequest) ([]*services.AppIntegration, int64, error)
-	Create(ctx context.Context, req *services.AppIntegrationCreateRequest) (*services.AppIntegration, error)
-	Update(ctx context.Context, id uint, req *services.AppIntegrationUpdateRequest) (*services.AppIntegration, error)
-	Delete(ctx context.Context, id uint) error
+	service appintegrationdelivery.HandlerService
 }
 
 // NewAppMarketHandler 创建处理器
-func NewAppMarketHandler(service AppMarketService) *AppMarketHandler {
+func NewAppMarketHandler(service appintegrationdelivery.HandlerService) *AppMarketHandler {
 	return &AppMarketHandler{service: service}
 }
 
 // ListIntegrations 获取集成列表
 func (h *AppMarketHandler) ListIntegrations(c *gin.Context) {
-	var req services.AppIntegrationListRequest
+	var req appintegrationdelivery.AppIntegrationListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid query", Message: err.Error()})
 		return
@@ -54,7 +46,7 @@ func (h *AppMarketHandler) ListIntegrations(c *gin.Context) {
 
 // CreateIntegration 新增集成
 func (h *AppMarketHandler) CreateIntegration(c *gin.Context) {
-	var req services.AppIntegrationCreateRequest
+	var req appintegrationdelivery.AppIntegrationCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
@@ -79,7 +71,7 @@ func (h *AppMarketHandler) UpdateIntegration(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: err.Error()})
 		return
 	}
-	var req services.AppIntegrationUpdateRequest
+	var req appintegrationdelivery.AppIntegrationUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return

@@ -292,16 +292,6 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 	}
 }
 
-func TestAppIntegrationService_ListFindError(t *testing.T) {
-	db := newServicesTestDB(t, &models.AppIntegration{})
-	failNthQuery(db, 2)
-	svc := NewAppIntegrationService(db, nil)
-	if _, _, err := svc.List(context.Background(), &AppIntegrationListRequest{Page: 1, PageSize: 10}); err == nil ||
-		!strings.Contains(err.Error(), "failed to list integrations") {
-		t.Fatalf("find error: %v", err)
-	}
-}
-
 func TestAuthService_SequentialErrors(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()

@@ -10,6 +10,7 @@ import (
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerapi "servify/apps/server/internal/modules/customer/api"
@@ -801,8 +802,8 @@ func (s *unitShiftService) GetShiftStats(ctx context.Context) (*shiftdelivery.Sh
 // ---- app market ----
 
 type unitAppMarketService struct {
-	items     []*services.AppIntegration
-	item      *services.AppIntegration
+	items     []*appintegrationdelivery.AppIntegration
+	item      *appintegrationdelivery.AppIntegration
 	total     int64
 	listErr   error
 	createErr error
@@ -810,21 +811,21 @@ type unitAppMarketService struct {
 	deleteErr error
 }
 
-func (s *unitAppMarketService) List(ctx context.Context, req *services.AppIntegrationListRequest) ([]*services.AppIntegration, int64, error) {
+func (s *unitAppMarketService) List(ctx context.Context, req *appintegrationdelivery.AppIntegrationListRequest) ([]*appintegrationdelivery.AppIntegration, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.items, s.total, nil
 }
 
-func (s *unitAppMarketService) Create(ctx context.Context, req *services.AppIntegrationCreateRequest) (*services.AppIntegration, error) {
+func (s *unitAppMarketService) Create(ctx context.Context, req *appintegrationdelivery.AppIntegrationCreateRequest) (*appintegrationdelivery.AppIntegration, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.item, nil
 }
 
-func (s *unitAppMarketService) Update(ctx context.Context, id uint, req *services.AppIntegrationUpdateRequest) (*services.AppIntegration, error) {
+func (s *unitAppMarketService) Update(ctx context.Context, id uint, req *appintegrationdelivery.AppIntegrationUpdateRequest) (*appintegrationdelivery.AppIntegration, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}

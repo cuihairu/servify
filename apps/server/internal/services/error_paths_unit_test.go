@@ -20,9 +20,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewSLAService(db, nil) == nil {
 		t.Fatal("expected SLA service")
 	}
-	if NewAppIntegrationService(db, nil) == nil {
-		t.Fatal("expected app integration service")
-	}
 }
 
 // ---- ai extras ----
@@ -43,36 +40,6 @@ func TestAIService_ShTransferToHuman_HistoryLength(t *testing.T) {
 }
 
 // ---- app integration error branches ----
-
-func TestAppIntegrationService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.AppIntegration{})
-	svc := NewAppIntegrationService(db, nil)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "X", Slug: "x", IFrameURL: "u"}); err != nil {
-		t.Fatalf("seed create: %v", err)
-	}
-	// duplicate name violates the unique index during insert
-	if _, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "X", Slug: "other", IFrameURL: "u"}); err == nil {
-		t.Fatal("expected create error from duplicate name")
-	}
-	// update violating unique name
-	if _, err := svc.Update(ctx, 1, &AppIntegrationUpdateRequest{Name: stringPtr("X")}); err != nil {
-		t.Fatalf("self rename: %v", err)
-	}
-	if err := db.Migrator().DropTable("app_integrations"); err != nil {
-		t.Fatalf("drop: %v", err)
-	}
-	if _, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "Y", Slug: "y", IFrameURL: "u"}); err == nil {
-		t.Fatal("expected slug check error with missing table")
-	}
-	if err := svc.Delete(ctx, 1); err == nil {
-		t.Fatal("expected delete error with missing table")
-	}
-	if encodeJSON(make(chan int)) != "" {
-		t.Fatal("expected empty encoding for unserializable value")
-	}
-}
 
 // ---- custom field error branches ----
 

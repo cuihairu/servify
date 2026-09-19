@@ -1,24 +1,22 @@
-package services
+package application
+
+// app_integration 模块应用层：应用市场集成管理（自 services/app_integration_service.go 迁入）。
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	"servify/apps/server/internal/models"
-
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
+	platformauth "servify/apps/server/internal/platform/auth"
 )
 
-// AppIntegrationService 管理应用市场集成
-type AppIntegrationService struct {
-	db     *gorm.DB
-	logger *logrus.Logger
-}
+// ErrIntegrationNotFound 集成不存在（消息保持原字符串）。
+var ErrIntegrationNotFound = errors.New("integration not found")
 
 // AppIntegration 定义返回给 API 的结构
 type AppIntegration struct {
@@ -74,16 +72,29 @@ type AppIntegrationUpdateRequest struct {
 	Enabled      *bool                  `json:"enabled"`
 }
 
-// NewAppIntegrationService 初始化服务
-func NewAppIntegrationService(db *gorm.DB, logger *logrus.Logger) *AppIntegrationService {
-	if logger == nil {
-		logger = logrus.New()
-	}
-	return &AppIntegrationService{db: db, logger: logger}
+// Repository 集成持久化契约。
+type Repository interface {
+	CountBySlug(ctx context.Context, slug string) (int64, error)
+	CountIntegrations(ctx context.Context, req *AppIntegrationListRequest) (int64, error)
+	ListIntegrations(ctx context.Context, req *AppIntegrationListRequest, offset, limit int) ([]models.AppIntegration, error)
+	GetIntegration(ctx context.Context, id uint) (*models.AppIntegration, error)
+	CreateIntegration(ctx context.Context, model *models.AppIntegration) error
+	SaveIntegration(ctx context.Context, model *models.AppIntegration) error
+	DeleteIntegration(ctx context.Context, id uint) error
+}
+
+// AppIntegrationService 管理应用市场集成
+type Service struct {
+	repo Repository
+}
+
+// NewService 初始化服务
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
 // List 返回集成列表
-func (s *AppIntegrationService) List(ctx context.Context, req *AppIntegrationListRequest) ([]*AppIntegration, int64, error) {
+func (s *Service) List(ctx context.Context, req *AppIntegrationListRequest) ([]*AppIntegration, int64, error) {
 	if req.Page < 1 {
 		req.Page = 1
 	}
@@ -91,34 +102,14 @@ func (s *AppIntegrationService) List(ctx context.Context, req *AppIntegrationLis
 		req.PageSize = 20
 	}
 
-	query := applyScopeFilter(s.db.WithContext(ctx).Model(&models.AppIntegration{}), ctx)
-	if req.Category != "" {
-		query = query.Where("category = ?", req.Category)
-	}
-	if req.Search != "" {
-		term := "%" + req.Search + "%"
-		query = query.Where("LOWER(name) LIKE LOWER(?) OR LOWER(vendor) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?)", term, term, term)
-	}
-	if len(req.Status) == 1 {
-		if req.Status[0] == "enabled" {
-			query = query.Where("enabled = ?", true)
-		} else if req.Status[0] == "disabled" {
-			query = query.Where("enabled = ?", false)
-		}
-	}
-
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	total, err := s.repo.CountIntegrations(ctx, req)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count integrations: %w", err)
 	}
 
-	if req.PageSize > 0 {
-		offset := (req.Page - 1) * req.PageSize
-		query = query.Offset(offset).Limit(req.PageSize)
-	}
-
-	var list []models.AppIntegration
-	if err := query.Order("created_at DESC").Find(&list).Error; err != nil {
+	offset := (req.Page - 1) * req.PageSize
+	list, err := s.repo.ListIntegrations(ctx, req, offset, req.PageSize)
+	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list integrations: %w", err)
 	}
 
@@ -126,7 +117,7 @@ func (s *AppIntegrationService) List(ctx context.Context, req *AppIntegrationLis
 }
 
 // Create 新增集成
-func (s *AppIntegrationService) Create(ctx context.Context, req *AppIntegrationCreateRequest) (*AppIntegration, error) {
+func (s *Service) Create(ctx context.Context, req *AppIntegrationCreateRequest) (*AppIntegration, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}
@@ -138,18 +129,17 @@ func (s *AppIntegrationService) Create(ctx context.Context, req *AppIntegrationC
 		return nil, fmt.Errorf("slug required")
 	}
 
-	var exists int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.AppIntegration{}), ctx).Where("slug = ?", slug).Count(&exists).Error; err != nil {
+	exists, err := s.repo.CountBySlug(ctx, slug)
+	if err != nil {
 		return nil, fmt.Errorf("failed to check slug: %w", err)
 	}
 	if exists > 0 {
 		return nil, fmt.Errorf("integration slug already exists")
 	}
 
-	tenantID, workspaceID := tenantAndWorkspace(ctx)
 	model := &models.AppIntegration{
-		TenantID:       tenantID,
-		WorkspaceID:    workspaceID,
+		TenantID:       platformauth.TenantIDFromContext(ctx),
+		WorkspaceID:    platformauth.WorkspaceIDFromContext(ctx),
 		Name:           req.Name,
 		Slug:           slug,
 		Vendor:         req.Vendor,
@@ -165,7 +155,7 @@ func (s *AppIntegrationService) Create(ctx context.Context, req *AppIntegrationC
 		UpdatedAt:      time.Now(),
 	}
 
-	if err := s.db.WithContext(ctx).Create(model).Error; err != nil {
+	if err := s.repo.CreateIntegration(ctx, model); err != nil {
 		return nil, fmt.Errorf("failed to create integration: %w", err)
 	}
 
@@ -173,15 +163,15 @@ func (s *AppIntegrationService) Create(ctx context.Context, req *AppIntegrationC
 }
 
 // Update 编辑集成
-func (s *AppIntegrationService) Update(ctx context.Context, id uint, req *AppIntegrationUpdateRequest) (*AppIntegration, error) {
+func (s *Service) Update(ctx context.Context, id uint, req *AppIntegrationUpdateRequest) (*AppIntegration, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request required")
 	}
 
-	var model models.AppIntegration
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("integration not found")
+	model, err := s.repo.GetIntegration(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrIntegrationNotFound) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("failed to load integration: %w", err)
 	}
@@ -215,23 +205,16 @@ func (s *AppIntegrationService) Update(ctx context.Context, id uint, req *AppInt
 	}
 	model.UpdatedAt = time.Now()
 
-	if err := s.db.WithContext(ctx).Save(&model).Error; err != nil {
+	if err := s.repo.SaveIntegration(ctx, model); err != nil {
 		return nil, fmt.Errorf("failed to update integration: %w", err)
 	}
 
-	return mapIntegration(model), nil
+	return mapIntegration(*model), nil
 }
 
 // Delete 删除集成
-func (s *AppIntegrationService) Delete(ctx context.Context, id uint) error {
-	result := applyScopeFilter(s.db.WithContext(ctx), ctx).Delete(&models.AppIntegration{}, id)
-	if result.Error != nil {
-		return fmt.Errorf("failed to delete integration: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("integration not found")
-	}
-	return nil
+func (s *Service) Delete(ctx context.Context, id uint) error {
+	return s.repo.DeleteIntegration(ctx, id)
 }
 
 func mapIntegrations(list []models.AppIntegration) []*AppIntegration {

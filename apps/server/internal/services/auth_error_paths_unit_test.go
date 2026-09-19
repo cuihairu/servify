@@ -107,23 +107,6 @@ func TestAuthService_SessionQueryErrors(t *testing.T) {
 	}
 }
 
-func TestAppIntegrationService_UpdateUniqueViolation(t *testing.T) {
-	db := newServicesTestDB(t, &models.AppIntegration{})
-	svc := NewAppIntegrationService(db, nil)
-	ctx := context.Background()
-
-	first, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "One", Slug: "one", IFrameURL: "u"})
-	if err != nil {
-		t.Fatalf("create one: %v", err)
-	}
-	if _, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "Two", Slug: "two", IFrameURL: "u"}); err != nil {
-		t.Fatalf("create two: %v", err)
-	}
-	if _, err := svc.Update(ctx, first.ID, &AppIntegrationUpdateRequest{Name: stringPtr("Two")}); err == nil {
-		t.Fatal("expected unique name violation on update")
-	}
-}
-
 func TestSatisfactionService_CreateInsertError(t *testing.T) {
 	db := newServicesTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},

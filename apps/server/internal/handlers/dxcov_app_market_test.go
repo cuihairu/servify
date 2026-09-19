@@ -5,15 +5,15 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/services"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func dxcAppMarketService() *unitAppMarketService {
 	return &unitAppMarketService{
-		items: []*services.AppIntegration{{ID: 1, Name: "app1"}},
-		item:  &services.AppIntegration{ID: 1, Name: "app1"},
+		items: []*appintegrationdelivery.AppIntegration{{ID: 1, Name: "app1"}},
+		item:  &appintegrationdelivery.AppIntegration{ID: 1, Name: "app1"},
 		total: 5,
 	}
 }

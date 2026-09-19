@@ -11,7 +11,7 @@ handler|Automation|apps/server/internal/handlers/automation_handler.go|service|a
 handler|Knowledge|apps/server/internal/handlers/knowledge_doc_handler.go|service|knowledgedelivery\.HandlerService|func NewKnowledgeDocHandler\(service knowledgedelivery\.HandlerService\)|\*services\.KnowledgeDocService
 handler|Session transfer|apps/server/internal/handlers/session_transfer_handler.go|transferService|routingdelivery\.HandlerService|func NewSessionTransferHandler\(transferService routingdelivery\.HandlerService, logger \*logrus\.Logger\)|\*services\.SessionTransferService
 handler|AI|apps/server/internal/handlers/ai_handler.go|aiService|aidelivery\.HandlerService|func NewAIHandler\(aiService aidelivery\.HandlerService\)|aiService services\.AIServiceInterface
-handler|App market|apps/server/internal/handlers/app_market_handler.go|service|AppMarketService|func NewAppMarketHandler\(service AppMarketService\)|\*services\.AppIntegrationService
+handler|App market|apps/server/internal/handlers/app_market_handler.go|service|appintegrationdelivery\.HandlerService|func NewAppMarketHandler\(service appintegrationdelivery.HandlerService\)|\*services\.AppIntegrationService
 handler|Custom field|apps/server/internal/handlers/custom_field_handler.go|service|customfielddelivery\.HandlerService|func NewCustomFieldHandler\(service customfielddelivery.HandlerService\)|\*services\.CustomFieldService
 handler|Macro|apps/server/internal/handlers/macro_handler.go|service|macrodelivery\.HandlerService|func NewMacroHandler\(service macrodelivery\.HandlerService\)|\*services\.MacroService
 handler|Satisfaction|apps/server/internal/handlers/satisfaction_handler.go|satisfactionService|SatisfactionService|func NewSatisfactionHandler\(satisfactionService SatisfactionService, logger \*logrus\.Logger\)|\*services\.SatisfactionService
@@ -71,8 +71,8 @@ require|apps/server/internal/app/server/runtime.go|SatisfactionService[[:space:]
 require|apps/server/internal/app/server/router.go|SatisfactionService[[:space:]]+handlers\.SatisfactionService|Router dependencies must expose satisfaction via handlers.SatisfactionService.
 require|apps/server/internal/app/server/runtime.go|MacroService[[:space:]]+macrodelivery\.HandlerService|Runtime must expose macros via the macro delivery contract.
 require|apps/server/internal/app/server/router.go|MacroService[[:space:]]+macrodelivery\.HandlerService|Router dependencies must expose macros via the macro delivery contract.
-require|apps/server/internal/app/server/runtime.go|AppIntegrationService[[:space:]]+handlers\.AppMarketService|Runtime must expose app integrations via handlers.AppMarketService.
-require|apps/server/internal/app/server/router.go|AppIntegrationService[[:space:]]+handlers\.AppMarketService|Router dependencies must expose app integrations via handlers.AppMarketService.
+require|apps/server/internal/app/server/runtime.go|AppIntegrationService[[:space:]]+appintegrationdelivery.HandlerService|Runtime must expose app integrations via handlers.AppMarketService.
+require|apps/server/internal/app/server/router.go|AppIntegrationService[[:space:]]+appintegrationdelivery.HandlerService|Router dependencies must expose app integrations via handlers.AppMarketService.
 require|apps/server/internal/app/server/runtime.go|CustomFieldService[[:space:]]+customfielddelivery\.HandlerService|Runtime must expose custom fields via customfielddelivery.HandlerService.
 require|apps/server/internal/app/server/router.go|CustomFieldService[[:space:]]+customfielddelivery\.HandlerService|Router dependencies must expose custom fields via customfielddelivery.HandlerService.
 require|apps/server/internal/app/server/runtime.go|ShiftService[[:space:]]+shiftdelivery.HandlerService|Runtime must expose shift via handlers.ShiftService.
@@ -140,7 +140,9 @@ require|apps/server/internal/app/server/runtime_assembly.go|MacroService[[:space
 require|apps/server/internal/app/server/runtime_assembly.go|CustomFieldService[[:space:]]*=[[:space:]]*customfielddelivery\.NewHandlerServiceAdapter\(customFieldModule\)|Runtime must assemble custom field handlers via the custom field delivery adapter on the single module instance.
 require|apps/server/internal/app/server/runtime_assembly.go|WorkspaceService[[:space:]]*=[[:space:]]*workspacedelivery\.NewHandlerServiceAdapter\(workspaceModule\)|Runtime must assemble workspace handlers via the workspace delivery adapter on the single module instance.
 require|apps/server/internal/app/server/runtime_assembly.go|ShiftService[[:space:]]*=[[:space:]]*shiftdelivery\.NewHandlerServiceAdapter\(shiftModule\)|Runtime must assemble shift handlers via the shift delivery adapter on the single module instance.
+require|apps/server/internal/app/server/runtime_assembly.go|AppIntegrationService[[:space:]]*=[[:space:]]*appintegrationdelivery\.NewHandlerServiceAdapter\(appIntegrationModule\)|Runtime must assemble app market handlers via the app integration delivery adapter on the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.MacroService|Runtime must not depend on the concrete macro service; use macrodelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.CustomFieldService|Runtime must not depend on the concrete custom field service; use customfielddelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.WorkspaceService|Runtime must not depend on the concrete workspace service; use workspacedelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.ShiftService|Runtime must not depend on the concrete shift service; use shiftdelivery contracts.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AppIntegrationService|Runtime must not depend on the concrete app integration service; use appintegrationdelivery contracts.

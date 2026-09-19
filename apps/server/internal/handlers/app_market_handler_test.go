@@ -16,7 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	appintegrationapp "servify/apps/server/internal/modules/app_integration/application"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
+	appintegrationinfra "servify/apps/server/internal/modules/app_integration/infra"
 )
 
 func newAppMarketHandlerTestDB(t *testing.T) *gorm.DB {
@@ -37,7 +39,7 @@ func TestAppMarketHandler_ListIntegrations_Empty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -60,7 +62,7 @@ func TestAppMarketHandler_CreateIntegration_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -88,7 +90,7 @@ func TestAppMarketHandler_CreateIntegration_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -107,7 +109,7 @@ func TestAppMarketHandler_CreateIntegration_Conflict(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	existing := &models.AppIntegration{Name: "slack", Slug: "slack", IFrameURL: "https://example.com/app"}
@@ -138,7 +140,7 @@ func TestAppMarketHandler_UpdateIntegration_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -160,7 +162,7 @@ func TestAppMarketHandler_UpdateIntegration_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -182,7 +184,7 @@ func TestAppMarketHandler_DeleteIntegration_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -200,7 +202,7 @@ func TestAppMarketHandler_DeleteIntegration_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 	handler := NewAppMarketHandler(svc)
 
 	router := gin.New()
@@ -216,7 +218,7 @@ func TestAppMarketHandler_DeleteIntegration_InvalidID(t *testing.T) {
 
 func TestNewAppMarketHandler(t *testing.T) {
 	db := newAppMarketHandlerTestDB(t)
-	svc := services.NewAppIntegrationService(db, nil)
+	svc := appintegrationdelivery.NewHandlerServiceAdapter(appintegrationapp.NewService(appintegrationinfra.NewGormRepository(db)))
 
 	handler := NewAppMarketHandler(svc)
 

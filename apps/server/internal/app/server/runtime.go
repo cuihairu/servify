@@ -11,6 +11,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
@@ -70,7 +71,7 @@ type Runtime struct {
 	SatisfactionService      handlers.SatisfactionService
 	WorkspaceService         workspacedelivery.HandlerService
 	MacroService             macrodelivery.HandlerService
-	AppIntegrationService    handlers.AppMarketService
+	AppIntegrationService    appintegrationdelivery.HandlerService
 	CustomFieldService       customfielddelivery.HandlerService
 	StatisticsHandlerService analyticsdelivery.HandlerService
 	SLAService               handlers.SLAService

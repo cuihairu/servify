@@ -14,6 +14,9 @@ import (
 	apikeyapp "servify/apps/server/internal/modules/api_key/application"
 	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
 	apikeyinfra "servify/apps/server/internal/modules/api_key/infra"
+	appintegrationapp "servify/apps/server/internal/modules/app_integration/application"
+	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
+	appintegrationinfra "servify/apps/server/internal/modules/app_integration/infra"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	assistinfra "servify/apps/server/internal/modules/assist/infra"
@@ -275,7 +278,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	rt.WorkspaceService = workspacedelivery.NewHandlerServiceAdapter(workspaceModule)
 	macroModule := macroapp.NewService(macroinfra.NewGormRepository(rt.DB))
 	rt.MacroService = macrodelivery.NewHandlerServiceAdapter(macroModule)
-	rt.AppIntegrationService = services.NewAppIntegrationService(rt.DB, rt.Logger)
+	appIntegrationModule := appintegrationapp.NewService(appintegrationinfra.NewGormRepository(rt.DB))
+	rt.AppIntegrationService = appintegrationdelivery.NewHandlerServiceAdapter(appIntegrationModule)
 	customFieldModule := customfieldapp.NewService(customfieldinfra.NewGormRepository(rt.DB))
 	rt.CustomFieldService = customfielddelivery.NewHandlerServiceAdapter(customFieldModule)
 	rt.KnowledgeDocHandler = knowledgedelivery.NewHandlerServiceWithProvider(rt.DB, state.aiAssembly.KnowledgeProvider(rt.Config))

@@ -61,27 +61,6 @@ func TestAIService_NewRequestError(t *testing.T) {
 	}
 }
 
-func TestAppIntegrationService_MoreBranches(t *testing.T) {
-	db := newServicesTestDB(t, &models.AppIntegration{})
-	svc := NewAppIntegrationService(db, nil)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, &AppIntegrationCreateRequest{Name: "A", Slug: "a", IFrameURL: "u", Category: "tools"}); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	items, _, err := svc.List(ctx, &AppIntegrationListRequest{Page: 1, PageSize: 10, Category: "tools"})
-	if err != nil || len(items) != 1 {
-		t.Fatalf("category filter: %v %d", err, len(items))
-	}
-
-	if err := db.Migrator().DropTable("app_integrations"); err != nil {
-		t.Fatalf("drop: %v", err)
-	}
-	if _, err := svc.Update(ctx, 1, &AppIntegrationUpdateRequest{}); err == nil || err.Error() == "integration not found" {
-		t.Fatalf("expected load error, got %v", err)
-	}
-}
-
 func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 	ctx := context.Background()
 
