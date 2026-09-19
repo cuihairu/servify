@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"sync"
 	"time"
 )
@@ -20,7 +21,7 @@ type MessageRouter struct {
 }
 
 type routerAIService interface {
-	ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error)
+	ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error)
 }
 
 type MessageRouterRuntime interface {

@@ -17,8 +17,7 @@ func TestProcessMessageWithAI_NoAI(t *testing.T) {
 func TestProcessMessageWithAI_UnsupportedType(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()
-	ai := NewAIService("", "")
-	hub.SetAIService(ai)
+	hub.SetAIService(&stubAI{reply: "ok"})
 	c := &WebSocketClient{ID: "c", SessionID: "s", Hub: hub}
 	// unsupported data type should be handled gracefully
 	msg := WebSocketMessage{Type: "text-message", Data: 12345, Timestamp: time.Now()}

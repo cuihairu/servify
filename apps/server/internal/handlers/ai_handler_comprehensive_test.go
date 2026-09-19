@@ -11,22 +11,29 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"servify/apps/server/internal/models"
+	aimodule "servify/apps/server/internal/modules/ai/application"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	"servify/apps/server/internal/services"
 )
 
 // MockEnhancedAIService 用于测试增强AI服务的处理器
 type MockEnhancedAIService struct {
-	*services.AIService
+	*aidelivery.AIService
 	weKnoraEnabled bool
-	metrics        *services.AIMetrics
+	metrics        *aidelivery.AIMetrics
 	uploadErr      error
 	syncErr        error
 }
 
+// ShouldTransferToHuman 随刀 16 handoff 双份合并：AIService 不再自带该启发式，
+// mock 显式委托 application 包级函数（与真实 enhanced 服务一致）。
+func (m *MockEnhancedAIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {
+	return aimodule.ShouldTransferToHuman(query, sessionHistory)
+}
+
 func (m *MockEnhancedAIService) ProcessQueryEnhanced(ctx context.Context, query, sessionID string) (*aidelivery.EnhancedAIResponse, error) {
 	return &aidelivery.EnhancedAIResponse{
-		AIResponse: &services.AIResponse{
+		AIResponse: &aidelivery.AIResponse{
 			Content:    "Mock enhanced response",
 			Confidence: 0.9,
 		},
@@ -48,9 +55,9 @@ func (m *MockEnhancedAIService) SyncKnowledgeBase(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockEnhancedAIService) GetMetrics() *services.AIMetrics {
+func (m *MockEnhancedAIService) GetMetrics() *aidelivery.AIMetrics {
 	if m.metrics == nil {
-		return &services.AIMetrics{
+		return &aidelivery.AIMetrics{
 			QueryCount:         10,
 			WeKnoraUsageCount:  5,
 			FallbackUsageCount: 2,
@@ -76,7 +83,7 @@ func TestAIHandler_GetMetrics_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -111,7 +118,7 @@ func TestAIHandler_GetMetrics_EnhancedService(t *testing.T) {
 func TestAIHandler_GetMetrics_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -132,7 +139,7 @@ func TestAIHandler_UploadDocument_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -163,7 +170,7 @@ func TestAIHandler_UploadDocument_InvalidRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -192,7 +199,7 @@ func TestAIHandler_UploadDocument_InvalidRequest(t *testing.T) {
 func TestAIHandler_UploadDocument_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -220,7 +227,7 @@ func TestAIHandler_SyncKnowledgeBase_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -242,7 +249,7 @@ func TestAIHandler_SyncKnowledgeBase_EnhancedService(t *testing.T) {
 func TestAIHandler_SyncKnowledgeBase_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -263,7 +270,7 @@ func TestAIHandler_EnableKnowledgeProvider_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: false,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -289,7 +296,7 @@ func TestAIHandler_EnableKnowledgeProvider_EnhancedService(t *testing.T) {
 func TestAIHandler_EnableKnowledgeProvider_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -310,7 +317,7 @@ func TestAIHandler_DisableKnowledgeProvider_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -336,7 +343,7 @@ func TestAIHandler_DisableKnowledgeProvider_EnhancedService(t *testing.T) {
 func TestAIHandler_DisableKnowledgeProvider_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -357,7 +364,7 @@ func TestAIHandler_UploadDocument_KnowledgeProviderDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService: services.NewAIService("", ""),
+		AIService: aidelivery.NewAIService("", ""),
 		uploadErr: errors.New("knowledge provider is not enabled"),
 	}
 	mockService.InitializeKnowledgeBase()
@@ -387,7 +394,7 @@ func TestAIHandler_SyncKnowledgeBase_KnowledgeProviderDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService: services.NewAIService("", ""),
+		AIService: aidelivery.NewAIService("", ""),
 		syncErr:   errors.New("knowledge provider is not enabled"),
 	}
 	mockService.InitializeKnowledgeBase()
@@ -410,7 +417,7 @@ func TestAIHandler_ResetCircuitBreaker_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -432,7 +439,7 @@ func TestAIHandler_ResetCircuitBreaker_EnhancedService(t *testing.T) {
 func TestAIHandler_ResetCircuitBreaker_StandardService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	baseService := services.NewAIService("", "")
+	baseService := aidelivery.NewAIService("", "")
 	baseService.InitializeKnowledgeBase()
 	handler := NewAIHandler(aidelivery.NewHandlerServiceAdapter(baseService))
 
@@ -453,7 +460,7 @@ func TestAIHandler_ProcessQuery_EnhancedService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -483,7 +490,7 @@ func TestAIHandler_ProcessQuery_MissingQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()
@@ -512,7 +519,7 @@ func TestAIHandler_ProcessQuery_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockService := &MockEnhancedAIService{
-		AIService:      services.NewAIService("", ""),
+		AIService:      aidelivery.NewAIService("", ""),
 		weKnoraEnabled: true,
 	}
 	mockService.InitializeKnowledgeBase()

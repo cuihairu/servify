@@ -12,7 +12,6 @@ import (
 	difykp "servify/apps/server/internal/platform/knowledgeprovider/dify"
 	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
 	"servify/apps/server/internal/platform/llm/openai"
-	"servify/apps/server/internal/services"
 	"servify/apps/server/pkg/dify"
 	"servify/apps/server/pkg/weknora"
 
@@ -58,7 +57,7 @@ func (s *scopedAIHandlerService) GetStatus(ctx context.Context) map[string]inter
 	return aidelivery.NewHandlerServiceAdapter(service).GetStatus(ctx)
 }
 
-func (s *scopedAIHandlerService) GetMetrics() (*services.AIMetrics, bool) {
+func (s *scopedAIHandlerService) GetMetrics() (*aidelivery.AIMetrics, bool) {
 	if s == nil || s.fallback == nil {
 		return nil, false
 	}
@@ -118,11 +117,11 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
-	baseAI := services.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
+	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
 	// AttachBusinessMetrics 把进程级业务指标挂上（nil 安全），AI 请求打点
 	// 见 OrchestratedEnhancedAIService.ProcessQueryEnhanced。
-	defaultService := services.NewOrchestratedEnhancedAIService(
+	defaultService := aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 		nil,
@@ -137,7 +136,7 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 			APIKey:  difyConfig.APIKey,
 			Timeout: difyConfig.Timeout,
 		})
-		return services.NewOrchestratedEnhancedAIService(
+		return aidelivery.NewOrchestratedEnhancedAIService(
 			baseAI,
 			openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 			difykp.NewProvider(client, difyConfig.DatasetID, difykp.SearchConfig{
@@ -162,7 +161,7 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 		Timeout:    weKnoraConfig.Timeout,
 		MaxRetries: weKnoraConfig.MaxRetries,
 	}, logger)
-	return services.NewOrchestratedEnhancedAIService(
+	return aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 		weknorakp.NewProvider(client, weKnoraConfig.KnowledgeBaseID),

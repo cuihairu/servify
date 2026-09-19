@@ -19,7 +19,6 @@ import (
 	"servify/apps/server/internal/middleware"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"servify/apps/server/internal/platform/llm/openai"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -91,9 +90,9 @@ func run(cmd *cobra.Command, args []string) {
 	app.DB = db
 
 	openAIProvider := openai.NewProvider(cfg.AI.OpenAI.APIKey, cfg.AI.OpenAI.BaseURL)
-	baseAI := services.NewAIService(cfg.AI.OpenAI.APIKey, cfg.AI.OpenAI.BaseURL)
+	baseAI := aidelivery.NewAIService(cfg.AI.OpenAI.APIKey, cfg.AI.OpenAI.BaseURL)
 	baseAI.InitializeKnowledgeBase()
-	aiService := services.NewOrchestratedEnhancedAIService(
+	aiService := aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openAIProvider,
 		nil,

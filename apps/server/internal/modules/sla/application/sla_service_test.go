@@ -10,7 +10,7 @@ import (
 
 	"servify/apps/server/internal/models"
 
-	"servify/apps/server/internal/modules/platformauth"
+	platformauth "servify/apps/server/internal/platform/auth"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -32,9 +32,7 @@ func newSLAIntegrationDB(t *testing.T) *gorm.DB {
 
 // scopedContext 复刻自 services 集成测试原件（platformauth 注入租户/工作区）。
 func scopedContext(tenantID, workspaceID string) context.Context {
-	ctx := context.Background()
-	ctx = platformauth.WithTenantID(ctx, tenantID)
-	return platformauth.WithWorkspaceID(ctx, workspaceID)
+	return platformauth.ContextWithScope(context.Background(), tenantID, workspaceID)
 }
 
 func TestSLAService_CheckViolation_FirstResponse(t *testing.T) {

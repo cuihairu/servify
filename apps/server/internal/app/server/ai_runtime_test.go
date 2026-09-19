@@ -4,11 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"strings"
 	"testing"
 
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/services"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
@@ -100,7 +100,7 @@ func TestBuildEmbeddingProviderFromConfig(t *testing.T) {
 
 func TestBuildPgvectorAssemblyBranches(t *testing.T) {
 	logger := logrus.New()
-	baseAI := services.NewAIService("test-key", "http://127.0.0.1:1")
+	baseAI := aidelivery.NewAIService("test-key", "http://127.0.0.1:1")
 	cfg := config.GetDefaultConfig()
 	cfg.Knowledge.Provider = "pgvector"
 
@@ -165,7 +165,7 @@ func TestBuildPgvectorAssemblySuccess(t *testing.T) {
 	cfg.Embedding.OpenAI.BaseURL = embServer.URL
 
 	fallback := &AIAssembly{}
-	asm, err := buildPgvectorAssembly(services.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, fallback)
+	asm, err := buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, fallback)
 	if err != nil {
 		t.Fatalf("buildPgvectorAssembly() error = %v", err)
 	}
@@ -196,7 +196,7 @@ func TestBuildPgvectorAssemblyEmbeddingFactoryError(t *testing.T) {
 	cfg.Knowledge.Provider = "pgvector"
 	cfg.Embedding.Provider = "tei"
 
-	_, err = buildPgvectorAssembly(services.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, &AIAssembly{})
+	_, err = buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, &AIAssembly{})
 	if err == nil || !strings.Contains(err.Error(), "build embedding provider for pgvector") {
 		t.Fatalf("expected embedding factory error wrap, got %v", err)
 	}

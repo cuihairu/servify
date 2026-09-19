@@ -12,7 +12,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"servify/apps/server/internal/config"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	"servify/apps/server/internal/services"
 )
 
 func TestEnhancedHealthHandler_Health_And_Ready(t *testing.T) {
@@ -26,7 +25,7 @@ func TestEnhancedHealthHandler_Health_And_Ready(t *testing.T) {
 	cfg.Monitoring.HealthChecks.WeKnora = false
 	cfg.WeKnora.Enabled = false
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	ai.InitializeKnowledgeBase()
 
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, nil)
@@ -60,7 +59,7 @@ func TestEnhancedHealthHandler_Health_WithDatabaseCheck(t *testing.T) {
 	cfg.Monitoring.HealthChecks.KnowledgeProvider = false
 	cfg.Monitoring.HealthChecks.WeKnora = false
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	ai.InitializeKnowledgeBase()
 
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, nil)
@@ -88,7 +87,7 @@ func TestEnhancedHealthHandler_Health_WithRedisCheck(t *testing.T) {
 	cfg.Monitoring.HealthChecks.KnowledgeProvider = false
 	cfg.Monitoring.HealthChecks.WeKnora = false
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	ai.InitializeKnowledgeBase()
 
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, nil)
@@ -117,7 +116,7 @@ func TestEnhancedHealthHandler_Health_WithKnowledgeProviderCheck(t *testing.T) {
 	cfg.Monitoring.HealthChecks.WeKnora = false
 	cfg.WeKnora.Enabled = true
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	ai.InitializeKnowledgeBase()
 
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, nil)
@@ -143,7 +142,7 @@ func TestEnhancedHealthHandler_CheckRedisWithSharedClient(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	cfg.Monitoring.HealthChecks.Redis = true
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	ai.InitializeKnowledgeBase()
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, client)
 

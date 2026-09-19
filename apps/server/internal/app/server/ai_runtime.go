@@ -15,7 +15,6 @@ import (
 	pgvectorkp "servify/apps/server/internal/platform/knowledgeprovider/pgvector"
 	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
 	"servify/apps/server/internal/platform/llm/openai"
-	"servify/apps/server/internal/services"
 	"servify/apps/server/pkg/dify"
 	"servify/apps/server/pkg/weknora"
 
@@ -62,9 +61,9 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	difyConfig := resolver.ResolveDify(context.Background(), nil)
 	weKnoraConfig := resolver.ResolveWeKnora(context.Background(), nil)
 
-	baseAI := services.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
+	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
-	defaultService := services.NewOrchestratedEnhancedAIService(
+	defaultService := aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 		nil,
@@ -110,7 +109,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 				SearchMethod:    difyConfig.Search.SearchMethod,
 				RerankingEnable: difyConfig.Search.RerankingEnable,
 			})
-			enhanced := services.NewOrchestratedEnhancedAIService(
+			enhanced := aidelivery.NewOrchestratedEnhancedAIService(
 				baseAI,
 				openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 				assembly.KnowledgeDriver,
@@ -156,7 +155,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	assembly.KnowledgeProviderID = "weknora"
 	assembly.KnowledgeDriver = weknorakp.NewProvider(client, weKnoraConfig.KnowledgeBaseID)
 
-	enhanced := services.NewOrchestratedEnhancedAIService(
+	enhanced := aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
 		assembly.KnowledgeDriver,
@@ -180,7 +179,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 // buildPgvectorAssembly 装配 pgvector 自建知识库驱动；健康检查失败时按
 // requireKnowledgeProviderHealthy 决定启动失败或降级为无知识源运行。
 func buildPgvectorAssembly(
-	baseAI *services.AIService,
+	baseAI *aidelivery.AIService,
 	apiKey, baseURL string,
 	cfg *config.Config,
 	logger *logrus.Logger,
@@ -228,7 +227,7 @@ func buildPgvectorAssembly(
 	fallback.KnowledgeProviderHealthy = true
 	fallback.KnowledgeProviderID = "pgvector"
 	fallback.KnowledgeDriver = driver
-	enhanced := services.NewOrchestratedEnhancedAIService(
+	enhanced := aidelivery.NewOrchestratedEnhancedAIService(
 		baseAI,
 		openai.NewProvider(apiKey, baseURL),
 		driver,

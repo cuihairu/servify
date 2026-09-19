@@ -14,7 +14,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -81,7 +81,7 @@ func (stubAIHandlerService) GetStatus(_ context.Context) map[string]interface{} 
 	return map[string]interface{}{"status": "ok"}
 }
 
-func (stubAIHandlerService) GetMetrics() (*services.AIMetrics, bool) {
+func (stubAIHandlerService) GetMetrics() (*aidelivery.AIMetrics, bool) {
 	return nil, false
 }
 

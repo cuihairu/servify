@@ -18,7 +18,6 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"servify/apps/server/internal/platform/configscope"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
-	"servify/apps/server/internal/services"
 )
 
 type stubRealtimeGateway struct{}
@@ -50,15 +49,14 @@ func (stubRTCGateway) CloseConnection(string) error                             
 
 type stubMessageRouter struct{}
 
-func (stubMessageRouter) Start() error                                 { return nil }
-func (stubMessageRouter) Stop() error                                  { return nil }
-func (stubMessageRouter) RouteMessage(string, *services.Message) error { return nil }
+func (stubMessageRouter) Start() error { return nil }
+func (stubMessageRouter) Stop() error  { return nil }
 func (stubMessageRouter) GetPlatformStats() map[string]interface{} {
 	return map[string]interface{}{"web": 2, "whatsapp": 1}
 }
 
 func newStandardAIHandler() *handlers.AIHandler {
-	svc := services.NewAIService("", "")
+	svc := aidelivery.NewAIService("", "")
 	svc.InitializeKnowledgeBase()
 	return handlers.NewAIHandler(aidelivery.NewHandlerServiceAdapter(svc))
 }
@@ -73,7 +71,7 @@ func TestReleaseCheckHealthEndpoints(t *testing.T) {
 	cfg.Monitoring.HealthChecks.WeKnora = false
 	cfg.WeKnora.Enabled = false
 
-	svc := services.NewAIService("", "")
+	svc := aidelivery.NewAIService("", "")
 	svc.InitializeKnowledgeBase()
 	h := handlers.NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(svc), nil, nil)
 

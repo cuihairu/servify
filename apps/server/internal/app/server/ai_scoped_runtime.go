@@ -9,7 +9,6 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
-	"servify/apps/server/internal/services"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -39,7 +38,7 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
 }
 
-func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string, sessionID string) (*services.AIResponse, error) {
+func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
 	service := s.buildService(ctx)
 	if service == nil {
 		return nil, nil

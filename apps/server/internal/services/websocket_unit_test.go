@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -88,12 +89,12 @@ type unitAIService struct {
 	processCalls   atomic.Int64
 }
 
-func (a *unitAIService) ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error) {
+func (a *unitAIService) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
 	a.processCalls.Add(1)
 	if a.queryErr != nil {
 		return nil, a.queryErr
 	}
-	return &AIResponse{Content: "ai:" + query, Confidence: 0.5, Source: "test"}, nil
+	return &aidelivery.AIResponse{Content: "ai:" + query, Confidence: 0.5, Source: "test"}, nil
 }
 
 func (a *unitAIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {

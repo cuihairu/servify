@@ -1,6 +1,10 @@
 package services
 
-import "testing"
+import (
+	"testing"
+
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+)
 
 type dummyAdapter struct{ ch chan UnifiedMessage }
 
@@ -13,7 +17,7 @@ func (d *dummyAdapter) Stop() error                              { return nil }
 func TestMessageRouter_GetPlatformStats(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()
-	ai := NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	r := NewMessageRouter(ai, hub, nil)
 
 	d := &dummyAdapter{ch: make(chan UnifiedMessage)}

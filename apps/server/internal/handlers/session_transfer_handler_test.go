@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"strings"
 	"testing"
 	"time"
@@ -26,13 +27,12 @@ import (
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	"servify/apps/server/internal/platform/eventbus"
-	"servify/apps/server/internal/services"
 )
 
 type stubAIForTransferHandler struct{}
 
-func (s stubAIForTransferHandler) ProcessQuery(ctx context.Context, query string, sessionID string) (*services.AIResponse, error) {
-	return &services.AIResponse{Content: "ok", Confidence: 1, Source: "ai"}, nil
+func (s stubAIForTransferHandler) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
+	return &aidelivery.AIResponse{Content: "ok", Confidence: 1, Source: "ai"}, nil
 }
 func (s stubAIForTransferHandler) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {
 	return false

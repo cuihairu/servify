@@ -19,7 +19,6 @@ import (
 	"servify/apps/server/internal/config"
 	svrmetrics "servify/apps/server/internal/metrics"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/glebarez/sqlite"
@@ -101,7 +100,7 @@ func TestCxcMetricsHandlerGetMetricsVariants(t *testing.T) {
 	svrmetrics.ResetRateLimit()
 
 	ai := &unitAIService{
-		metrics: &services.AIMetrics{
+		metrics: &aidelivery.AIMetrics{
 			QueryCount:                  7,
 			DifyUsageCount:              3,
 			WeKnoraUsageCount:           2,
@@ -388,7 +387,7 @@ func TestCxcGetUploadStatus(t *testing.T) {
 }
 
 func TestCxcAICapabilityStatusCode(t *testing.T) {
-	standard := aidelivery.NewHandlerServiceAdapter(services.NewAIService("", ""))
+	standard := aidelivery.NewHandlerServiceAdapter(aidelivery.NewAIService("", ""))
 	unsupportedErr := standard.SyncKnowledgeBase(context.Background())
 
 	cases := []struct {

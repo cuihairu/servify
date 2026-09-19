@@ -1,4 +1,4 @@
-package services
+package delivery
 
 // AI 编排落库错误分支（原 auth/satisfaction 段已分别随 auth、satisfaction
 // 模块迁移至各自 internal/modules/*/application）。

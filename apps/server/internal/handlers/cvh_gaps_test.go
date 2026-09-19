@@ -23,7 +23,6 @@ import (
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/webhook/delivery"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
-	"servify/apps/server/internal/services"
 )
 
 // ---------------------------------------------------------------------------
@@ -288,7 +287,7 @@ func TestCvhEnhancedHealthDegraded(t *testing.T) {
 	cfg.WeKnora.Enabled = false
 	cfg.Dify.Enabled = false
 
-	ai := services.NewAIService("", "")
+	ai := aidelivery.NewAIService("", "")
 	h := NewEnhancedHealthHandler(cfg, aidelivery.NewHandlerServiceAdapter(ai), nil, nil)
 
 	r := dxcRouter()

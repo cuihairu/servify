@@ -11,15 +11,14 @@ import (
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
-	"servify/apps/server/internal/services"
 
 	"github.com/sirupsen/logrus"
 )
 
 type stubRuntimeFallback struct{}
 
-func (stubRuntimeFallback) ProcessQuery(context.Context, string, string) (*services.AIResponse, error) {
-	return &services.AIResponse{Content: "fallback"}, nil
+func (stubRuntimeFallback) ProcessQuery(context.Context, string, string) (*aidelivery.AIResponse, error) {
+	return &aidelivery.AIResponse{Content: "fallback"}, nil
 }
 func (stubRuntimeFallback) ShouldTransferToHuman(query string, _ []models.Message) bool {
 	return query == "transfer"

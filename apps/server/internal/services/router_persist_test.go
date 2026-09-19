@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"testing"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 // stub AI to avoid external calls
 type stubAI2 struct{ reply string }
 
-func (s stubAI2) ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error) {
-	return &AIResponse{Content: s.reply, Confidence: 0.9, Source: "test"}, nil
+func (s stubAI2) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
+	return &aidelivery.AIResponse{Content: s.reply, Confidence: 0.9, Source: "test"}, nil
 }
 func (s stubAI2) ShouldTransferToHuman(query string, _ []models.Message) bool { return false }
 

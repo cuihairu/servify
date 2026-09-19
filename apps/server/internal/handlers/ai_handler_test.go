@@ -9,12 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	"servify/apps/server/internal/services"
 )
 
 func TestAIHandler_Status_And_Query(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	base := services.NewAIService("", "")
+	base := aidelivery.NewAIService("", "")
 	base.InitializeKnowledgeBase()
 	h := NewAIHandler(aidelivery.NewHandlerServiceAdapter(base))
 

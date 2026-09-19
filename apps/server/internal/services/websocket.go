@@ -15,6 +15,7 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
 	"servify/apps/server/internal/models"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 )
@@ -24,7 +25,7 @@ type sessionTransferRuntime interface {
 }
 
 type websocketAIService interface {
-	ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error)
+	ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error)
 	ShouldTransferToHuman(query string, sessionHistory []models.Message) bool
 	GetSessionSummary(messages []models.Message) (string, error)
 }

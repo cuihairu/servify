@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"testing"
 	"time"
 
@@ -132,7 +133,7 @@ func TestMessageRouter_RouteMessage_External(t *testing.T) {
 
 type failingRouterAI struct{}
 
-func (failingRouterAI) ProcessQuery(ctx context.Context, query string, sessionID string) (*AIResponse, error) {
+func (failingRouterAI) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
 	return nil, errors.New("ai down")
 }
 func (failingRouterAI) ShouldTransferToHuman(query string, _ []models.Message) bool { return false }

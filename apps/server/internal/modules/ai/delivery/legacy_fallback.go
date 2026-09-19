@@ -1,4 +1,4 @@
-package services
+package delivery
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
-	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	"servify/apps/server/internal/modules/ai/application"
 )
 
 type AIService struct {
@@ -53,13 +53,6 @@ type OpenAIResponse struct {
 		Type    string `json:"type"`
 	} `json:"error"`
 }
-
-// AIResponse / AIMetrics / EnhancedAIResponse 契约定义已迁至 modules/ai/delivery，
-// 此处保留类型别名供 legacy 引用方使用（EnhancedAIService 已随 P3-2 移除）。
-type AIResponse = aidelivery.AIResponse
-type AIMetrics = aidelivery.AIMetrics
-
-type EnhancedAIResponse = aidelivery.EnhancedAIResponse
 
 func NewAIService(apiKey, baseURL string) *AIService {
 	return &AIService{
@@ -277,29 +270,10 @@ func (s *AIService) InitializeKnowledgeBase() {
 	logrus.Info("Knowledge base initialized with default documents")
 }
 
-// 判断是否需要转人工客服
+// ShouldTransferToHuman 委托 application 的集中式转人工启发式（刀 16 起
+// 关键词表只保留一份，legacy facade 通过委托满足 RuntimeService 契约）。
 func (s *AIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {
-	query = strings.ToLower(query)
-
-	// 关键词判断
-	humanKeywords := []string{"人工", "客服", "转人工", "manual", "human", "agent"}
-	for _, keyword := range humanKeywords {
-		if strings.Contains(query, keyword) {
-			return true
-		}
-	}
-
-	// 复杂问题判断
-	if strings.Contains(query, "投诉") || strings.Contains(query, "complaint") {
-		return true
-	}
-
-	// 会话历史判断 - 如果用户多次询问同一类问题
-	if len(sessionHistory) > 5 {
-		return true
-	}
-
-	return false
+	return application.ShouldTransferToHuman(query, sessionHistory)
 }
 
 // 获取会话摘要
@@ -322,7 +296,7 @@ func (s *AIService) GetSessionSummary(messages []models.Message) (string, error)
 	summary, err := s.callOpenAI(ctx, prompt)
 	if err != nil {
 		logrus.Errorf("Failed to generate session summary: %v", err)
-		return "无法生成会话摘要", nil
+		return application.BuildSessionSummaryUnavailable(), nil
 	}
 
 	return summary, nil

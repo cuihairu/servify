@@ -1,7 +1,8 @@
-package services
+package delivery
 
 import (
 	"context"
+	aimodule "servify/apps/server/internal/modules/ai/application"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -35,11 +36,10 @@ func TestAIService_ProcessQuery_Fallback_NoAPIKey(t *testing.T) {
 }
 
 func TestAIService_ShouldTransferToHuman(t *testing.T) {
-	svc := NewAIService("", "")
-	if !svc.ShouldTransferToHuman("请帮我转人工客服", nil) {
+	if !aimodule.ShouldTransferToHuman("请帮我转人工客服", nil) {
 		t.Fatalf("expected true for human transfer keywords")
 	}
-	if svc.ShouldTransferToHuman("简单问题咨询", []models.Message{}) {
+	if aimodule.ShouldTransferToHuman("简单问题咨询", []models.Message{}) {
 		t.Fatalf("expected false for normal query")
 	}
 }

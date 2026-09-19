@@ -7,11 +7,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"strings"
 	"testing"
 
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/services"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -199,7 +199,7 @@ func TestCxcCheckAIServiceBranches(t *testing.T) {
 	// enhanced service with metrics -> details overridden
 	h2 := cxcHealthHandler(cxcHealthConfig(), &unitAIService{
 		status:    map[string]interface{}{"status": "ok"},
-		metrics:   &services.AIMetrics{QueryCount: 3},
+		metrics:   &aidelivery.AIMetrics{QueryCount: 3},
 		metricsOK: true,
 	}, nil, nil)
 	resp2 := &HealthResponse{Services: map[string]ServiceInfo{}}
@@ -384,7 +384,7 @@ func TestCxcEnhancedHealthFullyConfigured(t *testing.T) {
 			"knowledge_provider": "dify",
 			"dify_healthy":       true,
 		},
-		metrics:   &services.AIMetrics{QueryCount: 1},
+		metrics:   &aidelivery.AIMetrics{QueryCount: 1},
 		metricsOK: true,
 	}
 	h := cxcHealthHandler(cfg, ai, &unitDBPing{db: open}, client)

@@ -163,3 +163,18 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSLAServi
 forbid|apps/server/internal/app/server/runtime.go|services\.SLAService|Runtime must not reference the legacy SLA service.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SLAService|Runtime assembly must not reference the legacy SLA service.
 forbid|apps/server/internal/app/worker/jobs.go|services\.SLAService|Worker deps must consume SLA via the module monitor contract.
+forbid|apps/server/internal/app/server/ai_runtime.go|services\.NewAIService|AI assembly must construct AIService through the ai delivery module.
+forbid|apps/server/internal/app/server/ai_runtime.go|services\.NewOrchestratedEnhancedAIService|AI assembly must construct the enhanced service through the ai delivery module.
+forbid|apps/server/internal/app/server/ai_runtime.go|services\.AIService|AI assembly must use aidelivery.AIService.
+forbid|apps/server/internal/app/server/ai_scoped_handler.go|services\.NewAIService|Scoped AI assembly must construct AIService through the ai delivery module.
+forbid|apps/server/internal/app/server/ai_scoped_handler.go|services\.NewOrchestratedEnhancedAIService|Scoped AI assembly must construct the enhanced service through the ai delivery module.
+forbid|apps/server/internal/app/server/ai_scoped_handler.go|services\.AIMetrics|Scoped AI assembly must use aidelivery.AIMetrics.
+forbid|apps/server/internal/app/server/ai_scoped_runtime.go|services\.AIResponse|Scoped AI runtime must use the ai delivery contract type.
+forbid|apps/server/cmd/cli/run.go|services\.NewAIService|CLI assembly must construct AIService through the ai delivery module.
+forbid|apps/server/cmd/cli/run.go|services\.NewOrchestratedEnhancedAIService|CLI assembly must construct the enhanced service through the ai delivery module.
+forbid|apps/server/internal/app/server/runtime.go|services\.AIService|Runtime must not reference the legacy AI service; use aidelivery contracts.
+forbid|apps/server/internal/app/server/runtime.go|services\.CircuitBreaker|Runtime must not reference the legacy AI circuit breaker.
+forbid|apps/server/internal/app/server/runtime.go|services\.OrchestratedEnhancedAIService|Runtime must not reference the legacy enhanced AI service.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AIService|Runtime assembly must not reference the legacy AI service.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.CircuitBreaker|Runtime assembly must not reference the legacy AI circuit breaker.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.OrchestratedEnhancedAIService|Runtime assembly must not reference the legacy enhanced AI service.

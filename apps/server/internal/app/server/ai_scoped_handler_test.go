@@ -14,7 +14,6 @@ import (
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
-	"servify/apps/server/internal/services"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -29,8 +28,8 @@ func (stubFallbackAIHandler) ProcessQuery(context.Context, string, string) (inte
 func (stubFallbackAIHandler) GetStatus(context.Context) map[string]interface{} {
 	return map[string]interface{}{"type": "fallback"}
 }
-func (stubFallbackAIHandler) GetMetrics() (*services.AIMetrics, bool) {
-	return &services.AIMetrics{}, true
+func (stubFallbackAIHandler) GetMetrics() (*aidelivery.AIMetrics, bool) {
+	return &aidelivery.AIMetrics{}, true
 }
 func (stubFallbackAIHandler) UploadKnowledgeDocument(context.Context, string, string, []string) error {
 	return nil
@@ -82,7 +81,7 @@ func TestScopedAIHandlerServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 	if err != nil {
 		t.Fatalf("ProcessQuery() error = %v", err)
 	}
-	enhanced, ok := resp.(*services.EnhancedAIResponse)
+	enhanced, ok := resp.(*aidelivery.EnhancedAIResponse)
 	if !ok {
 		t.Fatalf("expected enhanced response, got %T", resp)
 	}

@@ -1,29 +1,11 @@
 package services
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"servify/apps/server/internal/models"
 )
-
-// ---- constructor nil-logger branches ----
-
-func TestAIService_ProcessQuery_Error(t *testing.T) {
-	svc := NewAIService("key", "https://invalid.example.invalid")
-	if _, err := svc.ProcessQuery(context.Background(), "q", "s"); err == nil {
-		t.Fatal("expected ProcessQuery error from failed OpenAI call")
-	}
-}
-
-func TestAIService_ShTransferToHuman_HistoryLength(t *testing.T) {
-	svc := NewAIService("", "")
-	history := make([]models.Message, 6)
-	if !svc.ShouldTransferToHuman("plain question", history) {
-		t.Fatal("expected long history to trigger transfer")
-	}
-}
 
 // ---- app integration error branches ----
 

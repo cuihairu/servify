@@ -1,4 +1,4 @@
-package services
+package delivery
 
 import (
 	"servify/apps/server/internal/models"

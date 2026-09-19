@@ -1,4 +1,4 @@
-package services
+package delivery
 
 import (
 	"context"
@@ -198,7 +198,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 }
 
 func (s *OrchestratedEnhancedAIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {
-	return s.base.ShouldTransferToHuman(query, sessionHistory)
+	return aimodule.ShouldTransferToHuman(query, sessionHistory)
 }
 
 func (s *OrchestratedEnhancedAIService) GetSessionSummary(messages []models.Message) (string, error) {
