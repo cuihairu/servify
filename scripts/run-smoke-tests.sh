@@ -38,7 +38,7 @@ go build ./...
 echo
 echo "=== Voice & AI Smoke ==="
 go test -tags=integration ./apps/server/internal/handlers -run 'TestVoiceHandler.*Integration' -count=1
-go test -tags=integration ./apps/server/internal/services -run 'TestOrchestratedEnhancedAIServiceFallback.*Integration' -count=1
+go test -tags=integration ./apps/server/internal/modules/ai/delivery -run 'TestOrchestratedEnhancedAIServiceFallback.*Integration' -count=1
 
 echo
 echo "=== SDK Examples ==="

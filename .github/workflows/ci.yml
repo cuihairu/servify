@@ -159,7 +159,6 @@ jobs:
           go test \
             ./apps/server/internal/modules/... \
             ./apps/server/internal/platform/... \
-            ./apps/server/internal/services/... \
             ./apps/server/internal/handlers/...
 
       - name: Build modular entrypoints
@@ -167,7 +166,7 @@ jobs:
         run: |
           go build \
             ./apps/server/internal/modules/... \
-            ./apps/server/internal/services \
+            ./apps/server/internal/platform/realtime \
             ./apps/server/internal/handlers \
             ./apps/server/cmd/server
 

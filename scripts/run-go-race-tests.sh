@@ -33,5 +33,5 @@ run_tier "modular-domain" \
   ./apps/server/internal/modules/...
 
 run_tier "service-and-delivery" \
-  ./apps/server/internal/services/... \
+  ./apps/server/internal/platform/realtime/... \
   ./apps/server/internal/handlers/...
