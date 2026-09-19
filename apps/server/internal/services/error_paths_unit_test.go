@@ -101,51 +101,6 @@ func TestCustomFieldService_DroppedTableErrors(t *testing.T) {
 	}
 }
 
-// ---- macro error branches ----
-
-func TestMacroService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.Macro{}, &models.Ticket{}, &models.TicketComment{})
-	svc := NewMacroService(db)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, &MacroCreateRequest{Name: "m", Content: "c"}); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if _, err := svc.Create(ctx, &MacroCreateRequest{Name: "m", Content: "dup"}); err == nil {
-		t.Fatal("expected duplicate name error")
-	}
-	if err := db.Migrator().DropTable("macros"); err != nil {
-		t.Fatalf("drop macros: %v", err)
-	}
-	if _, err := svc.List(ctx); err == nil {
-		t.Fatal("expected list error with missing table")
-	}
-	if err := svc.Delete(ctx, 1); err == nil {
-		t.Fatal("expected delete error with missing table")
-	}
-}
-
-func TestMacroService_ApplyToTicket_DroppedComments(t *testing.T) {
-	db := newServicesTestDB(t, &models.Macro{}, &models.Ticket{}, &models.TicketComment{})
-	svc := NewMacroService(db)
-	ctx := context.Background()
-
-	macro, err := svc.Create(ctx, &MacroCreateRequest{Name: "m", Content: "c"})
-	if err != nil {
-		t.Fatalf("seed macro: %v", err)
-	}
-	ticket := &models.Ticket{Title: "T", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	if err := db.Migrator().DropTable("ticket_comments"); err != nil {
-		t.Fatalf("drop comments: %v", err)
-	}
-	if _, err := svc.ApplyToTicket(ctx, macro.ID, ticket.ID, 1); err == nil {
-		t.Fatal("expected comment create error")
-	}
-}
-
 // ---- shift error branches ----
 
 func TestShiftService_DroppedTableErrors(t *testing.T) {

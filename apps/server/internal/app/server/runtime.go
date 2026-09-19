@@ -20,6 +20,7 @@ import (
 	emailinfra "servify/apps/server/internal/modules/email/infra"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -65,7 +66,7 @@ type Runtime struct {
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      handlers.SatisfactionService
 	WorkspaceService         services.WorkspaceOverviewReader
-	MacroService             handlers.MacroService
+	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    handlers.AppMarketService
 	CustomFieldService       handlers.CustomFieldService
 	StatisticsHandlerService analyticsdelivery.HandlerService

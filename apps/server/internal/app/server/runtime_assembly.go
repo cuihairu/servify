@@ -28,6 +28,9 @@ import (
 	emailinfra "servify/apps/server/internal/modules/email/infra"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	macroapp "servify/apps/server/internal/modules/macro/application"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
+	macroinfra "servify/apps/server/internal/modules/macro/infra"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -259,7 +262,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 
 	rt.ShiftService = services.NewShiftService(rt.DB, rt.Logger)
 	rt.WorkspaceService = services.NewWorkspaceService(rt.DB, agentAdapter)
-	rt.MacroService = services.NewMacroService(rt.DB)
+	macroModule := macroapp.NewService(macroinfra.NewGormRepository(rt.DB))
+	rt.MacroService = macrodelivery.NewHandlerServiceAdapter(macroModule)
 	rt.AppIntegrationService = services.NewAppIntegrationService(rt.DB, rt.Logger)
 	rt.CustomFieldService = services.NewCustomFieldService(rt.DB)
 	rt.KnowledgeDocHandler = knowledgedelivery.NewHandlerServiceWithProvider(rt.DB, state.aiAssembly.KnowledgeProvider(rt.Config))

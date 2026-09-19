@@ -13,7 +13,7 @@ handler|Session transfer|apps/server/internal/handlers/session_transfer_handler.
 handler|AI|apps/server/internal/handlers/ai_handler.go|aiService|aidelivery\.HandlerService|func NewAIHandler\(aiService aidelivery\.HandlerService\)|aiService services\.AIServiceInterface
 handler|App market|apps/server/internal/handlers/app_market_handler.go|service|AppMarketService|func NewAppMarketHandler\(service AppMarketService\)|\*services\.AppIntegrationService
 handler|Custom field|apps/server/internal/handlers/custom_field_handler.go|service|CustomFieldService|func NewCustomFieldHandler\(service CustomFieldService\)|\*services\.CustomFieldService
-handler|Macro|apps/server/internal/handlers/macro_handler.go|service|MacroService|func NewMacroHandler\(service MacroService\)|\*services\.MacroService
+handler|Macro|apps/server/internal/handlers/macro_handler.go|service|macrodelivery\.HandlerService|func NewMacroHandler\(service macrodelivery\.HandlerService\)|\*services\.MacroService
 handler|Satisfaction|apps/server/internal/handlers/satisfaction_handler.go|satisfactionService|SatisfactionService|func NewSatisfactionHandler\(satisfactionService SatisfactionService, logger \*logrus\.Logger\)|\*services\.SatisfactionService
 handler|CSAT public|apps/server/internal/handlers/csat_public_handler.go|service|SatisfactionService|func NewCSATSurveyHandler\(service SatisfactionService\)|\*services\.SatisfactionService
 handler|Voice PSTN webhook|apps/server/internal/handlers/voice_pstn_webhook_handler.go|adapter|voiceprotocol\.HostedVendorWebhookAdapter|func NewPSTNWebhookHandler\(coordinator \*voicedelivery\.Coordinator, adapter voiceprotocol\.HostedVendorWebhookAdapter, validateSignature bool, publicBaseURL string\)|\*twiliovoice\.Adapter
@@ -40,6 +40,7 @@ runtime|AI handlers|AIHandlerService|aidelivery\.HandlerService
 runtime|quality handlers|QualityHandlerService|qualitydelivery\.HandlerService
 runtime|assist handlers|AssistHandlerService|assistdelivery\.HandlerService
 runtime|api key handlers|APIKeyService|apikeydelivery\.HandlerService
+runtime|macro handlers|MacroService|macrodelivery\.HandlerService
 
 require|apps/server/internal/handlers/health_enhanced.go|aiService aidelivery\.HandlerService|Enhanced health handler must store modules/ai/delivery.HandlerService.
 require|apps/server/internal/services/websocket.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.
@@ -68,8 +69,8 @@ forbid|apps/server/internal/app/server/realtime_runtime.go|WSHub[[:space:]]+\*se
 forbid|apps/server/internal/app/server/realtime_runtime.go|WebRTCService[[:space:]]+\*services\.WebRTCService|Realtime runtime must not expose concrete WebRTCService.
 require|apps/server/internal/app/server/runtime.go|SatisfactionService[[:space:]]+handlers\.SatisfactionService|Runtime must expose satisfaction via handlers.SatisfactionService.
 require|apps/server/internal/app/server/router.go|SatisfactionService[[:space:]]+handlers\.SatisfactionService|Router dependencies must expose satisfaction via handlers.SatisfactionService.
-require|apps/server/internal/app/server/runtime.go|MacroService[[:space:]]+handlers\.MacroService|Runtime must expose macros via handlers.MacroService.
-require|apps/server/internal/app/server/router.go|MacroService[[:space:]]+handlers\.MacroService|Router dependencies must expose macros via handlers.MacroService.
+require|apps/server/internal/app/server/runtime.go|MacroService[[:space:]]+macrodelivery\.HandlerService|Runtime must expose macros via the macro delivery contract.
+require|apps/server/internal/app/server/router.go|MacroService[[:space:]]+macrodelivery\.HandlerService|Router dependencies must expose macros via the macro delivery contract.
 require|apps/server/internal/app/server/runtime.go|AppIntegrationService[[:space:]]+handlers\.AppMarketService|Runtime must expose app integrations via handlers.AppMarketService.
 require|apps/server/internal/app/server/router.go|AppIntegrationService[[:space:]]+handlers\.AppMarketService|Router dependencies must expose app integrations via handlers.AppMarketService.
 require|apps/server/internal/app/server/runtime.go|CustomFieldService[[:space:]]+handlers\.CustomFieldService|Runtime must expose custom fields via handlers.CustomFieldService.
@@ -135,3 +136,5 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.StatisticsS
 forbid|apps/server/internal/app/worker/jobs.go|services\.StatisticsService|Statistics worker must consume analyticsdelivery.DailyStatsRunner, not the concrete facade.
 require|apps/server/internal/app/server/runtime_assembly.go|APIKeyService[[:space:]]*=[[:space:]]*apikeydelivery\.NewHandlerServiceAdapter\(apiKeyModule\)|Runtime must assemble api key handlers via the api_key delivery adapter on the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.APIKeyService|Runtime must not depend on the concrete API key service; use apikeydelivery contracts.
+require|apps/server/internal/app/server/runtime_assembly.go|MacroService[[:space:]]*=[[:space:]]*macrodelivery\.NewHandlerServiceAdapter\(macroModule\)|Runtime must assemble macro handlers via the macro delivery adapter on the single module instance.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.MacroService|Runtime must not depend on the concrete macro service; use macrodelivery contracts.

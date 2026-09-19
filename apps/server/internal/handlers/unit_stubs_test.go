@@ -15,6 +15,7 @@ import (
 	gamificationcontract "servify/apps/server/internal/modules/gamification/contract"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
@@ -727,14 +728,14 @@ func (s *unitMacroService) List(ctx context.Context) ([]models.Macro, error) {
 	return s.macros, nil
 }
 
-func (s *unitMacroService) Create(ctx context.Context, req *services.MacroCreateRequest) (*models.Macro, error) {
+func (s *unitMacroService) Create(ctx context.Context, req *macrodelivery.MacroCreateRequest) (*models.Macro, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.macro, nil
 }
 
-func (s *unitMacroService) Update(ctx context.Context, id uint, req *services.MacroUpdateRequest) (*models.Macro, error) {
+func (s *unitMacroService) Update(ctx context.Context, id uint, req *macrodelivery.MacroUpdateRequest) (*models.Macro, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}

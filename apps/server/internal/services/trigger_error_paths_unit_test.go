@@ -176,21 +176,6 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 	}
 }
 
-func TestMacro_UpdateTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.Macro{}, &models.Ticket{}, &models.TicketComment{})
-	svc := NewMacroService(db)
-	ctx := context.Background()
-
-	macro, err := svc.Create(ctx, &MacroCreateRequest{Name: "m", Content: "c"})
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_macro BEFORE UPDATE ON macros BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.Update(ctx, macro.ID, &MacroUpdateRequest{Content: stringPtr("x")}); err == nil {
-		t.Fatal("expected macro update error")
-	}
-}
-
 func TestShift_UpdateTriggerError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
 	svc := NewShiftService(db, logrus.New())

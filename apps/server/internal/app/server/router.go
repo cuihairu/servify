@@ -13,6 +13,7 @@ import (
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
@@ -53,7 +54,7 @@ type Dependencies struct {
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      handlers.SatisfactionService
 	WorkspaceService         services.WorkspaceOverviewReader
-	MacroService             handlers.MacroService
+	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    handlers.AppMarketService
 	CustomFieldService       handlers.CustomFieldService
 	StatisticsHandlerService analyticsdelivery.HandlerService

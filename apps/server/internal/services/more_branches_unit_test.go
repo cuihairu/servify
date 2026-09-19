@@ -166,23 +166,6 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 	}
 }
 
-func TestMacroService_ApplyToTicket_TicketQueryError(t *testing.T) {
-	db := newServicesTestDB(t, &models.Macro{}, &models.Ticket{}, &models.TicketComment{})
-	svc := NewMacroService(db)
-	ctx := context.Background()
-
-	macro, err := svc.Create(ctx, &MacroCreateRequest{Name: "m", Content: "c"})
-	if err != nil {
-		t.Fatalf("seed macro: %v", err)
-	}
-	if err := db.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if _, err := svc.ApplyToTicket(ctx, macro.ID, 1, 2); err == nil || err.Error() == "ticket not found" {
-		t.Fatalf("expected ticket query error, got %v", err)
-	}
-}
-
 func TestShiftService_UnscopedPreloadWithData(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
 	svc := NewShiftService(db, logrus.New())

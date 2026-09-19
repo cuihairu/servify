@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,18 +13,10 @@ import (
 //
 //nolint:revive
 type MacroHandler struct {
-	service MacroService
+	service macrodelivery.HandlerService
 }
 
-type MacroService interface {
-	List(ctx context.Context) ([]models.Macro, error)
-	Create(ctx context.Context, req *services.MacroCreateRequest) (*models.Macro, error)
-	Update(ctx context.Context, id uint, req *services.MacroUpdateRequest) (*models.Macro, error)
-	Delete(ctx context.Context, id uint) error
-	ApplyToTicket(ctx context.Context, macroID, ticketID, actorID uint) (*models.TicketComment, error)
-}
-
-func NewMacroHandler(service MacroService) *MacroHandler {
+func NewMacroHandler(service macrodelivery.HandlerService) *MacroHandler {
 	return &MacroHandler{service: service}
 }
 
@@ -40,7 +30,7 @@ func (h *MacroHandler) List(c *gin.Context) {
 }
 
 func (h *MacroHandler) Create(c *gin.Context) {
-	var req services.MacroCreateRequest
+	var req macrodelivery.MacroCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
@@ -60,7 +50,7 @@ func (h *MacroHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: err.Error()})
 		return
 	}
-	var req services.MacroUpdateRequest
+	var req macrodelivery.MacroUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
