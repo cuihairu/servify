@@ -261,6 +261,7 @@ func TestLoad_SessionRiskEnvironmentProfileOverrides(t *testing.T) {
 	viper.Set("server.environment", "production")
 	viper.Set("jwt.secret", "secure-test-jwt-secret")      // Must override default in production
 	viper.Set("database.password", "secure-test-password") // Must override default in production
+	viper.Set("event_bus.provider", "redis")               // P3-3：production 拒绝默认 in-memory 事件总线
 	viper.Set("security.session_risk_profiles.production.high_risk_score", 7)
 	viper.Set("security.session_risk_profiles.production.rapid_change_window_hours", 8)
 
@@ -726,6 +727,8 @@ func TestValidate_ProductionRejectsInsecureDefaults(t *testing.T) {
 				cfg.Database.Password = "secure-production-password"
 				cfg.WeKnora.Enabled = true
 				cfg.WeKnora.APIKey = "secure-production-key"
+				// P3-3：in-memory 事件总线也是不安全默认值，production 必须 redis。
+				cfg.EventBus.Provider = "redis"
 			},
 			wantValid: true,
 		},

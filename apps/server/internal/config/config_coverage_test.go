@@ -87,6 +87,7 @@ func TestValidate_SecureConfigIsValid(t *testing.T) {
 	cfg.JWT.Secret = "a-very-long-production-secret-value"
 	cfg.WeKnora.APIKey = "wk-prod-key"
 	cfg.Database.Password = "prod-db-password"
+	cfg.EventBus.Provider = "redis" // P3-3：production 不允许默认 in-memory 事件总线
 
 	result := Validate(cfg)
 	if !result.Valid {

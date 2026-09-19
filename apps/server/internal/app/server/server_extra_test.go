@@ -117,6 +117,70 @@ func TestRegisterStaticServesDemoSDKAssetWhenPresent(t *testing.T) {
 	}
 }
 
+// P3-3：production 环境不暴露 demo-sdk 开发演示资产——资产在磁盘上存在
+// 也不服务，请求走 SPA 兜底（此处无 admin dist 故为 404）。
+func TestRegisterStaticSkipsDemoSDKInProduction(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "demo-sdk"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "apps", "demo-sdk", "widget.js"), []byte("// demo sdk"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	cfg := testRouterConfig()
+	cfg.Server.Environment = "production"
+
+	gin.SetMode(gin.TestMode)
+	router := BuildRouter(Dependencies{Config: cfg})
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/demo-sdk/widget.js", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 in production, got %d", w.Code)
+	}
+}
+
+// P3-3：Config 缺席时按开发语义处理（serveDemoSDK 短路分支）——
+// registerStatic 直接以 nil 配置调用，demo-sdk 资产仍然服务。
+func TestRegisterStaticTreatsNilConfigAsDevelopment(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "apps", "demo-sdk"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "apps", "demo-sdk", "widget.js"), []byte("// demo sdk"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	registerStatic(r, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/demo-sdk/widget.js", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil config, got %d", w.Code)
+	}
+}
+
 func TestDetectStaticRootFallsBackToDefault(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no", "such", "dir")
 	if got := detectStaticRoot([]string{missing}); got != "./apps/admin/dist" {

@@ -31,8 +31,10 @@ func BuildEventBus(cfg *config.Config, logger *logrus.Logger, redisClient *redis
 
 	switch provider {
 	case eventBusProviderInMemory:
+		// P3-3：与 config.InsecureDefaults 的启动校验同口径的装配层兜底——
+		// 绕过 LoadConfig 的调用方（GetDefaultConfig 直用）也拦在装配期。
 		if strings.EqualFold(strings.TrimSpace(cfg.Server.Environment), "production") {
-			logger.Warn("event bus provider 'inmemory' is running in production; asynchronous events are not durable and in-flight events are lost on restart")
+			return nil, fmt.Errorf("event bus provider %q is not allowed in production; configure event_bus.provider = 'redis' for durable events", cfg.EventBus.Provider)
 		}
 		return eventbus.NewInMemoryBusWithLogger(logger), nil
 	case eventBusProviderRedis:

@@ -6,7 +6,8 @@ server:
 
 event_bus:
   # WARNING: "inmemory" provider does NOT persist events. Events are lost on restart.
-  # This is acceptable for development/demo but NOT for production use.
+  # This is acceptable for development/demo but NOT for production use —
+  # production/staging startup validation rejects "inmemory" (P3-3); use "redis".
   provider: "inmemory"
 
 database:

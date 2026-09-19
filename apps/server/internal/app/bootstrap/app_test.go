@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -14,7 +13,6 @@ import (
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/sirupsen/logrus"
 )
 
 func TestBuildApp(t *testing.T) {
@@ -91,16 +89,6 @@ type stubRuntime struct {
 	startErr error
 	stopErr  error
 	router   http.Handler
-}
-
-func newTestLogger(buf *bytes.Buffer) *logrus.Logger {
-	logger := logrus.New()
-	logger.SetOutput(buf)
-	logger.SetFormatter(&logrus.TextFormatter{
-		DisableTimestamp: true,
-		DisableQuote:     true,
-	})
-	return logger
 }
 
 func (w *stubWorker) Name() string { return w.name }
@@ -250,22 +238,21 @@ func TestAppShutdownHooks(t *testing.T) {
 	}
 }
 
-func TestBuildEventBusWarnsForInMemoryInProduction(t *testing.T) {
+// P3-3：production 不允许 in-memory 事件总线——装配层硬失败（与
+// config.InsecureDefaults 的启动校验同口径），而非仅告警。
+func TestBuildEventBusRejectsInMemoryInProduction(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	cfg.Server.Environment = "production"
 
-	var buf bytes.Buffer
-	logger := newTestLogger(&buf)
-
-	bus, err := BuildEventBus(cfg, logger, nil)
-	if err != nil {
-		t.Fatalf("BuildEventBus() error = %v", err)
+	bus, err := BuildEventBus(cfg, nil, nil)
+	if err == nil {
+		t.Fatal("expected error for inmemory provider in production")
 	}
-	if bus == nil {
-		t.Fatal("expected event bus")
+	if bus != nil {
+		t.Fatal("expected no event bus")
 	}
-	if !strings.Contains(buf.String(), "not durable") {
-		t.Fatalf("expected production inmemory warning, got %q", buf.String())
+	if !strings.Contains(err.Error(), "not allowed in production") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

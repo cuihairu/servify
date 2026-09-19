@@ -51,7 +51,8 @@ func TestInsecureDefaults_OIDCHTTPIssuerWarned(t *testing.T) {
 	cfg := GetDefaultConfig()
 	cfg.JWT.Secret = "a-very-long-production-secret-value"
 	cfg.Database.Password = "prod-db-password"
-	cfg.Upload.Provider = "S3" // 大小写不敏感，且 bucket/region 均已配置
+	cfg.EventBus.Provider = "redis" // P3-3：排除 in-memory 默认值警告的干扰
+	cfg.Upload.Provider = "S3"      // 大小写不敏感，且 bucket/region 均已配置
 	cfg.Upload.S3.Bucket = "bucket"
 	cfg.Upload.S3.Region = "us-east-1"
 	cfg.OIDC.Enabled = true
@@ -66,6 +67,33 @@ func TestInsecureDefaults_OIDCHTTPIssuerWarned(t *testing.T) {
 	warnings := InsecureDefaults(cfg)
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "oidc.issuer uses http") {
 		t.Fatalf("warnings = %v, want only http-issuer warning", warnings)
+	}
+}
+
+// P3-3：in-memory 事件总线是默认值——显式 inmemory 与空串（经归一后同为
+// inmemory）都必须产生警告，production/staging 经 Validate 零容忍拒启。
+func TestInsecureDefaults_InMemoryEventBusWarned(t *testing.T) {
+	rest := func(cfg *Config) {
+		cfg.JWT.Secret = "a-very-long-production-secret-value"
+		cfg.Database.Password = "prod-db-password"
+	}
+
+	for name, provider := range map[string]string{"explicit": "inmemory", "empty": ""} {
+		t.Run(name, func(t *testing.T) {
+			cfg := GetDefaultConfig()
+			cfg.EventBus.Provider = provider
+			rest(cfg)
+
+			warnings := InsecureDefaults(cfg)
+			if len(warnings) != 1 || !strings.Contains(warnings[0], "event_bus.provider is 'inmemory'") {
+				t.Fatalf("warnings = %v, want only inmemory event bus warning", warnings)
+			}
+
+			cfg.Server.Environment = "production"
+			if result := Validate(cfg); result.Valid {
+				t.Fatalf("production with %s inmemory event bus must be invalid", name)
+			}
+		})
 	}
 }
 

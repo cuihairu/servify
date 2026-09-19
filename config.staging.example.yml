@@ -5,7 +5,8 @@ server:
   environment: "staging"
 
 event_bus:
-  # For staging, you can use "inmemory" for simplicity or "redis" for production parity.
+  # P3-3：staging 与 production 同等严格——"inmemory" 是不安全默认值，会被
+  # 启动校验拒绝；staging 必须显式配置 "redis"（与 production 对齐）。
   provider: "redis"
 
 # 数据库必须显式配置：缺失会回退代码默认 dev 密码并被启动校验拒绝。

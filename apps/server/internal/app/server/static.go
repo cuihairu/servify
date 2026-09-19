@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"servify/apps/server/internal/config"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,16 +20,14 @@ var defaultStaticRoots = []string{
 	"/app/apps/admin",
 }
 
-// demoStaticDirs contains paths that serve the demo site and SDK assets.
-var demoStaticDirs = []string{
-	"./apps/demo",
-	"./apps/demo-sdk",
-}
-
-func registerStatic(r staticRegistrar) {
+// registerStatic 挂 SPA 静态兜底。demo-sdk 是开发演示资产，production 环境
+// 不再默认暴露（P3-3）：非 production 才尝试从 ./apps/demo-sdk/ 直接服务。
+func registerStatic(r staticRegistrar, cfg *config.Config) {
 	root := detectStaticRoot(defaultStaticRoots)
+	serveDemoSDK := cfg == nil ||
+		!strings.EqualFold(strings.TrimSpace(cfg.Server.Environment), "production")
 
-	// Serve demo-sdk assets directly (no auth)
+	// Serve static assets directly (no auth)
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 
@@ -37,12 +37,14 @@ func registerStatic(r staticRegistrar) {
 			return
 		}
 
-		// Serve demo-sdk assets from ./apps/demo-sdk/
-		if rest, ok := strings.CutPrefix(path, "/demo-sdk/"); ok {
-			filePath := filepath.Join(".", "apps", "demo-sdk", filepath.Clean(rest))
-			if _, err := os.Stat(filePath); err == nil {
-				c.File(filePath)
-				return
+		// Serve demo-sdk assets from ./apps/demo-sdk/ (non-production only)
+		if serveDemoSDK {
+			if rest, ok := strings.CutPrefix(path, "/demo-sdk/"); ok {
+				filePath := filepath.Join(".", "apps", "demo-sdk", filepath.Clean(rest))
+				if _, err := os.Stat(filePath); err == nil {
+					c.File(filePath)
+					return
+				}
 			}
 		}
 

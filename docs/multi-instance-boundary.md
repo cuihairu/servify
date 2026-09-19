@@ -83,7 +83,8 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
   **进程级重启恢复**（worker 状态在 DB、事件在 Redis stream、
   presence TTL 自动收敛）+ 快速拉起满足，不通过多副本满足。
 - 事件总线：生产用 `event_bus.provider = "redis"`；`inmemory` 仅限
-  dev/demo（该边界见 P0-1 与 config 示例）。
+  dev/demo（该边界见 P0-1 与 config 示例；production/staging 启动
+  校验与装配层均拒绝 `inmemory`——P3-3）。
 - 单实例进程崩溃的最大损失面：in-flight HTTP 请求、未投递的实时
   推送（会话数据已入库，重连后可见）、pub/sub 通知窗口内的事件消费
   （stream 记录仍在）。

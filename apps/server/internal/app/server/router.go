@@ -86,7 +86,7 @@ func BuildRouter(deps Dependencies) *gin.Engine {
 	registerManagementRoutes(r, deps)
 	registerPublicRoutes(r, deps)
 	registerRealtimeRoutes(r, deps)
-	registerStatic(r)
+	registerStatic(r, deps.Config)
 	if deps.Logger != nil {
 		for _, warning := range routeSecurityWarnings(r.Routes(), deps.Config) {
 			deps.Logger.Warnf("security surface warning: %s", warning)

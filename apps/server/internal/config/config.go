@@ -615,6 +615,13 @@ func InsecureDefaults(cfg *Config) []string {
 		warnings = append(warnings, "database.password is empty or using a default value")
 	}
 
+	// P3-3：in-memory 事件总线是默认值，production/staging 不允许随默认配置
+	// 误接入（事件不持久、重启即丢）；显式配置 redis 才能进入对外环境。
+	eventBusProvider := strings.ToLower(strings.TrimSpace(cfg.EventBus.Provider))
+	if eventBusProvider == "" || eventBusProvider == "inmemory" {
+		warnings = append(warnings, "event_bus.provider is 'inmemory' (default); production and staging must use 'redis' for durable events")
+	}
+
 	if strings.EqualFold(strings.TrimSpace(cfg.Upload.Provider), "s3") {
 		if strings.TrimSpace(cfg.Upload.S3.Bucket) == "" {
 			warnings = append(warnings, "upload.provider is s3 but upload.s3.bucket is empty")
