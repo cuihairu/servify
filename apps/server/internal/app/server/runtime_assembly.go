@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -226,7 +227,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	agentAdapter := agentdelivery.NewHandlerServiceAdapter(agentModule, rt.Logger)
 	rt.AgentHandlerService = agentAdapter
 	rt.AgentGroupService = agentAdapter
-	go agentdelivery.NewRuntimeMaintenance(rt.Logger, agentModule).Start()
+	go agentdelivery.NewRuntimeMaintenance(rt.Logger, agentModule).Start(context.Background())
 	state.agentAdapter = agentAdapter
 
 	statisticsService := services.NewStatisticsService(rt.DB, rt.Logger)

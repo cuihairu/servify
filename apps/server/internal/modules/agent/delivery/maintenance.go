@@ -28,8 +28,8 @@ func NewRuntimeMaintenance(logger *logrus.Logger, module *agentapp.Service) *Run
 	}
 }
 
-// Start 阻塞运行维护循环（由装配方 go 起）。
-func (m *RuntimeMaintenance) Start() {
+// Start 阻塞运行维护循环（由装配方 go 起），ctx 取消时退出。
+func (m *RuntimeMaintenance) Start(ctx context.Context) {
 	interval := m.interval
 	if interval <= 0 {
 		interval = time.Minute
@@ -37,8 +37,13 @@ func (m *RuntimeMaintenance) Start() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		m.CleanupInactiveAgents(context.Background(), 5*time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			m.CleanupInactiveAgents(ctx, 5*time.Minute)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

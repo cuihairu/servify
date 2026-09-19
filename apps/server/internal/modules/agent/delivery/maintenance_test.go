@@ -5,6 +5,7 @@ package delivery
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,9 +19,18 @@ import (
 )
 
 type maintenanceTestRepo struct {
+	mu            sync.Mutex
 	profile       *agentdomain.AgentProfile
 	model         *models.Agent
 	statusUpdates []string
+}
+
+// statusSnapshot 并发安全地读取状态更新记录（ticker goroutine 与测试
+// goroutine 会同时访问）。
+func (r *maintenanceTestRepo) statusSnapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.statusUpdates...)
 }
 
 func (r *maintenanceTestRepo) CreateAgent(ctx context.Context, userID uint, department string, skills []string, maxChatConcurrency int) (*agentdomain.AgentProfile, error) {
@@ -61,6 +71,8 @@ func (r *maintenanceTestRepo) ListActiveAgentRuntimes(ctx context.Context) ([]ag
 }
 
 func (r *maintenanceTestRepo) UpdatePresenceStatus(ctx context.Context, userID uint, status agentdomain.PresenceStatus) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.statusUpdates = append(r.statusUpdates, string(status))
 	return nil
 }
@@ -209,8 +221,9 @@ func TestRuntimeMaintenance_CleanupInactiveAgents(t *testing.T) {
 
 	maintenance.CleanupInactiveAgents(context.Background(), 5*time.Minute)
 
-	if len(repo.statusUpdates) != 1 || repo.statusUpdates[0] != string(agentdomain.PresenceStatusAway) {
-		t.Fatalf("expected away status update, got %v", repo.statusUpdates)
+	updates := repo.statusSnapshot()
+	if len(updates) != 1 || updates[0] != string(agentdomain.PresenceStatusAway) {
+		t.Fatalf("expected away status update, got %v", updates)
 	}
 	if runtime, ok := registry.Get(7); !ok || runtime.Status != string(agentdomain.PresenceStatusAway) {
 		t.Fatalf("expected runtime status away, got %+v ok=%v", runtime, ok)
@@ -230,13 +243,14 @@ func TestRuntimeMaintenance_CleanupSkipsZeroActivity(t *testing.T) {
 	module := agentapp.NewService(repo, registry)
 	m := NewRuntimeMaintenance(logrus.New(), module)
 	m.CleanupInactiveAgents(context.Background(), time.Minute)
-	if len(repo.statusUpdates) != 0 {
-		t.Fatalf("expected no updates for zero activity, got %v", repo.statusUpdates)
+	if updates := repo.statusSnapshot(); len(updates) != 0 {
+		t.Fatalf("expected no updates for zero activity, got %v", updates)
 	}
 }
 
 // TestRuntimeMaintenance_TickerCleansUp：Start 的 ticker 循环按注入的毫秒级
-// interval 周期执行 cleanupInactiveAgents，超时坐席被标记 away。
+// interval 周期执行 cleanupInactiveAgents，超时坐席被标记 away；ctx 取消后
+// 循环退出（goroutine 不泄漏）。
 func TestRuntimeMaintenance_TickerCleansUp(t *testing.T) {
 	repo := &maintenanceTestRepo{
 		profile: &agentdomain.AgentProfile{UserID: 11, MaxChatConcurrency: 1},
@@ -249,17 +263,30 @@ func TestRuntimeMaintenance_TickerCleansUp(t *testing.T) {
 	maintenance := NewRuntimeMaintenance(logrus.New(), module)
 	maintenance.interval = 2 * time.Millisecond
 
-	go maintenance.Start()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		maintenance.Start(ctx)
+	}()
 
 	// 等 ≥3 轮 tick，覆盖 ticker 循环的回边。
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if len(repo.statusUpdates) >= 3 {
+		if len(repo.statusSnapshot()) >= 3 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("maintenance ticker ran only %d times", len(repo.statusUpdates))
+			cancel()
+			<-done
+			t.Fatalf("maintenance ticker ran only %d times", len(repo.statusSnapshot()))
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("maintenance goroutine did not exit after cancel")
 	}
 }
