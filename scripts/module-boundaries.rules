@@ -59,8 +59,8 @@ require|apps/server/internal/app/server/runtime_assembly.go|AgentHandlerService[
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AgentService|Runtime must not depend on the concrete agent facade; use agentdelivery contracts.
 require|apps/server/internal/app/server/runtime.go|KnowledgeDocHandler[[:space:]]+knowledgedelivery\.HandlerService|Runtime must expose knowledge via knowledgedelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|Knowledg[e]?DocHandler[[:space:]]*=.*knowledgedelivery\.NewHandlerServiceWithProvider\(rt\.DB|Runtime must assemble knowledge handlers directly from module delivery.
-require|apps/server/internal/app/server/runtime.go|WorkspaceService[[:space:]]+services\.WorkspaceOverviewReader|Runtime must expose workspace via WorkspaceOverviewReader.
-require|apps/server/internal/app/server/router.go|WorkspaceService[[:space:]]+services\.WorkspaceOverviewReader|Router dependencies must expose workspace via WorkspaceOverviewReader.
+require|apps/server/internal/app/server/runtime.go|WorkspaceService[[:space:]]+workspacedelivery\.HandlerService|Runtime must expose workspace via the workspace delivery contract.
+require|apps/server/internal/app/server/router.go|WorkspaceService[[:space:]]+workspacedelivery\.HandlerService|Router dependencies must expose workspace via the workspace delivery contract.
 require|apps/server/internal/app/server/runtime.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Runtime must expose message router via services.MessageRouterRuntime.
 require|apps/server/internal/app/server/router.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Router dependencies must expose message router via services.MessageRouterRuntime.
 require|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Realtime runtime must expose message router via services.MessageRouterRuntime.
@@ -89,8 +89,8 @@ require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|L
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|SyncWaitingAssignment\(ctx context\.Context, tx \*gorm\.DB, sessionID string, customerID uint\) error|Conversation runtime contract must expose waiting assignment syncing.
 require|apps/server/internal/app/server/runtime_assembly.go|Conversation:[[:space:]]+conversationdelivery\.NewRuntimeAdapter\(rt\.DB, rt\.Bus\)|Main runtime must wire session transfer conversation runtime with DB-backed adapter.
 require|apps/server/internal/app/server/runtime_assembly.go|routingdelivery\.NewHandlerService\(routingdelivery\.HandlerDependencies\{|Main runtime must assemble session transfer through routing module handler dependencies.
-require|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+services\.WorkspaceOverviewReader|Workspace handler must store WorkspaceOverviewReader.
-require|apps/server/internal/handlers/workspace_handler.go|func NewWorkspaceHandler\(service services\.WorkspaceOverviewReader\)|Workspace handler constructor must accept WorkspaceOverviewReader.
+require|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+workspacedelivery\.HandlerService|Workspace handler must store the workspace delivery contract.
+require|apps/server/internal/handlers/workspace_handler.go|func NewWorkspaceHandler\(service workspacedelivery\.HandlerService\)|Workspace handler constructor must accept the workspace delivery contract.
 require|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+services\.MessageRouterRuntime|Message handler must store services.MessageRouterRuntime.
 require|apps/server/internal/handlers/handlers.go|func NewMessageHandler\(messageRouter services\.MessageRouterRuntime\)|Message handler constructor must accept services.MessageRouterRuntime.
 require|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+SLAService|SLA handler must store the exported SLAService contract.
@@ -138,5 +138,7 @@ require|apps/server/internal/app/server/runtime_assembly.go|APIKeyService[[:spac
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.APIKeyService|Runtime must not depend on the concrete API key service; use apikeydelivery contracts.
 require|apps/server/internal/app/server/runtime_assembly.go|MacroService[[:space:]]*=[[:space:]]*macrodelivery\.NewHandlerServiceAdapter\(macroModule\)|Runtime must assemble macro handlers via the macro delivery adapter on the single module instance.
 require|apps/server/internal/app/server/runtime_assembly.go|CustomFieldService[[:space:]]*=[[:space:]]*customfielddelivery\.NewHandlerServiceAdapter\(customFieldModule\)|Runtime must assemble custom field handlers via the custom field delivery adapter on the single module instance.
+require|apps/server/internal/app/server/runtime_assembly.go|WorkspaceService[[:space:]]*=[[:space:]]*workspacedelivery\.NewHandlerServiceAdapter\(workspaceModule\)|Runtime must assemble workspace handlers via the workspace delivery adapter on the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.MacroService|Runtime must not depend on the concrete macro service; use macrodelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.CustomFieldService|Runtime must not depend on the concrete custom field service; use customfielddelivery contracts.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.WorkspaceService|Runtime must not depend on the concrete workspace service; use workspacedelivery contracts.

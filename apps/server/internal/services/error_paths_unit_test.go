@@ -223,34 +223,6 @@ func TestSatisfactionService_TicketLoadErrors(t *testing.T) {
 	}
 }
 
-// ---- workspace error branches ----
-
-func TestWorkspaceService_DroppedTableErrors(t *testing.T) {
-	ctx := context.Background()
-
-	dbAgents := newServicesTestDB(t,
-		&models.User{}, &models.Agent{}, &models.Customer{},
-		&models.Session{}, &models.Ticket{}, &models.Message{},
-	)
-	if err := dbAgents.Migrator().DropTable("agents"); err != nil {
-		t.Fatalf("drop agents: %v", err)
-	}
-	if _, err := NewWorkspaceService(dbAgents, nil).GetOverview(ctx, 5); err == nil {
-		t.Fatal("expected agents count error")
-	}
-
-	dbTickets := newServicesTestDB(t,
-		&models.User{}, &models.Agent{}, &models.Customer{},
-		&models.Session{}, &models.Ticket{}, &models.Message{},
-	)
-	if err := dbTickets.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if _, err := NewWorkspaceService(dbTickets, nil).GetOverview(ctx, 5); err == nil {
-		t.Fatal("expected recent sessions load error")
-	}
-}
-
 // ---- statistics error branches ----
 
 // ---- router extras ----

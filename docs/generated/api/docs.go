@@ -1406,7 +1406,7 @@ const docTemplate = `{
         },
         "/api/omni/workspace": {
             "get": {
-                "description": "返回渠道会话、队列、在线客服等汇总信息",
+                "description": "返回渠道会话、队列、在线客服等汇总信息（WorkspaceOverview）",
                 "produces": [
                     "application/json"
                 ],
@@ -1426,7 +1426,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.WorkspaceOverview"
+                            "type": "object"
                         }
                     },
                     "500": {
@@ -7730,45 +7730,6 @@ const docTemplate = `{
                 }
             }
         },
-        "services.AgentBasicInfo": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.AgentStatsOverview": {
-            "type": "object",
-            "properties": {
-                "available_agents": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.AgentBasicInfo"
-                    }
-                }
-            }
-        },
-        "services.ChannelSummary": {
-            "type": "object",
-            "properties": {
-                "active_sessions": {
-                    "type": "integer"
-                },
-                "avg_response_time": {
-                    "type": "number"
-                },
-                "platform": {
-                    "type": "string"
-                },
-                "waiting_sessions": {
-                    "type": "integer"
-                }
-            }
-        },
         "services.SLAComplianceTrend": {
             "type": "object",
             "properties": {
@@ -8024,67 +7985,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "secret": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.WorkspaceOverview": {
-            "type": "object",
-            "properties": {
-                "agent_stats": {
-                    "$ref": "#/definitions/services.AgentStatsOverview"
-                },
-                "busy_agents": {
-                    "type": "integer"
-                },
-                "channels": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.ChannelSummary"
-                    }
-                },
-                "online_agents": {
-                    "type": "integer"
-                },
-                "recent_sessions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.WorkspaceSession"
-                    }
-                },
-                "total_active_sessions": {
-                    "type": "integer"
-                },
-                "waiting_queue": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.WorkspaceSession": {
-            "type": "object",
-            "properties": {
-                "agent_id": {
-                    "type": "integer"
-                },
-                "agent_name": {
-                    "type": "string"
-                },
-                "customer_id": {
-                    "type": "integer"
-                },
-                "customer_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "platform": {
-                    "type": "string"
-                },
-                "started_at": {
-                    "type": "string"
-                },
-                "status": {
                     "type": "string"
                 }
             }

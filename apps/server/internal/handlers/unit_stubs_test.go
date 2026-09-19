@@ -20,6 +20,7 @@ import (
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/storage"
 	"servify/apps/server/internal/services"
@@ -938,12 +939,12 @@ func (p *unitStorageProvider) PresignedURL(key string, expiresSeconds int) (stri
 // ---- workspace overview ----
 
 type unitWorkspaceReader struct {
-	overview  *services.WorkspaceOverview
+	overview  *workspacedelivery.WorkspaceOverview
 	err       error
 	lastLimit int
 }
 
-func (r *unitWorkspaceReader) GetOverview(ctx context.Context, limit int) (*services.WorkspaceOverview, error) {
+func (r *unitWorkspaceReader) GetOverview(ctx context.Context, limit int) (*workspacedelivery.WorkspaceOverview, error) {
 	r.lastLimit = limit
 	if r.err != nil {
 		return nil, r.err

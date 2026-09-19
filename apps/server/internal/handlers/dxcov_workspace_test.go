@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/services"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func dxcWorkspaceReader() *unitWorkspaceReader {
 	return &unitWorkspaceReader{
-		overview: &services.WorkspaceOverview{TotalActiveSessions: 4, OnlineAgents: 2},
+		overview: &workspacedelivery.WorkspaceOverview{TotalActiveSessions: 4, OnlineAgents: 2},
 	}
 }
 

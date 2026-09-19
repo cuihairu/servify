@@ -1458,31 +1458,6 @@ definitions:
       user_id:
         type: integer
     type: object
-  services.AgentBasicInfo:
-    properties:
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  services.AgentStatsOverview:
-    properties:
-      available_agents:
-        items:
-          $ref: '#/definitions/services.AgentBasicInfo'
-        type: array
-    type: object
-  services.ChannelSummary:
-    properties:
-      active_sessions:
-        type: integer
-      avg_response_time:
-        type: number
-      platform:
-        type: string
-      waiting_sessions:
-        type: integer
-    type: object
   services.SLAComplianceTrend:
     properties:
       compliance_rate:
@@ -1659,46 +1634,6 @@ definitions:
       otpauth_uri:
         type: string
       secret:
-        type: string
-    type: object
-  services.WorkspaceOverview:
-    properties:
-      agent_stats:
-        $ref: '#/definitions/services.AgentStatsOverview'
-      busy_agents:
-        type: integer
-      channels:
-        items:
-          $ref: '#/definitions/services.ChannelSummary'
-        type: array
-      online_agents:
-        type: integer
-      recent_sessions:
-        items:
-          $ref: '#/definitions/services.WorkspaceSession'
-        type: array
-      total_active_sessions:
-        type: integer
-      waiting_queue:
-        type: integer
-    type: object
-  services.WorkspaceSession:
-    properties:
-      agent_id:
-        type: integer
-      agent_name:
-        type: string
-      customer_id:
-        type: integer
-      customer_name:
-        type: string
-      id:
-        type: string
-      platform:
-        type: string
-      started_at:
-        type: string
-      status:
         type: string
     type: object
 info:
@@ -2625,7 +2560,7 @@ paths:
       - 客户管理
   /api/omni/workspace:
     get:
-      description: 返回渠道会话、队列、在线客服等汇总信息
+      description: 返回渠道会话、队列、在线客服等汇总信息（WorkspaceOverview）
       parameters:
       - description: 返回最近会话条数，默认10
         in: query
@@ -2637,7 +2572,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.WorkspaceOverview'
+            type: object
         "500":
           description: Internal Server Error
           schema:

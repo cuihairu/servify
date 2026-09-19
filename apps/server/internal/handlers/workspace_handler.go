@@ -4,27 +4,27 @@ import (
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/services"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
 // WorkspaceHandler 全渠道工作台
 type WorkspaceHandler struct {
-	service services.WorkspaceOverviewReader
+	service workspacedelivery.HandlerService
 }
 
-func NewWorkspaceHandler(service services.WorkspaceOverviewReader) *WorkspaceHandler {
+func NewWorkspaceHandler(service workspacedelivery.HandlerService) *WorkspaceHandler {
 	return &WorkspaceHandler{service: service}
 }
 
 // GetOverview 获取全渠道工作台概览
 // @Summary 全渠道工作台概览
-// @Description 返回渠道会话、队列、在线客服等汇总信息
+// @Description 返回渠道会话、队列、在线客服等汇总信息（WorkspaceOverview）
 // @Tags 全渠道
 // @Produce json
 // @Param limit query int false "返回最近会话条数，默认10"
-// @Success 200 {object} services.WorkspaceOverview
+// @Success 200 {object} object
 // @Failure 500 {object} ErrorResponse
 // @Router /api/omni/workspace [get]
 func (h *WorkspaceHandler) GetOverview(c *gin.Context) {

@@ -14,7 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	workspaceapp "servify/apps/server/internal/modules/workspace/application"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
+	workspaceinfra "servify/apps/server/internal/modules/workspace/infra"
 )
 
 func newWorkspaceHandlerTestDB(t *testing.T) *gorm.DB {
@@ -44,7 +46,7 @@ func TestWorkspaceHandler_GetOverview_EmptyDB(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 	agentSvc := newTestAgentService(db, logger)
-	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
+	workspaceSvc := workspacedelivery.NewHandlerServiceAdapter(workspaceapp.NewService(workspaceinfra.NewGormRepository(db), agentSvc))
 	handler := NewWorkspaceHandler(workspaceSvc)
 
 	router := gin.New()
@@ -67,7 +69,7 @@ func TestWorkspaceHandler_GetOverview_WithLimit(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 	agentSvc := newTestAgentService(db, logger)
-	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
+	workspaceSvc := workspacedelivery.NewHandlerServiceAdapter(workspaceapp.NewService(workspaceinfra.NewGormRepository(db), agentSvc))
 	handler := NewWorkspaceHandler(workspaceSvc)
 
 	router := gin.New()
@@ -88,7 +90,7 @@ func TestWorkspaceHandler_GetOverview_InvalidLimit(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 	agentSvc := newTestAgentService(db, logger)
-	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
+	workspaceSvc := workspacedelivery.NewHandlerServiceAdapter(workspaceapp.NewService(workspaceinfra.NewGormRepository(db), agentSvc))
 	handler := NewWorkspaceHandler(workspaceSvc)
 
 	router := gin.New()
@@ -107,7 +109,7 @@ func TestNewWorkspaceHandler(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
 	agentSvc := newTestAgentService(db, logger)
-	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
+	workspaceSvc := workspacedelivery.NewHandlerServiceAdapter(workspaceapp.NewService(workspaceinfra.NewGormRepository(db), agentSvc))
 	handler := NewWorkspaceHandler(workspaceSvc)
 
 	assert.NotNil(t, handler)
@@ -120,7 +122,7 @@ func TestRegisterWorkspaceRoutes(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
 	agentSvc := newTestAgentService(db, logger)
-	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
+	workspaceSvc := workspacedelivery.NewHandlerServiceAdapter(workspaceapp.NewService(workspaceinfra.NewGormRepository(db), agentSvc))
 	handler := NewWorkspaceHandler(workspaceSvc)
 
 	router := gin.New()

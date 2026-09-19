@@ -30,6 +30,7 @@ import (
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 	"servify/apps/server/internal/platform/eventbus"
@@ -66,7 +67,7 @@ type Runtime struct {
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      handlers.SatisfactionService
-	WorkspaceService         services.WorkspaceOverviewReader
+	WorkspaceService         workspacedelivery.HandlerService
 	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    handlers.AppMarketService
 	CustomFieldService       customfielddelivery.HandlerService

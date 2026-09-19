@@ -322,28 +322,6 @@ func TestShiftService_SequentialErrors(t *testing.T) {
 	}
 }
 
-func TestWorkspaceService_SequentialErrors(t *testing.T) {
-	cases := []struct {
-		n          int32
-		wantSubstr string
-	}{
-		{2, "count waiting sessions"},
-		{3, "aggregate channels"},
-		{5, "count busy agents"},
-	}
-	for _, tc := range cases {
-		db := newServicesTestDB(t,
-			&models.User{}, &models.Agent{}, &models.Customer{},
-			&models.Session{}, &models.Ticket{}, &models.Message{},
-		)
-		failNthQuery(db, tc.n)
-		svc := NewWorkspaceService(db, nil)
-		if _, err := svc.GetOverview(context.Background(), 5); err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
-			t.Fatalf("n=%d: expected %q, got %v", tc.n, tc.wantSubstr, err)
-		}
-	}
-}
-
 func TestAppIntegrationService_ListFindError(t *testing.T) {
 	db := newServicesTestDB(t, &models.AppIntegration{})
 	failNthQuery(db, 2)

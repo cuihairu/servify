@@ -46,6 +46,9 @@ import (
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 	webhookinfra "servify/apps/server/internal/modules/webhook/infra"
+	workspaceapp "servify/apps/server/internal/modules/workspace/application"
+	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
+	workspaceinfra "servify/apps/server/internal/modules/workspace/infra"
 	svcerrors "servify/apps/server/internal/observability/errors"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/pstnprovider"
@@ -264,7 +267,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	}
 
 	rt.ShiftService = services.NewShiftService(rt.DB, rt.Logger)
-	rt.WorkspaceService = services.NewWorkspaceService(rt.DB, agentAdapter)
+	workspaceModule := workspaceapp.NewService(workspaceinfra.NewGormRepository(rt.DB), agentAdapter)
+	rt.WorkspaceService = workspacedelivery.NewHandlerServiceAdapter(workspaceModule)
 	macroModule := macroapp.NewService(macroinfra.NewGormRepository(rt.DB))
 	rt.MacroService = macrodelivery.NewHandlerServiceAdapter(macroModule)
 	rt.AppIntegrationService = services.NewAppIntegrationService(rt.DB, rt.Logger)
