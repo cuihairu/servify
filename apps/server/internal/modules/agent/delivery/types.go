@@ -2,8 +2,6 @@ package delivery
 
 import (
 	"time"
-
-	"servify/apps/server/internal/models"
 )
 
 type AgentCreateRequest struct {
@@ -14,25 +12,16 @@ type AgentCreateRequest struct {
 }
 
 type AgentInfo struct {
-	UserID          uint                       `json:"user_id"`
-	Username        string                     `json:"username"`
-	Name            string                     `json:"name"`
-	Department      string                     `json:"department"`
-	Skills          []string                   `json:"skills"`
-	Status          string                     `json:"status"`
-	MaxConcurrent   int                        `json:"max_concurrent"`
-	CurrentLoad     int                        `json:"current_load"`
-	Rating          float64                    `json:"rating"`
-	AvgResponseTime int                        `json:"avg_response_time"`
-	LastActivity    time.Time                  `json:"last_activity"`
-	ConnectedAt     time.Time                  `json:"connected_at"`
-	Sessions        map[string]*models.Session `json:"-"`
-}
-
-type AgentStats struct {
-	Total           int64   `json:"total"`
-	Online          int64   `json:"online"`
-	Busy            int64   `json:"busy"`
-	AvgResponseTime int64   `json:"avg_response_time"`
-	AvgRating       float64 `json:"avg_rating"`
+	UserID          uint      `json:"user_id"`
+	Username        string    `json:"username"`
+	Name            string    `json:"name"`
+	Department      string    `json:"department"`
+	Skills          []string  `json:"skills"`
+	Status          string    `json:"status"`
+	MaxConcurrent   int       `json:"max_concurrent"`
+	CurrentLoad     int       `json:"current_load"`
+	Rating          float64   `json:"rating"`
+	AvgResponseTime int       `json:"avg_response_time"`
+	LastActivity    time.Time `json:"last_activity"`
+	ConnectedAt     time.Time `json:"connected_at"`
 }

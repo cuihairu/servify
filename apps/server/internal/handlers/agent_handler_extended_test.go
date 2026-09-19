@@ -18,7 +18,6 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
 )
 
 func newAgentHandlerTestDB(t *testing.T) *gorm.DB {
@@ -76,7 +75,7 @@ func TestAgentHandler_AssignSession(t *testing.T) {
 	}
 	db.Create(agent)
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	// 让 agent 上线，使其进入 onlineAgents 缓存
@@ -186,7 +185,7 @@ func TestAgentHandler_ReleaseSession(t *testing.T) {
 	}
 	db.Create(agent)
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	session := &models.Session{
@@ -283,7 +282,7 @@ func TestAgentHandler_GetAgent(t *testing.T) {
 	}
 	db.Create(agent)
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	r := gin.New()
@@ -363,7 +362,7 @@ func TestAgentHandler_GetAgentStats(t *testing.T) {
 	}
 	db.Create(agent)
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	r := gin.New()
@@ -447,7 +446,7 @@ func TestAgentHandler_FindAvailableAgent(t *testing.T) {
 		db.Create(agent)
 	}
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	// 让所有 agents 上线
@@ -550,7 +549,7 @@ func TestAgentHandler_ListAgents_Extended(t *testing.T) {
 		db.Create(agent)
 	}
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	r := gin.New()

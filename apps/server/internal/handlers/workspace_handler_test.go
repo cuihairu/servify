@@ -43,7 +43,7 @@ func TestWorkspaceHandler_GetOverview_EmptyDB(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
 	handler := NewWorkspaceHandler(workspaceSvc)
 
@@ -66,7 +66,7 @@ func TestWorkspaceHandler_GetOverview_WithLimit(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
 	handler := NewWorkspaceHandler(workspaceSvc)
 
@@ -87,7 +87,7 @@ func TestWorkspaceHandler_GetOverview_InvalidLimit(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
 	handler := NewWorkspaceHandler(workspaceSvc)
 
@@ -106,7 +106,7 @@ func TestWorkspaceHandler_GetOverview_InvalidLimit(t *testing.T) {
 func TestNewWorkspaceHandler(t *testing.T) {
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
 	handler := NewWorkspaceHandler(workspaceSvc)
 
@@ -119,7 +119,7 @@ func TestRegisterWorkspaceRoutes(t *testing.T) {
 
 	db := newWorkspaceHandlerTestDB(t)
 	logger := logrus.New()
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	workspaceSvc := services.NewWorkspaceService(db, agentSvc)
 	handler := NewWorkspaceHandler(workspaceSvc)
 

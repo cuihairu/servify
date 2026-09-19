@@ -178,4 +178,18 @@ func TestPublicSuggestionNextQuestions(t *testing.T) {
 			t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("post service error maps to 500", func(t *testing.T) {
+		rec := &suggestionPublicRecorder{nextErr: context.DeadlineExceeded}
+		r := newSuggestionPublicRouter(rec)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/public/suggestions/next", strings.NewReader(`{"query":"密码"}`))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+		}
+	})
 }

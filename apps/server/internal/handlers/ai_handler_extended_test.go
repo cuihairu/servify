@@ -11,8 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-
-	"servify/apps/server/internal/services"
 )
 
 func TestAgentHandler_CreateAgent_BadRequest(t *testing.T) {
@@ -23,7 +21,7 @@ func TestAgentHandler_CreateAgent_BadRequest(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	r := gin.New()

@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	agentapp "servify/apps/server/internal/modules/agent/application"
-	agentdomain "servify/apps/server/internal/modules/agent/domain"
 
 	"github.com/sirupsen/logrus"
 )
@@ -31,25 +29,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewAppIntegrationService(db, nil) == nil {
 		t.Fatal("expected app integration service")
 	}
-}
-
-// ---- agent service error branches ----
-
-func TestAgentService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.Session{}, &models.Ticket{})
-	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
-	svc := NewAgentService(db, logger)
-	ctx := context.Background()
-
-	if err := db.Migrator().DropTable("agents"); err != nil {
-		t.Fatalf("drop agents: %v", err)
-	}
-	if _, err := svc.GetAgentStats(ctx, nil); err == nil {
-		t.Fatal("expected stats error with agents table missing")
-	}
-	from := uint(1)
-	svc.ApplySessionTransfer(ctx, "sess", &from, 2) // UpdateChatLoad error path logs warning
 }
 
 // ---- ai extras ----
@@ -437,22 +416,4 @@ func TestMessageRouter_HandlePlatformMessages_Waits(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	close(adapter.msgChan)
 	time.Sleep(20 * time.Millisecond)
-}
-
-// ---- agent runtime maintenance extras ----
-
-func TestAgentRuntimeMaintenance_CleanupSkipsZeroActivity(t *testing.T) {
-	repo := &maintenanceRepo{
-		profile: &agentdomain.AgentProfile{UserID: 9, MaxChatConcurrency: 2},
-		model:   &models.Agent{UserID: 9},
-	}
-	registry := &maintenanceRegistry{items: map[uint]agentapp.AgentRuntimeDTO{
-		9: {UserID: 9, Status: "online"}, // zero LastActivity
-	}}
-	module := agentapp.NewService(repo, registry)
-	m := newAgentRuntimeMaintenance(logrus.New(), module)
-	m.cleanupInactiveAgents(context.Background(), time.Minute)
-	if len(repo.statusUpdates) != 0 {
-		t.Fatalf("expected no updates for zero activity, got %v", repo.statusUpdates)
-	}
 }

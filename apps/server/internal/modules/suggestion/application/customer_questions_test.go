@@ -130,6 +130,26 @@ func TestServiceNextQuestions(t *testing.T) {
 		}
 	})
 
+	// score 不等时按命中率降序：query 四个 token，ID1 全命中(1.0)、ID4 命中
+	// 密/码两个(0.5)，排序比较走 score 不等分支。
+	t.Run("sorts by score descending", func(t *testing.T) {
+		repo := &suggestionRepoStub{
+			publicDocRows: []suggestionapp.KnowledgeDocCandidate{
+				{ID: 1, Title: "密码咨询", Content: "账号", Tags: ""},
+				{ID: 2, Title: "密码重置指南", Content: "密码 重置", Tags: ""},
+			},
+		}
+		svc := suggestionapp.NewService(repo)
+
+		resp, err := svc.NextQuestions(context.Background(), &suggestioncontract.NextQuestionsRequest{Query: "密码重置"})
+		if err != nil {
+			t.Fatalf("NextQuestions() error = %v", err)
+		}
+		if len(resp.Questions) != 2 || resp.Questions[0].Question != "密码重置指南" || resp.Questions[0].Score <= resp.Questions[1].Score {
+			t.Fatalf("expected score-descending order, got %+v", resp.Questions)
+		}
+	})
+
 	t.Run("nil request defaults query empty", func(t *testing.T) {
 		repo := &suggestionRepoStub{}
 		svc := suggestionapp.NewService(repo)

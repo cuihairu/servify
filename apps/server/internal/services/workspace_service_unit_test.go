@@ -6,15 +6,16 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 
 	"gorm.io/gorm"
 )
 
 type stubWorkspaceAgentReader struct {
-	agents []*AgentInfo
+	agents []*agentdelivery.AgentInfo
 }
 
-func (r *stubWorkspaceAgentReader) GetOnlineAgents(ctx context.Context) []*AgentInfo {
+func (r *stubWorkspaceAgentReader) GetOnlineAgents(ctx context.Context) []*agentdelivery.AgentInfo {
 	return r.agents
 }
 
@@ -28,7 +29,7 @@ func newWorkspaceTestDB(t *testing.T) *gorm.DB {
 
 func TestWorkspaceService_GetOverview(t *testing.T) {
 	db := newWorkspaceTestDB(t)
-	reader := &stubWorkspaceAgentReader{agents: []*AgentInfo{
+	reader := &stubWorkspaceAgentReader{agents: []*agentdelivery.AgentInfo{
 		{UserID: 1, Name: "Agent One"},
 		{UserID: 2, Username: "agent-two"},
 		nil,

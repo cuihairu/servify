@@ -225,3 +225,25 @@ func TestGormSuggestionFindPublicKnowledgeDocCandidates(t *testing.T) {
 		t.Fatalf("expected no cross-workspace docs, got %+v", rows)
 	}
 }
+
+func TestGormSuggestionFindPublicKnowledgeDocs_QueryError(t *testing.T) {
+	db := newSuggestionInfraTestDB(t)
+	repo := NewGormRepository(db)
+	if err := db.Migrator().DropTable("knowledge_docs"); err != nil {
+		t.Fatalf("drop docs: %v", err)
+	}
+	if _, err := repo.FindPublicKnowledgeDocs(context.Background(), 10); err == nil {
+		t.Fatal("expected query error after dropping docs")
+	}
+}
+
+func TestGormSuggestionFindPublicKnowledgeDocCandidates_QueryError(t *testing.T) {
+	db := newSuggestionInfraTestDB(t)
+	repo := NewGormRepository(db)
+	if err := db.Migrator().DropTable("knowledge_docs"); err != nil {
+		t.Fatalf("drop docs: %v", err)
+	}
+	if _, err := repo.FindPublicKnowledgeDocCandidates(context.Background(), []string{"refund"}); err == nil {
+		t.Fatal("expected query error after dropping docs")
+	}
+}

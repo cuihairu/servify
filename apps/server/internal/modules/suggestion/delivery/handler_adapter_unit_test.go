@@ -86,3 +86,16 @@ func TestSuggestionHandlerAdapterUnitSuggestPassthrough(t *testing.T) {
 		t.Fatalf("expected empty default response, got %+v", resp)
 	}
 }
+
+func TestSuggestionHandlerAdapterUnitQuestionPassthrough(t *testing.T) {
+	adapter := suggestiondelivery.NewHandlerServiceAdapter(
+		suggestionapp.NewService(suggestioninfra.NewGormRepository(newSuggestionUnitDB(t))))
+	ctx := context.Background()
+
+	if _, err := adapter.InitialQuestions(ctx, &suggestioncontract.InitialQuestionsRequest{Limit: 1}); err != nil {
+		t.Fatalf("InitialQuestions passthrough: %v", err)
+	}
+	if _, err := adapter.NextQuestions(ctx, &suggestioncontract.NextQuestionsRequest{Query: "refund"}); err != nil {
+		t.Fatalf("NextQuestions passthrough: %v", err)
+	}
+}

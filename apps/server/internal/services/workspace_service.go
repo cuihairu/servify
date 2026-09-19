@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 
 	"gorm.io/gorm"
 )
@@ -22,7 +23,7 @@ type WorkspaceOverviewReader interface {
 }
 
 type workspaceAgentReader interface {
-	GetOnlineAgents(ctx context.Context) []*AgentInfo
+	GetOnlineAgents(ctx context.Context) []*agentdelivery.AgentInfo
 }
 
 func NewWorkspaceService(db *gorm.DB, agentService workspaceAgentReader) *WorkspaceService {

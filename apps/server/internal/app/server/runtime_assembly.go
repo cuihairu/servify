@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	agentapp "servify/apps/server/internal/modules/agent/application"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	agentinfra "servify/apps/server/internal/modules/agent/infra"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	assistinfra "servify/apps/server/internal/modules/assist/infra"
@@ -40,13 +42,17 @@ import (
 	twiliovoice "servify/apps/server/internal/platform/twiliovoice"
 	"servify/apps/server/internal/platform/voiceprotocol"
 	"servify/apps/server/internal/services"
+
+	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 type runtimeAssemblyState struct {
 	aiAssembly          *AIAssembly
 	wsHub               *services.WebSocketHub
 	routingService      *routingapp.Service
-	agentAssembly       *services.AgentServiceAssembly
+	agentAdapter        *agentdelivery.HandlerServiceAdapter
 	satisfactionService *services.SatisfactionService
 }
 
@@ -182,6 +188,17 @@ func wireVoiceRuntime(rt *Runtime, webrtcService *services.WebRTCService) error 
 	return nil
 }
 
+// newAgentRegistry 按 Redis 可用性选择坐席运行态 registry：
+// 有 Redis 走多实例共享，否则退化为单机内存态。
+func newAgentRegistry(db *gorm.DB, redisClient *redis.Client, logger *logrus.Logger) agentapp.RuntimeRegistry {
+	if redisClient != nil {
+		logger.Info("using redis-backed agent registry for multi-instance support")
+		return agentinfra.NewRedisRegistry(redisClient, db, logger)
+	}
+	logger.Warn("using in-memory agent registry - not suitable for multi-instance deployment")
+	return agentinfra.NewInMemoryRegistry()
+}
+
 func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	slaService := services.NewSLAService(rt.DB, rt.Logger)
 	rt.SLAService = slaService
@@ -202,11 +219,15 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	rt.AssistHandlerService = assistdelivery.NewHandlerService(
 		assistapp.NewAssistService(assistinfra.NewGormRepository(rt.DB)))
 
-	agentAssembly := services.BuildAgentServiceAssembly(rt.DB, rt.Logger, rt.Redis)
-	rt.AgentHandlerService = agentAssembly.Service
-	rt.AgentGroupService = agentAssembly.Service
-	go agentAssembly.Maintenance.Start()
-	state.agentAssembly = agentAssembly
+	// agent：单一 module 实例贯穿 HTTP/组管理/routing 转接/workspace。
+	agentRepo := agentinfra.NewGormRepository(rt.DB)
+	agentRegistry := newAgentRegistry(rt.DB, rt.Redis, rt.Logger)
+	agentModule := agentapp.NewService(agentRepo, agentRegistry)
+	agentAdapter := agentdelivery.NewHandlerServiceAdapter(agentModule, rt.Logger)
+	rt.AgentHandlerService = agentAdapter
+	rt.AgentGroupService = agentAdapter
+	go agentdelivery.NewRuntimeMaintenance(rt.Logger, agentModule).Start()
+	state.agentAdapter = agentAdapter
 
 	statisticsService := services.NewStatisticsService(rt.DB, rt.Logger)
 	statisticsService.SetEventBus(rt.Bus)
@@ -229,7 +250,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	}
 
 	rt.ShiftService = services.NewShiftService(rt.DB, rt.Logger)
-	rt.WorkspaceService = services.NewWorkspaceService(rt.DB, agentAssembly.Service)
+	rt.WorkspaceService = services.NewWorkspaceService(rt.DB, agentAdapter)
 	rt.MacroService = services.NewMacroService(rt.DB)
 	rt.AppIntegrationService = services.NewAppIntegrationService(rt.DB, rt.Logger)
 	rt.CustomFieldService = services.NewCustomFieldService(rt.DB)
@@ -268,7 +289,7 @@ func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 		DB:                rt.DB,
 		Logger:            rt.Logger,
 		AI:                rt.AIService,
-		Agents:            state.agentAssembly.Service,
+		Agents:            state.agentAdapter,
 		Notifier:          newRoutingTransferNotifier(rt.RealtimeGateway),
 		Routing:           routingdelivery.NewSessionTransferAdapter(state.routingService, rt.Bus),
 		Tickets:           ticketdelivery.NewRuntimeAdapter(rt.Bus),

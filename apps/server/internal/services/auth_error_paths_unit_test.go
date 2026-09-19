@@ -191,26 +191,3 @@ func TestOrchestratedAI_ProcessQueryError(t *testing.T) {
 		t.Fatal("expected ProcessQuery error")
 	}
 }
-
-func TestAgentService_ApplySessionTransfer_ModuleError(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.Session{}, &models.Ticket{})
-	logger := newTestLogger()
-	svc := NewAgentService(db, logger)
-	ctx := context.Background()
-
-	user := &models.User{Username: "agent9", Email: "agent9@x.com", Role: "agent"}
-	if err := db.Create(user).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if _, err := svc.CreateAgent(ctx, &AgentCreateRequest{UserID: user.ID}); err != nil {
-		t.Fatalf("CreateAgent: %v", err)
-	}
-	if err := svc.AgentGoOnline(ctx, user.ID); err != nil {
-		t.Fatalf("AgentGoOnline: %v", err)
-	}
-	if err := db.Migrator().DropTable("agents"); err != nil {
-		t.Fatalf("drop agents: %v", err)
-	}
-	// registry hit + UpdateChatLoad failure triggers the warn branch
-	svc.ApplySessionTransfer(ctx, "sess-x", nil, user.ID)
-}

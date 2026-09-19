@@ -10,13 +10,10 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"servify/apps/server/internal/models"
-	agentapp "servify/apps/server/internal/modules/agent/application"
-	agentdomain "servify/apps/server/internal/modules/agent/domain"
 	analyticsapp "servify/apps/server/internal/modules/analytics/application"
 	customerapp "servify/apps/server/internal/modules/customer/application"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
@@ -24,7 +21,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
-	"github.com/sirupsen/logrus"
 )
 
 // hscovSetSeam 替换一个包级变量并在测试结束后还原。
@@ -374,50 +370,6 @@ func TestHSSeamsWebSocketPingTickerPath(t *testing.T) {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("writePump did not exit via ping branch")
-	}
-}
-
-// --- agent runtime maintenance ticker ---
-
-type hscovMaintenanceRepo struct {
-	*maintenanceRepo
-	mu    sync.Mutex
-	aways []uint
-}
-
-func (r *hscovMaintenanceRepo) UpdatePresenceStatus(ctx context.Context, userID uint, status agentdomain.PresenceStatus) error {
-	r.mu.Lock()
-	r.aways = append(r.aways, userID)
-	r.mu.Unlock()
-	return r.maintenanceRepo.UpdatePresenceStatus(ctx, userID, status)
-}
-
-func TestHSSeamsAgentRuntimeMaintenanceTicker(t *testing.T) {
-	repo := &hscovMaintenanceRepo{maintenanceRepo: &maintenanceRepo{
-		profile: &agentdomain.AgentProfile{UserID: 9, MaxChatConcurrency: 1},
-		model:   &models.Agent{UserID: 9},
-	}}
-	registry := &maintenanceRegistry{items: map[uint]agentapp.AgentRuntimeDTO{
-		9: {UserID: 9, LastActivity: time.Now().Add(-10 * time.Minute)},
-	}}
-	module := agentapp.NewService(repo, registry)
-	maintenance := newAgentRuntimeMaintenance(logrus.New(), module)
-	maintenance.interval = 2 * time.Millisecond
-
-	go maintenance.Start()
-
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		repo.mu.Lock()
-		observed := len(repo.aways)
-		repo.mu.Unlock()
-		if observed >= 1 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("maintenance ticker never ran cleanupInactiveAgents")
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 

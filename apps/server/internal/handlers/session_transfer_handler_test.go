@@ -68,7 +68,7 @@ func newTestDBForSessionTransferHandler(t *testing.T) *gorm.DB {
 	return db
 }
 
-func newRoutingTransferHandlerService(db *gorm.DB, logger *logrus.Logger, ai stubAIForTransferHandler, agentSvc *services.AgentService) routingdelivery.HandlerService {
+func newRoutingTransferHandlerService(db *gorm.DB, logger *logrus.Logger, ai stubAIForTransferHandler, agentSvc *agentdelivery.HandlerServiceAdapter) routingdelivery.HandlerService {
 	bus := eventbus.NewInMemoryBus()
 	routingSvc := routingapp.NewService(routinginfra.NewGormRepository(db), bus)
 	return routingdelivery.NewHandlerService(routingdelivery.HandlerDependencies{
@@ -101,7 +101,7 @@ func TestSessionTransferHandler_ListWaiting_And_Cancel(t *testing.T) {
 		t.Fatalf("seed waiting: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 
@@ -158,7 +158,7 @@ func TestSessionTransferHandler_TransferToHuman(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 
@@ -197,7 +197,7 @@ func TestSessionTransferHandler_GetTransferHistory(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 
@@ -237,7 +237,7 @@ func TestSessionTransferHandler_ListRecentTransferHistory(t *testing.T) {
 		t.Fatalf("seed transfer record: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 
@@ -293,7 +293,7 @@ func TestSessionTransferHandler_ProcessWaitingQueue(t *testing.T) {
 		t.Fatalf("seed waiting: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 
@@ -325,7 +325,7 @@ func TestSessionTransferHandler_CheckAutoTransfer(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	agentSvc := services.NewAgentService(db, logger)
+	agentSvc := newTestAgentService(db, logger)
 	transferSvc := newRoutingTransferHandlerService(db, logger, stubAIForTransferHandler{}, agentSvc)
 	h := NewSessionTransferHandler(transferSvc, logger)
 

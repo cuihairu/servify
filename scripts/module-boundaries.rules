@@ -52,6 +52,8 @@ require|apps/server/internal/app/server/runtime_assembly.go|CustomerHandlerServi
 require|apps/server/internal/app/server/runtime.go|AutomationHandlerService[[:space:]]+automationdelivery\.HandlerService|Runtime must expose automation via automationdelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|AutomationHandlerService[[:space:]]*=.*automationdelivery\.NewHandlerServiceAdapter\(autoModule\)|Runtime must assemble automation handlers from the single module instance (no split-brain).
 forbid|apps/server/internal/app/server/runtime_assembly.go|automationdelivery\.NewHandlerService\(rt\.DB\)|Automation handlers must not get a second bare module instance; assemble via NewHandlerServiceAdapter on the single instance.
+require|apps/server/internal/app/server/runtime_assembly.go|AgentHandlerService[[:space:]]*=[[:space:]]*agentAdapter|Runtime must assemble agent handlers via agentdelivery.NewHandlerServiceAdapter on the single module instance.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AgentService|Runtime must not depend on the concrete agent facade; use agentdelivery contracts.
 require|apps/server/internal/app/server/runtime.go|KnowledgeDocHandler[[:space:]]+knowledgedelivery\.HandlerService|Runtime must expose knowledge via knowledgedelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|Knowledg[e]?DocHandler[[:space:]]*=.*knowledgedelivery\.NewHandlerServiceWithProvider\(rt\.DB|Runtime must assemble knowledge handlers directly from module delivery.
 require|apps/server/internal/app/server/runtime.go|WorkspaceService[[:space:]]+services\.WorkspaceOverviewReader|Runtime must expose workspace via WorkspaceOverviewReader.

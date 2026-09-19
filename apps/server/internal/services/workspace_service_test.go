@@ -12,6 +12,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
+	agentapp "servify/apps/server/internal/modules/agent/application"
+	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	agentinfra "servify/apps/server/internal/modules/agent/infra"
 )
 
 func newWorkspaceServiceTestDB(t *testing.T) *gorm.DB {
@@ -34,11 +37,18 @@ func newWorkspaceServiceTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+func newWorkspaceIntegrationAgentService(db *gorm.DB, logger *logrus.Logger) *agentdelivery.HandlerServiceAdapter {
+	return agentdelivery.NewHandlerServiceAdapter(
+		agentapp.NewService(agentinfra.NewGormRepository(db), agentinfra.NewInMemoryRegistry()),
+		logger,
+	)
+}
+
 func TestWorkspaceService_GetOverview_EmptyDB(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	overview, err := svc.GetOverview(context.Background(), 10)
@@ -60,7 +70,7 @@ func TestWorkspaceService_GetOverview_WithSessions(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	// Create test users
@@ -114,7 +124,7 @@ func TestWorkspaceService_GetOverview_DefaultLimit(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	// Test with limit <= 0 (should default to 10)
@@ -131,7 +141,7 @@ func TestWorkspaceService_GetOverview_WaitingSessions(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	// Create active session without agent (waiting)
@@ -156,7 +166,7 @@ func TestWorkspaceService_GetOverview_MultipleChannels(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	// Create sessions for different platforms with unique IDs
@@ -184,7 +194,7 @@ func TestWorkspaceService_GetOverview_BusyAgents(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 	svc := NewWorkspaceService(db, agentSvc)
 
 	// Create users and agents
@@ -237,7 +247,7 @@ func TestWorkspaceService_GetOverview_NilAgentService(t *testing.T) {
 func TestNewWorkspaceService(t *testing.T) {
 	db := newWorkspaceServiceTestDB(t)
 	logger := logrus.New()
-	agentSvc := NewAgentService(db, logger)
+	agentSvc := newWorkspaceIntegrationAgentService(db, logger)
 
 	svc := NewWorkspaceService(db, agentSvc)
 

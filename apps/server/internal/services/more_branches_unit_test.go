@@ -353,14 +353,6 @@ func TestRouter_EnsureSessionTriggerErrors(t *testing.T) {
 	}
 }
 
-func TestBuildAgentServiceAssembly_NilLogger(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.Session{}, &models.Ticket{})
-	asm := BuildAgentServiceAssembly(db, nil, nil)
-	if asm == nil || asm.Service == nil {
-		t.Fatal("expected assembly with default logger")
-	}
-}
-
 func TestWebRTC_HandleOfferCreateError(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()

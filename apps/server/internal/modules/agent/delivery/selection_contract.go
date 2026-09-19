@@ -53,7 +53,7 @@ func AgentInfoFromRuntime(dto *AgentRuntimeDTO) *AgentInfo {
 	}
 }
 
-// AgentGroupService 坐席组管理契约（管理面 CRUD 由 services.AgentService 实现）。
+// AgentGroupService 坐席组管理契约（管理面 CRUD 由 HandlerServiceAdapter 实现）。
 type AgentGroupService interface {
 	ListAgentGroups(ctx context.Context) ([]models.AgentGroup, error)
 	GetAgentGroup(ctx context.Context, id uint) (*models.AgentGroup, error)

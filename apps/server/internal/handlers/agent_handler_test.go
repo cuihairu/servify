@@ -17,9 +17,20 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	agentapp "servify/apps/server/internal/modules/agent/application"
+	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	agentinfra "servify/apps/server/internal/modules/agent/infra"
 	auditplatform "servify/apps/server/internal/platform/audit"
-	"servify/apps/server/internal/services"
 )
+
+// newTestAgentService 构造经 module delivery adapter 的测试用 agent 服务
+// （in-memory registry，与原 services.NewAgentService 装配语义一致）。
+func newTestAgentService(db *gorm.DB, logger *logrus.Logger) *agentdelivery.HandlerServiceAdapter {
+	return agentdelivery.NewHandlerServiceAdapter(
+		agentapp.NewService(agentinfra.NewGormRepository(db), agentinfra.NewInMemoryRegistry()),
+		logger,
+	)
+}
 
 func newTestDBForAgents(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -66,7 +77,7 @@ func TestAgentHandler_Create_Online_Status_Offline(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 
 	r := gin.New()
@@ -166,7 +177,7 @@ func TestAgentHandler_AuditSnapshotsForStatusChanges(t *testing.T) {
 		t.Fatalf("seed agent: %v", err)
 	}
 
-	svc := services.NewAgentService(db, logger)
+	svc := newTestAgentService(db, logger)
 	h := NewAgentHandler(svc, logger)
 	recorder := &ticketAuditRecorder{}
 
@@ -228,7 +239,7 @@ func TestAgentHandler_CreateAgent_NotFoundAndNilLoggerSafe(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newTestDBForAgents(t)
-	svc := services.NewAgentService(db, nil)
+	svc := newTestAgentService(db, nil)
 	h := NewAgentHandler(svc, nil)
 
 	r := gin.New()
