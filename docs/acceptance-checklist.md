@@ -137,9 +137,9 @@ go test -tags weknora ./apps/server/cmd ./apps/server/internal/handlers ./apps/s
 
 代码入口：
 
-- [health.go](/Users/cui/Workspaces/servify/apps/server/internal/app/server/health.go)
-- [run.go](/Users/cui/Workspaces/servify/apps/server/cmd/cli/run.go)
-- [run_enhanced.go](/Users/cui/Workspaces/servify/apps/server/cmd/cli/run_enhanced.go)
+- [health.go](../../../apps/server/internal/app/server/health.go)
+- [main.go（cmd/server）](../../../apps/server/cmd/server/main.go)
+- [run.go（cmd/cli）](../../../apps/server/cmd/cli/run.go)
 
 | 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
 | --- | --- | --- | --- | --- | --- |

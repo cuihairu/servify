@@ -708,7 +708,7 @@
 - 目标：
   - 默认生产路径不再误接入 demo/mock 能力
 
-### [ ] P3-4 统一运行时装配方式
+### [x] P3-4 统一运行时装配方式（2026-09-19，刀 19）
 
 - 范围：
   - `cmd/server`
@@ -716,6 +716,16 @@
   - `cmd/cli/run_enhanced`
 - 目标：
   - 减少重复 wiring 与配置漂移
+- 完成记录（2026-09-19 刀 19）：
+  - `cmd/cli/run.go` 重写为与 cmd/server 同构的标准装配：LoadConfig → ResolveRuntimeOverrides(env-only，DB_DRIVER/DB_DSN/SERVIFY_PORT 生效) → BuildApp → `async.WireDefaultObservableBus` → OpenDatabaseWithRetry+Fatalf → BuildServerRuntime → StartRuntime → BuildHTTPServer(overrides.HTTP)；路由面即 `BuildRouter` 全量（生产同源：正版 CORS/限流/安全头/body 上限/RequestID/errors_total + auth 鉴权 + 全业务路由 + SPA 静态）
+  - `run_enhanced.go`（384 行）删除，weknora 构建标签全仓清零；`make run-weknora`/`run-knowledge-provider` 语义 = 同一实现按 config.weknora.yml 跑（provider 切换由配置驱动）
+  - 消灭的重复/漂移：两份简化 CORS（含只读 AllowedOrigins[0] 劣化版）、一份手写 75 行令牌桶限流复制品、run.go 手装 AI 绕过 BuildAIAssembly（丢 pgvector/dify/weknora）、两份手写路由装配、两份静态根探测、gormDBStatsProvider 副本、CLI 缺失的 ObservableBus 接线、DB 失败沉默降级（改 Fatalf）、`startHealthMonitoring` 日志 goroutine
+  - 删除死代码：`realtime_runtime.go` 整文件（RealtimeRuntime/BuildRealtimeRuntime，唯一非测试消费方就是旧 CLI run）；`make run-cli` 原本必 panic（setupRouter 的 router.Static("/") 与 /api 冲突）本刀顺带修复——CLI run 首次真实可用（sqlite 手动冒烟：/health 200、鉴权 401 生效）
+  - ObservableBus 接线下沉 `async.WireDefaultObservableBus`（bootstrap 不能 import async：async→bootstrap for Worker），cmd/server 与 CLI 共用
+  - 测试基座换血：原三个子进程测试依赖「setupRouter panic → recover → exit 0」，装配收敛后基座失效——新增 `TestCLIRunSmokeLifecycle`（真实起服 sqlite → /health 200 → SIGTERM → 干净退出，复刻 cmd/server 的 SIGTERM 手法守住整仓 100% 覆盖率）；shutdownRuntime 四测适配新收尾段（app.Shutdown + srv.Shutdown）
+  - module-boundaries.rules 五条 realtime_runtime.go 规则切 runtime.go/runtime_assembly.go 现承载文件
+  - 行为变化（有意）：CLI run 路由面从 6 条匿名演示路由扩为全量生产路由（含鉴权）；DB 必需（可 sqlite）；weknora 标签不再改变行为
+  - docs 同步：local-development.md 运行入口口径、acceptance-checklist.md 代码入口死链（/Users/cui/ 旧绝对路径）修复
 
 ---
 

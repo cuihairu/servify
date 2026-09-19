@@ -23,7 +23,8 @@
   - `make run-cli CONFIG=./config.yml`
   - `make run-knowledge-provider CONFIG=./config.weknora.yml`
   - `make run-weknora CONFIG=./config.weknora.yml`
-  - `run-knowledge-provider` / `run-weknora` 都仅用于 WeKnora compatibility / mock 回归；日常知识库链路优先使用 `Dify`
+  - `run-cli` 与 `run`（cmd/server）共用同一标准装配（bootstrap + BuildRouter 全量路由面）；差异仅两点：CLI 不做迁移（期望预迁移的库）、不注册后台 workers。数据库驱动与端口经环境变量覆盖（`DB_DRIVER=sqlite DB_DSN=... SERVIFY_PORT=...`），本地无 Postgres 时可用 sqlite 起服
+  - `run-weknora` / `run-knowledge-provider` 与 `run-cli` 是同一实现，仅以 `-tags weknora` 编译（兼容性构建产物）；provider 切换由配置驱动（WeKnora 段），用于 WeKnora compatibility / mock 回归；日常知识库链路优先使用 `Dify`
 - 测试：
   - `./scripts/run-tests.sh`
   - `./scripts/run-go-race-tests.sh`

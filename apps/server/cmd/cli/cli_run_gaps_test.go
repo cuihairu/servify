@@ -30,25 +30,3 @@ func TestCLIRunBuildAppFailure(t *testing.T) {
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
 	assert.Contains(t, string(out), "Failed to build app")
 }
-
-// TestCLIRunTracingSetupWarning 覆盖 SetupObservability 失败时的 Warnf 分支：
-// 非法的 OTEL_RESOURCE_ATTRIBUTES 让 resource.New 失败，run() 只告警并继续
-// 启动（随后在 setupRouter 的既有 panic 处被 worker 回收退出）。
-func TestCLIRunTracingSetupWarning(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yml"),
-		[]byte(baseCLIRunConfig(true, "localhost")), 0o600))
-
-	cmd := exec.Command(os.Args[0], "-test.run=^TestCLIWorker$", "-test.timeout=2m")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"CLI_RUN_SUBPROCESS=1",
-		"CLI_RUN_VARIANT=tracing-warn",
-		"CLI_RUN_DIR="+dir,
-		"OTEL_RESOURCE_ATTRIBUTES=not-a-valid-entry",
-	)
-	out, _ := cmd.CombinedOutput()
-	assert.Contains(t, string(out), "init tracing")
-	require.NotNil(t, cmd.ProcessState, "subprocess must run, output: %s", out)
-	assert.EqualValues(t, 0, cmd.ProcessState.ExitCode(), "output: %s", out)
-}

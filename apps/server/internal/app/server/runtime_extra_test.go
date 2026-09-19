@@ -169,41 +169,6 @@ func TestBuildRuntimeVoiceProviderFailure(t *testing.T) {
 	}
 }
 
-func TestBuildRealtimeRuntimeWithNilDBAndLifecycle(t *testing.T) {
-	cfg := newRuntimeTestConfig(t)
-	logger := logrus.New()
-
-	rt := BuildRealtimeRuntime(cfg, logger, nil, nil, nil)
-	if rt.RealtimeGateway == nil || rt.RTCGateway == nil || rt.MessageRouter == nil {
-		t.Fatal("expected realtime primitives to be wired without db")
-	}
-
-	if err := rt.Start(); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if err := rt.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-}
-
-func TestBuildRealtimeRuntimeWithDB(t *testing.T) {
-	cfg := newRuntimeTestConfig(t)
-	rt := BuildRealtimeRuntime(cfg, logrus.New(), newRuntimeTestDB(t), nil, nil)
-	if rt.DB == nil {
-		t.Fatal("expected db to be attached")
-	}
-	if err := rt.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-}
-
-func TestRealtimeRuntimeStopWithoutRouter(t *testing.T) {
-	rt := &RealtimeRuntime{}
-	if err := rt.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop() with nil router = %v", err)
-	}
-}
-
 type stubRealtimeGateway struct {
 	session  string
 	messages []realtimeplatform.Message

@@ -201,9 +201,9 @@ func TestRunCheckObservabilityBaselineCleanPass(t *testing.T) {
 }
 
 // TestCLIWorker re-executes the test binary to execute the package-private
-// run() startup path in a subprocess. The static route registration inside
-// setupRouter always panics under gin's router tree, so the worker recovers
-// and exits cleanly to flush coverage data.
+// run() startup path in a subprocess. Subprocess tests either inject seam
+// faults via CLI_RUN_VARIANT (see applyCLIRunFault, expecting logrus.Fatalf
+// to exit 1) or drive the real lifecycle ("smoke": SIGTERM → clean exit 0).
 func TestCLIWorker(t *testing.T) {
 	if os.Getenv("CLI_RUN_SUBPROCESS") != "1" {
 		return
@@ -229,37 +229,15 @@ func TestCLIWorker(t *testing.T) {
 
 	applyCLIRunFault(variant)
 
-	defer func() {
-		_ = recover()
-		os.Exit(0)
-	}()
 	run(nil, nil)
+	// Smoke variant: WaitForShutdownSignal returned on SIGTERM, the shutdown
+	// section completed, and run() returned normally.
 	os.Exit(0)
 }
 
-func runCLISubprocess(t *testing.T, variant, configBody string, extraSetup func(dir string)) {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "config.yml"), []byte(configBody), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	if extraSetup != nil {
-		extraSetup(dir)
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=^TestCLIWorker$", "-test.timeout=2m")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"CLI_RUN_SUBPROCESS=1",
-		"CLI_RUN_VARIANT="+variant,
-		"CLI_RUN_DIR="+dir,
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("cli run subprocess failed: %v\noutput:\n%s", err, out)
-	}
-}
-
+// baseCLIRunConfig 返回 CLI run 子进程测试用的最小配置；tracingEnabled 时附
+// 带监控段（tracing endpoint 不可达或 OTEL_RESOURCE_ATTRIBUTES 非法时走
+// "init tracing" Warn 分支）。
 func baseCLIRunConfig(tracingEnabled bool, host string) string {
 	body := []string{
 		"server:",
@@ -294,18 +272,6 @@ func baseCLIRunConfig(tracingEnabled bool, host string) string {
 		)
 	}
 	return strings.Join(body, "\n") + "\n"
-}
-
-func TestCLIRunStartupReleaseMode(t *testing.T) {
-	runCLISubprocess(t, "release", baseCLIRunConfig(false, "127.0.0.1"), nil)
-}
-
-func TestCLIRunStartupLocalhostWithTracingAndStaticRoot(t *testing.T) {
-	runCLISubprocess(t, "localhost-tracing", baseCLIRunConfig(true, "localhost"), func(dir string) {
-		if err := os.MkdirAll(filepath.Join(dir, "apps", "admin"), 0o755); err != nil {
-			return
-		}
-	})
 }
 
 func TestCLIRunConfigLoadFailure(t *testing.T) {

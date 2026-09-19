@@ -3,6 +3,7 @@ package async
 import (
 	"context"
 
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/sirupsen/logrus"
@@ -38,4 +39,17 @@ func (b *ObservableBus) Publish(ctx context.Context, event eventbus.Event) error
 	}
 	b.metrics.RecordPublished(event.Name(), "success")
 	return nil
+}
+
+// WireDefaultObservableBus wraps a bus with the standard observability stack:
+// bus metrics on the process-level default registry plus an in-memory dead
+// letter recorder (cap 1000). Shared by the server and CLI run entrypoints
+// (bootstrap cannot import this package: async -> bootstrap for Worker).
+func WireDefaultObservableBus(inner eventbus.Bus, logger *logrus.Logger) *ObservableBus {
+	return NewObservableBus(
+		inner,
+		NewBusMetrics(svcmetrics.DefaultRegistry),
+		NewInMemoryDeadLetterRecorder(1000),
+		logger,
+	)
 }

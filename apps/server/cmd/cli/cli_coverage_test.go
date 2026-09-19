@@ -1,36 +1,25 @@
 package cli
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/config"
-
-	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	appserver "servify/apps/server/internal/app/server"
 )
 
 func newQuietLogger() *logrus.Logger {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
 	return logger
-}
-
-func buildTestRealtimeRuntime(cfg *config.Config, logger *logrus.Logger) *appserver.RealtimeRuntime {
-	return appserver.BuildRealtimeRuntime(cfg, logger, nil, nil, nil)
 }
 
 func writeCLIConfig(t *testing.T, dir string, jwtSecret string) string {
@@ -414,64 +403,6 @@ func TestInitConfigMissingFileIsTolerated(t *testing.T) {
 	t.Cleanup(viper.Reset)
 	cfgFile = ""
 	initConfig()
-}
-
-func TestSetupRouterRegistersCoreRoutes(t *testing.T) {
-	cfg := config.GetDefaultConfig()
-	logger := newQuietLogger()
-	runtime := buildTestRealtimeRuntime(cfg, logger)
-
-	// The catch-all static route currently conflicts with the concrete API
-	// routes in gin's radix tree, so setupRouter panics at the final Static
-	// registration. Exercise the route assembly up to that point.
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Fatal("expected static route registration panic")
-			}
-		}()
-		_ = setupRouter(cfg, runtime)
-	}()
-}
-
-func TestCORSMiddlewareVariants(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfgWithCORS := config.GetDefaultConfig()
-	cfgWithCORS.Security.CORS.Enabled = true
-	cfgWithCORS.Security.CORS.AllowedOrigins = []string{"https://example.com"}
-	cfgWithCORS.Security.CORS.AllowedMethods = []string{"GET, POST"}
-	cfgWithCORS.Security.CORS.AllowedHeaders = []string{"X-Custom"}
-
-	r := gin.New()
-	r.Use(corsMiddlewareWithConfig(cfgWithCORS))
-	r.OPTIONS("/anything", func(c *gin.Context) { c.Status(http.StatusOK) })
-	r.GET("/anything", func(c *gin.Context) { c.Status(http.StatusOK) })
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodOptions, "/anything", nil))
-	if w.Header().Get("Access-Control-Allow-Origin") != "https://example.com" {
-		t.Fatalf("origin header = %q", w.Header().Get("Access-Control-Allow-Origin"))
-	}
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("OPTIONS = %d", w.Code)
-	}
-
-	rDefault := gin.New()
-	rDefault.Use(corsMiddlewareWithConfig(nil))
-	rDefault.GET("/anything", func(c *gin.Context) { c.Status(http.StatusOK) })
-	w2 := httptest.NewRecorder()
-	rDefault.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/anything", nil))
-	if w2.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatalf("default origin = %q", w2.Header().Get("Access-Control-Allow-Origin"))
-	}
-}
-
-func TestSetupRouterWithContextCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := ctx.Err(); err == nil {
-		t.Fatal("sanity")
-	}
 }
 
 func TestCheckBaselineCommandsViaCobra(t *testing.T) {
