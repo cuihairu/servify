@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	automationapp "servify/apps/server/internal/modules/automation/application"
 	platformauth "servify/apps/server/internal/platform/auth"
 
 	"github.com/sirupsen/logrus"
@@ -18,10 +19,10 @@ import (
 
 // SLAService SLA配置和监控服务
 type SLAService struct {
-	db         *gorm.DB
-	logger     *logrus.Logger
-	tracer     trace.Tracer
-	automation *AutomationService
+	db               *gorm.DB
+	logger           *logrus.Logger
+	tracer           trace.Tracer
+	automationModule *automationapp.Service
 }
 
 // NewSLAService 创建SLA服务
@@ -37,9 +38,9 @@ func NewSLAService(db *gorm.DB, logger *logrus.Logger) *SLAService {
 	}
 }
 
-// SetAutomationService 注入自动化服务，用于在违约时触发规则
-func (s *SLAService) SetAutomationService(automation *AutomationService) {
-	s.automation = automation
+// SetAutomationModule 注入 automation module 实例，用于在违约时触发规则
+func (s *SLAService) SetAutomationModule(module *automationapp.Service) {
+	s.automationModule = module
 }
 
 // SLAConfigCreateRequest 创建SLA配置请求
@@ -507,8 +508,8 @@ func (s *SLAService) CheckSLAViolation(ctx context.Context, ticket *models.Ticke
 		scopedTicket.ID, violation.ViolationType, violation.Deadline.Format(time.RFC3339))
 
 	// 触发自动化
-	if s.automation != nil {
-		go s.automation.HandleEvent(context.Background(), AutomationEvent{
+	if s.automationModule != nil {
+		go s.automationModule.HandleEvent(context.Background(), automationapp.Event{
 			Type:     "sla_violation",
 			TicketID: scopedTicket.ID,
 			Payload:  violation,

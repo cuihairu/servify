@@ -8,7 +8,9 @@ import (
 	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	assistinfra "servify/apps/server/internal/modules/assist/infra"
+	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	automationinfra "servify/apps/server/internal/modules/automation/infra"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
@@ -185,12 +187,14 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	rt.SLAService = slaService
 	rt.slaService = slaService
 
-	automationService := services.NewAutomationService(rt.DB, rt.Logger)
-	rt.AutomationHandlerService = automationdelivery.NewHandlerService(rt.DB)
-	automationService.SetEventBus(rt.Bus)
-	slaService.SetAutomationService(automationService)
-	rt.automationSvc = automationService
-	automationService.SetTimerBatchSize(rt.Config.Automation.TimerBatchSize)
+	// automation：单一 module 实例贯穿 HTTP/eventbus/SLA/timer worker，
+	// 避免 facade 与 delivery 各持一份实例的 split-brain。
+	autoModule := automationapp.NewService(automationinfra.NewGormRepository(rt.DB))
+	rt.AutomationHandlerService = automationdelivery.NewHandlerServiceAdapter(autoModule)
+	automationdelivery.NewEventBusSubscriber(autoModule).Register(rt.Bus)
+	slaService.SetAutomationModule(autoModule)
+	rt.automationModule = autoModule
+	autoModule.SetTimerBatchSize(rt.Config.Automation.TimerBatchSize)
 
 	rt.CustomerHandlerService = customerdelivery.NewHandlerService(rt.DB)
 
@@ -246,7 +250,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	webhookService.SetDeliverer(webhookinfra.NewHTTPDeliverer())
 	webhookdelivery.NewEventBusSubscriber(webhookService).Register(rt.Bus)
 	// automation call_webhook 动作复用同一投递器（单次投递 + 审计行）。
-	automationService.SetWebhookDispatcher(webhookdelivery.NewAutomationWebhookDispatcher(webhookService))
+	autoModule.SetWebhookDispatcher(webhookdelivery.NewAutomationWebhookDispatcher(webhookService))
 	rt.webhookService = webhookService
 	rt.WebhookHandlerService = webhookdelivery.NewHandlerServiceAdapter(webhookService)
 

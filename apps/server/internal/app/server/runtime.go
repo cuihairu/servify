@@ -92,7 +92,7 @@ type Runtime struct {
 	smtpSender        *emailinfra.GoSMTPSender
 	satisfactionSvc   *services.SatisfactionService
 	transferHandler   *routingdelivery.HandlerServiceAdapter
-	automationSvc     *services.AutomationService
+	automationModule  *automationapp.Service
 }
 
 type websocketRunner interface {
@@ -209,13 +209,13 @@ func (rt *Runtime) SurveysForWorker() *services.SatisfactionService {
 }
 
 // AutomationTimersForWorker returns the delay-timer processor for worker use.
-// 返回门面持有的 module 实例——事件订阅与 webhook dispatcher 都装配在它上面，
-// delay 到期后的 call_webhook 动作依赖它。
+// 返回单一 module 实例（其自身即 TimerProcessor）——事件订阅与 webhook
+// dispatcher 都装配在它上面，delay 到期后的 call_webhook 动作依赖它。
 func (rt *Runtime) AutomationTimersForWorker() automationapp.TimerProcessor {
-	if rt.automationSvc == nil {
+	if rt.automationModule == nil {
 		return nil
 	}
-	return rt.automationSvc.TimersForWorker()
+	return rt.automationModule
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {

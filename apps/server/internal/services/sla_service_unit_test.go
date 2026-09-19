@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	automationapp "servify/apps/server/internal/modules/automation/application"
+	automationinfra "servify/apps/server/internal/modules/automation/infra"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -653,13 +655,13 @@ func TestSLAUnit_Helpers(t *testing.T) {
 	}
 }
 
-func TestSLAUnit_SetAutomationService(t *testing.T) {
+func TestSLAUnit_SetAutomationModule(t *testing.T) {
 	svc := newSLAUnitTestService(t)
 	automationDB := newServicesTestDB(t,
 		&models.AutomationTrigger{}, &models.AutomationRun{},
 		&models.Ticket{}, &models.TicketComment{},
 	)
-	svc.SetAutomationService(NewAutomationService(automationDB, nil))
+	svc.SetAutomationModule(automationapp.NewService(automationinfra.NewGormRepository(automationDB)))
 
 	now := time.Now()
 	cfg := &models.SLAConfig{

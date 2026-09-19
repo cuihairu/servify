@@ -28,9 +28,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewStatisticsService(db, nil) == nil {
 		t.Fatal("expected statistics service")
 	}
-	if NewAutomationService(db, nil) == nil {
-		t.Fatal("expected automation service")
-	}
 	if NewAppIntegrationService(db, nil) == nil {
 		t.Fatal("expected app integration service")
 	}
@@ -396,15 +393,6 @@ func TestStatisticsService_WorkerTickerLoop(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("worker did not stop")
-	}
-}
-
-// ---- automation extras ----
-
-func TestAutomationService_MatchTriggerNilReceiver(t *testing.T) {
-	var svc *AutomationService
-	if svc.matchTrigger(context.Background(), models.AutomationTrigger{}, AutomationEvent{}, nil, false) {
-		t.Fatal("nil receiver should not match")
 	}
 }
 
