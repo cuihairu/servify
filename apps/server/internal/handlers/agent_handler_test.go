@@ -24,7 +24,7 @@ import (
 )
 
 // newTestAgentService 构造经 module delivery adapter 的测试用 agent 服务
-// （in-memory registry，与原 services.NewAgentService 装配语义一致）。
+// （in-memory registry，装配语义与 agent module 单实例一致）。
 func newTestAgentService(db *gorm.DB, logger *logrus.Logger) *agentdelivery.HandlerServiceAdapter {
 	return agentdelivery.NewHandlerServiceAdapter(
 		agentapp.NewService(agentinfra.NewGormRepository(db), agentinfra.NewInMemoryRegistry()),

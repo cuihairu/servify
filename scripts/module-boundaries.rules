@@ -91,8 +91,8 @@ require|apps/server/internal/app/server/runtime_assembly.go|Conversation:[[:spac
 require|apps/server/internal/app/server/runtime_assembly.go|routingdelivery\.NewHandlerService\(routingdelivery\.HandlerDependencies\{|Main runtime must assemble session transfer through routing module handler dependencies.
 require|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+workspacedelivery\.HandlerService|Workspace handler must store the workspace delivery contract.
 require|apps/server/internal/handlers/workspace_handler.go|func NewWorkspaceHandler\(service workspacedelivery\.HandlerService\)|Workspace handler constructor must accept the workspace delivery contract.
-require|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+services\.MessageRouterRuntime|Message handler must store services.MessageRouterRuntime.
-require|apps/server/internal/handlers/handlers.go|func NewMessageHandler\(messageRouter services\.MessageRouterRuntime\)|Message handler constructor must accept services.MessageRouterRuntime.
+require|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+PlatformStatsReader|Message handler must store the consumer-side PlatformStatsReader contract.
+require|apps/server/internal/handlers/handlers.go|func NewMessageHandler\(messageRouter PlatformStatsReader\)|Message handler constructor must accept the PlatformStatsReader contract.
 require|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+sladelivery\.SLAService|SLA handler must store the sla delivery contract.
 require|apps/server/internal/handlers/sla_handler.go|ticketService[[:space:]]+SLATicketReader|SLA handler must store the exported SLATicketReader contract.
 require|apps/server/internal/handlers/sla_handler.go|func NewSLAHandler\(slaService sladelivery\.SLAService, ticketService SLATicketReader\)|SLA handler constructor must accept the sla delivery contract.

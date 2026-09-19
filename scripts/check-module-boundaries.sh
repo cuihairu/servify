@@ -130,6 +130,11 @@ forbid_glob_pattern \
   'gorm\.io/gorm' \
   "Handlers must not import gorm directly."
 
+forbid_glob_pattern \
+  '*.go' \
+  'servify/apps/server/internal/services' \
+  "Handlers must not import internal/services; consume realtime surfaces via consumer-side narrow contracts."
+
 if [[ "$has_error" -ne 0 ]]; then
   exit 1
 fi

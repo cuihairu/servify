@@ -5,7 +5,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"servify/apps/server/internal/platform/realtime"
-	"servify/apps/server/internal/services"
 	"strings"
 )
 
@@ -86,11 +85,17 @@ func (h *WebRTCHandler) GetConnections(c *gin.Context) {
 	})
 }
 
-type MessageHandler struct {
-	messageRouter services.MessageRouterRuntime
+// PlatformStatsReader 是 MessageHandler 的消费侧窄接口：只读平台消息路由的
+// 统计视图（完整运行契约仍在 services.MessageRouterRuntime，随 realtime 收窄迁移）。
+type PlatformStatsReader interface {
+	GetPlatformStats() map[string]interface{}
 }
 
-func NewMessageHandler(messageRouter services.MessageRouterRuntime) *MessageHandler {
+type MessageHandler struct {
+	messageRouter PlatformStatsReader
+}
+
+func NewMessageHandler(messageRouter PlatformStatsReader) *MessageHandler {
 	return &MessageHandler{
 		messageRouter: messageRouter,
 	}

@@ -85,8 +85,8 @@ func (p *HTTPSessionIPIntelligence) DescribeIP(ip string) sessionIPDescription {
 	}
 }
 
-// LoginNetworkLabel 使 HTTPSessionIPIntelligence 满足 services.LoginRiskIntel
-// （P2-5 第二刀登录风险执行）。ctx 未下沉到 DescribeIP：查询超时由内部
+// LoginNetworkLabel 使 HTTPSessionIPIntelligence 满足 authapp.LoginRiskIntel
+// （P2-5 第二刀登录风险执行，契约现居 modules/auth/application）。ctx 未下沉到 DescribeIP：查询超时由内部
 // client 自带 timeout 兜底。
 func (p *HTTPSessionIPIntelligence) LoginNetworkLabel(ctx context.Context, ip string) string {
 	if p == nil {
