@@ -1,4 +1,4 @@
-package services
+package realtime
 
 import (
 	"strconv"
@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// newServicesTestDB opens an isolated in-memory sqlite database per test.
-func newServicesTestDB(t *testing.T, models ...interface{}) *gorm.DB {
+// newRealtimeTestDB opens an isolated in-memory sqlite database per test.
+func newRealtimeTestDB(t *testing.T, models ...interface{}) *gorm.DB {
 	t.Helper()
 	dsn := "file:svc_unit_" + t.Name() + "_" + strconv.Itoa(int(atomic.AddUint32(&testDBSeq, 1))) + "?mode=memory&cache=shared"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})

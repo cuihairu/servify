@@ -65,7 +65,6 @@ import (
 	"servify/apps/server/internal/platform/sipws"
 	twiliovoice "servify/apps/server/internal/platform/twiliovoice"
 	"servify/apps/server/internal/platform/voiceprotocol"
-	"servify/apps/server/internal/services"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -74,7 +73,7 @@ import (
 
 type runtimeAssemblyState struct {
 	aiAssembly          *AIAssembly
-	wsHub               *services.WebSocketHub
+	wsHub               *realtimeplatform.WebSocketHub
 	routingService      *routingapp.Service
 	agentAdapter        *agentdelivery.HandlerServiceAdapter
 	satisfactionService *satisfapp.SatisfactionService
@@ -103,14 +102,14 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	return aiAssembly, nil
 }
 
-func wireRealtimeRuntime(rt *Runtime) *services.WebSocketHub {
-	wsHub := services.NewWebSocketHub()
+func wireRealtimeRuntime(rt *Runtime) *realtimeplatform.WebSocketHub {
+	wsHub := realtimeplatform.NewWebSocketHub()
 	rt.wsRuntime = wsHub
 	rt.RealtimeGateway = realtimeplatform.NewWebSocketAdapter(wsHub)
 	return wsHub
 }
 
-func wireConversationRuntime(rt *Runtime, wsHub *services.WebSocketHub) {
+func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
@@ -159,16 +158,16 @@ func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
 	return routingapp.NewService(routingRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 }
 
-func wireRealtimeGateways(rt *Runtime, wsHub *services.WebSocketHub) *services.WebRTCService {
-	webrtcService := services.NewWebRTCService(rt.Config.WebRTC.STUNServer, wsHub)
+func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) *realtimeplatform.WebRTCService {
+	webrtcService := realtimeplatform.NewWebRTCService(rt.Config.WebRTC.STUNServer, wsHub)
 	wsHub.SetWebRTCService(webrtcService)
 	rt.RTCGateway = realtimeplatform.NewWebRTCAdapter(webrtcService)
-	rt.MessageRouter = services.NewMessageRouter(rt.AIService, wsHub, rt.DB)
+	rt.MessageRouter = realtimeplatform.NewMessageRouter(rt.AIService, wsHub, rt.DB)
 	wsHub.SetAIService(rt.AIService)
 	return webrtcService
 }
 
-func wireVoiceRuntime(rt *Runtime, webrtcService *services.WebRTCService) error {
+func wireVoiceRuntime(rt *Runtime, webrtcService *realtimeplatform.WebRTCService) error {
 	voiceService := voiceapp.NewService(voiceinfra.NewGormRepository(rt.DB), rt.Bus)
 	recordingProvider, err := buildVoiceRecordingProvider(rt.Config, rt.Logger)
 	if err != nil {

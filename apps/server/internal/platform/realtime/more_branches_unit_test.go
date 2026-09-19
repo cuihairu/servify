@@ -1,4 +1,4 @@
-package services
+package realtime
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 func TestRouter_EnsureSessionTriggerErrors(t *testing.T) {
 	// create-session insert fails while lookup succeeds
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	execTrigger(t, db, "CREATE TRIGGER blk_sess_ins BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT, 'insert blocked'); END;")
 	r := NewMessageRouter(stubAI{reply: "ok"}, NewWebSocketHub(), db)
 	if _, _, err := r.ensureSession("fresh", "web", "t", "w"); err == nil {
@@ -19,7 +19,7 @@ func TestRouter_EnsureSessionTriggerErrors(t *testing.T) {
 	}
 
 	// scope upgrade update fails
-	db2 := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db2 := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	if err := db2.Create(&models.Session{ID: "blank", Status: "active", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {
 		t.Fatalf("seed blank session: %v", err)
 	}

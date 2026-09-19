@@ -1,21 +1,17 @@
-package services
+package realtime
 
-// 本文件通过 seams.go 的包级 seam 与模块 repo 桩驱动 pion WebRTC、
-// websocket/维护 ticker 以及 app 层模块错误分支。
-// auth 模块的 seam 覆盖已随模块迁移至 internal/modules/auth/application/seams_test.go。
+// 本文件通过 seams.go 的包级 seam 驱动 pion WebRTC、websocket writePump
+// 以及 router 轮询适配器 ticker 的错误分支覆盖。
+// auth 模块的 seam 覆盖已随模块迁移至 internal/modules/auth/application/seams_test.go；
+// customer 模块 repo 错误传播段已随刀 18 拆回 modules/customer/application。
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	customerapp "servify/apps/server/internal/modules/customer/application"
-	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
-	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
@@ -27,44 +23,6 @@ func hscovSetSeam[T any](t *testing.T, slot *T, value T) {
 	old := *slot
 	*slot = value
 	t.Cleanup(func() { *slot = old })
-}
-
-// --- app 层模块错误分支：customer / statistics / knowledge ---
-
-type hscovCustomerRepo struct {
-	customerapp.Repository
-	activityErr error
-	statsErr    error
-}
-
-func (r *hscovCustomerRepo) GetCustomerActivity(ctx context.Context, customerID uint, limit int) (*customerapp.CustomerActivityDTO, error) {
-	return nil, r.activityErr
-}
-
-func (r *hscovCustomerRepo) GetStats(ctx context.Context) (*customerapp.CustomerStatsDTO, error) {
-	return nil, r.statsErr
-}
-
-func TestHSSeamsCustomerModuleErrors(t *testing.T) {
-	repo := &hscovCustomerRepo{activityErr: errors.New("boom: activity"), statsErr: errors.New("boom: stats")}
-	svc := customerapp.NewService(repo)
-	ctx := context.Background()
-
-	if _, err := svc.GetCustomerActivity(ctx, 1, 5); err == nil || !strings.Contains(err.Error(), "activity") {
-		t.Fatalf("expected activity module error, got %v", err)
-	}
-	if _, err := svc.GetStats(ctx); err == nil || !strings.Contains(err.Error(), "stats") {
-		t.Fatalf("expected stats module error, got %v", err)
-	}
-}
-
-type hscovDocRepo struct {
-	knowledgeapp.DocumentRepository
-	docs []knowledgedomain.Document
-}
-
-func (r *hscovDocRepo) List(ctx context.Context, filter knowledgeapp.ListDocumentsFilter) ([]knowledgedomain.Document, int64, error) {
-	return r.docs, int64(len(r.docs)), nil
 }
 
 // --- WebRTC：CreateAnswer / SetLocalDescription / Close 错误 ---

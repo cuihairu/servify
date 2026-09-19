@@ -135,6 +135,14 @@ forbid_glob_pattern \
   'servify/apps/server/internal/services' \
   "Handlers must not import internal/services; consume realtime surfaces via consumer-side narrow contracts."
 
+# 刀 18（P3-2 收官）：internal/services 包已整体删除（realtime 三件迁
+# platform/realtime）。此禁令扫全部 go 文件（含测试），防止重建 services
+# 包回潮。
+if find apps/server -type f -name '*.go' -print0 | xargs -0 "${SEARCH_Q[@]}" 'servify/apps/server/internal/services'; then
+  echo "internal/services package was removed (P3-2 knife 18); no go file may reference it."
+  has_error=1
+fi
+
 if [[ "$has_error" -ne 0 ]]; then
   exit 1
 fi

@@ -9,7 +9,6 @@ import (
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
-	"servify/apps/server/internal/services"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -25,11 +24,11 @@ type RealtimeRuntime struct {
 	wsRuntime        websocketRunner
 	RealtimeGateway  realtimeplatform.RealtimeGateway
 	RTCGateway       realtimeplatform.RTCGateway
-	MessageRouter    services.MessageRouterRuntime
+	MessageRouter    realtimeplatform.MessageRouterRuntime
 }
 
 func BuildRealtimeRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, ai aidelivery.RuntimeService, handlerAI aidelivery.HandlerService) *RealtimeRuntime {
-	wsHub := services.NewWebSocketHub()
+	wsHub := realtimeplatform.NewWebSocketHub()
 	if db != nil {
 		conversationRepo := conversationinfra.NewGormRepository(db)
 		conversationService := conversationapp.NewService(conversationRepo, nil)
@@ -37,7 +36,7 @@ func BuildRealtimeRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB
 	}
 	wsHub.SetAIService(ai)
 
-	webrtcService := services.NewWebRTCService(cfg.WebRTC.STUNServer, wsHub)
+	webrtcService := realtimeplatform.NewWebRTCService(cfg.WebRTC.STUNServer, wsHub)
 	wsHub.SetWebRTCService(webrtcService)
 	return &RealtimeRuntime{
 		Config:           cfg,
@@ -48,7 +47,7 @@ func BuildRealtimeRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB
 		wsRuntime:        wsHub,
 		RealtimeGateway:  realtimeplatform.NewWebSocketAdapter(wsHub),
 		RTCGateway:       realtimeplatform.NewWebRTCAdapter(webrtcService),
-		MessageRouter:    services.NewMessageRouter(ai, wsHub, db),
+		MessageRouter:    realtimeplatform.NewMessageRouter(ai, wsHub, db),
 	}
 }
 

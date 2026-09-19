@@ -29,7 +29,6 @@ import (
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/voiceprotocol"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -47,7 +46,7 @@ type Dependencies struct {
 	AIHandlerService         aidelivery.HandlerService
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
-	MessageRouter            services.MessageRouterRuntime
+	MessageRouter            realtimeplatform.MessageRouterRuntime
 	VoiceCoordinator         *voicedelivery.Coordinator
 	VoiceProtocolRegistry    *voiceprotocol.Registry
 	CustomerHandlerService   customerdelivery.HandlerService

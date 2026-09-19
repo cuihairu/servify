@@ -6,14 +6,12 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"servify/apps/server/internal/services"
 )
 
 func newTestWebRTCAdapter() *WebRTCAdapter {
-	hub := services.NewWebSocketHub()
+	hub := NewWebSocketHub()
 	go hub.Run()
-	return NewWebRTCAdapter(services.NewWebRTCService("stun:127.0.0.1:1", hub))
+	return NewWebRTCAdapter(NewWebRTCService("stun:127.0.0.1:1", hub))
 }
 
 func TestWebRTCAdapter_MissingSessionErrors(t *testing.T) {

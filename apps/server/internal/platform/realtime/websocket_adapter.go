@@ -3,16 +3,14 @@ package realtime
 import (
 	"time"
 
-	"servify/apps/server/internal/services"
-
 	"github.com/gin-gonic/gin"
 )
 
 type WebSocketAdapter struct {
-	hub *services.WebSocketHub
+	hub *WebSocketHub
 }
 
-func NewWebSocketAdapter(hub *services.WebSocketHub) *WebSocketAdapter {
+func NewWebSocketAdapter(hub *WebSocketHub) *WebSocketAdapter {
 	return &WebSocketAdapter{hub: hub}
 }
 
@@ -21,7 +19,7 @@ func (a *WebSocketAdapter) HandleWebSocket(c *gin.Context) {
 }
 
 func (a *WebSocketAdapter) SendToSession(sessionID string, message Message) {
-	a.hub.SendToSession(sessionID, services.WebSocketMessage{
+	a.hub.SendToSession(sessionID, WebSocketMessage{
 		Type:      message.Type,
 		Data:      message.Data,
 		SessionID: sessionID,

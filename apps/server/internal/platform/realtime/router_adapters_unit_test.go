@@ -1,4 +1,4 @@
-package services
+package realtime
 
 import (
 	"context"
@@ -155,7 +155,7 @@ func TestMessageRouter_BroadcastMessage_Errors(t *testing.T) {
 }
 
 func TestMessageRouter_EnsureSession_EdgeCases(t *testing.T) {
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	r := NewMessageRouter(stubAI{reply: "ok"}, NewWebSocketHub(), db)
 
 	// nil db / empty session id short circuit
@@ -208,7 +208,7 @@ func TestMessageRouter_EnsureSession_EdgeCases(t *testing.T) {
 }
 
 func TestMessageRouter_PersistMessage_NoUser(t *testing.T) {
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	r := NewMessageRouter(stubAI{reply: "ok"}, NewWebSocketHub(), db)
 
 	msg := UnifiedMessage{UserID: "", PlatformID: "web", Content: "anon", Type: MessageTypeText, Timestamp: time.Now()}

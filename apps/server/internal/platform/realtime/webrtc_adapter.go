@@ -1,16 +1,14 @@
 package realtime
 
 import (
-	"servify/apps/server/internal/services"
-
 	"github.com/pion/webrtc/v4"
 )
 
 type WebRTCAdapter struct {
-	service *services.WebRTCService
+	service *WebRTCService
 }
 
-func NewWebRTCAdapter(service *services.WebRTCService) *WebRTCAdapter {
+func NewWebRTCAdapter(service *WebRTCService) *WebRTCAdapter {
 	return &WebRTCAdapter{service: service}
 }
 

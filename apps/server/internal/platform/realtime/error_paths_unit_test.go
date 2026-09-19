@@ -1,4 +1,4 @@
-package services
+package realtime
 
 import (
 	"testing"
@@ -16,7 +16,7 @@ import (
 // ---- satisfaction error branches ----
 
 func TestMessageRouter_RouteMessage_PersistErrorContinues(t *testing.T) {
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	if err := db.Migrator().DropTable("messages"); err != nil {
 		t.Fatalf("drop messages: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestMessageRouter_RouteMessage_PersistErrorContinues(t *testing.T) {
 }
 
 func TestMessageRouter_EnsureSession_CreateError(t *testing.T) {
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	if err := db.Migrator().DropTable("sessions"); err != nil {
 		t.Fatalf("drop sessions: %v", err)
 	}

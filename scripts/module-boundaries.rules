@@ -1,6 +1,7 @@
 # format:
 # handler|Label|file|field_name|contract_expr|constructor_pattern|forbidden_pattern
 # runtime|Label|contract_field|contract_expr
+# 注意：internal/services 包已于 P3-2 刀 18 整体删除；存量 forbid services.* 规则保留为防重建回潮门禁。
 # require|file|pattern|message
 
 handler|Agent|apps/server/internal/handlers/agent_handler.go|agentService|agentdelivery\.HandlerService|func NewAgentHandler\(agentService agentdelivery\.HandlerService, logger \*logrus\.Logger\)|\*services\.AgentService
@@ -43,8 +44,8 @@ runtime|api key handlers|APIKeyService|apikeydelivery\.HandlerService
 runtime|macro handlers|MacroService|macrodelivery\.HandlerService
 
 require|apps/server/internal/handlers/health_enhanced.go|aiService aidelivery\.HandlerService|Enhanced health handler must store modules/ai/delivery.HandlerService.
-require|apps/server/internal/services/websocket.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.
-require|apps/server/internal/services/websocket.go|func \(h \*WebSocketHub\) SetConversationMessageWriter\(writer conversationdelivery\.WebSocketMessageWriter\)|WebSocket hub must accept conversationdelivery.WebSocketMessageWriter.
+require|apps/server/internal/platform/realtime/websocket_hub.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.
+require|apps/server/internal/platform/realtime/websocket_hub.go|func \(h \*WebSocketHub\) SetConversationMessageWriter\(writer conversationdelivery\.WebSocketMessageWriter\)|WebSocket hub must accept conversationdelivery.WebSocketMessageWriter.
 require|apps/server/internal/app/server/runtime_assembly.go|SetConversationMessageWriter\(conversationdelivery\.NewWebSocketMessageAdapter\(conversationService\)\)|Main runtime must wire conversation websocket persistence through the module delivery adapter.
 require|apps/server/internal/app/server/realtime_runtime.go|SetConversationMessageWriter\(conversationdelivery\.NewWebSocketMessageAdapter\(conversationService\)\)|Realtime runtime must wire conversation websocket persistence through the module delivery adapter.
 require|apps/server/internal/app/server/ai_runtime.go|Service[[:space:]]+aidelivery\.HandlerService|AI assembly must expose the handler-facing AI contract.
@@ -61,9 +62,9 @@ require|apps/server/internal/app/server/runtime.go|KnowledgeDocHandler[[:space:]
 require|apps/server/internal/app/server/runtime_assembly.go|Knowledg[e]?DocHandler[[:space:]]*=.*knowledgedelivery\.NewHandlerServiceWithProvider\(rt\.DB|Runtime must assemble knowledge handlers directly from module delivery.
 require|apps/server/internal/app/server/runtime.go|WorkspaceService[[:space:]]+workspacedelivery\.HandlerService|Runtime must expose workspace via the workspace delivery contract.
 require|apps/server/internal/app/server/router.go|WorkspaceService[[:space:]]+workspacedelivery\.HandlerService|Router dependencies must expose workspace via the workspace delivery contract.
-require|apps/server/internal/app/server/runtime.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Runtime must expose message router via services.MessageRouterRuntime.
-require|apps/server/internal/app/server/router.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Router dependencies must expose message router via services.MessageRouterRuntime.
-require|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space:]]+services\.MessageRouterRuntime|Realtime runtime must expose message router via services.MessageRouterRuntime.
+require|apps/server/internal/app/server/runtime.go|MessageRouter[[:space:]]+realtimeplatform\.MessageRouterRuntime|Runtime must expose message router via realtimeplatform.MessageRouterRuntime.
+require|apps/server/internal/app/server/router.go|MessageRouter[[:space:]]+realtimeplatform\.MessageRouterRuntime|Router dependencies must expose message router via realtimeplatform.MessageRouterRuntime.
+require|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space:]]+realtimeplatform\.MessageRouterRuntime|Realtime runtime must expose message router via realtimeplatform.MessageRouterRuntime.
 forbid|apps/server/internal/app/server/runtime.go|WSHub[[:space:]]+\*services\.WebSocketHub|Runtime must not expose concrete WebSocketHub.
 forbid|apps/server/internal/app/server/realtime_runtime.go|WSHub[[:space:]]+\*services\.WebSocketHub|Realtime runtime must not expose concrete WebSocketHub.
 forbid|apps/server/internal/app/server/realtime_runtime.go|WebRTCService[[:space:]]+\*services\.WebRTCService|Realtime runtime must not expose concrete WebRTCService.
@@ -83,8 +84,8 @@ require|apps/server/internal/app/server/runtime.go|GamificationService[[:space:]
 require|apps/server/internal/app/server/router.go|GamificationService[[:space:]]+gamificationdelivery\.HandlerService|Router dependencies must expose gamification via gamificationdelivery.HandlerService.
 require|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+sladelivery\.SLAService|Runtime must expose SLA via the sla delivery contract.
 require|apps/server/internal/app/server/router.go|SLAService[[:space:]]+sladelivery\.SLAService|Router dependencies must expose SLA via the sla delivery contract.
-require|apps/server/internal/services/websocket.go|transferService[[:space:]]+sessionTransferRuntime|WebSocket hub must store the session transfer runtime interface.
-require|apps/server/internal/services/websocket.go|func \(h \*WebSocketHub\) SetSessionTransferService\(svc sessionTransferRuntime\)|WebSocket hub must accept the session transfer runtime interface.
+require|apps/server/internal/platform/realtime/websocket_hub.go|transferService[[:space:]]+sessionTransferRuntime|WebSocket hub must store the session transfer runtime interface.
+require|apps/server/internal/platform/realtime/websocket_hub.go|func \(h \*WebSocketHub\) SetSessionTransferService\(svc sessionTransferRuntime\)|WebSocket hub must accept the session transfer runtime interface.
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|LoadTransferSession\(ctx context\.Context, sessionID string\) \(\*TransferSession, error\)|Conversation runtime contract must expose transfer session loading.
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|SyncWaitingAssignment\(ctx context\.Context, tx \*gorm\.DB, sessionID string, customerID uint\) error|Conversation runtime contract must expose waiting assignment syncing.
 require|apps/server/internal/app/server/runtime_assembly.go|Conversation:[[:space:]]+conversationdelivery\.NewRuntimeAdapter\(rt\.DB, rt\.Bus\)|Main runtime must wire session transfer conversation runtime with DB-backed adapter.
@@ -125,7 +126,7 @@ forbid|apps/server/internal/app/server/router.go|GamificationService[[:space:]]+
 forbid|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+\*slapp\.SLAService|Runtime must not expose concrete SLAService.
 forbid|apps/server/internal/app/server/router.go|SLAService[[:space:]]+\*slapp\.SLAService|Router dependencies must not expose concrete SLAService.
 forbid|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+\*services\.WorkspaceService|Workspace handler must not depend on concrete WorkspaceService.
-forbid|apps/server/internal/services/websocket.go|transferService[[:space:]]+\*SessionTransferService|WebSocket hub must not store concrete SessionTransferService.
+forbid|apps/server/internal/platform/realtime/websocket_hub.go|transferService[[:space:]]+\*SessionTransferService|WebSocket hub must not store concrete SessionTransferService.
 forbid|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space:]]+\*services\.MessageRouter|Realtime runtime must not expose concrete MessageRouter.
 forbid|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+\*services\.MessageRouter|Message handler must not depend on concrete MessageRouter.
 forbid|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+slaHandlerSLAService|SLA handler must not keep private slaHandlerSLAService wiring.

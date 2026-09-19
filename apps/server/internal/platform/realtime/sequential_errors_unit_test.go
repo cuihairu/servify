@@ -1,4 +1,4 @@
-package services
+package realtime
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 // raw Scan/Row reads) on this connection to fail. Used to exercise sequential
 // error branches unreachable with plain table drops.
 func TestRouter_EnsureSessionNoopUpdate(t *testing.T) {
-	db := newServicesTestDB(t, &models.Session{}, &models.Message{})
+	db := newRealtimeTestDB(t, &models.Session{}, &models.Message{})
 	if err := db.Create(&models.Session{ID: "blank", Status: "active", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {
 		t.Fatalf("seed blank session: %v", err)
 	}

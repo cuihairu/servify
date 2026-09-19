@@ -1,4 +1,4 @@
-package services
+package realtime
 
 // 本文件聚合仅供测试注入的包级 seam。每个变量的默认值都保持生产行为，
 // 生产代码不得在运行时改写；测试通过替换变量来驱动错误分支

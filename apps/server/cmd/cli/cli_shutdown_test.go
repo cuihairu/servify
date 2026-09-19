@@ -13,7 +13,7 @@ import (
 	appbootstrap "servify/apps/server/internal/app/bootstrap"
 	appserver "servify/apps/server/internal/app/server"
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/services"
+	realtimeplatform "servify/apps/server/internal/platform/realtime"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -34,7 +34,7 @@ func (f *fakeMessageRouter) GetPlatformStats() map[string]interface{} {
 }
 
 // 编译期守卫：fakeMessageRouter 必须持续满足 MessageRouterRuntime。
-var _ services.MessageRouterRuntime = (*fakeMessageRouter)(nil)
+var _ realtimeplatform.MessageRouterRuntime = (*fakeMessageRouter)(nil)
 
 // newBufferLogger 返回写入缓冲的 logrus logger，供断言 shutdownRuntime 的
 // 日志输出。

@@ -11,8 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"servify/apps/server/internal/services"
 )
 
 func TestDefaultTimestamp_ZeroBecomesNow(t *testing.T) {
@@ -26,13 +24,13 @@ func TestDefaultTimestamp_NonZeroPreserved(t *testing.T) {
 }
 
 func TestWebSocketAdapter_ClientCountWithoutClients(t *testing.T) {
-	adapter := NewWebSocketAdapter(services.NewWebSocketHub())
+	adapter := NewWebSocketAdapter(NewWebSocketHub())
 	assert.Equal(t, 0, adapter.ClientCount())
 }
 
 func TestWebSocketAdapter_HandleWebSocketRequiresSessionID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	hub := services.NewWebSocketHub()
+	hub := NewWebSocketHub()
 	go hub.Run()
 	adapter := NewWebSocketAdapter(hub)
 
@@ -49,7 +47,7 @@ func TestWebSocketAdapter_HandleWebSocketRequiresSessionID(t *testing.T) {
 
 func TestWebSocketAdapter_HandleWebSocketAndSendToSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	hub := services.NewWebSocketHub()
+	hub := NewWebSocketHub()
 	go hub.Run()
 	adapter := NewWebSocketAdapter(hub)
 
@@ -70,7 +68,7 @@ func TestWebSocketAdapter_HandleWebSocketAndSendToSession(t *testing.T) {
 	adapter.SendToSession("session-1", Message{Type: "greeting", Data: "hello"})
 
 	require.NoError(t, conn.SetReadDeadline(time.Now().Add(3*time.Second)))
-	var msg services.WebSocketMessage
+	var msg WebSocketMessage
 	require.NoError(t, conn.ReadJSON(&msg))
 	assert.Equal(t, "greeting", msg.Type)
 	assert.Equal(t, "hello", msg.Data)

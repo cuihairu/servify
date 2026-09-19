@@ -41,7 +41,6 @@ import (
 	"servify/apps/server/internal/platform/eventbus"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/voiceprotocol"
-	"servify/apps/server/internal/services"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -61,7 +60,7 @@ type Runtime struct {
 	wsRuntime                websocketRunner
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
-	MessageRouter            services.MessageRouterRuntime
+	MessageRouter            realtimeplatform.MessageRouterRuntime
 	ConversationHandler      conversationdelivery.HandlerService
 	VoiceCoordinator         *voicedelivery.Coordinator
 	VoiceProtocolRegistry    *voiceprotocol.Registry
