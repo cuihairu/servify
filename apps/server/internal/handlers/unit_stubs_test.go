@@ -19,6 +19,7 @@ import (
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
@@ -541,8 +542,8 @@ type unitSatisfactionService struct {
 	sats        []models.CustomerSatisfaction
 	surveys     []models.SatisfactionSurvey
 	survey      *models.SatisfactionSurvey
-	preview     *services.SatisfactionSurveyPreview
-	stats       *services.SatisfactionStatsResponse
+	preview     *satisfactiondelivery.SatisfactionSurveyPreview
+	stats       *satisfactiondelivery.SatisfactionStatsResponse
 	total       int64
 	createErr   error
 	getErr      error
@@ -557,7 +558,7 @@ type unitSatisfactionService struct {
 	respondErr  error
 }
 
-func (s *unitSatisfactionService) CreateSatisfaction(ctx context.Context, req *services.SatisfactionCreateRequest) (*models.CustomerSatisfaction, error) {
+func (s *unitSatisfactionService) CreateSatisfaction(ctx context.Context, req *satisfactiondelivery.SatisfactionCreateRequest) (*models.CustomerSatisfaction, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
@@ -571,14 +572,14 @@ func (s *unitSatisfactionService) GetSatisfaction(ctx context.Context, id uint) 
 	return s.sat, nil
 }
 
-func (s *unitSatisfactionService) ListSatisfactions(ctx context.Context, req *services.SatisfactionListRequest) ([]models.CustomerSatisfaction, int64, error) {
+func (s *unitSatisfactionService) ListSatisfactions(ctx context.Context, req *satisfactiondelivery.SatisfactionListRequest) ([]models.CustomerSatisfaction, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.sats, s.total, nil
 }
 
-func (s *unitSatisfactionService) ListSurveys(ctx context.Context, req *services.SatisfactionSurveyListRequest) ([]models.SatisfactionSurvey, int64, error) {
+func (s *unitSatisfactionService) ListSurveys(ctx context.Context, req *satisfactiondelivery.SatisfactionSurveyListRequest) ([]models.SatisfactionSurvey, int64, error) {
 	if s.surveyErr != nil {
 		return nil, 0, s.surveyErr
 	}
@@ -599,7 +600,7 @@ func (s *unitSatisfactionService) GetSatisfactionByTicket(ctx context.Context, t
 	return s.sat, nil
 }
 
-func (s *unitSatisfactionService) GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*services.SatisfactionStatsResponse, error) {
+func (s *unitSatisfactionService) GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*satisfactiondelivery.SatisfactionStatsResponse, error) {
 	if s.statsErr != nil {
 		return nil, s.statsErr
 	}
@@ -617,7 +618,7 @@ func (s *unitSatisfactionService) DeleteSatisfaction(ctx context.Context, id uin
 	return s.deleteErr
 }
 
-func (s *unitSatisfactionService) GetSurveyPreviewByToken(ctx context.Context, token string) (*services.SatisfactionSurveyPreview, error) {
+func (s *unitSatisfactionService) GetSurveyPreviewByToken(ctx context.Context, token string) (*satisfactiondelivery.SatisfactionSurveyPreview, error) {
 	if s.previewErr != nil {
 		return nil, s.previewErr
 	}

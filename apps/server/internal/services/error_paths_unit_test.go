@@ -6,17 +6,12 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-
-	"github.com/sirupsen/logrus"
 )
 
 // ---- constructor nil-logger branches ----
 
 func TestConstructors_NilLogger(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.Customer{})
-	if NewSatisfactionService(db, nil) == nil {
-		t.Fatal("expected satisfaction service")
-	}
 	if NewSLAService(db, nil) == nil {
 		t.Fatal("expected SLA service")
 	}
@@ -46,102 +41,6 @@ func TestAIService_ShTransferToHuman_HistoryLength(t *testing.T) {
 // ---- shift error branches ----
 
 // ---- satisfaction error branches ----
-
-func TestSatisfactionService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, logrus.New())
-	ctx := context.Background()
-
-	if err := db.Migrator().DropTable("satisfaction_surveys"); err != nil {
-		t.Fatalf("drop surveys: %v", err)
-	}
-	if _, err := svc.GetSurveyPreviewByToken(ctx, "tok"); err == nil || err == ErrSurveyNotFound {
-		t.Fatalf("expected load error, got %v", err)
-	}
-	if _, err := svc.RespondSurvey(ctx, "tok", 5, ""); err == nil || err == ErrSurveyNotFound {
-		t.Fatalf("expected load error, got %v", err)
-	}
-	if _, err := svc.ResendSurvey(ctx, 1); err == nil || err == ErrSurveyNotFound {
-		t.Fatalf("expected load error, got %v", err)
-	}
-	if _, _, err := svc.ListSurveys(ctx, &SatisfactionSurveyListRequest{Page: 1, PageSize: 10}); err == nil {
-		t.Fatal("expected list surveys error")
-	}
-
-	if err := db.Migrator().DropTable("customer_satisfactions"); err != nil {
-		t.Fatalf("drop satisfactions: %v", err)
-	}
-	if _, err := svc.GetSatisfaction(ctx, 1); err == nil {
-		t.Fatal("expected get satisfaction error")
-	}
-	if _, _, err := svc.ListSatisfactions(ctx, &SatisfactionListRequest{Page: 1, PageSize: 10}); err == nil {
-		t.Fatal("expected list satisfactions error")
-	}
-	if _, err := svc.GetSatisfactionByTicket(ctx, 1); err == nil {
-		t.Fatal("expected get by ticket error")
-	}
-	if _, err := svc.GetSatisfactionStats(ctx, nil, nil); err == nil {
-		t.Fatal("expected stats error")
-	}
-	if err := svc.DeleteSatisfaction(ctx, 1); err == nil {
-		t.Fatal("expected delete error")
-	}
-	if _, err := svc.UpdateSatisfaction(ctx, 1, "c"); err == nil {
-		t.Fatal("expected update error")
-	}
-}
-
-func TestSatisfactionService_ScheduleSurveyCountError(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, logrus.New())
-	ticket := &models.Ticket{Title: "T", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	if err := db.Migrator().DropTable("customer_satisfactions"); err != nil {
-		t.Fatalf("drop satisfactions: %v", err)
-	}
-	if _, err := svc.ScheduleSurvey(context.Background(), ticket); err == nil {
-		t.Fatal("expected satisfaction count error")
-	}
-}
-
-func TestSatisfactionService_TicketLoadErrors(t *testing.T) {
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, logrus.New())
-	ctx := context.Background()
-
-	past := time.Now().Add(-time.Hour)
-	survey := &models.SatisfactionSurvey{
-		TicketID: 1, CustomerID: 1, Status: "sent", SurveyToken: "tok-err", SentAt: &past, ExpiresAt: &past,
-		CreatedAt: past, UpdatedAt: past,
-	}
-	if err := db.Create(survey).Error; err != nil {
-		t.Fatalf("seed survey: %v", err)
-	}
-	if err := db.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if _, err := svc.GetSurveyPreviewByToken(ctx, "tok-err"); err == nil {
-		t.Fatal("expected ticket preload error")
-	}
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: 1, CustomerID: 1, Rating: 5}); err == nil {
-		t.Fatal("expected ticket lookup error")
-	}
-}
-
-// ---- statistics error branches ----
-
-// ---- router extras ----
 
 func TestMessageRouter_RouteMessage_PersistErrorContinues(t *testing.T) {
 	db := newServicesTestDB(t, &models.Session{}, &models.Message{})

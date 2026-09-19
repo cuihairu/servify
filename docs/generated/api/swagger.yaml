@@ -1,4 +1,62 @@
 definitions:
+  application.SatisfactionCreateRequest:
+    properties:
+      agent_id:
+        type: integer
+      category:
+        description: service_quality, response_time, resolution_quality, overall
+        type: string
+      comment:
+        type: string
+      customer_id:
+        type: integer
+      rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+      ticket_id:
+        type: integer
+    required:
+    - customer_id
+    - rating
+    - ticket_id
+    type: object
+  application.SatisfactionStat:
+    properties:
+      average_rating:
+        type: number
+      count:
+        type: integer
+    type: object
+  application.SatisfactionStatsResponse:
+    properties:
+      average_rating:
+        type: number
+      category_stats:
+        additionalProperties:
+          $ref: '#/definitions/application.SatisfactionStat'
+        type: object
+      rating_distribution:
+        additionalProperties:
+          type: integer
+        description: rating -> count
+        type: object
+      total_ratings:
+        type: integer
+      trend_data:
+        items:
+          $ref: '#/definitions/application.SatisfactionTrend'
+        type: array
+    type: object
+  application.SatisfactionTrend:
+    properties:
+      average_rating:
+        type: number
+      count:
+        type: integer
+      date:
+        type: string
+    type: object
   application.TwoFactorSetup:
     properties:
       otpauth_uri:
@@ -1578,64 +1636,6 @@ definitions:
           type: integer
         type: object
     type: object
-  services.SatisfactionCreateRequest:
-    properties:
-      agent_id:
-        type: integer
-      category:
-        description: service_quality, response_time, resolution_quality, overall
-        type: string
-      comment:
-        type: string
-      customer_id:
-        type: integer
-      rating:
-        maximum: 5
-        minimum: 1
-        type: integer
-      ticket_id:
-        type: integer
-    required:
-    - customer_id
-    - rating
-    - ticket_id
-    type: object
-  services.SatisfactionStat:
-    properties:
-      average_rating:
-        type: number
-      count:
-        type: integer
-    type: object
-  services.SatisfactionStatsResponse:
-    properties:
-      average_rating:
-        type: number
-      category_stats:
-        additionalProperties:
-          $ref: '#/definitions/services.SatisfactionStat'
-        type: object
-      rating_distribution:
-        additionalProperties:
-          type: integer
-        description: rating -> count
-        type: object
-      total_ratings:
-        type: integer
-      trend_data:
-        items:
-          $ref: '#/definitions/services.SatisfactionTrend'
-        type: array
-    type: object
-  services.SatisfactionTrend:
-    properties:
-      average_rating:
-        type: number
-      count:
-        type: integer
-      date:
-        type: string
-    type: object
 info:
   contact: {}
 paths:
@@ -3065,7 +3065,7 @@ paths:
         name: satisfaction
         required: true
         schema:
-          $ref: '#/definitions/services.SatisfactionCreateRequest'
+          $ref: '#/definitions/application.SatisfactionCreateRequest'
       produces:
       - application/json
       responses:
@@ -3200,7 +3200,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.SatisfactionStatsResponse'
+            $ref: '#/definitions/application.SatisfactionStatsResponse'
         "400":
           description: Bad Request
           schema:

@@ -12,6 +12,7 @@ import (
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/services"
 )
@@ -98,7 +99,7 @@ func (f *fakeRuntimeWorkerDependencies) WaitingQueueForWorker() *routingdelivery
 	return nil
 }
 
-func (f *fakeRuntimeWorkerDependencies) SurveysForWorker() *services.SatisfactionService {
+func (f *fakeRuntimeWorkerDependencies) SurveysForWorker() satisfapp.SurveyEmailProcessor {
 	return nil
 }
 

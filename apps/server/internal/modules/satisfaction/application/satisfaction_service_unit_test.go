@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -13,11 +13,11 @@ import (
 
 func newSatisfactionTestService(t *testing.T) (*SatisfactionService, *gorm.DB) {
 	t.Helper()
-	db := newServicesTestDB(t,
+	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	return NewSatisfactionService(db, logrus.New()), db
+	return NewService(db, logrus.New()), db
 }
 
 func seedSatisfactionData(t *testing.T, db *gorm.DB) (customerID, agentID, ticketID uint) {
@@ -425,7 +425,7 @@ func TestSatisfactionHelpers(t *testing.T) {
 		t.Fatalf("record scope keeps context: %q/%q", tenant, ws)
 	}
 
-	db := newServicesTestDB(t,
+	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)

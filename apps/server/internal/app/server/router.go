@@ -18,6 +18,7 @@ import (
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
@@ -56,7 +57,7 @@ type Dependencies struct {
 	TicketHandlerService     ticketdelivery.HandlerService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
-	SatisfactionService      handlers.SatisfactionService
+	SatisfactionService      satisfactiondelivery.SatisfactionService
 	WorkspaceService         workspacedelivery.HandlerService
 	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    appintegrationdelivery.HandlerService

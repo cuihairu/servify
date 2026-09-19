@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -21,7 +21,7 @@ type dxcSatisfactionRecorder struct {
 	gotDateTo   *time.Time
 }
 
-func (r *dxcSatisfactionRecorder) ListSatisfactions(ctx context.Context, req *services.SatisfactionListRequest) ([]models.CustomerSatisfaction, int64, error) {
+func (r *dxcSatisfactionRecorder) ListSatisfactions(ctx context.Context, req *satisfactiondelivery.SatisfactionListRequest) ([]models.CustomerSatisfaction, int64, error) {
 	r.gotDateFrom = req.DateFrom
 	r.gotDateTo = req.DateTo
 	return r.unitSatisfactionService.ListSatisfactions(ctx, req)

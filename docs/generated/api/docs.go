@@ -2176,7 +2176,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.SatisfactionCreateRequest"
+                            "$ref": "#/definitions/application.SatisfactionCreateRequest"
                         }
                     }
                 ],
@@ -2236,7 +2236,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.SatisfactionStatsResponse"
+                            "$ref": "#/definitions/application.SatisfactionStatsResponse"
                         }
                     },
                     "400": {
@@ -5566,6 +5566,92 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "application.SatisfactionCreateRequest": {
+            "type": "object",
+            "required": [
+                "customer_id",
+                "rating",
+                "ticket_id"
+            ],
+            "properties": {
+                "agent_id": {
+                    "type": "integer"
+                },
+                "category": {
+                    "description": "service_quality, response_time, resolution_quality, overall",
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "ticket_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "application.SatisfactionStat": {
+            "type": "object",
+            "properties": {
+                "average_rating": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "application.SatisfactionStatsResponse": {
+            "type": "object",
+            "properties": {
+                "average_rating": {
+                    "type": "number"
+                },
+                "category_stats": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/application.SatisfactionStat"
+                    }
+                },
+                "rating_distribution": {
+                    "description": "rating -\u003e count",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total_ratings": {
+                    "type": "integer"
+                },
+                "trend_data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.SatisfactionTrend"
+                    }
+                }
+            }
+        },
+        "application.SatisfactionTrend": {
+            "type": "object",
+            "properties": {
+                "average_rating": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                }
+            }
+        },
         "application.TwoFactorSetup": {
             "type": "object",
             "properties": {
@@ -7900,92 +7986,6 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "integer"
                     }
-                }
-            }
-        },
-        "services.SatisfactionCreateRequest": {
-            "type": "object",
-            "required": [
-                "customer_id",
-                "rating",
-                "ticket_id"
-            ],
-            "properties": {
-                "agent_id": {
-                    "type": "integer"
-                },
-                "category": {
-                    "description": "service_quality, response_time, resolution_quality, overall",
-                    "type": "string"
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "customer_id": {
-                    "type": "integer"
-                },
-                "rating": {
-                    "type": "integer",
-                    "maximum": 5,
-                    "minimum": 1
-                },
-                "ticket_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.SatisfactionStat": {
-            "type": "object",
-            "properties": {
-                "average_rating": {
-                    "type": "number"
-                },
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.SatisfactionStatsResponse": {
-            "type": "object",
-            "properties": {
-                "average_rating": {
-                    "type": "number"
-                },
-                "category_stats": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "$ref": "#/definitions/services.SatisfactionStat"
-                    }
-                },
-                "rating_distribution": {
-                    "description": "rating -\u003e count",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "total_ratings": {
-                    "type": "integer"
-                },
-                "trend_data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.SatisfactionTrend"
-                    }
-                }
-            }
-        },
-        "services.SatisfactionTrend": {
-            "type": "object",
-            "properties": {
-                "average_rating": {
-                    "type": "number"
-                },
-                "count": {
-                    "type": "integer"
-                },
-                "date": {
-                    "type": "string"
                 }
             }
         }

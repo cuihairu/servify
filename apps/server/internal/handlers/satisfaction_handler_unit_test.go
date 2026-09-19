@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -173,8 +173,8 @@ func TestSatisfactionHandlerUnitResend(t *testing.T) {
 		want int
 	}{
 		{"success", &unitSatisfactionService{survey: &models.SatisfactionSurvey{ID: 5}}, http.StatusOK},
-		{"not found", &unitSatisfactionService{resendErr: services.ErrSurveyNotFound}, http.StatusNotFound},
-		{"completed", &unitSatisfactionService{resendErr: services.ErrSurveyCompleted}, http.StatusBadRequest},
+		{"not found", &unitSatisfactionService{resendErr: satisfactiondelivery.ErrSurveyNotFound}, http.StatusNotFound},
+		{"completed", &unitSatisfactionService{resendErr: satisfactiondelivery.ErrSurveyCompleted}, http.StatusBadRequest},
 		{"internal", &unitSatisfactionService{resendErr: errors.New("boom")}, http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
@@ -225,7 +225,7 @@ func TestSatisfactionHandlerUnitByTicket(t *testing.T) {
 
 func TestSatisfactionHandlerUnitStats(t *testing.T) {
 	t.Run("success with dates", func(t *testing.T) {
-		svc := &unitSatisfactionService{stats: &services.SatisfactionStatsResponse{TotalRatings: 10}}
+		svc := &unitSatisfactionService{stats: &satisfactiondelivery.SatisfactionStatsResponse{TotalRatings: 10}}
 		r, _, _ := newSatisfactionUnitRouter(svc)
 		w := satisfactionUnitRequest(r, http.MethodGet, "/satisfactions/stats?date_from=2026-01-01&date_to=2026-03-01", "")
 		if w.Code != http.StatusOK {
@@ -323,7 +323,7 @@ func TestSatisfactionHandlerUnitUpdateDelete(t *testing.T) {
 
 func TestCSATSurveyHandlerUnit(t *testing.T) {
 	t.Run("get survey success", func(t *testing.T) {
-		svc := &unitSatisfactionService{preview: &services.SatisfactionSurveyPreview{TicketID: 1}}
+		svc := &unitSatisfactionService{preview: &satisfactiondelivery.SatisfactionSurveyPreview{TicketID: 1}}
 		r, _, _ := newSatisfactionUnitRouter(svc)
 		w := satisfactionUnitRequest(r, http.MethodGet, "/csat/token-1", "")
 		if w.Code != http.StatusOK {
@@ -331,7 +331,7 @@ func TestCSATSurveyHandlerUnit(t *testing.T) {
 		}
 	})
 	t.Run("get survey not found", func(t *testing.T) {
-		r, _, _ := newSatisfactionUnitRouter(&unitSatisfactionService{previewErr: services.ErrSurveyNotFound})
+		r, _, _ := newSatisfactionUnitRouter(&unitSatisfactionService{previewErr: satisfactiondelivery.ErrSurveyNotFound})
 		w := satisfactionUnitRequest(r, http.MethodGet, "/csat/token-1", "")
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("status = %d", w.Code)
@@ -355,9 +355,9 @@ func TestCSATSurveyHandlerUnit(t *testing.T) {
 		{"invalid body", &unitSatisfactionService{}, `{`, http.StatusBadRequest},
 		{"rating out of range", &unitSatisfactionService{}, `{"rating":9}`, http.StatusBadRequest},
 		{"rating missing", &unitSatisfactionService{}, `{"comment":"x"}`, http.StatusBadRequest},
-		{"not found", &unitSatisfactionService{respondErr: services.ErrSurveyNotFound}, `{"rating":4}`, http.StatusNotFound},
-		{"expired", &unitSatisfactionService{respondErr: services.ErrSurveyExpired}, `{"rating":4}`, http.StatusGone},
-		{"completed", &unitSatisfactionService{respondErr: services.ErrSurveyCompleted}, `{"rating":4}`, http.StatusConflict},
+		{"not found", &unitSatisfactionService{respondErr: satisfactiondelivery.ErrSurveyNotFound}, `{"rating":4}`, http.StatusNotFound},
+		{"expired", &unitSatisfactionService{respondErr: satisfactiondelivery.ErrSurveyExpired}, `{"rating":4}`, http.StatusGone},
+		{"completed", &unitSatisfactionService{respondErr: satisfactiondelivery.ErrSurveyCompleted}, `{"rating":4}`, http.StatusConflict},
 		{"internal", &unitSatisfactionService{respondErr: errors.New("boom")}, `{"rating":4}`, http.StatusInternalServerError},
 	}
 	for _, tc := range respondCases {

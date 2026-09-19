@@ -26,6 +26,8 @@ import (
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
@@ -68,7 +70,7 @@ type Runtime struct {
 	TicketHandlerService     ticketdelivery.HandlerService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
-	SatisfactionService      handlers.SatisfactionService
+	SatisfactionService      satisfactiondelivery.SatisfactionService
 	WorkspaceService         workspacedelivery.HandlerService
 	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    appintegrationdelivery.HandlerService
@@ -96,7 +98,7 @@ type Runtime struct {
 	qualityService   *qualityapp.QualityService
 	emailAdapter     *emaildelivery.Adapter
 	smtpSender       *emailinfra.GoSMTPSender
-	satisfactionSvc  *services.SatisfactionService
+	satisfactionSvc  *satisfapp.SatisfactionService
 	transferHandler  *routingdelivery.HandlerServiceAdapter
 	automationModule *automationapp.Service
 }
@@ -210,7 +212,7 @@ func (rt *Runtime) WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapte
 
 // SurveysForWorker returns the satisfaction service for the survey email worker.
 // Worker 自身对 mailer 为 nil 的服务是无操作（直接返回），无需开关判断。
-func (rt *Runtime) SurveysForWorker() *services.SatisfactionService {
+func (rt *Runtime) SurveysForWorker() satisfapp.SurveyEmailProcessor {
 	return rt.satisfactionSvc
 }
 

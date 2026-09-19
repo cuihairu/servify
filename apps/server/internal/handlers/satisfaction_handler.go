@@ -1,15 +1,13 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -17,26 +15,12 @@ import (
 
 // SatisfactionHandler 客户满意度处理器
 type SatisfactionHandler struct {
-	satisfactionService SatisfactionService
+	satisfactionService satisfactiondelivery.SatisfactionService
 	logger              *logrus.Logger
 }
 
-type SatisfactionService interface {
-	CreateSatisfaction(ctx context.Context, req *services.SatisfactionCreateRequest) (*models.CustomerSatisfaction, error)
-	GetSatisfaction(ctx context.Context, id uint) (*models.CustomerSatisfaction, error)
-	ListSatisfactions(ctx context.Context, req *services.SatisfactionListRequest) ([]models.CustomerSatisfaction, int64, error)
-	ListSurveys(ctx context.Context, req *services.SatisfactionSurveyListRequest) ([]models.SatisfactionSurvey, int64, error)
-	ResendSurvey(ctx context.Context, id uint) (*models.SatisfactionSurvey, error)
-	GetSatisfactionByTicket(ctx context.Context, ticketID uint) (*models.CustomerSatisfaction, error)
-	GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*services.SatisfactionStatsResponse, error)
-	UpdateSatisfaction(ctx context.Context, id uint, comment string) (*models.CustomerSatisfaction, error)
-	DeleteSatisfaction(ctx context.Context, id uint) error
-	GetSurveyPreviewByToken(ctx context.Context, token string) (*services.SatisfactionSurveyPreview, error)
-	RespondSurvey(ctx context.Context, token string, rating int, comment string) (*models.CustomerSatisfaction, error)
-}
-
 // NewSatisfactionHandler 创建满意度处理器
-func NewSatisfactionHandler(satisfactionService SatisfactionService, logger *logrus.Logger) *SatisfactionHandler {
+func NewSatisfactionHandler(satisfactionService satisfactiondelivery.SatisfactionService, logger *logrus.Logger) *SatisfactionHandler {
 	return &SatisfactionHandler{
 		satisfactionService: satisfactionService,
 		logger:              logger,
@@ -49,14 +33,16 @@ func NewSatisfactionHandler(satisfactionService SatisfactionService, logger *log
 // @Tags 满意度评价
 // @Accept json
 // @Produce json
-// @Param satisfaction body services.SatisfactionCreateRequest true "满意度评价信息"
+// 注意：swag v1.16 不解析跨包类型别名，注解引用 application 包真实 struct
+// （仅文档引用，handler 不 import 该包）。
+// @Param satisfaction body application.SatisfactionCreateRequest true "满意度评价信息"
 // @Success 201 {object} models.CustomerSatisfaction
 // @Failure 400 {object} ErrorResponse
 // @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/satisfactions [post]
 func (h *SatisfactionHandler) CreateSatisfaction(c *gin.Context) {
-	var req services.SatisfactionCreateRequest
+	var req satisfactiondelivery.SatisfactionCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid request body",
@@ -162,7 +148,7 @@ func (h *SatisfactionHandler) GetSatisfaction(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/satisfactions [get]
 func (h *SatisfactionHandler) ListSatisfactions(c *gin.Context) {
-	var req services.SatisfactionListRequest
+	var req satisfactiondelivery.SatisfactionListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid query parameters",
@@ -226,7 +212,7 @@ func (h *SatisfactionHandler) ListSatisfactions(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/satisfactions/surveys [get]
 func (h *SatisfactionHandler) ListSurveys(c *gin.Context) {
-	var req services.SatisfactionSurveyListRequest
+	var req satisfactiondelivery.SatisfactionSurveyListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid query parameters",
@@ -285,13 +271,13 @@ func (h *SatisfactionHandler) ResendSurvey(c *gin.Context) {
 	survey, err := h.satisfactionService.ResendSurvey(c.Request.Context(), uint(id))
 	if err != nil {
 		switch {
-		case errors.Is(err, services.ErrSurveyNotFound):
+		case errors.Is(err, satisfactiondelivery.ErrSurveyNotFound):
 			c.JSON(http.StatusNotFound, ErrorResponse{
 				Error:   "Survey not found",
 				Message: err.Error(),
 			})
 			return
-		case errors.Is(err, services.ErrSurveyCompleted):
+		case errors.Is(err, satisfactiondelivery.ErrSurveyCompleted):
 			c.JSON(http.StatusBadRequest, ErrorResponse{
 				Error:   "Survey already completed",
 				Message: err.Error(),
@@ -364,7 +350,8 @@ func (h *SatisfactionHandler) GetSatisfactionByTicket(c *gin.Context) {
 // @Produce json
 // @Param date_from query string false "开始日期 (YYYY-MM-DD)"
 // @Param date_to query string false "结束日期 (YYYY-MM-DD)"
-// @Success 200 {object} services.SatisfactionStatsResponse
+// @Success 200 {object} application.SatisfactionStatsResponse
+// （同上：注解引用 application 真实 struct 而非 delivery 别名。）
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/satisfactions/stats [get]

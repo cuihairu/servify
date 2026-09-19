@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/app/bootstrap"
-	"servify/apps/server/internal/services"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 
 	"github.com/sirupsen/logrus"
 )
@@ -20,7 +20,7 @@ const (
 // SurveyEmailWorker 周期性扫描 queued 的 email 渠道 CSAT 调查并真实投递，
 // 补上「ScheduleSurvey 仅置 sent 不发送」的缺口。
 type SurveyEmailWorker struct {
-	service *services.SatisfactionService
+	service satisfapp.SurveyEmailProcessor
 	logger  *logrus.Logger
 
 	// scanInterval/batchSize 供测试注入短间隔；零值取 surveyEmailScanInterval/batch 常量
@@ -32,7 +32,7 @@ type SurveyEmailWorker struct {
 	done   chan struct{}
 }
 
-func NewSurveyEmailWorker(service *services.SatisfactionService, logger *logrus.Logger) bootstrap.Worker {
+func NewSurveyEmailWorker(service satisfapp.SurveyEmailProcessor, logger *logrus.Logger) bootstrap.Worker {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}

@@ -1,26 +1,21 @@
-package services
+package application
 
-// satisfaction / AI 编排的落库错误分支（自原 auth_error_paths_unit_test.go 拆出：
-// auth 段已随 auth 模块迁移至 internal/modules/auth/application）。
+// satisfaction 落库错误分支（自 services/satisfaction_ai_error_paths_unit_test.go
+// 的 satisfaction 段下沉；同文件的 AI 编排测试留在 services 包）。
 
 import (
 	"context"
-	"errors"
 	"testing"
-	"time"
 
 	"servify/apps/server/internal/models"
-	mockllm "servify/apps/server/internal/platform/llm/mock"
 )
 
-func timeNow() time.Time { return time.Now() }
-
 func TestSatisfactionService_CreateInsertError(t *testing.T) {
-	db := newServicesTestDB(t,
+	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewSatisfactionService(db, nil)
+	svc := NewService(db, nil)
 	ctx := context.Background()
 
 	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
@@ -46,11 +41,11 @@ func TestSatisfactionService_CreateInsertError(t *testing.T) {
 }
 
 func TestSatisfactionService_ScheduleSurveyExistingLoadError(t *testing.T) {
-	db := newServicesTestDB(t,
+	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewSatisfactionService(db, nil)
+	svc := NewService(db, nil)
 	ticket := &models.Ticket{Title: "T", CreatedAt: timeNow(), UpdatedAt: timeNow()}
 	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -64,21 +59,9 @@ func TestSatisfactionService_ScheduleSurveyExistingLoadError(t *testing.T) {
 	}
 }
 
-func TestOrchestratedAI_ProcessQueryError(t *testing.T) {
-	base := NewAIService("", "")
-	base.InitializeKnowledgeBase()
-	svc := NewOrchestratedEnhancedAIService(
-		base,
-		&mockllm.Provider{ChatError: errors.New("llm unavailable")},
-		nil,
-		"",
-		nil,
-		"",
-		nil,
-	)
-	// no provider + no fallback configured -> orchestrator error surfaces when LLM fails
-	svc.SetFallbackEnabled(false)
-	if _, err := svc.ProcessQuery(context.Background(), "普通问题", "sess"); err == nil {
-		t.Fatal("expected ProcessQuery error")
+func TestService_NilLogger(t *testing.T) {
+	db := newSatisfactionTestDB(t, &models.CustomerSatisfaction{})
+	if NewService(db, nil) == nil {
+		t.Fatal("expected satisfaction service")
 	}
 }

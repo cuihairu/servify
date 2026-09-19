@@ -12,18 +12,18 @@ import (
 	"time"
 
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
-	"servify/apps/server/internal/services"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
 type stubSatisfactionStatsReader struct {
 	called bool
-	stats  *services.SatisfactionStatsResponse
+	stats  *satisfactiondelivery.SatisfactionStatsResponse
 	err    error
 }
 
-func (s *stubSatisfactionStatsReader) GetSatisfactionStats(ctx context.Context, from, to *time.Time) (*services.SatisfactionStatsResponse, error) {
+func (s *stubSatisfactionStatsReader) GetSatisfactionStats(ctx context.Context, from, to *time.Time) (*satisfactiondelivery.SatisfactionStatsResponse, error) {
 	s.called = true
 	if s.err != nil {
 		return nil, s.err
@@ -31,10 +31,10 @@ func (s *stubSatisfactionStatsReader) GetSatisfactionStats(ctx context.Context, 
 	if s.stats != nil {
 		return s.stats, nil
 	}
-	return &services.SatisfactionStatsResponse{
+	return &satisfactiondelivery.SatisfactionStatsResponse{
 		TotalRatings:  2,
 		AverageRating: 4.5,
-		TrendData: []services.SatisfactionTrend{
+		TrendData: []satisfactiondelivery.SatisfactionTrend{
 			{Date: "2026-04-08", Count: 1, AverageRating: 4},
 			{Date: "2026-04-09", Count: 1, AverageRating: 5},
 		},

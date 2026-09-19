@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -20,90 +19,6 @@ func TestAIService_NewRequestError(t *testing.T) {
 	svc := NewAIService("key", "http://127.0.0.1:1\x7f")
 	if _, err := svc.callOpenAI(context.Background(), "p"); err == nil {
 		t.Fatal("expected request creation error")
-	}
-}
-
-func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
-	ctx := context.Background()
-
-	// ScheduleSurvey: ticket validation query fails (non-notfound)
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc := NewSatisfactionService(db, nil)
-	if err := db.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if _, err := svc.ScheduleSurvey(ctx, &models.Ticket{ID: 1}); err == nil || err.Error() == "ticket not found" {
-		t.Fatalf("expected ticket query error, got %v", err)
-	}
-
-	// RespondSurvey: create fails without "already exists" marker
-	db2 := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc2 := NewSatisfactionService(db2, nil)
-	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
-	if err := db2.Create(customer).Error; err != nil {
-		t.Fatalf("seed customer: %v", err)
-	}
-	if err := db2.Create(&models.Customer{UserID: customer.ID}).Error; err != nil {
-		t.Fatalf("seed profile: %v", err)
-	}
-	ticket := &models.Ticket{Title: "T", CustomerID: customer.ID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db2.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	missingAgent := uint(999)
-	survey := &models.SatisfactionSurvey{
-		TicketID: ticket.ID, CustomerID: customer.ID, AgentID: &missingAgent,
-		Status: "sent", SurveyToken: "tok-agent", CreatedAt: time.Now(), UpdatedAt: time.Now(),
-	}
-	if err := db2.Create(survey).Error; err != nil {
-		t.Fatalf("seed survey: %v", err)
-	}
-	if _, err := svc2.RespondSurvey(ctx, "tok-agent", 5, ""); err == nil {
-		t.Fatal("expected agent-not-found error propagation")
-	}
-
-	// CreateSatisfaction: owner mismatch + agent query error
-	db3 := newServicesTestDB(t,
-		&models.User{}, &models.Customer{}, &models.Agent{},
-		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
-	)
-	svc3 := NewSatisfactionService(db3, nil)
-	owner := &models.User{Username: "owner", Email: "owner@x.com", Role: "customer"}
-	if err := db3.Create(owner).Error; err != nil {
-		t.Fatalf("seed owner: %v", err)
-	}
-	if err := db3.Create(&models.Customer{UserID: owner.ID}).Error; err != nil {
-		t.Fatalf("seed owner profile: %v", err)
-	}
-	other := &models.User{Username: "other", Email: "other@x.com", Role: "customer"}
-	if err := db3.Create(other).Error; err != nil {
-		t.Fatalf("seed other: %v", err)
-	}
-	if err := db3.Create(&models.Customer{UserID: other.ID}).Error; err != nil {
-		t.Fatalf("seed other profile: %v", err)
-	}
-	ticket3 := &models.Ticket{Title: "T3", CustomerID: owner.ID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db3.Create(ticket3).Error; err != nil {
-		t.Fatalf("seed ticket3: %v", err)
-	}
-	if _, err := svc3.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
-		TicketID: ticket3.ID, CustomerID: other.ID, Rating: 5,
-	}); err == nil || !strings.Contains(err.Error(), "owner") {
-		t.Fatalf("expected owner mismatch error, got %v", err)
-	}
-	if err := db3.Migrator().DropTable("agents"); err != nil {
-		t.Fatalf("drop agents: %v", err)
-	}
-	if _, err := svc3.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
-		TicketID: ticket3.ID, CustomerID: owner.ID, AgentID: &missingAgent, Rating: 5,
-	}); err == nil {
-		t.Fatal("expected agent query error")
 	}
 }
 

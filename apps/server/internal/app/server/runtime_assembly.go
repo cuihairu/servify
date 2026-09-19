@@ -41,6 +41,7 @@ import (
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	shiftapp "servify/apps/server/internal/modules/shift/application"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	shiftinfra "servify/apps/server/internal/modules/shift/infra"
@@ -75,7 +76,7 @@ type runtimeAssemblyState struct {
 	wsHub               *services.WebSocketHub
 	routingService      *routingapp.Service
 	agentAdapter        *agentdelivery.HandlerServiceAdapter
-	satisfactionService *services.SatisfactionService
+	satisfactionService *satisfapp.SatisfactionService
 }
 
 func initializeObservability(rt *Runtime) {
@@ -257,7 +258,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	analyticsdelivery.NewEventBusSubscriber(analyticsModule).Register(rt.Bus)
 	rt.dailyStatsRunner = analyticsdelivery.NewDailyStatsRunner(analyticsModule, rt.Logger)
 
-	satisfactionService := services.NewSatisfactionService(rt.DB, rt.Logger)
+	satisfactionService := satisfapp.NewService(rt.DB, rt.Logger)
 	rt.SatisfactionService = satisfactionService
 	rt.satisfactionSvc = satisfactionService
 	state.satisfactionService = satisfactionService

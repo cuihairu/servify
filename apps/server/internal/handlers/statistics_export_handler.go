@@ -11,7 +11,7 @@ import (
 
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
-	"servify/apps/server/internal/services"
+	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -19,9 +19,9 @@ import (
 )
 
 // SatisfactionStatsReader 是导出端点消费满意度统计的窄接口
-// （由 handlers.SatisfactionService 的实现满足）。
+// （由 satisfaction 模块 service 经 handlers.SatisfactionService 满足）。
 type SatisfactionStatsReader interface {
-	GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*services.SatisfactionStatsResponse, error)
+	GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*satisfactiondelivery.SatisfactionStatsResponse, error)
 }
 
 // StatisticsExportHandler 统计数据导出处理器（CSV / Excel）。

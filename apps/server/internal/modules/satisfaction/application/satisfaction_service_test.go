@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package services
+package application
 
 import (
 	"context"
@@ -9,13 +9,20 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	platformauth "servify/apps/server/internal/platform/auth"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
-func newSatisfactionTestDB(t *testing.T) *gorm.DB {
+// scopedContext 自 services 侧 integration helper 复刻
+// （与无标签 helper unitScopedContext 刻意区分名字）。
+func scopedContext(tenantID, workspaceID string) context.Context {
+	return platformauth.ContextWithScope(context.Background(), tenantID, workspaceID)
+}
+
+func newSatisfactionIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -28,9 +35,9 @@ func newSatisfactionTestDB(t *testing.T) *gorm.DB {
 }
 
 func TestSatisfactionService_ScheduleAndRespondSurvey(t *testing.T) {
-	db := newSatisfactionTestDB(t)
+	db := newSatisfactionIntegrationDB(t)
 	logger := logrus.New()
-	svc := NewSatisfactionService(db, logger)
+	svc := NewService(db, logger)
 
 	now := time.Now()
 	user := &models.User{ID: 1, Username: "customer1", Email: "c1@example.com"}
@@ -86,9 +93,9 @@ func TestSatisfactionService_ScheduleAndRespondSurvey(t *testing.T) {
 }
 
 func TestSatisfactionService_GetSurveyPreview(t *testing.T) {
-	db := newSatisfactionTestDB(t)
+	db := newSatisfactionIntegrationDB(t)
 	logger := logrus.New()
-	svc := NewSatisfactionService(db, logger)
+	svc := NewService(db, logger)
 
 	now := time.Now()
 	user := &models.User{ID: 2, Username: "customer2", Email: "c2@example.com"}
@@ -134,9 +141,9 @@ func TestSatisfactionService_GetSurveyPreview(t *testing.T) {
 }
 
 func TestSatisfactionService_ScopedByWorkspace(t *testing.T) {
-	db := newSatisfactionTestDB(t)
+	db := newSatisfactionIntegrationDB(t)
 	logger := logrus.New()
-	svc := NewSatisfactionService(db, logger)
+	svc := NewService(db, logger)
 
 	now := time.Now()
 	customerA := &models.User{ID: 10, Username: "customer-a", Email: "customer-a@example.com"}
@@ -241,8 +248,8 @@ func TestSatisfactionService_ScopedByWorkspace(t *testing.T) {
 }
 
 func TestSatisfactionService_GetSatisfactionStats_DoesNotLeakCrossWorkspaceCategoryOrTrend(t *testing.T) {
-	db := newSatisfactionTestDB(t)
-	svc := NewSatisfactionService(db, logrus.New())
+	db := newSatisfactionIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	day := time.Date(2026, 4, 8, 12, 0, 0, 0, time.UTC)
 
 	if err := db.Create(&[]models.CustomerSatisfaction{
@@ -297,8 +304,8 @@ func TestSatisfactionService_GetSatisfactionStats_DoesNotLeakCrossWorkspaceCateg
 }
 
 func TestSatisfactionService_ListSatisfactions_DoesNotLeakCrossScopePreloads(t *testing.T) {
-	db := newSatisfactionTestDB(t)
-	svc := NewSatisfactionService(db, logrus.New())
+	db := newSatisfactionIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	customerUserB := &models.User{ID: 301, Username: "customer-b", Email: "customer-b@example.com", Name: "Customer B"}
@@ -370,9 +377,9 @@ func TestSatisfactionService_ListSatisfactions_DoesNotLeakCrossScopePreloads(t *
 }
 
 func TestSatisfactionService_GetSurveyPreview_DoesNotLeakCrossScopeAgent(t *testing.T) {
-	db := newSatisfactionTestDB(t)
+	db := newSatisfactionIntegrationDB(t)
 	logger := logrus.New()
-	svc := NewSatisfactionService(db, logger)
+	svc := NewService(db, logger)
 	now := time.Now()
 
 	customerUser := &models.User{ID: 401, Username: "customer-prev", Email: "customer-prev@example.com"}
@@ -422,9 +429,9 @@ func TestSatisfactionService_GetSurveyPreview_DoesNotLeakCrossScopeAgent(t *test
 }
 
 func TestSatisfactionService_ScheduleSurvey_RejectsCrossScopeTicket(t *testing.T) {
-	db := newSatisfactionTestDB(t)
+	db := newSatisfactionIntegrationDB(t)
 	logger := logrus.New()
-	svc := NewSatisfactionService(db, logger)
+	svc := NewService(db, logger)
 	now := time.Now()
 
 	customerB := &models.User{ID: 451, Username: "customer-bx", Email: "customer-bx@example.com"}

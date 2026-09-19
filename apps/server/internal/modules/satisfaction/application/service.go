@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -21,6 +21,12 @@ type SurveyMailer interface {
 	SendSurveyEmail(ctx context.Context, to, subject, textBody string) error
 }
 
+// SurveyEmailProcessor 是后台扫描投递 queued CSAT 邮件所需的窄接口
+// （app/worker 的 SurveyEmailWorker 经 worker deps 引用）。
+type SurveyEmailProcessor interface {
+	ProcessPendingSurveyEmails(ctx context.Context, batchSize int) (int, error)
+}
+
 // SatisfactionService 客户满意度管理服务
 type SatisfactionService struct {
 	db     *gorm.DB
@@ -32,7 +38,7 @@ type SatisfactionService struct {
 }
 
 // NewSatisfactionService 创建满意度服务
-func NewSatisfactionService(db *gorm.DB, logger *logrus.Logger) *SatisfactionService {
+func NewService(db *gorm.DB, logger *logrus.Logger) *SatisfactionService {
 	if logger == nil {
 		logger = logrus.New()
 	}

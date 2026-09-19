@@ -23,6 +23,7 @@ import (
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/services"
 
@@ -451,7 +452,7 @@ func TestSurveyEmailWorkerNilServiceAndStopBeforeStart(t *testing.T) {
 }
 
 func TestSurveyEmailWorkerStopDuringJitter(t *testing.T) {
-	w := NewSurveyEmailWorker(&services.SatisfactionService{}, discardLogger())
+	w := NewSurveyEmailWorker(&satisfapp.SatisfactionService{}, discardLogger())
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() = %v", err)
 	}
@@ -500,7 +501,7 @@ func TestSurveyEmailWorkerDeliversQueuedSurveys(t *testing.T) {
 	}
 
 	mailer := &stubSurveyMailer{rejectDom: "blocked@example.com"}
-	svc := services.NewSatisfactionService(db, discardLogger())
+	svc := satisfapp.NewService(db, discardLogger())
 	svc.SetSurveyMailer(mailer)
 
 	w := NewSurveyEmailWorker(svc, discardLogger()).(*SurveyEmailWorker)
@@ -567,7 +568,7 @@ func TestSurveyEmailWorkerLogsScanFailures(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(buf)
 
-	svc := services.NewSatisfactionService(db, logger)
+	svc := satisfapp.NewService(db, logger)
 	svc.SetSurveyMailer(&stubSurveyMailer{})
 
 	w := NewSurveyEmailWorker(svc, logger).(*SurveyEmailWorker)
@@ -857,8 +858,8 @@ func (fullRuntimeWorkerDeps) WaitingQueueForWorker() *routingdelivery.HandlerSer
 	return &routingdelivery.HandlerServiceAdapter{}
 }
 
-func (fullRuntimeWorkerDeps) SurveysForWorker() *services.SatisfactionService {
-	return &services.SatisfactionService{}
+func (fullRuntimeWorkerDeps) SurveysForWorker() satisfapp.SurveyEmailProcessor {
+	return &satisfapp.SatisfactionService{}
 }
 
 func (fullRuntimeWorkerDeps) AutomationTimersForWorker() automationapp.TimerProcessor {
