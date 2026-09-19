@@ -292,36 +292,6 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 	}
 }
 
-func TestShiftService_SequentialErrors(t *testing.T) {
-	ctx := context.Background()
-
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	failNthQuery(db, 2)
-	svc := NewShiftService(db, logrus.New())
-	if _, _, err := svc.ListShifts(ctx, &ShiftListRequest{Page: 1, PageSize: 10}); err == nil ||
-		!strings.Contains(err.Error(), "failed to list shifts") {
-		t.Fatalf("shifts find error: %v", err)
-	}
-
-	cases := []struct {
-		n          int32
-		wantSubstr string
-	}{
-		{2, "failed to aggregate by shift_type"},
-		{3, "failed to aggregate by status"},
-		{4, "failed to count upcoming shifts"},
-		{5, "failed to count today active shifts"},
-	}
-	for _, tc := range cases {
-		db := newServicesTestDB(t, &models.ShiftSchedule{})
-		failNthQuery(db, tc.n)
-		svc := NewShiftService(db, logrus.New())
-		if _, err := svc.GetShiftStats(ctx); err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
-			t.Fatalf("n=%d: expected %q, got %v", tc.n, tc.wantSubstr, err)
-		}
-	}
-}
-
 func TestAppIntegrationService_ListFindError(t *testing.T) {
 	db := newServicesTestDB(t, &models.AppIntegration{})
 	failNthQuery(db, 2)

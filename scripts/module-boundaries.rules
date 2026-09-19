@@ -17,7 +17,7 @@ handler|Macro|apps/server/internal/handlers/macro_handler.go|service|macrodelive
 handler|Satisfaction|apps/server/internal/handlers/satisfaction_handler.go|satisfactionService|SatisfactionService|func NewSatisfactionHandler\(satisfactionService SatisfactionService, logger \*logrus\.Logger\)|\*services\.SatisfactionService
 handler|CSAT public|apps/server/internal/handlers/csat_public_handler.go|service|SatisfactionService|func NewCSATSurveyHandler\(service SatisfactionService\)|\*services\.SatisfactionService
 handler|Voice PSTN webhook|apps/server/internal/handlers/voice_pstn_webhook_handler.go|adapter|voiceprotocol\.HostedVendorWebhookAdapter|func NewPSTNWebhookHandler\(coordinator \*voicedelivery\.Coordinator, adapter voiceprotocol\.HostedVendorWebhookAdapter, validateSignature bool, publicBaseURL string\)|\*twiliovoice\.Adapter
-handler|Shift|apps/server/internal/handlers/shift_handler.go|shiftService|ShiftService|func NewShiftHandler\(shiftService ShiftService\)|\*services\.ShiftService
+handler|Shift|apps/server/internal/handlers/shift_handler.go|shiftService|shiftdelivery\.HandlerService|func NewShiftHandler\(shiftService shiftdelivery.HandlerService\)|\*services\.ShiftService
 handler|Suggestion|apps/server/internal/handlers/suggestion_handler.go|service|suggestiondelivery\.HandlerService|func NewSuggestionHandler\(service suggestiondelivery\.HandlerService\)|\*services\.SuggestionService
 handler|Statistics export|apps/server/internal/handlers/statistics_export_handler.go|statsService|analyticsdelivery\.HandlerService|func NewStatisticsExportHandler\(statsService analyticsdelivery\.HandlerService, satisfaction SatisfactionStatsReader, logger \*logrus\.Logger\)|\*services\.StatisticsService
 handler|Gamification|apps/server/internal/handlers/gamification_handler.go|service|gamificationdelivery\.HandlerService|func NewGamificationHandler\(service gamificationdelivery\.HandlerService\)|\*services\.GamificationService
@@ -75,8 +75,8 @@ require|apps/server/internal/app/server/runtime.go|AppIntegrationService[[:space
 require|apps/server/internal/app/server/router.go|AppIntegrationService[[:space:]]+handlers\.AppMarketService|Router dependencies must expose app integrations via handlers.AppMarketService.
 require|apps/server/internal/app/server/runtime.go|CustomFieldService[[:space:]]+customfielddelivery\.HandlerService|Runtime must expose custom fields via customfielddelivery.HandlerService.
 require|apps/server/internal/app/server/router.go|CustomFieldService[[:space:]]+customfielddelivery\.HandlerService|Router dependencies must expose custom fields via customfielddelivery.HandlerService.
-require|apps/server/internal/app/server/runtime.go|ShiftService[[:space:]]+handlers\.ShiftService|Runtime must expose shift via handlers.ShiftService.
-require|apps/server/internal/app/server/router.go|ShiftService[[:space:]]+handlers\.ShiftService|Router dependencies must expose shift via handlers.ShiftService.
+require|apps/server/internal/app/server/runtime.go|ShiftService[[:space:]]+shiftdelivery.HandlerService|Runtime must expose shift via handlers.ShiftService.
+require|apps/server/internal/app/server/router.go|ShiftService[[:space:]]+shiftdelivery.HandlerService|Router dependencies must expose shift via handlers.ShiftService.
 require|apps/server/internal/app/server/runtime.go|SuggestionService[[:space:]]+suggestiondelivery\.HandlerService|Runtime must expose suggestions via suggestiondelivery.HandlerService.
 require|apps/server/internal/app/server/router.go|SuggestionService[[:space:]]+suggestiondelivery\.HandlerService|Router dependencies must expose suggestions via suggestiondelivery.HandlerService.
 require|apps/server/internal/app/server/runtime.go|GamificationService[[:space:]]+gamificationdelivery\.HandlerService|Runtime must expose gamification via gamificationdelivery.HandlerService.
@@ -139,6 +139,8 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.APIKeyServi
 require|apps/server/internal/app/server/runtime_assembly.go|MacroService[[:space:]]*=[[:space:]]*macrodelivery\.NewHandlerServiceAdapter\(macroModule\)|Runtime must assemble macro handlers via the macro delivery adapter on the single module instance.
 require|apps/server/internal/app/server/runtime_assembly.go|CustomFieldService[[:space:]]*=[[:space:]]*customfielddelivery\.NewHandlerServiceAdapter\(customFieldModule\)|Runtime must assemble custom field handlers via the custom field delivery adapter on the single module instance.
 require|apps/server/internal/app/server/runtime_assembly.go|WorkspaceService[[:space:]]*=[[:space:]]*workspacedelivery\.NewHandlerServiceAdapter\(workspaceModule\)|Runtime must assemble workspace handlers via the workspace delivery adapter on the single module instance.
+require|apps/server/internal/app/server/runtime_assembly.go|ShiftService[[:space:]]*=[[:space:]]*shiftdelivery\.NewHandlerServiceAdapter\(shiftModule\)|Runtime must assemble shift handlers via the shift delivery adapter on the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.MacroService|Runtime must not depend on the concrete macro service; use macrodelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.CustomFieldService|Runtime must not depend on the concrete custom field service; use customfielddelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.WorkspaceService|Runtime must not depend on the concrete workspace service; use workspacedelivery contracts.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.ShiftService|Runtime must not depend on the concrete shift service; use shiftdelivery contracts.

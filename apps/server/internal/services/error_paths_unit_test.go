@@ -17,9 +17,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewSatisfactionService(db, nil) == nil {
 		t.Fatal("expected satisfaction service")
 	}
-	if NewShiftService(db, nil) == nil {
-		t.Fatal("expected shift service")
-	}
 	if NewSLAService(db, nil) == nil {
 		t.Fatal("expected SLA service")
 	}
@@ -80,54 +77,6 @@ func TestAppIntegrationService_DroppedTableErrors(t *testing.T) {
 // ---- custom field error branches ----
 
 // ---- shift error branches ----
-
-func TestShiftService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc := NewShiftService(db, logrus.New())
-	ctx := unitScopedContext("t1", "w1")
-
-	user := &models.User{Username: "agent", Email: "agent@x.com", Role: "agent"}
-	if err := db.Create(user).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.Agent{UserID: user.ID, TenantID: "t1", WorkspaceID: "w1"}).Error; err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	start := time.Now().Add(time.Hour)
-	end := start.Add(time.Hour)
-
-	if err := db.Migrator().DropTable("agents"); err != nil {
-		t.Fatalf("drop agents: %v", err)
-	}
-	if _, err := svc.CreateShift(ctx, &ShiftCreateRequest{AgentID: user.ID, ShiftType: "morning", StartTime: start, EndTime: end}); err == nil {
-		t.Fatal("expected agent lookup error")
-	}
-
-	// shift table missing scenarios
-	db2 := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc2 := NewShiftService(db2, logrus.New())
-	if err := db2.Migrator().DropTable("shift_schedules"); err != nil {
-		t.Fatalf("drop shifts: %v", err)
-	}
-	if _, _, err := svc2.ListShifts(ctx, &ShiftListRequest{Page: 1, PageSize: 10}); err == nil {
-		t.Fatal("expected list error")
-	}
-	if _, err := svc2.UpdateShift(ctx, 1, &ShiftUpdateRequest{}); err == nil {
-		t.Fatal("expected update error")
-	}
-	if err := svc2.DeleteShift(ctx, 1); err == nil {
-		t.Fatal("expected delete error")
-	}
-	if _, err := svc2.GetShiftStats(ctx); err == nil {
-		t.Fatal("expected stats error")
-	}
-	// unscoped preload shortcut branch
-	db3 := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc3 := NewShiftService(db3, logrus.New())
-	if _, _, err := svc3.ListShifts(context.Background(), &ShiftListRequest{Page: 1, PageSize: 10}); err != nil {
-		t.Fatalf("unscoped list: %v", err)
-	}
-}
 
 // ---- satisfaction error branches ----
 

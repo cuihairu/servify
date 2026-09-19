@@ -166,34 +166,6 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 	}
 }
 
-func TestShiftService_UnscopedPreloadWithData(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc := NewShiftService(db, logrus.New())
-	ctx := unitScopedContext("t1", "w1")
-
-	user := &models.User{Username: "agent", Email: "agent@x.com", Role: "agent", Name: "Agent X"}
-	if err := db.Create(user).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.Agent{UserID: user.ID, TenantID: "t1", WorkspaceID: "w1"}).Error; err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	start := time.Now().Add(time.Hour)
-	if _, err := svc.CreateShift(ctx, &ShiftCreateRequest{
-		AgentID: user.ID, ShiftType: "morning", StartTime: start, EndTime: start.Add(time.Hour),
-	}); err != nil {
-		t.Fatalf("CreateShift: %v", err)
-	}
-	// unscoped listing exercises the unscoped preload shortcut with data present
-	items, _, err := svc.ListShifts(context.Background(), &ShiftListRequest{Page: 1, PageSize: 10})
-	if err != nil {
-		t.Fatalf("unscoped list: %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 shift, got %d", len(items))
-	}
-}
-
 func TestSLAService_MoreBranches(t *testing.T) {
 	ctx := context.Background()
 

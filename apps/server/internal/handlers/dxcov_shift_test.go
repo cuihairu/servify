@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -16,7 +16,7 @@ func dxcShiftService() *unitShiftService {
 		shift:  &models.ShiftSchedule{ID: 1, AgentID: 2, ShiftType: "morning"},
 		shifts: []models.ShiftSchedule{{ID: 1}, {ID: 2}},
 		total:  2,
-		stats:  &services.ShiftStatsResponse{Total: 2},
+		stats:  &shiftdelivery.ShiftStatsResponse{Total: 2},
 	}
 }
 

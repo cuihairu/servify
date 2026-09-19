@@ -1,37 +1,27 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
 // ShiftHandler 班次管理处理器
 type ShiftHandler struct {
-	shiftService ShiftService
-}
-
-type ShiftService interface {
-	CreateShift(ctx context.Context, req *services.ShiftCreateRequest) (*models.ShiftSchedule, error)
-	ListShifts(ctx context.Context, req *services.ShiftListRequest) ([]models.ShiftSchedule, int64, error)
-	UpdateShift(ctx context.Context, id uint, req *services.ShiftUpdateRequest) (*models.ShiftSchedule, error)
-	DeleteShift(ctx context.Context, id uint) error
-	GetShiftStats(ctx context.Context) (*services.ShiftStatsResponse, error)
+	shiftService shiftdelivery.HandlerService
 }
 
 // NewShiftHandler 创建班次处理器
-func NewShiftHandler(shiftService ShiftService) *ShiftHandler {
+func NewShiftHandler(shiftService shiftdelivery.HandlerService) *ShiftHandler {
 	return &ShiftHandler{shiftService: shiftService}
 }
 
 // CreateShift 创建班次
 func (h *ShiftHandler) CreateShift(c *gin.Context) {
-	var req services.ShiftCreateRequest
+	var req shiftdelivery.ShiftCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",
@@ -54,7 +44,7 @@ func (h *ShiftHandler) CreateShift(c *gin.Context) {
 
 // ListShifts 获取班次列表
 func (h *ShiftHandler) ListShifts(c *gin.Context) {
-	var req services.ShiftListRequest
+	var req shiftdelivery.ShiftListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_QUERY",
@@ -92,7 +82,7 @@ func (h *ShiftHandler) UpdateShift(c *gin.Context) {
 		return
 	}
 
-	var req services.ShiftUpdateRequest
+	var req shiftdelivery.ShiftUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",

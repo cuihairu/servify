@@ -17,7 +17,9 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	shiftapp "servify/apps/server/internal/modules/shift/application"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
+	shiftinfra "servify/apps/server/internal/modules/shift/infra"
 )
 
 func newShiftHandlerTestDB(t *testing.T) *gorm.DB {
@@ -42,7 +44,7 @@ func TestShiftHandler_CreateShift_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -81,7 +83,7 @@ func TestShiftHandler_CreateShift_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -100,7 +102,7 @@ func TestShiftHandler_ListShifts_Empty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -123,7 +125,7 @@ func TestShiftHandler_UpdateShift_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -145,7 +147,7 @@ func TestShiftHandler_UpdateShift_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -167,7 +169,7 @@ func TestShiftHandler_DeleteShift_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -185,7 +187,7 @@ func TestShiftHandler_DeleteShift_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -203,7 +205,7 @@ func TestShiftHandler_GetShiftStats_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 	handler := NewShiftHandler(svc)
 
 	router := gin.New()
@@ -219,7 +221,7 @@ func TestShiftHandler_GetShiftStats_Success(t *testing.T) {
 
 func TestNewShiftHandler(t *testing.T) {
 	db := newShiftHandlerTestDB(t)
-	svc := services.NewShiftService(db, nil)
+	svc := shiftdelivery.NewHandlerServiceAdapter(shiftapp.NewService(shiftinfra.NewGormRepository(db)))
 
 	handler := NewShiftHandler(svc)
 

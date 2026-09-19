@@ -69,27 +69,6 @@ func TestSLA_InsertTriggerErrors(t *testing.T) {
 	}
 }
 
-func TestShift_InsertTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc := NewShiftService(db, logrus.New())
-	ctx := context.Background()
-
-	user := &models.User{Username: "agent", Email: "agent@x.com", Role: "agent"}
-	if err := db.Create(user).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.Agent{UserID: user.ID}).Error; err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_shift BEFORE INSERT ON shift_schedules BEGIN SELECT RAISE(ABORT, 'insert blocked'); END;")
-	start := time.Now().Add(time.Hour)
-	if _, err := svc.CreateShift(ctx, &ShiftCreateRequest{
-		AgentID: user.ID, ShiftType: "morning", StartTime: start, EndTime: start.Add(time.Hour),
-	}); err == nil {
-		t.Fatal("expected shift insert error")
-	}
-}
-
 func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 	ctx := context.Background()
 
@@ -173,31 +152,6 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 	execTrigger(t, db4, "CREATE TRIGGER blk_sat_upd BEFORE UPDATE ON customer_satisfactions BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
 	if _, err := svc4.UpdateSatisfaction(ctx, row.ID, "new"); err == nil {
 		t.Fatal("expected update save error")
-	}
-}
-
-func TestShift_UpdateTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Agent{}, &models.ShiftSchedule{})
-	svc := NewShiftService(db, logrus.New())
-	ctx := context.Background()
-
-	user := &models.User{Username: "agent", Email: "agent@x.com", Role: "agent"}
-	if err := db.Create(user).Error; err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	if err := db.Create(&models.Agent{UserID: user.ID}).Error; err != nil {
-		t.Fatalf("seed agent: %v", err)
-	}
-	start := time.Now().Add(time.Hour)
-	shift, err := svc.CreateShift(ctx, &ShiftCreateRequest{
-		AgentID: user.ID, ShiftType: "morning", StartTime: start, EndTime: start.Add(time.Hour),
-	})
-	if err != nil {
-		t.Fatalf("CreateShift: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_shift_upd BEFORE UPDATE ON shift_schedules BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.UpdateShift(ctx, shift.ID, &ShiftUpdateRequest{Status: stringPtr("active")}); err == nil {
-		t.Fatal("expected shift update error")
 	}
 }
 

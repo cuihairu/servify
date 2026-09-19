@@ -38,6 +38,9 @@ import (
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
+	shiftapp "servify/apps/server/internal/modules/shift/application"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
+	shiftinfra "servify/apps/server/internal/modules/shift/infra"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
@@ -266,7 +269,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 		satisfactionService.SetSurveyMailer(&surveyEmailMailer{sender: rt.smtpSender, from: smtpFrom})
 	}
 
-	rt.ShiftService = services.NewShiftService(rt.DB, rt.Logger)
+	shiftModule := shiftapp.NewService(shiftinfra.NewGormRepository(rt.DB))
+	rt.ShiftService = shiftdelivery.NewHandlerServiceAdapter(shiftModule)
 	workspaceModule := workspaceapp.NewService(workspaceinfra.NewGormRepository(rt.DB), agentAdapter)
 	rt.WorkspaceService = workspacedelivery.NewHandlerServiceAdapter(workspaceModule)
 	macroModule := macroapp.NewService(macroinfra.NewGormRepository(rt.DB))

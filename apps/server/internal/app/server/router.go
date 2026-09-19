@@ -17,6 +17,7 @@ import (
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
@@ -61,7 +62,7 @@ type Dependencies struct {
 	CustomFieldService       customfielddelivery.HandlerService
 	StatisticsHandlerService analyticsdelivery.HandlerService
 	SLAService               handlers.SLAService
-	ShiftService             handlers.ShiftService
+	ShiftService             shiftdelivery.HandlerService
 	AutomationHandlerService automationdelivery.HandlerService
 	KnowledgeDocHandler      knowledgedelivery.HandlerService
 	SuggestionService        suggestiondelivery.HandlerService

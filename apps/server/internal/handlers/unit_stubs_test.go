@@ -18,6 +18,7 @@ import (
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
@@ -758,7 +759,7 @@ func (s *unitMacroService) ApplyToTicket(ctx context.Context, macroID, ticketID,
 type unitShiftService struct {
 	shift     *models.ShiftSchedule
 	shifts    []models.ShiftSchedule
-	stats     *services.ShiftStatsResponse
+	stats     *shiftdelivery.ShiftStatsResponse
 	total     int64
 	createErr error
 	listErr   error
@@ -767,21 +768,21 @@ type unitShiftService struct {
 	statsErr  error
 }
 
-func (s *unitShiftService) CreateShift(ctx context.Context, req *services.ShiftCreateRequest) (*models.ShiftSchedule, error) {
+func (s *unitShiftService) CreateShift(ctx context.Context, req *shiftdelivery.ShiftCreateRequest) (*models.ShiftSchedule, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.shift, nil
 }
 
-func (s *unitShiftService) ListShifts(ctx context.Context, req *services.ShiftListRequest) ([]models.ShiftSchedule, int64, error) {
+func (s *unitShiftService) ListShifts(ctx context.Context, req *shiftdelivery.ShiftListRequest) ([]models.ShiftSchedule, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.shifts, s.total, nil
 }
 
-func (s *unitShiftService) UpdateShift(ctx context.Context, id uint, req *services.ShiftUpdateRequest) (*models.ShiftSchedule, error) {
+func (s *unitShiftService) UpdateShift(ctx context.Context, id uint, req *shiftdelivery.ShiftUpdateRequest) (*models.ShiftSchedule, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}
@@ -790,7 +791,7 @@ func (s *unitShiftService) UpdateShift(ctx context.Context, id uint, req *servic
 
 func (s *unitShiftService) DeleteShift(ctx context.Context, id uint) error { return s.deleteErr }
 
-func (s *unitShiftService) GetShiftStats(ctx context.Context) (*services.ShiftStatsResponse, error) {
+func (s *unitShiftService) GetShiftStats(ctx context.Context) (*shiftdelivery.ShiftStatsResponse, error) {
 	if s.statsErr != nil {
 		return nil, s.statsErr
 	}

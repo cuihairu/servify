@@ -2,6 +2,8 @@ package services
 
 // 测试辅助函数
 
+import "time"
+
 func stringPtr(s string) *string {
 	return &s
 }
@@ -17,3 +19,5 @@ func boolPtr(b bool) *bool {
 func intPtr(i int) *int {
 	return &i
 }
+
+func timePtr(t time.Time) *time.Time { return &t }
