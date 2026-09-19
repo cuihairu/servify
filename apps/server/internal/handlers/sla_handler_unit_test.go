@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 
 	"github.com/gin-gonic/gin"
 )
@@ -258,7 +258,7 @@ func TestSLAHandlerUnitViolations(t *testing.T) {
 
 func TestSLAHandlerUnitStats(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		r := newSLAUnitRouter(&unitSLAService{stats: &services.SLAStatsResponse{TotalConfigs: 2}}, nil)
+		r := newSLAUnitRouter(&unitSLAService{stats: &sladelivery.SLAStatsResponse{TotalConfigs: 2}}, nil)
 		w := slaUnitRequest(r, http.MethodGet, "/sla/stats", "")
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d", w.Code)

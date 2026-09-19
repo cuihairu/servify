@@ -21,7 +21,7 @@ handler|Shift|apps/server/internal/handlers/shift_handler.go|shiftService|shiftd
 handler|Suggestion|apps/server/internal/handlers/suggestion_handler.go|service|suggestiondelivery\.HandlerService|func NewSuggestionHandler\(service suggestiondelivery\.HandlerService\)|\*services\.SuggestionService
 handler|Statistics export|apps/server/internal/handlers/statistics_export_handler.go|statsService|analyticsdelivery\.HandlerService|func NewStatisticsExportHandler\(statsService analyticsdelivery\.HandlerService, satisfaction SatisfactionStatsReader, logger \*logrus\.Logger\)|\*services\.StatisticsService
 handler|Gamification|apps/server/internal/handlers/gamification_handler.go|service|gamificationdelivery\.HandlerService|func NewGamificationHandler\(service gamificationdelivery\.HandlerService\)|\*services\.GamificationService
-handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|SLAService|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|\*services\.SLAService
+handler|SLA|apps/server/internal/handlers/sla_handler.go|slaService|sladelivery\.SLAService|func NewSLAHandler\(slaService sladelivery\.SLAService, ticketService SLATicketReader\)|services\.SLA
 handler|Quality|apps/server/internal/handlers/quality_handler.go|service|qualitydelivery\.HandlerService|func NewQualityHandler\(service qualitydelivery\.HandlerService\)|qualityapp\.QualityService
 handler|Agent group|apps/server/internal/handlers/agent_group_handler.go|service|agentdelivery\.AgentGroupService|func NewAgentGroupHandler\(service agentdelivery\.AgentGroupService\)|\*services\.AgentService
 handler|Assist|apps/server/internal/handlers/assist_handler.go|service|assistdelivery\.HandlerService|func NewAssistHandler\(service assistdelivery\.HandlerService\)|assistapp\.Service
@@ -81,8 +81,8 @@ require|apps/server/internal/app/server/runtime.go|SuggestionService[[:space:]]+
 require|apps/server/internal/app/server/router.go|SuggestionService[[:space:]]+suggestiondelivery\.HandlerService|Router dependencies must expose suggestions via suggestiondelivery.HandlerService.
 require|apps/server/internal/app/server/runtime.go|GamificationService[[:space:]]+gamificationdelivery\.HandlerService|Runtime must expose gamification via gamificationdelivery.HandlerService.
 require|apps/server/internal/app/server/router.go|GamificationService[[:space:]]+gamificationdelivery\.HandlerService|Router dependencies must expose gamification via gamificationdelivery.HandlerService.
-require|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+handlers\.SLAService|Runtime must expose SLA via handlers.SLAService.
-require|apps/server/internal/app/server/router.go|SLAService[[:space:]]+handlers\.SLAService|Router dependencies must expose SLA via handlers.SLAService.
+require|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+sladelivery\.SLAService|Runtime must expose SLA via the sla delivery contract.
+require|apps/server/internal/app/server/router.go|SLAService[[:space:]]+sladelivery\.SLAService|Router dependencies must expose SLA via the sla delivery contract.
 require|apps/server/internal/services/websocket.go|transferService[[:space:]]+sessionTransferRuntime|WebSocket hub must store the session transfer runtime interface.
 require|apps/server/internal/services/websocket.go|func \(h \*WebSocketHub\) SetSessionTransferService\(svc sessionTransferRuntime\)|WebSocket hub must accept the session transfer runtime interface.
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|LoadTransferSession\(ctx context\.Context, sessionID string\) \(\*TransferSession, error\)|Conversation runtime contract must expose transfer session loading.
@@ -93,9 +93,9 @@ require|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+wo
 require|apps/server/internal/handlers/workspace_handler.go|func NewWorkspaceHandler\(service workspacedelivery\.HandlerService\)|Workspace handler constructor must accept the workspace delivery contract.
 require|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+services\.MessageRouterRuntime|Message handler must store services.MessageRouterRuntime.
 require|apps/server/internal/handlers/handlers.go|func NewMessageHandler\(messageRouter services\.MessageRouterRuntime\)|Message handler constructor must accept services.MessageRouterRuntime.
-require|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+SLAService|SLA handler must store the exported SLAService contract.
+require|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+sladelivery\.SLAService|SLA handler must store the sla delivery contract.
 require|apps/server/internal/handlers/sla_handler.go|ticketService[[:space:]]+SLATicketReader|SLA handler must store the exported SLATicketReader contract.
-require|apps/server/internal/handlers/sla_handler.go|func NewSLAHandler\(slaService SLAService, ticketService SLATicketReader\)|SLA handler constructor must accept exported SLA contracts.
+require|apps/server/internal/handlers/sla_handler.go|func NewSLAHandler\(slaService sladelivery\.SLAService, ticketService SLATicketReader\)|SLA handler constructor must accept the sla delivery contract.
 forbid|apps/server/internal/app/server/runtime.go|CustomerService[[:space:]]+\*services\.CustomerService|Runtime must not expose concrete CustomerService.
 forbid|apps/server/internal/app/server/runtime.go|NewCustomerService\(db,[[:space:]]*logger\)|Runtime must not assemble customer handlers through services.NewCustomerService.
 forbid|apps/server/internal/app/server/runtime.go|AutomationService[[:space:]]+\*services\.AutomationService|Runtime must not expose concrete AutomationService.
@@ -122,8 +122,8 @@ forbid|apps/server/internal/app/server/runtime.go|SuggestionService[[:space:]]+\
 forbid|apps/server/internal/app/server/router.go|SuggestionService[[:space:]]+\*services\.SuggestionService|Router dependencies must not expose concrete SuggestionService.
 forbid|apps/server/internal/app/server/runtime.go|GamificationService[[:space:]]+\*services\.GamificationService|Runtime must not expose concrete GamificationService.
 forbid|apps/server/internal/app/server/router.go|GamificationService[[:space:]]+\*services\.GamificationService|Router dependencies must not expose concrete GamificationService.
-forbid|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+\*services\.SLAService|Runtime must not expose concrete SLAService.
-forbid|apps/server/internal/app/server/router.go|SLAService[[:space:]]+\*services\.SLAService|Router dependencies must not expose concrete SLAService.
+forbid|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+\*slapp\.SLAService|Runtime must not expose concrete SLAService.
+forbid|apps/server/internal/app/server/router.go|SLAService[[:space:]]+\*slapp\.SLAService|Router dependencies must not expose concrete SLAService.
 forbid|apps/server/internal/handlers/workspace_handler.go|service[[:space:]]+\*services\.WorkspaceService|Workspace handler must not depend on concrete WorkspaceService.
 forbid|apps/server/internal/services/websocket.go|transferService[[:space:]]+\*SessionTransferService|WebSocket hub must not store concrete SessionTransferService.
 forbid|apps/server/internal/app/server/realtime_runtime.go|MessageRouter[[:space:]]+\*services\.MessageRouter|Realtime runtime must not expose concrete MessageRouter.
@@ -158,3 +158,8 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSatisfac
 forbid|apps/server/internal/app/server/runtime.go|services\.SatisfactionService|Runtime must not reference the legacy satisfaction service.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SatisfactionService|Runtime assembly must not reference the legacy satisfaction service.
 forbid|apps/server/internal/app/worker/jobs.go|services\.SatisfactionService|Worker deps must consume satisfaction via the module processor contract.
+require|apps/server/internal/app/server/runtime_assembly.go|slaService[[:space:]]*:=[[:space:]]*slapp\.NewService\(rt\.DB, rt\.Logger\)|SLA assembly must construct the single module instance.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSLAService|Runtime assembly must not construct the legacy SLA service.
+forbid|apps/server/internal/app/server/runtime.go|services\.SLAService|Runtime must not reference the legacy SLA service.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SLAService|Runtime assembly must not reference the legacy SLA service.
+forbid|apps/server/internal/app/worker/jobs.go|services\.SLAService|Worker deps must consume SLA via the module monitor contract.

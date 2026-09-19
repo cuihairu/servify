@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/handlers"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
@@ -29,6 +28,8 @@ import (
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
+	slapp "servify/apps/server/internal/modules/sla/application"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
@@ -76,7 +77,7 @@ type Runtime struct {
 	AppIntegrationService    appintegrationdelivery.HandlerService
 	CustomFieldService       customfielddelivery.HandlerService
 	StatisticsHandlerService analyticsdelivery.HandlerService
-	SLAService               handlers.SLAService
+	SLAService               sladelivery.SLAService
 	ShiftService             shiftdelivery.HandlerService
 	AutomationHandlerService automationdelivery.HandlerService
 	KnowledgeDocHandler      knowledgedelivery.HandlerService
@@ -93,7 +94,7 @@ type Runtime struct {
 
 	// Private fields for worker access only
 	dailyStatsRunner *analyticsdelivery.DailyStatsRunner
-	slaService       *services.SLAService
+	slaService       *slapp.SLAService
 	webhookService   *webhookapp.Service
 	qualityService   *qualityapp.QualityService
 	emailAdapter     *emaildelivery.Adapter
@@ -176,8 +177,11 @@ func (rt *Runtime) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRun
 	return rt.dailyStatsRunner
 }
 
-// SLAServiceForWorker returns the concrete SLA service for worker use.
-func (rt *Runtime) SLAServiceForWorker() *services.SLAService {
+// SLAServiceForWorker returns the SLA monitor for worker use.
+func (rt *Runtime) SLAServiceForWorker() slapp.SLAMonitor {
+	if rt.slaService == nil {
+		return nil
+	}
 	return rt.slaService
 }
 

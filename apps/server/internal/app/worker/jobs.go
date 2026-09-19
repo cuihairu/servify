@@ -14,12 +14,12 @@ import (
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/observability/async"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/usersecurity"
-	"servify/apps/server/internal/services"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -51,7 +51,7 @@ type StatisticsWorker struct {
 
 type RuntimeWorkerDependencies interface {
 	StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner
-	SLAServiceForWorker() *services.SLAService
+	SLAServiceForWorker() slapp.SLAMonitor
 	WebhookDeliveryForWorker() webhookapp.Processor
 	EmailPollAdapterForWorker() emaildelivery.PollProcessor
 	QualityScanForWorker() *qualityapp.QualityService

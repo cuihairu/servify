@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type SLAService struct {
 }
 
 // NewSLAService 创建SLA服务
-func NewSLAService(db *gorm.DB, logger *logrus.Logger) *SLAService {
+func NewService(db *gorm.DB, logger *logrus.Logger) *SLAService {
 	if logger == nil {
 		logger = logrus.New()
 	}
@@ -36,6 +36,12 @@ func NewSLAService(db *gorm.DB, logger *logrus.Logger) *SLAService {
 		logger: logger,
 		tracer: otel.Tracer("servify.sla"),
 	}
+}
+
+// SLAMonitor 是后台 SLA 违约扫描循环所需的窄接口
+// （app/worker 的 SLAMonitorWorker 经 worker deps 引用）。
+type SLAMonitor interface {
+	StartSLAMonitor(ctx context.Context, interval time.Duration)
 }
 
 // SetAutomationModule 注入 automation module 实例，用于在违约时触发规则

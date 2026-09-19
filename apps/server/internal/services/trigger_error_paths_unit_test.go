@@ -1,86 +1,21 @@
 package services
 
 import (
-	"context"
-	"strings"
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
-
 	"github.com/pion/webrtc/v4"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
+// execTrigger 在测试库上建 SQLite trigger，注入写路径失败（message router
+// 段仍使用；SLA 段已随 sla 模块迁移）。
 func execTrigger(t *testing.T, db *gorm.DB, stmt string) {
 	t.Helper()
 	if err := db.Exec(stmt).Error; err != nil {
 		t.Fatalf("create trigger: %v", err)
 	}
 }
-
-// ---- insert-error branches via BEFORE INSERT triggers ----
-
-func TestSLA_InsertTriggerErrors(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now()
-
-	// CheckSLAViolation: violation insert fails
-	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
-	cfg := &models.SLAConfig{
-		Name: "C", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
-		Active: true, CreatedAt: now, UpdatedAt: now,
-	}
-	if err := db.Create(cfg).Error; err != nil {
-		t.Fatalf("seed config: %v", err)
-	}
-	late := &models.Ticket{Title: "Late", Priority: "high", Status: "open", CreatedAt: now.Add(-time.Hour), UpdatedAt: now}
-	if err := db.Create(late).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_sla_ins BEFORE INSERT ON sla_violations BEGIN SELECT RAISE(ABORT, 'insert blocked'); END;")
-	if _, err := svc.CheckSLAViolation(ctx, late); err == nil {
-		t.Fatal("expected violation insert error")
-	}
-
-	// CreateSLAViolation: insert fails after validations
-	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
-	ticket := &models.Ticket{Title: "T", CreatedAt: now, UpdatedAt: now}
-	if err := db2.Create(ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	cfg2 := &models.SLAConfig{
-		Name: "C2", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
-		Active: true, CreatedAt: now, UpdatedAt: now,
-	}
-	if err := db2.Create(cfg2).Error; err != nil {
-		t.Fatalf("seed config: %v", err)
-	}
-	execTrigger(t, db2, "CREATE TRIGGER blk_sla2 BEFORE INSERT ON sla_violations BEGIN SELECT RAISE(ABORT, 'insert blocked'); END;")
-	if err := svc2.CreateSLAViolation(ctx, &models.SLAViolation{
-		TicketID: ticket.ID, SLAConfigID: cfg2.ID, ViolationType: "first_response",
-		Deadline: now, ViolatedAt: now,
-	}); err == nil {
-		t.Fatal("expected violation create error")
-	}
-}
-
-func TestSLA_ResolveTicketNonNotFound(t *testing.T) {
-	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
-	if err := db.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if err := svc.ResolveViolationsByTicket(context.Background(), 1, nil); err == nil || err.Error() == "ticket not found" {
-		t.Fatalf("expected non-notfound ticket error, got %v", err)
-	}
-}
-
-// ---- webrtc additional branches ----
 
 func TestWebRTC_HandleAnswerStateError(t *testing.T) {
 	s, _ := newUnitWebRTCService(t)
@@ -168,27 +103,4 @@ func TestMessageRouter_HandlePlatformMessages_AIError(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	close(adapter.msgChan)
 	time.Sleep(20 * time.Millisecond)
-}
-
-func bcryptHash(pw string) (string, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.MinCost)
-	return string(b), err
-}
-
-func TestSLA_UpdateConfigSaveTriggerError(t *testing.T) {
-	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
-	ctx := context.Background()
-
-	cfg, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
-		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
-	})
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_cfg_upd BEFORE UPDATE ON sla_configs BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.UpdateSLAConfig(ctx, cfg.ID, &SLAConfigUpdateRequest{Name: stringPtr("B")}); err == nil ||
-		!strings.Contains(err.Error(), "failed to update SLA config") {
-		t.Fatalf("expected save error, got %v", err)
-	}
 }

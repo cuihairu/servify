@@ -24,8 +24,8 @@ import (
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
-	"servify/apps/server/internal/services"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -838,8 +838,8 @@ func (fullRuntimeWorkerDeps) StatisticsServiceForWorker() *analyticsdelivery.Dai
 	return analyticsdelivery.NewDailyStatsRunner(analyticsapp.NewService(analyticsinfra.NewGormRepository(nil)), nil)
 }
 
-func (fullRuntimeWorkerDeps) SLAServiceForWorker() *services.SLAService {
-	return &services.SLAService{}
+func (fullRuntimeWorkerDeps) SLAServiceForWorker() slapp.SLAMonitor {
+	return &slapp.SLAService{}
 }
 
 func (fullRuntimeWorkerDeps) WebhookDeliveryForWorker() webhookapp.Processor {

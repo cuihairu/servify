@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package services
+package application
 
 import (
 	"context"
@@ -10,12 +10,16 @@ import (
 
 	"servify/apps/server/internal/models"
 
+	"servify/apps/server/internal/modules/platformauth"
+
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
-func newSLATestDB(t *testing.T) *gorm.DB {
+// newSLAIntegrationDB 与 unit 侧 newSLATestDB 刻意区分名：
+// integration 标签构建会把两文件一起编译，避免重声明冲突。
+func newSLAIntegrationDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open sqlite: %v", err)
@@ -26,9 +30,16 @@ func newSLATestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+// scopedContext 复刻自 services 集成测试原件（platformauth 注入租户/工作区）。
+func scopedContext(tenantID, workspaceID string) context.Context {
+	ctx := context.Background()
+	ctx = platformauth.WithTenantID(ctx, tenantID)
+	return platformauth.WithWorkspaceID(ctx, workspaceID)
+}
+
 func TestSLAService_CheckViolation_FirstResponse(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	now := time.Now()
 	cfg := &models.SLAConfig{
@@ -85,8 +96,8 @@ func TestSLAService_CheckViolation_FirstResponse(t *testing.T) {
 }
 
 func TestSLAService_ListConfigsScopedByWorkspace(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	ctxA := scopedContext("tenant-a", "workspace-a")
 	ctxB := scopedContext("tenant-a", "workspace-b")
@@ -112,8 +123,8 @@ func TestSLAService_ListConfigsScopedByWorkspace(t *testing.T) {
 }
 
 func TestSLAService_ResolveViolationsByTicket(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	now := time.Now()
 	cfg := &models.SLAConfig{
@@ -161,8 +172,8 @@ func TestSLAService_ResolveViolationsByTicket(t *testing.T) {
 }
 
 func TestSLAService_ResolveViolationsByTicket_NoMatchesIsNoop(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	ticket := &models.Ticket{
 		ID:        999,
@@ -182,8 +193,8 @@ func TestSLAService_ResolveViolationsByTicket_NoMatchesIsNoop(t *testing.T) {
 }
 
 func TestSLAService_ResolveViolationsByTicket_MissingTicket(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	if err := svc.ResolveViolationsByTicket(context.Background(), 999, []string{"first_response"}); err == nil {
 		t.Fatal("expected missing ticket to fail")
@@ -191,8 +202,8 @@ func TestSLAService_ResolveViolationsByTicket_MissingTicket(t *testing.T) {
 }
 
 func TestSLAService_ViolationsScopedByWorkspace(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 
 	now := time.Now()
 	ctxA := scopedContext("tenant-a", "workspace-a")
@@ -298,8 +309,8 @@ func TestSLAService_ViolationsScopedByWorkspace(t *testing.T) {
 }
 
 func TestSLAService_ListViolations_DoesNotLeakCrossScopePreloads(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	ticketB := &models.Ticket{
@@ -367,8 +378,8 @@ func TestSLAService_ListViolations_DoesNotLeakCrossScopePreloads(t *testing.T) {
 }
 
 func TestSLAService_CheckViolation_RejectsCrossScopeTicket(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	cfgB := &models.SLAConfig{
@@ -407,8 +418,8 @@ func TestSLAService_CheckViolation_RejectsCrossScopeTicket(t *testing.T) {
 }
 
 func TestSLAService_CreateSLAViolation_RejectsCrossScopeReferences(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	ticketB := &models.Ticket{
@@ -455,8 +466,8 @@ func TestSLAService_CreateSLAViolation_RejectsCrossScopeReferences(t *testing.T)
 }
 
 func TestSLAService_GetStats_DoesNotLeakCrossScopeConfigJoins(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	violationA := &models.SLAViolation{
@@ -505,8 +516,8 @@ func TestSLAService_GetStats_DoesNotLeakCrossScopeConfigJoins(t *testing.T) {
 }
 
 func TestSLAService_GetStats_DoesNotLeakCrossScopeTrendData(t *testing.T) {
-	db := newSLATestDB(t)
-	svc := NewSLAService(db, logrus.New())
+	db := newSLAIntegrationDB(t)
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 
 	if err := db.Create(&[]models.Ticket{

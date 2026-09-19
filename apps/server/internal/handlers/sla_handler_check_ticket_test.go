@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,16 +32,16 @@ type fakeSLAHandlerSLAService struct {
 	checkErr  error
 }
 
-func (f *fakeSLAHandlerSLAService) CreateSLAConfig(ctx context.Context, req *services.SLAConfigCreateRequest) (*models.SLAConfig, error) {
+func (f *fakeSLAHandlerSLAService) CreateSLAConfig(ctx context.Context, req *sladelivery.SLAConfigCreateRequest) (*models.SLAConfig, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeSLAHandlerSLAService) GetSLAConfig(ctx context.Context, id uint) (*models.SLAConfig, error) {
 	return nil, errors.New("not implemented")
 }
-func (f *fakeSLAHandlerSLAService) ListSLAConfigs(ctx context.Context, req *services.SLAConfigListRequest) ([]models.SLAConfig, int64, error) {
+func (f *fakeSLAHandlerSLAService) ListSLAConfigs(ctx context.Context, req *sladelivery.SLAConfigListRequest) ([]models.SLAConfig, int64, error) {
 	return nil, 0, errors.New("not implemented")
 }
-func (f *fakeSLAHandlerSLAService) UpdateSLAConfig(ctx context.Context, id uint, req *services.SLAConfigUpdateRequest) (*models.SLAConfig, error) {
+func (f *fakeSLAHandlerSLAService) UpdateSLAConfig(ctx context.Context, id uint, req *sladelivery.SLAConfigUpdateRequest) (*models.SLAConfig, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeSLAHandlerSLAService) DeleteSLAConfig(ctx context.Context, id uint) error {
@@ -50,13 +50,13 @@ func (f *fakeSLAHandlerSLAService) DeleteSLAConfig(ctx context.Context, id uint)
 func (f *fakeSLAHandlerSLAService) GetSLAConfigByPriority(ctx context.Context, priority string, customerTier string) (*models.SLAConfig, error) {
 	return nil, errors.New("not implemented")
 }
-func (f *fakeSLAHandlerSLAService) ListSLAViolations(ctx context.Context, req *services.SLAViolationListRequest) ([]models.SLAViolation, int64, error) {
+func (f *fakeSLAHandlerSLAService) ListSLAViolations(ctx context.Context, req *sladelivery.SLAViolationListRequest) ([]models.SLAViolation, int64, error) {
 	return nil, 0, errors.New("not implemented")
 }
 func (f *fakeSLAHandlerSLAService) ResolveSLAViolation(ctx context.Context, id uint) error {
 	return errors.New("not implemented")
 }
-func (f *fakeSLAHandlerSLAService) GetSLAStats(ctx context.Context) (*services.SLAStatsResponse, error) {
+func (f *fakeSLAHandlerSLAService) GetSLAStats(ctx context.Context) (*sladelivery.SLAStatsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 func (f *fakeSLAHandlerSLAService) CheckSLAViolation(ctx context.Context, ticket *models.Ticket) (*models.SLAViolation, error) {

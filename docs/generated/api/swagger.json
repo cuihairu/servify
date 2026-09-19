@@ -3459,7 +3459,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.SLAConfigCreateRequest"
+                            "$ref": "#/definitions/application.SLAConfigCreateRequest"
                         }
                     }
                 ],
@@ -3616,7 +3616,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/services.SLAConfigUpdateRequest"
+                            "$ref": "#/definitions/application.SLAConfigUpdateRequest"
                         }
                     }
                 ],
@@ -3719,7 +3719,7 @@
                     "200": {
                         "description": "SLA统计数据",
                         "schema": {
-                            "$ref": "#/definitions/services.SLAStatsResponse"
+                            "$ref": "#/definitions/application.SLAStatsResponse"
                         }
                     },
                     "500": {
@@ -5555,6 +5555,168 @@
         }
     },
     "definitions": {
+        "application.SLAComplianceTrend": {
+            "type": "object",
+            "properties": {
+                "compliance_rate": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "tier": {
+                    "type": "string"
+                },
+                "total_tickets": {
+                    "type": "integer"
+                },
+                "violations": {
+                    "type": "integer"
+                }
+            }
+        },
+        "application.SLAConfigCreateRequest": {
+            "type": "object",
+            "required": [
+                "escalation_time",
+                "first_response_time",
+                "name",
+                "priority",
+                "resolution_time"
+            ],
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "business_hours_only": {
+                    "type": "boolean"
+                },
+                "customer_tier": {
+                    "description": "针对特定客户级别（可选）",
+                    "type": "string"
+                },
+                "escalation_time": {
+                    "description": "分钟",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "first_response_time": {
+                    "description": "分钟",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "low, normal, high, urgent",
+                    "type": "string"
+                },
+                "resolution_time": {
+                    "description": "分钟",
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "tags": {
+                    "description": "标签条件",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "warning_threshold": {
+                    "description": "触发预警的百分比，默认80",
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 50
+                }
+            }
+        },
+        "application.SLAConfigUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "business_hours_only": {
+                    "type": "boolean"
+                },
+                "customer_tier": {
+                    "type": "string"
+                },
+                "escalation_time": {
+                    "type": "integer"
+                },
+                "first_response_time": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "resolution_time": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "warning_threshold": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 50
+                }
+            }
+        },
+        "application.SLAStatsResponse": {
+            "type": "object",
+            "properties": {
+                "active_configs": {
+                    "type": "integer"
+                },
+                "compliance_rate": {
+                    "description": "合规率",
+                    "type": "number"
+                },
+                "total_configs": {
+                    "type": "integer"
+                },
+                "total_violations": {
+                    "type": "integer"
+                },
+                "trend_data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.SLAComplianceTrend"
+                    }
+                },
+                "unresolved_violations": {
+                    "type": "integer"
+                },
+                "violations_by_priority": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "violations_by_tier": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "violations_by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "application.SatisfactionCreateRequest": {
             "type": "object",
             "required": [
@@ -7813,168 +7975,6 @@
                 },
                 "user_id": {
                     "type": "integer"
-                }
-            }
-        },
-        "services.SLAComplianceTrend": {
-            "type": "object",
-            "properties": {
-                "compliance_rate": {
-                    "type": "number"
-                },
-                "date": {
-                    "type": "string"
-                },
-                "tier": {
-                    "type": "string"
-                },
-                "total_tickets": {
-                    "type": "integer"
-                },
-                "violations": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.SLAConfigCreateRequest": {
-            "type": "object",
-            "required": [
-                "escalation_time",
-                "first_response_time",
-                "name",
-                "priority",
-                "resolution_time"
-            ],
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "business_hours_only": {
-                    "type": "boolean"
-                },
-                "customer_tier": {
-                    "description": "针对特定客户级别（可选）",
-                    "type": "string"
-                },
-                "escalation_time": {
-                    "description": "分钟",
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "first_response_time": {
-                    "description": "分钟",
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "description": "low, normal, high, urgent",
-                    "type": "string"
-                },
-                "resolution_time": {
-                    "description": "分钟",
-                    "type": "integer",
-                    "minimum": 1
-                },
-                "tags": {
-                    "description": "标签条件",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "warning_threshold": {
-                    "description": "触发预警的百分比，默认80",
-                    "type": "integer",
-                    "maximum": 100,
-                    "minimum": 50
-                }
-            }
-        },
-        "services.SLAConfigUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "active": {
-                    "type": "boolean"
-                },
-                "business_hours_only": {
-                    "type": "boolean"
-                },
-                "customer_tier": {
-                    "type": "string"
-                },
-                "escalation_time": {
-                    "type": "integer"
-                },
-                "first_response_time": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "string"
-                },
-                "resolution_time": {
-                    "type": "integer"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "warning_threshold": {
-                    "type": "integer",
-                    "maximum": 100,
-                    "minimum": 50
-                }
-            }
-        },
-        "services.SLAStatsResponse": {
-            "type": "object",
-            "properties": {
-                "active_configs": {
-                    "type": "integer"
-                },
-                "compliance_rate": {
-                    "description": "合规率",
-                    "type": "number"
-                },
-                "total_configs": {
-                    "type": "integer"
-                },
-                "total_violations": {
-                    "type": "integer"
-                },
-                "trend_data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.SLAComplianceTrend"
-                    }
-                },
-                "unresolved_violations": {
-                    "type": "integer"
-                },
-                "violations_by_priority": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "violations_by_tier": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "violations_by_type": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
                 }
             }
         }

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +16,7 @@ import (
 // @Summary SLA配置管理
 // @Tags SLA
 type SLAHandler struct {
-	slaService    SLAService
+	slaService    sladelivery.SLAService
 	ticketService SLATicketReader
 }
 
@@ -24,21 +24,8 @@ type SLATicketReader interface {
 	GetTicketByID(ctx context.Context, ticketID uint) (*models.Ticket, error)
 }
 
-type SLAService interface {
-	CreateSLAConfig(ctx context.Context, req *services.SLAConfigCreateRequest) (*models.SLAConfig, error)
-	GetSLAConfig(ctx context.Context, id uint) (*models.SLAConfig, error)
-	ListSLAConfigs(ctx context.Context, req *services.SLAConfigListRequest) ([]models.SLAConfig, int64, error)
-	UpdateSLAConfig(ctx context.Context, id uint, req *services.SLAConfigUpdateRequest) (*models.SLAConfig, error)
-	DeleteSLAConfig(ctx context.Context, id uint) error
-	GetSLAConfigByPriority(ctx context.Context, priority string, customerTier string) (*models.SLAConfig, error)
-	ListSLAViolations(ctx context.Context, req *services.SLAViolationListRequest) ([]models.SLAViolation, int64, error)
-	ResolveSLAViolation(ctx context.Context, id uint) error
-	GetSLAStats(ctx context.Context) (*services.SLAStatsResponse, error)
-	CheckSLAViolation(ctx context.Context, ticket *models.Ticket) (*models.SLAViolation, error)
-}
-
 // NewSLAHandler 创建SLA处理器
-func NewSLAHandler(slaService SLAService, ticketService SLATicketReader) *SLAHandler {
+func NewSLAHandler(slaService sladelivery.SLAService, ticketService SLATicketReader) *SLAHandler {
 	return &SLAHandler{
 		slaService:    slaService,
 		ticketService: ticketService,
@@ -51,14 +38,15 @@ func NewSLAHandler(slaService SLAService, ticketService SLATicketReader) *SLAHan
 // @Tags SLA
 // @Accept json
 // @Produce json
-// @Param config body services.SLAConfigCreateRequest true "SLA配置信息"
+// 注意：swag v1.16 不解析跨包类型别名，注解引用 application 包真实 struct（仅文档引用）。
+// @Param config body application.SLAConfigCreateRequest true "SLA配置信息"
 // @Success 201 {object} models.SLAConfig "创建成功"
 // @Failure 400 {object} ErrorResponse "请求参数错误"
 // @Failure 409 {object} ErrorResponse "配置冲突"
 // @Failure 500 {object} ErrorResponse "服务器错误"
 // @Router /api/sla/configs [post]
 func (h *SLAHandler) CreateSLAConfig(c *gin.Context) {
-	var req services.SLAConfigCreateRequest
+	var req sladelivery.SLAConfigCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",
@@ -159,7 +147,7 @@ func (h *SLAHandler) GetSLAConfig(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse "服务器错误"
 // @Router /api/sla/configs [get]
 func (h *SLAHandler) ListSLAConfigs(c *gin.Context) {
-	var req services.SLAConfigListRequest
+	var req sladelivery.SLAConfigListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_QUERY",
@@ -200,7 +188,7 @@ func (h *SLAHandler) ListSLAConfigs(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "SLA配置ID"
-// @Param config body services.SLAConfigUpdateRequest true "更新的配置信息"
+// @Param config body application.SLAConfigUpdateRequest true "更新的配置信息"
 // @Success 200 {object} models.SLAConfig "更新后的配置"
 // @Failure 400 {object} ErrorResponse "请求参数错误"
 // @Failure 404 {object} ErrorResponse "配置不存在"
@@ -218,7 +206,7 @@ func (h *SLAHandler) UpdateSLAConfig(c *gin.Context) {
 		return
 	}
 
-	var req services.SLAConfigUpdateRequest
+	var req sladelivery.SLAConfigUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_REQUEST",
@@ -373,7 +361,7 @@ func (h *SLAHandler) GetSLAConfigByPriority(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse "服务器错误"
 // @Router /api/sla/violations [get]
 func (h *SLAHandler) ListSLAViolations(c *gin.Context) {
-	var req services.SLAViolationListRequest
+	var req sladelivery.SLAViolationListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "INVALID_QUERY",
@@ -454,7 +442,7 @@ func (h *SLAHandler) ResolveSLAViolation(c *gin.Context) {
 // @Description 获取SLA服务质量的详细统计数据和趋势分析
 // @Tags SLA
 // @Produce json
-// @Success 200 {object} services.SLAStatsResponse "SLA统计数据"
+// @Success 200 {object} application.SLAStatsResponse "SLA统计数据"
 // @Failure 500 {object} ErrorResponse "服务器错误"
 // @Router /api/sla/stats [get]
 func (h *SLAHandler) GetSLAStats(c *gin.Context) {

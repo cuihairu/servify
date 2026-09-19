@@ -2,7 +2,6 @@ package server
 
 import (
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/handlers"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
@@ -20,6 +19,7 @@ import (
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
@@ -63,7 +63,7 @@ type Dependencies struct {
 	AppIntegrationService    appintegrationdelivery.HandlerService
 	CustomFieldService       customfielddelivery.HandlerService
 	StatisticsHandlerService analyticsdelivery.HandlerService
-	SLAService               handlers.SLAService
+	SLAService               sladelivery.SLAService
 	ShiftService             shiftdelivery.HandlerService
 	AutomationHandlerService automationdelivery.HandlerService
 	KnowledgeDocHandler      knowledgedelivery.HandlerService

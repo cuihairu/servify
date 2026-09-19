@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 func newSLAUnitTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return newServicesTestDB(t,
+	return newSLATestDB(t,
 		&models.Ticket{}, &models.SLAConfig{}, &models.SLAViolation{},
 		&models.Customer{}, &models.User{},
 	)
@@ -23,7 +23,7 @@ func newSLAUnitTestDB(t *testing.T) *gorm.DB {
 
 func newSLAUnitTestService(t *testing.T) *SLAService {
 	t.Helper()
-	return NewSLAService(newSLAUnitTestDB(t), logrus.New())
+	return NewService(newSLAUnitTestDB(t), logrus.New())
 }
 
 func TestSLAUnit_CreateConfigValidation(t *testing.T) {
@@ -657,7 +657,7 @@ func TestSLAUnit_Helpers(t *testing.T) {
 
 func TestSLAUnit_SetAutomationModule(t *testing.T) {
 	svc := newSLAUnitTestService(t)
-	automationDB := newServicesTestDB(t,
+	automationDB := newSLATestDB(t,
 		&models.AutomationTrigger{}, &models.AutomationRun{},
 		&models.Ticket{}, &models.TicketComment{},
 	)
@@ -680,5 +680,11 @@ func TestSLAUnit_SetAutomationModule(t *testing.T) {
 	}
 	if _, err := svc.CheckSLAViolation(context.Background(), ticket); err != nil {
 		t.Fatalf("CheckSLAViolation with automation: %v", err)
+	}
+}
+
+func TestSLAUnit_NewServiceNilLogger(t *testing.T) {
+	if NewService(newSLAUnitTestDB(t), nil) == nil {
+		t.Fatal("expected non-nil service with nil logger fallback")
 	}
 }

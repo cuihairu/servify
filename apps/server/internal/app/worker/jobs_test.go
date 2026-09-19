@@ -13,8 +13,8 @@ import (
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
-	"servify/apps/server/internal/services"
 )
 
 type fakeLoop struct {
@@ -72,14 +72,14 @@ func (f *fakeRevokedTokenRetentionService) Cleanup(ctx context.Context, now time
 
 type fakeRuntimeWorkerDependencies struct {
 	statistics *analyticsdelivery.DailyStatsRunner
-	sla        *services.SLAService
+	sla        *slapp.SLAService
 }
 
 func (f *fakeRuntimeWorkerDependencies) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner {
 	return f.statistics
 }
 
-func (f *fakeRuntimeWorkerDependencies) SLAServiceForWorker() *services.SLAService {
+func (f *fakeRuntimeWorkerDependencies) SLAServiceForWorker() slapp.SLAMonitor {
 	return f.sla
 }
 

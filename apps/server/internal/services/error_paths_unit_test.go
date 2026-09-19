@@ -10,15 +10,6 @@ import (
 
 // ---- constructor nil-logger branches ----
 
-func TestConstructors_NilLogger(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.Customer{})
-	if NewSLAService(db, nil) == nil {
-		t.Fatal("expected SLA service")
-	}
-}
-
-// ---- ai extras ----
-
 func TestAIService_ProcessQuery_Error(t *testing.T) {
 	svc := NewAIService("key", "https://invalid.example.invalid")
 	if _, err := svc.ProcessQuery(context.Background(), "q", "s"); err == nil {

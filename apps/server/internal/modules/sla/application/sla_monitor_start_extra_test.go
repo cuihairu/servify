@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -16,7 +16,7 @@ func TestStartSLAMonitorTickErrors(t *testing.T) {
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 
 	// 第一次查询（监控里的工单扫描）触发信号，证明 tick 已执行
 	tickSeen := make(chan struct{}, 1)

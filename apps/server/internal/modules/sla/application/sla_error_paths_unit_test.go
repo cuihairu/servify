@@ -1,4 +1,4 @@
-package services
+package application
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 func newSLAErrorDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return newServicesTestDB(t, &models.Ticket{}, &models.SLAConfig{}, &models.SLAViolation{}, &models.Customer{}, &models.User{})
+	return newSLATestDB(t, &models.Ticket{}, &models.SLAConfig{}, &models.SLAViolation{}, &models.Customer{}, &models.User{})
 }
 
 func TestSLA_ConfigTableErrors(t *testing.T) {
@@ -21,7 +21,7 @@ func TestSLA_ConfigTableErrors(t *testing.T) {
 
 	// CreateSLAConfig: existing-config check fails
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("sla_configs"); err != nil {
 		t.Fatalf("drop: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestSLA_DeleteConfigTableErrors(t *testing.T) {
 
 	// violation count fails when sla_violations is missing
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("sla_violations"); err != nil {
 		t.Fatalf("drop violations: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestSLA_DeleteConfigTableErrors(t *testing.T) {
 
 	// delete fails when sla_configs is missing but violations table is empty
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	if err := db2.Migrator().DropTable("sla_configs"); err != nil {
 		t.Fatalf("drop configs: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestSLA_CheckViolationTableErrors(t *testing.T) {
 
 	// ticket validation query fails
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestSLA_CheckViolationTableErrors(t *testing.T) {
 
 	// config lookup fails with tickets present
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	ticket := &models.Ticket{Title: "T", Priority: "high", Status: "open", CreatedAt: now, UpdatedAt: now}
 	if err := db2.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -109,7 +109,7 @@ func TestSLA_CheckViolationTableErrors(t *testing.T) {
 
 	// existing-violation check fails
 	db3 := newSLAErrorDB(t)
-	svc3 := NewSLAService(db3, logrus.New())
+	svc3 := NewService(db3, logrus.New())
 	cfg := &models.SLAConfig{
 		Name: "C", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
@@ -130,7 +130,7 @@ func TestSLA_CheckViolationTableErrors(t *testing.T) {
 }
 
 func TestSLA_DetectViolation_ZeroCreatedAt(t *testing.T) {
-	svc := NewSLAService(newSLAErrorDB(t), logrus.New())
+	svc := NewService(newSLAErrorDB(t), logrus.New())
 	now := time.Now()
 	cfg := &models.SLAConfig{ID: 1, FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30}
 
@@ -147,7 +147,7 @@ func TestSLA_CreateViolationTableErrors(t *testing.T) {
 
 	// ticket lookup fails
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestSLA_CreateViolationTableErrors(t *testing.T) {
 
 	// config lookup fails
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	ticket := &models.Ticket{Title: "T", CreatedAt: now, UpdatedAt: now}
 	if err := db2.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -174,7 +174,7 @@ func TestSLA_ListResolveViolationTableErrors(t *testing.T) {
 	ctx := context.Background()
 
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("sla_violations"); err != nil {
 		t.Fatalf("drop violations: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestSLA_ListResolveViolationTableErrors(t *testing.T) {
 
 	// ticket exists, violation updates fail
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	ticket := &models.Ticket{Title: "T", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db2.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -208,7 +208,7 @@ func TestSLA_StatsTableErrors(t *testing.T) {
 
 	// config count fails
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("sla_configs"); err != nil {
 		t.Fatalf("drop configs: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestSLA_StatsTableErrors(t *testing.T) {
 
 	// violations count fails
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	if err := db2.Migrator().DropTable("sla_violations"); err != nil {
 		t.Fatalf("drop violations: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestSLA_StatsTableErrors(t *testing.T) {
 
 	// tickets count fails
 	db3 := newSLAErrorDB(t)
-	svc3 := NewSLAService(db3, logrus.New())
+	svc3 := NewService(db3, logrus.New())
 	if err := db3.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestSLA_TrendDataErrors(t *testing.T) {
 	ctx := context.Background()
 
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestSLA_TrendDataErrors(t *testing.T) {
 	}
 
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	if err := db2.Migrator().DropTable("sla_violations"); err != nil {
 		t.Fatalf("drop violations: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestSLA_TrendDataErrors(t *testing.T) {
 
 func TestSLA_ResolveCustomerTierErrors(t *testing.T) {
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	if err := db.Migrator().DropTable("customers"); err != nil {
 		t.Fatalf("drop customers: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestSLA_ResolveCustomerTierErrors(t *testing.T) {
 
 func TestSLA_MonitorWithViolations(t *testing.T) {
 	db := newSLAErrorDB(t)
-	svc := NewSLAService(db, logrus.New())
+	svc := NewService(db, logrus.New())
 	now := time.Now()
 	ctx := context.Background()
 
@@ -314,7 +314,7 @@ func TestSLA_MonitorWithViolations(t *testing.T) {
 
 	// Find error branch
 	db2 := newSLAErrorDB(t)
-	svc2 := NewSLAService(db2, logrus.New())
+	svc2 := NewService(db2, logrus.New())
 	if err := db2.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}

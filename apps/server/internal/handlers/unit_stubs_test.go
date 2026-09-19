@@ -9,6 +9,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
@@ -21,12 +22,12 @@ import (
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
+	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/storage"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pion/webrtc/v4"
@@ -639,7 +640,7 @@ type unitSLAService struct {
 	configs      []models.SLAConfig
 	violation    *models.SLAViolation
 	violations   []models.SLAViolation
-	stats        *services.SLAStatsResponse
+	stats        *sladelivery.SLAStatsResponse
 	total        int64
 	createErr    error
 	getErr       error
@@ -653,7 +654,7 @@ type unitSLAService struct {
 	checkErr     error
 }
 
-func (s *unitSLAService) CreateSLAConfig(ctx context.Context, req *services.SLAConfigCreateRequest) (*models.SLAConfig, error) {
+func (s *unitSLAService) CreateSLAConfig(ctx context.Context, req *sladelivery.SLAConfigCreateRequest) (*models.SLAConfig, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
@@ -667,14 +668,14 @@ func (s *unitSLAService) GetSLAConfig(ctx context.Context, id uint) (*models.SLA
 	return s.config, nil
 }
 
-func (s *unitSLAService) ListSLAConfigs(ctx context.Context, req *services.SLAConfigListRequest) ([]models.SLAConfig, int64, error) {
+func (s *unitSLAService) ListSLAConfigs(ctx context.Context, req *sladelivery.SLAConfigListRequest) ([]models.SLAConfig, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.configs, s.total, nil
 }
 
-func (s *unitSLAService) UpdateSLAConfig(ctx context.Context, id uint, req *services.SLAConfigUpdateRequest) (*models.SLAConfig, error) {
+func (s *unitSLAService) UpdateSLAConfig(ctx context.Context, id uint, req *sladelivery.SLAConfigUpdateRequest) (*models.SLAConfig, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}
@@ -690,7 +691,7 @@ func (s *unitSLAService) GetSLAConfigByPriority(ctx context.Context, priority st
 	return s.config, nil
 }
 
-func (s *unitSLAService) ListSLAViolations(ctx context.Context, req *services.SLAViolationListRequest) ([]models.SLAViolation, int64, error) {
+func (s *unitSLAService) ListSLAViolations(ctx context.Context, req *sladelivery.SLAViolationListRequest) ([]models.SLAViolation, int64, error) {
 	if s.violationErr != nil {
 		return nil, 0, s.violationErr
 	}
@@ -699,7 +700,7 @@ func (s *unitSLAService) ListSLAViolations(ctx context.Context, req *services.SL
 
 func (s *unitSLAService) ResolveSLAViolation(ctx context.Context, id uint) error { return s.resolveErr }
 
-func (s *unitSLAService) GetSLAStats(ctx context.Context) (*services.SLAStatsResponse, error) {
+func (s *unitSLAService) GetSLAStats(ctx context.Context) (*sladelivery.SLAStatsResponse, error) {
 	if s.statsErr != nil {
 		return nil, s.statsErr
 	}
@@ -882,7 +883,7 @@ func (s *unitCustomFieldService) Delete(ctx context.Context, id uint) error { re
 type unitAIService struct {
 	queryResp interface{}
 	status    map[string]interface{}
-	metrics   *services.AIMetrics
+	metrics   *aidelivery.AIMetrics
 	metricsOK bool
 	uploadErr error
 	syncErr   error
@@ -899,7 +900,7 @@ func (s *unitAIService) ProcessQuery(ctx context.Context, query string, sessionI
 
 func (s *unitAIService) GetStatus(ctx context.Context) map[string]interface{} { return s.status }
 
-func (s *unitAIService) GetMetrics() (*services.AIMetrics, bool) { return s.metrics, s.metricsOK }
+func (s *unitAIService) GetMetrics() (*aidelivery.AIMetrics, bool) { return s.metrics, s.metricsOK }
 
 func (s *unitAIService) UploadKnowledgeDocument(ctx context.Context, title, content string, tags []string) error {
 	return s.uploadErr
