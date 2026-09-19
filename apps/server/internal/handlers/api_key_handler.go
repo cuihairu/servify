@@ -1,31 +1,21 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
-// APIKeyService 管理面能力契约（由 services.APIKeyService 实现）。
-type APIKeyService interface {
-	List(ctx context.Context) ([]models.APIKey, error)
-	Create(ctx context.Context, req *services.APIKeyCreateRequest, createdBy string) (*models.APIKey, string, error)
-	Revoke(ctx context.Context, id uint) (*models.APIKey, error)
-	Delete(ctx context.Context, id uint) error
-}
-
 // APIKeyHandler 开放平台 API Key 管理面（签发/吊销/删除）。
 type APIKeyHandler struct {
-	service APIKeyService
+	service apikeydelivery.HandlerService
 }
 
-func NewAPIKeyHandler(service APIKeyService) *APIKeyHandler {
+func NewAPIKeyHandler(service apikeydelivery.HandlerService) *APIKeyHandler {
 	return &APIKeyHandler{service: service}
 }
 
@@ -43,7 +33,7 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 // Create godoc
 // @Router /api/v1/api-keys [post]
 func (h *APIKeyHandler) Create(c *gin.Context) {
-	var req services.APIKeyCreateRequest
+	var req apikeydelivery.APIKeyCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
@@ -88,7 +78,7 @@ func (h *APIKeyHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err := h.service.Delete(c.Request.Context(), uint(id)); err != nil {
-		if errors.Is(err, services.ErrAPIKeyNotFound) {
+		if errors.Is(err, apikeydelivery.ErrAPIKeyNotFound) {
 			c.JSON(http.StatusNotFound, ErrorResponse{Error: "Api key not found", Message: err.Error()})
 			return
 		}

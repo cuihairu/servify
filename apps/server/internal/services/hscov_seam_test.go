@@ -164,18 +164,6 @@ func TestHSSeamsOIDCUsernameSuffixRandError(t *testing.T) {
 	}
 }
 
-func TestHSSeamsAPIKeyGenerateError(t *testing.T) {
-	hscovSetSeam(t, &hookGenerateAPIKey, func() (string, string, string, error) {
-		return "", "", "", errors.New("boom: keygen")
-	})
-	db := newServicesTestDB(t, &models.APIKey{})
-	svc := NewAPIKeyService(db)
-	_, _, err := svc.Create(context.Background(), &APIKeyCreateRequest{Name: "k"}, "admin")
-	if err == nil || !strings.Contains(err.Error(), "keygen") {
-		t.Fatalf("expected keygen error, got %v", err)
-	}
-}
-
 // --- JWT 签名失败：挑战 token 与 access/refresh token ---
 
 func TestHSSeamsLoginChallengeTokenError(t *testing.T) {

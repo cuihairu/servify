@@ -10,6 +10,7 @@ import (
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
+	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
@@ -77,7 +78,7 @@ type Runtime struct {
 	WebhookHandlerService    webhookdelivery.HandlerService
 	QualityHandlerService    qualitydelivery.HandlerService
 	AssistHandlerService     assistdelivery.HandlerService
-	APIKeyService            *services.APIKeyService
+	APIKeyService            apikeydelivery.HandlerService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics

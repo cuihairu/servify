@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
+	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
+
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +25,7 @@ type fakeAPIKeyService struct {
 }
 
 func (f *fakeAPIKeyService) List(ctx context.Context) ([]models.APIKey, error) { return f.list, nil }
-func (f *fakeAPIKeyService) Create(ctx context.Context, req *services.APIKeyCreateRequest, createdBy string) (*models.APIKey, string, error) {
+func (f *fakeAPIKeyService) Create(ctx context.Context, req *apikeydelivery.APIKeyCreateRequest, createdBy string) (*models.APIKey, string, error) {
 	if f.createErr != nil {
 		return nil, "", f.createErr
 	}
@@ -39,7 +40,7 @@ func (f *fakeAPIKeyService) Revoke(ctx context.Context, id uint) (*models.APIKey
 }
 func (f *fakeAPIKeyService) Delete(ctx context.Context, id uint) error { return f.deleteErr }
 
-func newAPIKeyTestRouter(t *testing.T, svc APIKeyService) *gin.Engine {
+func newAPIKeyTestRouter(t *testing.T, svc apikeydelivery.HandlerService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -95,7 +96,7 @@ func TestAPIKeyRoutesLifecycleAndSecretHygiene(t *testing.T) {
 }
 
 func TestAPIKeyRoutesErrors(t *testing.T) {
-	svc := &fakeAPIKeyService{createErr: errors.New("name required"), revokeErr: services.ErrAPIKeyNotFound, deleteErr: services.ErrAPIKeyNotFound}
+	svc := &fakeAPIKeyService{createErr: errors.New("name required"), revokeErr: apikeydelivery.ErrAPIKeyNotFound, deleteErr: apikeydelivery.ErrAPIKeyNotFound}
 	r := newAPIKeyTestRouter(t, svc)
 
 	if rec := doAPIKeyRequest(r, http.MethodPost, "/api/v1/api-keys", `{}`); rec.Code != http.StatusBadRequest {
@@ -112,5 +113,5 @@ func TestAPIKeyRoutesErrors(t *testing.T) {
 	}
 }
 
-// 编译期保证生产实现满足 handler 依赖接口。
-var _ APIKeyService = (*services.APIKeyService)(nil)
+// 编译期保证生产实现满足 handler 依赖契约。
+var _ apikeydelivery.HandlerService = (*apikeydelivery.HandlerServiceAdapter)(nil)

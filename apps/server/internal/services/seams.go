@@ -7,8 +7,6 @@ package services
 import (
 	"crypto/rand"
 
-	platformauth "servify/apps/server/internal/platform/auth"
-
 	"github.com/pion/webrtc/v4"
 )
 
@@ -19,8 +17,6 @@ var (
 	// hookCreateHS256JWT 注入 JWT 签名失败，覆盖 access/refresh/challenge
 	// token 的错误分支。
 	hookCreateHS256JWT = createHS256JWT
-	// hookGenerateAPIKey 注入 platformauth.GenerateAPIKey 失败。
-	hookGenerateAPIKey = platformauth.GenerateAPIKey
 
 	// pion WebRTC 不可注入的错误路径：对合法 SDP/连接这些操作实际不会失败，
 	// 通过包级函数变量注入错误以覆盖防御性错误分支。

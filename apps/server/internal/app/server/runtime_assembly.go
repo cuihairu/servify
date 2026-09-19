@@ -11,6 +11,9 @@ import (
 	analyticsapp "servify/apps/server/internal/modules/analytics/application"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
+	apikeyapp "servify/apps/server/internal/modules/api_key/application"
+	apikeydelivery "servify/apps/server/internal/modules/api_key/delivery"
+	apikeyinfra "servify/apps/server/internal/modules/api_key/infra"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	assistinfra "servify/apps/server/internal/modules/assist/infra"
@@ -281,7 +284,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	rt.WebhookHandlerService = webhookdelivery.NewHandlerServiceAdapter(webhookService)
 
 	// 开放平台：API Key 签发/吊销管理（X-API-Key 认证分支在 AuthMiddleware 内）。
-	rt.APIKeyService = services.NewAPIKeyService(rt.DB)
+	apiKeyModule := apikeyapp.NewService(apikeyinfra.NewGormRepository(rt.DB))
+	rt.APIKeyService = apikeydelivery.NewHandlerServiceAdapter(apiKeyModule)
 
 	// 质检：规则 + 可选 LLM 打分，扫描走后台 worker（quality.enabled 才装配）。
 	rt.qualityService = rt.buildQualityService()

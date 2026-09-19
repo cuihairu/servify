@@ -26,6 +26,7 @@ handler|Quality|apps/server/internal/handlers/quality_handler.go|service|quality
 handler|Agent group|apps/server/internal/handlers/agent_group_handler.go|service|agentdelivery\.AgentGroupService|func NewAgentGroupHandler\(service agentdelivery\.AgentGroupService\)|\*services\.AgentService
 handler|Assist|apps/server/internal/handlers/assist_handler.go|service|assistdelivery\.HandlerService|func NewAssistHandler\(service assistdelivery\.HandlerService\)|assistapp\.Service
 handler|Assist recording|apps/server/internal/handlers/assist_recording_handler.go|service|assistdelivery\.HandlerService|func NewAssistRecordingHandler\(service assistdelivery\.HandlerService\)|assistapp\.Service
+handler|API key|apps/server/internal/handlers/api_key_handler.go|service|apikeydelivery\.HandlerService|func NewAPIKeyHandler\(service apikeydelivery\.HandlerService\)|\*services\.APIKeyService
 
 runtime|customer handlers|CustomerHandlerService|customerdelivery\.HandlerService
 runtime|automation handlers|AutomationHandlerService|automationdelivery\.HandlerService
@@ -38,6 +39,7 @@ runtime|session transfer handlers|TransferHandlerService|routingdelivery\.Handle
 runtime|AI handlers|AIHandlerService|aidelivery\.HandlerService
 runtime|quality handlers|QualityHandlerService|qualitydelivery\.HandlerService
 runtime|assist handlers|AssistHandlerService|assistdelivery\.HandlerService
+runtime|api key handlers|APIKeyService|apikeydelivery\.HandlerService
 
 require|apps/server/internal/handlers/health_enhanced.go|aiService aidelivery\.HandlerService|Enhanced health handler must store modules/ai/delivery.HandlerService.
 require|apps/server/internal/services/websocket.go|conversationWriter conversationdelivery\.WebSocketMessageWriter|WebSocket hub must store the public conversationdelivery.WebSocketMessageWriter contract.
@@ -131,3 +133,5 @@ require|apps/server/internal/handlers/statistics_export_handler.go|SatisfactionS
 require|apps/server/internal/app/server/runtime_assembly.go|StatisticsHandlerService[[:space:]]*=[[:space:]]*analyticsdelivery\.NewHandlerServiceAdapter\(analyticsModule\)|Runtime must assemble statistics handlers via the analytics delivery adapter on the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.StatisticsService|Runtime must not depend on the concrete statistics facade; use analyticsdelivery contracts.
 forbid|apps/server/internal/app/worker/jobs.go|services\.StatisticsService|Statistics worker must consume analyticsdelivery.DailyStatsRunner, not the concrete facade.
+require|apps/server/internal/app/server/runtime_assembly.go|APIKeyService[[:space:]]*=[[:space:]]*apikeydelivery\.NewHandlerServiceAdapter\(apiKeyModule\)|Runtime must assemble api key handlers via the api_key delivery adapter on the single module instance.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.APIKeyService|Runtime must not depend on the concrete API key service; use apikeydelivery contracts.
