@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/app/bootstrap"
+	"servify/apps/server/internal/observability/async"
 
 	"github.com/sirupsen/logrus"
 )
@@ -20,6 +21,7 @@ type QualityReviewWorker struct {
 	service  qualityScanProcessor
 	interval time.Duration
 	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -42,6 +44,8 @@ func NewQualityReviewWorker(service qualityScanProcessor, interval time.Duration
 
 func (w *QualityReviewWorker) Name() string { return "quality-review-scan" }
 
+func (w *QualityReviewWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *QualityReviewWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -54,35 +58,16 @@ func (w *QualityReviewWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		run := func() {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			processed, err := w.service.RunScan(ctx)
-			if err != nil && w.logger != nil {
-				w.logger.WithError(err).Warn("quality-review worker: scan failed")
-				return
+			if err != nil {
+				return err
 			}
 			if processed > 0 && w.logger != nil {
 				w.logger.Debugf("quality-review worker: advanced %d sessions", processed)
 			}
-		}
-		run()
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }

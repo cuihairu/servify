@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/app/bootstrap"
+	"servify/apps/server/internal/observability/async"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +20,7 @@ type EmailPollWorker struct {
 	processor emailPollProcessor
 	interval  time.Duration
 	logger    *logrus.Logger
+	metrics   *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -41,6 +43,8 @@ func NewEmailPollWorker(processor emailPollProcessor, interval time.Duration, lo
 
 func (w *EmailPollWorker) Name() string { return "email-poll" }
 
+func (w *EmailPollWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *EmailPollWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -53,35 +57,16 @@ func (w *EmailPollWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		run := func() {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			produced, err := w.processor.PollOnce(ctx)
 			if err != nil {
-				w.logger.Warnf("email-poll worker: poll: %v", err)
-				return
+				return err
 			}
 			if produced > 0 {
 				w.logger.Debugf("email-poll worker: ingested %d emails", produced)
 			}
-		}
-		run()
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }

@@ -10,12 +10,9 @@
 
 ## 未接线指标
 
-未接线指标对应的告警规则与 dashboard 面板已一并摘除，接线完成后随条目
-删除一并恢复。
+（当前无——全部已定义指标均已接线）
 
 <!-- 行格式：- metric: <指标名>，行内可附计划说明 -->
-
-- metric: worker_job_duration_seconds — ObservableWorker 只记启动计数与活跃 gauge；duration 需周期 job 级 TrackJob 接线（后续刀）
 
 ## 已接线指标
 
@@ -69,3 +66,18 @@
   99% 请求 < 2s；burn rate 告警 SLOAvailabilityFastBurn /
   SLOAvailabilitySlowBurn / SLOLatencyFastBurn 与 service dashboard 的
   SLO Error Budget 面板已随之恢复
+
+### 第五刀（worker job 级埋点）
+
+- `worker_job_duration_seconds{worker_name}` — 全部后台 worker 的周期循环
+  收敛到 app/worker 的 `periodicJob` helper（jitter → 首跑 → ticker），
+  每轮经 `TrackJob` 观测：duration + `worker_jobs_total` + 活跃 gauge；
+  Statistics/SLA 的单轮 job 方法（`RunDailyStatsUpdate` /
+  `RunMonitorOnce`）由 worker 侧驱动，循环不再沉在 service 内
+- 口径升级（有意）：`worker_jobs_total{worker_name, outcome}` 从「worker
+  Start 计数」（每生命周期一次，几乎恒 success）改为「job 轮次计数」——
+  单轮业务失败（DB 抖动等）现以 outcome=failure 记录并进入
+  WorkerJobFailures 告警视野；`worker_active_jobs` 同时承载 worker 存活
+  （包装层 Start/Stop）与单轮 job 进行中（TrackJob）两个增量来源
+- service dashboard 的 Worker Job Duration p99 面板随之新增；known-gaps
+  清零

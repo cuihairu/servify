@@ -596,7 +596,7 @@ func TestSLAUnit_GetStats(t *testing.T) {
 	}
 }
 
-func TestSLAUnit_MonitorAndStart(t *testing.T) {
+func TestSLAUnit_MonitorOnce(t *testing.T) {
 	svc := newSLAUnitTestService(t)
 	now := time.Now()
 
@@ -611,18 +611,9 @@ func TestSLAUnit_MonitorAndStart(t *testing.T) {
 		t.Fatalf("monitorSLAViolations: %v", err)
 	}
 
-	// StartSLAMonitor with cancelled context returns promptly
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	done := make(chan struct{})
-	go func() {
-		svc.StartSLAMonitor(ctx, time.Minute)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("StartSLAMonitor did not stop")
+	// RunMonitorOnce on the seeded store succeeds (closed ticket, no violation work).
+	if err := svc.RunMonitorOnce(context.Background()); err != nil {
+		t.Fatalf("RunMonitorOnce: %v", err)
 	}
 }
 

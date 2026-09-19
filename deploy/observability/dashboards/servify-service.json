@@ -156,11 +156,19 @@
       },
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "sum(rate(worker_jobs_total[5m])) by (worker_name, outcome)",
           "legendFormat": "__auto",
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "expr": "worker_active_jobs",
           "legendFormat": "__auto",
           "refId": "B"
@@ -168,7 +176,7 @@
       ],
       "title": "Worker Jobs",
       "type": "timeseries",
-      "description": "后台 worker 启动计数与活跃实例"
+      "description": "后台 worker job 轮次计数（outcome 含单轮业务失败）与活跃实例/job"
     },
     {
       "title": "Go Runtime",
@@ -221,6 +229,48 @@
           "max": 1
         }
       }
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 302,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "histogram_quantile(0.99, sum(rate(worker_job_duration_seconds_bucket[5m])) by (worker_name, le))",
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker Job Duration (p99)",
+      "type": "timeseries",
+      "description": "单轮 job 执行时长 p99（per-job-run，TrackJob 记录）"
     }
   ],
   "schemaVersion": 39,

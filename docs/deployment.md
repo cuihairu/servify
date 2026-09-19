@@ -434,7 +434,8 @@ scrape_configs:
 | `eventbus_published_total` | Counter | 事件发布量 |
 | `eventbus_failed_total` | Counter | 事件处理失败数 |
 | `errors_total` | Counter | 分类错误数（severity, category, module） |
-| `worker_jobs_total` | Counter | Worker 任务数 |
+| `worker_jobs_total` | Counter | Worker job 轮次数（outcome 含单轮业务失败） |
+| `worker_job_duration_seconds` | Histogram | 单轮 job 执行时长 |
 
 ### 6.2 Grafana Cloud 接入（推荐免费方案）
 

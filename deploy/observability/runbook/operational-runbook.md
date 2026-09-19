@@ -23,7 +23,7 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 | `ai_` | AI/LLM interactions |
 | `ratelimit_` | Rate-limited (429) requests |
 | `eventbus_` | Event bus processing |
-| `worker_` | Background job processing（`worker_job_duration_seconds` 见 known-gaps.md） |
+| `worker_` | Background job processing（job 轮次计数与 duration） |
 | `errors_` | Classified errors（HTTP 5xx 统一出口打点） |
 
 ## Alert Runbooks
@@ -116,12 +116,14 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 
 ### WorkerJobFailures
 
-**Severity**: Warning | **Threshold**: any worker start failures for 10 minutes
+**Severity**: Warning | **Threshold**: any job-run failures for 10 minutes
 
 **Investigation**:
 1. Check "Worker Jobs" panel: `worker_jobs_total` by `worker_name` and `outcome`
+   （outcome 为单轮 job 口径：业务失败如 DB 抖动同样计入 failure）
 2. Check `worker_active_jobs` — a gauge stuck at 0 means the worker never came up
-3. Review worker-specific logs
+3. Check "Worker Job Duration (p99)" panel — 慢 job 与失败常同源（锁等待/慢查询）
+4. Review worker-specific logs
 
 ### AIProviderDegraded
 
@@ -225,10 +227,9 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 
 ## Known Gaps
 
-部分指标已定义但尚未接线（`worker_job_duration_seconds`），
-对应告警与面板已摘除。当前清单与接线计划见
-`deploy/observability/known-gaps.md`；接线完成前不要在告警规则或
-dashboard 中引用这些指标。
+当前无未接线指标（known-gaps.md 已清零）。新增指标定义时必须同步接线，
+或先登记 `deploy/observability/known-gaps.md`——登记期间禁止在告警规则
+或 dashboard 中引用，否则一致性门禁直接失败。
 
 ## Common Operations
 
@@ -303,13 +304,13 @@ POST /api/v1/ai/circuit-breaker/reset
 | `eventbus_failed_total` | Counter | event_type | Handler failures |
 | `eventbus_handle_duration_seconds` | Histogram | event_type | Handler duration |
 | `eventbus_dead_letter_total` | Counter | event_type | Events dead-lettered |
-| `worker_jobs_total` | Counter | worker_name, outcome | Worker starts; outcome ∈ success / failure |
-| `worker_active_jobs` | Gauge | worker_name | Currently active workers |
+| `worker_jobs_total` | Counter | worker_name, outcome | Job runs（周期轮次，含单轮业务失败）; outcome ∈ success / failure |
+| `worker_active_jobs` | Gauge | worker_name | Currently active workers/jobs |
+| `worker_job_duration_seconds` | Histogram | worker_name | Per-job-run duration |
 
 ### Infrastructure Metrics
 
 `go_*` / `process_*` 由 Prometheus runtime collectors 直接产出。
 
-`worker_job_duration_seconds` 仍处未接线状态，
-见 `deploy/observability/known-gaps.md`。SLO 语义与 burn rate
+SLO 语义与 burn rate
 告警口径见 `deploy/observability/slo.md`。

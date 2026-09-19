@@ -17,31 +17,38 @@ import (
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 )
 
-type fakeLoop struct {
-	started chan struct{}
-	stopped chan struct{}
-}
-
-func (f *fakeLoop) run(ctx context.Context) {
-	close(f.started)
-	<-ctx.Done()
-	close(f.stopped)
-}
-
+// fakeStatisticsService / fakeSLAService：单轮 job 阻塞直至 ctx 取消，
+// 首次调用向 started 发信号（循环由 worker 侧 periodicJob 驱动）。
 type fakeStatisticsService struct {
-	loop *fakeLoop
+	started chan struct{}
 }
 
-func (f *fakeStatisticsService) StartDailyStatsWorkerContext(ctx context.Context, interval time.Duration) {
-	f.loop.run(ctx)
+func (f *fakeStatisticsService) RunDailyStatsUpdate(ctx context.Context, day time.Time) error {
+	if f.started != nil {
+		select {
+		case f.started <- struct{}{}:
+		default:
+		}
+	}
+	<-ctx.Done()
+	time.Sleep(300 * time.Millisecond)
+	return ctx.Err()
 }
 
 type fakeSLAService struct {
-	loop *fakeLoop
+	started chan struct{}
 }
 
-func (f *fakeSLAService) StartSLAMonitor(ctx context.Context, interval time.Duration) {
-	f.loop.run(ctx)
+func (f *fakeSLAService) RunMonitorOnce(ctx context.Context) error {
+	if f.started != nil {
+		select {
+		case f.started <- struct{}{}:
+		default:
+		}
+	}
+	<-ctx.Done()
+	time.Sleep(300 * time.Millisecond)
+	return ctx.Err()
 }
 
 type fakeAuditRetentionService struct {
@@ -108,13 +115,13 @@ func (f *fakeRuntimeWorkerDependencies) AutomationTimersForWorker() automationap
 }
 
 func TestStatisticsWorkerLifecycle(t *testing.T) {
-	loop := &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}
-	w := NewStatisticsWorker(&fakeStatisticsService{loop: loop}, 100*time.Millisecond, nil)
+	started := make(chan struct{})
+	w := NewStatisticsWorker(&fakeStatisticsService{started: started}, 100*time.Millisecond, nil)
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	select {
-	case <-loop.started:
+	case <-started:
 	case <-time.After(time.Second):
 		t.Fatal("worker did not start")
 	}
@@ -122,22 +129,17 @@ func TestStatisticsWorkerLifecycle(t *testing.T) {
 	defer cancel()
 	if err := w.Stop(stopCtx); err != nil {
 		t.Fatalf("Stop() error = %v", err)
-	}
-	select {
-	case <-loop.stopped:
-	case <-time.After(time.Second):
-		t.Fatal("worker did not stop")
 	}
 }
 
 func TestSLAMonitorWorkerLifecycle(t *testing.T) {
-	loop := &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}
-	w := NewSLAMonitorWorker(&fakeSLAService{loop: loop}, 100*time.Millisecond, nil)
+	started := make(chan struct{})
+	w := NewSLAMonitorWorker(&fakeSLAService{started: started}, 100*time.Millisecond, nil)
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
 	select {
-	case <-loop.started:
+	case <-started:
 	case <-time.After(time.Second):
 		t.Fatal("worker did not start")
 	}
@@ -145,11 +147,6 @@ func TestSLAMonitorWorkerLifecycle(t *testing.T) {
 	defer cancel()
 	if err := w.Stop(stopCtx); err != nil {
 		t.Fatalf("Stop() error = %v", err)
-	}
-	select {
-	case <-loop.stopped:
-	case <-time.After(time.Second):
-		t.Fatal("worker did not stop")
 	}
 }
 

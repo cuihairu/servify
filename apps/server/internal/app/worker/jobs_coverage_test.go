@@ -66,14 +66,14 @@ func TestStatisticsWorkerStopBeforeStart(t *testing.T) {
 }
 
 func TestStatisticsWorkerStartTwiceRunsSingleLoop(t *testing.T) {
-	loop := &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}
-	w := NewStatisticsWorker(&fakeStatisticsService{loop: loop}, 100*time.Millisecond, nil)
+	started := make(chan struct{})
+	w := NewStatisticsWorker(&fakeStatisticsService{started: started}, 100*time.Millisecond, nil)
 
 	if err := w.Start(); err != nil {
 		t.Fatalf("first Start() error = %v", err)
 	}
 	select {
-	case <-loop.started:
+	case <-started:
 	case <-time.After(time.Second):
 		t.Fatal("worker did not start")
 	}
@@ -186,6 +186,58 @@ func (f *slowExitTokenService) Cleanup(ctx context.Context, now time.Time) (int6
 	return 0, ctx.Err()
 }
 
+// countingStatsService 记录 RunDailyStatsUpdate 的调用序列，供验证
+// StatisticsWorker 的首轮只当日、后续轮当日+昨日的单轮语义。
+type countingStatsService struct {
+	calls atomic.Int64
+	days  chan time.Time
+}
+
+func (c *countingStatsService) RunDailyStatsUpdate(ctx context.Context, day time.Time) error {
+	c.calls.Add(1)
+	if c.days != nil {
+		select {
+		case c.days <- day:
+		default:
+		}
+	}
+	return nil
+}
+
+func TestStatisticsWorkerFirstRunTodayThenYesterday(t *testing.T) {
+	svc := &countingStatsService{days: make(chan time.Time, 8)}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+	w := NewStatisticsWorker(svc, 20*time.Millisecond, logger)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+
+	// 收集三轮调用：首轮（当日）+ 后续轮（当日、昨日）。
+	var seq []time.Time
+	deadline := time.Now().Add(2 * time.Second)
+	for len(seq) < 3 && time.Now().Before(deadline) {
+		select {
+		case d := <-svc.days:
+			seq = append(seq, d)
+		default:
+			time.Sleep(2 * time.Millisecond)
+		}
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+	if len(seq) < 3 {
+		t.Fatalf("expected 3 RunDailyStatsUpdate calls, got %d", len(seq))
+	}
+	if seq[0].Sub(time.Now()).Abs() > time.Hour || seq[1].Sub(time.Now()).Abs() > time.Hour {
+		t.Fatalf("first run and next-run today step should both be today: %v / %v", seq[0], seq[1])
+	}
+	if !seq[2].Before(seq[1]) || seq[1].Sub(seq[2]) < 23*time.Hour {
+		t.Fatalf("third call should be yesterday: %v vs %v", seq[2], seq[1])
+	}
+}
+
 func TestRegisterDefaultWorkersWithRetentionWorkers(t *testing.T) {
 	app, err := bootstrap.BuildApp(config.GetDefaultConfig())
 	if err != nil {
@@ -215,26 +267,6 @@ func (c *countingCleanupService) Cleanup(ctx context.Context, now time.Time) (in
 	return c.result, c.err
 }
 
-type blockingStatisticsService struct {
-	started chan struct{}
-}
-
-func (b *blockingStatisticsService) StartDailyStatsWorkerContext(ctx context.Context, interval time.Duration) {
-	close(b.started)
-	<-ctx.Done()
-	time.Sleep(300 * time.Millisecond)
-}
-
-type blockingSLAService struct {
-	started chan struct{}
-}
-
-func (b *blockingSLAService) StartSLAMonitor(ctx context.Context, interval time.Duration) {
-	close(b.started)
-	<-ctx.Done()
-	time.Sleep(300 * time.Millisecond)
-}
-
 func TestStatisticsWorkerDefaultInterval(t *testing.T) {
 	w := NewStatisticsWorker(nil, 0, nil)
 	if got := w.(*StatisticsWorker).interval; got != time.Hour {
@@ -243,7 +275,7 @@ func TestStatisticsWorkerDefaultInterval(t *testing.T) {
 }
 
 func TestStatisticsWorkerStopDuringJitter(t *testing.T) {
-	w := NewStatisticsWorker(&fakeStatisticsService{loop: &fakeLoop{started: make(chan struct{}), stopped: make(chan struct{})}}, time.Hour, nil)
+	w := NewStatisticsWorker(&fakeStatisticsService{started: make(chan struct{})}, time.Hour, nil)
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -256,7 +288,7 @@ func TestStatisticsWorkerStopDuringJitter(t *testing.T) {
 
 func TestStatisticsWorkerStopReturnsContextError(t *testing.T) {
 	started := make(chan struct{})
-	w := NewStatisticsWorker(&blockingStatisticsService{started: started}, 100*time.Millisecond, nil)
+	w := NewStatisticsWorker(&fakeStatisticsService{started: started}, 100*time.Millisecond, nil)
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -279,7 +311,7 @@ func TestSLAMonitorWorkerStopVariants(t *testing.T) {
 	}
 
 	started := make(chan struct{})
-	w2 := NewSLAMonitorWorker(&blockingSLAService{started: started}, 100*time.Millisecond, nil)
+	w2 := NewSLAMonitorWorker(&fakeSLAService{started: started}, 100*time.Millisecond, nil)
 	if err := w2.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}

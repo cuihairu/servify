@@ -57,19 +57,13 @@ func (w *ObservableWorker) Name() string {
 }
 
 // Start delegates to the inner worker and tracks the active job gauge.
+// worker_jobs_total 不在此计数：job 轮次口径（含单轮 outcome 与 duration）
+// 由 job 执行侧的 TrackJob 统一记录，避免同一指标混入启动计数。
 func (w *ObservableWorker) Start() error {
 	if w.metrics != nil {
 		w.metrics.activeJobs.WithLabelValues(w.inner.Name()).Inc()
 	}
-	err := w.inner.Start()
-	if w.metrics != nil {
-		outcome := "success"
-		if err != nil {
-			outcome = "failure"
-		}
-		w.metrics.jobsTotal.WithLabelValues(w.inner.Name(), outcome).Inc()
-	}
-	return err
+	return w.inner.Start()
 }
 
 // Stop delegates to the inner worker and updates the active job gauge.

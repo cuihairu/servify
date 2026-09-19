@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/app/bootstrap"
+	"servify/apps/server/internal/observability/async"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,6 +20,7 @@ type WebhookDeliveryWorker struct {
 	service  webhookDeliveryProcessor
 	interval time.Duration
 	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -41,6 +43,8 @@ func NewWebhookDeliveryWorker(service webhookDeliveryProcessor, interval time.Du
 
 func (w *WebhookDeliveryWorker) Name() string { return "webhook-delivery" }
 
+func (w *WebhookDeliveryWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *WebhookDeliveryWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -53,31 +57,13 @@ func (w *WebhookDeliveryWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		run := func() {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			processed := w.service.ProcessDueDeliveries(ctx, time.Now())
 			if processed > 0 && w.logger != nil {
 				w.logger.Debugf("webhook-delivery worker: processed %d deliveries", processed)
 			}
-		}
-		run()
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }

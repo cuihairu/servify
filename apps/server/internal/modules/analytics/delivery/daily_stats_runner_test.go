@@ -1,6 +1,7 @@
 package delivery
 
-// DailyStatsRunner 的 ticker 循环行为：ctx 取消退出、更新失败只记日志。
+// DailyStatsRunner 的单轮行为：UpdateDailyStats 结果透传（周期循环由
+// app/worker 的 StatisticsWorker 驱动）。
 
 import (
 	"context"
@@ -14,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// runnerStubRepo 驱动 DailyStatsRunner 循环：UpdateDailyStats 行为可注入。
+// runnerStubRepo 驱动 DailyStatsRunner：UpdateDailyStats 行为可注入。
 type runnerStubRepo struct {
 	updateErr error
 }
@@ -55,56 +56,28 @@ func (r *runnerStubRepo) IncrementDailyStat(ctx context.Context, event analytics
 	return nil
 }
 
-func TestDailyStatsRunner_StopsOnCancel(t *testing.T) {
+func TestDailyStatsRunner_RunUpdateSuccess(t *testing.T) {
 	runner := NewDailyStatsRunner(analyticsapp.NewService(&runnerStubRepo{}), logrus.New())
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		runner.StartDailyStatsWorkerContext(ctx, 5*time.Millisecond)
-		close(done)
-	}()
-	time.Sleep(60 * time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("runner did not stop")
+
+	if err := runner.RunDailyStatsUpdate(context.Background(), time.Now()); err != nil {
+		t.Fatalf("RunDailyStatsUpdate: %v", err)
 	}
 }
 
-func TestDailyStatsRunner_UpdateErrorsLogged(t *testing.T) {
-	// daily stats updates fail; both error log branches in the ticker loop
-	// must be exercised before cancellation
+func TestDailyStatsRunner_RunUpdateErrorPassthrough(t *testing.T) {
+	// UpdateDailyStats 失败原样透传，由 worker 侧 TrackJob 记 job failure。
 	runner := NewDailyStatsRunner(analyticsapp.NewService(&runnerStubRepo{updateErr: errors.New("boom: stats")}), logrus.New())
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		runner.StartDailyStatsWorkerContext(ctx, 5*time.Millisecond)
-		close(done)
-	}()
-	time.Sleep(150 * time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("runner did not stop")
+
+	if err := runner.RunDailyStatsUpdate(context.Background(), time.Now()); err == nil || err.Error() != "boom: stats" {
+		t.Fatalf("want passthrough error, got %v", err)
 	}
 }
 
-func TestDailyStatsRunner_DefaultIntervalAndLogger(t *testing.T) {
-	// interval <=0 取默认 1 小时：验证 initial run 执行后 ctx 取消即退出。
+func TestDailyStatsRunner_NilLoggerDefaults(t *testing.T) {
+	// nil logger 取默认 logger（构造分支），单轮调用照常成功。
 	runner := NewDailyStatsRunner(analyticsapp.NewService(&runnerStubRepo{}), nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		runner.StartDailyStatsWorkerContext(ctx, 0)
-		close(done)
-	}()
-	time.Sleep(50 * time.Millisecond) // 让 initial run 先执行
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("runner with default interval did not return on cancel")
+
+	if err := runner.RunDailyStatsUpdate(context.Background(), time.Now()); err != nil {
+		t.Fatalf("RunDailyStatsUpdate: %v", err)
 	}
 }

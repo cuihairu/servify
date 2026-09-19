@@ -552,8 +552,9 @@ func (b *lockedBuffer) String() string {
 }
 
 // TestSurveyEmailWorkerLogsScanFailures 覆盖扫描失败分支：satisfaction_surveys
-// 表被删后，ProcessPendingSurveyEmails 的过期兜底 UPDATE 必然失败，worker 只
-// 告警（scan failed）并 continue 到下一轮 tick，循环本身不退出。与投递测试并行。
+// 表被删后，ProcessPendingSurveyEmails 的过期兜底 UPDATE 必然失败，单轮 job
+// 经 periodicJob.runOnce 统一告警（job failed）并进下一轮 tick，循环本身不退出。
+// 与投递测试并行。
 func TestSurveyEmailWorkerLogsScanFailures(t *testing.T) {
 	t.Parallel()
 	db := openSQLiteMemDB(t)
@@ -577,7 +578,7 @@ func TestSurveyEmailWorkerLogsScanFailures(t *testing.T) {
 		t.Fatalf("Start() = %v", err)
 	}
 	waitAtLeast(t, 10*time.Second, func() bool {
-		return strings.Contains(buf.String(), "survey-email worker: scan failed")
+		return strings.Contains(buf.String(), "survey-email-send worker: job failed")
 	}, "survey worker never logged the scan failure")
 	if err := w.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop() = %v", err)
@@ -793,7 +794,7 @@ func TestAutomationTimerWorkerStopContextError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSLAMonitorWorkerStopDuringJitter(t *testing.T) {
-	w := NewSLAMonitorWorker(&blockingSLAService{started: make(chan struct{})}, time.Hour, discardLogger())
+	w := NewSLAMonitorWorker(&fakeSLAService{started: make(chan struct{})}, time.Hour, discardLogger())
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() = %v", err)
 	}

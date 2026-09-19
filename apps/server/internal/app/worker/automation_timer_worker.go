@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	automationapp "servify/apps/server/internal/modules/automation/application"
+	"servify/apps/server/internal/observability/async"
 
 	"github.com/sirupsen/logrus"
 )
@@ -18,6 +19,7 @@ type AutomationTimerWorker struct {
 	service  automationapp.TimerProcessor
 	interval time.Duration
 	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -40,6 +42,8 @@ func NewAutomationTimerWorker(service automationapp.TimerProcessor, interval tim
 
 func (w *AutomationTimerWorker) Name() string { return "automation-timer" }
 
+func (w *AutomationTimerWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *AutomationTimerWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -52,31 +56,13 @@ func (w *AutomationTimerWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		run := func() {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			processed := w.service.ProcessDueTimers(ctx, time.Now())
 			if processed > 0 && w.logger != nil {
 				w.logger.Debugf("automation-timer worker: processed %d timers", processed)
 			}
-		}
-		run()
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }

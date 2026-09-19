@@ -464,7 +464,7 @@
     （provider=backup-restore，五 checks 全 true，db 44 表 10 行 + 上传
     2 文件对账归零）
 
-### [x] P2-4 可观测性从“有指标”升级到“可运维”（四刀全部完成，验收口径见下）
+### [x] P2-4 可观测性从“有指标”升级到“可运维”（五刀全部完成，验收口径见下）
 
 - 范围：
   - 关键业务 SLI/SLO
@@ -524,6 +524,29 @@
       runbook 新增三条处置段；known-gaps 摘除 errors_total，只剩
       worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
     - 一致性门禁自动覆盖全部新增资产（四类文件一致性测试全绿）
+  - 第五刀（worker job 级埋点收尾，known-gaps 清零，2026-09-19）✅
+    - app/worker 新增 `periodicJob` 统一周期循环 helper（jitter 初始延迟 →
+      首跑 → ticker 循环），10 个后台 worker 全部收敛到该模板（消除 8 份
+      重复的 jitter/ticker 循环代码）；每轮 job 经既有 `TrackJob` 观测，
+      `worker_job_duration_seconds{worker_name}` 真实出数（最后一项
+      known-gap 接线）
+    - 循环归属下沉：Statistics/SLA 的周期循环原先沉在 service 内
+      （`StartDailyStatsWorkerContext` / `StartSLAMonitor` 自持 ticker），
+      改为 worker 侧驱动单轮方法（`RunDailyStatsUpdate` / `RunMonitorOnce`），
+      `slapp.SLAMonitor` 窄接口随之改为单轮口径；首轮只补当日、后续轮补
+      当日+昨日的跨天兜底语义保留（errors.Join 两步独立）
+    - 口径升级（有意）：`worker_jobs_total{worker_name, outcome}` 从
+      「worker Start 计数」（每生命周期一次，几乎恒 success，告警近似永假
+      阴性）改为「job 轮次计数」——单轮业务失败（DB 抖动等）计入 failure，
+      WorkerJobFailures 告警从此真实有效；ObservableWorker.Start 不再
+      计数（active gauge 保留）
+    - deploy 资产同步：known-gaps.md 清零（一致性门禁改为允许合法空集，
+      段落标题作为格式哨兵）；service dashboard 新增 Worker Job Duration
+      p99 面板；runbook 三处（指标前缀表/Known Gaps/指标表）与
+      WorkerJobFailures 处置段更新为新口径
+    - 门禁：worker/async/metrics/sla/analytics 五包 100% 覆盖、race 绿、
+      boundaries 绿；async 的 `WireDefaultObservableBus`（刀 19 引入）补
+      包内直测，消除对跨包覆盖统计口径的依赖
 
 ### [x] P2-5 安全治理继续收口到首批企业交付标准
 
@@ -779,6 +802,7 @@
 
 - 当前优先恢复任务：按用户指示推进下一项。P3-2 已于 2026-09-19 收官（18 刀，CI 35457474387 绿）；P3-4 已于 2026-09-19 完成（刀 19，提交 af58235，CI 35461039568 绿）；**P3-3 已于 2026-09-19 完成（刀 20，提交 34b66a9，CI 35462743342 绿，eventbus inmemory 生产拒启 + demo-sdk 生产不暴露，完成记录见 P3-3 条目）；P3 段（P3-1/2/3/4）至此全部收官**；**P1-6 已于 2026-09-19 完成（刀 21，提交 9d801a7，CI 35465422927 绿，bootstrap.RunStandalone 落地唯一编排根 + 双入口薄壳化 + seam 归一 ApplyFault，完成记录见 P1-6 条目）——todo.md 全部可推进任务至此收官**：剩余两项均阻塞于外部条件，本地不可推进（P1-1 仅剩真实 Dify/WeKnora 双路径运行证据，等外部环境与凭证；P2-0 RQ-5 埋点等产品口径定稿后启动）。后续按 todo 执行顺序继续。P3-1 已完成（2026-09-18，e6928a6）。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
 - 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
+- 附注（2026-09-19）：P2-4 第五刀完成（known-gaps 清零）——`worker_job_duration_seconds` 经 app/worker 统一 `periodicJob` helper + 每轮 `TrackJob` 接线，10 个 worker 的重复 ticker 循环收敛为一处；`worker_jobs_total` 口径升级为 job 轮次（单轮业务失败计入 failure，WorkerJobFailures 告警真实生效）；Statistics/SLA 循环从 service 沉底改为 worker 侧驱动单轮方法（SLAMonitor 窄接口改单轮口径）；known-gaps.md 清零、dashboard 新增 duration p99 面板、runbook 三处同步。另 P1-6 已于同日收官（刀 21，提交 9d801a7，RunStandalone 唯一编排根）。至此仓库无未接线指标、无未完成可推进任务
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）

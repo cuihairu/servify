@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	"servify/apps/server/internal/observability/async"
 
 	"github.com/sirupsen/logrus"
 )
@@ -22,6 +23,7 @@ const (
 type SurveyEmailWorker struct {
 	service satisfapp.SurveyEmailProcessor
 	logger  *logrus.Logger
+	metrics *async.WorkerMetrics
 
 	// scanInterval/batchSize 供测试注入短间隔；零值取 surveyEmailScanInterval/batch 常量
 	scanInterval time.Duration
@@ -44,6 +46,8 @@ func NewSurveyEmailWorker(service satisfapp.SurveyEmailProcessor, logger *logrus
 
 func (w *SurveyEmailWorker) Name() string { return "survey-email-send" }
 
+func (w *SurveyEmailWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *SurveyEmailWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -64,34 +68,17 @@ func (w *SurveyEmailWorker) Start() error {
 	}
 	go func() {
 		defer close(done)
-		initialDelay := jitter(interval, 0.1)
-		if initialDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
+		newPeriodicJob(w.Name(), interval, w.logger, w.metrics, func(ctx context.Context) error {
+			sent, err := w.service.ProcessPendingSurveyEmails(ctx, batchSize)
+			if err != nil {
+				// 单轮失败不终止 worker（DB 抖动等），下一轮重试
+				return err
 			}
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				sent, err := w.service.ProcessPendingSurveyEmails(ctx, batchSize)
-				if err != nil {
-					// 单轮失败不终止 worker（DB 抖动等），下一轮重试
-					if w.logger != nil {
-						w.logger.WithError(err).Warn("survey-email worker: scan failed")
-					}
-					continue
-				}
-				if sent > 0 && w.logger != nil {
-					w.logger.Infof("survey-email worker: delivered %d survey emails", sent)
-				}
+			if sent > 0 && w.logger != nil {
+				w.logger.Infof("survey-email worker: delivered %d survey emails", sent)
 			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }

@@ -67,19 +67,20 @@ var (
 	runbookAlertRe = regexp.MustCompile(`(?m)^###\s+([A-Za-z0-9]+)\s*$`)
 )
 
-// knownGaps 读取 known-gaps.md 登记的未接线指标名集合。
+// knownGaps 读取 known-gaps.md 登记的未接线指标名集合（空集合法：全部
+// 已接线）。格式哨兵是「## 未接线指标」段落标题——标题消失才算格式坏。
 func knownGaps(t *testing.T) map[string]bool {
 	t.Helper()
 	raw, err := os.ReadFile(repoRoot + "deploy/observability/known-gaps.md")
 	if err != nil {
 		t.Fatalf("read known-gaps.md: %v", err)
 	}
+	if !strings.Contains(string(raw), "## 未接线指标") {
+		t.Fatal("known-gaps.md 缺少「## 未接线指标」段落标题，格式约定可能被破坏")
+	}
 	gaps := make(map[string]bool)
 	for _, m := range gapLineRe.FindAllStringSubmatch(string(raw), -1) {
 		gaps[m[1]] = true
-	}
-	if len(gaps) == 0 {
-		t.Fatal("known-gaps.md 解析出 0 个条目，格式约定（- metric: <name>）可能被破坏")
 	}
 	return gaps
 }

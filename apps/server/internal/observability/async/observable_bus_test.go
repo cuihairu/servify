@@ -158,3 +158,24 @@ func (b *failingBus) Subscribe(eventName string, handler eventbus.Handler) {}
 func (b *failingBus) Publish(ctx context.Context, event eventbus.Event) error {
 	return errors.New("bus down")
 }
+
+// TestWireDefaultObservableBus 覆盖入口共享装配 helper：包装后订阅/发布
+// 链路可用且默认 registry 上有打点（发布计数经 DefaultRegistry 读回）。
+func TestWireDefaultObservableBus(t *testing.T) {
+	bus := WireDefaultObservableBus(eventbus.NewInMemoryBus(), nil)
+
+	okHandler := &recordingHandler{}
+	bus.Subscribe("ticket.created", okHandler)
+
+	if err := bus.Publish(context.Background(), obsEvent("evt-wire", "ticket.created")); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if okHandler.calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", okHandler.calls)
+	}
+	if got := asyncMetricValue(t, metrics.DefaultRegistry, "eventbus_published_total", map[string]string{
+		"event_type": "ticket.created", "outcome": "success",
+	}); got != 1 {
+		t.Fatalf("default registry published success = %v, want 1", got)
+	}
+}

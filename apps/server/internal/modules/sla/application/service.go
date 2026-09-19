@@ -38,10 +38,10 @@ func NewService(db *gorm.DB, logger *logrus.Logger) *SLAService {
 	}
 }
 
-// SLAMonitor 是后台 SLA 违约扫描循环所需的窄接口
-// （app/worker 的 SLAMonitorWorker 经 worker deps 引用）。
+// SLAMonitor 是后台 SLA 违约扫描所需的窄接口
+// （app/worker 的 SLAMonitorWorker 周期驱动单轮扫描，循环在 worker 侧）。
 type SLAMonitor interface {
-	StartSLAMonitor(ctx context.Context, interval time.Duration)
+	RunMonitorOnce(ctx context.Context) error
 }
 
 // SetAutomationModule 注入 automation module 实例，用于在违约时触发规则
@@ -987,24 +987,9 @@ func (s *SLAService) resolveCustomerTier(ctx context.Context, customerUserID uin
 	return normalizeTier(customer.Priority)
 }
 
-// StartSLAMonitor 启动SLA监控服务
-func (s *SLAService) StartSLAMonitor(ctx context.Context, interval time.Duration) {
-	s.logger.Info("Starting SLA monitoring service")
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.logger.Info("SLA monitoring service stopped")
-			return
-		case <-ticker.C:
-			if err := s.monitorSLAViolations(ctx); err != nil {
-				s.logger.Errorf("SLA monitoring error: %v", err)
-			}
-		}
-	}
+// RunMonitorOnce 执行一轮 SLA 违约扫描并返回错误（周期循环由 app/worker 驱动）。
+func (s *SLAService) RunMonitorOnce(ctx context.Context) error {
+	return s.monitorSLAViolations(ctx)
 }
 
 // monitorSLAViolations 监控SLA违约

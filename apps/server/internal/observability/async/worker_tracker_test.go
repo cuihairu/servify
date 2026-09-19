@@ -109,11 +109,9 @@ func TestObservableWorker_StartStop_Success(t *testing.T) {
 	if v := testutil.ToFloat64(wm.activeJobs.WithLabelValues("emailer")); v != 1 {
 		t.Fatalf("expected active gauge 1 during run, got %v", v)
 	}
-	if v := testutil.ToFloat64(wm.jobsTotal.WithLabelValues("emailer", "success")); v != 1 {
-		t.Fatalf("expected success job counter 1, got %v", v)
-	}
-	if v := testutil.ToFloat64(wm.jobsTotal.WithLabelValues("emailer", "failure")); v != 0 {
-		t.Fatalf("expected failure job counter 0, got %v", v)
+	// worker_jobs_total 为 job 轮次口径（由 TrackJob 记），Start 不计数。
+	if v := testutil.ToFloat64(wm.jobsTotal.WithLabelValues("emailer", "success")); v != 0 {
+		t.Fatalf("expected success job counter 0 (Start no longer counts), got %v", v)
 	}
 
 	if err := w.Stop(context.Background()); err != nil {
@@ -138,8 +136,10 @@ func TestObservableWorker_StartStop_Failure(t *testing.T) {
 	if err := w.Start(); !errors.Is(err, startErr) {
 		t.Fatalf("expected start error, got %v", err)
 	}
-	if v := testutil.ToFloat64(wm.jobsTotal.WithLabelValues("mailer", "failure")); v != 1 {
-		t.Fatalf("expected failure job counter 1, got %v", v)
+	// Start 失败不记 jobs_total（job 轮次口径归 TrackJob），但 gauge 保持
+	// 抬升直到 Stop（既有语义：Start 抬、Stop 落）。
+	if v := testutil.ToFloat64(wm.jobsTotal.WithLabelValues("mailer", "failure")); v != 0 {
+		t.Fatalf("expected failure job counter 0 (Start no longer counts), got %v", v)
 	}
 	if v := testutil.ToFloat64(wm.activeJobs.WithLabelValues("mailer")); v != 1 {
 		t.Fatalf("expected active gauge 1 after failed start, got %v", v)

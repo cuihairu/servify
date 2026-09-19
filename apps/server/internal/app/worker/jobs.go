@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -35,7 +36,8 @@ func jitter(base time.Duration, fraction float64) time.Duration {
 }
 
 type statisticsService interface {
-	StartDailyStatsWorkerContext(context.Context, time.Duration)
+	// RunDailyStatsUpdate 聚合指定日期的每日统计（单轮，循环由 worker 驱动）。
+	RunDailyStatsUpdate(ctx context.Context, day time.Time) error
 }
 
 // StatisticsWorker runs periodic daily-stats aggregation.
@@ -43,6 +45,7 @@ type StatisticsWorker struct {
 	service  statisticsService
 	interval time.Duration
 	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -111,10 +114,14 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 			app.Logger,
 		))
 	}
-	// 后台 worker 观测接线：全部注册完成后统一包装，
-	// worker_jobs_total{worker_name, outcome} 与 worker_active_jobs{worker_name}。
+	// 后台 worker 观测接线：全部注册完成后统一注入 job 级 metrics 并包装，
+	// worker_active_jobs{worker_name}（包装层）与 worker_jobs_total /
+	// worker_job_duration_seconds（periodicJob 每轮 TrackJob）。
 	// collector 挂进程级 registry，同进程内只注册一次（测试会多次装配）。
 	for i := range app.Workers {
+		if setter, ok := app.Workers[i].(jobMetricsAware); ok {
+			setter.setJobMetrics(sharedWorkerMetrics())
+		}
 		app.Workers[i] = async.NewObservableWorker(app.Workers[i], sharedWorkerMetrics())
 	}
 }
@@ -147,6 +154,8 @@ func NewStatisticsWorker(service statisticsService, interval time.Duration, logg
 
 func (w *StatisticsWorker) Name() string { return "statistics-daily-stats" }
 
+func (w *StatisticsWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *StatisticsWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -157,21 +166,22 @@ func (w *StatisticsWorker) Start() error {
 	done := make(chan struct{})
 	w.cancel = cancel
 	w.done = done
+	// 首轮只补当日；后续轮补当日+昨日（跨天边界漏算兜底）。
+	firstRun := true
 	go func() {
 		defer close(done)
-		// Add initial jitter to stagger workers on restart.
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			if w.logger != nil {
-				w.logger.Debugf("statistics worker: initial jitter delay %v", initialDelay)
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
+			day := time.Now()
+			if firstRun {
+				firstRun = false
+				return w.service.RunDailyStatsUpdate(ctx, day)
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		w.service.StartDailyStatsWorkerContext(ctx, w.interval)
+			// 两步独立执行（任一失败整轮记 failure，互不阻断）。
+			return errors.Join(
+				w.service.RunDailyStatsUpdate(ctx, day),
+				w.service.RunDailyStatsUpdate(ctx, day.AddDate(0, 0, -1)),
+			)
+		}).loop(ctx)
 	}()
 	return nil
 }
@@ -197,7 +207,8 @@ func (w *StatisticsWorker) Stop(ctx context.Context) error {
 }
 
 type slaMonitorService interface {
-	StartSLAMonitor(context.Context, time.Duration)
+	// RunMonitorOnce 执行一轮 SLA 违约扫描（单轮，循环由 worker 驱动）。
+	RunMonitorOnce(ctx context.Context) error
 }
 
 // SLAMonitorWorker runs periodic SLA violation scanning.
@@ -205,6 +216,7 @@ type SLAMonitorWorker struct {
 	service  slaMonitorService
 	interval time.Duration
 	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -227,6 +239,8 @@ func NewSLAMonitorWorker(service slaMonitorService, interval time.Duration, logg
 
 func (w *SLAMonitorWorker) Name() string { return "sla-monitor" }
 
+func (w *SLAMonitorWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *SLAMonitorWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -239,18 +253,7 @@ func (w *SLAMonitorWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			if w.logger != nil {
-				w.logger.Debugf("sla-monitor worker: initial jitter delay %v", initialDelay)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-		w.service.StartSLAMonitor(ctx, w.interval)
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, w.service.RunMonitorOnce).loop(ctx)
 	}()
 	return nil
 }
@@ -285,6 +288,7 @@ type AuditCleanupWorker struct {
 	interval time.Duration
 	logger   *logrus.Logger
 	now      func() time.Time
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -308,6 +312,8 @@ func NewAuditCleanupWorker(service auditRetentionService, interval time.Duration
 
 func (w *AuditCleanupWorker) Name() string { return "audit-retention-cleanup" }
 
+func (w *AuditCleanupWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *AuditCleanupWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -320,46 +326,16 @@ func (w *AuditCleanupWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			if w.logger != nil {
-				w.logger.Debugf("audit-cleanup worker: initial jitter delay %v", initialDelay)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-
-		run := func() bool {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			deleted, err := w.service.Cleanup(ctx, w.now().UTC())
 			if err != nil {
-				if w.logger != nil {
-					w.logger.WithError(err).Warn("audit cleanup worker: cleanup failed")
-				}
-				return false
+				return err
 			}
 			if deleted > 0 && w.logger != nil {
 				w.logger.Infof("audit cleanup worker: deleted %d expired audit logs", deleted)
 			}
-			return true
-		}
-
-		if !run() && ctx.Err() != nil {
-			return
-		}
-
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }
@@ -394,6 +370,7 @@ type RevokedTokenCleanupWorker struct {
 	interval time.Duration
 	logger   *logrus.Logger
 	now      func() time.Time
+	metrics  *async.WorkerMetrics
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -417,6 +394,8 @@ func NewRevokedTokenCleanupWorker(service revokedTokenRetentionService, interval
 
 func (w *RevokedTokenCleanupWorker) Name() string { return "revoked-token-cleanup" }
 
+func (w *RevokedTokenCleanupWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
 func (w *RevokedTokenCleanupWorker) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -429,46 +408,16 @@ func (w *RevokedTokenCleanupWorker) Start() error {
 	w.done = done
 	go func() {
 		defer close(done)
-		initialDelay := jitter(w.interval, 0.1)
-		if initialDelay > 0 {
-			if w.logger != nil {
-				w.logger.Debugf("revoked-token-cleanup worker: initial jitter delay %v", initialDelay)
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(initialDelay):
-			}
-		}
-
-		run := func() bool {
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
 			deleted, err := w.service.Cleanup(ctx, w.now().UTC())
 			if err != nil {
-				if w.logger != nil {
-					w.logger.WithError(err).Warn("revoked-token cleanup worker: cleanup failed")
-				}
-				return false
+				return err
 			}
 			if deleted > 0 && w.logger != nil {
 				w.logger.Infof("revoked-token cleanup worker: deleted %d expired revoked tokens", deleted)
 			}
-			return true
-		}
-
-		if !run() && ctx.Err() != nil {
-			return
-		}
-
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
-		}
+			return nil
+		}).loop(ctx)
 	}()
 	return nil
 }
