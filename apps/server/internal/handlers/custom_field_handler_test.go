@@ -15,7 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	customfieldapp "servify/apps/server/internal/modules/custom_field/application"
+	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
+	customfieldinfra "servify/apps/server/internal/modules/custom_field/infra"
 )
 
 func newCustomFieldHandlerTestDB(t *testing.T) *gorm.DB {
@@ -36,7 +38,7 @@ func TestCustomFieldHandler_List_Empty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -59,7 +61,7 @@ func TestCustomFieldHandler_Create_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -88,7 +90,7 @@ func TestCustomFieldHandler_Create_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -107,7 +109,7 @@ func TestCustomFieldHandler_Get_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -125,7 +127,7 @@ func TestCustomFieldHandler_Update_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -147,7 +149,7 @@ func TestCustomFieldHandler_Delete_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 	handler := NewCustomFieldHandler(svc)
 
 	router := gin.New()
@@ -163,7 +165,7 @@ func TestCustomFieldHandler_Delete_NotFound(t *testing.T) {
 
 func TestNewCustomFieldHandler(t *testing.T) {
 	db := newCustomFieldHandlerTestDB(t)
-	svc := services.NewCustomFieldService(db)
+	svc := customfielddelivery.NewHandlerServiceAdapter(customfieldapp.NewService(customfieldinfra.NewGormRepository(db)))
 
 	handler := NewCustomFieldHandler(svc)
 

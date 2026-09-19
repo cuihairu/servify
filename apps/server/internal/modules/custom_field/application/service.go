@@ -1,4 +1,6 @@
-package services
+package application
+
+// 动态自定义字段（当前仅 ticket 资源）：定义管理 + 校验。
 
 import (
 	"context"
@@ -9,20 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"servify/apps/server/internal/models"
+	platformauth "servify/apps/server/internal/platform/auth"
 
-	"gorm.io/gorm"
+	"servify/apps/server/internal/models"
 )
 
-// CustomFieldService manages dynamic custom fields for resources (currently: tickets).
-type CustomFieldService struct {
-	db *gorm.DB
-}
-
-func NewCustomFieldService(db *gorm.DB) *CustomFieldService {
-	return &CustomFieldService{db: db}
-}
-
+// CustomFieldCreateRequest 创建请求
 type CustomFieldCreateRequest struct {
 	Resource   string      `json:"resource"` // default: ticket
 	Key        string      `json:"key" binding:"required"`
@@ -35,6 +29,7 @@ type CustomFieldCreateRequest struct {
 	ShowWhen   interface{} `json:"show_when"`
 }
 
+// CustomFieldUpdateRequest 更新请求
 type CustomFieldUpdateRequest struct {
 	Name       *string     `json:"name"`
 	Type       *string     `json:"type"`
@@ -45,32 +40,39 @@ type CustomFieldUpdateRequest struct {
 	ShowWhen   interface{} `json:"show_when"`
 }
 
+var ErrCustomFieldNotFound = errors.New("custom field not found")
+
 var customFieldKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-func (s *CustomFieldService) List(ctx context.Context, resource string, activeOnly bool) ([]models.CustomField, error) {
+type Repository interface {
+	List(ctx context.Context, resource string, activeOnly bool) ([]models.CustomField, error)
+	// GetScoped 按主键取字段（上下文租户/工作区过滤）；错误原样透传。
+	GetScoped(ctx context.Context, id uint) (*models.CustomField, error)
+	Create(ctx context.Context, field *models.CustomField) error
+	Save(ctx context.Context, field *models.CustomField) error
+	Delete(ctx context.Context, id uint) error
+}
+
+type Service struct {
+	repo Repository
+}
+
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
+}
+
+func (s *Service) List(ctx context.Context, resource string, activeOnly bool) ([]models.CustomField, error) {
 	if resource == "" {
 		resource = "ticket"
 	}
-	q := applyScopeFilter(s.db.WithContext(ctx).Model(&models.CustomField{}), ctx).Where("resource = ?", resource).Order("id ASC")
-	if activeOnly {
-		q = q.Where("active = ?", true)
-	}
-	var fields []models.CustomField
-	if err := q.Find(&fields).Error; err != nil {
-		return nil, err
-	}
-	return fields, nil
+	return s.repo.List(ctx, resource, activeOnly)
 }
 
-func (s *CustomFieldService) Get(ctx context.Context, id uint) (*models.CustomField, error) {
-	var field models.CustomField
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&field, id).Error; err != nil {
-		return nil, err
-	}
-	return &field, nil
+func (s *Service) Get(ctx context.Context, id uint) (*models.CustomField, error) {
+	return s.repo.GetScoped(ctx, id)
 }
 
-func (s *CustomFieldService) Create(ctx context.Context, req *CustomFieldCreateRequest) (*models.CustomField, error) {
+func (s *Service) Create(ctx context.Context, req *CustomFieldCreateRequest) (*models.CustomField, error) {
 	if req == nil {
 		return nil, errors.New("request required")
 	}
@@ -110,10 +112,9 @@ func (s *CustomFieldService) Create(ctx context.Context, req *CustomFieldCreateR
 	}
 
 	now := time.Now()
-	tenantID, workspaceID := tenantAndWorkspace(ctx)
 	field := &models.CustomField{
-		TenantID:       tenantID,
-		WorkspaceID:    workspaceID,
+		TenantID:       platformauth.TenantIDFromContext(ctx),
+		WorkspaceID:    platformauth.WorkspaceIDFromContext(ctx),
 		Resource:       resource,
 		Key:            key,
 		Name:           strings.TrimSpace(req.Name),
@@ -130,18 +131,18 @@ func (s *CustomFieldService) Create(ctx context.Context, req *CustomFieldCreateR
 		return nil, errors.New("name required")
 	}
 
-	if err := s.db.WithContext(ctx).Create(field).Error; err != nil {
+	if err := s.repo.Create(ctx, field); err != nil {
 		return nil, err
 	}
 	return field, nil
 }
 
-func (s *CustomFieldService) Update(ctx context.Context, id uint, req *CustomFieldUpdateRequest) (*models.CustomField, error) {
+func (s *Service) Update(ctx context.Context, id uint, req *CustomFieldUpdateRequest) (*models.CustomField, error) {
 	if req == nil {
 		return nil, errors.New("request required")
 	}
-	var field models.CustomField
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&field, id).Error; err != nil {
+	field, err := s.repo.GetScoped(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 	if req.Name != nil {
@@ -183,21 +184,14 @@ func (s *CustomFieldService) Update(ctx context.Context, id uint, req *CustomFie
 	}
 
 	field.UpdatedAt = time.Now()
-	if err := s.db.WithContext(ctx).Save(&field).Error; err != nil {
+	if err := s.repo.Save(ctx, field); err != nil {
 		return nil, err
 	}
-	return &field, nil
+	return field, nil
 }
 
-func (s *CustomFieldService) Delete(ctx context.Context, id uint) error {
-	result := applyScopeFilter(s.db.WithContext(ctx), ctx).Delete(&models.CustomField{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("custom field not found")
-	}
-	return nil
+func (s *Service) Delete(ctx context.Context, id uint) error {
+	return s.repo.Delete(ctx, id)
 }
 
 func isAllowedCustomFieldType(typ string) bool {

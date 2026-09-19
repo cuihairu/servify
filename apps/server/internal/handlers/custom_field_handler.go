@@ -1,29 +1,19 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
-	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 
 	"github.com/gin-gonic/gin"
 )
 
 type CustomFieldHandler struct {
-	service CustomFieldService
+	service customfielddelivery.HandlerService
 }
 
-type CustomFieldService interface {
-	List(ctx context.Context, resource string, activeOnly bool) ([]models.CustomField, error)
-	Get(ctx context.Context, id uint) (*models.CustomField, error)
-	Create(ctx context.Context, req *services.CustomFieldCreateRequest) (*models.CustomField, error)
-	Update(ctx context.Context, id uint, req *services.CustomFieldUpdateRequest) (*models.CustomField, error)
-	Delete(ctx context.Context, id uint) error
-}
-
-func NewCustomFieldHandler(service CustomFieldService) *CustomFieldHandler {
+func NewCustomFieldHandler(service customfielddelivery.HandlerService) *CustomFieldHandler {
 	return &CustomFieldHandler{service: service}
 }
 
@@ -53,7 +43,7 @@ func (h *CustomFieldHandler) Get(c *gin.Context) {
 }
 
 func (h *CustomFieldHandler) Create(c *gin.Context) {
-	var req services.CustomFieldCreateRequest
+	var req customfielddelivery.CustomFieldCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
@@ -72,7 +62,7 @@ func (h *CustomFieldHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: err.Error()})
 		return
 	}
-	var req services.CustomFieldUpdateRequest
+	var req customfielddelivery.CustomFieldUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return

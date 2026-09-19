@@ -15,6 +15,7 @@ import (
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
+	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	emailinfra "servify/apps/server/internal/modules/email/infra"
@@ -68,7 +69,7 @@ type Runtime struct {
 	WorkspaceService         services.WorkspaceOverviewReader
 	MacroService             macrodelivery.HandlerService
 	AppIntegrationService    handlers.AppMarketService
-	CustomFieldService       handlers.CustomFieldService
+	CustomFieldService       customfielddelivery.HandlerService
 	StatisticsHandlerService analyticsdelivery.HandlerService
 	SLAService               handlers.SLAService
 	ShiftService             handlers.ShiftService

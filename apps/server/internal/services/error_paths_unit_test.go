@@ -79,28 +79,6 @@ func TestAppIntegrationService_DroppedTableErrors(t *testing.T) {
 
 // ---- custom field error branches ----
 
-func TestCustomFieldService_DroppedTableErrors(t *testing.T) {
-	db := newServicesTestDB(t, &models.CustomField{})
-	svc := NewCustomFieldService(db)
-	ctx := context.Background()
-
-	if _, err := svc.Create(ctx, &CustomFieldCreateRequest{Key: "k1", Name: "n", Type: "string"}); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if _, err := svc.Create(ctx, &CustomFieldCreateRequest{Key: "k1", Name: "n2", Type: "string"}); err == nil {
-		t.Fatal("expected duplicate key error")
-	}
-	if err := db.Migrator().DropTable("custom_fields"); err != nil {
-		t.Fatalf("drop: %v", err)
-	}
-	if _, err := svc.List(ctx, "", false); err == nil {
-		t.Fatal("expected list error with missing table")
-	}
-	if err := svc.Delete(ctx, 1); err == nil {
-		t.Fatal("expected delete error with missing table")
-	}
-}
-
 // ---- shift error branches ----
 
 func TestShiftService_DroppedTableErrors(t *testing.T) {

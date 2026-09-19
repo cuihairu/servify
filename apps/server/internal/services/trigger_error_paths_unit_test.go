@@ -201,21 +201,6 @@ func TestShift_UpdateTriggerError(t *testing.T) {
 	}
 }
 
-func TestCustomField_UpdateTriggerError(t *testing.T) {
-	db := newServicesTestDB(t, &models.CustomField{})
-	svc := NewCustomFieldService(db)
-	ctx := context.Background()
-
-	field, err := svc.Create(ctx, &CustomFieldCreateRequest{Key: "k", Name: "n", Type: "string"})
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	execTrigger(t, db, "CREATE TRIGGER blk_cf BEFORE UPDATE ON custom_fields BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.Update(ctx, field.ID, &CustomFieldUpdateRequest{Name: stringPtr("x")}); err == nil {
-		t.Fatal("expected field update error")
-	}
-}
-
 func TestAuthService_RotateTriggerError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
 	cfg := testAuthConfig()

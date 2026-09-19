@@ -44,6 +44,8 @@ var workerMemDBSeq atomic.Uint64
 // openSQLiteMemDB 打开测试用命名内存库：cache=shared + 单连接。裸 ":memory:"
 // 每个连接是独立空库——race 下 worker goroutine 与测试并发查询会迫使连接池
 // 开第二条连接，报 no such table（间歇性 flake）。
+// 另持一个池外常驻连接占住库：shared-cache 内存库随最后一个连接关闭而销毁，
+// 若 Stop 后池内唯一空闲连接被回收，下一次查询会拿到空库（同报 no such table）。
 func openSQLiteMemDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := "file:worker_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" + strconv.FormatUint(workerMemDBSeq.Add(1), 10) + "?mode=memory&cache=shared"
@@ -55,7 +57,14 @@ func openSQLiteMemDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("get sql db: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(1)
+	// 上限 2：1 个被下面的 holder 借走（Conn() 计入 MaxOpenConns），1 个留给
+	// 业务池——shared-cache 下两个连接共享同一库，读写锁由 sqlite 仲裁。
+	sqlDB.SetMaxOpenConns(2)
+	holder, err := sqlDB.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("hold mem db connection: %v", err)
+	}
+	t.Cleanup(func() { _ = holder.Close() })
 	return db
 }
 

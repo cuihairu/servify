@@ -271,29 +271,6 @@ func TestSLAService_MoreBranches(t *testing.T) {
 	}
 }
 
-func TestCustomFieldService_MoreBranches(t *testing.T) {
-	db := newServicesTestDB(t, &models.CustomField{})
-	svc := NewCustomFieldService(db)
-	ctx := context.Background()
-
-	created, err := svc.Create(ctx, &CustomFieldCreateRequest{
-		Key: "k", Name: "n", Type: "string", Active: boolPtr(true),
-	})
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if !created.Active {
-		t.Fatal("expected explicit active")
-	}
-
-	if _, err := svc.Update(ctx, created.ID, &CustomFieldUpdateRequest{Validation: "{bad"}); err == nil {
-		t.Fatal("expected validation marshal error")
-	}
-	if _, err := svc.Update(ctx, created.ID, &CustomFieldUpdateRequest{ShowWhen: "[bad"}); err == nil {
-		t.Fatal("expected show_when marshal error")
-	}
-}
-
 func TestOrchestratedAI_FallbackErrorBranch(t *testing.T) {
 	server := httptest.NewServer(nil)
 	url := server.URL

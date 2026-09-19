@@ -11,6 +11,7 @@ import (
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerapi "servify/apps/server/internal/modules/customer/api"
 	gamificationcontract "servify/apps/server/internal/modules/gamification/contract"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
@@ -856,14 +857,14 @@ func (s *unitCustomFieldService) Get(ctx context.Context, id uint) (*models.Cust
 	return s.field, nil
 }
 
-func (s *unitCustomFieldService) Create(ctx context.Context, req *services.CustomFieldCreateRequest) (*models.CustomField, error) {
+func (s *unitCustomFieldService) Create(ctx context.Context, req *customfielddelivery.CustomFieldCreateRequest) (*models.CustomField, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.field, nil
 }
 
-func (s *unitCustomFieldService) Update(ctx context.Context, id uint, req *services.CustomFieldUpdateRequest) (*models.CustomField, error) {
+func (s *unitCustomFieldService) Update(ctx context.Context, id uint, req *customfielddelivery.CustomFieldUpdateRequest) (*models.CustomField, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}

@@ -23,6 +23,9 @@ import (
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
+	customfieldapp "servify/apps/server/internal/modules/custom_field/application"
+	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
+	customfieldinfra "servify/apps/server/internal/modules/custom_field/infra"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	emailinfra "servify/apps/server/internal/modules/email/infra"
@@ -265,7 +268,8 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	macroModule := macroapp.NewService(macroinfra.NewGormRepository(rt.DB))
 	rt.MacroService = macrodelivery.NewHandlerServiceAdapter(macroModule)
 	rt.AppIntegrationService = services.NewAppIntegrationService(rt.DB, rt.Logger)
-	rt.CustomFieldService = services.NewCustomFieldService(rt.DB)
+	customFieldModule := customfieldapp.NewService(customfieldinfra.NewGormRepository(rt.DB))
+	rt.CustomFieldService = customfielddelivery.NewHandlerServiceAdapter(customFieldModule)
 	rt.KnowledgeDocHandler = knowledgedelivery.NewHandlerServiceWithProvider(rt.DB, state.aiAssembly.KnowledgeProvider(rt.Config))
 	rt.SuggestionService = suggestiondelivery.NewHandlerService(rt.DB)
 	rt.GamificationService = gamificationdelivery.NewHandlerService(rt.DB)
