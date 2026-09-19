@@ -704,8 +704,7 @@ sdk/
 The bootstrap refactor is no longer only a target state. The current codebase has already landed these boundaries:
 
 - `apps/server/cmd/server/main.go`
-  - now acts as a thin entrypoint
-  - only keeps startup ordering, fatal error handling, and graceful shutdown trigger
+  - acts as a thin entrypoint: config load plus a single `bootstrap.RunStandalone` call with entrypoint differences injected as options
 - `apps/server/internal/app/bootstrap`
   - owns config discovery
   - owns startup flag and environment override parsing for the server entrypoint
@@ -714,17 +713,18 @@ The bootstrap refactor is no longer only a target state. The current codebase ha
   - owns observability bootstrap hook registration
   - owns HTTP server construction and runtime attachment
   - owns worker lifecycle and unified shutdown sequencing
+  - owns `RunStandalone` (`standalone.go`), the shared startup sequence root for `cmd/server` and `cmd/cli run`; entrypoint differences (startup flags, schema migrations, default workers, event-bus observability decorator) are `StandaloneOptions` fields, not duplicated sequence code, and startup test seams are anchored at `bootstrap.ApplyFault`
 - `apps/server/internal/app/server/runtime.go`
   - remains the default HTTP runtime assembly
   - now exposes a router-facing runtime contract so bootstrap can manage lifecycle without rebuilding router wiring in `main.go`
 - `apps/server/internal/app/worker`
   - owns default background worker registration for the server runtime instead of leaving that wiring in the entrypoint
 
-This means the current gap is narrower than the original target:
+This means the original gap is closed:
 
-- the entrypoint is already thin
-- bootstrap is already the primary runtime assembly root
-- the remaining work is to keep reducing sequence-level knowledge in `cmd/server/main.go` and avoid reintroducing direct wiring there
+- both entrypoints are thin shells over one assembly root
+- bootstrap is the single runtime assembly root
+- going forward, sequence-level changes go into `bootstrap.RunStandalone`/`StandaloneOptions`, not into the entrypoints
 
 ## 15. Migration Strategy
 
@@ -740,7 +740,7 @@ The migration should be incremental.
 Current landing status:
 
 - server startup override parsing, database retry wiring, worker registration, runtime attach, router/server binding, and unified shutdown sequencing have already moved under `internal/app/bootstrap` and `internal/app/worker`
-- the remaining phase-1 bootstrap work is now mostly refinement, not greenfield extraction
+- the shared startup sequence root (`bootstrap.RunStandalone`) is landed: `cmd/server` and `cmd/cli run` are thin shells and no duplicated sequence wiring remains in entrypoints
 
 ### Phase 2
 

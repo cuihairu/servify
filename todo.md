@@ -910,7 +910,7 @@
   - `apps/website/README.md`
   - 验证命令：`rg -n "website-dev:|website-deploy:|website-pages-deploy:|apps/website/wrangler.jsonc" Makefile`
 
-### [ ] P1-6 Bootstrap 落地与入口 wiring 收口
+### [x] P1-6 Bootstrap 落地与入口 wiring 收口（2026-09-19，刀 21 收官）
 
 - 现状：
   - `apps/server/internal/app/bootstrap/app.go` 仍是骨架，只收集最小运行时依赖
@@ -933,10 +933,15 @@
   - `cmd/server/main.go` 只保留薄入口职责
   - bootstrap 成为唯一可信的运行时装配根
   - `ARCHITECTURE.md` 与实际目录、责任划分一致
-- 状态：`[-]`
-- 最近进展：已把 server 启动的 flag/env 覆盖解析、数据库重试连接、默认 worker 注册、runtime attach、router/server 绑定以及统一 shutdown 生命周期收口到 `bootstrap` / `app` 层，并已同步回写 `ARCHITECTURE.md` 的当前落地边界；本轮继续收口 logger wiring，`BuildApp()` 已改为直接初始化共享 logger，`cmd/server` / `cmd/cli run` / `cmd/cli run_enhanced` 不再各自重复初始化并覆盖 `app.Logger`，默认 worker 也开始复用 `app.Logger` 而不是回退到 `logrus.StandardLogger()`
-- 下一步：继续减少 legacy/compat 入口对具体 `internal/services` 的直连，优先处理 `P1-7 Modules 与 legacy services/models 的边界收口`
-- 阻塞项：暂无
+- 完成记录（2026-09-19 刀 21 收官）：
+  - `bootstrap.RunStandalone`（standalone.go）落地为唯一启动编排根：overrides 解析 → BuildApp → 事件总线观测接线 → SetupObservability → 数据库重试 → schema 管理三分支 → BuildServerRuntime → StartRuntime → 可选 workers → HTTP server → 等待信号 → 优雅关停。`cmd/server/main.go`（110→40 行）与 `cmd/cli/run.go` 收敛为薄壳：LoadConfig + 一次 RunStandalone 调用
+  - 入口差异参数化为 `StandaloneOptions`：StartupArgs/StartupOutput（CLI 传 nil 只吃 env）、Migrate（CLI 无迁移）、RegisterWorkers（回调注入——bootstrap 不能反向 import app/worker）、EventBusDecorator（async.WireDefaultObservableBus 经入口注入——bootstrap→async import cycle）
+  - 测试 seam 归一 `bootstrap.ApplyFault`：server 的 SERVIFY_SERVER_FAULT 与 cli 的 CLI_RUN_VARIANT 注入点统一托管（versioned/versioned-fail/workers/shutdown/start-runtime/shutdown-server），双入口子进程测试改为转发
+  - 消灭的现存漂移：CLI DB 日志级别（Warning→Info 与 server 对齐）、CLI srv.Shutdown 失败语义（Errorf+exit 0→Fatalf exit 1 与 server 对齐）、CLI overrides 错误文案统一 "Failed to parse startup options"
+  - bootstrap 包新增 standalone_test.go：编排各阶段错误分支进程内直测 + 完整生命周期（sqlite 起服 → /health 200 → SIGTERM → nil）+ HTTP shutdown 失败分支；迁移原 cmd/cli 的 shutdownRuntime 四测为 shutdownStandalone 三分支直测
+  - ARCHITECTURE.md §14.1 更新为「gap closed」；覆盖率保持 100%（bootstrap 98.1%→100% 收口），race 四包绿；run-cli 手动冒烟 /health 200
+  - 行为变化（有意）：CLI 的 DB 日志级别与 shutdown 硬错误语义对齐 cmd/server
+- 完成证据：本地 bootstrap/cmd/server/cmd/cli 依赖包测试 + race 全绿；五包覆盖率 100%；提交后 CI 留证
 
 ### [x] P1-7 Modules 与 legacy services/models 的边界收口
 

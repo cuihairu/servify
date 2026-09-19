@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"testing"
 
@@ -15,40 +12,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 // applyServerFault 在子进程内按 SERVIFY_SERVER_FAULT 注入 seam 失败/分支，
-// 覆盖 main() 的 postgres-only versioned 分支与恒 nil 错误的防御性 fatal。
+// 覆盖 postgres-only versioned 分支与恒 nil 错误的防御性 fatal。seam 本体
+// 托管在 bootstrap 包（standalone.go），这里只是环境变量到 fault 值的转发。
 // 生产进程不设置该环境变量，seam 保持默认（生产实现）。
 func applyServerFault(fault string) {
-	switch fault {
-	case "versioned":
-		// versioned 分支 + RunMigrations 成功 + StartRuntime 失败：快速结束，
-		// 不真正监听端口。
-		resolveSchemaMode = func(string) appbootstrap.SchemaManagementMode {
-			return appbootstrap.SchemaModeVersioned
-		}
-		runVersionedMigrations = func(*gorm.DB) error { return nil }
-		startRuntime = func(*appbootstrap.App) error { return errors.New("injected runtime failure") }
-	case "versioned-fail":
-		resolveSchemaMode = func(string) appbootstrap.SchemaManagementMode {
-			return appbootstrap.SchemaModeVersioned
-		}
-		runVersionedMigrations = func(*gorm.DB) error { return errors.New("injected migration failure") }
-	case "workers":
-		// 跳过真实 runtime 启动，注入 StartWorkers 失败：在监听端口前退出。
-		startRuntime = func(*appbootstrap.App) error { return nil }
-		startWorkers = func(*appbootstrap.App) error { return errors.New("injected worker failure") }
-	case "shutdown":
-		// 跳过 runtime/worker 启动但真正监听 HTTP，注入 App.Shutdown 失败：
-		// 走完整 SIGTERM 优雅关停流程。
-		startRuntime = func(*appbootstrap.App) error { return nil }
-		startWorkers = func(*appbootstrap.App) error { return nil }
-		shutdownApp = func(*appbootstrap.App, context.Context) error {
-			return errors.New("injected shutdown failure")
-		}
-	}
+	appbootstrap.ApplyFault(fault)
 }
 
 func runServerFaultSubprocess(t *testing.T, dir, fault string, args ...string) (*exec.Cmd, string) {
@@ -146,25 +117,10 @@ func TestServerMainShutdownErrorLogged(t *testing.T) {
 	assert.Contains(t, out.String(), "Server exited")
 }
 
-// TestServerSeamDefaults 验证 seam 默认值即生产实现：sqlite 走 AutoMigrate、
-// 空 App 的生命周期方法返回 nil。
-func TestServerSeamDefaults(t *testing.T) {
-	assert.Equal(t, appbootstrap.ResolveSchemaMode("sqlite"), resolveSchemaMode("sqlite"))
-	assert.Equal(t, appbootstrap.ResolveSchemaMode("postgres"), resolveSchemaMode("postgres"))
-	assert.Equal(t, appbootstrap.SchemaModeAutoMigrate, resolveSchemaMode("sqlite"))
-
-	ctx := context.Background()
-	assert.NoError(t, startRuntime(&appbootstrap.App{}))
-	assert.NoError(t, startWorkers(&appbootstrap.App{}))
-	assert.NoError(t, shutdownApp(nil, ctx))
-}
-
-// TestApplyServerFaultUnknownIsNoOp 未知 fault 值不改 seam，保证默认路径
-// 不受影响。
+// TestApplyServerFaultUnknownIsNoOp 未知 fault 值不改 seam（行为验证随
+// seam 本体迁至 bootstrap 包的 standalone_test.go）。
 func TestApplyServerFaultUnknownIsNoOp(t *testing.T) {
-	before := fmt.Sprintf("%v %v", resolveSchemaMode("sqlite"), startWorkers(&appbootstrap.App{}))
-	applyServerFault("nonexistent")
-	after := fmt.Sprintf("%v %v", resolveSchemaMode("sqlite"), startWorkers(&appbootstrap.App{}))
-	assert.Equal(t, before, after)
-	assert.False(t, strings.Contains(after, "injected"))
+	assert.NotPanics(t, func() {
+		applyServerFault("nonexistent")
+	})
 }
