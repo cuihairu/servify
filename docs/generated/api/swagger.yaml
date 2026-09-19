@@ -1,4 +1,11 @@
 definitions:
+  application.TwoFactorSetup:
+    properties:
+      otpauth_uri:
+        type: string
+      secret:
+        type: string
+    type: object
   contract.AgentPerformanceStats:
     properties:
       agent_id:
@@ -1627,13 +1634,6 @@ definitions:
       count:
         type: integer
       date:
-        type: string
-    type: object
-  services.TwoFactorSetup:
-    properties:
-      otpauth_uri:
-        type: string
-      secret:
         type: string
     type: object
 info:
@@ -5037,7 +5037,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.TwoFactorSetup'
+            $ref: '#/definitions/application.TwoFactorSetup'
         "400":
           description: Bad Request
           schema:

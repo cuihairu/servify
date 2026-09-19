@@ -5166,7 +5166,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.TwoFactorSetup"
+                            "$ref": "#/definitions/application.TwoFactorSetup"
                         }
                     },
                     "400": {
@@ -5566,6 +5566,17 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "application.TwoFactorSetup": {
+            "type": "object",
+            "properties": {
+                "otpauth_uri": {
+                    "type": "string"
+                },
+                "secret": {
+                    "type": "string"
+                }
+            }
+        },
         "contract.AgentPerformanceStats": {
             "type": "object",
             "properties": {
@@ -7974,17 +7985,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "date": {
-                    "type": "string"
-                }
-            }
-        },
-        "services.TwoFactorSetup": {
-            "type": "object",
-            "properties": {
-                "otpauth_uri": {
-                    "type": "string"
-                },
-                "secret": {
                     "type": "string"
                 }
             }

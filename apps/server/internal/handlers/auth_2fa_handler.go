@@ -84,7 +84,9 @@ func (h *Auth2FAHandler) VerifyLogin(c *gin.Context) {
 // @Tags auth
 // @Security BearerAuth
 // @Produce json
-// @Success 200 {object} authdelivery.TwoFactorSetup
+// 注意：swag v1.16 不解析跨包类型别名（authdelivery.TwoFactorSetup 为别名），
+// 注解直接引用 application 包的真实 struct（仅文档引用，handler 不 import 该包）。
+// @Success 200 {object} application.TwoFactorSetup
 // @Failure 400 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Router /api/v1/auth/2fa/setup [post]
