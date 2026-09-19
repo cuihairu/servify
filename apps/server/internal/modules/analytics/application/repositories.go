@@ -12,6 +12,7 @@ type Repository interface {
 	GetTicketCategoryStats(ctx context.Context, startDate, endDate time.Time) ([]CategoryStats, error)
 	GetTicketPriorityStats(ctx context.Context, startDate, endDate time.Time) ([]CategoryStats, error)
 	GetCustomerSourceStats(ctx context.Context) ([]CategoryStats, error)
+	GetRemoteAssistTicketStats(ctx context.Context) (*RemoteAssistTicketStats, error)
 	UpdateDailyStats(ctx context.Context, date time.Time) error
 	IncrementDailyStat(ctx context.Context, event IncrementEvent) error
 }

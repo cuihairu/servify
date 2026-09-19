@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
@@ -48,7 +49,7 @@ type StatisticsWorker struct {
 }
 
 type RuntimeWorkerDependencies interface {
-	StatisticsServiceForWorker() *services.StatisticsService
+	StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner
 	SLAServiceForWorker() *services.SLAService
 	WebhookDeliveryForWorker() webhookapp.Processor
 	EmailPollAdapterForWorker() emaildelivery.PollProcessor

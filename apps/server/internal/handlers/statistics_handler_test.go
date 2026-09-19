@@ -17,7 +17,9 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
-	"servify/apps/server/internal/services"
+	analyticsapp "servify/apps/server/internal/modules/analytics/application"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
+	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
 )
 
 func newTestDBForStatistics(t *testing.T) *gorm.DB {
@@ -49,6 +51,11 @@ func newTestDBForStatistics(t *testing.T) *gorm.DB {
 	return db
 }
 
+// newStatisticsHandlerService 用 module adapter 构造 handler 依赖。
+func newStatisticsHandlerService(db *gorm.DB, logger *logrus.Logger) *analyticsdelivery.HandlerServiceAdapter {
+	return analyticsdelivery.NewHandlerServiceAdapter(analyticsapp.NewService(analyticsinfra.NewGormRepository(db)))
+}
+
 func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -56,7 +63,7 @@ func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()
@@ -96,7 +103,7 @@ func TestStatisticsHandler_GetAgentPerformanceStats_SQLiteError(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()
@@ -129,7 +136,7 @@ func TestStatisticsHandler_GetTicketCategoryStats(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()
@@ -151,7 +158,7 @@ func TestStatisticsHandler_GetTicketPriorityStats(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()
@@ -173,7 +180,7 @@ func TestStatisticsHandler_GetCustomerSourceStats(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()
@@ -207,7 +214,7 @@ func TestStatisticsHandler_GetRemoteAssistTicketStats(t *testing.T) {
 		t.Fatalf("seed non remote assist ticket: %v", err)
 	}
 
-	svc := services.NewStatisticsService(db, logger)
+	svc := newStatisticsHandlerService(db, logger)
 	h := NewStatisticsHandler(svc, logger)
 
 	r := gin.New()

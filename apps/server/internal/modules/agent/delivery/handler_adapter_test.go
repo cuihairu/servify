@@ -261,6 +261,13 @@ func (r *chatLoadFailingRepo) UpdateChatLoad(ctx context.Context, userID uint, c
 	return errGroupBoom
 }
 
+// revokeFailingRepo 让令牌吊销失败（RevokeAgentTokens 错误分支）。
+type revokeFailingRepo struct{ maintenanceTestRepo }
+
+func (r *revokeFailingRepo) RevokeUserTokens(ctx context.Context, userID uint, revokeAt time.Time) (int, error) {
+	return 0, errGroupBoom
+}
+
 func TestHandlerServiceAdapter_ErrorBranches(t *testing.T) {
 	ctx := context.Background()
 
@@ -280,6 +287,12 @@ func TestHandlerServiceAdapter_ErrorBranches(t *testing.T) {
 	// AssignSession：坐席不存在（runtime miss + lookup miss）。
 	if err := adapter.AssignSessionToAgent(ctx, "sess-x", 99); err == nil {
 		t.Fatal("expected assign error for unseeded agent")
+	}
+
+	// RevokeAgentTokens：repo 吊销失败。
+	revokeAdapter := NewHandlerServiceAdapter(agentapp.NewService(&revokeFailingRepo{}, &maintenanceTestRegistry{items: map[uint]agentapp.AgentRuntimeDTO{}}), logrus.New())
+	if _, err := revokeAdapter.RevokeAgentTokens(ctx, 7); err == nil {
+		t.Fatal("expected revoke repo error")
 	}
 
 	// ReleaseSession：repo 释放失败。

@@ -29,8 +29,10 @@ type stubRepo struct {
 	updateDate time.Time
 	updateErr  error
 
-	incrementErr error
-	last         IncrementEvent
+	incrementErr    error
+	last            IncrementEvent
+	remoteAssist    *RemoteAssistTicketStats
+	remoteAssistErr error
 }
 
 func (s *stubRepo) GetDashboardStats(ctx context.Context) (*DashboardStats, error) {
@@ -73,6 +75,13 @@ func (s *stubRepo) GetCustomerSourceStats(ctx context.Context) ([]CategoryStats,
 		return nil, s.sourceErr
 	}
 	return s.source, nil
+}
+
+func (s *stubRepo) GetRemoteAssistTicketStats(ctx context.Context) (*RemoteAssistTicketStats, error) {
+	if s.remoteAssistErr != nil {
+		return nil, s.remoteAssistErr
+	}
+	return s.remoteAssist, nil
 }
 
 func (s *stubRepo) UpdateDailyStats(ctx context.Context, date time.Time) error {
@@ -255,5 +264,24 @@ func TestIncrementDailyStatPropagatesError(t *testing.T) {
 
 	if err := svc.IncrementDailyStat(context.Background(), IncrementEvent{Kind: IncrementSessions}); err == nil {
 		t.Fatal("expected error from IncrementDailyStat")
+	}
+}
+
+func TestServiceGetRemoteAssistTicketStats(t *testing.T) {
+	want := &RemoteAssistTicketStats{Total: 3, Open: 1, ResolvedRate: 0.5}
+	repo := &stubRepo{remoteAssist: want}
+	svc := NewService(repo)
+
+	got, err := svc.GetRemoteAssistTicketStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetRemoteAssistTicketStats() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("GetRemoteAssistTicketStats() = %+v, want %+v", got, want)
+	}
+
+	repo.remoteAssistErr = errors.New("remote assist boom")
+	if _, err := svc.GetRemoteAssistTicketStats(context.Background()); err == nil {
+		t.Fatal("expected error from GetRemoteAssistTicketStats")
 	}
 }

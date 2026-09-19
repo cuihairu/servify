@@ -55,6 +55,10 @@ func (r *recorderRepo) GetCustomerSourceStats(ctx context.Context) ([]analyticsa
 	return nil, nil
 }
 
+func (r *recorderRepo) GetRemoteAssistTicketStats(ctx context.Context) (*analyticsapp.RemoteAssistTicketStats, error) {
+	return nil, nil
+}
+
 func (r *recorderRepo) UpdateDailyStats(ctx context.Context, date time.Time) error {
 	return nil
 }

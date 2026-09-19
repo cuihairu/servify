@@ -290,3 +290,23 @@ func TestRuntimeMaintenance_TickerCleansUp(t *testing.T) {
 		t.Fatal("maintenance goroutine did not exit after cancel")
 	}
 }
+
+// TestRuntimeMaintenance_StartDefaultInterval：零值 interval 取默认且
+// ctx 已取消时立即退出（覆盖 interval<=0 分支与 select 的 ctx.Done 分支）。
+func TestRuntimeMaintenance_StartDefaultInterval(t *testing.T) {
+	module := agentapp.NewService(&maintenanceTestRepo{}, &maintenanceTestRegistry{items: map[uint]agentapp.AgentRuntimeDTO{}})
+	maintenance := NewRuntimeMaintenance(logrus.New(), module)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		maintenance.Start(ctx)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Start did not return on cancelled context")
+	}
+}

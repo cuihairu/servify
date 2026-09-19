@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
-	analyticsapp "servify/apps/server/internal/modules/analytics/application"
 	customerapp "servify/apps/server/internal/modules/customer/application"
 	knowledgeapp "servify/apps/server/internal/modules/knowledge/application"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
@@ -255,23 +254,6 @@ func TestHSSeamsCustomerModuleErrors(t *testing.T) {
 	}
 	if _, err := svc.GetStats(ctx); err == nil || !strings.Contains(err.Error(), "stats") {
 		t.Fatalf("expected stats module error, got %v", err)
-	}
-}
-
-type hscovAnalyticsRepo struct {
-	analyticsapp.Repository
-	dashErr error
-}
-
-func (r *hscovAnalyticsRepo) GetDashboardStats(ctx context.Context) (*analyticsapp.DashboardStats, error) {
-	return nil, r.dashErr
-}
-
-func TestHSSeamsStatisticsDashboardModuleError(t *testing.T) {
-	repo := &hscovAnalyticsRepo{dashErr: errors.New("boom: dashboard")}
-	svc := &StatisticsService{module: analyticsapp.NewService(repo), logger: newTestLogger()}
-	if _, err := svc.GetDashboardStats(context.Background()); err == nil || !strings.Contains(err.Error(), "dashboard") {
-		t.Fatalf("expected dashboard module error, got %v", err)
 	}
 }
 

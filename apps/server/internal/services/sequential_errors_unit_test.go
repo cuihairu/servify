@@ -322,19 +322,6 @@ func TestShiftService_SequentialErrors(t *testing.T) {
 	}
 }
 
-func TestStatisticsService_RemoteAssistSequentialErrors(t *testing.T) {
-	// n=5 (avg-close Row) is skipped: the source dereferences Row() without a
-	// nil guard, so forcing that failure panics inside the production code.
-	for n := int32(2); n <= 4; n++ {
-		db := newServicesTestDB(t, &models.Ticket{})
-		failNthQuery(db, n)
-		svc := NewStatisticsService(db, logrus.New())
-		if _, err := svc.GetRemoteAssistTicketStats(context.Background()); err == nil {
-			t.Fatalf("n=%d: expected error", n)
-		}
-	}
-}
-
 func TestWorkspaceService_SequentialErrors(t *testing.T) {
 	cases := []struct {
 		n          int32
@@ -431,29 +418,5 @@ func TestRouter_EnsureSessionNoopUpdate(t *testing.T) {
 func TestWebSocket_AsICECandidateDecodeError(t *testing.T) {
 	if _, err := asICECandidate(map[string]interface{}{"candidate": 123}); err == nil {
 		t.Fatal("expected decode error for numeric candidate")
-	}
-}
-
-func TestStatisticsService_WorkerUpdateErrors(t *testing.T) {
-	// daily stats updates fail (missing tables); both error log branches in the
-	// ticker loop must be exercised before cancellation
-	db := newServicesTestDB(t, &models.Ticket{})
-	if err := db.Migrator().DropTable("daily_stats", "tickets"); err != nil {
-		t.Fatalf("drop: %v", err)
-	}
-	svc := NewStatisticsService(db, logrus.New())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		svc.StartDailyStatsWorkerContext(ctx, 5*time.Millisecond)
-		close(done)
-	}()
-	time.Sleep(150 * time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker did not stop")
 	}
 }

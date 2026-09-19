@@ -37,6 +37,10 @@ func (s *Service) GetCustomerSourceStats(ctx context.Context) ([]CategoryStats, 
 	return s.repo.GetCustomerSourceStats(ctx)
 }
 
+func (s *Service) GetRemoteAssistTicketStats(ctx context.Context) (*RemoteAssistTicketStats, error) {
+	return s.repo.GetRemoteAssistTicketStats(ctx)
+}
+
 func (s *Service) UpdateDailyStats(ctx context.Context, date time.Time) error {
 	return s.repo.UpdateDailyStats(ctx, date)
 }

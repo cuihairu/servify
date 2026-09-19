@@ -15,6 +15,9 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
+	analyticsapp "servify/apps/server/internal/modules/analytics/application"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
+	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
@@ -821,8 +824,8 @@ func TestRevokedTokenCleanupWorkerStopDuringJitter(t *testing.T) {
 
 type fullRuntimeWorkerDeps struct{}
 
-func (fullRuntimeWorkerDeps) StatisticsServiceForWorker() *services.StatisticsService {
-	return &services.StatisticsService{}
+func (fullRuntimeWorkerDeps) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner {
+	return analyticsdelivery.NewDailyStatsRunner(analyticsapp.NewService(analyticsinfra.NewGormRepository(nil)), nil)
 }
 
 func (fullRuntimeWorkerDeps) SLAServiceForWorker() *services.SLAService {

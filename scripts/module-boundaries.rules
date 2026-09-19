@@ -128,3 +128,6 @@ forbid|apps/server/internal/handlers/handlers.go|messageRouter[[:space:]]+\*serv
 forbid|apps/server/internal/handlers/sla_handler.go|slaService[[:space:]]+slaHandlerSLAService|SLA handler must not keep private slaHandlerSLAService wiring.
 forbid|apps/server/internal/handlers/sla_handler.go|ticketService[[:space:]]+slaHandlerTicketService|SLA handler must not keep private slaHandlerTicketService wiring.
 require|apps/server/internal/handlers/statistics_export_handler.go|SatisfactionStatsReader|Statistics export handler must consume satisfaction stats behind the narrow reader interface.
+require|apps/server/internal/app/server/runtime_assembly.go|StatisticsHandlerService[[:space:]]*=[[:space:]]*analyticsdelivery\.NewHandlerServiceAdapter\(analyticsModule\)|Runtime must assemble statistics handlers via the analytics delivery adapter on the single module instance.
+forbid|apps/server/internal/app/server/runtime_assembly.go|services\.StatisticsService|Runtime must not depend on the concrete statistics facade; use analyticsdelivery contracts.
+forbid|apps/server/internal/app/worker/jobs.go|services\.StatisticsService|Statistics worker must consume analyticsdelivery.DailyStatsRunner, not the concrete facade.

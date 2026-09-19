@@ -1,56 +1,20 @@
 package application
 
-import "time"
+import (
+	"time"
 
-type DashboardStats struct {
-	TotalCustomers              int64   `json:"total_customers"`
-	TotalAgents                 int64   `json:"total_agents"`
-	TotalTickets                int64   `json:"total_tickets"`
-	TotalSessions               int64   `json:"total_sessions"`
-	TodayTickets                int64   `json:"today_tickets"`
-	TodaySessions               int64   `json:"today_sessions"`
-	TodayMessages               int64   `json:"today_messages"`
-	OpenTickets                 int64   `json:"open_tickets"`
-	AssignedTickets             int64   `json:"assigned_tickets"`
-	ResolvedTickets             int64   `json:"resolved_tickets"`
-	ClosedTickets               int64   `json:"closed_tickets"`
-	OnlineAgents                int64   `json:"online_agents"`
-	BusyAgents                  int64   `json:"busy_agents"`
-	ActiveSessions              int64   `json:"active_sessions"`
-	AvgResponseTime             float64 `json:"avg_response_time"`
-	AvgResolutionTime           float64 `json:"avg_resolution_time"`
-	CustomerSatisfaction        float64 `json:"customer_satisfaction"`
-	AIUsageToday                int64   `json:"ai_usage_today"`
-	KnowledgeProviderUsageToday int64   `json:"knowledge_provider_usage_today"`
-	WeKnoraUsageToday           int64   `json:"weknora_usage_today"`
-}
+	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
+)
 
-type TimeRangeStats struct {
-	Date                 string  `json:"date"`
-	Tickets              int64   `json:"tickets"`
-	Sessions             int64   `json:"sessions"`
-	Messages             int64   `json:"messages"`
-	ResolvedTickets      int64   `json:"resolved_tickets"`
-	AvgResponseTime      float64 `json:"avg_response_time"`
-	CustomerSatisfaction float64 `json:"customer_satisfaction"`
-}
-
-type AgentPerformanceStats struct {
-	AgentID           uint    `json:"agent_id"`
-	AgentName         string  `json:"agent_name"`
-	Department        string  `json:"department"`
-	TotalTickets      int64   `json:"total_tickets"`
-	ResolvedTickets   int64   `json:"resolved_tickets"`
-	AvgResponseTime   float64 `json:"avg_response_time"`
-	AvgResolutionTime float64 `json:"avg_resolution_time"`
-	Rating            float64 `json:"rating"`
-	OnlineTime        int64   `json:"online_time"`
-}
-
-type CategoryStats struct {
-	Category string `json:"category"`
-	Count    int64  `json:"count"`
-}
+// 统计形状与 HTTP 契约字段全同：直接别名 contract 类型，避免双份
+// struct 与 DTO→contract 的纯复制转换（HTTP 面只认 contract 类型）。
+type (
+	DashboardStats          = analyticscontract.DashboardStats
+	TimeRangeStats          = analyticscontract.TimeRangeStats
+	AgentPerformanceStats   = analyticscontract.AgentPerformanceStats
+	CategoryStats           = analyticscontract.CategoryStats
+	RemoteAssistTicketStats = analyticscontract.RemoteAssistTicketStats
+)
 
 type IncrementKind string
 

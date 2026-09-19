@@ -8,6 +8,9 @@ import (
 	agentapp "servify/apps/server/internal/modules/agent/application"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	agentinfra "servify/apps/server/internal/modules/agent/infra"
+	analyticsapp "servify/apps/server/internal/modules/analytics/application"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
+	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
 	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
 	assistinfra "servify/apps/server/internal/modules/assist/infra"
@@ -230,10 +233,11 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	go agentdelivery.NewRuntimeMaintenance(rt.Logger, agentModule).Start(context.Background())
 	state.agentAdapter = agentAdapter
 
-	statisticsService := services.NewStatisticsService(rt.DB, rt.Logger)
-	statisticsService.SetEventBus(rt.Bus)
-	rt.StatisticsHandlerService = statisticsService
-	rt.statisticsService = statisticsService
+	// statistics：单一 module 实例贯穿 HTTP/eventbus/每日统计 worker。
+	analyticsModule := analyticsapp.NewService(analyticsinfra.NewGormRepository(rt.DB))
+	rt.StatisticsHandlerService = analyticsdelivery.NewHandlerServiceAdapter(analyticsModule)
+	analyticsdelivery.NewEventBusSubscriber(analyticsModule).Register(rt.Bus)
+	rt.dailyStatsRunner = analyticsdelivery.NewDailyStatsRunner(analyticsModule, rt.Logger)
 
 	satisfactionService := services.NewSatisfactionService(rt.DB, rt.Logger)
 	rt.SatisfactionService = satisfactionService

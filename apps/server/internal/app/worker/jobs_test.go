@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/config"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
@@ -69,11 +70,11 @@ func (f *fakeRevokedTokenRetentionService) Cleanup(ctx context.Context, now time
 }
 
 type fakeRuntimeWorkerDependencies struct {
-	statistics *services.StatisticsService
+	statistics *analyticsdelivery.DailyStatsRunner
 	sla        *services.SLAService
 }
 
-func (f *fakeRuntimeWorkerDependencies) StatisticsServiceForWorker() *services.StatisticsService {
+func (f *fakeRuntimeWorkerDependencies) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner {
 	return f.statistics
 }
 

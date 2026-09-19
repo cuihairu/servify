@@ -23,9 +23,6 @@ func TestConstructors_NilLogger(t *testing.T) {
 	if NewSLAService(db, nil) == nil {
 		t.Fatal("expected SLA service")
 	}
-	if NewStatisticsService(db, nil) == nil {
-		t.Fatal("expected statistics service")
-	}
 	if NewAppIntegrationService(db, nil) == nil {
 		t.Fatal("expected app integration service")
 	}
@@ -322,58 +319,6 @@ func TestWorkspaceService_DroppedTableErrors(t *testing.T) {
 }
 
 // ---- statistics error branches ----
-
-func TestStatisticsService_DroppedTableErrors(t *testing.T) {
-	ctx := context.Background()
-	now := time.Now()
-
-	db := newServicesTestDB(t,
-		&models.User{}, &models.Agent{}, &models.Ticket{}, &models.Session{},
-		&models.Message{}, &models.CustomerSatisfaction{}, &models.Customer{}, &models.DailyStats{},
-	)
-	svc := NewStatisticsService(db, logrus.New())
-	if err := db.Migrator().DropTable("tickets"); err != nil {
-		t.Fatalf("drop tickets: %v", err)
-	}
-	if _, err := svc.GetAgentPerformanceStats(ctx, now.Add(-time.Hour), now, 5); err == nil {
-		t.Fatal("expected agent perf error")
-	}
-	if _, err := svc.GetTicketCategoryStats(ctx, now.Add(-time.Hour), now); err == nil {
-		t.Fatal("expected category stats error")
-	}
-	if _, err := svc.GetTicketPriorityStats(ctx, now.Add(-time.Hour), now); err == nil {
-		t.Fatal("expected priority stats error")
-	}
-	if _, err := svc.GetRemoteAssistTicketStats(ctx); err == nil {
-		t.Fatal("expected remote assist error")
-	}
-
-	db2 := newServicesTestDB(t, &models.Customer{})
-	if err := db2.Migrator().DropTable("customers"); err != nil {
-		t.Fatalf("drop customers: %v", err)
-	}
-	svc2 := NewStatisticsService(db2, logrus.New())
-	if _, err := svc2.GetCustomerSourceStats(ctx); err == nil {
-		t.Fatal("expected customer source stats error")
-	}
-}
-
-func TestStatisticsService_WorkerTickerLoop(t *testing.T) {
-	svc := newStatisticsTestService(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		svc.StartDailyStatsWorkerContext(ctx, 5*time.Millisecond)
-		close(done)
-	}()
-	time.Sleep(60 * time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("worker did not stop")
-	}
-}
 
 // ---- router extras ----
 

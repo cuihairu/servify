@@ -84,15 +84,15 @@ type Runtime struct {
 	BusinessMetrics          *svcmetrics.BusinessMetrics
 
 	// Private fields for worker access only
-	statisticsService *services.StatisticsService
-	slaService        *services.SLAService
-	webhookService    *webhookapp.Service
-	qualityService    *qualityapp.QualityService
-	emailAdapter      *emaildelivery.Adapter
-	smtpSender        *emailinfra.GoSMTPSender
-	satisfactionSvc   *services.SatisfactionService
-	transferHandler   *routingdelivery.HandlerServiceAdapter
-	automationModule  *automationapp.Service
+	dailyStatsRunner *analyticsdelivery.DailyStatsRunner
+	slaService       *services.SLAService
+	webhookService   *webhookapp.Service
+	qualityService   *qualityapp.QualityService
+	emailAdapter     *emaildelivery.Adapter
+	smtpSender       *emailinfra.GoSMTPSender
+	satisfactionSvc  *services.SatisfactionService
+	transferHandler  *routingdelivery.HandlerServiceAdapter
+	automationModule *automationapp.Service
 }
 
 type websocketRunner interface {
@@ -163,9 +163,9 @@ func (rt *Runtime) Router() http.Handler {
 	return BuildRouter(rt.RouterDependencies())
 }
 
-// StatisticsServiceForWorker returns the concrete statistics service for worker use.
-func (rt *Runtime) StatisticsServiceForWorker() *services.StatisticsService {
-	return rt.statisticsService
+// StatisticsServiceForWorker returns the daily-stats runner for worker use.
+func (rt *Runtime) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner {
+	return rt.dailyStatsRunner
 }
 
 // SLAServiceForWorker returns the concrete SLA service for worker use.

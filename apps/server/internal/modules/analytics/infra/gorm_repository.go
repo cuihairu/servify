@@ -229,6 +229,44 @@ func (r *GormRepository) GetCustomerSourceStats(ctx context.Context) ([]analytic
 	return stats, nil
 }
 
+// GetRemoteAssistTicketStats 汇总远程协助工单：source/category/tags 任一
+// 标记即计入，按状态分桶并换算解决率、关闭率与平均关闭时长（小时）。
+func (r *GormRepository) GetRemoteAssistTicketStats(ctx context.Context) (*analyticsapp.RemoteAssistTicketStats, error) {
+	stats := &analyticsapp.RemoteAssistTicketStats{}
+	base := applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), ctx).
+		Where("source = ? OR category = ? OR tags LIKE ?", "remote_assist", "remote-assist", "%remote_assist%")
+
+	if err := base.Count(&stats.Total).Error; err != nil {
+		return nil, fmt.Errorf("failed to count remote assist tickets: %w", err)
+	}
+	if err := base.Session(&gorm.Session{}).Where("status = ?", "open").Count(&stats.Open).Error; err != nil {
+		return nil, fmt.Errorf("failed to count open remote assist tickets: %w", err)
+	}
+	if err := base.Session(&gorm.Session{}).Where("status = ?", "resolved").Count(&stats.Resolved).Error; err != nil {
+		return nil, fmt.Errorf("failed to count resolved remote assist tickets: %w", err)
+	}
+	if err := base.Session(&gorm.Session{}).Where("status = ?", "closed").Count(&stats.Closed).Error; err != nil {
+		return nil, fmt.Errorf("failed to count closed remote assist tickets: %w", err)
+	}
+	var avgCloseSeconds float64
+	// 空集时聚合无行：用 gorm Scan（no rows 归零不报错），避免
+	// Row().Scan 的 no rows/NULL 错误让无远程协助工单的环境拿到 500。
+	if err := base.Session(&gorm.Session{}).
+		Where("closed_at IS NOT NULL").
+		Select("COALESCE(" + AvgDurationExpr(r.db, "closed_at", "created_at") + ", 0)").
+		Scan(&avgCloseSeconds).Error; err != nil {
+		return nil, fmt.Errorf("failed to scan remote assist close duration: %w", err)
+	}
+	if stats.Total > 0 {
+		stats.ResolvedRate = float64(stats.Resolved) / float64(stats.Total)
+		stats.ClosedRate = float64(stats.Closed) / float64(stats.Total)
+	}
+	if avgCloseSeconds > 0 {
+		stats.AvgCloseHours = avgCloseSeconds / 3600.0
+	}
+	return stats, nil
+}
+
 func (r *GormRepository) UpdateDailyStats(ctx context.Context, date time.Time) error {
 	date = date.Truncate(24 * time.Hour)
 	nextDay := date.Add(24 * time.Hour)
