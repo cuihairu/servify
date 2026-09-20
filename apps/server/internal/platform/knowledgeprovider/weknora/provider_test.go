@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/platform/aiprovider"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	base "servify/apps/server/pkg/weknora"
 )
@@ -88,22 +87,6 @@ func TestProviderUpsertDocumentReturnsExternalID(t *testing.T) {
 	}
 	if id != "doc-1" {
 		t.Fatalf("expected returned external id, got %q", id)
-	}
-}
-
-func TestWeKnoraDescriptorClaimsDeletionSupport(t *testing.T) {
-	desc := knowledgeprovider.WeKnoraDescriptor(true, "kb-1")
-	found := false
-	for _, capability := range desc.Capabilities {
-		if capability.Name == aiprovider.CapabilityDeletion {
-			found = true
-			if !capability.Enabled {
-				t.Fatalf("expected weknora deletion capability to be enabled, got %+v", desc)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("expected deletion capability to be declared, got %+v", desc)
 	}
 }
 

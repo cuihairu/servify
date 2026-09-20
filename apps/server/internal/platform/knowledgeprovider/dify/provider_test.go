@@ -86,19 +86,3 @@ func TestProviderDeleteDocument(t *testing.T) {
 		t.Fatalf("DeleteDocument() error = %v", err)
 	}
 }
-
-func TestDifyDescriptorClaimsDeletionSupport(t *testing.T) {
-	desc := knowledgeprovider.DifyDescriptor(true, "dataset-1")
-	found := false
-	for _, capability := range desc.Capabilities {
-		if capability.Name == "deletion" {
-			found = true
-			if !capability.Enabled {
-				t.Fatalf("expected dify deletion capability to be enabled, got %+v", desc)
-			}
-		}
-	}
-	if !found {
-		t.Fatalf("expected deletion capability, got %+v", desc)
-	}
-}

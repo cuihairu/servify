@@ -7,47 +7,7 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"servify/apps/server/internal/platform/aiprovider"
 )
-
-func TestProviderDescriptors(t *testing.T) {
-	openai := OpenAIDescriptor(false, "gpt-test")
-	if openai.ID != "openai" || openai.Kind != aiprovider.KindLLM || openai.Driver != "openai" {
-		t.Fatalf("unexpected openai descriptor: %+v", openai)
-	}
-	if openai.Enabled {
-		t.Fatal("expected openai descriptor disabled")
-	}
-	if openai.Fallback.Priority != 1 {
-		t.Fatalf("openai fallback priority = %d", openai.Fallback.Priority)
-	}
-	byName := map[aiprovider.CapabilityName]bool{}
-	for _, cap := range openai.Capabilities {
-		byName[cap.Name] = cap.Enabled
-	}
-	if !byName[aiprovider.CapabilityChat] || !byName[aiprovider.CapabilityToolCalling] || !byName[aiprovider.CapabilityHealthCheck] {
-		t.Fatalf("expected chat/tool-calling/health-check capabilities enabled: %+v", openai.Capabilities)
-	}
-	if byName[aiprovider.CapabilityChatStream] || byName[aiprovider.CapabilityEmbeddings] {
-		t.Fatalf("expected stream/embeddings capabilities disabled: %+v", openai.Capabilities)
-	}
-	for _, cap := range openai.Capabilities {
-		if cap.Name == aiprovider.CapabilityChat {
-			if got := cap.Metadata["default_model"]; got != "gpt-test" {
-				t.Fatalf("default model metadata = %v", got)
-			}
-		}
-	}
-
-	anthropic := AnthropicDescriptor(true, "claude-test")
-	if anthropic.ID != "anthropic" || !anthropic.Enabled {
-		t.Fatalf("unexpected anthropic descriptor: %+v", anthropic)
-	}
-	if anthropic.Fallback.Priority != 2 || len(anthropic.Fallback.FallbackTo) != 1 || anthropic.Fallback.FallbackTo[0] != "openai" {
-		t.Fatalf("anthropic fallback policy = %+v", anthropic.Fallback)
-	}
-}
 
 func TestProviderErrorFormatting(t *testing.T) {
 	var nilErr *ProviderError

@@ -24,8 +24,7 @@ import (
 //
 // 运行期外部知识源故障由编排服务的 circuitBreaker 兜底；启动期选择时的健康
 // 检查与 require 语义见 knowledgeSourceOptions。真正的降级开关是
-// cfg.Fallback.Enabled——aiprovider.FallbackPolicy 声明链是展示性元数据，
-// 不参与编排。
+// cfg.Fallback.Enabled。
 type knowledgeSource struct {
 	driver knowledgeprovider.KnowledgeProvider
 	id     string // dify / weknora / pgvector；空 = 无外部知识源
