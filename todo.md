@@ -652,17 +652,35 @@
       对称校验，生产投递侧 SignatureHeader 活）
     - 门禁：构建/vet/gofmt/boundaries 绿、受影响 22 包 100%、全量门禁
       实测 100.0%
-  - 独立遗留项（2026-09-20 查实）：RedisBus 订阅确认竞态窗口未完全关闭
-    ——`NewRedisBus` 构造时 `go subscribeLoop()` 异步启动，订阅确认
-    （`awaitSubscriptionConfirmed` 轮询 PUBSUB NUMSUB）在 goroutine 内
-    进行；`Publish` 不等待 readyCh 直接 XAdd+pub/sub 通知。构造后立即
-    发布的事件，通知可能先于订阅生效而丢失（stream 写成功但
-    dispatchFromStream 永不被触发 → 本地 handler 永不分发）。5c4da70 修
-    了订阅侧同步确认，`waitUntilReady` 辅助写了但 Publish 侧未接线。
-    实际风险窗口极小（构造到首次发布间隔着装配流程毫秒级延迟 + NUMSUB
-    轮询 5ms），但语义缺口存在。修复方案：Publish 开头接
-    `waitUntilReady`（新增错误分支为行为变更，需适配 10+ 测试构造点并
-    补竞态回归测试），待定刀实施
+  - 第十刀（RedisBus 订阅确认竞态修复——通知丢失窗口闭环，2026-09-20）✅
+    - 根因：go-redis v9 `PubSub.Subscribe` 只写 SUBSCRIBE 命令即返回，
+      不等服务端确认；`Publish` 不等 readyCh 直接 XAdd+pub/sub 通知，
+      构造后立即发布的事件通知可先于订阅生效而丢失（stream 写成功但
+      `dispatchFromStream` 永不被触发 → 本地 handler 永不分发）
+    - 口径升级（超出原登记方案）：确认机制从 PUBSUB NUMSUB 轮询换成
+      `pubsub.Receive` 拿本连接的 `*redis.Subscription` 确认——NUMSUB
+      是 channel 级计数不区分连接，多实例部署下一个 bus 的 ready 可被
+      另一个 bus 的订阅满足、自己的 SUBSCRIBE 仍在途（multi_instance
+      测试注释自证此缺陷），仅接线 waitUntilReady 修不彻底；启动期
+      Redis 短暂不可达保留 5ms ticker 重试（go-redis PubSub 自动重连）
+    - 三处修复（提交 822d788）：确认口径 Receive 化（seam
+      pubSubNumSub→pubSubReceive）；Publish 开头接 waitUntilReady，
+      ctx 到期报 `event bus not ready` 不再静默发布无人分发的事件；
+      Close 显式关闭 readyCh 放行等待者（原 ctx.Done 隐式放行上移）
+    - 测试四件套：gap2 seam 换 Receive 口径覆盖重试路径；新增
+      redis_bus_ready_test.go（未就绪错误分支 + 确定性阻塞锁行为 +
+      NewRedisBus 后立即 Publish 端到端竞态回归）；multi_instance 手动
+      NUMSUB 轮询替换为双实例 waitUntilReady（歧义口径随之消除）；
+      coverage 的 SetError 前补 waitForSubscription（修复后 Publish
+      会等确认，全局 SetError 先于确认生效会让 Publish 死等 Background
+      ctx）
+    - 门禁：eventbus 包 100%（Publish/await/waitUntilReady/Close 全
+      100%）、构建/vet/gofmt/boundaries 绿、全量门禁实测 100.0%、CI
+      35499297519 绿
+  - ~~独立遗留项（2026-09-20 查实）：RedisBus 订阅确认竞态窗口未完全关闭~~
+    已由第十刀闭环（原登记：`go subscribeLoop()` 异步启动、Publish 侧
+    未接线 `waitUntilReady`，5c4da70 修了订阅侧同步确认但发布侧缺口仍在；
+    实施时口径升级为 Receive 本连接确认，见上条）
 
 ### [x] P2-5 安全治理继续收口到首批企业交付标准
 
@@ -918,7 +936,7 @@
 
 - 当前优先恢复任务：按用户指示推进下一项。P3-2 已于 2026-09-19 收官（18 刀，CI 35457474387 绿）；P3-4 已于 2026-09-19 完成（刀 19，提交 af58235，CI 35461039568 绿）；**P3-3 已于 2026-09-19 完成（刀 20，提交 34b66a9，CI 35462743342 绿，eventbus inmemory 生产拒启 + demo-sdk 生产不暴露，完成记录见 P3-3 条目）；P3 段（P3-1/2/3/4）至此全部收官**；**P1-6 已于 2026-09-19 完成（刀 21，提交 9d801a7，CI 35465422927 绿，bootstrap.RunStandalone 落地唯一编排根 + 双入口薄壳化 + seam 归一 ApplyFault，完成记录见 P1-6 条目）——todo.md 全部可推进任务至此收官**：剩余两项均阻塞于外部条件，本地不可推进（P1-1 仅剩真实 Dify/WeKnora 双路径运行证据，等外部环境与凭证；P2-0 RQ-5 埋点等产品口径定稿后启动）。后续按 todo 执行顺序继续。P3-1 已完成（2026-09-18，e6928a6）。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
 - 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
-- 附注（2026-09-20）：P2-4 第九刀完成（全仓死代码普查 A 类，提交 88d633a，净 -1107 行——deadcode 四入口可达性分析定位「收口刀孤儿」，B 类半成品清单与 RedisBus 竞态查实另行登记，详见第九刀条目）。同日第八刀完成（assist 模块死链卫生扫描，提交 ac9ef2c，CI 35489519876 绿，净 -35 行——刀 24 方法论对单模块 41 个导出符号的首次全面应用，唯一死链 Repository.GetAnnotation 清除）。同日第七刀完成（FallbackPolicy/Matrix 死元数据链清除，提交 b0e4bc5，CI 35482372209 绿，净 -439 行，第六刀遗留登记的独立遗留项就此执行完毕）。同日第六刀完成（知识源选择门面，提交 99a42d2，CI 35479481212 绿）——启动/请求级双份选择链经 `selectKnowledgeSource` 合一，死存储 weKnoraClient/knowledgeBaseID 清除（构造 7 参缩 5 参），AIAssembly 收敛为统一视图五字段，净 -163 行。同日刀 22 验收脚本 flaky 根治（提交 1a0a96c，CI 35478211582 绿，gamification 验收 require_2xx 硬校验 + leaderboard 轮询 + 失败 dump）。另 P2-4 第五刀完成于 2026-09-19（known-gaps 清零，提交 871119c，CI 35476156786 绿）——`worker_job_duration_seconds` 经 app/worker 统一 `periodicJob` helper + 每轮 `TrackJob` 接线，10 个 worker 的重复 ticker 循环收敛为一处；`worker_jobs_total` 口径升级为 job 轮次（单轮业务失败计入 failure，WorkerJobFailures 告警真实生效）；Statistics/SLA 循环从 service 沉底改为 worker 侧驱动单轮方法（SLAMonitor 窄接口改单轮口径）；known-gaps.md 清零、dashboard 新增 duration p99 面板、runbook 三处同步。另 P1-6 已于 2026-09-19 收官（刀 21，提交 9d801a7，RunStandalone 唯一编排根）。至此仓库无未接线指标、无未完成可推进任务（剩余仅外部阻塞两项）
+- 附注（2026-09-20）：P2-4 第十刀完成（RedisBus 订阅确认竞态修复，提交 822d788，CI 35499297519 绿——Publish 前置 waitUntilReady 门控 + 确认口径升级 pubsub.Receive 本连接确认替代 NUMSUB channel 级计数（多实例歧义消除），第九刀查实的独立遗留项就此闭环，详见第十刀条目）。同日第九刀完成（全仓死代码普查 A 类，提交 88d633a，净 -1107 行——deadcode 四入口可达性分析定位「收口刀孤儿」，B 类半成品清单另行登记，详见第九刀条目）。同日第八刀完成（assist 模块死链卫生扫描，提交 ac9ef2c，CI 35489519876 绿，净 -35 行——刀 24 方法论对单模块 41 个导出符号的首次全面应用，唯一死链 Repository.GetAnnotation 清除）。同日第七刀完成（FallbackPolicy/Matrix 死元数据链清除，提交 b0e4bc5，CI 35482372209 绿，净 -439 行，第六刀遗留登记的独立遗留项就此执行完毕）。同日第六刀完成（知识源选择门面，提交 99a42d2，CI 35479481212 绿）——启动/请求级双份选择链经 `selectKnowledgeSource` 合一，死存储 weKnoraClient/knowledgeBaseID 清除（构造 7 参缩 5 参），AIAssembly 收敛为统一视图五字段，净 -163 行。同日刀 22 验收脚本 flaky 根治（提交 1a0a96c，CI 35478211582 绿，gamification 验收 require_2xx 硬校验 + leaderboard 轮询 + 失败 dump）。另 P2-4 第五刀完成于 2026-09-19（known-gaps 清零，提交 871119c，CI 35476156786 绿）——`worker_job_duration_seconds` 经 app/worker 统一 `periodicJob` helper + 每轮 `TrackJob` 接线，10 个 worker 的重复 ticker 循环收敛为一处；`worker_jobs_total` 口径升级为 job 轮次（单轮业务失败计入 failure，WorkerJobFailures 告警真实生效）；Statistics/SLA 循环从 service 沉底改为 worker 侧驱动单轮方法（SLAMonitor 窄接口改单轮口径）；known-gaps.md 清零、dashboard 新增 duration p99 面板、runbook 三处同步。另 P1-6 已于 2026-09-19 收官（刀 21，提交 9d801a7，RunStandalone 唯一编排根）。至此仓库无未接线指标、无未完成可推进任务（剩余仅外部阻塞两项）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）
