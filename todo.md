@@ -751,6 +751,18 @@
     持有，外部无引用入口）——数据写入即沉底，重启即失。决策项待产品/运维
     口径：接线读出口（GET 端点或 prometheus 桥）vs 删除端点与聚合器 vs
     其他消费语义（转发上游等）；接线状态无争议，非删除刀候选
+  - 独立遗留项（2026-09-20 登记，产品口径）：知识库选型决策——用户确认
+    「Dify 不能严格算知识库，当初把 dify 作为知识库插件定位不合适」。调研
+    文档已产出（docs/KNOWLEDGE_BASE_LANDSCAPE.md：RAGFlow 首选候选 /
+    MaxKB 次选 / Dify 定位降级为「编排平台集成（dataset 兼容保留）」/
+    WeKnora+RAGFlow 双路线建议），6 处「Dify 优先」文档口径已同步修正为
+    现状描述 + 定位澄清（WEKNORA_INTEGRATION/ARCHITECTURE/index/README/
+    local-development/configuration-scopes）。决策项待产品确认：
+    ① RAGFlow driver 是否立项（适配路径见 KNOWLEDGE_BASE_LANDSCAPE §6）
+    ② selectKnowledgeSource 选择链是否调整 dify 优先现状（行为变更，牵动
+    启动期健康检查降级语义与 request 级构造路径，需回归 server_extra_test
+    五子路径行为契约）③ 新客户交付默认知识库口径（WeKnora/RAGFlow/pgvector）
+    注：文档层已完成的定位澄清不属行为变更；此处仅登记代码侧待决策项
 
 ### [x] P2-5 安全治理继续收口到首批企业交付标准
 

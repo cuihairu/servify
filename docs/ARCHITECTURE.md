@@ -23,7 +23,7 @@ Servify 当前阶段保持为模块化单体，围绕统一 runtime、AI 编排�
 - [实施计划](/implementation/)
 - [版本发布策略](/release-versioning)
 - [测试金字塔](/testing-pyramid)
-- [外部知识库集成：Dify 优先，WeKnora 兼容](/WEKNORA_INTEGRATION)
+- [外部知识库集成：知识库 provider 路径（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）](/WEKNORA_INTEGRATION)
 
 ## 站内约定
 

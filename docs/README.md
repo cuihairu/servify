@@ -69,7 +69,7 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 - [实施 Backlog 索引](/implementation/)
 - [模块迁移计划](/implementation/10-service-to-module-migration)
 - [模块迁移完成度](/implementation/10-migration-scorecard)
-- [外部知识库集成指南：Dify 优先，WeKnora 兼容](/WEKNORA_INTEGRATION)
+- [外部知识库集成：知识库 provider 路径（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）](/WEKNORA_INTEGRATION)
 - [v0.1.0 Release Notes](/release-notes-v0.1.0)
 - [版本发布策略](/release-versioning)
 - [测试金字塔](/testing-pyramid)

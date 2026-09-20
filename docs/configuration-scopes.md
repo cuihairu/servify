@@ -21,7 +21,7 @@
 2. 系统启动配置文件
    - 入口：`config.yml`、`config.weknora.yml`
    - 装载：`apps/server/internal/app/bootstrap/config.go`
-   - 用途：部署级基础设施和系统默认策略；其中 `config.weknora.yml` 主要用于 WeKnora compatibility 回归，默认知识库 provider 仍应以 Dify 配置为主
+   - 用途：部署级基础设施和系统默认策略；其中 `config.weknora.yml` 主要用于 WeKnora compatibility 回归；知识库 provider 现状默认走 Dify dataset 兼容路径，正统知识库方向以 WeKnora 为主（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）
 
 3. 环境变量覆盖
    - 入口：Viper `AutomaticEnv()`

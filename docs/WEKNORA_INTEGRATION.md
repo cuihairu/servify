@@ -1,8 +1,10 @@
-# 外部知识库集成指南：Dify 优先，WeKnora 兼容
+# 外部知识库集成指南：知识库 provider 路径（Dify dataset 兼容 + WeKnora）
 
 ## 🎯 项目概述
 
-本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。当前推荐路径是 `Dify` 作为默认和优先的知识库 provider，`WeKnora` 保留为兼容与后备 provider，用于已有部署、协议回归和 fallback 验证。
+本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。`Dify` 是当前代码选择链中的默认 provider（历史兼容路径），`WeKnora` 是正统知识库方向的主推 provider，用于已有部署、协议回归和 fallback 验证。
+
+> **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（WeKnora / RAGFlow 双路径建议、Dify 定位降级）见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
 文档名保留 `WEKNORA_INTEGRATION` 主要是为了兼容历史链接；内容语义以通用 knowledge provider 为主。
 
 ## 📋 集成计划完成情况
