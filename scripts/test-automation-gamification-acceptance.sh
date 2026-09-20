@@ -66,6 +66,21 @@ request_capture() {
   RESPONSE_RAW="$(cat "$EVIDENCE_DIR/$evidence_name.txt")"
 }
 
+# require_2xx：样本链关键请求的硬校验。CI 负载下 curl --max-time 5 可能
+# 超时（status 为空）——若静默传导，数据缺失会伪装成 LEADERBOARD_RECONCILED
+# 失败，无法定位；这里在源头立即失败并留档。
+require_2xx() {
+  local evidence_name=$1
+  case "$RESPONSE_STATUS" in
+    2??) ;;
+    *)
+      append_summary "request_failed=$evidence_name status=${RESPONSE_STATUS:-none}"
+      echo "❌ 请求失败: $evidence_name (status=${RESPONSE_STATUS:-none})，evidence: $EVIDENCE_DIR/$evidence_name.txt" >&2
+      exit 1
+      ;;
+  esac
+}
+
 # json_extract <python表达式>：在最近一次响应 JSON 上求值，表达式里 `d` 为根对象。
 json_extract() {
   printf '%s' "$RESPONSE_RAW" | python3 -c "
@@ -477,15 +492,19 @@ resolve_ticket_and_csat() {
   request_capture "ticket-$ticket_name-create" -X POST -H "$AUTH" -H "Content-Type: application/json" \
     -d '{"title":"st7-lb-'"$ticket_name"'","description":"leaderboard sample","category":"technical","priority":"normal","customer_id":'"$customer_id"'}' \
     "$TICKETS_BASE"
+  require_2xx "ticket-$ticket_name-create"
   local tid
   tid="$(json_extract "d.get('id')")"
   request_capture "ticket-$ticket_name-assign" -X POST -H "$AUTH" -H "Content-Type: application/json" \
     -d '{"agent_id":'"$agent_id"'}' "$TICKETS_BASE/$tid/assign"
+  require_2xx "ticket-$ticket_name-assign"
   request_capture "ticket-$ticket_name-resolve" -X PUT -H "$AUTH" -H "Content-Type: application/json" \
     -d '{"status":"resolved"}' "$TICKETS_BASE/$tid"
+  require_2xx "ticket-$ticket_name-resolve"
   request_capture "satisfaction-$ticket_name-create" -X POST -H "$AUTH" -H "Content-Type: application/json" \
     -d '{"ticket_id":'"$tid"',"customer_id":'"$customer_id"',"agent_id":'"$agent_id"',"rating":'"$rating"',"comment":"st7","category":"service_quality"}' \
     "$SAT_BASE"
+  require_2xx "satisfaction-$ticket_name-create"
   echo "$tid"
 }
 
@@ -497,30 +516,46 @@ done
 LB_B1_TICKET="$(resolve_ticket_and_csat "b1" "$AGENT_B_ID" "$CUSTOMER_B_ID" 4)"
 append_summary "lb_ticket_a1:$LB_A1_TICKETS lb_ticket_b1:$LB_B1_TICKET"
 
-# leaderboard days=7 的窗口上界是秒级截断的 now：与查询同秒落库的
+# leaderboard days=7 的窗口上界是秒级截断的 server now：与查询同秒落库的
 # resolved_at/created_at 会因小数部分被边界比较排除（真实边界行为）。
-# 验收在数据落定后错开 2 秒再查询。
-sleep 2
+# 验收先错开 2 秒再查询；CI 负载下若首次不对账，按 1s 间隔重查（最多 10 次），
+# 吸收查询超时与落库可见性延迟。判定经 LB_NOW_OK 传递（函数返回值会被 set -e 处理）。
+leaderboard_reconciled_now() {
+  request_capture "leaderboard-days" -H "$AUTH" --get "$LB_BASE" \
+    --data-urlencode "days=7" --data-urlencode "limit=10"
+  LB_COUNT="$(json_extract "len(d.get('entries', []))")"
+  LB_A1_RANK="$(json_extract "next((e.get('rank') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
+  LB_A1_RESOLVED="$(json_extract "next((e.get('resolved_tickets') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
+  LB_A1_SCORE="$(json_extract "next((e.get('score') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
+  LB_A1_CSAT_COUNT="$(json_extract "next((e.get('csat_count') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
+  LB_A1_BADGES="$(json_extract "len(next((e.get('badges') or [] for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), []))")"
+  LB_B1_SCORE="$(json_extract "next((e.get('score') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_B_ID), -1)")"
+  LB_RANKS_ASC="$(json_extract "[e.get('rank') for e in d.get('entries', [])] == sorted(e.get('rank') for e in d.get('entries', []))")"
+  # 排行对账：A1 = 3 resolved + CSAT 5 分×3（count>=3 权重 20）→ 3*10+5*20=130；
+  # B1 = 1 resolved + CSAT 4 分×1（count<3 权重 10）→ 1*10+4*10=50。
+  LB_NOW_OK=false
+  if [ "$RESPONSE_STATUS" = "200" ] && [ "${LB_COUNT:--1}" = "2" ] && [ "${LB_A1_RANK:--1}" = "1" ] \
+    && [ "${LB_A1_RESOLVED:--1}" = "3" ] && [ "${LB_A1_CSAT_COUNT:--1}" = "3" ] \
+    && [ "${LB_A1_SCORE:--1}" = "130" ] && [ "${LB_B1_SCORE:--1}" = "50" ] \
+    && [ "${LB_A1_BADGES:--1}" -ge 1 ] 2>/dev/null && [ "$LB_RANKS_ASC" = "True" ]; then
+    LB_NOW_OK=true
+  fi
+  return 0
+}
 
-# 排行对账：A1 = 3 resolved + CSAT 5 分×3（count>=3 权重 20）→ 3*10+5*20=130；
-# B1 = 1 resolved + CSAT 4 分×1（count<3 权重 10）→ 1*10+4*10=50。
-request_capture "leaderboard-days" -H "$AUTH" --get "$LB_BASE" \
-  --data-urlencode "days=7" --data-urlencode "limit=10"
-LB_COUNT="$(json_extract "len(d.get('entries', []))")"
-LB_A1_RANK="$(json_extract "next((e.get('rank') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
-LB_A1_RESOLVED="$(json_extract "next((e.get('resolved_tickets') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
-LB_A1_SCORE="$(json_extract "next((e.get('score') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
-LB_A1_CSAT_COUNT="$(json_extract "next((e.get('csat_count') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), -1)")"
-LB_A1_BADGES="$(json_extract "len(next((e.get('badges') or [] for e in d.get('entries', []) if e.get('agent_id') == $AGENT_A_ID), []))")"
-LB_B1_SCORE="$(json_extract "next((e.get('score') for e in d.get('entries', []) if e.get('agent_id') == $AGENT_B_ID), -1)")"
-LB_RANKS_ASC="$(json_extract "[e.get('rank') for e in d.get('entries', [])] == sorted(e.get('rank') for e in d.get('entries', []))")"
-if [ "$RESPONSE_STATUS" = "200" ] && [ "${LB_COUNT:--1}" = "2" ] && [ "${LB_A1_RANK:--1}" = "1" ] \
-  && [ "${LB_A1_RESOLVED:--1}" = "3" ] && [ "${LB_A1_CSAT_COUNT:--1}" = "3" ] \
-  && [ "${LB_A1_SCORE:--1}" = "130" ] && [ "${LB_B1_SCORE:--1}" = "50" ] \
-  && [ "${LB_A1_BADGES:--1}" -ge 1 ] 2>/dev/null && [ "$LB_RANKS_ASC" = "True" ]; then
+sleep 2
+LB_ATTEMPTS=0
+leaderboard_reconciled_now
+until [ "$LB_NOW_OK" = "true" ]; do
+  LB_ATTEMPTS=$((LB_ATTEMPTS+1))
+  if [ "$LB_ATTEMPTS" -ge 10 ]; then break; fi
+  sleep 1
+  leaderboard_reconciled_now
+done
+if [ "$LB_NOW_OK" = "true" ]; then
   LEADERBOARD_RECONCILED=true
 fi
-append_summary "lb_count=$LB_COUNT a1_rank=$LB_A1_RANK a1_resolved=$LB_A1_RESOLVED a1_score=$LB_A1_SCORE b1_score=$LB_B1_SCORE a1_badges=$LB_A1_BADGES"
+append_summary "lb_attempts=$LB_ATTEMPTS lb_count=$LB_COUNT a1_rank=$LB_A1_RANK a1_resolved=$LB_A1_RESOLVED a1_score=$LB_A1_SCORE b1_score=$LB_B1_SCORE a1_badges=$LB_A1_BADGES"
 append_summary "leaderboard_reconciled_with_scores=$LEADERBOARD_RECONCILED"
 
 LB_START="$(date -d '1 day ago' +%Y-%m-%d)"
@@ -573,6 +608,8 @@ for check in READY_OK UNAUTH_AUTOMATIONS_REJECTED AGENTS_PREPARED \
 done
 if [ "$FAILED" = "true" ]; then
   append_summary "overall_status=failed"
+  echo "----- evidence summary（诊断用）-----" >&2
+  cat "$EVIDENCE_DIR/summary.txt" >&2
   echo "❌ Automation/Gamification acceptance 未通过" >&2
   exit 1
 fi
