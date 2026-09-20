@@ -636,17 +636,16 @@
       1、knowledge 1）；pgvector search.go 7 个旧实现（生产走
       CosineDistance/EuclideanDistance）+ chunking CountTokens/isChinese；
       配套测试/断言同步清理（活函数断言保留），受影响 22 包 100% 保持
-    - B 类登记（半成品/预留 API，删除 vs 接线需产品决策，本刀不动）：
-      未接线 handler（UploadHandler 文件上传/PortalConfigHandler/
-      HealthHandler /ready 双份实现之一/MetricsAggregator.Snapshot/
-      WithSessionRiskPolicyConfig 两处/sliceAuditLogsPage 等）；权限中间
-      件双份（middleware 包 vs platform/auth/gin_middleware 同名函数，需
-      决策留哪份）；observability/errors 语义分类体系（errors_total 走
-      StatusMiddleware 状态码分类，此套未接线）；telemetry context 透传
-      （请求链路可观测半成品）；platform/auth scope/subject（tenant 体系
-      预留）；平台适配半成品（Telegram/WeChat adapter、OIDC provider、
-      SIP DefaultAdapter、NewWebMessageEvent）；RedisBus.waitUntilReady
-      （见下条）
+    - B 类登记（半成品/预留 API，2026-09-20 刀 28 复核处置，原登记保留作考古）：
+      复核翻案 10 项（原判定过时，实际已接线）：PortalConfigHandler
+      （/portal/config 活路由）、MetricsAggregator（/api/v1/metrics/ingest
+      活端点；Snapshot 无读出口属产品黑洞非死代码）、health /ready 与权限
+      中间件非双份（后者是门面+委托，middleware 注释自证 delegates to
+      platform/auth）、observability/errors（StatusMiddleware+ErrorMetrics
+      已接线）、telemetry（RequestIDMiddleware 已接线）、scope 骨架
+      （ContextWithScope 多模块消费）、OIDC（handler→LoginWithOIDC 活链）、
+      channel 包（sip/email/outbound 消费）、RedisBus.waitUntilReady（刀 27
+      闭环）；确认死链 15 处已删（见第十一刀）
     - 有意保留（非死代码）：bootstrap.ApplyFault（P1-6 seam 归一产物）、
       voice InMemory 三件套（测试 repo）、webhook VerifySignature（协议
       对称校验，生产投递侧 SignatureHeader 活）
@@ -677,6 +676,31 @@
     - 门禁：eventbus 包 100%（Publish/await/waitUntilReady/Close 全
       100%）、构建/vet/gofmt/boundaries 绿、全量门禁实测 100.0%、CI
       35499297519 绿
+  - 第十一刀（B 类半成品清单复核——15 处死链清除 + 10 项翻案，2026-09-20）✅
+    - 方法：对刀 26 登记的 B 类清单逐项重查生产消费面（grep 调用链 +
+      路由注册 + 注释自证），登记仅隔一天即三分之一翻案——「待产品决策」
+      清单也会过期，死代码判定要跟着接线状态走，不能一次定终身
+    - 翻案 10 项（详见上条 B 类登记更新）：多处「未接线」实际已有活路由/
+      活链路；权限中间件与 health /ready 非双份；errors/telemetry/scope/
+      OIDC/channel 均已接线
+    - 死链 15 处已清（提交 3090a27，净 -1682 行，33 文件）：
+      UploadHandler 全套（双份 handler 死一份，GetUploadStatus 硬编码
+      mock；生产走 FileUploadHandler）、WithSessionRiskPolicyConfig ×2
+      （生产走 resolver 路径）、sliceAuditLogsPage、NewPortalConfigHandler
+      薄委托、middleware 门面 RequirePermissionsAll/Any/RolesAny +
+      platform/auth 实现 RequirePermissionsAll/RolesAny（Any 实现被
+      RequireResourcePermission 内部用故保留）、RateLimitMiddleware 双份
+      死一份、Subject/Scope 读取 API 链（scope.go 整文件；ctx 写入方活
+      读取方从未接线）、SIPAdapter+DefaultAdapter（接口零装配）、
+      web_adapter.go 整文件、ReservedAdapterNames（注释自证 future，
+      展示性元数据）、Telegram/WeChatAdapter（注释自证「示例」）
+    - 测试意图承接：上传行为保护由 FileUploadHandler 测试继续承担；
+      sessionRiskPolicyFromConfig 全字段映射与 getGrantedRoles 各分支改
+      直测（原经死入口间接覆盖，删除后 100% 门禁暴露——跨包合并覆盖会
+      掩盖包内缺口，删测试后必须单包复测）；buildMultipart helper 迁至
+      在用测试文件
+    - 门禁：构建/vet/gofmt/boundaries 绿、受影响包 100%、全量门禁实测
+      100.0%、CI 35510668953 绿
   - ~~独立遗留项（2026-09-20 查实）：RedisBus 订阅确认竞态窗口未完全关闭~~
     已由第十刀闭环（原登记：`go subscribeLoop()` 异步启动、Publish 侧
     未接线 `waitUntilReady`，5c4da70 修了订阅侧同步确认但发布侧缺口仍在；
@@ -936,7 +960,7 @@
 
 - 当前优先恢复任务：按用户指示推进下一项。P3-2 已于 2026-09-19 收官（18 刀，CI 35457474387 绿）；P3-4 已于 2026-09-19 完成（刀 19，提交 af58235，CI 35461039568 绿）；**P3-3 已于 2026-09-19 完成（刀 20，提交 34b66a9，CI 35462743342 绿，eventbus inmemory 生产拒启 + demo-sdk 生产不暴露，完成记录见 P3-3 条目）；P3 段（P3-1/2/3/4）至此全部收官**；**P1-6 已于 2026-09-19 完成（刀 21，提交 9d801a7，CI 35465422927 绿，bootstrap.RunStandalone 落地唯一编排根 + 双入口薄壳化 + seam 归一 ApplyFault，完成记录见 P1-6 条目）——todo.md 全部可推进任务至此收官**：剩余两项均阻塞于外部条件，本地不可推进（P1-1 仅剩真实 Dify/WeKnora 双路径运行证据，等外部环境与凭证；P2-0 RQ-5 埋点等产品口径定稿后启动）。后续按 todo 执行顺序继续。P3-1 已完成（2026-09-18，e6928a6）。P2-6 八刀全部完成（第一刀会话转接 §7 七项、第二刀满意度 §8 九项、第三刀客服/客户管理 §4+§5 五项、第四刀统计/排班 §10 六项、第五刀宏/集成/自定义字段 §9 三项、第六刀远程协助+辅助建议（§2 新增远程协助行 + §11 辅助建议行，`make remote-assist-acceptance` 入库，含 WS 真实访客会话/协助发起列表详情/标注增删查升序对账/带录制结束/未认证与 GET-POST 相似工单对账 20 项检查）、第七刀自动化三行+激励排行（§11：触发器 CRUD/运行记录/批量运行 + gamification leaderboard，`make automation-gamification-acceptance` 入库 21 项检查，含事件名归一化 ticket_updated→ticket.updated、三负例 400 精确文本、dry-run 匹配无副作用、真实运行落标签 st7-auto-hit、runs 审计 success 对账、排行榜分数精确对账 130/50；已知边界：days 窗上界秒级截断，同秒落库样本被边界比较排除，验收脚本以 sleep 2 错开）、第八刀 pgvector 自建知识库真实验收（runner-docker pg15 真库 + mock embedding/LLM，16 项 checks，详见上方进展记录；本刀修复 pgvector 装配缺口与 golang-migrate 关主池两个沉默缺陷），均从未验转通过，`make session-transfer-acceptance` / `make satisfaction-acceptance` / `make customer-agent-acceptance` / `make statistics-acceptance` / `make macro-integration-customfield-acceptance` / `make remote-assist-acceptance` / `make automation-gamification-acceptance` / `make pgvector-acceptance` 入库）；P2-6 验收项至此全部闭环，无剩余未验分散项；P2-7 SDK 与多端 contract 稳定性治理已于 2026-09-18 完成（SDK 示例真实可构建 + surface governance 纳入 CI，提交 efa24a2）；P2-8 性能压测基线已完成（perfbench 四场景 + smoke/full 两档 + full 容量基线入库 + CI 驱动测试 + docs/perf-baseline.md + checklist §13，详见上方进展记录）；另:第六刀验收发现的远程协助删除不存在标注返回 500 缺陷已于 2026-09-18 修复（新增 ErrAssistAnnotationNotFound 经 assistErrorStatus 映射 404，第六刀验收脚本断言 500→404 并重新真实留证复验通过）
 - 原因：P2-0 核心链路已收口（RQ-5 埋点等产品口径定稿后启动）；P2-1 完成“文档、部署说明、运行时行为一致”三收口；P2-2 完成“配置加载、校验、模板、文档完全对齐”四收口；P2-3 完成“可迁移→可恢复”（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据 + 文档）；P2-4 完成 AI/provider 失败分类、业务埋点、异步观测、errors_total 统一出口与 SLO burn rate 四刀；P2-5 四刀全部完成（2026-09-18 收口）——安全响应头/body 上限/CORS 多 origin 回显/WS Origin 白名单/uploads 禁目录列举 + auth 面含失败审计 + 登录风险执行 + refresh 家族吊销 + scoped config 审批回滚链路真实验收（双管理员互审、职责分离 403、快照恢复、跨人验证、history 与审计对账），四份真实验收入库。`P1-1` 仅剩真实 Dify/WeKnora 双路径运行证据（等外部环境与凭证）
-- 附注（2026-09-20）：P2-4 第十刀完成（RedisBus 订阅确认竞态修复，提交 822d788，CI 35499297519 绿——Publish 前置 waitUntilReady 门控 + 确认口径升级 pubsub.Receive 本连接确认替代 NUMSUB channel 级计数（多实例歧义消除），第九刀查实的独立遗留项就此闭环，详见第十刀条目）。同日 P0-1～P0-5 与 P1-1 标题标记对齐翻转（P0-1~P0-5 内部状态早已 `[x]` 且完成证据齐全，标题 `[!]` 为 2026-09-15 翻转 P0-6/7/8 时的遗漏；P1-1 对齐为 `[-]` 外部阻塞进行中），至此 todo.md 无 `[!]` 标记。同日第九刀完成（全仓死代码普查 A 类，提交 88d633a，净 -1107 行——deadcode 四入口可达性分析定位「收口刀孤儿」，B 类半成品清单另行登记，详见第九刀条目）。同日第八刀完成（assist 模块死链卫生扫描，提交 ac9ef2c，CI 35489519876 绿，净 -35 行——刀 24 方法论对单模块 41 个导出符号的首次全面应用，唯一死链 Repository.GetAnnotation 清除）。同日第七刀完成（FallbackPolicy/Matrix 死元数据链清除，提交 b0e4bc5，CI 35482372209 绿，净 -439 行，第六刀遗留登记的独立遗留项就此执行完毕）。同日第六刀完成（知识源选择门面，提交 99a42d2，CI 35479481212 绿）——启动/请求级双份选择链经 `selectKnowledgeSource` 合一，死存储 weKnoraClient/knowledgeBaseID 清除（构造 7 参缩 5 参），AIAssembly 收敛为统一视图五字段，净 -163 行。同日刀 22 验收脚本 flaky 根治（提交 1a0a96c，CI 35478211582 绿，gamification 验收 require_2xx 硬校验 + leaderboard 轮询 + 失败 dump）。另 P2-4 第五刀完成于 2026-09-19（known-gaps 清零，提交 871119c，CI 35476156786 绿）——`worker_job_duration_seconds` 经 app/worker 统一 `periodicJob` helper + 每轮 `TrackJob` 接线，10 个 worker 的重复 ticker 循环收敛为一处；`worker_jobs_total` 口径升级为 job 轮次（单轮业务失败计入 failure，WorkerJobFailures 告警真实生效）；Statistics/SLA 循环从 service 沉底改为 worker 侧驱动单轮方法（SLAMonitor 窄接口改单轮口径）；known-gaps.md 清零、dashboard 新增 duration p99 面板、runbook 三处同步。另 P1-6 已于 2026-09-19 收官（刀 21，提交 9d801a7，RunStandalone 唯一编排根）。至此仓库无未接线指标、无未完成可推进任务（剩余仅外部阻塞两项）
+- 附注（2026-09-20）：P2-4 第十一刀完成（B 类半成品清单复核，提交 3090a27，CI 35510668953 绿，净 -1682 行——15 处死链清除 + 10 项翻案，B 类清单就此清零，详见第十一刀条目）。同日第十刀完成（RedisBus 订阅确认竞态修复，提交 822d788，CI 35499297519 绿——Publish 前置 waitUntilReady 门控 + 确认口径升级 pubsub.Receive 本连接确认替代 NUMSUB channel 级计数（多实例歧义消除），第九刀查实的独立遗留项就此闭环，详见第十刀条目）。同日 P0-1～P0-5 与 P1-1 标题标记对齐翻转（P0-1~P0-5 内部状态早已 `[x]` 且完成证据齐全，标题 `[!]` 为 2026-09-15 翻转 P0-6/7/8 时的遗漏；P1-1 对齐为 `[-]` 外部阻塞进行中），至此 todo.md 无 `[!]` 标记。同日第九刀完成（全仓死代码普查 A 类，提交 88d633a，净 -1107 行——deadcode 四入口可达性分析定位「收口刀孤儿」，B 类半成品清单另行登记，详见第九刀条目）。同日第八刀完成（assist 模块死链卫生扫描，提交 ac9ef2c，CI 35489519876 绿，净 -35 行——刀 24 方法论对单模块 41 个导出符号的首次全面应用，唯一死链 Repository.GetAnnotation 清除）。同日第七刀完成（FallbackPolicy/Matrix 死元数据链清除，提交 b0e4bc5，CI 35482372209 绿，净 -439 行，第六刀遗留登记的独立遗留项就此执行完毕）。同日第六刀完成（知识源选择门面，提交 99a42d2，CI 35479481212 绿）——启动/请求级双份选择链经 `selectKnowledgeSource` 合一，死存储 weKnoraClient/knowledgeBaseID 清除（构造 7 参缩 5 参），AIAssembly 收敛为统一视图五字段，净 -163 行。同日刀 22 验收脚本 flaky 根治（提交 1a0a96c，CI 35478211582 绿，gamification 验收 require_2xx 硬校验 + leaderboard 轮询 + 失败 dump）。另 P2-4 第五刀完成于 2026-09-19（known-gaps 清零，提交 871119c，CI 35476156786 绿）——`worker_job_duration_seconds` 经 app/worker 统一 `periodicJob` helper + 每轮 `TrackJob` 接线，10 个 worker 的重复 ticker 循环收敛为一处；`worker_jobs_total` 口径升级为 job 轮次（单轮业务失败计入 failure，WorkerJobFailures 告警真实生效）；Statistics/SLA 循环从 service 沉底改为 worker 侧驱动单轮方法（SLAMonitor 窄接口改单轮口径）；known-gaps.md 清零、dashboard 新增 duration p99 面板、runbook 三处同步。另 P1-6 已于 2026-09-19 收官（刀 21，提交 9d801a7，RunStandalone 唯一编排根）。至此仓库无未接线指标、无未完成可推进任务（剩余仅外部阻塞两项）
 - 附注（2026-09-17）：P2-4 第四刀完成——`errors_total` 经 HTTP 层 StatusMiddleware 统一出口接线（5xx 分类打点，2xx/4xx 不计），SLO 首批定稿 availability 99.9% / latency 99%<2s，三条多窗 burn rate 告警 + SLO Error Budget 面板 + runbook 处置段，一致性门禁覆盖；known-gaps 只剩 worker_job_duration_seconds（需周期 job 级 TrackJob，独立遗留项）
 - 附注（2026-09-14）：`P1-3` / `P1-5` 已真实运行闭环——`make workspace-acceptance` / `make ticket-acceptance` 在 sqlite 真实服务上跑通并入库 manifest（本机无 Postgres/Redis/Docker；server 原生支持 `DB_DRIVER=sqlite`，Redis 仅 `event_bus.provider=redis` 时必需）
 - 附注（2026-09-15）：`P1-4` 已整体闭环——`make security-acceptance`（security-check 真实配置留证）与 `make runtime-baseline-acceptance`（build / ready / metrics / platforms 真实运行留证）均已入库 manifest；顺带修复 12 处 `sh` 调用 bash 脚本导致 `make security-check` / `release-check` / `local-check` 在 Linux 本机无法执行的问题。`P1-1` 的 fallback 三类证据（日志 / 响应 / 状态）也已本地真实留证闭环（`make ai-fallback-acceptance`，manifest 已入库）。同日：`P1-8` 闭环（乱码存量经复扫已清零，新增 `make text-encoding-check` 仓库级编码门禁并挂入 CI script-checks）；`P0-6` / `P0-7` / `P0-8` / `P1-2` 标题标记与已完成的条目状态对齐翻转为 `[x]`。P1 序列只剩 `P1-1` 验收标准第一条——真实文档上传 / 同步 / 查询命中的 Dify/WeKnora 双路径运行证据（等外部环境）
