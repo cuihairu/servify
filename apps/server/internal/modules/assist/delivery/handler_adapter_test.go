@@ -85,15 +85,6 @@ func (m *adapterRepo) CreateAnnotation(_ context.Context, annotation *assistdoma
 	return nil
 }
 
-func (m *adapterRepo) GetAnnotation(_ context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error) {
-	annotation, ok := m.annotations[id]
-	if !ok {
-		return nil, errors.New("record not found")
-	}
-	cp := *annotation
-	return &cp, nil
-}
-
 func (m *adapterRepo) DeleteAnnotation(_ context.Context, id uint) error {
 	if _, ok := m.annotations[id]; !ok {
 		return errors.New("record not found")

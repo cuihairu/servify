@@ -3,30 +3,25 @@ package infra
 import (
 	"context"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
-	"strings"
 	"testing"
 )
 
-// TestGormRepositoryGetAnnotationRoundTrip 覆盖 GetAnnotation 的命中与未命中分支。
-func TestGormRepositoryGetAnnotationRoundTrip(t *testing.T) {
+// TestGormRepositoryCreateAnnotationRoundTrip 覆盖标注落库并经 ListAnnotations 读回对账。
+func TestGormRepositoryCreateAnnotationRoundTrip(t *testing.T) {
 	db := newAssistUnitTestDB(t)
 	repo := NewGormRepository(db)
 	ctx := context.Background()
-
-	if _, err := repo.GetAnnotation(ctx, 7); err == nil || !strings.Contains(err.Error(), "not found") {
-		t.Fatalf("missing annotation error = %v, want record not found", err)
-	}
 
 	annotation := &assistdomain.RemoteAssistAnnotation{AssistSessionID: 1, Shape: "rect", Payload: "{}"}
 	if err := repo.CreateAnnotation(ctx, annotation); err != nil {
 		t.Fatalf("CreateAnnotation() error = %v", err)
 	}
-	got, err := repo.GetAnnotation(ctx, annotation.ID)
+	list, err := repo.ListAnnotations(ctx, 1)
 	if err != nil {
-		t.Fatalf("GetAnnotation() error = %v", err)
+		t.Fatalf("ListAnnotations() error = %v", err)
 	}
-	if got.ID != annotation.ID || got.Shape != "rect" || got.AssistSessionID != 1 {
-		t.Fatalf("unexpected annotation: %+v", got)
+	if len(list) != 1 || list[0].ID != annotation.ID || list[0].Shape != "rect" || list[0].AssistSessionID != 1 {
+		t.Fatalf("unexpected annotations: %+v", list)
 	}
 }
 
@@ -48,9 +43,6 @@ func TestGormRepositoryQueryErrorBranches(t *testing.T) {
 	}
 	if _, err := repo.ListAnnotations(ctx, 1); err == nil {
 		t.Fatal("ListAnnotations() on dropped table should fail")
-	}
-	if _, err := repo.GetAnnotation(ctx, 1); err == nil {
-		t.Fatal("GetAnnotation() on dropped table should fail")
 	}
 	if err := repo.DeleteAnnotation(ctx, 1); err == nil {
 		t.Fatal("DeleteAnnotation() on dropped table should fail")

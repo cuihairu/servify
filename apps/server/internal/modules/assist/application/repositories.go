@@ -15,6 +15,5 @@ type Repository interface {
 
 	ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error)
 	CreateAnnotation(ctx context.Context, annotation *assistdomain.RemoteAssistAnnotation) error
-	GetAnnotation(ctx context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error)
 	DeleteAnnotation(ctx context.Context, id uint) error
 }

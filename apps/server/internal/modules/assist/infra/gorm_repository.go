@@ -72,14 +72,6 @@ func (r *GormRepository) CreateAnnotation(ctx context.Context, annotation *assis
 	return r.db.WithContext(ctx).Create(annotation).Error
 }
 
-func (r *GormRepository) GetAnnotation(ctx context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error) {
-	var annotation assistdomain.RemoteAssistAnnotation
-	if err := r.db.WithContext(ctx).First(&annotation, id).Error; err != nil {
-		return nil, err
-	}
-	return &annotation, nil
-}
-
 func (r *GormRepository) DeleteAnnotation(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&assistdomain.RemoteAssistAnnotation{}, id)
 	if result.Error != nil {

@@ -118,15 +118,6 @@ func (m *mockRepo) CreateAnnotation(_ context.Context, annotation *assistdomain.
 	return nil
 }
 
-func (m *mockRepo) GetAnnotation(_ context.Context, id uint) (*assistdomain.RemoteAssistAnnotation, error) {
-	annotation, ok := m.annotations[id]
-	if !ok {
-		return nil, errors.New("record not found")
-	}
-	cp := *annotation
-	return &cp, nil
-}
-
 func (m *mockRepo) DeleteAnnotation(_ context.Context, id uint) error {
 	if m.deleteAnnotErr != nil {
 		return m.deleteAnnotErr
