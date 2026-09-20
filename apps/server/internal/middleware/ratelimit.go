@@ -55,43 +55,6 @@ func (b *tokenBucket) allow() bool {
 	return false
 }
 
-// RateLimitMiddleware enables simple per-IP rate limiting using a token bucket.
-// It is controlled by cfg.Security.RateLimiting. If disabled, it no-ops.
-func RateLimitMiddleware(cfg *config.Config) gin.HandlerFunc {
-	rl := cfg.Security.RateLimiting
-	if !rl.Enabled || rl.RequestsPerMinute <= 0 {
-		return func(c *gin.Context) { c.Next() }
-	}
-	var (
-		mu      sync.Mutex
-		buckets = make(map[string]*tokenBucket)
-	)
-	getBucket := func(key string) *tokenBucket {
-		mu.Lock()
-		defer mu.Unlock()
-		if b, ok := buckets[key]; ok {
-			return b
-		}
-		b := newBucket(rl.RequestsPerMinute, rl.Burst)
-		buckets[key] = b
-		return b
-	}
-	return func(c *gin.Context) {
-		key := c.ClientIP()
-		if key == "" {
-			key = "unknown"
-		}
-		if !getBucket(key).allow() {
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":   "Too Many Requests",
-				"message": "rate limit exceeded",
-			})
-			return
-		}
-		c.Next()
-	}
-}
-
 // RateLimitMiddlewareFromConfig selects per-path limits if configured, otherwise falls back to global.
 // Matching is done by the first Paths entry whose Prefix matches the request path prefix.
 func RateLimitMiddlewareFromConfig(cfg *config.Config) gin.HandlerFunc {

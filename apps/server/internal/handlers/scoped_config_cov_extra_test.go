@@ -123,16 +123,6 @@ func TestSccSliceAndPageHelpers(t *testing.T) {
 	if got := sliceScopedConfigHistoryItemsPage(items, 9, 2); got != nil {
 		t.Fatalf("expected nil got %+v", got)
 	}
-	logs := []models.AuditLog{{ID: 1}, {ID: 2}, {ID: 3}}
-	if got := sliceAuditLogsPage(logs, 1, 2); len(got) != 2 {
-		t.Fatalf("expected two logs got %+v", got)
-	}
-	if got := sliceAuditLogsPage(logs, 2, 2); len(got) != 1 {
-		t.Fatalf("expected one log got %+v", got)
-	}
-	if got := sliceAuditLogsPage(logs, 5, 2); got != nil {
-		t.Fatalf("expected nil got %+v", got)
-	}
 	if page, size := normalizeAuditPage(0, 0); page != 1 || size != 20 {
 		t.Fatalf("unexpected normalize %+v %+v", page, size)
 	}

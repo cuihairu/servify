@@ -31,13 +31,6 @@ func NewAuthHandler(service authdelivery.HandlerService) *AuthHandler {
 	return &AuthHandler{service: service, policy: defaultSessionRiskPolicy(), ipIntel: heuristicSessionIPIntelligence{}}
 }
 
-func (h *AuthHandler) WithSessionRiskPolicyConfig(cfg config.SessionRiskPolicyConfig) *AuthHandler {
-	if h != nil {
-		h.policy = sessionRiskPolicyFromConfig(cfg)
-	}
-	return h
-}
-
 func (h *AuthHandler) WithSessionRiskResolver(resolver *configscope.Resolver) *AuthHandler {
 	if h != nil {
 		h.resolver = resolver

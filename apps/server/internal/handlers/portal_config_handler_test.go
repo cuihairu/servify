@@ -20,7 +20,7 @@ func TestPortalConfigHandler_Get_WithDefaults(t *testing.T) {
 			BrandName: "",
 		},
 	}
-	handler := NewPortalConfigHandler(cfg)
+	handler := NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
 
 	router := gin.New()
 	router.GET("/portal/config", handler.Get)
@@ -52,7 +52,7 @@ func TestPortalConfigHandler_Get_WithCustomConfig(t *testing.T) {
 			SupportEmail:   "support@example.com",
 		},
 	}
-	handler := NewPortalConfigHandler(cfg)
+	handler := NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
 
 	router := gin.New()
 	router.GET("/portal/config", handler.Get)
@@ -77,7 +77,7 @@ func TestPortalConfigHandler_Get_WithCustomConfig(t *testing.T) {
 func TestPortalConfigHandler_Get_WithNilConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	handler := NewPortalConfigHandler(nil)
+	handler := NewPortalConfigHandlerWithResolver(nil, configscope.NewResolver(nil))
 
 	router := gin.New()
 	router.GET("/portal/config", handler.Get)
@@ -102,7 +102,7 @@ func TestPortalConfigHandler_Get_WithPartialConfig(t *testing.T) {
 			// Leave other fields empty to test defaults
 		},
 	}
-	handler := NewPortalConfigHandler(cfg)
+	handler := NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
 
 	router := gin.New()
 	router.GET("/portal/config", handler.Get)
@@ -127,7 +127,7 @@ func TestNewPortalConfigHandler(t *testing.T) {
 			BrandName: "Test",
 		},
 	}
-	handler := NewPortalConfigHandler(cfg)
+	handler := NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
 
 	assert.NotNil(t, handler)
 	assert.Equal(t, cfg, handler.cfg)
@@ -200,7 +200,7 @@ func TestPortalConfigResponse_Structure(t *testing.T) {
 			SupportEmail:   "test@test.com",
 		},
 	}
-	handler := NewPortalConfigHandler(cfg)
+	handler := NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
 
 	router := gin.New()
 	router.GET("/portal/config", handler.Get)

@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
@@ -19,6 +22,25 @@ import (
 )
 
 // ---- handlers.go ----
+
+func buildMultipart(url, field, filename string, content []byte) (*http.Request, error) {
+	buf := &bytes.Buffer{}
+	w := multipart.NewWriter(buf)
+	part, err := w.CreateFormFile(field, filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(part, bytes.NewReader(content)); err != nil {
+		return nil, err
+	}
+	_ = w.Close()
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req, nil
+}
 
 func TestCxcWebSocketHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)

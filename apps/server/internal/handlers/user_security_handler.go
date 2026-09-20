@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"servify/apps/server/internal/config"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/usersecurity"
@@ -74,13 +73,6 @@ func NewUserSecurityHandler(service *usersecurity.Service, logger *logrus.Logger
 func (h *UserSecurityHandler) WithJWTSecret(secret string) *UserSecurityHandler {
 	if h != nil {
 		h.jwtSecret = strings.TrimSpace(secret)
-	}
-	return h
-}
-
-func (h *UserSecurityHandler) WithSessionRiskPolicyConfig(cfg config.SessionRiskPolicyConfig) *UserSecurityHandler {
-	if h != nil {
-		h.policy = sessionRiskPolicyFromConfig(cfg)
 	}
 	return h
 }

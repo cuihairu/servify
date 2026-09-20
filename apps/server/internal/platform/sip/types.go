@@ -4,6 +4,9 @@ import "time"
 
 type CallEventKind string
 
+// ChannelName is the normalized channel identifier for SIP events.
+const ChannelName = "sip"
+
 const (
 	CallEventInvite CallEventKind = "invite"
 	CallEventHangup CallEventKind = "hangup"

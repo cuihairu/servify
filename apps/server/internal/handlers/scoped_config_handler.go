@@ -1401,19 +1401,6 @@ func normalizeAuditPage(page, pageSize int) (int, int) {
 	return page, pageSize
 }
 
-func sliceAuditLogsPage(items []models.AuditLog, page, pageSize int) []models.AuditLog {
-	page, pageSize = normalizeAuditPage(page, pageSize)
-	start := (page - 1) * pageSize
-	if start >= len(items) {
-		return nil
-	}
-	end := start + pageSize
-	if end > len(items) {
-		end = len(items)
-	}
-	return items[start:end]
-}
-
 func filterScopedConfigHistoryEntries(items []models.AuditLog, action string) []models.AuditLog {
 	action = strings.TrimSpace(action)
 	if action == "" {

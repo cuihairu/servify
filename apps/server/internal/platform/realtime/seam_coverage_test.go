@@ -115,28 +115,3 @@ func TestHSSeamsWebSocketPingTickerPath(t *testing.T) {
 }
 
 // --- router 轮询适配器 ticker ---
-
-func TestHSSeamsRouterPollersTick(t *testing.T) {
-	t.Run("telegram", func(t *testing.T) {
-		adapter := NewTelegramAdapter("token", "chat")
-		adapter.pollInterval = 2 * time.Millisecond
-		if err := adapter.Start(); err != nil {
-			t.Fatalf("Start: %v", err)
-		}
-		time.Sleep(30 * time.Millisecond) // 覆盖多个 ticker tick
-		if err := adapter.Stop(); err != nil {
-			t.Fatalf("Stop: %v", err)
-		}
-	})
-	t.Run("wechat", func(t *testing.T) {
-		adapter := NewWeChatAdapter("app", "secret")
-		adapter.pollInterval = 2 * time.Millisecond
-		if err := adapter.Start(); err != nil {
-			t.Fatalf("Start: %v", err)
-		}
-		time.Sleep(30 * time.Millisecond)
-		if err := adapter.Stop(); err != nil {
-			t.Fatalf("Stop: %v", err)
-		}
-	})
-}

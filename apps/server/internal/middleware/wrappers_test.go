@@ -80,29 +80,15 @@ func TestAuthorizeWrappers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("roles", []string{"agent"})
 		c.Set("principal_kind", "agent")
-		c.Set("permissions", []string{"tickets.read"})
 		c.Next()
 	})
-	r.GET("/roles-ok", RequireRolesAny("admin", "agent"))
-	r.GET("/roles-deny", RequireRolesAny("admin"))
 	r.GET("/kinds-ok", RequirePrincipalKinds("agent"))
 	r.GET("/kinds-deny", RequirePrincipalKinds("admin"))
-	r.GET("/perm-any-ok", RequirePermissionsAny("tickets.read", "tickets.write"))
-	r.GET("/perm-any-deny", RequirePermissionsAny("tickets.write"))
-	r.GET("/perm-all-ok", RequirePermissionsAll("tickets.read"))
-	r.GET("/perm-all-deny", RequirePermissionsAll("tickets.read", "tickets.write"))
 
 	cases := map[string]int{
-		"/roles-ok":      http.StatusOK,
-		"/roles-deny":    http.StatusForbidden,
-		"/kinds-ok":      http.StatusOK,
-		"/kinds-deny":    http.StatusForbidden,
-		"/perm-any-ok":   http.StatusOK,
-		"/perm-any-deny": http.StatusForbidden,
-		"/perm-all-ok":   http.StatusOK,
-		"/perm-all-deny": http.StatusForbidden,
+		"/kinds-ok":   http.StatusOK,
+		"/kinds-deny": http.StatusForbidden,
 	}
 	for path, want := range cases {
 		w := httptest.NewRecorder()

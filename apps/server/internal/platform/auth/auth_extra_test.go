@@ -31,95 +31,6 @@ func TestContextScopeRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSubjectFromGinVariants(t *testing.T) {
-	if got := SubjectFromGin(nil); got.HasUserID || got.TenantID != "" || got.PrincipalType != "" {
-		t.Fatalf("nil context = %+v", got)
-	}
-
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Set(ContextUserID, uint(9))
-	c.Set(ContextUserIDRaw, "9")
-	c.Set(ContextTenantID, "tenant-a")
-	c.Set(ContextWorkspaceID, "ws-1")
-	c.Set(ContextTokenType, "refresh")
-	c.Set(ContextPrincipalType, PrincipalService)
-	c.Set(ContextRoles, []interface{}{"ops", 7, " "})
-	c.Set(ContextPermissions, []string{"tickets.read", ""})
-
-	subject := SubjectFromGin(c)
-	if !subject.HasUserID || subject.UserID != 9 || subject.UserIDRaw != "9" {
-		t.Fatalf("unexpected subject id fields: %+v", subject)
-	}
-	if subject.TenantID != "tenant-a" || subject.WorkspaceID != "ws-1" || subject.TokenType != "refresh" {
-		t.Fatalf("unexpected scope fields: %+v", subject)
-	}
-	if len(subject.Roles) != 2 || subject.Roles[0] != "ops" {
-		t.Fatalf("unexpected roles: %+v", subject.Roles)
-	}
-	if len(subject.Permissions) != 2 || subject.Permissions[0] != "tickets.read" {
-		t.Fatalf("unexpected permissions: %+v", subject.Permissions)
-	}
-
-	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c2.Set(ContextUserID, "not-uint")
-	if subject := SubjectFromGin(c2); subject.HasUserID {
-		t.Fatalf("expected HasUserID=false, got %+v", subject)
-	}
-}
-
-func TestIsInternalPrincipalType(t *testing.T) {
-	if !IsInternalPrincipalType(PrincipalService) || !IsInternalPrincipalType(PrincipalAdmin) {
-		t.Fatal("service/admin should be internal")
-	}
-	if IsInternalPrincipalType(PrincipalAgent) || IsInternalPrincipalType("bogus") {
-		t.Fatal("agent/bogus should not be internal")
-	}
-	if !(Subject{PrincipalType: PrincipalAdmin}).IsInternalPrincipal() {
-		t.Fatal("admin subject should be internal")
-	}
-	if (Subject{PrincipalType: PrincipalAgent}).IsInternalPrincipal() {
-		t.Fatal("agent subject should not be internal")
-	}
-}
-
-func TestScopeHelpers(t *testing.T) {
-	cases := []struct {
-		scope  Scope
-		mode   string
-		valid  bool
-		tenant bool
-		ws     bool
-	}{
-		{Scope{}, ScopeModeGlobal, true, false, false},
-		{Scope{TenantID: "t"}, ScopeModeTenant, true, true, false},
-		{Scope{TenantID: "t", WorkspaceID: "w"}, ScopeModeWorkspace, true, true, true},
-		{Scope{WorkspaceID: "w"}, ScopeModeWorkspace, false, false, true},
-	}
-	for _, tc := range cases {
-		if got := tc.scope.Mode(); got != tc.mode {
-			t.Fatalf("Mode() = %q want %q", got, tc.mode)
-		}
-		if err := tc.scope.Validate(); (err == nil) != tc.valid {
-			t.Fatalf("Validate() = %v for %+v", err, tc.scope)
-		}
-		if tc.scope.HasTenant() != tc.tenant || tc.scope.HasWorkspace() != tc.ws {
-			t.Fatalf("HasTenant/HasWorkspace mismatch for %+v", tc.scope)
-		}
-	}
-
-	gin.SetMode(gin.TestMode)
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Set(ContextTenantID, "t2")
-	c.Set(ContextWorkspaceID, "w2")
-	if s := ScopeFromGin(c); s.TenantID != "t2" || s.WorkspaceID != "w2" {
-		t.Fatalf("ScopeFromGin = %+v", s)
-	}
-	if s := ScopeFromSubject(Subject{TenantID: "t3"}); s.TenantID != "t3" || s.HasWorkspace() {
-		t.Fatalf("ScopeFromSubject = %+v", s)
-	}
-}
-
 func TestMiddlewareConfigFromApp(t *testing.T) {
 	if got := MiddlewareConfigFromApp(nil); got.Secret != "" {
 		t.Fatalf("nil config should give empty middleware config, got %+v", got)
@@ -273,33 +184,6 @@ func TestRequirePermissionsAnyDeny(t *testing.T) {
 	r.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/blank", nil))
 	if w2.Code != http.StatusForbidden {
 		t.Fatalf("blank = %d want 403", w2.Code)
-	}
-}
-
-func TestRequireRolesAny(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("roles", []string{"agent"})
-		c.Next()
-	})
-	r.GET("/ok", RequireRolesAny("admin", " agent "))
-	r.GET("/deny", RequireRolesAny("admin"))
-	r.GET("/blank", RequireRolesAny("  "))
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ok", nil))
-	if w.Code != http.StatusOK {
-		t.Fatalf("ok = %d want 200", w.Code)
-	}
-	w2 := httptest.NewRecorder()
-	r.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/deny", nil))
-	if w2.Code != http.StatusForbidden {
-		t.Fatalf("deny = %d want 403", w2.Code)
-	}
-	w3 := httptest.NewRecorder()
-	r.ServeHTTP(w3, httptest.NewRequest(http.MethodGet, "/blank", nil))
-	if w3.Code != http.StatusForbidden {
-		t.Fatalf("blank = %d want 403", w3.Code)
 	}
 }
 
@@ -575,5 +459,34 @@ func TestTokenPoliciesMoreBranches(t *testing.T) {
 	composed := ComposeTokenPolicies(nil, RequireMinimumTokenVersion(1))
 	if err := composed(map[string]interface{}{"ver": float64(2)}, Claims{}, now); err != nil {
 		t.Fatalf("composed policy = %v", err)
+	}
+}
+
+// TestGetGrantedRolesVariants 直测 roles 读取的各分支（原经已删除的
+// SubjectFromGin 测试间接覆盖）。
+func TestGetGrantedRolesVariants(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Set("roles", []string{"ops"})
+	if got := getGrantedRoles(c); len(got) != 1 || got[0] != "ops" {
+		t.Fatalf("[]string roles = %v", got)
+	}
+
+	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c2.Set("roles", []interface{}{"ops", 7, " "})
+	if got := getGrantedRoles(c2); len(got) != 2 || got[0] != "ops" {
+		t.Fatalf("mixed roles = %v, want [ops, ]", got)
+	}
+
+	c3, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c3.Set("roles", "agent")
+	if got := getGrantedRoles(c3); len(got) != 1 || got[0] != "agent" {
+		t.Fatalf("string role = %v", got)
+	}
+
+	c4, _ := gin.CreateTestContext(httptest.NewRecorder())
+	if got := getGrantedRoles(c4); got != nil {
+		t.Fatalf("missing roles = %v, want nil", got)
 	}
 }

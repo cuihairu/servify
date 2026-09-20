@@ -167,8 +167,8 @@ func TestAxcUserSecurityConstructors(t *testing.T) {
 	})
 	t.Run("nil receiver withers", func(t *testing.T) {
 		var h *UserSecurityHandler
-		if h.WithJWTSecret("x") != nil || h.WithSessionRiskPolicyConfig(config.SessionRiskPolicyConfig{}) != nil ||
-			h.WithSessionRiskResolver(nil) != nil || h.WithSessionIPIntelligence(nil) != nil {
+		if h.WithJWTSecret("x") != nil || h.WithSessionRiskResolver(nil) != nil ||
+			h.WithSessionIPIntelligence(nil) != nil {
 			t.Fatal("expected nil handlers")
 		}
 	})
@@ -179,10 +179,6 @@ func TestAxcUserSecurityConstructors(t *testing.T) {
 			t.Fatalf("expected default policy, got %+v", got)
 		}
 		h := NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger())
-		h.WithSessionRiskPolicyConfig(config.SessionRiskPolicyConfig{HighRiskScore: 8})
-		if got := h.sessionRiskPolicy(context.Background()); got.HighRiskScore != 8 {
-			t.Fatalf("expected configured policy, got %+v", got)
-		}
 		resolver := configscope.NewResolver(&config.Config{Security: config.SecurityConfig{SessionRisk: config.SessionRiskPolicyConfig{MediumRiskScore: 5}}})
 		h.WithSessionRiskResolver(resolver)
 		if got := h.sessionRiskPolicy(context.Background()); got.MediumRiskScore != 5 {

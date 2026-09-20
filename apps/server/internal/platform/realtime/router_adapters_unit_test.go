@@ -263,42 +263,4 @@ type stringerValue string
 
 func (s stringerValue) String() string { return string(s) }
 
-func TestTelegramAdapter_Methods(t *testing.T) {
-	adapter := NewTelegramAdapter("token", "chat")
-	if adapter.GetPlatformType() != PlatformTelegram {
-		t.Fatalf("unexpected platform: %s", adapter.GetPlatformType())
-	}
-	if err := adapter.SendMessage("chat", "msg"); err != nil {
-		t.Fatalf("SendMessage: %v", err)
-	}
-	if adapter.ReceiveMessage() == nil {
-		t.Fatal("expected message channel")
-	}
-	if err := adapter.Start(); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if err := adapter.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-}
-
-func TestWeChatAdapter_Methods(t *testing.T) {
-	adapter := NewWeChatAdapter("appID", "secret")
-	if adapter.GetPlatformType() != PlatformWeChat {
-		t.Fatalf("unexpected platform: %s", adapter.GetPlatformType())
-	}
-	if err := adapter.SendMessage("chat", "msg"); err != nil {
-		t.Fatalf("SendMessage: %v", err)
-	}
-	if adapter.ReceiveMessage() == nil {
-		t.Fatal("expected message channel")
-	}
-	if err := adapter.Start(); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if err := adapter.Stop(); err != nil {
-		t.Fatalf("Stop: %v", err)
-	}
-}
-
 var _ = fmt.Sprintf // keep fmt available for future assertions

@@ -157,25 +157,6 @@ func RequireResourcePermission(resource string) gin.HandlerFunc {
 	}
 }
 
-// RequireRolesAny requires at least one matching role from the normalized context.
-func RequireRolesAny(required ...string) gin.HandlerFunc {
-	reqSet := make(map[string]struct{}, len(required))
-	for _, r := range required {
-		if role := strings.TrimSpace(r); role != "" {
-			reqSet[role] = struct{}{}
-		}
-	}
-	return func(c *gin.Context) {
-		for _, r := range getGrantedRoles(c) {
-			if _, ok := reqSet[r]; ok {
-				c.Next()
-				return
-			}
-		}
-		abortJSON(c, http.StatusForbidden, "Forbidden", "insufficient role")
-	}
-}
-
 // RequirePrincipalKinds requires the caller to match one of the normalized principal kinds.
 func RequirePrincipalKinds(required ...string) gin.HandlerFunc {
 	reqSet := make(map[string]struct{}, len(required))

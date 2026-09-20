@@ -14,10 +14,6 @@ type PortalConfigHandler struct {
 	resolver *configscope.Resolver
 }
 
-func NewPortalConfigHandler(cfg *config.Config) *PortalConfigHandler {
-	return NewPortalConfigHandlerWithResolver(cfg, configscope.NewResolver(cfg))
-}
-
 func NewPortalConfigHandlerWithResolver(cfg *config.Config, resolver *configscope.Resolver) *PortalConfigHandler {
 	return &PortalConfigHandler{cfg: cfg, resolver: resolver}
 }

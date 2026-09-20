@@ -421,24 +421,8 @@ func TestAxcAuthLogoutBranches(t *testing.T) {
 func TestAxcAuthOptionBuilders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := config.SessionRiskPolicyConfig{
-		HotRefreshWindowMinutes:    5,
-		RecentRefreshWindowMinutes: 30,
-		TodayRefreshWindowHours:    12,
-		RapidChangeWindowHours:     6,
-		StaleActivityWindowDays:    7,
-		MultiPublicIPThreshold:     4,
-		ManySessionsThreshold:      5,
-		HotRefreshFamilyThreshold:  3,
-		MediumRiskScore:            6,
-		HighRiskScore:              9,
-	}
-
 	t.Run("nil auth handler ignores options", func(t *testing.T) {
 		var h *AuthHandler
-		if h.WithSessionRiskPolicyConfig(cfg) != nil {
-			t.Fatal("expected nil handler")
-		}
 		if h.WithSessionRiskResolver(nil) != nil {
 			t.Fatal("expected nil handler")
 		}
@@ -447,19 +431,6 @@ func TestAxcAuthOptionBuilders(t *testing.T) {
 		}
 		if got := h.sessionRiskPolicy(context.Background()); got != defaultSessionRiskPolicy() {
 			t.Fatalf("expected default policy, got %+v", got)
-		}
-	})
-	t.Run("policy from config applies all fields", func(t *testing.T) {
-		h := NewAuthHandler(&axcAuthService{}).WithSessionRiskPolicyConfig(cfg)
-		if h.policy.HotRefreshWindow != 5*time.Minute || h.policy.RecentRefreshWindow != 30*time.Minute ||
-			h.policy.TodayRefreshWindow != 12*time.Hour || h.policy.RapidChangeWindow != 6*time.Hour ||
-			h.policy.StaleActivityWindow != 7*24*time.Hour || h.policy.MultiPublicIPThreshold != 4 ||
-			h.policy.ManySessionsThreshold != 5 || h.policy.HotRefreshFamilyThreshold != 3 ||
-			h.policy.MediumRiskScore != 6 || h.policy.HighRiskScore != 9 {
-			t.Fatalf("unexpected policy: %+v", h.policy)
-		}
-		if got := h.sessionRiskPolicy(context.Background()); got != h.policy {
-			t.Fatalf("expected stored policy, got %+v", got)
 		}
 	})
 	t.Run("nil ip intel provider ignored", func(t *testing.T) {
@@ -937,5 +908,37 @@ func TestAxcMapUserResponse(t *testing.T) {
 	got := mapUserResponse(user)
 	if got.ID != 3 || got.Username != "u" || got.Email != "e" || got.Name != "n" || got.Phone != "p" || got.Avatar != "av" || got.Role != "r" || got.Status != "s" {
 		t.Fatalf("unexpected response: %+v", got)
+	}
+}
+
+// TestAxcSessionRiskPolicyFromConfigAllFields 直测 config→policy 全字段映射
+// （原经 WithSessionRiskPolicyConfig 间接覆盖，该死入口删除后改为直测）。
+func TestAxcSessionRiskPolicyFromConfigAllFields(t *testing.T) {
+	got := sessionRiskPolicyFromConfig(config.SessionRiskPolicyConfig{
+		HotRefreshWindowMinutes:    5,
+		RecentRefreshWindowMinutes: 30,
+		TodayRefreshWindowHours:    12,
+		RapidChangeWindowHours:     6,
+		StaleActivityWindowDays:    7,
+		MultiPublicIPThreshold:     4,
+		ManySessionsThreshold:      5,
+		HotRefreshFamilyThreshold:  3,
+		MediumRiskScore:            6,
+		HighRiskScore:              9,
+	})
+	want := sessionRiskPolicy{
+		HotRefreshWindow:          5 * time.Minute,
+		RecentRefreshWindow:       30 * time.Minute,
+		TodayRefreshWindow:        12 * time.Hour,
+		RapidChangeWindow:         6 * time.Hour,
+		StaleActivityWindow:       7 * 24 * time.Hour,
+		MultiPublicIPThreshold:    4,
+		ManySessionsThreshold:     5,
+		HotRefreshFamilyThreshold: 3,
+		MediumRiskScore:           6,
+		HighRiskScore:             9,
+	}
+	if got != want {
+		t.Fatalf("unexpected policy: got %+v want %+v", got, want)
 	}
 }
