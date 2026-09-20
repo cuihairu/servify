@@ -196,14 +196,24 @@ func TestHandlerAssemblyCreateTicketAutoAssignsAgent(t *testing.T) {
 		t.Fatalf("expected agent load 1, got %d", agent.CurrentLoad)
 	}
 
+	// 自动派单是异步 goroutine（orchestrator.go: go autoAssignAgent）且先落库后发
+	// 事件——上面的 DB 轮询可能在「落库后、事件发布前」的窗口内 break，因此
+	// 事件断言同样轮询等待，不能在 break 后立即读 bus。
 	assigned := false
-	for _, name := range bus.published() {
-		if name == "ticket.assigned" {
-			assigned = true
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		for _, name := range bus.published() {
+			if name == "ticket.assigned" {
+				assigned = true
+			}
 		}
-	}
-	if !assigned {
-		t.Fatalf("expected ticket.assigned event, got %v", bus.published())
+		if assigned {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected ticket.assigned event, got %v", bus.published())
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 
