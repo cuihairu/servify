@@ -577,7 +577,3 @@ func isSupportedEvent(event string) bool {
 		return false
 	}
 }
-
-func IsSupportedEvent(event string) bool {
-	return isSupportedEvent(normalizeEvent(event))
-}

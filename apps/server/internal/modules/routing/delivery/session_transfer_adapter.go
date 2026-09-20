@@ -229,14 +229,6 @@ func joinSkills(skills []string) string {
 	return out
 }
 
-func cloneTimePtr(in *time.Time) *time.Time {
-	if in == nil {
-		return nil
-	}
-	t := *in
-	return &t
-}
-
 func mapTransferRecord(item routingapp.TransferRecordDTO) models.TransferRecord {
 	return models.TransferRecord{
 		SessionID:      item.SessionID,

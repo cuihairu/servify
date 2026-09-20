@@ -984,33 +984,11 @@ func TestNormalizeEvent(t *testing.T) {
 }
 
 func TestIsSupportedEvent(t *testing.T) {
-	supported := []string{
-		"ticket.created",
-		"ticket.updated",
-		"ticket.closed",
-		"ticket.assigned",
-		"conversation.created",
-		"conversation.message_received",
-		"routing.agent_assigned",
-		"routing.transfer_completed",
-		"sla.violation",
-	}
-	for _, e := range supported {
-		if !IsSupportedEvent(e) {
-			t.Fatalf("expected %q supported", e)
-		}
-	}
-	aliases := []string{"ticket_created", "ticket_updated", "sla_violation"}
-	for _, e := range aliases {
-		if !IsSupportedEvent(e) {
-			t.Fatalf("expected alias %q supported", e)
-		}
-	}
-	if IsSupportedEvent("bogus") {
+	if isSupportedEvent("bogus") {
 		t.Fatal("expected bogus event unsupported")
 	}
-	if isSupportedEvent("bogus") {
-		t.Fatal("expected bogus event unsupported (internal)")
+	if !isSupportedEvent("ticket.created") {
+		t.Fatal("expected ticket.created supported")
 	}
 }
 

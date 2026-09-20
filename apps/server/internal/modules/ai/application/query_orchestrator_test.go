@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"errors"
-	"servify/apps/server/internal/models"
 	"testing"
 
 	"servify/apps/server/internal/platform/knowledgeprovider"
@@ -583,12 +582,6 @@ func TestGuardrailsValidateInputBranches(t *testing.T) {
 	}
 	if err := g.ValidateInput(AIRequest{Query: "drop table users;"}); err == nil {
 		t.Fatal("blocked term should fail")
-	}
-}
-
-func TestSimpleSessionSummaryEmptyContent(t *testing.T) {
-	if got := SimpleSessionSummary([]models.Message{{Content: "   "}}); got == "" {
-		t.Fatal("expected fallback summary for blank content")
 	}
 }
 

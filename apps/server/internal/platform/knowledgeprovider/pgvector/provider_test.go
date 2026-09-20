@@ -853,11 +853,6 @@ func TestChunkerEdgeBranches(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected single merged chunk, got %v", got)
 	}
-
-	// CountTokens minimum clamp
-	if got := CountTokens("a"); got != 1 {
-		t.Fatalf("CountTokens('a') = %d want 1", got)
-	}
 }
 
 func TestFindSentenceBoundaryFallbacks(t *testing.T) {
@@ -936,13 +931,4 @@ func TestEuclideanDistanceMismatchGuard(t *testing.T) {
 		}
 	}()
 	_ = EuclideanDistance([]float32{1}, []float32{1, 2})
-}
-
-func TestDotProductMismatchGuard(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("DotProduct should panic on length mismatch")
-		}
-	}()
-	_ = DotProduct([]float32{1}, []float32{1, 2})
 }

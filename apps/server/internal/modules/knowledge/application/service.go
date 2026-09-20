@@ -249,14 +249,3 @@ func (s *Service) syncDocument(ctx context.Context, doc *domain.Document) error 
 	}
 	return nil
 }
-
-func providerIdentity(provider knowledgeprovider.KnowledgeProvider) string {
-	switch provider.(type) {
-	case nil:
-		return ""
-	default:
-		t := fmt.Sprintf("%T", provider)
-		t = strings.TrimPrefix(t, "*")
-		return strings.TrimSpace(t)
-	}
-}

@@ -436,17 +436,6 @@ func (s *HandlerServiceAdapter) syncTransferTicket(ctx context.Context, tx *gorm
 	return err
 }
 
-func buildTransferTicketUpdate(targetAgentID uint, currentStatus string) (map[string]interface{}, string, string) {
-	updates := map[string]interface{}{"agent_id": targetAgentID}
-	fromStatus := currentStatus
-	toStatus := fromStatus
-	if fromStatus == "open" || fromStatus == "" {
-		toStatus = "assigned"
-		updates["status"] = toStatus
-	}
-	return updates, fromStatus, toStatus
-}
-
 func (s *HandlerServiceAdapter) syncTransferAgentLoad(ctx context.Context, tx *gorm.DB, fromAgentID *uint, targetAgentID uint) error {
 	return s.agents.SyncTransferLoad(ctx, tx, fromAgentID, targetAgentID)
 }

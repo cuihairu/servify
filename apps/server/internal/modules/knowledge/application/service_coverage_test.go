@@ -8,7 +8,6 @@ import (
 
 	"servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/knowledgeprovider"
-	memorykp "servify/apps/server/internal/platform/knowledgeprovider/memory"
 	mockkp "servify/apps/server/internal/platform/knowledgeprovider/mock"
 )
 
@@ -344,17 +343,5 @@ func TestServiceSyncDocumentDirect(t *testing.T) {
 	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil)
 	if err := svc.syncDocument(context.Background(), nil); err != nil {
 		t.Fatalf("expected nil doc sync to be a no-op, got %v", err)
-	}
-}
-
-func TestProviderIdentity(t *testing.T) {
-	if got := providerIdentity(nil); got != "" {
-		t.Fatalf("expected empty identity for nil provider, got %q", got)
-	}
-	if got := providerIdentity(&mockkp.Provider{}); got != "mock.Provider" {
-		t.Fatalf("unexpected mock identity: %q", got)
-	}
-	if got := providerIdentity(memorykp.NewProvider("tenant-a", "kb-a")); got != "memory.Provider" {
-		t.Fatalf("unexpected memory identity: %q", got)
 	}
 }

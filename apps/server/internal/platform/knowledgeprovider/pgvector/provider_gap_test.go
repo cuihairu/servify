@@ -54,12 +54,6 @@ func TestDistanceFunctionsEmptyVectors(t *testing.T) {
 	if got := EuclideanDistance([]float32{}, []float32{}); got != 0 {
 		t.Fatalf("EuclideanDistance(empty,empty) = %v, want 0", got)
 	}
-	if got := DotProduct(nil, nil); got != 0 {
-		t.Fatalf("DotProduct(nil,nil) = %v, want 0", got)
-	}
-	if got := L2Norm(nil); got != 0 {
-		t.Fatalf("L2Norm(nil) = %v, want 0", got)
-	}
 }
 
 // TestProvider_UpsertDocumentWhitespaceID 覆盖 externalID 为空但

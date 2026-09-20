@@ -1044,25 +1044,4 @@ func TestHandlerPureHelpers(t *testing.T) {
 	assert.Equal(t, "您的会话已转接至人工客服。客服将很快为您提供帮助。", buildTransferMessage("", ""))
 	assert.Contains(t, buildTransferMessage("busy", "vip"), "转接原因：busy")
 	assert.Contains(t, buildTransferMessage("busy", "vip"), "备注：vip")
-
-	updates, from, to := buildTransferTicketUpdate(9, "open")
-	assert.Equal(t, map[string]interface{}{"agent_id": uint(9), "status": "assigned"}, updates)
-	assert.Equal(t, "open", from)
-	assert.Equal(t, "assigned", to)
-
-	updates, from, to = buildTransferTicketUpdate(9, "")
-	assert.Equal(t, "assigned", to)
-	assert.Equal(t, map[string]interface{}{"agent_id": uint(9), "status": "assigned"}, updates)
-
-	updates, from, to = buildTransferTicketUpdate(9, "resolved")
-	assert.Equal(t, map[string]interface{}{"agent_id": uint(9)}, updates)
-	assert.Equal(t, "resolved", from)
-	assert.Equal(t, "resolved", to)
-
-	assert.Nil(t, cloneTimePtr(nil))
-	original := time.Now()
-	cloned := cloneTimePtr(&original)
-	require.NotNil(t, cloned)
-	assert.Equal(t, original, *cloned)
-	assert.NotSame(t, &original, cloned)
 }

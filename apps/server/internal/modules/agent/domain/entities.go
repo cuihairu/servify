@@ -40,7 +40,3 @@ type AgentLoad struct {
 	CurrentChatLoad     int
 	CurrentVoiceLoad    int
 }
-
-func (l AgentLoad) CanTakeChat() bool {
-	return l.CurrentChatLoad < l.MaxChatConcurrency
-}
