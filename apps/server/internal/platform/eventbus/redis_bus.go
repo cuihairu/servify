@@ -74,10 +74,18 @@ func (b *RedisBus) Subscribe(eventName string, handler Handler) {
 
 // Publish publishes an event to Redis.
 // The event is written to a Redis Stream (persistent) and also
-// announced via Pub/Sub for real-time delivery.
+// announced via Pub/Sub for real-time delivery. It first waits for this
+// instance's pub/sub subscription to be acknowledged: a notification
+// published earlier would be dropped (the stream entry persists, but no
+// subscriber dispatches it, so local handlers never run), so early callers
+// block briefly instead of silently losing the event.
 func (b *RedisBus) Publish(ctx context.Context, event Event) error {
 	if event == nil {
 		return nil
+	}
+
+	if !b.waitUntilReady(ctx) {
+		return fmt.Errorf("event bus not ready: %w", ctx.Err())
 	}
 
 	// Serialize event data
@@ -123,7 +131,7 @@ func (b *RedisBus) Publish(ctx context.Context, event Event) error {
 func (b *RedisBus) subscribeLoop() {
 	pubsub := b.client.Subscribe(b.ctx, eventPubSubChannel)
 	defer pubsub.Close()
-	b.awaitSubscriptionConfirmed()
+	b.awaitSubscriptionConfirmed(pubsub)
 
 	ch := pubsub.Channel()
 	for {
@@ -141,49 +149,53 @@ func (b *RedisBus) subscribeLoop() {
 	}
 }
 
-// pubSubNumSubFn 是包级 seam（默认查询 PUBSUB NUMSUB）。订阅确认取决于
-// SUBSCRIBE 命令何时被服务端处理，生产下首次轮询结果本质上是一个竞态；
-// seam 让测试确定性地覆盖"未确认→轮询等待"路径。通过 RWMutex 读写：
-// 其他测试遗留的 subscribeLoop 协程仍在并发调用，裸 var 会构成数据竞争。
+// pubSubReceiveFn 是包级 seam（默认读取订阅确认消息）。SUBSCRIBE 确认何时
+// 到达取决于服务端处理时机，是天然竞态；seam 让测试确定性地覆盖"未确认→
+// 重试→确认"路径。通过 RWMutex 读写：其他测试遗留的 subscribeLoop 协程
+// 仍在并发调用，裸 var 会构成数据竞争。
 var (
-	pubSubNumSubMu sync.RWMutex
-	pubSubNumSubFn = func(ctx context.Context, client *redis.Client, channel string) (map[string]int64, error) {
-		return client.PubSubNumSub(ctx, channel).Result()
+	pubSubReceiveMu sync.RWMutex
+	pubSubReceiveFn = func(ctx context.Context, pubsub *redis.PubSub) (interface{}, error) {
+		return pubsub.Receive(ctx)
 	}
 )
 
-func pubSubNumSub(ctx context.Context, client *redis.Client, channel string) (map[string]int64, error) {
-	pubSubNumSubMu.RLock()
-	defer pubSubNumSubMu.RUnlock()
-	return pubSubNumSubFn(ctx, client, channel)
+func pubSubReceive(ctx context.Context, pubsub *redis.PubSub) (interface{}, error) {
+	pubSubReceiveMu.RLock()
+	defer pubSubReceiveMu.RUnlock()
+	return pubSubReceiveFn(ctx, pubsub)
 }
 
 // awaitSubscriptionConfirmed marks the bus ready only after the server has
-// actually registered the pub/sub subscription.
+// acknowledged this connection's SUBSCRIBE command.
 //
 // go-redis v9 PubSub.Subscribe only writes the SUBSCRIBE command and returns
 // without waiting for the server acknowledgement, so a Publish issued right
-// after Subscribe can race ahead of the subscription and get dropped. Polling
-// PUBSUB NUMSUB closes that window: once the channel reports at least one
-// subscriber, subsequent PUBLISH commands are guaranteed to be delivered to
-// this bus.
-func (b *RedisBus) awaitSubscriptionConfirmed() {
+// after Subscribe can race ahead of the subscription and get dropped. Waiting
+// for the *redis.Subscription acknowledgement via Receive closes that window
+// for this connection. A channel-wide PUBSUB NUMSUB poll would not: the
+// subscriber count does not distinguish connections, so in a multi-instance
+// deployment one bus's ready signal can be satisfied by another bus's
+// subscription while its own SUBSCRIBE is still in flight.
+//
+// Receive failures (e.g. Redis briefly unreachable during startup) are
+// retried on a ticker; go-redis PubSub reconnects transparently. When the
+// bus is closing, the wait is abandoned and Close releases Publish waiters
+// by closing readyCh.
+func (b *RedisBus) awaitSubscriptionConfirmed(pubsub *redis.PubSub) {
 	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
-		subs, err := pubSubNumSub(b.ctx, b.client, eventPubSubChannel)
-		if err == nil && subs[eventPubSubChannel] > 0 {
+		if _, err := pubSubReceive(b.ctx, pubsub); err == nil {
 			break
 		}
 		select {
 		case <-b.ctx.Done():
-			// Bus is closing before the subscription was confirmed; unblock
-			// waiters so nobody deadlocks on readyCh.
+			return
 		case <-ticker.C:
 			continue
 		}
-		break
 	}
 
 	b.readyOnce.Do(func() {
@@ -278,8 +290,13 @@ func (b *RedisBus) dispatchMessage(ctx context.Context, eventName string, messag
 	}
 }
 
-// Close gracefully shuts down the bus.
+// Close gracefully shuts down the bus. Publish callers still waiting for the
+// subscription confirmation are released first: their events proceed to the
+// stream write, which fails naturally once the client is shut down.
 func (b *RedisBus) Close() error {
+	b.readyOnce.Do(func() {
+		close(b.readyCh)
+	})
 	b.cancel()
 	return nil
 }

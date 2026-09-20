@@ -47,24 +47,17 @@ func TestRedisBusBroadcastsToEverySubscribingInstance(t *testing.T) {
 	busA.Subscribe(event.Name(), handler(receivedA))
 	busB.Subscribe(event.Name(), handler(receivedB))
 
-	// 不能用 waitUntilReady：它走 PUBSUB NUMSUB 口径，只保证"channel 上已有
-	// 订阅者"，不区分是哪个连接——busB 的 ready 可能被 busA 的订阅满足，
-	// Publish 会跑在 busB 的 SUBSCRIBE 被 server 处理之前，广播通知被丢弃
-	//（CI 慢环境下必现的订阅竞态）。这里直接轮询到 channel 上出现两个
-	// 订阅者，即两个实例的 SUBSCRIBE 都被 server 确认后再发布。
-	subscribeDeadline := time.Now().Add(5 * time.Second)
-	for {
-		subs, err := client.PubSubNumSub(context.Background(), eventPubSubChannel).Result()
-		if err != nil {
-			t.Fatalf("pubsub numsub: %v", err)
-		}
-		if subs[eventPubSubChannel] >= 2 {
-			break
-		}
-		if time.Now().After(subscribeDeadline) {
-			t.Fatalf("timed out waiting for both instances to subscribe: %v", subs)
-		}
-		time.Sleep(2 * time.Millisecond)
+	// 修复后 waitUntilReady 走本连接的 SUBSCRIBE 确认口径（pubsub.Receive
+	// 返回 *redis.Subscription 即 server 已处理本实例的 SUBSCRIBE），不再有
+	// 早期 NUMSUB 口径"channel 计数不分连接"的歧义：两个实例各自 ready 即
+	// 两边订阅都已生效，Publish 广播必达。
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer readyCancel()
+	if !busA.waitUntilReady(readyCtx) {
+		t.Fatal("instance A subscription was never confirmed")
+	}
+	if !busB.waitUntilReady(readyCtx) {
+		t.Fatal("instance B subscription was never confirmed")
 	}
 
 	if err := busA.Publish(context.Background(), event); err != nil {

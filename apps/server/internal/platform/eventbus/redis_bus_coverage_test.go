@@ -131,6 +131,10 @@ func TestRedisBusPublishStreamError(t *testing.T) {
 	bus := NewRedisBus(client, logrus.New())
 	defer bus.Close()
 
+	// SetError applies to every command: confirm the subscription before
+	// injecting it, otherwise Publish blocks on waitUntilReady forever
+	// (context.Background never expires).
+	waitForSubscription(t, bus)
 	mr.SetError("XADD forced failure")
 
 	event := BaseEvent{EventID: "evt-x", EventName: "ticket.x"}

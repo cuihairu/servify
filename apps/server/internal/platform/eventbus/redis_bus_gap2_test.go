@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,12 +13,12 @@ import (
 )
 
 // TestRedisBusAwaitSubscriptionRetriesUntilConfirmed 确定性地覆盖
-// awaitSubscriptionConfirmed 的轮询等待分支：首次 NUMSUB 报告 0 个订阅者
-// （未确认），经 ticker 重试后确认。生产下首次轮询结果取决于 SUBSCRIBE
-// 命令何时被服务端处理，是天然竞态，因此经 seam 注入固定序列。
+// awaitSubscriptionConfirmed 的重试等待分支：首次 Receive 报告未确认
+// （如启动期 Redis 短暂不可达），经 ticker 重试后拿到服务端确认。生产下
+// SUBSCRIBE 确认何时到达是天然竞态，因此经 seam 注入固定序列。
 //
 // 注入按 ctx 区分调用方：更早测试遗留的 subscribeLoop 协程可能仍在并发
-// 轮询，它们被立即"确认"以免吞掉属于本测试的首轮 0 订阅结果；ctx 断言
+// 等待确认，它们被立即"确认"以免吞掉属于本测试的首轮失败结果；ctx 断言
 // 保证重试路径由本测试的协程执行。
 func TestRedisBusAwaitSubscriptionRetriesUntilConfirmed(t *testing.T) {
 	mr := miniredis.RunT(t)
@@ -27,22 +28,22 @@ func TestRedisBusAwaitSubscriptionRetriesUntilConfirmed(t *testing.T) {
 	defer cancel()
 
 	var myCalls atomic.Int32
-	previous := pubSubNumSubFn
-	pubSubNumSubMu.Lock()
-	pubSubNumSubFn = func(ctx context.Context, c *redis.Client, ch string) (map[string]int64, error) {
+	previous := pubSubReceiveFn
+	pubSubReceiveMu.Lock()
+	pubSubReceiveFn = func(ctx context.Context, _ *redis.PubSub) (interface{}, error) {
 		if ctx != myCtx {
-			return map[string]int64{ch: 1}, nil
+			return &redis.Subscription{}, nil
 		}
 		if myCalls.Add(1) == 1 {
-			return map[string]int64{}, nil
+			return nil, errors.New("subscription not confirmed yet")
 		}
-		return map[string]int64{ch: 1}, nil
+		return &redis.Subscription{}, nil
 	}
-	pubSubNumSubMu.Unlock()
+	pubSubReceiveMu.Unlock()
 	t.Cleanup(func() {
-		pubSubNumSubMu.Lock()
-		pubSubNumSubFn = previous
-		pubSubNumSubMu.Unlock()
+		pubSubReceiveMu.Lock()
+		pubSubReceiveFn = previous
+		pubSubReceiveMu.Unlock()
 	})
 
 	bus := &RedisBus{
@@ -57,7 +58,7 @@ func TestRedisBusAwaitSubscriptionRetriesUntilConfirmed(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		bus.awaitSubscriptionConfirmed()
+		bus.awaitSubscriptionConfirmed(nil)
 	}()
 
 	select {
@@ -68,6 +69,6 @@ func TestRedisBusAwaitSubscriptionRetriesUntilConfirmed(t *testing.T) {
 	<-done
 
 	if got := myCalls.Load(); got < 2 {
-		t.Fatalf("NUMSUB poll count = %d, want >= 2 (retry path not exercised)", got)
+		t.Fatalf("Receive call count = %d, want >= 2 (retry path not exercised)", got)
 	}
 }
