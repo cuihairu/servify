@@ -17,6 +17,69 @@ import (
 	"gorm.io/gorm"
 )
 
+// TestAuditMiddlewareWithFailuresAudit4xx 直测 auth 公开面的失败留痕：
+// AuditFailures 开启时 4xx 同样落审计（Success=false），默认中间件不留痕。
+func TestAuditMiddlewareWithFailuresAudit4xx(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dsn := uniqueMemDSN(fmt.Sprintf("file:%s", t.Name()))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := db.AutoMigrate(&models.AuditLog{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	r := gin.New()
+	r.Use(AuditMiddlewareWithFailures(db))
+	r.POST("/api/auth/login", func(c *gin.Context) { c.JSON(http.StatusUnauthorized, gin.H{"error": "bad credentials"}) })
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"u"}`)))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 got %d", w.Code)
+	}
+
+	var log models.AuditLog
+	if err := db.First(&log, "action = ?", "auth.login").Error; err != nil {
+		t.Fatalf("failure audit log missing: %v", err)
+	}
+	if log.Success || log.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unexpected failure entry: success=%v status=%d", log.Success, log.StatusCode)
+	}
+}
+
+// 默认中间件（AuditFailures 关闭）对 4xx 不留痕，与上一测试互为对照。
+func TestAuditMiddlewareSkips4xxByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dsn := uniqueMemDSN(fmt.Sprintf("file:%s", t.Name()))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := db.AutoMigrate(&models.AuditLog{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	r := gin.New()
+	r.Use(AuditMiddleware(db))
+	r.POST("/api/auth/login", func(c *gin.Context) { c.JSON(http.StatusUnauthorized, gin.H{"error": "bad credentials"}) })
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{}`)))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 got %d", w.Code)
+	}
+
+	var count int64
+	if err := db.Model(&models.AuditLog{}).Count(&count).Error; err != nil {
+		t.Fatalf("count audit logs: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no audit entries for 4xx by default, got %d", count)
+	}
+}
+
 func TestAuditMiddlewareRecordsWrite(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dsn := uniqueMemDSN(fmt.Sprintf("file:%s", t.Name()))

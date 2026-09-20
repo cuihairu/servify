@@ -80,10 +80,11 @@ func TestGormRepositoryRemoteAssistTicketStatsEmpty(t *testing.T) {
 	}
 }
 
-// n=5 (avg-close Row) is skipped: the source dereferences Row() without a
-// nil guard, so forcing that failure panics inside the production code.
+// n 遍历全部五次查询（4 个 Count + avg-close Scan）：avg-close 分支失败
+// 必须包装为 "failed to scan remote assist close duration" 而非裸错。
+// （历史注释曾因 Row() 无 nil guard 跳过 n=5——源码改用 Scan 后已安全。）
 func TestGormRepositoryRemoteAssistSequentialErrors(t *testing.T) {
-	for n := int32(2); n <= 4; n++ {
+	for n := int32(2); n <= 5; n++ {
 		db := newAnalyticsScopeTestDB(t)
 		failNthAnalyticsQuery(db, n)
 		repo := NewGormRepository(db)
