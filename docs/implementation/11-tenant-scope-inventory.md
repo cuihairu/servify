@@ -11,7 +11,7 @@
     - `workspace_id`
     - `token_type`
     - `principal_type`
-  - `platform/auth/SubjectFromGin(...)` 与 `platform/auth/ScopeFromGin(...)` 已可读取标准化 subject / scope
+  - subject / scope 归一化在 `platform/auth.AuthMiddleware` 内部完成：`extractClaims` 将标准化后的 claims（`tenant_id` / `workspace_id` / `roles` 等）写入 gin context；请求级 scope 头（`X-Tenant-ID` / `X-Workspace-ID`）经 `platform/auth.EnforceRequestScope()` 校验，阻止调用方放大或抵触 token 自带的 scope（原 `SubjectFromGin` / `ScopeFromGin` 独立读取入口已随 2026-09-20 死代码清理移除）
 
 - AI / knowledge provider 默认配置
   - `config.WeKnora.TenantID`

@@ -705,6 +705,15 @@
     已由第十刀闭环（原登记：`go subscribeLoop()` 异步启动、Publish 侧
     未接线 `waitUntilReady`，5c4da70 修了订阅侧同步确认但发布侧缺口仍在；
     实施时口径升级为 Receive 本连接确认，见上条）
+  - 独立遗留项（2026-09-20 登记，刀 28 复核 B 类时查实定性）：MetricsAggregator
+    Snapshot 无读取出口，属产品黑洞非死代码——`POST /api/v1/metrics/ingest`
+    活端点（router_realtime.go:46 注册，bootstrap/security.go 安全清单登记为
+    "service ingestion surface"）接收外部指标写入内存聚合器
+    `handlers.MetricsAggregator`，但 `Snapshot()` 生产零调用、不接 prometheus
+    registry、无 GET 读取端点，且聚合器是路由构造时的匿名实例（handler 内部
+    持有，外部无引用入口）——数据写入即沉底，重启即失。决策项待产品/运维
+    口径：接线读出口（GET 端点或 prometheus 桥）vs 删除端点与聚合器 vs
+    其他消费语义（转发上游等）；接线状态无争议，非删除刀候选
 
 ### [x] P2-5 安全治理继续收口到首批企业交付标准
 
