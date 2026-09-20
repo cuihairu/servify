@@ -567,12 +567,6 @@ func TestSccGovernanceHelpers(t *testing.T) {
 	if got := requiredScopedConfigVerificationCheckIDs(scopedConfigVerificationTemplate{Checks: []scopedConfigVerificationCheckDefinition{{ID: "opt", Required: false}}}); got != nil {
 		t.Fatalf("expected nil got %+v", got)
 	}
-	if got := latestScopedConfigApprovalResponse(nil); got != nil {
-		t.Fatalf("expected nil got %+v", got)
-	}
-	if got := latestScopedConfigApprovalResponse(&scopedConfigApprovalRecord{AuditID: 3}); got == nil || got["audit_id"] != uint(3) {
-		t.Fatalf("unexpected response %+v", got)
-	}
 }
 
 func TestSccValidateSubmission(t *testing.T) {

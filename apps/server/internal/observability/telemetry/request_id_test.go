@@ -16,9 +16,9 @@ func TestRequestIDMiddleware_GeneratesID(t *testing.T) {
 	r := gin.New()
 	r.Use(RequestIDMiddleware())
 	r.GET("/test", func(c *gin.Context) {
-		id := RequestIDFromContext(c.Request.Context())
+		id := c.GetString(FieldRequestID)
 		if id == "" {
-			t.Fatal("expected request ID to be set in context")
+			t.Fatal("expected request ID to be set in gin context")
 		}
 		c.String(http.StatusOK, id)
 	})

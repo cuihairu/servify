@@ -341,27 +341,6 @@ func TestGormIndexJobRepositoryUnit(t *testing.T) {
 	}
 }
 
-func TestNoopIndexJobRepository(t *testing.T) {
-	repo := NewNoopIndexJobRepository()
-	ctx := context.Background()
-
-	if err := repo.Create(ctx, nil); err == nil || err.Error() != "index job required" {
-		t.Fatalf("expected nil job error, got %v", err)
-	}
-	if err := repo.Create(ctx, &domain.IndexJob{ID: "job-1"}); err != nil {
-		t.Fatalf("unexpected create error: %v", err)
-	}
-	if err := repo.Update(ctx, nil); err == nil || err.Error() != "index job required" {
-		t.Fatalf("expected nil job error on update, got %v", err)
-	}
-	if err := repo.Update(ctx, &domain.IndexJob{ID: "job-1"}); err != nil {
-		t.Fatalf("unexpected update error: %v", err)
-	}
-	if _, err := repo.Get(ctx, "job-1"); err == nil || err.Error() != "knowledge index jobs not configured" {
-		t.Fatalf("expected not configured error, got %v", err)
-	}
-}
-
 func TestIndexJobModelFromDomainNil(t *testing.T) {
 	if _, err := indexJobModelFromDomain(nil); err == nil || err.Error() != "index job required" {
 		t.Fatalf("expected nil job error, got %v", err)

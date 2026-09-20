@@ -701,6 +701,43 @@
       在用测试文件
     - 门禁：构建/vet/gofmt/boundaries 绿、受影响包 100%、全量门禁实测
       100.0%、CI 35510668953 绿
+  - 第十二刀（deadcode 复查——刀 27/28 删除后新孤儿 15 处清除，2026-09-20）✅
+    - 方法：deadcode 四入口复跑（server 生产入口报 62 个 unreachable 候选），
+      逐一三分类（生产消费/测试回读/多入口与接口契约误报），生产死链 15
+      处全清后复跑 deadcode 归零（余 34 项均为测试基建/多入口/接口契约/
+      已登记产品黑洞）
+    - errors 包：Classify/classifyProviderError/As/Unwrap/wrapAs
+      （classify.go 整文件）、HTTPStatusFromError/UserMessageFromError
+      （httpstatus.go 整文件）、WithMessage/WithHTTPStatus、
+      AppError.HTTPStatus 字段 + severityToHTTPStatus（读侧已全删成零读
+      死字段）——StatusMiddleware 真实接线走 RecordHTTPStatus→
+      classifyHTTPStatus 自有链，Classify 链从未被消费
+    - telemetry 包：context.go 会话/租户/追踪 6 函数 + RequestIDFromContext
+      （链头 logfields 死）、logfields.go 整文件、request_id.go 的
+      context 注入两行（写进 context.Context 全仓无人读；RequestID
+      真实出口是响应头 + gin context）
+    - platform/auth：RequirePermissionsAll（刀 28 保留的实现层，复核后
+      确认也死）、getGrantedRoles（刀 28 删光其仅有的两个生产调用方
+      SubjectFromGin 链与 RequireRolesAny 后成孤儿）、ContextRoles 常量
+    - middleware/handlers/knowledge：HasPermission 门面（零消费，通配符
+      语义由 platform/auth 直测承接）、旧版 HealthHandler 全套（被
+      EnhancedHealthHandler 替代，生产走 health.go:11）、
+      NewFileUploadHandler 便捷构造（生产走 WithConfig）、
+      latestScopedConfigApprovalResponse、NoopIndexJobRepository（刀 25
+      同款接口预留占位）
+    - 甄别保留 25 项：voice InMemory 三件套（10 个测试文件的注入基建）、
+      webhook VerifySignature/NewHTTPDelivererWithClient（测试 seam）、
+      ResetRateLimit（测试隔离）、bootstrap 4 函数与 config.Load（cli/
+      migrate/dbrecovery 多入口消费）、AppError.Error/Unwrap（error 接口
+      契约，deadcode 静态盲区）、MetricsAggregator.Snapshot（产品黑洞
+      已另行登记）
+    - 教训（对刀 28 的翻案）：「单包复测暴露缺口→补直测」的补救流程会
+      把死函数的缺口也补上——刀 28 给 getGrantedRoles 补直测时漏查函数
+      自身生产消费链（其调用方正是同刀被删的两个死链）。补测前先 grep
+      生产调用方，孤儿函数的正确处置是连删
+    - 门禁：构建/vet/gofmt/boundaries 绿、受影响包 100%（middleware 单包
+      99.2% 为 AuditMiddlewareWithFailures 跨包合并已知状态）、全量门禁
+      实测 100.0%、CI 见恢复点附注
   - ~~独立遗留项（2026-09-20 查实）：RedisBus 订阅确认竞态窗口未完全关闭~~
     已由第十刀闭环（原登记：`go subscribeLoop()` 异步启动、Publish 侧
     未接线 `waitUntilReady`，5c4da70 修了订阅侧同步确认但发布侧缺口仍在；

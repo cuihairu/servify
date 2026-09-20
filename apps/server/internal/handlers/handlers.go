@@ -109,23 +109,3 @@ func (h *MessageHandler) GetPlatformStats(c *gin.Context) {
 		"data":    stats,
 	})
 }
-
-type HealthHandler struct{}
-
-func NewHealthHandler() *HealthHandler {
-	return &HealthHandler{}
-}
-
-func (h *HealthHandler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "healthy",
-		"timestamp": c.GetHeader("X-Request-Time"),
-		"version":   "1.0.0",
-	})
-}
-
-func (h *HealthHandler) Ready(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ready",
-	})
-}

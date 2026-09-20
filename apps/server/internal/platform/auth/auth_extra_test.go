@@ -143,33 +143,6 @@ func TestAuthMiddlewareProjectsOptionalClaims(t *testing.T) {
 	}
 }
 
-func TestRequirePermissionsAll(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("permissions", []string{"tickets.read", "tickets.write"})
-		c.Next()
-	})
-	r.GET("/all", RequirePermissionsAll("tickets.read", "tickets.write"))
-	r.GET("/missing", RequirePermissionsAll("tickets.read", "tickets.delete"))
-	r.GET("/blank", RequirePermissionsAll("  ", "tickets.read"))
-	r.GET("/none", RequirePermissionsAll())
-
-	cases := map[string]int{
-		"/all":     http.StatusOK,
-		"/missing": http.StatusForbidden,
-		"/blank":   http.StatusOK,
-		"/none":    http.StatusOK,
-	}
-	for path, want := range cases {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
-		if w.Code != want {
-			t.Fatalf("%s = %d want %d", path, w.Code, want)
-		}
-	}
-}
-
 func TestRequirePermissionsAnyDeny(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -187,31 +160,8 @@ func TestRequirePermissionsAnyDeny(t *testing.T) {
 	}
 }
 
-func TestGetGrantedRolesAndPrincipalKindVariants(t *testing.T) {
+func TestGetGrantedPermissionsAndPrincipalKindVariants(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-
-	c1, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c1.Set(ContextRoles, "single-role")
-	if roles := getGrantedRoles(c1); len(roles) != 1 || roles[0] != "single-role" {
-		t.Fatalf("string roles = %+v", roles)
-	}
-
-	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c2.Set(ContextRoles, "")
-	if roles := getGrantedRoles(c2); roles != nil {
-		t.Fatalf("empty string roles = %+v", roles)
-	}
-
-	c3, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c3.Set(ContextRoles, 42)
-	if roles := getGrantedRoles(c3); roles != nil {
-		t.Fatalf("int roles = %+v", roles)
-	}
-
-	c4, _ := gin.CreateTestContext(httptest.NewRecorder())
-	if roles := getGrantedRoles(c4); roles != nil {
-		t.Fatalf("no roles = %+v", roles)
-	}
 
 	c5, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c5.Set(ContextPermissions, "not-a-list")
@@ -459,34 +409,5 @@ func TestTokenPoliciesMoreBranches(t *testing.T) {
 	composed := ComposeTokenPolicies(nil, RequireMinimumTokenVersion(1))
 	if err := composed(map[string]interface{}{"ver": float64(2)}, Claims{}, now); err != nil {
 		t.Fatalf("composed policy = %v", err)
-	}
-}
-
-// TestGetGrantedRolesVariants 直测 roles 读取的各分支（原经已删除的
-// SubjectFromGin 测试间接覆盖）。
-func TestGetGrantedRolesVariants(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Set("roles", []string{"ops"})
-	if got := getGrantedRoles(c); len(got) != 1 || got[0] != "ops" {
-		t.Fatalf("[]string roles = %v", got)
-	}
-
-	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c2.Set("roles", []interface{}{"ops", 7, " "})
-	if got := getGrantedRoles(c2); len(got) != 2 || got[0] != "ops" {
-		t.Fatalf("mixed roles = %v, want [ops, ]", got)
-	}
-
-	c3, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c3.Set("roles", "agent")
-	if got := getGrantedRoles(c3); len(got) != 1 || got[0] != "agent" {
-		t.Fatalf("string role = %v", got)
-	}
-
-	c4, _ := gin.CreateTestContext(httptest.NewRecorder())
-	if got := getGrantedRoles(c4); got != nil {
-		t.Fatalf("missing roles = %v, want nil", got)
 	}
 }

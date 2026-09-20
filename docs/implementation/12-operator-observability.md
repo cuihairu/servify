@@ -63,9 +63,8 @@
 当前进展：
 
 - `internal/observability/errors/errors.go` — `AppError` type，Severity（user/dependency/config/system）、Category（auth/database/ai/routing/validation/rate_limit/internal/network）、Option 模式
-- `internal/observability/errors/classify.go` — `Classify(err)` 自动映射；特殊处理 `llm.ProviderError`
+- `internal/observability/errors/http_middleware.go` — `RecordHTTPStatus()` 按响应状态码分类（502/504 归 dependency，其余 5xx 归 system）+ `StatusMiddleware()` 统一出口（原 `classify.go`/`httpstatus.go` 的 `Classify`/`HTTPStatusFromError` 链因生产零消费已随 2026-09-20 死代码清理移除）
 - `internal/observability/errors/metrics.go` — `errors_total` Prometheus counter + `RecordError()`
-- `internal/observability/errors/httpstatus.go` — `HTTPStatusFromError()`、`UserMessageFromError()`
 
 ## O4 async-reliability-observability
 

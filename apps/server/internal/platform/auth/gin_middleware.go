@@ -128,26 +128,6 @@ func RequirePermissionsAny(required ...string) gin.HandlerFunc {
 	}
 }
 
-// RequirePermissionsAll requires the caller to have all listed permissions.
-func RequirePermissionsAll(required ...string) gin.HandlerFunc {
-	req := make([]string, 0, len(required))
-	for _, r := range required {
-		if s := strings.TrimSpace(r); s != "" {
-			req = append(req, s)
-		}
-	}
-	return func(c *gin.Context) {
-		granted := getGrantedPermissions(c)
-		for _, r := range req {
-			if !HasPermission(granted, r) {
-				abortJSON(c, http.StatusForbidden, "Forbidden", "insufficient permission")
-				return
-			}
-		}
-		c.Next()
-	}
-}
-
 // RequireResourcePermission maps HTTP methods to resource permissions.
 func RequireResourcePermission(resource string) gin.HandlerFunc {
 	resource = strings.TrimSpace(resource)
@@ -218,28 +198,6 @@ func getGrantedPermissions(c *gin.Context) []string {
 	if v, ok := c.Get("permissions"); ok {
 		if perms, ok := v.([]string); ok {
 			return perms
-		}
-	}
-	return nil
-}
-
-func getGrantedRoles(c *gin.Context) []string {
-	if v, ok := c.Get("roles"); ok {
-		switch t := v.(type) {
-		case []string:
-			return t
-		case []interface{}:
-			var out []string
-			for _, it := range t {
-				if s, ok := it.(string); ok {
-					out = append(out, s)
-				}
-			}
-			return out
-		case string:
-			if t != "" {
-				return []string{t}
-			}
 		}
 	}
 	return nil

@@ -7,6 +7,5 @@ const (
 	ContextWorkspaceID   = "workspace_id"
 	ContextTokenType     = "token_type"
 	ContextPrincipalType = "principal_type"
-	ContextRoles         = "roles"
 	ContextPermissions   = "permissions"
 )

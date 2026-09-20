@@ -8,28 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestHasPermission_WildcardsAndExact(t *testing.T) {
-	tests := []struct {
-		name     string
-		granted  []string
-		required string
-		want     bool
-	}{
-		{"star", []string{"*"}, "tickets.read", true},
-		{"exact", []string{"tickets.read"}, "tickets.read", true},
-		{"prefixStar", []string{"tickets.*"}, "tickets.read", true},
-		{"prefixStarNested", []string{"tickets.*"}, "tickets.write", true},
-		{"noMatch", []string{"customers.read"}, "tickets.read", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := HasPermission(tt.granted, tt.required); got != tt.want {
-				t.Fatalf("HasPermission(%v, %q)=%v want %v", tt.granted, tt.required, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestRequireResourcePermission_ReadWrite(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

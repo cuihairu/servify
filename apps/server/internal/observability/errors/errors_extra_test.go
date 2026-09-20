@@ -22,10 +22,3 @@ func TestAppError_ErrorWithoutModule(t *testing.T) {
 		t.Fatalf("expected %q, got %q", expected, appErr.Error())
 	}
 }
-
-func TestNew_UnknownSeverityDefaultStatus(t *testing.T) {
-	appErr := New(errors.New("mystery"), Severity("bogus"), CategoryInternal)
-	if appErr.HTTPStatus != 500 {
-		t.Fatalf("expected 500 for unknown severity, got %d", appErr.HTTPStatus)
-	}
-}

@@ -91,33 +91,6 @@ func TestCxcWebRTCHandlerGetConnections(t *testing.T) {
 	}
 }
 
-func TestCxcHealthHandler(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	h := NewHealthHandler()
-	r := gin.New()
-	r.GET("/health", h.Health)
-	r.GET("/ready", h.Ready)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	req.Header.Set("X-Request-Time", "2026-01-02T03:04:05Z")
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("health expected 200, got %d", w.Code)
-	}
-	if !strings.Contains(w.Body.String(), `"healthy"`) || !strings.Contains(w.Body.String(), "2026-01-02T03:04:05Z") {
-		t.Fatalf("unexpected health body: %s", w.Body.String())
-	}
-
-	wReady := cxcPerform(r, http.MethodGet, "/ready", nil, "")
-	if wReady.Code != http.StatusOK {
-		t.Fatalf("ready expected 200, got %d", wReady.Code)
-	}
-	if !strings.Contains(wReady.Body.String(), `"ready"`) {
-		t.Fatalf("unexpected ready body: %s", wReady.Body.String())
-	}
-}
-
 // ---- health_enhanced.go ----
 
 func cxcHealthHandler(cfg *config.Config, ai *unitAIService, db DatabasePing, redisClient *redis.Client) *EnhancedHealthHandler {
@@ -480,7 +453,7 @@ func TestCxcFileUploadHandlerBranches(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// no file provided, maxSize == 0 (skips MaxBytesReader)
-	h := NewFileUploadHandler(&unitStorageProvider{}, 0)
+	h := NewFileUploadHandlerWithConfig(&unitStorageProvider{}, UploadHandlerConfig{MaxSize: 0})
 	r := gin.New()
 	r.POST("/upload", h.Upload)
 	if w := cxcPerform(r, http.MethodPost, "/upload", nil, ""); w.Code != http.StatusBadRequest {
@@ -488,7 +461,7 @@ func TestCxcFileUploadHandlerBranches(t *testing.T) {
 	}
 
 	// oversized body with maxSize > 0 -> MaxBytesReader triggers FormFile error
-	h2 := NewFileUploadHandler(&unitStorageProvider{}, 8)
+	h2 := NewFileUploadHandlerWithConfig(&unitStorageProvider{}, UploadHandlerConfig{MaxSize: 8})
 	r2 := gin.New()
 	r2.POST("/upload", h2.Upload)
 	req, err := buildMultipart("/upload", "file", "big.txt", []byte("this is way more than eight bytes"))
@@ -502,7 +475,7 @@ func TestCxcFileUploadHandlerBranches(t *testing.T) {
 	}
 
 	// disallowed extension
-	h3 := NewFileUploadHandler(&unitStorageProvider{}, 0)
+	h3 := NewFileUploadHandlerWithConfig(&unitStorageProvider{}, UploadHandlerConfig{MaxSize: 0})
 	r3 := gin.New()
 	r3.POST("/upload", h3.Upload)
 	req3, err := buildMultipart("/upload", "file", "malware.exe", []byte("MZ"))
@@ -517,7 +490,7 @@ func TestCxcFileUploadHandlerBranches(t *testing.T) {
 
 	// provider save error
 	prov := &unitStorageProvider{err: errors.New("disk full")}
-	h4 := NewFileUploadHandler(prov, 0)
+	h4 := NewFileUploadHandlerWithConfig(prov, UploadHandlerConfig{MaxSize: 0})
 	r4 := gin.New()
 	r4.POST("/upload", h4.Upload)
 	req4, err := buildMultipart("/upload", "file", "ok.txt", []byte("data"))
@@ -532,7 +505,7 @@ func TestCxcFileUploadHandlerBranches(t *testing.T) {
 
 	// success
 	provOK := &unitStorageProvider{}
-	h5 := NewFileUploadHandler(provOK, 1024)
+	h5 := NewFileUploadHandlerWithConfig(provOK, UploadHandlerConfig{MaxSize: 1024})
 	r5 := gin.New()
 	r5.POST("/upload", h5.Upload)
 	req5, err := buildMultipart("/upload", "file", "photo.png", []byte("pngdata"))

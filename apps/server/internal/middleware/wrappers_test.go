@@ -97,8 +97,4 @@ func TestAuthorizeWrappers(t *testing.T) {
 			t.Fatalf("%s = %d want %d", path, w.Code, want)
 		}
 	}
-
-	if !HasPermission([]string{"tickets.*"}, "tickets.read") {
-		t.Fatal("HasPermission wildcard failed")
-	}
 }

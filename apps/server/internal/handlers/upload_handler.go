@@ -26,11 +26,6 @@ type UploadHandlerConfig struct {
 	AllowedExts []string
 }
 
-// NewFileUploadHandler creates a new FileUploadHandler backed by a storage.Provider.
-func NewFileUploadHandler(provider storage.Provider, maxSize int64) *FileUploadHandler {
-	return NewFileUploadHandlerWithConfig(provider, UploadHandlerConfig{MaxSize: maxSize})
-}
-
 // NewFileUploadHandlerWithConfig creates a handler with an explicit size limit
 // and extension whitelist (usually derived from config.Upload).
 func NewFileUploadHandlerWithConfig(provider storage.Provider, cfg UploadHandlerConfig) *FileUploadHandler {

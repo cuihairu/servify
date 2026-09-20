@@ -181,30 +181,6 @@ func (r *GormIndexJobRepository) Get(ctx context.Context, id string) (*domain.In
 	return indexJobFromModel(model), nil
 }
 
-type NoopIndexJobRepository struct{}
-
-func NewNoopIndexJobRepository() *NoopIndexJobRepository {
-	return &NoopIndexJobRepository{}
-}
-
-func (r *NoopIndexJobRepository) Create(ctx context.Context, job *domain.IndexJob) error {
-	if job == nil {
-		return fmt.Errorf("index job required")
-	}
-	return nil
-}
-
-func (r *NoopIndexJobRepository) Update(ctx context.Context, job *domain.IndexJob) error {
-	if job == nil {
-		return fmt.Errorf("index job required")
-	}
-	return nil
-}
-
-func (r *NoopIndexJobRepository) Get(ctx context.Context, id string) (*domain.IndexJob, error) {
-	return nil, fmt.Errorf("knowledge index jobs not configured")
-}
-
 func documentFromModel(model domain.KnowledgeDoc) *domain.Document {
 	return &domain.Document{
 		ID:         strconv.FormatUint(uint64(model.ID), 10),

@@ -8,8 +8,8 @@ import (
 const requestIDHeader = "X-Request-ID"
 
 // RequestIDMiddleware generates a UUID request ID if not already present,
-// sets it in the response header, and stores it in context for downstream
-// consumers (logging, audit, metrics).
+// sets it in the response header, and stores it in the Gin context for
+// other middleware.
 func RequestIDMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(requestIDHeader)
@@ -22,10 +22,6 @@ func RequestIDMiddleware() gin.HandlerFunc {
 
 		// Store in Gin context for other middleware.
 		c.Set(FieldRequestID, id)
-
-		// Store in context.Context for non-Gin code paths.
-		ctx := WithRequestID(c.Request.Context(), id)
-		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

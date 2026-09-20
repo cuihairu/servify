@@ -2174,13 +2174,6 @@ func scopedConfigVerificationResponses(verifications []scopedConfigVerificationR
 	return result
 }
 
-func latestScopedConfigApprovalResponse(approval *scopedConfigApprovalRecord) gin.H {
-	if approval == nil {
-		return nil
-	}
-	return approval.response()
-}
-
 func latestScopedConfigApprovalFromIndex(index map[string][]scopedConfigApprovalRecord, changeControl scopedConfigChangeControl) *scopedConfigApprovalRecord {
 	key := scopedConfigApprovalKey(changeControl)
 	if key == "" || len(index[key]) == 0 {
