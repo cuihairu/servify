@@ -28,8 +28,6 @@ func TestOrchestratedEnhancedAIServiceFallbackWhenKnowledgeProviderFailsIntegrat
 		},
 		"",
 		nil,
-		"kb-1",
-		nil,
 	)
 
 	resp, err := service.ProcessQueryEnhanced(context.Background(), "退款政策", "session-knowledge-fallback")
@@ -62,8 +60,6 @@ func TestOrchestratedEnhancedAIServiceFallbackWhenLLMProviderFailsIntegration(t 
 			},
 		},
 		"",
-		nil,
-		"kb-1",
 		nil,
 	)
 

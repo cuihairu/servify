@@ -9,11 +9,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
-	difykp "servify/apps/server/internal/platform/knowledgeprovider/dify"
-	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
 	"servify/apps/server/internal/platform/llm/openai"
-	"servify/apps/server/pkg/dify"
-	"servify/apps/server/pkg/weknora"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -113,63 +109,26 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger, s.businessMeter))
 }
 
+// runtimeServiceFromResolvedConfig 按解析后的租户/工作区配置重建编排服务。
+// 知识源选择与启动期 BuildAIAssembly 共用 selectKnowledgeSource 门面，但
+// checkHealth=false：请求级不做健康探测（不可达 BaseURL 也纯构造），运行期
+// 外部知识源故障由编排服务的 circuitBreaker 兜底。
 func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
+	// checkHealth=false 时选择链按契约不产生错误（错误路径全部位于健康检查内），
+	// 请求级重建不做健康探测，运行期故障由编排服务 circuitBreaker 兜底。
+	source, _ := selectKnowledgeSource(difyConfig, weKnoraConfig, knowledgeSourceOptions{
+		checkHealth: false,
+		logger:      logger,
+	})
 	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
 	// AttachBusinessMetrics 把进程级业务指标挂上（nil 安全），AI 请求打点
 	// 见 OrchestratedEnhancedAIService.ProcessQueryEnhanced。
-	defaultService := aidelivery.NewOrchestratedEnhancedAIService(
-		baseAI,
-		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-		nil,
-		"",
-		nil,
-		"",
-		logger,
-	).AttachBusinessMetrics(businessMeter)
-	if difyConfig.Enabled {
-		client := dify.NewClient(&dify.Config{
-			BaseURL: difyConfig.BaseURL,
-			APIKey:  difyConfig.APIKey,
-			Timeout: difyConfig.Timeout,
-		})
-		return aidelivery.NewOrchestratedEnhancedAIService(
-			baseAI,
-			openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-			difykp.NewProvider(client, difyConfig.DatasetID, difykp.SearchConfig{
-				TopK:            difyConfig.Search.TopK,
-				ScoreThreshold:  difyConfig.Search.ScoreThreshold,
-				SearchMethod:    difyConfig.Search.SearchMethod,
-				RerankingEnable: difyConfig.Search.RerankingEnable,
-			}),
-			"dify",
-			nil,
-			difyConfig.DatasetID,
-			logger,
-		).AttachBusinessMetrics(businessMeter)
-	}
-	if !weKnoraConfig.Enabled {
-		return defaultService
-	}
-	client := weknora.NewClient(&weknora.Config{
-		BaseURL:    weKnoraConfig.BaseURL,
-		APIKey:     weKnoraConfig.APIKey,
-		TenantID:   weKnoraConfig.TenantID,
-		Timeout:    weKnoraConfig.Timeout,
-		MaxRetries: weKnoraConfig.MaxRetries,
-	}, logger)
-	return aidelivery.NewOrchestratedEnhancedAIService(
-		baseAI,
-		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-		weknorakp.NewProvider(client, weKnoraConfig.KnowledgeBaseID),
-		"weknora",
-		client,
-		weKnoraConfig.KnowledgeBaseID,
-		logger,
-	).AttachBusinessMetrics(businessMeter)
+	return source.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger).
+		AttachBusinessMetrics(businessMeter)
 }
 
 func (s *scopedAIHandlerService) applyRuntimeOverrides(service aidelivery.RuntimeService) aidelivery.RuntimeService {

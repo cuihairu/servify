@@ -31,8 +31,6 @@ func TestOrchestratedEnhancedAIServiceProcessQueryEnhanced(t *testing.T) {
 		},
 		"",
 		nil,
-		"kb-1",
-		nil,
 	)
 
 	resp, err := svc.ProcessQueryEnhanced(context.Background(), "billing", "session-1")
@@ -70,8 +68,6 @@ func TestOrchestratedEnhancedAIServiceProcessQueryEnhancedWithDifyProvider(t *te
 			},
 		},
 		"dify",
-		nil,
-		"dataset-1",
 		nil,
 	)
 
@@ -111,8 +107,6 @@ func TestOrchestratedEnhancedAIServiceUploadAndSyncWithDifyProvider(t *testing.T
 		provider,
 		"dify",
 		nil,
-		"dataset-1",
-		nil,
 	)
 
 	if err := svc.UploadKnowledgeDocument(context.Background(), "Manual Doc", "Manual content", []string{"manual"}); err != nil {
@@ -146,8 +140,6 @@ func TestOrchestratedEnhancedAIServiceUploadKnowledgeDocumentDisabled(t *testing
 		nil,
 		"",
 		nil,
-		"",
-		nil,
 	)
 
 	err := svc.UploadKnowledgeDocument(context.Background(), "Manual Doc", "Manual content", []string{"manual"})
@@ -170,8 +162,6 @@ func TestOrchestratedEnhancedAIServiceSyncKnowledgeBaseDisabled(t *testing.T) {
 	svc := NewOrchestratedEnhancedAIService(
 		base,
 		&mockllm.Provider{},
-		nil,
-		"",
 		nil,
 		"",
 		nil,
@@ -201,8 +191,6 @@ func TestOrchestratedEnhancedAIServiceUploadAndSyncRespectEnableToggle(t *testin
 		&mockllm.Provider{},
 		provider,
 		"dify",
-		nil,
-		"dataset-1",
 		nil,
 	)
 
@@ -240,8 +228,6 @@ func TestOrchestratedEnhancedAIServiceFallbackAndReset(t *testing.T) {
 		&mockllm.Provider{ChatError: context.DeadlineExceeded},
 		&mockkp.Provider{},
 		"",
-		nil,
-		"kb-1",
 		nil,
 	)
 
@@ -286,8 +272,6 @@ func TestOrchestratedEnhancedAIServiceFallbackLogsStrategy(t *testing.T) {
 		&mockllm.Provider{ChatError: context.DeadlineExceeded},
 		&mockkp.Provider{},
 		"",
-		nil,
-		"kb-1",
 		logger,
 	)
 

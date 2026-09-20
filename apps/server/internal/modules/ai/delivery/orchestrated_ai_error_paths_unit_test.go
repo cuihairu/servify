@@ -20,8 +20,6 @@ func TestOrchestratedAI_ProcessQueryError(t *testing.T) {
 		nil,
 		"",
 		nil,
-		"",
-		nil,
 	)
 	// no provider + no fallback configured -> orchestrator error surfaces when LLM fails
 	svc.SetFallbackEnabled(false)

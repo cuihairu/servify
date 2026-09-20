@@ -30,8 +30,6 @@ func TestOrchestratedAI_FallbackErrorBranch(t *testing.T) {
 		&mockkp.Provider{},
 		"",
 		nil,
-		"kb",
-		nil,
 	)
 	if _, err := svc.ProcessQueryEnhanced(context.Background(), "普通问题", "sess"); err == nil {
 		t.Fatal("expected fallback error propagation")

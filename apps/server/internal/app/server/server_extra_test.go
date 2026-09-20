@@ -365,7 +365,7 @@ func TestBuildAIAssemblyFailurePaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("BuildAIAssembly() error = %v", err)
 		}
-		if assembly.KnowledgeProviderHealthy || assembly.WeKnoraHealthy {
+		if assembly.KnowledgeProviderHealthy {
 			t.Fatalf("expected unhealthy assembly, got %+v", assembly)
 		}
 		if assembly.KnowledgeDriver != nil {
@@ -412,11 +412,11 @@ func TestBuildAIAssemblySyncKnowledgeBaseWarnsOnFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildAIAssembly() error = %v", err)
 	}
-	if !assembly.WeKnoraHealthy || assembly.KnowledgeProviderID != "weknora" {
+	if !assembly.KnowledgeProviderHealthy || assembly.KnowledgeProviderID != "weknora" {
 		t.Fatalf("expected healthy weknora assembly, got %+v", assembly)
 	}
-	if assembly.WeKnoraClient == nil {
-		t.Fatal("expected weknora client to be attached")
+	if assembly.KnowledgeDriver == nil {
+		t.Fatal("expected weknora driver to be attached")
 	}
 }
 

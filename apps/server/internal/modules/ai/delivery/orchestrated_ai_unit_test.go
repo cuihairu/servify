@@ -27,7 +27,7 @@ func newOrchestratedForUnit(t *testing.T) (*OrchestratedEnhancedAIService, *mock
 	base.InitializeKnowledgeBase()
 	llmProvider := &mockllm.Provider{}
 	kp := &mockkp.Provider{}
-	svc := NewOrchestratedEnhancedAIService(base, llmProvider, kp, "weknora", nil, "kb", nil)
+	svc := NewOrchestratedEnhancedAIService(base, llmProvider, kp, "weknora", nil)
 	return svc, llmProvider, kp
 }
 
@@ -80,8 +80,6 @@ func TestOrchestratedAI_ProcessQueryEnhanced_ProviderDisabled(t *testing.T) {
 		base,
 		&mockllm.Provider{ChatError: errors.New("boom")},
 		nil, // no knowledge provider
-		"",
-		nil,
 		"",
 		nil,
 	)
@@ -174,8 +172,6 @@ func TestOrchestratedAI_SyncKnowledgeBase_UpsertError(t *testing.T) {
 		&failingUpsertProvider{Provider: &mockkp.Provider{}, upsertErr: errors.New("write failed")},
 		"dify",
 		nil,
-		"",
-		nil,
 	)
 	if err := svc.SyncKnowledgeBase(context.Background()); err == nil {
 		t.Fatal("expected sync error")
@@ -200,7 +196,7 @@ func TestOrchestratedAI_HelperBranches(t *testing.T) {
 	}
 
 	base := NewAIService("", "")
-	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{}, nil, "", nil, "", nil)
+	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{}, nil, "", nil)
 	if got := svc.activeKnowledgeProviderID(); got != "" {
 		t.Fatalf("disabled provider id: %q", got)
 	}

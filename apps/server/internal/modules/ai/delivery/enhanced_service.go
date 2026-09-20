@@ -23,8 +23,6 @@ type OrchestratedEnhancedAIService struct {
 	llmProvider              llm.LLMProvider
 	knowledgeProvider        knowledgeprovider.KnowledgeProvider
 	knowledgeProviderID      string
-	weKnoraClient            baseweknora.WeKnoraInterface
-	knowledgeBaseID          string
 	knowledgeProviderEnabled bool
 	fallbackEnabled          bool
 	circuitBreaker           *CircuitBreaker
@@ -53,13 +51,15 @@ func (s *OrchestratedEnhancedAIService) aiProviderLabel() string {
 	return "none"
 }
 
+// NewOrchestratedEnhancedAIService 组装编排服务。原 weKnoraClient /
+// knowledgeBaseID 两参为 write-only 死存储（SyncKnowledgeBase 与上传走
+// knowledgeProvider.UpsertDocument），已删——weknora 客户端与 kb id 由
+// knowledgeprovider/weknora 的 driver 内部持有。
 func NewOrchestratedEnhancedAIService(
 	base *AIService,
 	llmProvider llm.LLMProvider,
 	knowledgeProvider knowledgeprovider.KnowledgeProvider,
 	knowledgeProviderID string,
-	weKnoraClient baseweknora.WeKnoraInterface,
-	knowledgeBaseID string,
 	logger *logrus.Logger,
 ) *OrchestratedEnhancedAIService {
 	if logger == nil {
@@ -81,8 +81,6 @@ func NewOrchestratedEnhancedAIService(
 		llmProvider:              llmProvider,
 		knowledgeProvider:        knowledgeProvider,
 		knowledgeProviderID:      strings.TrimSpace(knowledgeProviderID),
-		weKnoraClient:            weKnoraClient,
-		knowledgeBaseID:          knowledgeBaseID,
 		knowledgeProviderEnabled: knowledgeProvider != nil,
 		fallbackEnabled:          true,
 		circuitBreaker:           NewCircuitBreaker(),

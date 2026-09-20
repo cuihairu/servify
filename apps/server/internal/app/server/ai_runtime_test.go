@@ -15,18 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestAIAssemblyKnowledgeProviderUsesResolvedKnowledgeBaseID(t *testing.T) {
-	assembly := &AIAssembly{
-		KnowledgeProviderHealthy: true,
-		WeKnoraHealthy:           true,
-		WeKnoraClient:            nil,
-		KnowledgeBaseID:          "kb-resolved",
+// TestAIAssemblyKnowledgeProviderNilSafety 覆盖 KnowledgeProvider 的 nil 接收者
+// 与空视图防御（provider 特定字段已收敛进 knowledgeSource 门面，统一视图仅五字段）。
+func TestAIAssemblyKnowledgeProviderNilSafety(t *testing.T) {
+	var nilAssembly *AIAssembly
+	if provider := nilAssembly.KnowledgeProvider(&config.Config{}); provider != nil {
+		t.Fatal("expected nil provider on nil assembly")
 	}
-	if provider := assembly.KnowledgeProvider(&config.Config{}); provider != nil {
-		t.Fatal("expected nil provider without client")
-	}
-	if assembly.KnowledgeBaseID != "kb-resolved" {
-		t.Fatalf("knowledge base id = %q want kb-resolved", assembly.KnowledgeBaseID)
+	empty := &AIAssembly{}
+	if provider := empty.KnowledgeProvider(&config.Config{}); provider != nil {
+		t.Fatal("expected nil provider without driver")
 	}
 }
 

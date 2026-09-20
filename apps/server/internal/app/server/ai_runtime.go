@@ -11,12 +11,8 @@ import (
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
-	difykp "servify/apps/server/internal/platform/knowledgeprovider/dify"
 	pgvectorkp "servify/apps/server/internal/platform/knowledgeprovider/pgvector"
-	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
 	"servify/apps/server/internal/platform/llm/openai"
-	"servify/apps/server/pkg/dify"
-	"servify/apps/server/pkg/weknora"
 
 	"gorm.io/gorm"
 
@@ -32,19 +28,18 @@ type AIAssemblyOptions struct {
 	DB *gorm.DB
 }
 
+// AIAssembly 是启动期 AI 装配的统一视图：知识源经 knowledgeSource 门面选择
+// 后只暴露 provider 无关字段（driver / id / healthy），provider 特定状态
+// （dify dataset id、weknora client 等）由各 driver 内部持有。
 type AIAssembly struct {
 	Service                  aidelivery.HandlerService
 	RuntimeService           aidelivery.RuntimeService
 	KnowledgeDriver          knowledgeprovider.KnowledgeProvider
 	KnowledgeProviderID      string
 	KnowledgeProviderHealthy bool
-	DifyHealthy              bool
-	DifyDatasetID            string
-	WeKnoraClient            weknora.WeKnoraInterface
-	WeKnoraHealthy           bool
-	KnowledgeBaseID          string
 }
 
+// KnowledgeProvider 返回选定知识源 driver（KnowledgeDocHandler 消费；nil 安全）。
 func (a *AIAssembly) KnowledgeProvider(cfg *config.Config) knowledgeprovider.KnowledgeProvider {
 	if a == nil {
 		return nil
@@ -63,20 +58,11 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 
 	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
-	defaultService := aidelivery.NewOrchestratedEnhancedAIService(
-		baseAI,
-		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-		nil,
-		"",
-		nil,
-		"",
-		logger,
-	)
-
+	// 基础编排服务（无外部知识源）：无知识源运行与 pgvector 降级路径共用。
+	defaultService := knowledgeSource{}.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger)
 	assembly := &AIAssembly{
-		Service:         aidelivery.NewHandlerServiceAdapter(defaultService),
-		RuntimeService:  defaultService,
-		KnowledgeBaseID: weKnoraConfig.KnowledgeBaseID,
+		Service:        aidelivery.NewHandlerServiceAdapter(defaultService),
+		RuntimeService: defaultService,
 	}
 
 	// pgvector 自建知识库：knowledge.provider=pgvector 时优先于外部 provider，
@@ -85,94 +71,29 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 		return buildPgvectorAssembly(baseAI, openAIConfig.APIKey, openAIConfig.BaseURL, cfg, logger, opts, assembly)
 	}
 
-	if difyConfig.Enabled {
-		difyClient := dify.NewClient(&dify.Config{
-			BaseURL: difyConfig.BaseURL,
-			APIKey:  difyConfig.APIKey,
-			Timeout: difyConfig.Timeout,
-		})
-		ctx, cancel := context.WithTimeout(context.Background(), timeoutForHealthCheck(opts))
-		defer cancel()
-		if err := difyClient.HealthCheck(ctx, difyConfig.DatasetID); err != nil {
-			logger.Warnf("Dify health check failed: %v", err)
-			if !weKnoraConfig.Enabled && opts.requireKnowledgeProviderHealthy() {
-				return nil, fmt.Errorf("dify health check failed: %w", err)
-			}
-		} else {
-			assembly.KnowledgeProviderHealthy = true
-			assembly.DifyHealthy = true
-			assembly.DifyDatasetID = difyConfig.DatasetID
-			assembly.KnowledgeProviderID = "dify"
-			assembly.KnowledgeDriver = difykp.NewProvider(difyClient, difyConfig.DatasetID, difykp.SearchConfig{
-				TopK:            difyConfig.Search.TopK,
-				ScoreThreshold:  difyConfig.Search.ScoreThreshold,
-				SearchMethod:    difyConfig.Search.SearchMethod,
-				RerankingEnable: difyConfig.Search.RerankingEnable,
-			})
-			enhanced := aidelivery.NewOrchestratedEnhancedAIService(
-				baseAI,
-				openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-				assembly.KnowledgeDriver,
-				"dify",
-				nil,
-				difyConfig.DatasetID,
-				logger,
-			)
-			assembly.Service = aidelivery.NewHandlerServiceAdapter(enhanced)
-			assembly.RuntimeService = enhanced
-			return assembly, nil
-		}
+	source, err := selectKnowledgeSource(difyConfig, weKnoraConfig, knowledgeSourceOptions{
+		checkHealth:     true,
+		requireHealthy:  opts.requireKnowledgeProviderHealthy(),
+		fallbackEnabled: cfg.Fallback.Enabled,
+		healthTimeout:   timeoutForHealthCheck(opts),
+		logger:          logger,
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if !weKnoraConfig.Enabled {
+	if !source.present() {
 		return assembly, nil
 	}
-
-	client := weknora.NewClient(&weknora.Config{
-		BaseURL:    weKnoraConfig.BaseURL,
-		APIKey:     weKnoraConfig.APIKey,
-		TenantID:   weKnoraConfig.TenantID,
-		Timeout:    weKnoraConfig.Timeout,
-		MaxRetries: weKnoraConfig.MaxRetries,
-	}, logger)
-	assembly.WeKnoraClient = client
-
-	timeout := timeoutForHealthCheck(opts)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	if err := client.HealthCheck(ctx); err != nil {
-		logger.Warnf("WeKnora health check failed: %v", err)
-		if opts.requireKnowledgeProviderHealthy() {
-			return nil, fmt.Errorf("weknora health check failed: %w", err)
-		}
-		if !cfg.Fallback.Enabled {
-			return nil, fmt.Errorf("weknora unavailable and fallback disabled: %w", err)
-		}
-		return assembly, nil
-	}
-	assembly.KnowledgeProviderHealthy = true
-	assembly.WeKnoraHealthy = true
-	assembly.KnowledgeProviderID = "weknora"
-	assembly.KnowledgeDriver = weknorakp.NewProvider(client, weKnoraConfig.KnowledgeBaseID)
-
-	enhanced := aidelivery.NewOrchestratedEnhancedAIService(
-		baseAI,
-		openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL),
-		assembly.KnowledgeDriver,
-		"weknora",
-		client,
-		weKnoraConfig.KnowledgeBaseID,
-		logger,
-	)
-	if opts.SyncKnowledgeBase {
+	enhanced := source.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger)
+	// 知识同步仅在 weknora 驱动下执行（dify/pgvector 的索引由各自平台/迁移管理）。
+	if source.id == "weknora" && opts.SyncKnowledgeBase {
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer syncCancel()
 		if err := enhanced.SyncKnowledgeBase(syncCtx); err != nil {
 			logger.Warnf("Knowledge base sync failed: %v", err)
 		}
 	}
-	assembly.Service = aidelivery.NewHandlerServiceAdapter(enhanced)
-	assembly.RuntimeService = enhanced
+	assembly.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
 	return assembly, nil
 }
 
@@ -224,20 +145,9 @@ func buildPgvectorAssembly(
 		logger.Warnf("pgvector health check failed: %v", err)
 		return fallback, nil
 	}
-	fallback.KnowledgeProviderHealthy = true
-	fallback.KnowledgeProviderID = "pgvector"
-	fallback.KnowledgeDriver = driver
-	enhanced := aidelivery.NewOrchestratedEnhancedAIService(
-		baseAI,
-		openai.NewProvider(apiKey, baseURL),
-		driver,
-		"pgvector",
-		nil,
-		"",
-		logger,
-	)
-	fallback.Service = aidelivery.NewHandlerServiceAdapter(enhanced)
-	fallback.RuntimeService = enhanced
+	source := knowledgeSource{driver: driver, id: "pgvector"}
+	enhanced := source.buildOrchestrated(baseAI, openai.NewProvider(apiKey, baseURL), logger)
+	fallback.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
 	return fallback, nil
 }
 

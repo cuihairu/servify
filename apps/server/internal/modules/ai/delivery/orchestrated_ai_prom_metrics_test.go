@@ -75,7 +75,7 @@ func newMeteredOrchestrator(t *testing.T, base *AIService) (*OrchestratedEnhance
 		base = NewAIService("", "")
 		base.InitializeKnowledgeBase()
 	}
-	svc := NewOrchestratedEnhancedAIService(base, llmProvider, kp, "weknora", nil, "kb", nil).AttachBusinessMetrics(bm)
+	svc := NewOrchestratedEnhancedAIService(base, llmProvider, kp, "weknora", nil).AttachBusinessMetrics(bm)
 	return svc, llmProvider, kp, reg
 }
 
@@ -175,7 +175,7 @@ func TestOrchestratedAI_PromMetricsFallbackFailureUsesNoneProvider(t *testing.T)
 	base.InitializeKnowledgeBase()
 	reg := svcmetrics.NewRegistry()
 	bm := svcmetrics.NewBusinessMetrics(reg)
-	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{ChatError: context.DeadlineExceeded}, nil, "", nil, "", nil).AttachBusinessMetrics(bm)
+	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{ChatError: context.DeadlineExceeded}, nil, "", nil).AttachBusinessMetrics(bm)
 
 	if _, err := svc.ProcessQueryEnhanced(context.Background(), "普通问题", "sess"); err == nil {
 		t.Fatal("expected fallback failure")
@@ -198,7 +198,7 @@ func TestOrchestratedAI_PromMetricsNilMeterNoop(t *testing.T) {
 	// 未 Attach 指标（nil）时全部打点路径静默降级，不 panic。
 	base := NewAIService("", "")
 	base.InitializeKnowledgeBase()
-	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{ChatError: context.DeadlineExceeded}, nil, "", nil, "", nil)
+	svc := NewOrchestratedEnhancedAIService(base, &mockllm.Provider{ChatError: context.DeadlineExceeded}, nil, "", nil)
 
 	if _, err := svc.ProcessQueryEnhanced(context.Background(), "普通问题", "sess"); err != nil {
 		t.Fatalf("nil-meter fallback: %v", err)
