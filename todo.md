@@ -767,7 +767,10 @@
     五子路径行为契约）——随 ① 一并落地：ragflow → dify → weknora →
     pgvector 直配（dify/weknora 相对顺序不变，server_extra 五子路径契约
     回归绿）
-    ③ 新客户交付默认知识库口径（WeKnora/RAGFlow/pgvector）——仍待产品确认
+    ③ 新客户交付默认知识库口径（WeKnora/RAGFlow/pgvector）——已于 2026-09-21
+    拍板：pgvector 起步（零外部配置兜底，交付首周跑通全链路），客户有知识库
+    运营诉求时按解析深度选 WeKnora（轻量中文）或 RAGFlow（重解析）增强；
+    口径落 docs/deployment.md「新客户交付默认知识库口径」与 LANDSCAPE §5
     注：文档层已完成的定位澄清不属行为变更；此处仅登记代码侧待决策项
 
 ### [x] P2-5 安全治理继续收口到首批企业交付标准

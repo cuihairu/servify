@@ -197,6 +197,13 @@ export WEKNORA_API_KEY=your-weknora-api-key
 export OPENAI_API_KEY=your-openai-api-key
 ```
 
+#### 新客户交付默认知识库口径（2026-09-21 拍板）
+
+知识库能力按交付节奏分两层，不做互斥单选：
+
+1. **默认（零外部配置）：pgvector 直配**。选择链兜底即 pgvector，交付第一周即可跑通 AI 首答全链路，不阻塞在外部知识库部署上，交付失败率最低。检索质量依赖自建分块，适合文档量小、结构简单的起步阶段。
+2. **增强（客户有知识库运营诉求时）**：轻量中文生态场景接 **WeKnora**（部署轻、中文融合好）；复杂 PDF/合同/表格等重解析场景接 **RAGFlow**（DeepDoc 解析最深，资源占用偏高）。两者配置与验收见各自集成文档，启用即在选择链中按 ragflow → dify → weknora 优先级生效。
+
 ### 4.3 带可观测性栈
 
 ```bash
