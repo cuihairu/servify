@@ -25,21 +25,34 @@ type MetricsIngestRequest struct {
 // MetricsAggregator 简易聚合器（内存）
 type MetricsAggregator struct {
 	mu      sync.RWMutex
-	counter map[string]map[string]float64 // key: series(signature) -> labels-json -> value
+	counter map[string]map[string]*metricSeries // key: series(signature) -> labels-json -> series
+}
+
+// metricSeries 是单条时间序列：labels 仅在首见时拷贝一次，此后不可变。
+type metricSeries struct {
+	labels map[string]string
+	value  float64
 }
 
 func NewMetricsAggregator() *MetricsAggregator {
-	return &MetricsAggregator{counter: make(map[string]map[string]float64)}
+	return &MetricsAggregator{counter: make(map[string]map[string]*metricSeries)}
 }
 
 func (a *MetricsAggregator) Add(name string, labels map[string]string, v float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if _, ok := a.counter[name]; !ok {
-		a.counter[name] = make(map[string]float64)
+	series, ok := a.counter[name]
+	if !ok {
+		series = make(map[string]*metricSeries)
+		a.counter[name] = series
 	}
 	key := labelsKey(labels)
-	a.counter[name][key] += v
+	s, ok := series[key]
+	if !ok {
+		s = &metricSeries{labels: cloneLabels(labels)}
+		series[key] = s
+	}
+	s.value += v
 }
 
 func (a *MetricsAggregator) Snapshot() map[string]map[string]float64 {
@@ -48,10 +61,40 @@ func (a *MetricsAggregator) Snapshot() map[string]map[string]float64 {
 	out := make(map[string]map[string]float64, len(a.counter))
 	for n, series := range a.counter {
 		m := make(map[string]float64, len(series))
-		for k, v := range series {
-			m[k] = v
+		for k, s := range series {
+			m[k] = s.value
 		}
 		out[n] = m
+	}
+	return out
+}
+
+// MetricSeries 是聚合器内一条时间序列的快照。
+type MetricSeries struct {
+	Labels map[string]string
+	Value  float64
+}
+
+// SnapshotSeries 返回按指标名分组的序列快照，供 prometheus 桥导出；
+// Labels 为防御性拷贝，调用方可自由改写。
+func (a *MetricsAggregator) SnapshotSeries() map[string][]MetricSeries {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make(map[string][]MetricSeries, len(a.counter))
+	for n, series := range a.counter {
+		list := make([]MetricSeries, 0, len(series))
+		for _, s := range series {
+			list = append(list, MetricSeries{Labels: cloneLabels(s.labels), Value: s.value})
+		}
+		out[n] = list
+	}
+	return out
+}
+
+func cloneLabels(labels map[string]string) map[string]string {
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[k] = v
 	}
 	return out
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"servify/apps/server/internal/handlers"
 	"servify/apps/server/internal/middleware"
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +39,14 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	aiAPI.PUT("/knowledge-provider/disable", aiHandler.DisableKnowledgeProvider)
 	aiAPI.POST("/circuit-breaker/reset", aiHandler.ResetCircuitBreaker)
 
-	ingest := handlers.NewMetricsIngestHandler(handlers.NewMetricsAggregator())
+	aggregator := handlers.NewMetricsAggregator()
+	ingest := handlers.NewMetricsIngestHandler(aggregator)
+	// 客户端上报指标桥接进 prometheus /metrics 端点；条件与 health.go 的
+	// PrometheusHandler 分支对齐（Monitoring 关闭或降级 JSON handler 时无
+	// prometheus 出口，注册没有意义且 MustRegister 不可重入）。
+	if deps.Config.Monitoring.Enabled && deps.HTTPMetrics != nil {
+		svcmetrics.DefaultRegistry.MustRegister(handlers.NewMetricsPrometheusCollector(aggregator))
+	}
 	serviceV1 := r.Group("/api/v1")
 	serviceV1.Use(middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...))
 	serviceV1.Use(middleware.EnforceRequestScope())

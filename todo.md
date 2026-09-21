@@ -742,15 +742,16 @@
     已由第十刀闭环（原登记：`go subscribeLoop()` 异步启动、Publish 侧
     未接线 `waitUntilReady`，5c4da70 修了订阅侧同步确认但发布侧缺口仍在；
     实施时口径升级为 Receive 本连接确认，见上条）
-  - 独立遗留项（2026-09-20 登记，刀 28 复核 B 类时查实定性）：MetricsAggregator
-    Snapshot 无读取出口，属产品黑洞非死代码——`POST /api/v1/metrics/ingest`
-    活端点（router_realtime.go:46 注册，bootstrap/security.go 安全清单登记为
-    "service ingestion surface"）接收外部指标写入内存聚合器
-    `handlers.MetricsAggregator`，但 `Snapshot()` 生产零调用、不接 prometheus
-    registry、无 GET 读取端点，且聚合器是路由构造时的匿名实例（handler 内部
-    持有，外部无引用入口）——数据写入即沉底，重启即失。决策项待产品/运维
-    口径：接线读出口（GET 端点或 prometheus 桥）vs 删除端点与聚合器 vs
-    其他消费语义（转发上游等）；接线状态无争议，非删除刀候选
+  - 独立遗留项（2026-09-20 登记，刀 28 复核 B 类时查实定性）——已于
+    2026-09-21 按 prometheus 桥方案接线（产品口径拍板：客户端指标无替代
+    来源不删端点，不新增 GET 端点避免鉴权/审计面扩张）：聚合器存储升级为
+    labels 结构（`Snapshot`/`Add` 签名不变），新增
+    `MetricsPrometheusCollector`（`SnapshotSeries` → prometheus 指标族，
+    `_gauge` 后缀按 Gauge、其余按 Counter，动态序列走 unchecked
+    collector 惯例 Describe 空）；接线点 `registerRealtimeRoutes`（条件与
+    health.go PrometheusHandler 分支对齐：Monitoring.Enabled 且
+    HTTPMetrics 非 nil），客户端上报随 `/metrics` 端点对外暴露。已知边界
+    如实登记：内存聚合重启即失（持久化需另行立项，无产品诉求前不做）
   - 独立遗留项（2026-09-20 登记，产品口径）：知识库选型决策——用户确认
     「Dify 不能严格算知识库，当初把 dify 作为知识库插件定位不合适」。调研
     文档已产出（docs/KNOWLEDGE_BASE_LANDSCAPE.md：RAGFlow 首选候选 /

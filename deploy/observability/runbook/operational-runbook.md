@@ -25,6 +25,7 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 | `eventbus_` | Event bus processing |
 | `worker_` | Background job processing（job 轮次计数与 duration） |
 | `errors_` | Classified errors（HTTP 5xx 统一出口打点） |
+| `sdk_` / `agent_` / `admin_actions_` | Client-reported metrics（客户端经 `POST /api/v1/metrics/ingest` 上报，`MetricsPrometheusCollector` 桥接导出；内存聚合，重启即失） |
 
 ## Alert Runbooks
 
