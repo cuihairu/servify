@@ -517,8 +517,8 @@ jobs:
         run: |
           state=$(docker compose -f infra/compose/docker-compose.yml exec -T postgres psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations")
           echo "schema_migrations: $state"
-          if [ "$state" != "8|f" ]; then
-            echo "expected schema_migrations version=8 dirty=false, got: $state"
+          if [ "$state" != "9|f" ]; then
+            echo "expected schema_migrations version=9 dirty=false, got: $state"
             exit 1
           fi
 
@@ -548,8 +548,8 @@ jobs:
           # 4) 对账:迁移水位与播种行数随备份回来(损坏被回滚)
           state=$(pg "SELECT version, dirty FROM schema_migrations")
           echo "schema_migrations after restore: $state"
-          if [ "$state" != "8|f" ]; then
-            echo "expected schema_migrations version=8 dirty=false after restore, got: $state"
+          if [ "$state" != "9|f" ]; then
+            echo "expected schema_migrations version=9 dirty=false after restore, got: $state"
             exit 1
           fi
           after=$(pg "SELECT count(*) FROM users")
