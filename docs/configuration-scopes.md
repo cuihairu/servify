@@ -21,7 +21,7 @@
 2. 系统启动配置文件
    - 入口：`config.yml`、`config.weknora.yml`
    - 装载：`apps/server/internal/app/bootstrap/config.go`
-   - 用途：部署级基础设施和系统默认策略；其中 `config.weknora.yml` 主要用于 WeKnora compatibility 回归；知识库 provider 现状默认走 Dify dataset 兼容路径，正统知识库方向以 WeKnora 为主（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）
+   - 用途：部署级基础设施和系统默认策略；其中 `config.weknora.yml` 主要用于 WeKnora compatibility 回归；知识库选择链为 ragflow → dify → weknora → pgvector 直配（RAGFlow 与 WeKnora 为正统知识库双路径，Dify 为编排平台 dataset 兼容保留；选型全景见 KNOWLEDGE_BASE_LANDSCAPE，RAGFlow 集成见 RAGFLOW_INTEGRATION）
 
 3. 环境变量覆盖
    - 入口：Viper `AutomaticEnv()`
@@ -242,7 +242,7 @@
 
 当前代码骨架：
 
-- `internal/platform/configscope.Resolver` 已支持 `portal`、`OpenAI`、`Dify / WeKnora knowledge provider` 的 `tenant -> workspace -> runtime` provider 覆盖顺序
+- `internal/platform/configscope.Resolver` 已支持 `portal`、`OpenAI`、`Dify / RAGFlow / WeKnora knowledge provider` 的 `tenant -> workspace -> runtime` provider 覆盖顺序
 - `internal/platform/configscope.Resolver` 现已支持 `session_risk` 的 `system -> tenant -> workspace -> runtime` 风险阈值解析链路
 - 已新增数据库持久化的 `TenantConfig` / `WorkspaceConfig` GORM provider；当前 public portal 已接入这套读取链路
 - 管理面已具备 tenant/workspace scoped config 的最小读写入口，当前覆盖 `portal` / `OpenAI` / knowledge provider / `session_risk`

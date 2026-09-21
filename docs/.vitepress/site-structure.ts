@@ -44,6 +44,7 @@ const operationsPages = [
 const appendixPages = [
   '/ARCHITECTURE',
   '/WEKNORA_INTEGRATION',
+  '/RAGFLOW_INTEGRATION',
   '/KNOWLEDGE_BASE_LANDSCAPE',
   '/CI_SELF_HOSTED',
   '/release-versioning',
@@ -73,6 +74,7 @@ export const docsNav = [
       { text: '当前架构分析', link: '/current-architecture' },
       { text: '架构重设计计划', link: '/architecture-redesign-plan' },
       { text: 'WeKnora 集成', link: '/WEKNORA_INTEGRATION' },
+      { text: 'RAGFlow 集成', link: '/RAGFLOW_INTEGRATION' },
       { text: '知识库选型全景', link: '/KNOWLEDGE_BASE_LANDSCAPE' },
       { text: 'CI / Runner', link: '/CI_SELF_HOSTED' },
       { text: '版本发布', link: '/release-versioning' },

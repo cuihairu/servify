@@ -189,7 +189,9 @@ docker compose \
 需要额外环境变量：
 
 ```bash
-# Dify 为推荐主路径；WeKnora 主要用于兼容与 fallback 验收
+# 知识库选择链 ragflow → dify → weknora → pgvector 直配：
+# RAGFlow/WeKnora 为正统知识库双路径（RAGFlow 集成见 docs/RAGFLOW_INTEGRATION.md），
+# Dify 为编排平台 dataset 兼容保留
 export WEKNORA_ENABLED=true
 export WEKNORA_API_KEY=your-weknora-api-key
 export OPENAI_API_KEY=your-openai-api-key
