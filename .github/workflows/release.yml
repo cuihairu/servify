@@ -50,7 +50,6 @@ jobs:
           cache-dependency-path: |
             sdk/package-lock.json
             docs/package-lock.json
-            apps/website-worker/package-lock.json
 
       - name: Validate release version format
         timeout-minutes: 1

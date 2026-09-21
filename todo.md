@@ -1151,7 +1151,7 @@
   - README、Makefile、部署配置使用同一套路径
   - 新环境按文档执行可直接跑通
 - 状态：`[x]`
-- 最近进展：已把 `website-dev`、`website-deploy` 改到真实目录 `apps/website`，并将 deploy 配置切换到现有 `apps/website/wrangler.jsonc`
+- 最近进展：已把 `website-dev`、`website-deploy` 改到真实目录 `apps/website`，并将 deploy 配置切换到现有 `apps/website/wrangler.jsonc`。2026-09-21 复核补漏：release.yml Setup Node 的 cache-dependency-path 与 docs/CI_SELF_HOSTED.md 各残留一处 `apps/website-worker` 引用（目录已删，release 触发时 setup-node 必失败；push CI 不跑 release workflow 故长期未暴露），两处已清，全仓 `rg website-worker` 归零
 - 完成证据：
   - `Makefile`
   - `apps/website/README.md`

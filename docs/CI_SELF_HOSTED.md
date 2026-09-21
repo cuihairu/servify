@@ -36,11 +36,6 @@
 - SDK build
 - SDK 同步到 demo 后的工作区漂移检查
 
-### Website worker checks
-
-- `apps/website-worker` 依赖安装
-- TypeScript type check
-
 ### Integration
 
 - 使用 `docker compose` 拉起 Dify 优先、WeKnora compatibility mock 集成环境
