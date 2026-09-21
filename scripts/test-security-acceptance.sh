@@ -70,7 +70,7 @@ payload = {
     },
     "evidence_files": sorted(
         name for name in os.listdir(evidence_dir)
-        if os.path.isfile(os.path.join(evidence_dir, name))
+        if name != "manifest.json" and os.path.isfile(os.path.join(evidence_dir, name))
     ),
 }
 with open(out, "w", encoding="utf-8") as fh:

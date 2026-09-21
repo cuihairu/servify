@@ -15,15 +15,16 @@
 | `HealthCheck` | 可用性探测（启动期 require/降级判断依据） |
 | `RebuildIndex`（可选扩展） | 索引重建 |
 
-现有三个 driver：
+现有四个 driver：
 
 | Driver | 适配对象 | 定位评估 |
 | --- | --- | --- |
+| `ragflowkp` | RAGFlow（InfiniFlow 开源知识库，锚定 v0.27.x） | **正统知识库**，主推方向之一：文档解析最深、REST API 完整；租户作用域全量对齐 dify/weknora，见 `scripts/test-ragflow-acceptance.sh` |
 | `weknorakp` | WeKnora（腾讯开源知识库） | **正统知识库**，主推方向之一，见 `WEKNORA_INTEGRATION.md` |
 | `pgvector` | 进程内 pgvector（DB + embedding 直配） | 轻量自托管默认路径，无外部依赖 |
 | `difykp` | Dify dataset API | **定位不严谨**：Dify 是编排平台，dataset 是附属功能。作为兼容路径保留，不宜作为知识库主推 |
 
-选择链由启动/请求级共用的 `selectKnowledgeSource` 门面收敛（刀 23）：dify（健康检查、可降级）→ weknora（健康检查）→ pgvector 直配。新增 driver 只需实现契约并接入该门面，选择优先级与装配为既有代码路径。
+选择链由启动/请求级共用的 `selectKnowledgeSource` 门面收敛（刀 23 + RAGFlow 立项刀）：ragflow（健康检查、可降级）→ dify（健康检查、可降级）→ weknora（健康检查）→ pgvector 直配。新增 driver 只需实现契约并接入该门面，选择优先级与装配为既有代码路径。RAGFlow 健康检查失败时的 require 语义：仅当 dify、weknora 均未启用时立即失败，否则沿链降级。
 
 ## 2. 选型维度
 
@@ -39,13 +40,14 @@
 
 综合社区横评与官方文档（来源见文末）：
 
-### 3.1 RAGFlow（InfiniFlow）——首选候选
+### 3.1 RAGFlow（InfiniFlow）——已立项（首选候选兑现）
 
+- **状态**：driver 已落地（`ragflowkp`），版本锚定 v0.27.x；选择链最高优先（ragflow → dify → weknora → pgvector 直配），租户/工作区作用域全量对齐 dify/weknora
 - **定位**：开源企业级 RAG 引擎，GitHub 18k+ star，以 DeepDoc 深度文档理解（复杂 PDF/表格/版式解析）与检索精度著称
 - **API**：RESTful API 完整（知识库创建、文档上传、检索等，API Key 认证），契约四操作可一一映射
 - **部署**：Docker Compose 自托管，契合私有化交付
 - **适配评估**：四操作映射最直接；检索质量上限高；资源占用偏高（解析服务较重）
-- **风险**：版本迭代快（当前 0.x），API 稳定性需在接入时锁定版本
+- **风险**：版本迭代快（当前 0.x），API 稳定性靠版本锚定 + 验收脚本（`test-ragflow-acceptance.sh`，mock/real 双模式）护航
 
 ### 3.2 MaxKB（飞致云 / 1Panel）——次选候选
 
@@ -103,20 +105,21 @@
 
 ## 5. 建议路线
 
-1. **RAGFlow driver 优先立项**：REST API 最完整、文档解析最深、自托管契合——作为知识库主推方向的补强（与 WeKnora 形成双路径：深度解析场景走 RAGFlow，轻量中文生态走 WeKnora）
+1. **RAGFlow driver 已立项落地**：REST API 最完整、文档解析最深、自托管契合——知识库主推方向之一（与 WeKnora 形成双路径：深度解析场景走 RAGFlow，轻量中文生态走 WeKnora）；后续投入转向真实环境联调与版本跟进（v0.27.x 锚定）
 2. **MaxKB 备选观察**：客户已有 MaxKB 存量时按需接入，不做默认主推
 3. **Dify 定位降级**：文档与产品口径从「知识库插件」修正为「编排平台集成（dataset 兼容保留）」；`selectKnowledgeSource` 门面中 dify 分支保留兼容，不新增能力投入
 4. **pgvector 保持默认轻量路径**：零外部依赖场景的默认选择不变
 
 ## 6. 落地路径（新 driver 模式）
 
-新增 driver 参照 `difykp` / `weknorakp` 既有模式：
+新增 driver 参照 `ragflowkp` / `difykp` / `weknorakp` 既有模式：
 
-1. `platform/knowledgeprovider/<driver>/`：`Provider` 实现四操作 + `HealthCheck`（HTTP client + API Key 认证）
+1. `platform/knowledgeprovider/<driver>/`：`Provider` 实现四操作 + `HealthCheck`（HTTP client + API Key 认证；HTTP 细节放 `pkg/<driver>/`，driver 层 mock 接口 seam）
 2. `mapping.go`：外部命中/文档模型 → `KnowledgeHit` / `KnowledgeDocument` 映射
 3. `config` 增配置块（BaseURL / API Key / Timeout），对齐 secure-config 白名单门禁（新增 gate 必改三个白名单测试）
-4. `selectKnowledgeSource` 门面接入选择链（健康检查 / 降级语义沿用现行契约）
-5. swag 注释与文档同步；验收脚本对齐 `acceptance-weknora-docker.md` 模式
+4. `configscope` 租户/工作区作用域接入（resolver + gorm provider/store 列 + 版本化迁移，参照 `000009_ragflow_scoped_config`）
+5. `selectKnowledgeSource` 门面接入选择链（健康检查 / 降级语义沿用现行契约）
+6. swag 注释与文档同步；验收脚本对齐 `test-ragflow-acceptance.sh` 模式（mock 模式全自含可进 CI，real 模式拒私网）
 
 ## 7. 参考来源
 

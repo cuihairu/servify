@@ -9,9 +9,11 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	difykp "servify/apps/server/internal/platform/knowledgeprovider/dify"
+	ragflowkp "servify/apps/server/internal/platform/knowledgeprovider/ragflow"
 	weknorakp "servify/apps/server/internal/platform/knowledgeprovider/weknora"
 	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/pkg/dify"
+	"servify/apps/server/pkg/ragflow"
 	"servify/apps/server/pkg/weknora"
 
 	"github.com/sirupsen/logrus"
@@ -52,13 +54,45 @@ type knowledgeSourceOptions struct {
 	logger          *logrus.Logger
 }
 
-// selectKnowledgeSource 统一知识源选择链：dify（可选健康检查，健康失败降级
-// weknora）→ weknora（可选健康检查）。pgvector 不进此函数：它是全局声明 +
-// 进程内 driver（绑 DB 与 embedding 实例），由调用方直通启动装配的实例。
-func selectKnowledgeSource(difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, opts knowledgeSourceOptions) (knowledgeSource, error) {
+// selectKnowledgeSource 统一知识源选择链：ragflow（可选健康检查，健康失败
+// 降级 dify）→ dify（可选健康检查，健康失败降级 weknora）→ weknora（可选
+// 健康检查）。pgvector 不进此函数：它是全局声明 + 进程内 driver（绑 DB 与
+// embedding 实例），由调用方直通启动装配的实例。
+func selectKnowledgeSource(ragFlowConfig config.RagFlowConfig, difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, opts knowledgeSourceOptions) (knowledgeSource, error) {
 	logger := opts.logger
 	if logger == nil {
 		logger = logrus.StandardLogger()
+	}
+
+	if ragFlowConfig.Enabled {
+		client := ragflow.NewClient(&ragflow.Config{
+			BaseURL: ragFlowConfig.BaseURL,
+			APIKey:  ragFlowConfig.APIKey,
+			Timeout: ragFlowConfig.Timeout,
+		})
+		ragFlowHealthy := true
+		if opts.checkHealth {
+			ctx, cancel := context.WithTimeout(context.Background(), opts.healthTimeout)
+			defer cancel()
+			if err := client.HealthCheck(ctx, ragFlowConfig.DatasetID); err != nil {
+				logger.Warnf("RagFlow health check failed: %v", err)
+				ragFlowHealthy = false
+				// ragflow 失败且 dify/weknora 也未启用时，require 语义直接启动
+				// 失败；任一后续源启用则继续走它自己的 require/fallback 语义。
+				if !difyConfig.Enabled && !weKnoraConfig.Enabled && opts.requireHealthy {
+					return knowledgeSource{}, fmt.Errorf("ragflow health check failed: %w", err)
+				}
+			}
+		}
+		if ragFlowHealthy {
+			return knowledgeSource{
+				driver: ragflowkp.NewProvider(client, ragFlowConfig.DatasetID, ragflowkp.SearchConfig{
+					TopK:           ragFlowConfig.Search.TopK,
+					ScoreThreshold: ragFlowConfig.Search.ScoreThreshold,
+				}),
+				id: "ragflow",
+			}, nil
+		}
 	}
 
 	if difyConfig.Enabled {

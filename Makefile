@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance perf-baseline validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance ragflow-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance perf-baseline validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -42,6 +42,7 @@ help:
 	@echo "  observability-check - Validate the observability baseline in strict mode"
 	@echo "  release-check - Run the minimal release-readiness verification"
 	@echo "  dify-acceptance - Run the Dify primary-path acceptance script"
+	@echo "  ragflow-acceptance - Run the RAGFlow knowledge provider acceptance script"
 	@echo "  weknora-acceptance - Run the WeKnora compatibility acceptance script"
 	@echo "  knowledge-provider-acceptance - Alias of weknora-acceptance for provider compatibility runs"
 	@echo "  knowledge-acceptance - Run the knowledge base acceptance script"
@@ -273,6 +274,11 @@ dify-acceptance:
 	@echo "Running Dify primary-path acceptance..."
 	chmod +x ./scripts/test-dify-integration.sh
 	./scripts/test-dify-integration.sh
+
+ragflow-acceptance:
+	@echo "Running RAGFlow knowledge provider acceptance..."
+	chmod +x ./scripts/test-ragflow-acceptance.sh
+	./scripts/test-ragflow-acceptance.sh
 
 weknora-acceptance:
 	@echo "Running WeKnora compatibility acceptance..."

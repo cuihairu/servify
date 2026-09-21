@@ -64,6 +64,12 @@ func SecurityWarnings(cfg *config.Config) []string {
 	if cfg.Dify.Enabled && strings.TrimSpace(cfg.Dify.DatasetID) == "" {
 		warnings = append(warnings, "dify is enabled but dify.dataset_id is empty")
 	}
+	if cfg.RagFlow.Enabled && strings.TrimSpace(cfg.RagFlow.APIKey) == "" {
+		warnings = append(warnings, "ragflow is enabled but ragflow.api_key is empty")
+	}
+	if cfg.RagFlow.Enabled && strings.TrimSpace(cfg.RagFlow.DatasetID) == "" {
+		warnings = append(warnings, "ragflow is enabled but ragflow.dataset_id is empty")
+	}
 	// 移除知识provider未启用的警告（v0.1.0允许fallback模式）
 	// if !cfg.Dify.Enabled && !cfg.WeKnora.Enabled {
 	// 	warnings = append(warnings, "no external knowledge provider is enabled; ai will rely on fallback mode only")

@@ -60,6 +60,64 @@ func TestValidateAcceptanceManifestScriptAcceptsValidDifyManifest(t *testing.T) 
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidRagflowManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                  "ok",
+		"ai-status.json":               "{}",
+		"ai-query.json":                "{}",
+		"knowledge-upload.json":        "{}",
+		"knowledge-upload-repeat.json": "{}",
+		"knowledge-sync.json":          "{}",
+		"ragflow-dataset.json":         "{}",
+		"server-log.txt":               "ok",
+		"ragflow-mock-requests.jsonl":  "{}",
+		"manifest.json": `{
+  "provider": "ragflow",
+  "mode": "mock",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ragflow_available": "true",
+    "unauthenticated_rejected": "true",
+    "status_ok": "true",
+    "query_ok": "true",
+    "retrieval_hit": "true",
+    "knowledge_upload_ok": "true",
+    "knowledge_upload_dedup_ok": "true",
+    "knowledge_sync_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "ai-status.json",
+    "ai-query.json",
+    "knowledge-upload.json",
+    "knowledge-upload-repeat.json",
+    "knowledge-sync.json",
+    "ragflow-dataset.json",
+    "server-log.txt",
+    "ragflow-mock-requests.jsonl"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
 func TestValidateAcceptanceManifestScriptAcceptsValidAuthSessionManifest(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash-backed script tests are not stable on Windows")

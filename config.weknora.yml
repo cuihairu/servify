@@ -67,6 +67,14 @@ weknora:
     interval: 30s
     timeout: 10s
 
+# RAGFlow 知识库（主推正统知识库方向）；本模板用于 WeKnora 兼容回归，
+# 必须保持关闭——ragflow 启用即选择链最高优先，会抢走 weknora 链路。
+ragflow:
+  enabled: false
+  base_url: "http://localhost:9380"
+  api_key: ""
+  dataset_id: ""
+
 # 新增：降级策略配置
 fallback:
   enabled: true

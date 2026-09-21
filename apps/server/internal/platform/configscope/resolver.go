@@ -23,6 +23,10 @@ type WeKnoraConfigProvider interface {
 	LoadWeKnoraConfig(ctx context.Context) (config.WeKnoraConfig, bool, error)
 }
 
+type RagFlowConfigProvider interface {
+	LoadRagFlowConfig(ctx context.Context) (config.RagFlowConfig, bool, error)
+}
+
 type SessionRiskConfigProvider interface {
 	LoadSessionRiskConfig(ctx context.Context) (config.SessionRiskPolicyConfig, bool, error)
 }
@@ -37,6 +41,8 @@ type Resolver struct {
 	workspaceDify        DifyConfigProvider
 	tenantWeKnora        WeKnoraConfigProvider
 	workspaceWeKnora     WeKnoraConfigProvider
+	tenantRagFlow        RagFlowConfigProvider
+	workspaceRagFlow     RagFlowConfigProvider
 	tenantSessionRisk    SessionRiskConfigProvider
 	workspaceSessionRisk SessionRiskConfigProvider
 }
@@ -98,6 +104,18 @@ func WithTenantWeKnoraProvider(provider WeKnoraConfigProvider) Option {
 func WithWorkspaceWeKnoraProvider(provider WeKnoraConfigProvider) Option {
 	return func(r *Resolver) {
 		r.workspaceWeKnora = provider
+	}
+}
+
+func WithTenantRagFlowProvider(provider RagFlowConfigProvider) Option {
+	return func(r *Resolver) {
+		r.tenantRagFlow = provider
+	}
+}
+
+func WithWorkspaceRagFlowProvider(provider RagFlowConfigProvider) Option {
+	return func(r *Resolver) {
+		r.workspaceRagFlow = provider
 	}
 }
 
@@ -243,6 +261,27 @@ func (r *Resolver) ResolveWeKnora(ctx context.Context, runtime *config.WeKnoraCo
 	return resolved
 }
 
+func (r *Resolver) ResolveRagFlow(ctx context.Context, runtime *config.RagFlowConfig) config.RagFlowConfig {
+	var resolved config.RagFlowConfig
+	if r != nil && r.system != nil {
+		resolved = r.system.RagFlow
+	}
+	if r != nil && r.tenantRagFlow != nil {
+		if next, ok, err := r.tenantRagFlow.LoadRagFlowConfig(ctx); err == nil && ok {
+			resolved = mergeRagFlowConfig(resolved, next)
+		}
+	}
+	if r != nil && r.workspaceRagFlow != nil {
+		if next, ok, err := r.workspaceRagFlow.LoadRagFlowConfig(ctx); err == nil && ok {
+			resolved = mergeRagFlowConfig(resolved, next)
+		}
+	}
+	if runtime != nil {
+		resolved = mergeRagFlowConfig(resolved, *runtime)
+	}
+	return resolved
+}
+
 func (r *Resolver) ResolveSessionRisk(ctx context.Context, runtime *config.SessionRiskPolicyConfig) config.SessionRiskPolicyConfig {
 	var resolved config.SessionRiskPolicyConfig
 	if r != nil && r.system != nil {
@@ -358,6 +397,31 @@ func mergeWeKnoraConfig(base config.WeKnoraConfig, overlay config.WeKnoraConfig)
 	}
 	if overlay.HealthCheck.Timeout != 0 {
 		base.HealthCheck.Timeout = overlay.HealthCheck.Timeout
+	}
+	return base
+}
+
+func mergeRagFlowConfig(base config.RagFlowConfig, overlay config.RagFlowConfig) config.RagFlowConfig {
+	if overlay.Enabled {
+		base.Enabled = true
+	}
+	if strings.TrimSpace(overlay.BaseURL) != "" {
+		base.BaseURL = overlay.BaseURL
+	}
+	if strings.TrimSpace(overlay.APIKey) != "" {
+		base.APIKey = overlay.APIKey
+	}
+	if strings.TrimSpace(overlay.DatasetID) != "" {
+		base.DatasetID = overlay.DatasetID
+	}
+	if overlay.Timeout != 0 {
+		base.Timeout = overlay.Timeout
+	}
+	if overlay.Search.TopK != 0 {
+		base.Search.TopK = overlay.Search.TopK
+	}
+	if overlay.Search.ScoreThreshold != 0 {
+		base.Search.ScoreThreshold = overlay.Search.ScoreThreshold
 	}
 	return base
 }

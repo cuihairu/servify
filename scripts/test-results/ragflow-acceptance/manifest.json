@@ -1,0 +1,37 @@
+{
+  "provider": "ragflow",
+  "mode": "mock",
+  "servify_url": "http://127.0.0.1:18093",
+  "provider_url": "http://127.0.0.1:19380",
+  "dataset_id": "ds-acceptance",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ragflow_available": "true",
+    "unauthenticated_rejected": "true",
+    "status_ok": "true",
+    "query_ok": "true",
+    "retrieval_hit": "true",
+    "knowledge_upload_ok": "true",
+    "knowledge_upload_dedup_ok": "true",
+    "knowledge_sync_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "ai-query.json",
+    "ai-status-unauthorized.json",
+    "ai-status.json",
+    "build-output.txt",
+    "knowledge-sync.json",
+    "knowledge-upload-repeat.json",
+    "knowledge-upload.json",
+    "ragflow-dataset.json",
+    "ragflow-mock-requests.jsonl",
+    "ragflow-mock-server.log",
+    "ragflow-mock.log",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

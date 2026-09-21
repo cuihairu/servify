@@ -59,6 +59,15 @@ func (p *GormTenantConfigProvider) LoadWeKnoraConfig(ctx context.Context) (confi
 	return decodeConfig[config.WeKnoraConfig](cfg.WeKnoraJSON)
 }
 
+func (p *GormTenantConfigProvider) LoadRagFlowConfig(ctx context.Context) (config.RagFlowConfig, bool, error) {
+	var cfg models.TenantConfig
+	ok, err := p.load(ctx, &cfg)
+	if !ok || err != nil {
+		return config.RagFlowConfig{}, ok, err
+	}
+	return decodeConfig[config.RagFlowConfig](cfg.RagFlowJSON)
+}
+
 func (p *GormTenantConfigProvider) LoadSessionRiskConfig(ctx context.Context) (config.SessionRiskPolicyConfig, bool, error) {
 	var cfg models.TenantConfig
 	ok, err := p.load(ctx, &cfg)
@@ -131,6 +140,15 @@ func (p *GormWorkspaceConfigProvider) LoadWeKnoraConfig(ctx context.Context) (co
 		return config.WeKnoraConfig{}, ok, err
 	}
 	return decodeConfig[config.WeKnoraConfig](cfg.WeKnoraJSON)
+}
+
+func (p *GormWorkspaceConfigProvider) LoadRagFlowConfig(ctx context.Context) (config.RagFlowConfig, bool, error) {
+	var cfg models.WorkspaceConfig
+	ok, err := p.load(ctx, &cfg)
+	if !ok || err != nil {
+		return config.RagFlowConfig{}, ok, err
+	}
+	return decodeConfig[config.RagFlowConfig](cfg.RagFlowJSON)
 }
 
 func (p *GormWorkspaceConfigProvider) LoadSessionRiskConfig(ctx context.Context) (config.SessionRiskPolicyConfig, bool, error) {

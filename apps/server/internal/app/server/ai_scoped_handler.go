@@ -39,6 +39,8 @@ func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithWorkspaceDifyProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 		configscope.WithTenantWeKnoraProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceWeKnoraProvider(configscope.NewGormWorkspaceConfigProvider(db)),
+		configscope.WithTenantRagFlowProvider(configscope.NewGormTenantConfigProvider(db)),
+		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
 	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, startup: startup, businessMeter: businessMeter}
 }
@@ -101,25 +103,26 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 		return s.applyRuntimeOverrides(s.startup)
 	}
 	if s.resolver == nil {
-		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{}, s.logger, s.businessMeter))
+		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, s.logger, s.businessMeter))
 	}
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
-	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger, s.businessMeter))
+	ragFlowConfig := s.resolver.ResolveRagFlow(ctx, nil)
+	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.logger, s.businessMeter))
 }
 
 // runtimeServiceFromResolvedConfig 按解析后的租户/工作区配置重建编排服务。
 // 知识源选择与启动期 BuildAIAssembly 共用 selectKnowledgeSource 门面，但
 // checkHealth=false：请求级不做健康探测（不可达 BaseURL 也纯构造），运行期
 // 外部知识源故障由编排服务的 circuitBreaker 兜底。
-func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
+func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, ragFlowConfig config.RagFlowConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
 	// checkHealth=false 时选择链按契约不产生错误（错误路径全部位于健康检查内），
 	// 请求级重建不做健康探测，运行期故障由编排服务 circuitBreaker 兜底。
-	source, _ := selectKnowledgeSource(difyConfig, weKnoraConfig, knowledgeSourceOptions{
+	source, _ := selectKnowledgeSource(ragFlowConfig, difyConfig, weKnoraConfig, knowledgeSourceOptions{
 		checkHealth: false,
 		logger:      logger,
 	})

@@ -65,6 +65,46 @@ func TestBuildAIAssemblyPrefersDifyOverWeKnora(t *testing.T) {
 	}
 }
 
+func TestBuildAIAssemblyPrefersRagFlowOverDifyAndWeKnora(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/datasets" && r.URL.Query().Get("id") == "ds-rf" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":0,"data":[{"id":"ds-rf","name":"RF KB"}]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	cfg := config.GetDefaultConfig()
+	cfg.RagFlow.Enabled = true
+	cfg.RagFlow.BaseURL = server.URL
+	cfg.RagFlow.APIKey = "ragflow-key"
+	cfg.RagFlow.DatasetID = "ds-rf"
+	cfg.Dify.Enabled = true
+	cfg.Dify.BaseURL = "http://127.0.0.1:1"
+	cfg.Dify.APIKey = "dify-key"
+	cfg.Dify.DatasetID = "ds-1"
+	cfg.WeKnora.Enabled = true
+	cfg.WeKnora.BaseURL = "http://127.0.0.1:1"
+	cfg.WeKnora.APIKey = "wk-key"
+
+	assembly, err := BuildAIAssembly(cfg, logrus.New(), AIAssemblyOptions{})
+	if err != nil {
+		t.Fatalf("BuildAIAssembly() error = %v", err)
+	}
+	if assembly.KnowledgeProviderID != "ragflow" {
+		t.Fatalf("knowledge provider = %q", assembly.KnowledgeProviderID)
+	}
+	if !assembly.KnowledgeProviderHealthy {
+		t.Fatalf("expected knowledge provider health to be tracked")
+	}
+	status := assembly.RuntimeService.GetStatus(context.Background())
+	if provider, _ := status["knowledge_provider"].(string); provider != "ragflow" {
+		t.Fatalf("status provider = %q", provider)
+	}
+}
+
 func TestBuildEmbeddingProviderFromConfig(t *testing.T) {
 	// nil / 空 provider：不构造（调用方按 nil 判定"未配置 embedding"）。
 	if provider, err := BuildEmbeddingProviderFromConfig(nil); provider != nil || err != nil {

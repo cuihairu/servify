@@ -55,6 +55,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	openAIConfig := resolver.ResolveOpenAI(context.Background(), nil)
 	difyConfig := resolver.ResolveDify(context.Background(), nil)
 	weKnoraConfig := resolver.ResolveWeKnora(context.Background(), nil)
+	ragFlowConfig := resolver.ResolveRagFlow(context.Background(), nil)
 
 	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
@@ -71,7 +72,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 		return buildPgvectorAssembly(baseAI, openAIConfig.APIKey, openAIConfig.BaseURL, cfg, logger, opts, assembly)
 	}
 
-	source, err := selectKnowledgeSource(difyConfig, weKnoraConfig, knowledgeSourceOptions{
+	source, err := selectKnowledgeSource(ragFlowConfig, difyConfig, weKnoraConfig, knowledgeSourceOptions{
 		checkHealth:     true,
 		requireHealthy:  opts.requireKnowledgeProviderHealthy(),
 		fallbackEnabled: cfg.Fallback.Enabled,

@@ -18,6 +18,7 @@ type ScopedConfigDocument struct {
 	OpenAI      *config.OpenAIConfig            `json:"openai,omitempty"`
 	Dify        *config.DifyConfig              `json:"dify,omitempty"`
 	WeKnora     *config.WeKnoraConfig           `json:"weknora,omitempty"`
+	RagFlow     *config.RagFlowConfig           `json:"ragflow,omitempty"`
 	SessionRisk *config.SessionRiskPolicyConfig `json:"session_risk,omitempty"`
 }
 
@@ -86,6 +87,13 @@ func (s *GormConfigStore) UpsertTenantConfig(ctx context.Context, tenantID strin
 			return nil, err
 		}
 		row.WeKnoraJSON = encoded
+	}
+	if payload.RagFlow != nil {
+		encoded, err := encodeConfig(*payload.RagFlow)
+		if err != nil {
+			return nil, err
+		}
+		row.RagFlowJSON = encoded
 	}
 	if payload.SessionRisk != nil {
 		encoded, err := encodeConfig(*payload.SessionRisk)
@@ -160,6 +168,13 @@ func (s *GormConfigStore) UpsertWorkspaceConfig(ctx context.Context, tenantID, w
 		}
 		row.WeKnoraJSON = encoded
 	}
+	if payload.RagFlow != nil {
+		encoded, err := encodeConfig(*payload.RagFlow)
+		if err != nil {
+			return nil, err
+		}
+		row.RagFlowJSON = encoded
+	}
 	if payload.SessionRisk != nil {
 		encoded, err := encodeConfig(*payload.SessionRisk)
 		if err != nil {
@@ -199,6 +214,11 @@ func tenantRowToDocument(row models.TenantConfig) (*ScopedConfigDocument, error)
 	} else if ok {
 		doc.WeKnora = &cfg
 	}
+	if cfg, ok, err := decodeConfig[config.RagFlowConfig](row.RagFlowJSON); err != nil {
+		return nil, err
+	} else if ok {
+		doc.RagFlow = &cfg
+	}
 	if cfg, ok, err := decodeConfig[config.SessionRiskPolicyConfig](row.SessionRiskJSON); err != nil {
 		return nil, err
 	} else if ok {
@@ -228,6 +248,11 @@ func workspaceRowToDocument(row models.WorkspaceConfig) (*ScopedConfigDocument, 
 		return nil, err
 	} else if ok {
 		doc.WeKnora = &cfg
+	}
+	if cfg, ok, err := decodeConfig[config.RagFlowConfig](row.RagFlowJSON); err != nil {
+		return nil, err
+	} else if ok {
+		doc.RagFlow = &cfg
 	}
 	if cfg, ok, err := decodeConfig[config.SessionRiskPolicyConfig](row.SessionRiskJSON); err != nil {
 		return nil, err

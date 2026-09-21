@@ -111,6 +111,27 @@ func TestScopedAIHandlerServiceGetStatusUsesWorkspaceWeKnoraOverride(t *testing.
 	}
 }
 
+func TestScopedAIHandlerServiceGetStatusUsesWorkspaceRagFlowOverride(t *testing.T) {
+	db := openScopedAITestDB(t)
+	if err := db.Create(&models.WorkspaceConfig{
+		TenantID:    "tenant-a",
+		WorkspaceID: "workspace-1",
+		RagFlowJSON: "enabled: true\nbase_url: http://127.0.0.1:1\napi_key: ragflow-key\ndataset_id: ds-scoped\n",
+	}).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), db, stubFallbackAIHandler{}, nil, nil)
+	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
+	status := handler.GetStatus(ctx)
+	if enabled, _ := status["knowledge_provider_enabled"].(bool); !enabled {
+		t.Fatalf("expected scoped ragflow provider enabled, got %+v", status)
+	}
+	if provider, _ := status["knowledge_provider"].(string); provider != "ragflow" {
+		t.Fatalf("expected workspace ragflow override, got %+v", status)
+	}
+}
+
 func TestScopedAIHandlerServiceGetMetricsFallsBackToBaseHandler(t *testing.T) {
 	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
 	metrics, ok := handler.GetMetrics()
@@ -120,7 +141,7 @@ func TestScopedAIHandlerServiceGetMetricsFallsBackToBaseHandler(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigWithoutWeKnora(t *testing.T) {
-	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{APIKey: "", BaseURL: ""}, config.DifyConfig{}, config.WeKnoraConfig{}, logrus.New(), nil)
+	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{APIKey: "", BaseURL: ""}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, logrus.New(), nil)
 	status := service.GetStatus(context.Background())
 	if typ, _ := status["type"].(string); typ == "" {
 		t.Fatalf("expected service status type, got %+v", status)
@@ -128,7 +149,7 @@ func TestRuntimeServiceFromResolvedConfigWithoutWeKnora(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigWithWeKnoraScopedKnowledgeBase(t *testing.T) {
-	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.WeKnoraConfig{
+	service := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{
 		Enabled:         true,
 		BaseURL:         "http://127.0.0.1:1",
 		APIKey:          "key",

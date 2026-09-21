@@ -629,6 +629,29 @@ case "$PROVIDER" in
     require_file_listed "knowledge-upload.json"
     require_file_listed "knowledge-sync.json"
     ;;
+  ragflow)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.unauthenticated_rejected // ""' "true"
+    require_equals '.checks.status_ok // ""' "true"
+    require_equals '.checks.query_ok // ""' "true"
+    require_equals '.checks.knowledge_upload_ok // ""' "true"
+    require_equals '.checks.knowledge_upload_dedup_ok // ""' "true"
+    require_equals '.checks.knowledge_sync_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "ai-status.json"
+    require_file_listed "ai-query.json"
+    require_file_listed "knowledge-upload.json"
+    require_file_listed "knowledge-upload-repeat.json"
+    require_file_listed "knowledge-sync.json"
+    require_file_listed "ragflow-dataset.json"
+    require_file_listed "server-log.txt"
+    if [ "$MODE" = "mock" ]; then
+      require_equals '.checks.build_ok // ""' "true"
+      require_equals '.checks.ragflow_available // ""' "true"
+      require_equals '.checks.retrieval_hit // ""' "true"
+      require_file_listed "ragflow-mock-requests.jsonl"
+    fi
+    ;;
   workspace)
     require_equals '.status.overall // ""' "passed"
     require_equals '.checks.admin_auth_ok // ""' "true"

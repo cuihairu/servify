@@ -170,6 +170,12 @@ weknora:
   enabled: false
   api_key: "${WEKNORA_API_KEY}"
 
+ragflow:
+  enabled: false
+  base_url: "http://localhost:9380"
+  api_key: "${RAGFLOW_API_KEY}"
+  dataset_id: "${RAGFLOW_DATASET_ID}"
+
 log:
   level: "info"
   format: "json"

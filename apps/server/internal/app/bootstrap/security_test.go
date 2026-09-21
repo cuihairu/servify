@@ -20,6 +20,9 @@ func TestSecurityWarnings(t *testing.T) {
 	cfg.Dify.DatasetID = ""
 	cfg.WeKnora.Enabled = true
 	cfg.WeKnora.APIKey = ""
+	cfg.RagFlow.Enabled = true
+	cfg.RagFlow.APIKey = ""
+	cfg.RagFlow.DatasetID = ""
 
 	warnings := SecurityWarnings(cfg)
 	joined := strings.Join(warnings, "\n")
@@ -33,6 +36,8 @@ func TestSecurityWarnings(t *testing.T) {
 		"dify is enabled but dify.api_key is empty",
 		"dify is enabled but dify.dataset_id is empty",
 		"weknora is enabled but weknora.api_key is empty or using default value",
+		"ragflow is enabled but ragflow.api_key is empty",
+		"ragflow is enabled but ragflow.dataset_id is empty",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing warning %q in %q", want, joined)
@@ -59,6 +64,7 @@ func TestSecurityWarnings_NoExternalKnowledgeProviderEnabled(t *testing.T) {
 	cfg.AI.OpenAI.APIKey = "openai-key"
 	cfg.Dify.Enabled = false
 	cfg.WeKnora.Enabled = false
+	cfg.RagFlow.Enabled = false
 
 	// v0.1.0允许fallback模式，不应对无知识provider产生警告
 	warnings := SecurityWarnings(cfg)

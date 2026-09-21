@@ -34,6 +34,8 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithWorkspaceDifyProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 		configscope.WithTenantWeKnoraProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceWeKnoraProvider(configscope.NewGormWorkspaceConfigProvider(db)),
+		configscope.WithTenantRagFlowProvider(configscope.NewGormTenantConfigProvider(db)),
+		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
 	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
 }
@@ -83,5 +85,6 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
-	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, weKnoraConfig, s.logger, s.businessMeter)
+	ragFlowConfig := s.resolver.ResolveRagFlow(ctx, nil)
+	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.logger, s.businessMeter)
 }

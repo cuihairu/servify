@@ -43,6 +43,7 @@ type Config struct {
 	AI         AIConfig         `yaml:"ai"`
 	Dify       DifyConfig       `yaml:"dify"`
 	WeKnora    WeKnoraConfig    `yaml:"weknora"`
+	RagFlow    RagFlowConfig    `yaml:"ragflow"`
 	Fallback   FallbackConfig   `yaml:"fallback"`
 	JWT        JWTConfig        `yaml:"jwt"`
 	Log        LogConfig        `yaml:"log"`
@@ -174,6 +175,21 @@ type WeKnoraSearchConfig struct {
 type WeKnoraHealthConfig struct {
 	Interval time.Duration `yaml:"interval" json:"interval,omitempty"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`
+}
+
+// RagFlowConfig 接入 RAGFlow（InfiniFlow 开源 RAG 引擎）知识库，API 面锚定 v0.27.x。
+type RagFlowConfig struct {
+	Enabled   bool                `yaml:"enabled" json:"enabled,omitempty"`
+	BaseURL   string              `yaml:"base_url" json:"base_url,omitempty"`
+	APIKey    string              `yaml:"api_key" json:"api_key,omitempty"`
+	DatasetID string              `yaml:"dataset_id" json:"dataset_id,omitempty"`
+	Timeout   time.Duration       `yaml:"timeout" json:"timeout,omitempty"`
+	Search    RagFlowSearchConfig `yaml:"search" json:"search,omitempty"`
+}
+
+type RagFlowSearchConfig struct {
+	TopK           int     `yaml:"top_k" json:"top_k,omitempty"`
+	ScoreThreshold float64 `yaml:"score_threshold" json:"score_threshold,omitempty"`
 }
 
 type FallbackConfig struct {
@@ -853,6 +869,16 @@ func GetDefaultConfig() *Config {
 			HealthCheck: WeKnoraHealthConfig{
 				Interval: 30 * time.Second,
 				Timeout:  10 * time.Second,
+			},
+		},
+		RagFlow: RagFlowConfig{
+			Enabled:   false,
+			BaseURL:   "http://localhost:9380",
+			DatasetID: "",
+			Timeout:   30 * time.Second,
+			Search: RagFlowSearchConfig{
+				TopK:           10,
+				ScoreThreshold: 0.2,
 			},
 		},
 		Fallback: FallbackConfig{

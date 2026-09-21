@@ -475,6 +475,7 @@ type TenantConfig struct {
 	OpenAIJSON      string    `gorm:"type:text" json:"openai_json"`
 	DifyJSON        string    `gorm:"type:text" json:"dify_json"`
 	WeKnoraJSON     string    `gorm:"type:text" json:"weknora_json"`
+	RagFlowJSON     string    `gorm:"type:text" json:"ragflow_json"`
 	SessionRiskJSON string    `gorm:"type:text" json:"session_risk_json"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -489,6 +490,7 @@ type WorkspaceConfig struct {
 	OpenAIJSON      string    `gorm:"type:text" json:"openai_json"`
 	DifyJSON        string    `gorm:"type:text" json:"dify_json"`
 	WeKnoraJSON     string    `gorm:"type:text" json:"weknora_json"`
+	RagFlowJSON     string    `gorm:"type:text" json:"ragflow_json"`
 	SessionRiskJSON string    `gorm:"type:text" json:"session_risk_json"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`

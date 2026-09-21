@@ -88,6 +88,16 @@ weknora:
     score_threshold: 0.7
     strategy: "semantic"
 
+ragflow:
+  enabled: ${RAGFLOW_ENABLED}
+  base_url: "${RAGFLOW_BASE_URL}"
+  api_key: "${RAGFLOW_API_KEY}"
+  dataset_id: "${RAGFLOW_DATASET_ID}"
+  timeout: 30s
+  search:
+    top_k: 10
+    score_threshold: 0.2
+
 jwt:
   secret: "${SERVIFY_JWT_SECRET}"
   expires_in: "24h"
