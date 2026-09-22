@@ -30,6 +30,13 @@ type websocketAIService interface {
 	GetSessionSummary(messages []models.Message) (string, error)
 }
 
+// websocketAIStreamer 流式首答可选能力（hub 本地窄接口，与 iceConfigProvider
+// 等可选能力同风格）：实现者经 ai-response-delta 帧增量推送，终帧仍发完整
+// ai-response。用可选接口而非扩 websocketAIService，既有测试桩无需跟随改动。
+type websocketAIStreamer interface {
+	ProcessQueryStream(ctx context.Context, query string, sessionID string) (<-chan aidelivery.AIStreamEvent, error)
+}
+
 type websocketRTCService interface {
 	HandleOffer(sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error)
 	HandleAnswer(sessionID string, answer webrtc.SessionDescription) error
@@ -639,10 +646,19 @@ func (c *WebSocketClient) processMessageWithAI(message WebSocketMessage) {
 	go func(sessionID string, text string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		resp, err := ai.ProcessQuery(ctx, text, sessionID)
-		if err != nil {
-			logrus.Errorf("AI processing failed: %v", err)
-			return
+		resp, streamed := h.streamAIResponse(ctx, c, ai, sessionID, text)
+		if resp == nil {
+			if streamed {
+				// 增量已推送但流中途失败：不回退单发（文本会重复），
+				// 按无响应处理（与 ProcessQuery 失败路径一致）。
+				return
+			}
+			var err error
+			resp, err = ai.ProcessQuery(ctx, text, sessionID)
+			if err != nil {
+				logrus.Errorf("AI processing failed: %v", err)
+				return
+			}
 		}
 		// 推送AI回复
 		c.Hub.SendToSession(sessionID, WebSocketMessage{
@@ -652,6 +668,55 @@ func (c *WebSocketClient) processMessageWithAI(message WebSocketMessage) {
 			Timestamp: time.Now(),
 		})
 	}(c.SessionID, content)
+}
+
+// streamAIResponse 流式首答：增量经 ai-response-delta 帧推送（字段形
+// {content_delta, done}，message_id 预留），完成后发终末 delta（done=true）
+// 并返回完整响应供调用方发 ai-response 终帧（SDK 据此替换增量拼接结果，
+// 帧契约向后兼容——不识别 delta 帧的客户端仍只消费 ai-response）。
+// 返回 streamed=false 表示流式能力缺失或流启动即失败（调用方回退非流式
+// 路径）；增量已推送后失败返回 (nil, true)。
+func (h *WebSocketHub) streamAIResponse(ctx context.Context, c *WebSocketClient, ai websocketAIService, sessionID, text string) (*aidelivery.AIResponse, bool) {
+	streamer, ok := ai.(websocketAIStreamer)
+	if !ok {
+		return nil, false
+	}
+	stream, err := streamer.ProcessQueryStream(ctx, text, sessionID)
+	if err != nil || stream == nil {
+		return nil, false
+	}
+
+	sendDelta := func(delta string, done bool) {
+		c.Hub.SendToSession(sessionID, WebSocketMessage{
+			Type:      "ai-response-delta",
+			Data:      map[string]interface{}{"content_delta": delta, "done": done},
+			SessionID: sessionID,
+			Timestamp: time.Now(),
+		})
+	}
+
+	var final *aidelivery.AIResponse
+	sent := false
+	for evt := range stream {
+		if evt.ContentDelta != "" {
+			sendDelta(evt.ContentDelta, false)
+			sent = true
+		}
+		if evt.Done {
+			final = evt.Final
+			break
+		}
+	}
+	if final == nil {
+		if sent {
+			// 终末 delta 告知客户端增量流结束（此后没有 ai-response 帧）。
+			logrus.Warnf("AI stream ended without final response (session_id=%s)", sessionID)
+			sendDelta("", true)
+		}
+		return nil, sent
+	}
+	sendDelta("", true)
+	return final, true
 }
 
 // aiResponsePayload 构造 ai-response 帧的 Data：基础三字段之外，编排路径

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"servify/apps/server/internal/config"
@@ -57,6 +58,20 @@ func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string,
 		return nil, nil
 	}
 	return service.ProcessQuery(ctx, query, sessionID)
+}
+
+// ProcessQueryStream 流式首答透传：请求级重建的实例具备流式能力时委托；
+// 否则显式报错，由调用方（WS hub）回退非流式路径。nil 安全与其他方法同规。
+func (s *scopedAIRuntimeService) ProcessQueryStream(ctx context.Context, query string, sessionID string) (<-chan aidelivery.AIStreamEvent, error) {
+	if s == nil {
+		return nil, fmt.Errorf("ai streaming unavailable")
+	}
+	service := s.buildService(ctx)
+	streamer, ok := service.(aidelivery.RuntimeQueryStreamer)
+	if !ok {
+		return nil, fmt.Errorf("ai streaming unavailable for this request scope")
+	}
+	return streamer.ProcessQueryStream(ctx, query, sessionID)
 }
 
 func (s *scopedAIRuntimeService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {

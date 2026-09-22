@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
+	kpmock "servify/apps/server/internal/platform/knowledgeprovider/mock"
+	llm "servify/apps/server/internal/platform/llm"
+	llmmock "servify/apps/server/internal/platform/llm/mock"
 
 	"github.com/sirupsen/logrus"
 )
@@ -86,5 +90,56 @@ func TestScopedAIRuntimeServiceBuildServiceNilReceiverAndPgvectorShortcut(t *tes
 	svc := &scopedAIRuntimeService{cfg: cfg, fallback: fallback}
 	if got := svc.buildService(context.Background()); got != aidelivery.RuntimeService(fallback) {
 		t.Fatalf("expected fallback passthrough for pgvector, got %#v", got)
+	}
+}
+
+// TestScopedAIRuntimeServiceProcessQueryStream 流式首答透传：pgvector
+// 直通 fallback 时委托具备流式能力的编排实例（增量+终帧完整首答）；
+// fallback 无流式能力或 nil 接收者时显式报错，调用方回退非流式路径。
+func TestScopedAIRuntimeServiceProcessQueryStream(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	cfg.Knowledge.Provider = "pgvector"
+
+	provider := &llmmock.Provider{StreamChunks: []llm.ChatChunk{
+		{ContentDelta: "您好"},
+		{ContentDelta: "，正在查询。"},
+		{Done: true},
+	}}
+	fallback := aidelivery.NewOrchestratedEnhancedAIService(
+		aidelivery.NewAIService("", ""),
+		provider,
+		&kpmock.Provider{},
+		"",
+		nil,
+	)
+	svc := &scopedAIRuntimeService{cfg: cfg, fallback: fallback}
+
+	stream, err := svc.ProcessQueryStream(context.Background(), "物流进度", "sess-scoped-stream")
+	if err != nil {
+		t.Fatalf("ProcessQueryStream() error = %v", err)
+	}
+	var deltas []string
+	var final *aidelivery.AIResponse
+	for evt := range stream {
+		if evt.Done {
+			final = evt.Final
+		} else {
+			deltas = append(deltas, evt.ContentDelta)
+		}
+	}
+	if strings.Join(deltas, "") != "您好，正在查询。" || final == nil || final.Content != "您好，正在查询。" {
+		t.Fatalf("deltas=%q final=%+v", deltas, final)
+	}
+
+	// 无流式能力的 fallback：显式报错。
+	plain := &scopedAIRuntimeService{cfg: cfg, fallback: stubRuntimeFallback{}}
+	if _, err := plain.ProcessQueryStream(context.Background(), "q", "s"); err == nil {
+		t.Fatal("non-streamer fallback must error")
+	}
+
+	// nil 接收者。
+	var nilSvc *scopedAIRuntimeService
+	if _, err := nilSvc.ProcessQueryStream(context.Background(), "q", "s"); err == nil {
+		t.Fatal("nil receiver must error")
 	}
 }

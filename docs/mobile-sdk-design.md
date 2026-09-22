@@ -124,7 +124,7 @@ agent_chatting ──(session_update: closed)──> closed
 
 **为什么状态机显式成契约**：Web 端转人工状态散落在 widget 的 if/else 里（无状态机），导致"转人工后 AI 抢答"需要服务端 `HasActiveHumanAgent` 兜底。移动端把状态机做成一等契约后，同一份状态转移表可在 Android/iOS 互验测试中回放，服务端兜底逻辑退化为保险丝而非正确性来源。
 
-**SSE 的角色**：当前后端无 AI 流式端点（provider 层 `ChatStream` 已实现但未接出）。契约文档为 `ai-response-delta`（WS 增量帧）预留类型位与字段形 `{message_id?, content_delta, done}`；移动端 V1 实现完整渲染（增量拼接 + 完成帧替换），但该路径默认关闭，待服务端接出后经能力协商开启。这样协议先行、实现跟进，三端不会在服务端接出流式时各自发明帧格式。
+**SSE 的角色**：服务端已接出 WS 流式首答——AI 编排层 `HandleStream` 与非流式共用同一条流水线，WS 侧在 `text-message` 链路上以 `ai-response-delta` 增量帧（`{content_delta, done}`，`message_id` 预留）推送增量，完成时补终末 delta（`done=true`）再发完整 `ai-response` 终帧（增量拼接 + 完成帧替换），帧契约与本文档预留位一致；流式能力缺失或流启动即失败时服务端自动回退单发 `ai-response`，移动端 V1 可直接按该契约渲染。这样协议先行、实现跟进，三端不会在服务端接出流式时各自发明帧格式。
 
 ---
 

@@ -211,44 +211,10 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 	start := time.Now()
 	s.metrics.QueryCount++
 	if s.ShouldTransferToHuman(query, nil) {
-		s.promMetrics.RecordAIRequest("internal", "", "success", "transfer", time.Since(start).Seconds())
-		return &EnhancedAIResponse{
-			AIResponse: &AIResponse{
-				Content:    "我来为您转接人工客服，请稍等...",
-				Source:     "system",
-				Confidence: 1.0,
-			},
-			Strategy: "transfer",
-			Duration: time.Since(start),
-		}, nil
+		return s.transferShortCircuit(start), nil
 	}
 
-	result, err := s.activeOrchestrator().Handle(ctx, aimodule.AIRequest{
-		TaskType:       aimodule.TaskTypeQA,
-		ConversationID: sessionID,
-		Query:          query,
-		SystemPrompt:   "你是 Servify 智能客服助手，请基于上下文给出准确、简洁、专业的中文回答。",
-		// 模型参数来自 ai.provider 对应配置族（见 WithRuntimeParams）：
-		// 此前 config 里 model/temperature/max_tokens 一直是死配置，这里
-		// 是它们唯一生效的入口。
-		Model:       s.runtimeParams.Model,
-		Temperature: s.runtimeParams.Temperature,
-		MaxTokens:   s.runtimeParams.MaxTokens,
-		TimeoutMs:   s.runtimeParams.TimeoutMs,
-		// 多轮上下文：历史由 SessionHistoryLoader 拉取（零注入 = 单轮），
-		// 当前 query 恒为最后一条 user 消息（PromptBuilder 的分叉约定）。
-		Messages: s.buildHistoryMessages(ctx, query, sessionID),
-		RetrievalPolicy: aimodule.RetrievalPolicy{
-			Enabled:   true,
-			TopK:      5,
-			Threshold: 0.7,
-			Strategy:  "semantic",
-		},
-		ToolPolicy: aimodule.ToolPolicy{
-			Enabled:  true,
-			MaxSteps: 5,
-		},
-	})
+	result, err := s.activeOrchestrator().Handle(ctx, s.buildAIRequest(ctx, query, sessionID))
 	if err == nil && result == nil {
 		// Handle 契约外仍可能 (nil, nil)（如 llmProvider 未接线）：
 		// 归一成错误走兜底分支，避免对 result.Content 解引用 panic。
@@ -277,6 +243,56 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "failure", "primary", time.Since(start).Seconds())
 		return nil, err
 	}
+	return s.finalizeEnhanced(result), nil
+}
+
+// buildAIRequest 组装首答编排请求：模型参数来自 ai.provider 对应配置族
+// （见 WithRuntimeParams）——此前 config 里 model/temperature/max_tokens
+// 一直是死配置，这里是它们唯一生效的入口。多轮上下文：历史由
+// SessionHistoryLoader 拉取（零注入 = 单轮），当前 query 恒为最后一条
+// user 消息（PromptBuilder 的分叉约定）。非流式与流式首答共用。
+func (s *OrchestratedEnhancedAIService) buildAIRequest(ctx context.Context, query, sessionID string) aimodule.AIRequest {
+	return aimodule.AIRequest{
+		TaskType:       aimodule.TaskTypeQA,
+		ConversationID: sessionID,
+		Query:          query,
+		SystemPrompt:   "你是 Servify 智能客服助手，请基于上下文给出准确、简洁、专业的中文回答。",
+		Model:          s.runtimeParams.Model,
+		Temperature:    s.runtimeParams.Temperature,
+		MaxTokens:      s.runtimeParams.MaxTokens,
+		TimeoutMs:      s.runtimeParams.TimeoutMs,
+		Messages:       s.buildHistoryMessages(ctx, query, sessionID),
+		RetrievalPolicy: aimodule.RetrievalPolicy{
+			Enabled:   true,
+			TopK:      5,
+			Threshold: 0.7,
+			Strategy:  "semantic",
+		},
+		ToolPolicy: aimodule.ToolPolicy{
+			Enabled:  true,
+			MaxSteps: 5,
+		},
+	}
+}
+
+// transferShortCircuit 转人工关键词命中时的统一响应（记录 transfer 指标）。
+// 非流式与流式首答共用。
+func (s *OrchestratedEnhancedAIService) transferShortCircuit(start time.Time) *EnhancedAIResponse {
+	s.promMetrics.RecordAIRequest("internal", "", "success", "transfer", time.Since(start).Seconds())
+	return &EnhancedAIResponse{
+		AIResponse: &AIResponse{
+			Content:    "我来为您转接人工客服，请稍等...",
+			Source:     "system",
+			Confidence: 1.0,
+		},
+		Strategy: "transfer",
+		Duration: time.Since(start),
+	}
+}
+
+// finalizeEnhanced 把编排成功结果映射为 enhanced 响应并记录指标：引用来源
+// →置信度/产生方式，置信门→转人工建议。非流式与流式首答共用。
+func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResponse) *EnhancedAIResponse {
 	if s.knowledgeProviderEnabled {
 		s.circuitBreaker.OnSuccess()
 	}
@@ -327,7 +343,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		s.promMetrics.RecordAILLMTokens(s.aiProviderLabel(), "input", result.TokenUsage.InputTokens)
 		s.promMetrics.RecordAILLMTokens(s.aiProviderLabel(), "output", result.TokenUsage.OutputTokens)
 	}
-	return enhanced, nil
+	return enhanced
 }
 
 func (s *OrchestratedEnhancedAIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {

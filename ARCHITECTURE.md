@@ -599,6 +599,8 @@ LLM 侧的构造统一收口在 `internal/platform/llm/factory`：`ai.provider` 
 
 坐席 AI 辅助（AgentCopilot）与首答共用同一 LLM provider、出站参数与会话历史口径：`POST /api/v1/ai/copilot` 单端点按 `action` 分发三类"点一下就能用"的能力——`suggest_reply`（基于会话近期历史起草下一条回复）、`rewrite`（按语气改写坐席草稿，事实与承诺不变）、`session_summary`（三段式会话摘要）。历史类动作用与首答相同的 `SessionHistoryLoader` 读取口，但采用"明确失败"语义：会话无可读消息或历史加载失败时返回 4xx，不静默降级、不凭空编造上下文；LLM provider 未装配时端点降级 503。权限走 workspace 资源组（`RequireResourcePermission("workspace")`，POST → `workspace.write`），坐席角色模板已含写权限。当前为启动期全局装配，不跟随租户/工作区作用域模型覆盖。
 
+首答流式输出复用 WS 既有 `text-message` 入站链路：编排层 `HandleStream` 与非流式 `Handle` 共享同一条前置流水线（策略钩子、护栏、检索、prompt、审计）与 finalize 口径，模型侧经 provider `ChatStream` 增量产出（含 agent 工具循环——分片中出现的完整工具调用照常执行，最终内容为全部分片拼接）。delivery 层 `ProcessQueryStream` 在终末事件做与非流式一致的 finalize（引用来源、产生方式、置信门），WS hub 以可选能力接口协商流式：支持则先推 `ai-response-delta` 增量帧（`{content_delta, done}`），完成时补终末 delta（`done=true`）再发完整 `ai-response` 终帧（帧契约向后兼容，不识别增量的客户端仍只消费终帧）；能力缺失或流启动即失败整体回退非流式单发；增量已推送后流失败则只补终末 delta、不再发 ai-response 也不回退（避免文本重复），与既有失败路径一致。
+
 ## 11. Events
 
 Internal domain events should be explicit.
