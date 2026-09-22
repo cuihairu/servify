@@ -253,7 +253,7 @@ func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 	}
 
 	client := &WebSocketClient{
-		ID:        fmt.Sprintf("client_%d", time.Now().UnixNano()),
+		ID:        newClientID(),
 		SessionID: sessionID,
 		Conn:      conn,
 		Send:      make(chan WebSocketMessage, 256),
@@ -264,6 +264,17 @@ func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 
 	go client.writePump()
 	go client.readPump()
+}
+
+// clientIDSeq 兜底同纳秒并发建连时的 ID 唯一性：CI 虚拟机时钟粒度粗，
+// time.Now().UnixNano() 可能对同一批并发握手返回相同值，重复 ID 会在
+// hub 的 clients map 里互相覆盖（后注册顶掉先注册），表现为
+// connected_clients 永久少计——perf 基线 WS 对账因此翻车过（2026-09）。
+var clientIDSeq atomic.Int64
+
+// newClientID 生成唯一连接 ID：纳秒时间戳保留可读性，原子序号保证唯一。
+func newClientID() string {
+	return fmt.Sprintf("client_%d_%d", time.Now().UnixNano(), clientIDSeq.Add(1))
 }
 
 func (c *WebSocketClient) readPump() {
