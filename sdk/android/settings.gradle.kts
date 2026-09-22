@@ -17,3 +17,5 @@ rootProject.name = "servify-android"
 
 include(":servify-sdk")
 include(":probe")
+include(":demo")
+include(":demo-baseline")

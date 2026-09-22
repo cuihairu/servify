@@ -1,0 +1,1 @@
+-keep class servify.sdk.demo.MainActivity { *; }

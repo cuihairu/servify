@@ -438,6 +438,10 @@ jobs:
         working-directory: sdk/android
         run: ./gradlew --no-daemon build
 
+      - name: SDK size gate (M1 acceptance #3, D9 ≤1.5MB)
+        timeout-minutes: 15
+        run: ./scripts/check-android-sdk-size.sh
+
   admin-checks:
     name: Admin Checks
     runs-on: ubuntu-latest
