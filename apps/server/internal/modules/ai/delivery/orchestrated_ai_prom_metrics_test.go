@@ -139,18 +139,27 @@ func TestOrchestratedAI_PromMetricsFallbackOnOrchestratorError(t *testing.T) {
 	}
 }
 
-func TestOrchestratedAI_PromMetricsFallbackOnMissingSources(t *testing.T) {
+func TestOrchestratedAI_PromMetricsDirectLLMOnMissingSources(t *testing.T) {
 	svc, llmProvider, _, reg := newMeteredOrchestrator(t, nil)
-	// llm 正常但知识库无命中：Handle 成功、sources 为空 → 记 strategy=fallback。
+	// llm 正常但知识库无命中：Handle 成功、sources 为空 → 策略 "llm"
+	//（零命中直答，历史上误标为 fallback），打点记主链路 success/primary，
+	// 且不计入 fallback 指标——那是编排失败兜底专用。
 	llmProvider.ChatResponse = llm.ChatResponse{Content: "answer"}
 
-	if _, err := svc.ProcessQueryEnhanced(context.Background(), "冷门问题", "sess"); err != nil {
+	resp, err := svc.ProcessQueryEnhanced(context.Background(), "冷门问题", "sess")
+	if err != nil {
 		t.Fatalf("ProcessQueryEnhanced: %v", err)
 	}
+	if resp.Strategy != "llm" {
+		t.Fatalf("expected llm strategy for zero-hit direct answer, got %q", resp.Strategy)
+	}
 	if got := promRowValue(t, reg, "ai_requests_total", map[string]string{
-		"provider": "weknora", "model": "", "outcome": "success", "strategy": "fallback",
+		"provider": "weknora", "model": "", "outcome": "success", "strategy": "primary",
 	}); got != 1 {
-		t.Fatalf("no-sources fallback counter = %v, want 1", got)
+		t.Fatalf("no-sources primary counter = %v, want 1", got)
+	}
+	if metrics := svc.GetMetrics(); metrics.FallbackUsageCount != 0 {
+		t.Fatalf("zero-hit direct answer must not count as fallback, got %d", metrics.FallbackUsageCount)
 	}
 }
 

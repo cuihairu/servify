@@ -20,6 +20,7 @@ type scopedAIRuntimeService struct {
 	resolver      *configscope.Resolver
 	fallback      aidelivery.RuntimeService
 	businessMeter *svcmetrics.BusinessMetrics
+	historyLoader aidelivery.SessionHistoryLoader
 }
 
 func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
@@ -38,6 +39,16 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
 	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
+}
+
+// WithSessionHistory 注入会话历史读取口（多轮上下文）。启动装配在
+// conversation service 构建完成后回填；nil 安全，链式风格统一。
+func (s *scopedAIRuntimeService) WithSessionHistory(loader aidelivery.SessionHistoryLoader) aidelivery.RuntimeService {
+	if s == nil {
+		return s
+	}
+	s.historyLoader = loader
+	return s
 }
 
 func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
@@ -90,5 +101,5 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	if s.cfg != nil {
 		aiCfg = s.cfg.AI
 	}
-	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, aiCfg, s.logger, s.businessMeter)
+	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, aiCfg, s.logger, s.businessMeter, s.historyLoader)
 }

@@ -19,11 +19,27 @@ import (
 // AIRuntimeParams 编排出站 LLM 调用的模型参数，由装配层从 ai.provider
 // 对应的配置族导出（见 llm factory.RuntimeParams）。零值字段原样透传、
 // 由 provider 侧默认兜底——与 AIRequest.Model/Temperature 的既有语义一致。
+// Handoff* 是首答置信门参数（零值 = 关闭，与历史行为一致）。
 type AIRuntimeParams struct {
 	Model       string
 	Temperature float64
 	MaxTokens   int
 	TimeoutMs   int
+	// HandoffEnabled 开启"置信不足建议转人工"：首答 confidence 低于
+	// HandoffConfidenceThreshold 时置 NextAction=handoff（只给建议字段，
+	// 不改写答案内容、不执行转接）。
+	HandoffEnabled bool
+	// HandoffConfidenceThreshold 置信阈值，(0,1]；默认配置 0.65 恰好落在
+	// "零命中 confidence=0.6" 与 "有命中 confidence≥0.7" 之间——开箱即
+	// "知识库答不上来才建议转人工"。
+	HandoffConfidenceThreshold float64
+}
+
+// SessionHistoryLoader 是多轮上下文的最小依赖口：编排服务只关心"按会话
+// 取最近 N 条消息"，不关心消息如何持久化。conversation 模块的适配器
+// 已按此形状实现（models.Message 归一），AI 模块不反向依赖 conversation。
+type SessionHistoryLoader interface {
+	ListRecentMessages(ctx context.Context, sessionID string, limit int) ([]models.Message, error)
 }
 
 // OrchestratedEnhancedAIService keeps the legacy enhanced AI surface while delegating query flow to the AI module.
@@ -41,6 +57,7 @@ type OrchestratedEnhancedAIService struct {
 	logger                   *logrus.Logger
 	toolExecutor             *aimodule.ToolExecutor
 	runtimeParams            AIRuntimeParams
+	historyLoader            SessionHistoryLoader
 }
 
 // AttachBusinessMetrics 注入进程级 Prometheus 业务指标（nil 安全，可链式）。
@@ -63,6 +80,63 @@ func (s *OrchestratedEnhancedAIService) WithRuntimeParams(params AIRuntimeParams
 	}
 	s.runtimeParams = params
 	return s
+}
+
+// WithSessionHistory 注入会话历史读取口（多轮上下文，nil 安全，可链式，
+// 与 WithRuntimeParams 同款注入风格）。零值 = 不注入 = 单轮问答的历史行为。
+func (s *OrchestratedEnhancedAIService) WithSessionHistory(loader SessionHistoryLoader) *OrchestratedEnhancedAIService {
+	if s == nil {
+		return s
+	}
+	s.historyLoader = loader
+	return s
+}
+
+// aiHistoryTurns 多轮上下文携带的最大历史消息数（不含当前 query）。够覆盖
+// "上下文指代 + 追问"场景，同时把 prompt 膨胀与 token 成本控制在个位数
+// 消息量级；当前为代码级常量，后续如需按租户调优再配置化。
+const aiHistoryTurns = 8
+
+// buildHistoryMessages 构造多轮上下文消息：会话近期消息转 ChatMessage
+// （customer→user、agent→assistant，system 与空内容跳过），末尾追加当前
+// query（PromptBuilder 只在 Messages 为空时才单独发 query）。ListRecent
+// 按 created_at DESC 返回，转成时间升序；最新一条与 query 相同视为已落库
+// 的当前消息，去重避免重复提问。任何失败都降级为单轮（返回 nil），不阻塞首答。
+func (s *OrchestratedEnhancedAIService) buildHistoryMessages(ctx context.Context, query, sessionID string) []llm.ChatMessage {
+	if s == nil || s.historyLoader == nil || strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+	msgs, err := s.historyLoader.ListRecentMessages(ctx, sessionID, aiHistoryTurns+1)
+	if err != nil {
+		s.logger.Warnf("AI session history load failed, falling back to single-turn (session_id=%s, error=%v)", sessionID, err)
+		return nil
+	}
+	trimmed := strings.TrimSpace(query)
+	chat := make([]llm.ChatMessage, 0, len(msgs)+1)
+	for i := len(msgs) - 1; i >= 0; i-- {
+		content := strings.TrimSpace(msgs[i].Content)
+		if content == "" {
+			continue
+		}
+		var role string
+		switch strings.TrimSpace(msgs[i].Sender) {
+		case "customer":
+			role = "user"
+		case "agent":
+			role = "assistant"
+		default: // system / 未知发送者不进提示词
+			continue
+		}
+		// DESC 序里 i==0 是最新一条：与当前 query 重复则为已落库的当前消息
+		if i == 0 && content == trimmed {
+			continue
+		}
+		chat = append(chat, llm.ChatMessage{Role: role, Content: content})
+	}
+	if len(chat) > aiHistoryTurns {
+		chat = chat[len(chat)-aiHistoryTurns:]
+	}
+	return append(chat, llm.ChatMessage{Role: "user", Content: query})
 }
 
 // aiProviderLabel 返回打点用的 provider 标签；未启用外部 provider 时记 "none"。
@@ -117,6 +191,10 @@ func (s *OrchestratedEnhancedAIService) ProcessQuery(ctx context.Context, query 
 	if err != nil {
 		return nil, err
 	}
+	// 把 enhanced 附加输出（引用来源、产生方式）带回 legacy AIResponse，
+	// WS ai-response 帧与 REST 普通查询路径据此透出，无需改接口签名。
+	resp.AIResponse.Sources = resp.Sources
+	resp.AIResponse.Strategy = resp.Strategy
 	return resp.AIResponse, nil
 }
 
@@ -148,6 +226,9 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		Temperature: s.runtimeParams.Temperature,
 		MaxTokens:   s.runtimeParams.MaxTokens,
 		TimeoutMs:   s.runtimeParams.TimeoutMs,
+		// 多轮上下文：历史由 SessionHistoryLoader 拉取（零注入 = 单轮），
+		// 当前 query 恒为最后一条 user 消息（PromptBuilder 的分叉约定）。
+		Messages: s.buildHistoryMessages(ctx, query, sessionID),
 		RetrievalPolicy: aimodule.RetrievalPolicy{
 			Enabled:   true,
 			TopK:      5,
@@ -159,6 +240,11 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 			MaxSteps: 5,
 		},
 	})
+	if err == nil && result == nil {
+		// Handle 契约外仍可能 (nil, nil)（如 llmProvider 未接线）：
+		// 归一成错误走兜底分支，避免对 result.Content 解引用 panic。
+		err = fmt.Errorf("ai orchestrator returned empty result (session_id=%s)", sessionID)
+	}
 	if err != nil {
 		if s.knowledgeProviderEnabled {
 			s.circuitBreaker.OnFailure()
@@ -190,13 +276,17 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 	s.metrics.OpenAILatency = result.Latency
 
 	recordedStrategy := "primary"
+	aiResp := &AIResponse{
+		Content:    result.Content,
+		Confidence: confidenceFromSources(result.Sources),
+		Source:     "ai",
+	}
 	enhanced := &EnhancedAIResponse{
-		AIResponse: &AIResponse{
-			Content:    result.Content,
-			Confidence: confidenceFromSources(result.Sources),
-			Source:     "ai",
-		},
-		Strategy: "fallback",
+		AIResponse: aiResp,
+		// 零命中但 LLM 正常作答是"llm"（模型直接回答）而非 fallback——
+		// fallback 专指编排失败走 legacy 兜底。历史上这里误标为 fallback，
+		// 把能力内的直接回答记成了降级。
+		Strategy: "llm",
 		Duration: result.Latency,
 	}
 	if len(result.Sources) > 0 {
@@ -212,8 +302,15 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 			s.metrics.WeKnoraLatency = result.Latency
 		}
 	} else {
-		s.metrics.FallbackUsageCount++
-		recordedStrategy = "fallback"
+		// 零命中直答：主链路成功（strategy=primary），不再计入
+		// FallbackUsageCount——那是编排失败兜底专用的指标。
+		recordedStrategy = "primary"
+	}
+	// 置信门：低于阈值只产出"建议转人工"的元数据（next_action/handoff_reason），
+	// 不改写答案内容、不执行转接——真正转接仍由用户显式发起或关键词触发。
+	if s.runtimeParams.HandoffEnabled && aiResp.Confidence < s.runtimeParams.HandoffConfidenceThreshold {
+		aiResp.NextAction = "handoff"
+		aiResp.HandoffReason = "low_confidence"
 	}
 	s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", recordedStrategy, result.Latency.Seconds())
 	if result.TokenUsage != nil {

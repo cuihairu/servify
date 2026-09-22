@@ -43,7 +43,7 @@ func TestScopedAIHandlerServiceNilReceiverBranches(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigNilLogger(t *testing.T) {
-	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, config.AIConfig{}, nil, nil)
+	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, config.AIConfig{}, nil, nil, nil)
 	if svc == nil {
 		t.Fatal("expected default runtime service with nil logger")
 	}

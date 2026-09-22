@@ -184,6 +184,10 @@ ai:
   #   temperature: 0.7
   #   max_tokens: 1000
   #   timeout: 30s
+  # handoff: 首答置信门（低于阈值建议转人工，不改写答案）；阈值须在 (0,1]。
+  # handoff:
+  #   enabled: true
+  #   confidence_threshold: 0.65
 
 dify:
   enabled: true

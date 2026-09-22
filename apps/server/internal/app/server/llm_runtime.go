@@ -37,9 +37,11 @@ func resolveLLMRuntime(cfg *config.Config, resolver *configscope.Resolver) (llm.
 	}
 	model, temperature, maxTokens, timeoutMs := llmfactory.RuntimeParams(factoryCfg)
 	return provider, aidelivery.AIRuntimeParams{
-		Model:       model,
-		Temperature: temperature,
-		MaxTokens:   maxTokens,
-		TimeoutMs:   timeoutMs,
+		Model:                      model,
+		Temperature:                temperature,
+		MaxTokens:                  maxTokens,
+		TimeoutMs:                  timeoutMs,
+		HandoffEnabled:             cfg.AI.Handoff.Enabled,
+		HandoffConfidenceThreshold: cfg.AI.Handoff.ConfidenceThreshold,
 	}, nil
 }

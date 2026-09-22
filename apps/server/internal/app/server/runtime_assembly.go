@@ -8,6 +8,7 @@ import (
 	agentapp "servify/apps/server/internal/modules/agent/application"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	agentinfra "servify/apps/server/internal/modules/agent/infra"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsapp "servify/apps/server/internal/modules/analytics/application"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
@@ -112,14 +113,35 @@ func wireRealtimeRuntime(rt *Runtime) *realtimeplatform.WebSocketHub {
 	return wsHub
 }
 
-func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) {
+func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) *conversationdelivery.WebSocketMessageAdapter {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
-	wsHub.SetConversationMessageWriter(conversationdelivery.NewWebSocketMessageAdapter(conversationService))
+	historyAdapter := conversationdelivery.NewWebSocketMessageAdapter(conversationService)
+	wsHub.SetConversationMessageWriter(historyAdapter)
 	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。
 	rt.OpenConversationReader = conversationdelivery.NewOpenConversationAdapter(conversationService)
 	wireEmailRuntime(rt, conversationService)
+	return historyAdapter
+}
+
+// attachSessionHistory 把会话历史读取口回填给 AI 面（多轮上下文）：
+// scoped 包装器覆盖请求级重建，启动装配的编排实例覆盖 pgvector 等全局
+// 路径。conversation service 晚于 AI 装配构建，所以是事后回填而不是
+// 构造参数；全部 nil 安全，loader 为 nil 时整体跳过（单轮历史行为）。
+func attachSessionHistory(rt *Runtime, aiAssembly *AIAssembly, loader aidelivery.SessionHistoryLoader) {
+	if rt == nil || aiAssembly == nil || loader == nil {
+		return
+	}
+	if v, ok := rt.AIService.(*scopedAIRuntimeService); ok {
+		v.WithSessionHistory(loader)
+	}
+	if v, ok := rt.AIHandlerService.(*scopedAIHandlerService); ok {
+		v.WithSessionHistory(loader)
+	}
+	if v, ok := aiAssembly.RuntimeService.(*aidelivery.OrchestratedEnhancedAIService); ok {
+		v.WithSessionHistory(loader)
+	}
 }
 
 // wireEmailRuntime 按需构建单邮箱 IMAP 渠道（enabled=false 时不构建任何组件）。

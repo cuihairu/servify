@@ -150,6 +150,15 @@ type AIConfig struct {
 	Provider  string          `yaml:"provider" json:"provider,omitempty"`
 	OpenAI    OpenAIConfig    `yaml:"openai" json:"openai,omitempty"`
 	Anthropic AnthropicConfig `yaml:"anthropic" json:"anthropic,omitempty"`
+	Handoff   HandoffConfig   `yaml:"handoff" json:"handoff,omitempty"`
+}
+
+// HandoffConfig 首答置信门："答不上来时平滑转人工"的建议开关。只产出
+// next_action=handoff 元数据（不改写答案、不执行转接），阈值默认 0.65
+// 恰落在零命中 confidence=0.6 与有命中 confidence≥0.7 之间。
+type HandoffConfig struct {
+	Enabled             bool    `yaml:"enabled" json:"enabled"`
+	ConfidenceThreshold float64 `yaml:"confidence_threshold" json:"confidence_threshold"`
 }
 
 // AnthropicConfig Anthropic（Claude 系列）接入参数。
@@ -680,6 +689,13 @@ func InsecureDefaults(cfg *Config) []string {
 		warnings = append(warnings, fmt.Sprintf("ai.provider must be 'openai' or 'anthropic' (got %q)", aiProvider))
 	}
 
+	// 置信门开着就必须给 (0,1] 的阈值：0 或负值会让所有首答都建议转人工，
+	// >1 则永远不触发——两种都不是运维想要的语义，production/staging 在
+	// 加载期直接拦下。
+	if cfg.AI.Handoff.Enabled && (cfg.AI.Handoff.ConfidenceThreshold <= 0 || cfg.AI.Handoff.ConfidenceThreshold > 1) {
+		warnings = append(warnings, fmt.Sprintf("ai.handoff.confidence_threshold must be in (0,1] when handoff is enabled (got %v)", cfg.AI.Handoff.ConfidenceThreshold))
+	}
+
 	if strings.EqualFold(strings.TrimSpace(cfg.Upload.Provider), "s3") {
 		if strings.TrimSpace(cfg.Upload.S3.Bucket) == "" {
 			warnings = append(warnings, "upload.provider is s3 but upload.s3.bucket is empty")
@@ -907,6 +923,10 @@ func GetDefaultConfig() *Config {
 				Temperature: 0.7,
 				MaxTokens:   1000,
 				Timeout:     30 * time.Second,
+			},
+			Handoff: HandoffConfig{
+				Enabled:             true,
+				ConfidenceThreshold: 0.65,
 			},
 		},
 		Dify: DifyConfig{

@@ -84,6 +84,12 @@ ai:
     temperature: 0.7
     max_tokens: 1000
     timeout: 30s
+  # handoff: 首答置信门——答不上来时平滑转人工的建议开关。低于阈值只产出
+  # next_action=handoff 元数据（不改写答案、不执行转接）。默认阈值 0.65
+  # 恰落在"零命中 confidence=0.6"与"有命中 confidence>=0.7"之间。
+  handoff:
+    enabled: true
+    confidence_threshold: 0.65
 
 dify:
   enabled: ${DIFY_ENABLED}

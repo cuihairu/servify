@@ -26,6 +26,7 @@ type scopedAIHandlerService struct {
 
 	mu                       sync.RWMutex
 	knowledgeProviderEnabled *bool
+	historyLoader            aidelivery.SessionHistoryLoader
 }
 
 func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.HandlerService, startup aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.HandlerService {
@@ -93,6 +94,16 @@ func (s *scopedAIHandlerService) ResetCircuitBreaker() bool {
 	return s.fallback.ResetCircuitBreaker()
 }
 
+// WithSessionHistory 注入会话历史读取口（多轮上下文）。启动装配在
+// conversation service 构建完成后回填；nil 安全，链式风格与字段 setter 一致。
+func (s *scopedAIHandlerService) WithSessionHistory(loader aidelivery.SessionHistoryLoader) aidelivery.HandlerService {
+	if s == nil {
+		return s
+	}
+	s.historyLoader = loader
+	return s
+}
+
 func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.RuntimeService {
 	if s == nil {
 		return nil
@@ -104,13 +115,13 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 		return s.applyRuntimeOverrides(s.startup)
 	}
 	if s.resolver == nil {
-		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, s.aiConfig(), s.logger, s.businessMeter))
+		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, s.aiConfig(), s.logger, s.businessMeter, s.historyLoader))
 	}
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
 	ragFlowConfig := s.resolver.ResolveRagFlow(ctx, nil)
-	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.aiConfig(), s.logger, s.businessMeter))
+	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.aiConfig(), s.logger, s.businessMeter, s.historyLoader))
 }
 
 // aiConfig 返回全局 AI 配置段（provider 选型 + anthropic 参数族）；
@@ -126,8 +137,9 @@ func (s *scopedAIHandlerService) aiConfig() config.AIConfig {
 // 知识源选择与启动期 BuildAIAssembly 共用 selectKnowledgeSource 门面，但
 // checkHealth=false：请求级不做健康探测（不可达 BaseURL 也纯构造），运行期
 // 外部知识源故障由编排服务的 circuitBreaker 兜底。aiCfg 只取全局面
-// （provider 选型 + anthropic 参数），openai 参数面来自作用域解析结果。
-func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, ragFlowConfig config.RagFlowConfig, weKnoraConfig config.WeKnoraConfig, aiCfg config.AIConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
+// （provider 选型 + anthropic 参数 + 置信门），openai 参数面来自作用域解析
+// 结果；historyLoader 透传给编排服务做多轮上下文（nil = 单轮）。
+func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, ragFlowConfig config.RagFlowConfig, weKnoraConfig config.WeKnoraConfig, aiCfg config.AIConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics, historyLoader aidelivery.SessionHistoryLoader) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -155,11 +167,14 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 	// AttachBusinessMetrics 把进程级业务指标挂上（nil 安全），AI 请求打点
 	// 见 OrchestratedEnhancedAIService.ProcessQueryEnhanced。
 	return source.buildOrchestrated(baseAI, llmProvider, aidelivery.AIRuntimeParams{
-		Model:       model,
-		Temperature: temperature,
-		MaxTokens:   maxTokens,
-		TimeoutMs:   timeoutMs,
+		Model:                      model,
+		Temperature:                temperature,
+		MaxTokens:                  maxTokens,
+		TimeoutMs:                  timeoutMs,
+		HandoffEnabled:             aiCfg.Handoff.Enabled,
+		HandoffConfidenceThreshold: aiCfg.Handoff.ConfidenceThreshold,
 	}, logger).
+		WithSessionHistory(historyLoader).
 		AttachBusinessMetrics(businessMeter)
 }
 

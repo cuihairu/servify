@@ -595,6 +595,8 @@ The AI module only depends on the interfaces, not the provider DTOs.
 
 LLM 侧的构造统一收口在 `internal/platform/llm/factory`：`ai.provider` 全局选型（openai | anthropic）由装配层经 factory 实例化，openai 与 anthropic 均实现真实 Chat / ChatStream；编排层把 `ai.<provider>.model / temperature / max_tokens / timeout` 写入每次出站调用，零值由 provider 侧默认兜底。
 
+首答质量三件套已接入编排主链路：多轮上下文经 `SessionHistoryLoader` 窄接口拉取会话近期消息（AI 模块不反向依赖 conversation，conversation 适配器按形状实现）；引用来源与产生方式（`sources`/`strategy`）随 REST 响应与 WS `ai-response` 帧透出；`ai.handoff` 置信门在首答 confidence 低于阈值时只产出 `next_action=handoff` 建议元数据（不改写答案、不执行转接，转接仍由用户显式发起或关键词触发）。
+
 ## 11. Events
 
 Internal domain events should be explicit.

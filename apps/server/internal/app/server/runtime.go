@@ -130,7 +130,7 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 
 	wsHub := wireRealtimeRuntime(rt)
 	state.wsHub = wsHub
-	wireConversationRuntime(rt, wsHub)
+	attachSessionHistory(rt, aiAssembly, wireConversationRuntime(rt, wsHub))
 	state.routingService = wireRoutingRuntime(rt)
 
 	webrtcService, err := wireRealtimeGateways(rt, wsHub)

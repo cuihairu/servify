@@ -35,7 +35,7 @@ func TestRuntimeServiceFromResolvedConfigUnknownProviderFallsBack(t *testing.T) 
 	service := runtimeServiceFromResolvedConfig(
 		config.OpenAIConfig{APIKey: "k"},
 		config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{},
-		config.AIConfig{Provider: "bogus"}, logger, nil,
+		config.AIConfig{Provider: "bogus"}, logger, nil, nil,
 	)
 	if service == nil {
 		t.Fatal("expected fallback runtime service")

@@ -646,14 +646,35 @@ func (c *WebSocketClient) processMessageWithAI(message WebSocketMessage) {
 		}
 		// 推送AI回复
 		c.Hub.SendToSession(sessionID, WebSocketMessage{
-			Type: "ai-response",
-			Data: map[string]interface{}{
-				"content":    resp.Content,
-				"confidence": resp.Confidence,
-				"source":     resp.Source,
-			},
+			Type:      "ai-response",
+			Data:      aiResponsePayload(resp),
 			SessionID: sessionID,
 			Timestamp: time.Now(),
 		})
 	}(c.SessionID, content)
+}
+
+// aiResponsePayload 构造 ai-response 帧的 Data：基础三字段之外，编排路径
+// 的附加输出（引用来源 sources、产生方式 strategy、置信不足建议 next_action/
+// handoff_reason）按零值省略透出——Web/移动端 SDK 据此渲染引用与"转人工"
+// 提示；stub 或 legacy 服务只填基础字段，帧形状向后兼容。
+func aiResponsePayload(resp *aidelivery.AIResponse) map[string]interface{} {
+	payload := map[string]interface{}{
+		"content":    resp.Content,
+		"confidence": resp.Confidence,
+		"source":     resp.Source,
+	}
+	if len(resp.Sources) > 0 {
+		payload["sources"] = resp.Sources
+	}
+	if resp.Strategy != "" {
+		payload["strategy"] = resp.Strategy
+	}
+	if resp.NextAction != "" {
+		payload["next_action"] = resp.NextAction
+	}
+	if resp.HandoffReason != "" {
+		payload["handoff_reason"] = resp.HandoffReason
+	}
+	return payload
 }

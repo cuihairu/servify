@@ -301,9 +301,9 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 | # | 需求 | 服务 SDK 阶段 | 现状 |
 |---|---|---|---|
 | 1 | 访客 token 签发端点 + WS 校验 | M1 | 无（session_id 即身份） |
-| 2 | WS `ai-response` 携带 `sources`（一等字段，非 metadata 透传） | M1 | REST 已带，WS 未带 |
+| 2 | WS `ai-response` 携带 `sources`（一等字段，非 metadata 透传） | M1 | ✅ 已落地（2026-09）：WS `ai-response` 现携带 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略，向后兼容），多轮上下文与置信转人工建议同批交付 |
 | 3 | 未读计数（服务端会话级未读数或客户端可推导的已读游标） | M1 | 无（客户端推导即可起步，服务端游标为增强） |
 | 4 | 推送 token 注册 + 会话消息推送下发 | M3 | app-core contract 已预留，服务端未实现 |
 | 5 | 工单创建接口接受 `ai_summary` 字段 | M3 | `/api/tickets` 存在，摘要字段未接 |
 
-> 其中 #2 属于 AI 主链路智能化批次的前置范围（WS 流式/引用扩展），#1/#3 是移动端独立配套。服务端排期时两者可合并评审。
+> 其中 #2 已随 AI 主链路智能化批次完成；#1/#3 是移动端独立配套，服务端排期时可合并评审。
