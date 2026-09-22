@@ -414,9 +414,9 @@ jobs:
           ./scripts/run-smoke-tests.sh
 
   android-probe:
-    name: Android Protocol Probe
+    name: Android SDK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         shell: bash
@@ -433,8 +433,8 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Build and test Android protocol probe
-        timeout-minutes: 15
+      - name: Build and test Android SDK modules
+        timeout-minutes: 20
         working-directory: sdk/android
         run: ./gradlew --no-daemon build
 

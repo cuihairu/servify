@@ -38,7 +38,7 @@ VISITOR_SESSION="mp-acc-session-$(date +%s)"
 SERVIFY_URL="http://127.0.0.1:${SERVIFY_PORT}"
 WS_URL="ws://127.0.0.1:${SERVIFY_PORT}/api/v1/ws?session_id=${VISITOR_SESSION}"
 PROBE_LOG="$EVIDENCE_DIR/probe.log"
-PROBE_BIN="$PROJECT_ROOT/sdk/android/build/install/servify-android-probe/bin/servify-android-probe"
+PROBE_BIN="$PROJECT_ROOT/sdk/android/probe/build/install/servify-android-probe/bin/servify-android-probe"
 
 cleanup() {
   for pid in "$PROBE_PID" "$SERVER_PID" "$MOCK_PID"; do

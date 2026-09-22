@@ -26,7 +26,7 @@ private val AGENT_CHATTING: HandoffState = HandoffState.AgentChatting
 
 class FixtureReplayTest {
 
-    private val fixturesDir = File("../protocol-fixtures")
+    private val fixturesDir = File("../../protocol-fixtures")
 
     private fun loadFixtures(): List<JsonObject> =
         fixturesDir.listFiles()!!
