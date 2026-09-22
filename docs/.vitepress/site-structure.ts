@@ -52,6 +52,7 @@ const appendixPages = [
   '/testing-pyramid',
   '/MERMAID_COMPATIBILITY',
   '/mobile-sdk-design',
+  '/mobile-sdk-platform-spec',
 ];
 
 export const docsNav = [
@@ -84,6 +85,7 @@ export const docsNav = [
       { text: '测试金字塔', link: '/testing-pyramid' },
       { text: 'Mermaid 兼容性', link: '/MERMAID_COMPATIBILITY' },
       { text: '移动端 SDK 策划', link: '/mobile-sdk-design' },
+      { text: '移动端 SDK 平台规格', link: '/mobile-sdk-platform-spec' },
     ],
   },
 ];
