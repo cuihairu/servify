@@ -92,6 +92,7 @@ write_manifest() {
   MANIFEST_NEXT_GET_OK="${NEXT_GET_OK:-false}" \
   MANIFEST_NEXT_POST_OK="${NEXT_POST_OK:-false}" \
   MANIFEST_NEXT_REJECT_OK="${NEXT_REJECT_OK:-false}" \
+  MANIFEST_EXPOSURE_CONVERSION_OK="${EXPOSURE_CONVERSION_OK:-false}" \
   python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
 import json
 import os
@@ -113,6 +114,7 @@ payload = {
         "next_questions_get_ok": os.environ.get("MANIFEST_NEXT_GET_OK", "false"),
         "next_questions_post_ok": os.environ.get("MANIFEST_NEXT_POST_OK", "false"),
         "next_questions_reject_ok": os.environ.get("MANIFEST_NEXT_REJECT_OK", "false"),
+        "exposure_conversion_ok": os.environ.get("MANIFEST_EXPOSURE_CONVERSION_OK", "false"),
     },
     "evidence_files": sorted(
         name for name in os.listdir(evidence_dir)
@@ -340,7 +342,78 @@ else
   append_summary "next_reject_ok=false"
 fi
 
-if [ "$DOCS_OK" != "true" ] || [ "$INITIAL_OK" != "true" ] || [ "$NEXT_GET_OK" != "true" ] || [ "$NEXT_POST_OK" != "true" ] || [ "$NEXT_REJECT_OK" != "true" ]; then
+# 9) 曝光/转化归因（P2-0 RQ-5，仅真实服务 + 本地 sqlite 模式）：initial/next
+#    带 session_id 产出曝光行，WS 发送匹配的客户消息触发转化回写，随后直读
+#    sqlite 断言 suggestion_exposure_logs（mock/外部模式无 DB 落点，跳过）。
+EXPOSURE_CONVERSION_OK=skipped
+if [ -n "$DB_DSN" ] && [ -n "$SERVER_PID" ] && command -v node >/dev/null 2>&1 \
+  && node -e 'process.exit(typeof WebSocket === "function" ? 0 : 1)' 2>/dev/null; then
+  append_summary "step=exposure_conversion"
+  request_json "GET" "$SERVIFY_URL/public/suggestions/initial?limit=8&session_id=s-acc-1"
+  save_response "initial-questions-session" "$RESPONSE_BODY"
+  append_summary "initial_session_http=$RESPONSE_STATUS"
+  request_json "GET" "$SERVIFY_URL/public/suggestions/next?query=%E5%AF%86%E7%A0%81&session_id=s-acc-1&limit=8"
+  save_response "next-questions-session" "$RESPONSE_BODY"
+  append_summary "next_session_http=$RESPONSE_STATUS"
+
+  if node - "$SERVIFY_PORT" <<'NODE' 2>> "$EVIDENCE_DIR/ws-conversion.log"
+const port = process.argv[2];
+const ws = new WebSocket('ws://127.0.0.1:' + port + '/api/v1/ws?session_id=s-acc-1');
+const timer = setTimeout(() => { console.error('ws connect timeout'); process.exit(1); }, 8000);
+ws.addEventListener('open', () => {
+  clearTimeout(timer);
+  ws.send(JSON.stringify({
+    type: 'text-message',
+    data: { content: '如何重置登录密码' },
+    session_id: 's-acc-1',
+    timestamp: new Date().toISOString(),
+  }));
+  // 留出落库/归因处理时间再关闭，避免读泵提前被切断
+  setTimeout(() => { ws.close(); process.exit(0); }, 800);
+});
+ws.addEventListener('error', () => { clearTimeout(timer); process.exit(1); });
+NODE
+  then
+    EXPOSURE_CHECK=""
+    for i in $(seq 1 10); do
+      EXPOSURE_CHECK=$(SERVIFY_DB="$DB_DSN" python3 - <<'PY'
+import os, sqlite3
+try:
+    conn = sqlite3.connect(os.environ["SERVIFY_DB"])
+    rows = conn.execute(
+        "SELECT kind, converted_question FROM suggestion_exposure_logs"
+        " WHERE session_id = 's-acc-1' ORDER BY id"
+    ).fetchall()
+    kinds = [r[0] for r in rows]
+    converted = [r[1] for r in rows if r[1]]
+    if kinds == ["initial", "next"] and converted == ["如何重置登录密码"]:
+        print("ok")
+    else:
+        print("pending: kinds=%r converted=%r" % (kinds, converted))
+except Exception as exc:
+    print("error: %s" % exc)
+PY
+)
+      if [ "$EXPOSURE_CHECK" = "ok" ]; then
+        EXPOSURE_CONVERSION_OK=true
+        break
+      fi
+      sleep 1
+    done
+    append_summary "exposure_check=${EXPOSURE_CHECK:-no-run}"
+  else
+    append_summary "ws_send=failed"
+  fi
+  if [ "$EXPOSURE_CONVERSION_OK" = "true" ]; then
+    append_summary "exposure_conversion_ok=true"
+  else
+    append_summary "exposure_conversion_ok=false"
+  fi
+else
+  append_summary "exposure_conversion=skipped (external/mock mode or node WebSocket unavailable)"
+fi
+
+if [ "$DOCS_OK" != "true" ] || [ "$INITIAL_OK" != "true" ] || [ "$NEXT_GET_OK" != "true" ] || [ "$NEXT_POST_OK" != "true" ] || [ "$NEXT_REJECT_OK" != "true" ] || [ "$EXPOSURE_CONVERSION_OK" = "false" ]; then
   OVERALL_STATUS=failed
   append_summary "overall_status=failed"
   echo "❌ Suggestion acceptance 未通过" >&2
@@ -349,4 +422,4 @@ fi
 
 OVERALL_STATUS=passed
 append_summary "overall_status=passed"
-echo "✅ Suggestion acceptance 通过: initial(recency/仅公开) / next GET+POST(评分命中/隐私隔离) / 400 拒绝路径 全部真实留档"
+echo "✅ Suggestion acceptance 通过: initial(recency/仅公开) / next GET+POST(评分命中/隐私隔离) / 400 拒绝路径 / 曝光-转化归因 全部真实留档"

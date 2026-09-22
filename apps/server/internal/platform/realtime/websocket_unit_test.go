@@ -279,6 +279,85 @@ func TestWebSocket_HandleTextMessageFlow(t *testing.T) {
 	}
 }
 
+// unitConversionService 客户侧推荐转化匹配的测试替身。
+type unitConversionService struct {
+	calls     atomic.Int64
+	sessionID string
+	content   string
+	err       error
+}
+
+func (u *unitConversionService) MatchSuggestionConversion(ctx context.Context, sessionID string, content string) error {
+	u.calls.Add(1)
+	u.sessionID = sessionID
+	u.content = content
+	return u.err
+}
+
+func TestWebSocket_HandleTextMessageSuggestionConversion(t *testing.T) {
+	t.Run("matched after persist with broadcast intact", func(t *testing.T) {
+		hub := NewWebSocketHub()
+		go hub.Run()
+		conv := &unitConversionService{}
+		hub.SetSuggestionConversionService(conv)
+
+		client := &WebSocketClient{ID: "c", SessionID: "s-conv", Send: make(chan WebSocketMessage, 2), Hub: hub}
+		hub.register <- client
+		time.Sleep(20 * time.Millisecond)
+
+		client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "重置密码"}})
+
+		if conv.calls.Load() != 1 {
+			t.Fatalf("conversion calls = %d, want 1", conv.calls.Load())
+		}
+		if conv.sessionID != "s-conv" || conv.content != "重置密码" {
+			t.Fatalf("conversion args = (%q, %q)", conv.sessionID, conv.content)
+		}
+		if waitForMessage(t, client.Send).Type != "text-message" {
+			t.Fatal("expected broadcast echo")
+		}
+	})
+
+	t.Run("converter error does not break message flow", func(t *testing.T) {
+		hub := NewWebSocketHub()
+		go hub.Run()
+		conv := &unitConversionService{err: errors.New("boom")}
+		hub.SetSuggestionConversionService(conv)
+
+		client := &WebSocketClient{ID: "c", SessionID: "s-conv", Send: make(chan WebSocketMessage, 2), Hub: hub}
+		hub.register <- client
+		time.Sleep(20 * time.Millisecond)
+
+		client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: "plain"})
+
+		if conv.calls.Load() != 1 {
+			t.Fatalf("conversion calls = %d, want 1", conv.calls.Load())
+		}
+		if waitForMessage(t, client.Send).Type != "text-message" {
+			t.Fatal("broadcast must survive conversion failure")
+		}
+	})
+
+	t.Run("textMessageContent extraction variants", func(t *testing.T) {
+		cases := []struct {
+			name string
+			data interface{}
+			want string
+		}{
+			{"map content", map[string]interface{}{"content": "hi"}, "hi"},
+			{"map without content", map[string]interface{}{"other": "hi"}, ""},
+			{"plain string", "raw", "raw"},
+			{"unsupported type", 12345, ""},
+			{"nil", nil, ""},
+		}
+		for _, tc := range cases {
+			if got := textMessageContent(tc.data); got != tc.want {
+				t.Fatalf("%s: textMessageContent = %q, want %q", tc.name, got, tc.want)
+			}
+		}
+	})
+}
+
 func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 	t.Run("blank content", func(t *testing.T) {
 		hub := NewWebSocketHub()

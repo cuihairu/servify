@@ -46,7 +46,9 @@ import (
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	shiftinfra "servify/apps/server/internal/modules/shift/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
+	suggestioninfra "servify/apps/server/internal/modules/suggestion/infra"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
@@ -299,7 +301,13 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	customFieldModule := customfieldapp.NewService(customfieldinfra.NewGormRepository(rt.DB))
 	rt.CustomFieldService = customfielddelivery.NewHandlerServiceAdapter(customFieldModule)
 	rt.KnowledgeDocHandler = knowledgedelivery.NewHandlerServiceWithProvider(rt.DB, state.aiAssembly.KnowledgeProvider(rt.Config))
-	rt.SuggestionService = suggestiondelivery.NewHandlerService(rt.DB)
+	// 客户侧推荐（P2-0 RQ-5）：module 单实例贯穿 REST 管理面与 WS 转化归因，
+	// 曝光落库与转化匹配读同一仓储；未注入 hub 时归因自动跳过。
+	suggestionModule := suggestionapp.NewService(suggestioninfra.NewGormRepository(rt.DB))
+	rt.SuggestionService = suggestiondelivery.NewHandlerServiceAdapter(suggestionModule)
+	if state.wsHub != nil {
+		state.wsHub.SetSuggestionConversionService(suggestionModule)
+	}
 	rt.GamificationService = gamificationdelivery.NewHandlerService(rt.DB)
 	rt.TicketHandlerService = ticketdelivery.NewHandlerServiceWithDependencies(ticketdelivery.HandlerAssemblyDependencies{
 		DB:           rt.DB,

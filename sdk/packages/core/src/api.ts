@@ -186,9 +186,17 @@ export class ApiClient {
   }
 
   // 客户侧推荐问题（P2-0）：公开路由，无需登录态
-  async getInitialQuestions(limit?: number): Promise<ApiResponse<InitialQuestionsResult>> {
-    const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : '';
-    return this.request<InitialQuestionsResult>('GET', `/public/suggestions/initial${query}`);
+  async getInitialQuestions(limit?: number, options?: { sessionId?: string | number }): Promise<ApiResponse<InitialQuestionsResult>> {
+    const params = new URLSearchParams();
+    if (limit && limit > 0) {
+      params.set('limit', String(limit));
+    }
+    // 曝光归因（P2-0 RQ-5）：session_id 使服务端把曝光/转化挂到同一会话
+    if (options?.sessionId) {
+      params.set('session_id', String(options.sessionId));
+    }
+    const query = params.toString();
+    return this.request<InitialQuestionsResult>('GET', `/public/suggestions/initial${query ? `?${query}` : ''}`);
   }
 
   async getNextQuestions(query: string, options?: { sessionId?: string | number; limit?: number }): Promise<ApiResponse<NextQuestionsResult>> {

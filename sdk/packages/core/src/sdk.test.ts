@@ -330,6 +330,18 @@ describe('ServifySDK suggested questions', () => {
     expect(requests[0].url).toBe('http://localhost:8080/public/suggestions/initial?limit=5');
   });
 
+  it('forwards session id on initial questions for exposure attribution', async () => {
+    const requests = installSuggestionFetch();
+    const sdk = createPlainSDK();
+
+    await sdk.getInitialQuestions(6, { sessionId: 'ws_1' });
+
+    const url = new URL(requests[0].url);
+    expect(url.pathname).toBe('/public/suggestions/initial');
+    expect(url.searchParams.get('limit')).toBe('6');
+    expect(url.searchParams.get('session_id')).toBe('ws_1');
+  });
+
   it('fetches next questions with query, session id and limit', async () => {
     const requests = installSuggestionFetch();
     const sdk = createPlainSDK();

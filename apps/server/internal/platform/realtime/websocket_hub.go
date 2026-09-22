@@ -43,6 +43,14 @@ type iceConfigProvider interface {
 	ICEConfigPayload() (map[string]interface{}, bool)
 }
 
+// suggestionConversionRuntime 是客户侧推荐转化的可选能力（P2-0 RQ-5）：
+// 客户文本消息到达时与该 session 最近一次未转化曝光做规范化匹配，命中即
+// 归因。签名与 suggestion.Service.MatchSuggestionConversion 一致，零适配器
+// 接入；未注入时跳过归因。
+type suggestionConversionRuntime interface {
+	MatchSuggestionConversion(ctx context.Context, sessionID string, content string) error
+}
+
 type WebSocketMessage struct {
 	Type      string      `json:"type"`
 	Data      interface{} `json:"data"`
@@ -74,6 +82,8 @@ type WebSocketHub struct {
 	conversationWriter conversationdelivery.WebSocketMessageWriter
 	// 可选：用于处理 WebRTC 信令
 	rtcService websocketRTCService
+	// 可选：客户侧推荐曝光/转化归因（未设置则跳过）
+	conversionService suggestionConversionRuntime
 }
 
 // websocketAllowedOrigins 是 WS 建连的 Origin 白名单（P2-5 第一刀）。
@@ -151,6 +161,28 @@ func (h *WebSocketHub) SetWebRTCService(rtc websocketRTCService) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.rtcService = rtc
+}
+
+// SetSuggestionConversionService injects the customer-suggestion conversion
+// matcher (optional; nil keeps conversion attribution disabled).
+func (h *WebSocketHub) SetSuggestionConversionService(svc suggestionConversionRuntime) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.conversionService = svc
+}
+
+// textMessageContent 提取文本消息内容：Data 为对象时取 content 字段，
+// 为字符串时取原值，其余格式返回空串。
+func textMessageContent(data interface{}) string {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		if s, ok := v["content"].(string); ok {
+			return s
+		}
+	case string:
+		return v
+	}
+	return ""
 }
 
 func (h *WebSocketHub) Run() {
@@ -324,6 +356,19 @@ func (c *WebSocketClient) handleTextMessage(message WebSocketMessage) {
 		// 不影响消息处理流程，继续执行
 	}
 
+	// 客户侧推荐转化归因（P2-0 RQ-5）：本条消息与该 session 最近一次未
+	// 转化曝光做规范化匹配，命中即回填归因。同步执行（单行索引查询，
+	// 量级与持久化相当）；失败仅记日志，不影响消息主流程。
+	hub := c.Hub
+	hub.mutex.RLock()
+	converter := hub.conversionService
+	hub.mutex.RUnlock()
+	if converter != nil {
+		if err := converter.MatchSuggestionConversion(context.Background(), c.SessionID, textMessageContent(message.Data)); err != nil {
+			logrus.WithFields(logrus.Fields{"session_id": c.SessionID}).Warnf("Suggestion conversion match failed: %v", err)
+		}
+	}
+
 	// 转发给 AI 服务处理
 	go c.processMessageWithAI(message)
 
@@ -480,17 +525,7 @@ func (c *WebSocketClient) persistTextMessage(message WebSocketMessage) error {
 		return nil
 	}
 
-	var content string
-	switch v := message.Data.(type) {
-	case map[string]interface{}:
-		if s, ok := v["content"].(string); ok {
-			content = s
-		}
-	case string:
-		content = v
-	default:
-		// 其他格式不处理
-	}
+	content := textMessageContent(message.Data)
 	if strings.TrimSpace(content) == "" {
 		return nil
 	}

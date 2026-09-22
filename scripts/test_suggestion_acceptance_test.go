@@ -149,6 +149,7 @@ func TestSuggestionAcceptanceScriptWritesEvidence(t *testing.T) {
 		"next_get_ok=true",
 		"next_post_ok=true",
 		"next_reject_ok=true",
+		"exposure_conversion=skipped",
 		"overall_status=passed",
 	} {
 		if !strings.Contains(summaryText, want) {
@@ -169,6 +170,7 @@ func TestSuggestionAcceptanceScriptWritesEvidence(t *testing.T) {
 		`"next_questions_get_ok": "true"`,
 		`"next_questions_post_ok": "true"`,
 		`"next_questions_reject_ok": "true"`,
+		`"exposure_conversion_ok": "skipped"`,
 		`"overall": "passed"`,
 	} {
 		if !strings.Contains(manifestText, want) {

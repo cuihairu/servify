@@ -449,9 +449,10 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   }
 
   // 客户侧推荐问题（P2-0）：公开路由，无需登录态；首屏在会话建立前后
-  // 均可调用，上下文联想以客户最近一条消息为 query。
-  async getInitialQuestions(limit?: number): Promise<InitialQuestionsResult> {
-    const response = await this.api.getInitialQuestions(limit);
+  // 均可调用，上下文联想以客户最近一条消息为 query。sessionId 用于
+  // 服务端曝光/转化归因（P2-0 RQ-5）。
+  async getInitialQuestions(limit?: number, options?: { sessionId?: string | number }): Promise<InitialQuestionsResult> {
+    const response = await this.api.getInitialQuestions(limit, options);
     if (!response.success || !response.data) {
       throw new Error(response.error || 'Failed to get initial questions');
     }

@@ -239,7 +239,11 @@
     // 公开路由失败时静默隐藏，绝不阻塞聊天主链路。
     function fetchSuggestQuestions(path) {
       if (!root.fetch) return Promise.resolve([]);
-      return root.fetch(baseUrl + path)
+      // 曝光归因（P2-0 RQ-5）：带 WS 会话 id，服务端把曝光/转化挂到同一
+      // session；无 session 时不带参，仅计匿名曝光。
+      var sep = path.indexOf('?') >= 0 ? '&' : '?';
+      var full = sessionId ? path + sep + 'session_id=' + encodeURIComponent(sessionId) : path;
+      return root.fetch(baseUrl + full)
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (body) {
           var data = body && body.success && body.data;
