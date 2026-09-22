@@ -288,4 +288,145 @@ class ServifyChatTest {
         chat.destroy()
         assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
     }
+
+    // ---- 刀 4：会话连续性（累积/未读可见性/流中断收口）与 guestToken 握手 ----
+
+    /** 按收到的客户消息序号下发不同服务端帧：1=坐席消息、2=流式增量+终帧、3=坐席消息。 */
+    private class ScriptedListener : WebSocketListener() {
+        @Volatile
+        private var count = 0
+
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            count += 1
+            when (count) {
+                1 -> webSocket.send("""{"type":"agent-message","data":{"content":"坐席A"},"session_id":"test-session"}""")
+                2 -> {
+                    webSocket.send("""{"type":"ai-response-delta","data":{"content_delta":"根据","done":false}}""")
+                    webSocket.send("""{"type":"ai-response-delta","data":{"content_delta":"政策。","done":false}}""")
+                    webSocket.send("""{"type":"ai-response","data":{"content":"根据政策。","confidence":0.9,"source":"kb"},"session_id":"test-session"}""")
+                }
+                else -> webSocket.send("""{"type":"agent-message","data":{"content":"坐席B"},"session_id":"test-session"}""")
+            }
+        }
+    }
+
+    @Test
+    fun buildWsUrlCarriesAccessTokenOnlyWhenConfigured() {
+        chat = newChat()
+        val base = chat.buildWsUrl("https://chat.example.com", null, null)
+        assertTrue(base.startsWith("wss://chat.example.com/api/v1/ws?"))
+        assertTrue(base.contains("session_id=test-session"))
+        assertTrue(!base.contains("access_token"))
+
+        // PROTOCOL §1：access_token 现阶段服务端不读取，端点落地后自动生效；特殊字符须编码
+        // （URLEncoder form 语义：空格→+，&/=→%XX——Go 服务端 r.URL.Query() 按 form 解 + 为空格）。
+        val withToken = chat.buildWsUrl("https://chat.example.com", null, "tok en&x=1")
+        assertTrue(withToken.contains("access_token=tok+en%26x%3D1"), withToken)
+
+        val override = "ws://127.0.0.1:1/ws"
+        assertEquals(override, chat.buildWsUrl("https://chat.example.com", override, null))
+        assertEquals(
+            "$override?access_token=tok+en%26x%3D1",
+            chat.buildWsUrl("https://chat.example.com", override, "tok en&x=1"),
+        )
+    }
+
+    @Test
+    fun historySnapshotAccumulatesAndMergesStreamById() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
+        chat = newChat(echoTimeoutMs = 100)
+        chat.connect()
+        awaitConnected()
+
+        chat.sendMessage("触发1") // listener → 坐席帧
+        chat.sendMessage("触发AI") // listener → 流式+终帧
+
+        withTimeout(5_000) {
+            while (chat.historySnapshot().none { it.isAiResponse && !it.isStreaming }) kotlinx.coroutines.delay(50)
+        }
+        val snapshot = chat.historySnapshot()
+        // 坐席 + AI 终帧两条；delta 中间态同 id 覆盖不重复累积。
+        assertEquals(2, snapshot.size)
+        assertEquals(SenderType.Agent, snapshot[0].sender)
+        assertEquals("根据政策。", snapshot[1].content)
+        assertTrue(snapshot[1].isAiResponse)
+        assertTrue(!snapshot[1].isStreaming)
+    }
+
+    @Test
+    fun unreadCountsOnlyWhileSessionHidden() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
+        chat = newChat(echoTimeoutMs = 100)
+        chat.connect()
+        awaitConnected()
+
+        // 可见期：坐席消息不计未读。
+        chat.onSessionVisible()
+        chat.sendMessage("一")
+        withTimeout(5_000) {
+            while (chat.historySnapshot().none { it.sender == SenderType.Agent }) kotlinx.coroutines.delay(50)
+        }
+        assertEquals(0, chat.events.unreadCount.value)
+
+        // 收起后：AI 流式只按终帧计 1（同 id 不重复），坐席消息再计 1。
+        chat.onSessionHidden()
+        chat.sendMessage("二")
+        withTimeout(5_000) {
+            while (chat.historySnapshot().none { it.isAiResponse && !it.isStreaming }) kotlinx.coroutines.delay(50)
+        }
+        assertEquals(1, chat.events.unreadCount.value)
+
+        chat.sendMessage("三")
+        withTimeout(5_000) {
+            while (chat.historySnapshot().count { it.sender == SenderType.Agent } < 2) kotlinx.coroutines.delay(50)
+        }
+        assertEquals(2, chat.events.unreadCount.value)
+
+        chat.onSessionVisible()
+        assertEquals(0, chat.events.unreadCount.value)
+    }
+
+    @Test
+    fun streamInterruptionOnDisconnectFinalizesPartialWithHint() = runBlocking {
+        // 断线即流中断（PROTOCOL §4.1）：保留已渲染 + 提示行；提示行不计未读。
+        // 服务器断开必须走 onMessage 内同步 cancel()（外部线程/SocketPolicy/onOpen 均不传播，
+        // 见 reconnectsAfterServerDrop 注释）；delta 与断开拆两条消息时序驱动。
+        server.enqueue(
+            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                @Volatile
+                private var count = 0
+
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    count += 1
+                    when (count) {
+                        1 -> {
+                            webSocket.send("""{"type":"ai-response-delta","data":{"content_delta":"根据","done":false}}""")
+                            webSocket.send("""{"type":"ai-response-delta","data":{"content_delta":"退货政策。","done":false}}""")
+                        }
+                        else -> webSocket.cancel()
+                    }
+                }
+            }),
+        )
+        chat = newChat(echoTimeoutMs = 100)
+        chat.connect()
+        awaitConnected()
+
+        chat.sendMessage("触发流式") // listener → delta×2（streamingId 挂上）
+        chat.sendMessage("触发断开") // listener → 服务器同步 cancel → onFailure → finalize
+
+        try {
+            withTimeout(5_000) {
+                while (chat.historySnapshot().none { it.content == "回答中断，请重试" }) kotlinx.coroutines.delay(50)
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            println("PROBE-INTERRUPT snapshot=${chat.historySnapshot()} state=${chat.events.connectionState.value}")
+            throw e
+        }
+        val snapshot = chat.historySnapshot()
+        val partial = snapshot.first { it.isAiResponse }
+        assertEquals("根据退货政策。", partial.content)
+        assertTrue(!partial.isStreaming)
+        assertEquals(0, chat.events.unreadCount.value)
+    }
 }

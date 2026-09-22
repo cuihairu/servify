@@ -59,7 +59,12 @@ fun ChatPanel(
     // 面板打开即会话页可见：清未读（§4.3）。
     LaunchedEffect(chat) { chat.onSessionVisible() }
 
-    val panelState = remember(chat) { ChatPanelState(welcomeText) }
+    val panelState = remember(chat) {
+        ChatPanelState(welcomeText).also { state ->
+            // 面板重开回放门面累积（hide 期间消息不丢，D7 内存级连续性）。
+            chat.historySnapshot().forEach(state::onMessage)
+        }
+    }
     var version by remember(chat) { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     val connectionState by chat.events.connectionState.collectAsState()

@@ -61,6 +61,16 @@ class ServifyChat internal constructor(
     private val wsUrlOverride: String? = null,
 ) {
     private val core = SessionCore()
+
+    /**
+     * 会话消息累积（D7 口径：内存级，不做磁盘持久化同步协议）。hide() 收面板后连接保持、
+     * 消息照常累积，面板重开经 [historySnapshot] 完整恢复渲染。OkHttp 线程写、UI 线程读。
+     */
+    private val history = java.util.concurrent.CopyOnWriteArrayList<ConversationMessage>()
+
+    /** 会话页可见性（未读"本地未渲染过"判据；onSessionVisible/Hidden 由面板接线驱动）。 */
+    @Volatile
+    private var sessionVisible = false
     // 回调来自 OkHttp 不同线程池线程，跨线程读写的状态必须 volatile（守卫与重连计数依赖可见性）。
     @Volatile
     private var webSocket: WebSocket? = null
@@ -74,6 +84,7 @@ class ServifyChat internal constructor(
     private val entry = EntryOrchestrator(this, config, scope)
 
     private var localSeq = 0L
+    @Volatile
     private var streamingId: String? = null
     private val streamedContent = StringBuilder()
 
@@ -161,31 +172,52 @@ class ServifyChat internal constructor(
 
     /** 会话页可见时清零未读（§4.3 unreadCount 语义；UI 刀内部接线）。 */
     internal fun onSessionVisible() {
+        sessionVisible = true
         _unreadCount.value = 0
     }
 
-    /** 销毁：断连接、取消作用域（含未决重连）、移除 UI 挂载；快照保留属持久化刀职责。 */
+    /** 会话页收起（hide()/点 scrim）：连接保持，此后到达的消息计入未读。 */
+    internal fun onSessionHidden() {
+        sessionVisible = false
+    }
+
+    /** 当前累积消息快照（面板初始化回放；同 id 后到覆盖，与渲染层合并规则一致）。 */
+    internal fun historySnapshot(): List<ConversationMessage> = history.toList()
+
+    /** 销毁：断连接、取消作用域（含未决重连）、移除 UI 挂载与累积快照。 */
     fun destroy() {
         entry.release()
         webSocket?.cancel()
         webSocket = null
         scope.cancel()
+        history.clear()
+        sessionVisible = false
         _connectionState.value = ConnectionState.Disconnected
     }
 
     private fun openSocket() {
-        val url = wsUrlOverride ?: deriveWsUrl(config.apiUrl)
+        val url = buildWsUrl(config.apiUrl, wsUrlOverride, config.guestToken)
         val request = Request.Builder().url(url).build()
         webSocket = client.newWebSocket(request, WsListener())
     }
 
+    /**
+     * 最终 WS URL：apiUrl 推导或宿主显式 override；guestToken 非空时带 `access_token`
+     * 查询参数（PROTOCOL §1：服务端当前不消费，访客 token 端点落地后自动生效，向后兼容）。
+     * 注意不能用 HttpUrl 二次解析——ws/wss scheme 不在 okhttp HttpUrl 的合法集内，手工拼接。
+     */
+    internal fun buildWsUrl(apiUrl: String, override: String?, guestToken: String?): String {
+        val base = override ?: deriveWsUrl(apiUrl)
+        if (guestToken == null) return base
+        val separator = if (base.contains('?')) "&" else "?"
+        return base + separator + "access_token=" + java.net.URLEncoder.encode(guestToken, "UTF-8")
+    }
+
     private fun deriveWsUrl(apiUrl: String): String {
+        // 不能走 HttpUrl 二次解析：ws/wss scheme 不在 okhttp HttpUrl 合法集内（会抛
+        // IllegalArgumentException）。手工拼接；apiUrl 带 query 的场景 V1 不支持。
         val base = if (apiUrl.startsWith("https://")) "wss://" + apiUrl.removePrefix("https://") else apiUrl
-        return base.toHttpUrl().newBuilder()
-            .addPathSegments("api/v1/ws")
-            .addQueryParameter("session_id", sessionId)
-            .build()
-            .toString()
+        return base.trimEnd('/') + "/api/v1/ws?session_id=" + java.net.URLEncoder.encode(sessionId, "UTF-8")
     }
 
     private fun onTransportFailure(t: Throwable, httpStatus: Int?) {
@@ -206,6 +238,7 @@ class ServifyChat internal constructor(
     }
 
     private fun scheduleReconnect() {
+        finalizeInterruptedStream()
         reconnectAttempt += 1
         val delayMs = policy.delayFor(reconnectAttempt)
         if (delayMs == null) {
@@ -234,14 +267,15 @@ class ServifyChat internal constructor(
             }
             is WireFrame.AgentMessage -> {
                 emitMessage(SenderType.Agent, frame.content)
-                _unreadCount.value += 1
+                // 未读 = 面板不可见时到达的坐席/AI 内容（设计 §移动端未读口径）。
+                if (!sessionVisible) _unreadCount.value += 1
             }
             is WireFrame.AiResponseDelta -> {
                 val delta = event as ProtocolEvent.AiDelta
                 if (!delta.done) {
                     if (streamingId == null) streamingId = nextId()
                     streamedContent.append(delta.contentDelta)
-                    _messages.tryEmit(
+                    recordAndEmit(
                         ConversationMessage(
                             id = streamingId!!,
                             sessionId = sessionId,
@@ -259,7 +293,7 @@ class ServifyChat internal constructor(
                 streamedContent.setLength(0)
                 val id = streamingId ?: nextId()
                 streamingId = null
-                _messages.tryEmit(
+                recordAndEmit(
                     ConversationMessage(
                         id = id,
                         sessionId = sessionId,
@@ -273,6 +307,7 @@ class ServifyChat internal constructor(
                         nextAction = frame.nextAction,
                     ),
                 )
+                if (!sessionVisible) _unreadCount.value += 1
             }
             is WireFrame.TransferNotification -> {
                 _agentAssigned.tryEmit(AgentAssignment(frame.agentId, frame.message))
@@ -285,12 +320,45 @@ class ServifyChat internal constructor(
     }
 
     private fun emitMessage(sender: SenderType, content: String) {
-        _messages.tryEmit(
+        recordAndEmit(
             ConversationMessage(
                 id = nextId(),
                 sessionId = sessionId,
                 sender = sender,
                 content = content,
+                createdAt = now(),
+            ),
+        )
+    }
+
+    /** 累积（同 id 后到覆盖，与渲染层合并规则一致）后发往事件流。 */
+    private fun recordAndEmit(message: ConversationMessage) {
+        val index = history.indexOfLast { it.id == message.id }
+        if (index >= 0) history[index] = message else history += message
+        _messages.tryEmit(message)
+    }
+
+    /**
+     * 流中断收口（PROTOCOL §4.1：终末增量已到但无 ai-response 终帧 = 本次回答失败；
+     * 断连时流必然中断）——保留已渲染部分（翻 isStreaming=false）+ 追加提示行（D8）。
+     * 提示行是 SDK 自造的 UI 状态行（协议无此帧），不计未读。
+     */
+    private fun finalizeInterruptedStream() {
+        val id = streamingId ?: return
+        streamingId = null
+        streamedContent.setLength(0)
+        val index = history.indexOfLast { it.id == id }
+        if (index >= 0) {
+            val partial = history[index].copy(isStreaming = false)
+            history[index] = partial
+            _messages.tryEmit(partial)
+        }
+        recordAndEmit(
+            ConversationMessage(
+                id = nextId(),
+                sessionId = sessionId,
+                sender = SenderType.System,
+                content = "回答中断，请重试",
                 createdAt = now(),
             ),
         )

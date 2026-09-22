@@ -63,8 +63,9 @@ internal class EntryOrchestrator(
         startBadge()
     }
 
-    /** 收起面板（hide()：连接保持，浮钮保留）。 */
+    /** 收起面板（hide()：连接保持，浮钮保留）。此后到达的消息计入未读。 */
     fun detachPanel() {
+        chat.onSessionHidden()
         panelView?.let { root ->
             root.post { (root.parent as? ViewGroup)?.removeView(root) }
         }
@@ -147,6 +148,8 @@ internal class EntryOrchestrator(
         )
         decor.addView(root, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         panelView = root
+        // 挂载即会话页可见：清未读（Compose 侧 LaunchedEffect 是第二重保险）。
+        chat.onSessionVisible()
     }
 
     /**
