@@ -1,0 +1,26 @@
+{
+  "name": "ai-response-delta-interrupted",
+  "direction": "server-to-client",
+  "frames": [
+    {
+      "type": "ai-response-delta",
+      "data": { "content_delta": "根据退货政策，商品签收后" },
+      "session_id": "fixture-session",
+      "timestamp": "2026-09-22T12:00:05Z"
+    },
+    {
+      "type": "ai-response-delta",
+      "data": { "content_delta": "", "done": true },
+      "session_id": "fixture-session",
+      "timestamp": "2026-09-22T12:00:06Z"
+    }
+  ],
+  "expectations": {
+    "kind": "ai-stream-interrupted",
+    "assert": {
+      "content_parts": ["根据退货政策，商品签收后"],
+      "no_final_frame": true,
+      "semantic": "终末增量已到但无 ai-response 终帧 = 本次回答失败；保留已渲染部分并提示重试，不自动重发"
+    }
+  }
+}

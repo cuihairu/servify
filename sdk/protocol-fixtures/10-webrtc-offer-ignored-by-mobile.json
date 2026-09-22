@@ -1,0 +1,16 @@
+{
+  "name": "webrtc-offer-ignored-by-mobile",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "webrtc-offer",
+    "data": { "type": "offer", "sdp": "v=0 ..." },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:08:00Z"
+  },
+  "expectations": {
+    "kind": "webrtc-ignored-by-mobile",
+    "assert": {
+      "semantic": "webrtc 信令族移动端 V1 不消费（createMobileCapabilitySet voice/remote_assist 置 off）；core Web 端消费（emit webrtc:offer）——两端断言在此显式分叉"
+    }
+  }
+}

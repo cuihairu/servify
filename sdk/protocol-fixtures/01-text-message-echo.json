@@ -1,0 +1,16 @@
+{
+  "name": "text-message-echo",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "text-message",
+    "data": { "content": "你好，我想咨询退货政策" },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:00:00Z"
+  },
+  "expectations": {
+    "kind": "visitor-echo",
+    "assert": {
+      "content": "你好，我想咨询退货政策"
+    }
+  }
+}

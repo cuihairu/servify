@@ -1,0 +1,23 @@
+{
+  "name": "ai-response-minimal",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "ai-response",
+    "data": {
+      "content": "这是兜底回答。",
+      "confidence": 0.5,
+      "source": "fallback"
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:00:02Z"
+  },
+  "expectations": {
+    "kind": "ai-final",
+    "assert": {
+      "content": "这是兜底回答。",
+      "confidence": 0.5,
+      "source": "fallback",
+      "fields_absent": ["sources", "strategy", "next_action", "handoff_reason"]
+    }
+  }
+}

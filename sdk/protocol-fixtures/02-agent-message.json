@@ -1,0 +1,17 @@
+{
+  "name": "agent-message",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "agent-message",
+    "data": { "content": "您好，我是坐席小李，请问有什么可以帮您？", "sender": "坐席小李" },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:05:30Z"
+  },
+  "expectations": {
+    "kind": "agent-message",
+    "assert": {
+      "content": "您好，我是坐席小李，请问有什么可以帮您？",
+      "sender": "坐席小李"
+    }
+  }
+}

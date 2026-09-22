@@ -1,0 +1,16 @@
+{
+  "name": "unknown-type-ignored",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "session_update",
+    "data": { "status": "closed" },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:07:00Z"
+  },
+  "expectations": {
+    "kind": "unknown-ignored",
+    "assert": {
+      "semantic": "core 类型声明过但服务端零发射的死分支帧（PROTOCOL.md §5）；移动端契约不含——断言忽略而非报错"
+    }
+  }
+}

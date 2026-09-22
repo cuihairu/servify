@@ -1,0 +1,22 @@
+{
+  "name": "waiting-notification",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "waiting_notification",
+    "data": {
+      "message": "当前坐席全忙，已为您排队等待。客服将很快为您提供帮助。",
+      "timestamp": "2026-09-22T12:06:01Z"
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-22T12:06:01Z"
+  },
+  "expectations": {
+    "kind": "waiting",
+    "assert": {
+      "message": "当前坐席全忙，已为您排队等待。客服将很快为您提供帮助。"
+    },
+    "state": [
+      { "from": "ai_answering", "to": "waiting_human" }
+    ]
+  }
+}

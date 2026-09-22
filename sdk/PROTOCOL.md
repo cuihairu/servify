@@ -95,6 +95,7 @@ core `WSMessage.type` 联合（`types.ts:113-128`）声明了下表左列类型�
 ## 8. fixtures 互验约定（M0 落地物）
 
 - 位置：`sdk/protocol-fixtures/`，与 core、Android、iOS 测试共用同一套 JSON 样例；
-- 每个样例 = `{name, direction, frame, expectations}`：`frame` 是原始 WS JSON，`expectations` 是反序列化与状态机断言的规范描述；
-- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、慢客户端边界（文档级用例）；
+- 每个样例 = `{name, direction, frame | frames, expectations}`：单帧场景用 `frame`（原始 WS JSON），多帧场景（流式三段契约）用 `frames` 数组按序排列；`expectations` 是两端共用的断言词汇表——`kind`（协议语义分类：`visitor-echo`/`agent-message`/`ai-final`/`ai-stream-complete`/`ai-stream-interrupted`/`transfer`/`waiting`/`unknown-ignored`/`webrtc-ignored-by-mobile`）、`assert`（关键字段与拼接/缺省断言）、`state`（转人工状态机合法转移对，见 §4.2）；
+- 两端断言的"一致"指：同一 `kind` 与 `assert` 语义在各自已实现的契约范围内必须得出相同结论；已知的端级偏差在样例内显式声明（如 `webrtc-ignored-by-mobile` 对 core 是消费事件、对移动端是忽略）；
+- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、慢客户端边界（文档级用例）；
 - 服务端 WS 广播点变更 → 同一 PR 更新本文 + fixtures → 三端回放测试同时验证。
