@@ -186,6 +186,9 @@ func TestAssembleTurnEnabledIssuesShortLivedCredential(t *testing.T) {
 	if got.TURNCredential != "isReWBKNlmmMSS3VR4Xr9PtPqYE=" {
 		t.Fatalf("TURNCredential = %q, want golden vector", got.TURNCredential)
 	}
+	if got.TURNTTL != 5*time.Minute {
+		t.Fatalf("TURNTTL = %v, want configured 5m", got.TURNTTL)
+	}
 }
 
 func TestAssembleTurnCredentialsRotatedByNow(t *testing.T) {
@@ -197,6 +200,17 @@ func TestAssembleTurnCredentialsRotatedByNow(t *testing.T) {
 	}
 	if earlier.TURNCredential == later.TURNCredential {
 		t.Fatalf("credential should rotate with username")
+	}
+}
+
+func TestAssembleTurnZeroTTLUsesDefault(t *testing.T) {
+	turn := Config{URL: "turn:t:3478", Realm: "r", StaticAuthSecret: "s", TTL: 0}
+	got := Assemble(nil, "", turn, fixedNow)
+	if got.TURNTTL != DefaultTTL {
+		t.Fatalf("TURNTTL = %v, want DefaultTTL %v", got.TURNTTL, DefaultTTL)
+	}
+	if got.TURNUsername != "1790000300" {
+		t.Fatalf("TURNUsername = %q, want DefaultTTL-based expiry", got.TURNUsername)
 	}
 }
 

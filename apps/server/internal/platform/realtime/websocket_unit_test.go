@@ -18,6 +18,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	"servify/apps/server/internal/platform/iceturn"
 )
 
 // ---- stubs (names distinct from integration-tagged test helpers) ----
@@ -548,5 +549,48 @@ func TestWebSocket_HandleWebSocketUpgradeFailure(t *testing.T) {
 	hub.HandleWebSocket(c)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected upgrade failure (400), got %d", w.Code)
+	}
+}
+
+func TestWebSocketHub_RegisterPushesICEConfig(t *testing.T) {
+	hub := NewWebSocketHub()
+	hub.SetWebRTCService(NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:a:3478"}}, hub))
+	go hub.Run()
+
+	client := &WebSocketClient{ID: "ice-1", SessionID: "s1", Send: make(chan WebSocketMessage, 1), Hub: hub}
+	hub.register <- client
+	got := waitForMessage(t, client.Send)
+	if got.Type != "webrtc-ice-config" || got.SessionID != "s1" {
+		t.Fatalf("register push = %+v, want webrtc-ice-config for s1", got)
+	}
+	entries := got.Data.(map[string]interface{})["ice_servers"].([]map[string]interface{})
+	if len(entries) != 1 || entries[0]["urls"].([]string)[0] != "stun:a:3478" {
+		t.Fatalf("ice_servers payload = %+v, want single STUN entry", entries)
+	}
+}
+
+func TestWebSocketHub_RegisterICEConfigBranches(t *testing.T) {
+	// 空 ICE 配置：payload ok=false，注册后不应有下发。
+	emptyHub := NewWebSocketHub()
+	emptyHub.SetWebRTCService(NewWebRTCService(iceturn.ICEConfig{}, emptyHub))
+	go emptyHub.Run()
+	quiet := &WebSocketClient{ID: "ice-quiet", SessionID: "s", Send: make(chan WebSocketMessage, 1), Hub: emptyHub}
+	emptyHub.register <- quiet
+	time.Sleep(20 * time.Millisecond)
+	select {
+	case msg := <-quiet.Send:
+		t.Fatalf("empty ICE config must not push, got %+v", msg)
+	default:
+	}
+
+	// 发送队列满（无缓冲且无接收者）：走 default 放弃下发，客户端保留。
+	fullHub := NewWebSocketHub()
+	fullHub.SetWebRTCService(NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:a:3478"}}, fullHub))
+	go fullHub.Run()
+	full := &WebSocketClient{ID: "ice-full", SessionID: "s", Send: make(chan WebSocketMessage), Hub: fullHub}
+	fullHub.register <- full
+	time.Sleep(20 * time.Millisecond)
+	if fullHub.GetClientCount() != 1 {
+		t.Fatalf("congested client should stay registered, got %d", fullHub.GetClientCount())
 	}
 }

@@ -86,6 +86,29 @@ func (s *WebRTCService) iceServers() []webrtc.ICEServer {
 	return servers
 }
 
+// ICEConfigPayload 把装配好的 ICE 配置转为客户端下发消息体（webrtc-ice-config）。
+// 每个 STUN 一项；TURN 启用时追加带 username/credential/ttl 的一项（时间限
+// 凭据，客户端按 ttl 秒数规划刷新）。无任何可下发条目时返回 (nil, false)。
+func (s *WebRTCService) ICEConfigPayload() (map[string]interface{}, bool) {
+	entries := make([]map[string]interface{}, 0, len(s.ice.STUNServers)+1)
+	for _, server := range s.ice.STUNServers {
+		entries = append(entries, map[string]interface{}{"urls": []string{server}})
+	}
+	if s.ice.TURNURL != "" {
+		entries = append(entries, map[string]interface{}{
+			"urls":       []string{s.ice.TURNURL},
+			"username":   s.ice.TURNUsername,
+			"credential": s.ice.TURNCredential,
+			// 整秒粒度；Assemble 装配出的 ICEConfig 恒为正。
+			"ttl": int64(s.ice.TURNTTL / time.Second),
+		})
+	}
+	if len(entries) == 0 {
+		return nil, false
+	}
+	return map[string]interface{}{"ice_servers": entries}, true
+}
+
 func (s *WebRTCService) SetVoiceLifecycle(voice VoiceLifecycle) {
 	s.voice = voice
 }

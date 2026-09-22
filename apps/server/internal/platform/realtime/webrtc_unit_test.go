@@ -60,6 +60,49 @@ func TestWebRTC_iceServersMapping(t *testing.T) {
 	}
 }
 
+func TestWebRTC_ICEConfigPayload(t *testing.T) {
+	stunOnly := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:a:3478"}}, NewWebSocketHub())
+	payload, ok := stunOnly.ICEConfigPayload()
+	if !ok {
+		t.Fatal("stun-only payload should be deliverable")
+	}
+	entries := payload["ice_servers"].([]map[string]interface{})
+	if len(entries) != 1 {
+		t.Fatalf("stun-only entries = %+v, want single STUN", entries)
+	}
+	if _, hasUser := entries[0]["username"]; hasUser {
+		t.Fatalf("STUN entry must not carry credentials: %+v", entries[0])
+	}
+	if entries[0]["urls"].([]string)[0] != "stun:a:3478" {
+		t.Fatalf("stun url = %+v, want stun:a:3478", entries[0])
+	}
+
+	withTurn := NewWebRTCService(iceturn.ICEConfig{
+		STUNServers:    []string{"stun:a:3478"},
+		TURNURL:        "turn:turn.example.com:3478",
+		TURNUsername:   "1790000300",
+		TURNCredential: "isReWBKNlmmMSS3VR4Xr9PtPqYE=",
+		TURNTTL:        5 * time.Minute,
+	}, NewWebSocketHub())
+	payload, ok = withTurn.ICEConfigPayload()
+	if !ok {
+		t.Fatal("turn payload should be deliverable")
+	}
+	entries = payload["ice_servers"].([]map[string]interface{})
+	if len(entries) != 2 {
+		t.Fatalf("entries = %d, want stun+turn", len(entries))
+	}
+	turn := entries[1]
+	if turn["username"] != "1790000300" || turn["credential"] != "isReWBKNlmmMSS3VR4Xr9PtPqYE=" || turn["ttl"] != int64(300) {
+		t.Fatalf("turn entry = %+v, want username/credential/ttl carried over", turn)
+	}
+
+	empty := NewWebRTCService(iceturn.ICEConfig{}, NewWebSocketHub())
+	if payload, ok := empty.ICEConfigPayload(); ok || payload != nil {
+		t.Fatalf("empty ICE config = (%+v, %v), want (nil, false)", payload, ok)
+	}
+}
+
 func TestWebRTC_HandleOfferCreatePeerConnectionError(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()

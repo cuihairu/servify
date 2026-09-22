@@ -82,6 +82,9 @@ type ICEConfig struct {
 	TURNURL        string
 	TURNUsername   string
 	TURNCredential string
+	// TURNTTL 是签发凭据时用的有效期，随下发给客户端用于规划刷新；
+	// TURN 未启用时为零值。
+	TURNTTL time.Duration
 }
 
 // Assemble 把 STUN 列表（为空时回退单值 legacy 配置）与 TURN 配置装配为 ICEConfig。
@@ -110,6 +113,7 @@ func Assemble(stunServers []string, legacySTUNServer string, turn Config, now ti
 	ice.TURNURL = strings.TrimSpace(turn.URL)
 	ice.TURNUsername = credential.Username
 	ice.TURNCredential = credential.Credential
+	ice.TURNTTL = turn.WithDefaults().TTL
 	return ice
 }
 

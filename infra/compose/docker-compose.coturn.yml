@@ -1,0 +1,45 @@
+# coturn TURN 中继（docs/TURN_DEPLOYMENT.md 第 5 节交付资产，切片二）
+# 形态：独立容器 + host 网络 + use-auth-secret 时间限凭据（选型拍板见 TURN_DEPLOYMENT.md）。
+# secret 与 Servify app 同源注入（同一变量插值，缺省即拒起）：
+#   export TURN_STATIC_AUTH_SECRET="$(openssl rand -hex 32)"
+#   export TURN_PUBLIC_URL="turn:<coturn 所在节点的公网 IP 或域名>:3478"
+# 使用方法（overlay 到基础 compose，与 dify/weknora 覆盖文件同模式）:
+#   docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.coturn.yml up -d
+# 防火墙放行（host 网络不经 Docker 端口映射，端口直接开在宿主机）：
+#   3478/tcp+udp      TURN 分配（STUN/TURN）
+#   49160-49200/udp   中继端口段（--min-port/--max-port，保持收敛）
+#   5349/tcp          TURNS（TLS，默认关闭；需启用时挂证书并去掉 --no-tls/--no-dtls）
+# 云主机 1:1 NAT 场景需在 command 补 --external-ip=<公网IP>，否则中继地址不可达。
+
+services:
+  coturn:
+    image: coturn/coturn:4.6.2
+    container_name: servify_coturn
+    network_mode: host
+    command:
+      - --listening-port=3478
+      - --realm=${TURN_REALM:-servify.example.com}
+      # 时间限凭据（REST API for TURN）：secret 与 app 侧 webrtc.turn.static_auth_secret 同值
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_STATIC_AUTH_SECRET:?TURN_STATIC_AUTH_SECRET 未设置（openssl rand -hex 32 生成，与 app 的 WEBRTC_TURN_STATIC_AUTH_SECRET 同值）}
+      # 中继端口段收敛，防火墙按段放行
+      - --min-port=49160
+      - --max-port=49200
+      # TLS/DTLS 监听默认关闭（媒体本身走 DTLS-SRTP 端到端加密，TURNS 为可选增强）
+      - --no-tls
+      - --no-dtls
+      # 防滥用硬化：禁 multicast/回环中继目标
+      - --no-multicast-peers
+      - --no-loopback-peers
+      # 关闭 CLI 管理面，日志走 stdout 交 docker logs / 采集器
+      - --no-cli
+      - --simple-log
+      - --log-file=stdout
+    restart: unless-stopped
+
+  # Servify app 侧覆盖：与 coturn 共享同一 secret，凭据由 app 运行时签发
+  servify:
+    environment:
+      - WEBRTC_TURN_URL=${TURN_PUBLIC_URL:?TURN_PUBLIC_URL 未设置（形如 turn:<公网IP或域名>:3478，浏览器须可达）}
+      - WEBRTC_TURN_REALM=${TURN_REALM:-servify.example.com}
+      - WEBRTC_TURN_STATIC_AUTH_SECRET=${TURN_STATIC_AUTH_SECRET:?TURN_STATIC_AUTH_SECRET 未设置（与 coturn 的 --static-auth-secret 同值）}

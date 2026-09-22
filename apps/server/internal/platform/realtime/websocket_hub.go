@@ -36,6 +36,13 @@ type websocketRTCService interface {
 	HandleICECandidate(sessionID string, candidate webrtc.ICECandidateInit) error
 }
 
+// iceConfigProvider 是 rtcService 的可选能力：客户端注册时下发一次 ICE 配置
+// （含 TURN 时间限凭据），客户端不必再从静态配置读 iceServers。用可选接口
+// 而非扩 websocketRTCService，既有测试桩无需跟随改动。
+type iceConfigProvider interface {
+	ICEConfigPayload() (map[string]interface{}, bool)
+}
+
 type WebSocketMessage struct {
 	Type      string      `json:"type"`
 	Data      interface{} `json:"data"`
@@ -152,8 +159,24 @@ func (h *WebSocketHub) Run() {
 		case client := <-h.register:
 			h.mutex.Lock()
 			h.clients[client.ID] = client
+			rtc := h.rtcService
 			h.mutex.Unlock()
 			logrus.Infof("Client %s connected", client.ID)
+			if provider, ok := rtc.(iceConfigProvider); ok {
+				if payload, ok := provider.ICEConfigPayload(); ok {
+					select {
+					case client.Send <- WebSocketMessage{
+						Type:      "webrtc-ice-config",
+						Data:      payload,
+						SessionID: client.SessionID,
+						Timestamp: time.Now(),
+					}:
+					default:
+						// 发送队列已满时放弃本次下发，不能阻塞注册循环；
+						// 客户端建连侧会因缺 ICE 走 host 候选兜底。
+					}
+				}
+			}
 
 		case client := <-h.unregister:
 			h.mutex.Lock()

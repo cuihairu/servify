@@ -6,7 +6,7 @@
 
 1. **WebRTC 协议栈（pion/webrtc）不需要单独部署**。Servify 使用 [`pion/webrtc/v4`](https://github.com/pion/webrtc)（纯 Go 库，见 `apps/server/go.mod` 的 `github.com/pion/webrtc/v4 v4.2.20`），编译期直接打进 `bin/servify` 单二进制，没有任何独立的 WebRTC 进程或容器。
 2. **需要规划的是三件事**：STUN 服务（可自建 coturn 或用公共 STUN）、服务器侧 UDP 防火墙、信令入口（`/api/v1/ws`）的反代配置。
-3. **当前版本的配置面只有一个键**：`webrtc.stun_server`。TURN 尚无配置面（详见[第 4 节](#4-stun-与-turn现状与边界)），跨严格 NAT 的公网互通需要先扩展这一处代码。
+3. **配置面**：STUN 单键 `webrtc.stun_server` + 多 STUN 冗余 `stun_servers`；TURN 已支持（[TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md) 拍板的 `webrtc.turn.*` 时间限凭据形态），**默认关闭**，跨严格 NAT 场景按[第 5 节](#5-自建-coturn-部署示例)启用（详见[第 4 节](#4-stun-与-turn现状与边界)）。
 
 ## 目录
 
@@ -24,8 +24,8 @@
 
 Servify 在 WebRTC 链路中承担**两个角色**：
 
-- **信令服务器**：浏览器通过 WebSocket（`/api/v1/ws?session_id=...`）与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`，见 `apps/server/internal/services/websocket.go`）。
-- **PeerConnection 一端**：服务端进程自己也是一个 PeerConnection 端点（`WebRTCService.CreatePeerConnection`，见 `apps/server/internal/services/webrtc.go`）。也就是说 ICE 直连发生在**浏览器 ↔ Servify 服务器**之间，媒体/数据流不经过任何第三方，但**服务器必须参与 ICE**，UDP 连通性是服务器侧的网络问题。
+- **信令服务器**：浏览器通过 WebSocket（`/api/v1/ws?session_id=...`）与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`，见 `apps/server/internal/platform/realtime/websocket_hub.go`）。
+- **PeerConnection 一端**：服务端进程自己也是一个 PeerConnection 端点（`WebRTCService.CreatePeerConnection`，见 `apps/server/internal/platform/realtime/webrtc_service.go`）。也就是说 ICE 直连发生在**浏览器 ↔ Servify 服务器**之间，媒体/数据流不经过任何第三方，但**服务器必须参与 ICE**，UDP 连通性是服务器侧的网络问题。
 
 ```mermaid
 flowchart LR
@@ -34,27 +34,36 @@ flowchart LR
     B -. "ICE 直连: UDP" ==> S
 ```
 
-信令走 WebSocket：浏览器通过 `/api/v1/ws?session_id=...` 与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`）。ICE 直连发生在**浏览器 ↔ Servify 服务器**之间：媒体流量（SRTP/DataChannel）不经过任何第三方，但服务器必须参与 ICE，UDP 连通性是服务器侧的网络问题。STUN 只参与地址发现（双方报出各自的 server-reflexive 地址），不承载媒体流量。
+信令走 WebSocket：浏览器通过 `/api/v1/ws?session_id=...` 与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`；建联后服务端还会主动推送一条 `webrtc-ice-config`，下发 ICE 配置与 TURN 短时凭据，见[第 2 节](#2-当前配置面)）。ICE 直连发生在**浏览器 ↔ Servify 服务器**之间：媒体流量（SRTP/DataChannel）不经过任何第三方，但服务器必须参与 ICE，UDP 连通性是服务器侧的网络问题。STUN 只参与地址发现（双方报出各自的 server-reflexive 地址），不承载媒体流量。
 
 ## 2. 当前配置面
 
-`config.yml` 中与 WebRTC 相关的配置只有一项：
+`config.yml` 中与 WebRTC 相关的配置（`apps/server/internal/config/config.go` 的 `WebRTCConfig`）：
 
 ```yaml
 webrtc:
-  # ICE 使用的 STUN 服务地址（单值）。
-  # 默认 stun:stun.l.google.com:19302（见 apps/server/internal/config/config.go）。
+  # STUN 服务地址（单值，默认 stun:stun.l.google.com:19302）。
   stun_server: "stun:stun.l.google.com:19302"
+  # 多 STUN 冗余（可选；配置后 stun_server 被忽略）。
+  # stun_servers: ["stun:stun.qq.com:3478", "stun:stun.miwifi.com:3478"]
+  # TURN 时间限凭据（docs/TURN_DEPLOYMENT.md；url 为空即禁用）。
+  # turn:
+  #   url: "turn:turn.example.com:3478"
+  #   realm: "servify.example.com"
+  #   static_auth_secret: "${TURN_STATIC_AUTH_SECRET}" # 只经 env 注入，不落配置文件
+  #   ttl: 5m
 ```
 
-该值被 `NewWebRTCService(cfg.WebRTC.STUNServer, wsHub)` 消费（`apps/server/internal/app/server/runtime_assembly.go`），最终进入每个 PeerConnection 的 `ICEServers[].URLs`。
+装配链路：`wireRealtimeGateways`（`apps/server/internal/app/server/runtime_assembly.go`）经 `iceturn.Assemble`（`apps/server/internal/platform/iceturn/`）把 STUN 列表与 TURN 配置装配为 `ICEConfig`——TURN 启用时按 `username = 过期 Unix 秒`、`credential = base64(HMAC-SHA1(secret, username))` 生成**短时凭据**（默认 5 分钟）。服务端 PeerConnection 的 `ICEServers` 与客户端下发共用同一份装配结果。
+
+客户端下发：浏览器 WS 建联（`/api/v1/ws`）后，服务端立即推送一条 `webrtc-ice-config` 消息（`data.ice_servers[]`：STUN 项只有 `urls`；TURN 项另带 `username`/`credential`/`ttl` 秒数）。客户端凭 `ttl` 规划在到期前重连换取新凭据；SDK `remoteAssist.iceServers` 宿主覆盖口保留为最高优先级。
 
 部署要点：
 
 - **中国大陆或无法访问 Google 服务的环境必须改掉默认值**，否则 ICE 地址发现会超时拖慢建连（自建 coturn 见[第 5 节](#5-自建-coturn-部署示例)，公共替代见[第 6 节](#6-公共-stun-与国内替代)）。
-- 当前实现只把**这一个 URL** 塞进 ICEServers（`apps/server/internal/services/webrtc.go` 的 `CreatePeerConnection`），不支持多个 STUN 冗余、也不支持带凭据的 TURN 条目。
+- TURN 启用是零容忍门禁：`turn.url` 配置后 `realm`/`static_auth_secret`/`ttl` 必须完整，缺一拒绝启动（`config.InsecureDefaults` 告警 + 装配层 `iceturn.Config.Validate` 双层 gate）；secret 生产环境只经 env 注入。
 
-环境变量：**当前没有** `webrtc.stun_server` 的环境变量覆盖（env 覆盖是白名单式的，见 `apps/server/internal/app/bootstrap/config.go` 的 `applyConfigEnvOverrides`，不含 webrtc 键）。修改 STUN 只能通过配置文件的 `webrtc.stun_server` 键。
+环境变量（白名单见 `apps/server/internal/app/bootstrap/config.go` 的 `applyConfigEnvOverrides`）：`WEBRTC_STUN_SERVERS`（逗号分隔）、`WEBRTC_TURN_URL`、`WEBRTC_TURN_REALM`、`WEBRTC_TURN_STATIC_AUTH_SECRET`。
 
 ## 3. 端口与防火墙清单
 
@@ -75,50 +84,64 @@ webrtc:
 
 | 能力 | 现状 |
 | --- | --- |
-| STUN | ✅ 支持，`webrtc.stun_server` 单键配置 |
-| 多 STUN 冗余 | ❌ 当前只填一个 URL |
-| TURN（中继） | ❌ **无配置面**：`ICEServer.Username/Credential` 未暴露，`webrtc.Configuration` 亦未暴露附加 ICE server 列表 |
+| STUN | ✅ 支持，`webrtc.stun_server` 单键 + `webrtc.stun_servers` 列表 |
+| 多 STUN 冗余 | ✅ `stun_servers` 列表（env `WEBRTC_STUN_SERVERS` 逗号分隔） |
+| TURN（中继） | ✅ **已支持**：`webrtc.turn.*` 时间限凭据（coturn `use-auth-secret` 模式），凭据服务端运行时签发、WS 建联即下发（见[第 2 节](#2-当前配置面)与 [TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md)） |
 | 服务端 UDP 端口收敛 | ❌ 未暴露 `SettingEngine` 配置 |
 
-**这意味着什么**：STUN 能解决"双方都在 NAT 后、但 NAT 类型友好（full-cone/restricted cone）"的打洞；一旦任一侧是对称 NAT（常见于部分企业网、部分移动网络），纯 STUN 会打洞失败，必须走 TURN 中继。在补齐 TURN 配置面之前：
+**这意味着什么**：STUN 能解决"双方都在 NAT 后、但 NAT 类型友好（full-cone/restricted cone）"的打洞；一旦任一侧是对称 NAT（常见于部分企业网、部分移动网络），纯 STUN 会打洞失败，必须走 TURN 中继。TURN 现已支持，**但默认关闭**（`turn.url` 为空）：
 
-- 部署建议让 **Servify 服务器拥有公网 IP 或一对一 NAT（全端口转发）**——服务端网络条件良好时，浏览器侧即使在对称 NAT 后也大概率能直连（出站方向的打洞由浏览器侧 NAT 完成）。
-- 若确有跨对称 NAT 的场景，需要先做一处代码扩展：`webrtc` 配置增加 `ice_servers` 列表（含 `username`/`credential`），`CreatePeerConnection` 填入完整 `ICEServers`。改动面很小（config 结构体 + `webrtc.go` 一处），是明确的演进路径。
+- 未启用 TURN 时，部署建议让 **Servify 服务器拥有公网 IP 或一对一 NAT（全端口转发）**——服务端网络条件良好时，浏览器侧即使在对称 NAT 后也大概率能直连（出站方向的打洞由浏览器侧 NAT 完成）。
+- 跨对称 NAT 场景启用 TURN：自建 coturn（`use-auth-secret` 时间限凭据形态，见[第 5 节](#5-自建-coturn-部署示例)）+ 配置 `webrtc.turn.*`（见[第 2 节](#2-当前配置面)），凭据泄露可自愈、无需吊销流程。
 
 ## 5. 自建 coturn 部署示例
 
-自建 coturn 是最可控的方案（一台有公网 IP 的机器即可，STUN 场景对带宽要求极低）。Docker 方式：
+自建 coturn 是最可控的方案（一台有公网 IP 的机器即可，STUN 场景对带宽要求极低）。
+
+**生产形态：`use-auth-secret` 时间限凭据**（[TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md) 拍板；静态长期凭据不进生产）。仓库附带 compose 交付资产，secret 与 app 同源注入：
+
+```bash
+export TURN_STATIC_AUTH_SECRET="$(openssl rand -hex 32)"
+export TURN_PUBLIC_URL="turn:<coturn公网IP>:3478"
+docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.coturn.yml up -d
+```
+
+`infra/compose/docker-compose.coturn.yml` 干的事：coturn 独立容器 + host 网络 + `--use-auth-secret --static-auth-secret=${TURN_STATIC_AUTH_SECRET:?}`（缺省拒起）+ 中继段 `--min-port=49160 --max-port=49200`，同时给 servify 服务注入 `WEBRTC_TURN_URL/REALM/STATIC_AUTH_SECRET`。
+
+等价的 `docker run` 手工形态：
 
 ```bash
 docker run -d --name coturn \
   --network host \
-  coturn/coturn:latest \
-  -n --no-cli \
+  coturn/coturn:4.6.2 \
   --listening-port=3478 \
-  --fingerprint \
-  --lt-cred-mech \
   --realm=servify.example.com \
-  --user=servify:servify-turn-secret \
+  --use-auth-secret \
+  --static-auth-secret="$(openssl rand -hex 32)" \
   --min-port=49160 --max-port=49200 \
-  --no-tls --no-dtls
+  --no-tls --no-dtls \
+  --no-multicast-peers --no-loopback-peers \
+  --no-cli --simple-log --log-file=stdout
 ```
 
 说明：
 
 - `--network host` 让 coturn 直接使用宿主网络，避免 Docker NAT 干扰地址发现；此时防火墙直接对宿主放行 `3478/udp` 与 `49160-49200/udp`。
-- 只做 STUN 用可以去掉 `--lt-cred-mech/--user/--min-port/--max-port`（不需要凭据与中继端口）；带上它们是为将来 Servify 补齐 TURN 配置面后无需再动基础设施。
-- `--realm` 换成你的域名；生产建议再加 TLS/DTLS（`--no-tls --no-dtls` 去掉并配证书），本例从简。
+- `--static-auth-secret` 的值必须与 Servify 侧 `WEBRTC_TURN_STATIC_AUTH_SECRET` 完全一致（app 用它签发短时凭据，coturn 用它验签）；**生成后走 env 注入，不进命令行历史与配置文件**。
+- 只做 STUN 用可以去掉 `--use-auth-secret/--static-auth-secret/--min-port/--max-port`（不需要凭据与中继端口）。
+- `--realm` 换成你的域名，并与 app 侧 `webrtc.turn.realm` 保持一致；TURNS（5349/TLS）为可选增强——媒体本身走 DTLS-SRTP 端到端加密，需要时挂证书去掉 `--no-tls --no-dtls`。
+- 云主机 1:1 NAT 场景需补 `--external-ip=<公网IP>`，否则中继地址不可达。
 
-systemd 裸机方式的最小 `/etc/turnserver.conf`：
+systemd 裸机方式的最小 `/etc/turnserver.conf`（同款 auth-secret 形态；secret 建议 `EnvironmentFile` 注入）：
 
 ```conf
 listening-port=3478
-fingerprint
-lt-cred-mech
+use-auth-secret
+static-auth-secret=<同 WEBRTC_TURN_STATIC_AUTH_SECRET>
 realm=servify.example.com
-user=servify:servify-turn-secret
 min-port=49160
 max-port=49200
+no-cli
 ```
 
 **防火墙放行**（以 ufw 为例）：
@@ -140,12 +163,19 @@ turnutils_stun -p 3478 <coturn公网IP>
 # 填入 stun:<coturn公网IP>:3478，能看到 srflx 候选即为可用
 ```
 
-然后在 Servify 侧启用：
+然后在 Servify 侧启用（env 或 config.yml，二者等价）：
 
 ```yaml
 webrtc:
   stun_server: "stun:<coturn公网IP>:3478"
+  turn:
+    url: "turn:<coturn公网IP>:3478"
+    realm: "servify.example.com"
+    static_auth_secret: "${TURN_STATIC_AUTH_SECRET}"
+    ttl: 5m
 ```
+
+启用后用 WS 探针连 `/api/v1/ws`，建联即应收到 `webrtc-ice-config`，其 TURN 项携带短时 `username`/`credential`（见[第 2 节](#2-当前配置面)与[第 7 节](#7-端到端验证步骤)②）。
 
 ## 6. 公共 STUN 与国内替代
 
@@ -178,7 +208,7 @@ curl -sS -i --max-time 3 http://127.0.0.1:8080/api/v1/ws?session_id=probe | head
 
 **② 信令回环（WebRTC 消息面）**
 
-用任意 WS 客户端连 `ws://<host>:8080/api/v1/ws?session_id=webrtc-probe`，发送：
+用任意 WS 客户端连 `ws://<host>:8080/api/v1/ws?session_id=webrtc-probe`，连上后应**先收到一条服务端推送的 `webrtc-ice-config`**（ICE 配置与 TURN 短时凭据；未启用 TURN 时只有 STUN 项）。然后发送：
 
 ```json
 {"type": "webrtc-offer", "data": {"sdp": "<真实浏览器生成的 SDP offer>", "type": "offer"}}
@@ -210,7 +240,7 @@ curl -fsS "http://127.0.0.1:8080/api/v1/webrtc/connections"
 | WS 连上但收不到 `webrtc-answer` | SDP 非法 / 服务端 PeerConnection 创建失败 | 查服务端日志 `failed to create peer connection`；确认 offer 是浏览器生成的真实 SDP |
 | `ice_connection_state` 卡在 `checking` | UDP 未放行 / STUN 不可达 / 对称 NAT | 放行 UDP 端口范围；`turnutils_stun` 验证 STUN；更换 `webrtc.stun_server`（国内换国内源）；必要时让服务器直挂公网 |
 | 建连很慢（数秒级） | 默认 Google STUN 不可达，等超时才回退 host 候选 | 换可达的 STUN（国内环境必改默认值） |
-| `connection_state` 变 `failed` | ICE 全部候选失败 | 服务端是否在严格 NAT 后？做 UDP 端口转发；或等待 TURN 配置面补齐 |
+| `connection_state` 变 `failed` | ICE 全部候选失败 | 服务端是否在严格 NAT 后？做 UDP 端口转发；或启用 TURN（[第 5 节](#5-自建-coturn-部署示例)） |
 | 浏览器侧报 `getUserMedia` 错误 | 媒体采集失败，与部署无关 | 浏览器需 HTTPS/localhost 才能采集摄像头麦克风 |
 
 ## 9. 与远程协助 REST 面的关系

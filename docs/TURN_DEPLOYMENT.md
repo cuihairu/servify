@@ -1,6 +1,6 @@
 # TURN 部署选型：内嵌 pion/turn vs 独立 coturn
 
-> 状态：选型已拍板（2026-09-22）：**coturn 独立部署 + 时间限凭据**。代码与配置面落地待排期。
+> 状态：选型已拍板（2026-09-22）：**coturn 独立部署 + 时间限凭据**。第 5 节清单第 1–4 项（服务端侧）与第 6 项已落地（2026-09-22）：配置面、`iceturn` 凭据包、服务端装配、WS 下发 `webrtc-ice-config`、coturn compose 交付资产、双文档同步。剩余：SDK 消费 `webrtc-ice-config`、REST 下发口 `/api/v1/rtc/ice-servers`（消 SDK `startCall` 桩）、`docs/deployment.md` 交付清单节、TURN 建联验收脚本。
 > 背景：2026-09-22 架构评审确认 TURN 无配置面（[部署指南第 4 节](./webrtc-deployment.md)已如实记录现状），跨对称 NAT 场景下 WebRTC 实时链路不可用。本文档回答"选哪个方案、凭据怎么管、代码扩展落在哪里"，**不重复操作细节**（安装、端口、验证见[WebRTC / 远程协助部署指南](./webrtc-deployment.md)）。
 
 ## 结论先行
@@ -72,14 +72,14 @@ credential = base64(HMAC-SHA1(static_auth_secret, username))
 
 按依赖顺序：
 
-1. **配置面**：`webrtc` 块扩展为 `stun_servers`（列表，多 STUN 冗余）+ `turn.url / turn.realm / turn.static_auth_secret / turn.ttl`。
+1. ✅（2026-09-22）**配置面**：`webrtc` 块扩展为 `stun_servers`（列表，多 STUN 冗余）+ `turn.url / turn.realm / turn.static_auth_secret / turn.ttl`。
    > 口径说明：[部署指南第 4 节](./webrtc-deployment.md)曾建议"配置加 `ice_servers` 列表（含 username/credential）"的最小演进路径——该路径会诱导**静态凭据写进配置文件**，本文档将其升级为上述 `turn.*` 口径：secret 只存服务端，凭据运行时生成。落地时同步更新部署指南第 2/4 节。
    门禁惯例：零容忍 `Validate` + 装配层兜底双层 gate；新增配置键必改 secure-config 白名单/模板 lint 测试（参照 `internal/config/config_template_lint_test.go`、`TestValidate_SecureConfigIsValid` 等）并同步 `config.yml` + `config.production.secure.example.yml` + `config.staging.example.yml` 三模板；`applyConfigEnvOverrides` 白名单补 webrtc 键（事实 3）。
-2. **平台包**：`internal/platform/` 新增 ICE 凭据包（或并入 `realtime`）：凭据生成（HMAC）+ ICE 配置装配，provider `none | coturn`，接口带 mock seam（覆盖率门禁 100%，异步副作用测试按既有惯例轮询）。
-3. **服务端装配**：`CreatePeerConnection` 填入完整 `ICEServers`（STUN 列表 + TURN 条目带短时凭据），voice/realtime 一处收口。
-4. **客户端下发口**：最小路径走 WS 信令建联时下发 ICE 配置（沿用 `webrtc-state-change` 类消息模式）；REST 面（`/api/v1/rtc/ice-servers`，workspace 鉴权）作为后续项，同时消掉 SDK `startCall` 的 `unsupported` 桩。SDK `remoteAssist.iceServers` 保留为宿主覆盖口，服务端下发为默认。
-5. **交付资产**：`infra/compose/docker-compose.coturn.yml`（host 网络 + `use-auth-secret` 模式 + 端口段 + 与 app 共享 secret 的 env 注入）；`docs/deployment.md` 交付清单补"远程协助网络要求"一节；验收脚本参照 `test-ragflow-acceptance.sh` 的 mock/real 双模式思路补 TURN 建联验收。
-6. **文档同步**：部署指南第 4 节现状表 TURN 行改 ✅、第 5 节 coturn 示例升级为 auth-secret 模式；本文档状态头更新落地排期。
+2. ✅（2026-09-22）**平台包**：`internal/platform/` 新增 ICE 凭据包（或并入 `realtime`）：凭据生成（HMAC）+ ICE 配置装配，provider `none | coturn`，接口带 mock seam（覆盖率门禁 100%，异步副作用测试按既有惯例轮询）。
+3. ✅（2026-09-22）**服务端装配**：`CreatePeerConnection` 填入完整 `ICEServers`（STUN 列表 + TURN 条目带短时凭据），voice/realtime 一处收口。
+4. ◐（服务端侧 2026-09-22）**客户端下发口**：最小路径走 WS 信令建联时下发 ICE 配置（沿用 `webrtc-state-change` 类消息模式）；REST 面（`/api/v1/rtc/ice-servers`，workspace 鉴权）作为后续项，同时消掉 SDK `startCall` 的 `unsupported` 桩。SDK `remoteAssist.iceServers` 保留为宿主覆盖口，服务端下发为默认。
+5. ◐（compose 资产 2026-09-22）**交付资产**：`infra/compose/docker-compose.coturn.yml`（host 网络 + `use-auth-secret` 模式 + 端口段 + 与 app 共享 secret 的 env 注入）；`docs/deployment.md` 交付清单补"远程协助网络要求"一节；验收脚本参照 `test-ragflow-acceptance.sh` 的 mock/real 双模式思路补 TURN 建联验收。
+6. ✅（2026-09-22）**文档同步**：部署指南第 4 节现状表 TURN 行改 ✅、第 5 节 coturn 示例升级为 auth-secret 模式；本文档状态头更新落地排期。
 
 ## 6. 与既有文档分工
 
