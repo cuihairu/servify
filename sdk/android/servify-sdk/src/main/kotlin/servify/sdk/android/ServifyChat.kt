@@ -1,5 +1,7 @@
 package servify.sdk.android
 
+import android.app.Activity
+import android.content.Context
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,7 @@ import servify.sdk.android.model.ConversationMessage
 import servify.sdk.android.model.SenderType
 import servify.sdk.android.protocol.FrameCodec
 import servify.sdk.android.protocol.WireFrame
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -67,6 +70,9 @@ class ServifyChat internal constructor(
     @Volatile
     private var everConnected = false
 
+    /** 入口编排（浮钮/面板），与门面生命周期同步。 */
+    private val entry = EntryOrchestrator(this, config.branding.primaryColor, scope)
+
     private var localSeq = 0L
     private var streamingId: String? = null
     private val streamedContent = StringBuilder()
@@ -77,25 +83,23 @@ class ServifyChat internal constructor(
     private class EchoGate(val expectedContent: String, val gate: CompletableDeferred<Unit>)
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
-    val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
-
     private val _messages = MutableSharedFlow<ConversationMessage>(extraBufferCapacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    val messages: SharedFlow<ConversationMessage> = _messages.asSharedFlow()
-
     private val _unreadCount = MutableStateFlow(0)
-    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
-
     private val _reconnecting = MutableSharedFlow<Int>(extraBufferCapacity = 16)
-    val reconnecting: SharedFlow<Int> = _reconnecting.asSharedFlow()
-
     private val _agentAssigned = MutableSharedFlow<AgentAssignment>(extraBufferCapacity = 16)
-    val agentAssigned: SharedFlow<AgentAssignment> = _agentAssigned.asSharedFlow()
-
     private val _waitingInQueue = MutableSharedFlow<String>(extraBufferCapacity = 16)
-    val waitingInQueue: SharedFlow<String> = _waitingInQueue.asSharedFlow()
-
     private val _errors = MutableSharedFlow<ServifyError>(extraBufferCapacity = 16)
-    val error: SharedFlow<ServifyError> = _errors.asSharedFlow()
+
+    /** 事件流聚合面（§4.3 V1 冻结面）。 */
+    val events: ServifyEvents = ServifyEvents(
+        messages = _messages.asSharedFlow(),
+        unreadCount = _unreadCount.asStateFlow(),
+        connectionState = _connectionState.asStateFlow(),
+        reconnecting = _reconnecting.asSharedFlow(),
+        agentAssigned = _agentAssigned.asSharedFlow(),
+        waitingInQueue = _waitingInQueue.asSharedFlow(),
+        error = _errors.asSharedFlow(),
+    )
 
     /** 惰性连接入口（§4.4：disconnected 后用户再次打开会话页即重新 connecting）。 */
     suspend fun connect() {
@@ -109,6 +113,20 @@ class ServifyChat internal constructor(
         reconnectAttempt = 0
         _connectionState.value = ConnectionState.Connecting
         openSocket()
+    }
+
+    /**
+     * 拉起会话 UI（§4.2：抽屉或全屏，首次调用触发 WS 连接）。
+     * 挂起连接经内部作用域异步发起，宿主无需协程上下文。
+     */
+    fun show(hostActivity: Activity) {
+        scope.launch { connect() }
+        entry.attach(hostActivity)
+    }
+
+    /** 收起会话 UI，连接保持（§4.2）。浮钮入口保留；面板收起属 UI 刀接线。 */
+    fun hide() {
+        entry.detachPanel()
     }
 
     /**
@@ -146,8 +164,9 @@ class ServifyChat internal constructor(
         _unreadCount.value = 0
     }
 
-    /** 销毁：断连接、取消作用域（含未决重连）；快照保留属持久化刀职责。 */
+    /** 销毁：断连接、取消作用域（含未决重连）、移除 UI 挂载；快照保留属持久化刀职责。 */
     fun destroy() {
+        entry.release()
         webSocket?.cancel()
         webSocket = null
         scope.cancel()
@@ -251,6 +270,7 @@ class ServifyChat internal constructor(
                         isStreaming = false,
                         sources = frame.sources.orEmpty(),
                         confidence = frame.confidence,
+                        nextAction = frame.nextAction,
                     ),
                 )
             }
@@ -311,15 +331,21 @@ class ServifyChat internal constructor(
         /** 回显判据默认超时（PROTOCOL.md §6.3 成功判据的本地兜底）。 */
         const val DEFAULT_ECHO_TIMEOUT_MS = 10_000L
 
-        /** 构造门面：载入配置，不建连（惰性连接）。重复 create 由接入方避免（单例语义，文档明示）。 */
-        fun create(config: ServifyConfig, sessionId: String): ServifyChat {
+        /**
+         * 构造门面（§4.2）：载入配置，不建连（惰性连接）；sessionId 由 SDK 生成
+         * （"m-" + UUID，D5/PROTOCOL §1 匿名 session 模式）。
+         * `context` 为宿主上下文（可选）——SessionSnapshot/安全存储载入属持久化刀消费，
+         * V1 快照未启用前不读不写。
+         * 重复 create 由接入方避免（单例语义，文档明示）。
+         */
+        fun create(context: Context?, config: ServifyConfig): ServifyChat {
             val client = OkHttpClient.Builder()
                 // PROTOCOL.md §2 移动端口径：协议层保活走平台 WS 实现。
                 .pingInterval(30, TimeUnit.SECONDS)
                 .build()
             return ServifyChat(
                 config = config,
-                sessionId = sessionId,
+                sessionId = "m-${UUID.randomUUID()}",
                 client = client,
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
             )

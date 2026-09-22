@@ -7,8 +7,10 @@ enum class SenderType { Customer, Agent, System }
 
 /**
  * 会话消息（设计文档 D5 规范形，跨端一致）：
- * id 缺省回退 "ws-" + 本地序号（对齐 core normalizeMessage）；sources/confidence
- * 由 ai-response 帧透出，供 UI 引用展示与置信门提示（M1 验收范围）。
+ * id 缺省回退 "ws-" + 本地序号（对齐 core normalizeMessage）；sources/confidence/nextAction
+ * 是 ai-response 帧编排附加输出（D5 metadata 的类型化透出）——sources/confidence 供引用
+ * 展示，nextAction=="handoff" 驱动"转人工"按钮强调态（D8 置信门提示）；其余附加输出
+ * （strategy/handoff_reason）无 V1 消费面，按死代码纪律不进。
  */
 data class ConversationMessage(
     val id: String,
@@ -21,4 +23,8 @@ data class ConversationMessage(
     val isStreaming: Boolean = false,
     val sources: List<KnowledgeSource> = emptyList(),
     val confidence: Double? = null,
-)
+    val nextAction: String? = null,
+) {
+    /** 置信门建议转人工（D8：渲染"转人工"按钮强调态）。 */
+    val suggestsHandoff: Boolean get() = nextAction == "handoff"
+}

@@ -74,7 +74,7 @@ class ServifyChatTest {
     private val testScope get() = chatScope
 
     private suspend fun awaitConnected() {
-        withTimeout(5_000) { chat.connectionState.first { it == ConnectionState.Connected } }
+        withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Connected } }
     }
 
     private suspend fun CompletableDeferred<Unit>.awaitReady() {
@@ -96,7 +96,7 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val echoed = chat.messages.awaitWhenSubscribed(ready) { it.sender == SenderType.Customer }
+        val echoed = chat.events.messages.awaitWhenSubscribed(ready) { it.sender == SenderType.Customer }
         ready.awaitReady()
 
         chat.connect()
@@ -104,7 +104,7 @@ class ServifyChatTest {
         chat.sendMessage("你好")
 
         assertEquals("你好", withTimeout(5_000) { echoed.await() }.content)
-        assertEquals(ConnectionState.Connected, chat.connectionState.value)
+        assertEquals(ConnectionState.Connected, chat.events.connectionState.value)
     }
 
     @Test
@@ -113,7 +113,7 @@ class ServifyChatTest {
         chat = newChat(echoTimeoutMs = 250)
 
         val ready = CompletableDeferred<Unit>()
-        val failure = chat.error.awaitWhenSubscribed(ready)
+        val failure = chat.events.error.awaitWhenSubscribed(ready)
         ready.awaitReady()
 
         chat.connect()
@@ -131,13 +131,13 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val failure = chat.error.awaitWhenSubscribed(ready)
+        val failure = chat.events.error.awaitWhenSubscribed(ready)
         ready.awaitReady()
 
         chat.connect()
 
         assertIs<ServifyError.ServerUnavailable>(withTimeout(5_000) { failure.await() })
-        assertEquals(ConnectionState.Disconnected, withTimeout(5_000) { chat.connectionState.first { it == ConnectionState.Disconnected } })
+        assertEquals(ConnectionState.Disconnected, withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } })
     }
 
     @Test
@@ -156,8 +156,8 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val streamed = chat.messages.awaitWhenSubscribed(ready) { it.isStreaming }
-        val final = chat.messages.awaitWhenSubscribed(CompletableDeferred()) { it.isAiResponse && !it.isStreaming }
+        val streamed = chat.events.messages.awaitWhenSubscribed(ready) { it.isStreaming }
+        val final = chat.events.messages.awaitWhenSubscribed(CompletableDeferred()) { it.isAiResponse && !it.isStreaming }
         ready.awaitReady()
 
         chat.connect()
@@ -187,16 +187,16 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val second = chat.messages.awaitWhenSubscribed(ready) { it.content == "第二条" }
+        val second = chat.events.messages.awaitWhenSubscribed(ready) { it.content == "第二条" }
         ready.awaitReady()
 
         chat.connect()
 
         withTimeout(5_000) { second.await() }
-        assertEquals(2, chat.unreadCount.value)
+        assertEquals(2, chat.events.unreadCount.value)
 
         chat.onSessionVisible()
-        assertEquals(0, chat.unreadCount.value)
+        assertEquals(0, chat.events.unreadCount.value)
     }
 
     @Test
@@ -213,7 +213,7 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val assignment = chat.agentAssigned.awaitWhenSubscribed(ready)
+        val assignment = chat.events.agentAssigned.awaitWhenSubscribed(ready)
         ready.awaitReady()
 
         chat.connect()
@@ -233,7 +233,7 @@ class ServifyChatTest {
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
-        val waiting = chat.waitingInQueue.awaitWhenSubscribed(ready)
+        val waiting = chat.events.waitingInQueue.awaitWhenSubscribed(ready)
         ready.awaitReady()
 
         chat.connect()
@@ -263,10 +263,10 @@ class ServifyChatTest {
         // 触发断线； onFailure → §4.4 connected ─断→ reconnecting(n) 自动恢复
         val reconnected = async {
             val reconnecting = withTimeout(5_000) {
-                chat.connectionState.first { it is ConnectionState.Reconnecting }
+                chat.events.connectionState.first { it is ConnectionState.Reconnecting }
             }
             withTimeout(5_000) {
-                chat.connectionState.first { it == ConnectionState.Connected }
+                chat.events.connectionState.first { it == ConnectionState.Connected }
             }
             reconnecting
         }
@@ -274,7 +274,7 @@ class ServifyChatTest {
 
         val reconnecting = reconnected.await() as ConnectionState.Reconnecting
         assertEquals(1, reconnecting.attempt)
-        assertEquals(ConnectionState.Connected, chat.connectionState.value)
+        assertEquals(ConnectionState.Connected, chat.events.connectionState.value)
     }
 
     @Test
@@ -286,6 +286,6 @@ class ServifyChatTest {
 
         chat.destroy()
         chat.destroy()
-        assertEquals(ConnectionState.Disconnected, chat.connectionState.value)
+        assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
     }
 }
