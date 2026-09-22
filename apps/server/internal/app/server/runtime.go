@@ -57,6 +57,7 @@ type Runtime struct {
 
 	AIService                aidelivery.RuntimeService
 	AIHandlerService         aidelivery.HandlerService
+	AICopilot                *aidelivery.AgentCopilotService
 	wsRuntime                websocketRunner
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
@@ -241,6 +242,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		Redis:                    rt.Redis,
 		AIService:                rt.AIService,
 		AIHandlerService:         rt.AIHandlerService,
+		AICopilot:                rt.AICopilot,
 		RealtimeGateway:          rt.RealtimeGateway,
 		RTCGateway:               rt.RTCGateway,
 		RTCIceSource:             rt.RTCIceSource,

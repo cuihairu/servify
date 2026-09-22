@@ -37,7 +37,7 @@ func (r Resolver) ExpandPermissions(roles, explicit []string) []string {
 				"custom_fields.read",
 				"session_transfer.read", "session_transfer.write",
 				"satisfaction.read", "satisfaction.write",
-				"workspace.read",
+				"workspace.read", "workspace.write",
 				"macros.read",
 				"integrations.read",
 				"voice.read", "voice.write",

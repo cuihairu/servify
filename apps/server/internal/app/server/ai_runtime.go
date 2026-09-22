@@ -32,8 +32,11 @@ type AIAssemblyOptions struct {
 // 后只暴露 provider 无关字段（driver / id / healthy），provider 特定状态
 // （dify dataset id、weknora client 等）由各 driver 内部持有。
 type AIAssembly struct {
-	Service                  aidelivery.HandlerService
-	RuntimeService           aidelivery.RuntimeService
+	Service        aidelivery.HandlerService
+	RuntimeService aidelivery.RuntimeService
+	// Copilot 坐席 AI 辅助（建议回复/一键改写/会话摘要）：与首答共用
+	// LLM provider 与出站参数；会话历史口由 attachSessionHistory 回填。
+	Copilot                  *aidelivery.AgentCopilotService
 	KnowledgeDriver          knowledgeprovider.KnowledgeProvider
 	KnowledgeProviderID      string
 	KnowledgeProviderHealthy bool
@@ -69,6 +72,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	assembly := &AIAssembly{
 		Service:        aidelivery.NewHandlerServiceAdapter(defaultService),
 		RuntimeService: defaultService,
+		Copilot:        aidelivery.NewAgentCopilotService(llmProvider, runtimeParams),
 	}
 
 	// pgvector 自建知识库：knowledge.provider=pgvector 时优先于外部 provider，

@@ -22,20 +22,3 @@ const (
 	ResourceAPIKeys         = "api_keys"
 	ResourceConversations   = "conversations"
 )
-
-var fallbackAgentPermissions = []string{
-	ResourcePermission(ResourceTickets, "GET"),
-	ResourcePermission(ResourceTickets, "POST"),
-	ResourcePermission(ResourceCustomers, "GET"),
-	ResourcePermission(ResourceAgents, "GET"),
-	ResourcePermission(ResourceCustomFields, "GET"),
-	ResourcePermission(ResourceSessionTransfer, "GET"),
-	ResourcePermission(ResourceSessionTransfer, "POST"),
-	ResourcePermission(ResourceSatisfaction, "GET"),
-	ResourcePermission(ResourceSatisfaction, "POST"),
-	ResourcePermission(ResourceWorkspace, "GET"),
-	ResourcePermission(ResourceMacros, "GET"),
-	ResourcePermission(ResourceIntegrations, "GET"),
-	ResourcePermission(ResourceVoice, "GET"),
-	ResourcePermission(ResourceVoice, "POST"),
-}

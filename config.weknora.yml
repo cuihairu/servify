@@ -164,6 +164,7 @@ security:
         - "satisfaction.read"
         - "satisfaction.write"
         - "workspace.read"
+        - "workspace.write"
         - "macros.read"
         - "integrations.read"
 

@@ -112,7 +112,23 @@ func (s *OrchestratedEnhancedAIService) buildHistoryMessages(ctx context.Context
 		return nil
 	}
 	trimmed := strings.TrimSpace(query)
-	chat := make([]llm.ChatMessage, 0, len(msgs)+1)
+	chat := convertHistory(msgs)
+	// DESC 序里 msgs[0] 是最新一条（转换后位于升序末位）：与当前 query
+	// 重复则为已落库的当前消息，去重避免重复提问。
+	if n := len(chat); n > 0 && chat[n-1].Content == trimmed {
+		chat = chat[:n-1]
+	}
+	if len(chat) > aiHistoryTurns {
+		chat = chat[len(chat)-aiHistoryTurns:]
+	}
+	return append(chat, llm.ChatMessage{Role: "user", Content: query})
+}
+
+// convertHistory 把 DESC 序的会话消息转为时间升序的 ChatMessage：
+// customer→user、agent→assistant，system 与空内容跳过。首答多轮上下文
+// 与坐席 Copilot 共用同一份转换口径。
+func convertHistory(msgs []models.Message) []llm.ChatMessage {
+	chat := make([]llm.ChatMessage, 0, len(msgs))
 	for i := len(msgs) - 1; i >= 0; i-- {
 		content := strings.TrimSpace(msgs[i].Content)
 		if content == "" {
@@ -127,16 +143,9 @@ func (s *OrchestratedEnhancedAIService) buildHistoryMessages(ctx context.Context
 		default: // system / 未知发送者不进提示词
 			continue
 		}
-		// DESC 序里 i==0 是最新一条：与当前 query 重复则为已落库的当前消息
-		if i == 0 && content == trimmed {
-			continue
-		}
 		chat = append(chat, llm.ChatMessage{Role: role, Content: content})
 	}
-	if len(chat) > aiHistoryTurns {
-		chat = chat[len(chat)-aiHistoryTurns:]
-	}
-	return append(chat, llm.ChatMessage{Role: "user", Content: query})
+	return chat
 }
 
 // aiProviderLabel 返回打点用的 provider 标签；未启用外部 provider 时记 "none"。

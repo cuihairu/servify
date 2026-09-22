@@ -103,6 +103,7 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	}
 	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics)
 	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics)
+	rt.AICopilot = aiAssembly.Copilot
 	return aiAssembly, nil
 }
 
@@ -141,6 +142,10 @@ func attachSessionHistory(rt *Runtime, aiAssembly *AIAssembly, loader aidelivery
 	}
 	if v, ok := aiAssembly.RuntimeService.(*aidelivery.OrchestratedEnhancedAIService); ok {
 		v.WithSessionHistory(loader)
+	}
+	// 坐席 Copilot 与首答同用一份会话历史口径（suggest_reply/摘要）。
+	if rt.AICopilot != nil {
+		rt.AICopilot.WithSessionHistory(loader)
 	}
 }
 

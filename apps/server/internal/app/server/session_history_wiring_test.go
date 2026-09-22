@@ -7,6 +7,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	llm "servify/apps/server/internal/platform/llm"
 	llmmock "servify/apps/server/internal/platform/llm/mock"
 
 	"github.com/sirupsen/logrus"
@@ -114,4 +115,44 @@ func TestSessionHistoryFlowsThroughScopedRebuild(t *testing.T) {
 	if scoped.historyLoader == nil {
 		t.Fatal("WithSessionHistory must stick on the scoped runtime wrapper")
 	}
+}
+
+// copilotHistoryLoader 坐席 Copilot 接线探针桩：返回一条可用的历史消息。
+type copilotHistoryLoader struct {
+	calls int
+}
+
+func (c *copilotHistoryLoader) ListRecentMessages(ctx context.Context, sessionID string, limit int) ([]models.Message, error) {
+	c.calls++
+	return []models.Message{{Sender: "customer", Content: "我的订单还没发货"}}, nil
+}
+
+// TestAttachSessionHistoryWiresCopilot 坐席 Copilot 与首答同用一份会话
+// 历史口径：回填后 suggest_reply 会拉一次历史；rt.AICopilot 为 nil 时
+// 回填不 panic（BuildAIAssembly 之外的装配形态）。
+func TestAttachSessionHistoryWiresCopilot(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	logger := logrus.New()
+	loader := &copilotHistoryLoader{}
+
+	rt := &Runtime{Config: cfg, Logger: logger}
+	rt.AICopilot = aidelivery.NewAgentCopilotService(&llmmock.Provider{ChatResponse: llm.ChatResponse{Content: "建议"}}, aidelivery.AIRuntimeParams{})
+	attachSessionHistory(rt, &AIAssembly{}, loader)
+
+	resp, err := rt.AICopilot.Copilot(context.Background(), aidelivery.CopilotRequest{
+		Action:    aidelivery.CopilotSuggestReply,
+		SessionID: "sess-copilot-1",
+	})
+	if err != nil {
+		t.Fatalf("Copilot() error = %v", err)
+	}
+	if resp.Text != "建议" {
+		t.Fatalf("Text = %q", resp.Text)
+	}
+	if loader.calls == 0 {
+		t.Fatal("copilot must receive the history loader (no history fetch on suggest_reply)")
+	}
+
+	// nil Copilot：回填整体 no-op，不 panic。
+	attachSessionHistory(&Runtime{Config: cfg, Logger: logger}, &AIAssembly{}, loader)
 }

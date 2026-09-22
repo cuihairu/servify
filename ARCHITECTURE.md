@@ -597,6 +597,8 @@ LLM 侧的构造统一收口在 `internal/platform/llm/factory`：`ai.provider` 
 
 首答质量三件套已接入编排主链路：多轮上下文经 `SessionHistoryLoader` 窄接口拉取会话近期消息（AI 模块不反向依赖 conversation，conversation 适配器按形状实现）；引用来源与产生方式（`sources`/`strategy`）随 REST 响应与 WS `ai-response` 帧透出；`ai.handoff` 置信门在首答 confidence 低于阈值时只产出 `next_action=handoff` 建议元数据（不改写答案、不执行转接，转接仍由用户显式发起或关键词触发）。
 
+坐席 AI 辅助（AgentCopilot）与首答共用同一 LLM provider、出站参数与会话历史口径：`POST /api/v1/ai/copilot` 单端点按 `action` 分发三类"点一下就能用"的能力——`suggest_reply`（基于会话近期历史起草下一条回复）、`rewrite`（按语气改写坐席草稿，事实与承诺不变）、`session_summary`（三段式会话摘要）。历史类动作用与首答相同的 `SessionHistoryLoader` 读取口，但采用"明确失败"语义：会话无可读消息或历史加载失败时返回 4xx，不静默降级、不凭空编造上下文；LLM provider 未装配时端点降级 503。权限走 workspace 资源组（`RequireResourcePermission("workspace")`，POST → `workspace.write`），坐席角色模板已含写权限。当前为启动期全局装配，不跟随租户/工作区作用域模型覆盖。
+
 ## 11. Events
 
 Internal domain events should be explicit.

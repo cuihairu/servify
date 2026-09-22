@@ -33,6 +33,8 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 
 	aiAPI := managementV1.Group("/ai")
 	aiAPI.POST("/query", aiHandler.ProcessQuery)
+	// 坐席 AI 辅助：建议回复 / 一键改写 / 会话摘要（action 分发单端点）。
+	aiAPI.POST("/copilot", handlers.NewAICopilotHandler(deps.AICopilot).Copilot)
 	aiAPI.GET("/status", aiHandler.GetStatus)
 	aiAPI.GET("/metrics", aiHandler.GetMetrics)
 	aiAPI.POST("/knowledge/upload", aiHandler.UploadDocument)

@@ -44,6 +44,7 @@ type Dependencies struct {
 	Redis                    *redis.Client
 	AIService                aidelivery.RuntimeService
 	AIHandlerService         aidelivery.HandlerService
+	AICopilot                *aidelivery.AgentCopilotService
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
 	RTCIceSource             realtimeplatform.ICEConfigSource
