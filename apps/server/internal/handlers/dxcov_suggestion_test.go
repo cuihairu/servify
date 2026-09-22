@@ -12,9 +12,11 @@ import (
 )
 
 type dxcSuggestionRecorder struct {
-	resp    *suggestioncontract.SuggestionResponse
-	err     error
-	lastReq *suggestioncontract.SuggestionRequest
+	resp       *suggestioncontract.SuggestionResponse
+	err        error
+	lastReq    *suggestioncontract.SuggestionRequest
+	summary    *suggestioncontract.ExposureSummaryResponse
+	summaryErr error
 }
 
 func (s *dxcSuggestionRecorder) Suggest(ctx context.Context, req *suggestioncontract.SuggestionRequest) (*suggestioncontract.SuggestionResponse, error) {
@@ -31,6 +33,13 @@ func (s *dxcSuggestionRecorder) InitialQuestions(ctx context.Context, req *sugge
 
 func (s *dxcSuggestionRecorder) NextQuestions(ctx context.Context, req *suggestioncontract.NextQuestionsRequest) (*suggestioncontract.NextQuestionsResponse, error) {
 	return nil, nil
+}
+
+func (s *dxcSuggestionRecorder) ExposureSummary(ctx context.Context) (*suggestioncontract.ExposureSummaryResponse, error) {
+	if s.summaryErr != nil {
+		return nil, s.summaryErr
+	}
+	return s.summary, nil
 }
 
 func TestDxcNewSuggestionHandler(t *testing.T) {
@@ -121,6 +130,43 @@ func TestDxcRegisterSuggestionRoutes(t *testing.T) {
 	RegisterSuggestionRoutes(&r.RouterGroup, NewSuggestionHandler(&dxcSuggestionRecorder{}))
 	w := dxcDo(r, http.MethodGet, "/assist/suggest", "")
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestDxcSuggestionHandlerExposureSummary(t *testing.T) {
+	t.Run("returns summary payload", func(t *testing.T) {
+		rec := &dxcSuggestionRecorder{summary: &suggestioncontract.ExposureSummaryResponse{
+			TotalExposures:     5,
+			ConvertedExposures: 1,
+			ByKind: []suggestioncontract.ExposureKindSummary{
+				{Kind: "next", TotalExposures: 2, ConvertedExposures: 1},
+			},
+		}}
+		r := dxcRouter()
+		r.GET("/assist/suggestions/exposure-summary", NewSuggestionHandler(rec).ExposureSummary)
+
+		w := dxcDo(r, http.MethodGet, "/assist/suggestions/exposure-summary", "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), `"total_exposures":5`)
+		assert.Contains(t, w.Body.String(), `"converted_exposures":1`)
+		assert.Contains(t, w.Body.String(), `"kind":"next"`)
+	})
+
+	t.Run("service error maps to 500", func(t *testing.T) {
+		rec := &dxcSuggestionRecorder{summaryErr: errors.New("boom")}
+		r := dxcRouter()
+		r.GET("/assist/suggestions/exposure-summary", NewSuggestionHandler(rec).ExposureSummary)
+
+		w := dxcDo(r, http.MethodGet, "/assist/suggestions/exposure-summary", "")
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+	})
+
+	t.Run("registered on assist group", func(t *testing.T) {
+		r := dxcRouter()
+		RegisterSuggestionRoutes(&r.RouterGroup, NewSuggestionHandler(&dxcSuggestionRecorder{summary: &suggestioncontract.ExposureSummaryResponse{}}))
+
+		w := dxcDo(r, http.MethodGet, "/assist/suggestions/exposure-summary", "")
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 }
 
 func TestDxcParseIntDefault(t *testing.T) {

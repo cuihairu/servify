@@ -102,10 +102,11 @@ security:
     whitelist_ips: []
     whitelist_keys: []
     paths:
+      # 专用前缀必须排在 /public/ 之前：中间件按首个匹配前缀取限流
       - enabled: true
-        prefix: "/public/"
-        requests_per_minute: 120
-        burst: 30
+        prefix: "/public/suggestions/"
+        requests_per_minute: 30
+        burst: 10
       - enabled: true
         prefix: "/public/kb/"
         requests_per_minute: 60
@@ -114,6 +115,10 @@ security:
         prefix: "/public/csat/"
         requests_per_minute: 30
         burst: 10
+      - enabled: true
+        prefix: "/public/"
+        requests_per_minute: 120
+        burst: 30
       - enabled: true
         prefix: "/api/v1/auth/"
         requests_per_minute: 20

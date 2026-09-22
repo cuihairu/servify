@@ -34,4 +34,24 @@ func (a *HandlerServiceAdapter) NextQuestions(ctx context.Context, req *suggesti
 	return a.service.NextQuestions(ctx, req)
 }
 
+func (a *HandlerServiceAdapter) ExposureSummary(ctx context.Context) (*suggestioncontract.ExposureSummaryResponse, error) {
+	summary, err := a.service.ExposureSummary(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byKind := make([]suggestioncontract.ExposureKindSummary, 0, len(summary.ByKind))
+	for _, kind := range summary.ByKind {
+		byKind = append(byKind, suggestioncontract.ExposureKindSummary{
+			Kind:               kind.Kind,
+			TotalExposures:     kind.TotalExposures,
+			ConvertedExposures: kind.ConvertedExposures,
+		})
+	}
+	return &suggestioncontract.ExposureSummaryResponse{
+		TotalExposures:     summary.TotalExposures,
+		ConvertedExposures: summary.ConvertedExposures,
+		ByKind:             byKind,
+	}, nil
+}
+
 var _ HandlerService = (*HandlerServiceAdapter)(nil)

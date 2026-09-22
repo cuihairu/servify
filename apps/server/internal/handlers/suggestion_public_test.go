@@ -46,6 +46,10 @@ func (s *suggestionPublicRecorder) NextQuestions(ctx context.Context, req *sugge
 	}, nil
 }
 
+func (s *suggestionPublicRecorder) ExposureSummary(ctx context.Context) (*suggestioncontract.ExposureSummaryResponse, error) {
+	return &suggestioncontract.ExposureSummaryResponse{}, nil
+}
+
 func newSuggestionPublicRouter(rec *suggestionPublicRecorder) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

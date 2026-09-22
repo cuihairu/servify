@@ -207,6 +207,36 @@ func (r *errRepoStub) ExposureSummary(ctx context.Context) (*suggestionapp.Expos
 	return nil, errors.New("boom")
 }
 
+func TestServiceExposureSummary(t *testing.T) {
+	t.Run("passes through repository summary", func(t *testing.T) {
+		want := &suggestionapp.ExposureSummary{
+			TotalExposures:     5,
+			ConvertedExposures: 1,
+			ByKind: []suggestionapp.ExposureKindSummary{
+				{Kind: "initial", TotalExposures: 3, ConvertedExposures: 0},
+				{Kind: "next", TotalExposures: 2, ConvertedExposures: 1},
+			},
+		}
+		repo := &suggestionRepoStub{summary: want}
+		svc := suggestionapp.NewService(repo)
+
+		got, err := svc.ExposureSummary(context.Background())
+		if err != nil {
+			t.Fatalf("ExposureSummary() error = %v", err)
+		}
+		if got != want {
+			t.Fatalf("summary = %+v, want repo passthrough %+v", got, want)
+		}
+	})
+
+	t.Run("repository error propagates", func(t *testing.T) {
+		svc := suggestionapp.NewService(&errRepoStub{})
+		if _, err := svc.ExposureSummary(context.Background()); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
 func TestServiceInitialQuestionsRecordsExposure(t *testing.T) {
 	t.Run("records session and returned questions", func(t *testing.T) {
 		repo := &suggestionRepoStub{

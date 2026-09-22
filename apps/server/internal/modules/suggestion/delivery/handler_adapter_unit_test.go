@@ -30,7 +30,7 @@ func newSuggestionUnitDB(t *testing.T) *gorm.DB {
 		t.Fatalf("db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.KnowledgeDoc{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &models.KnowledgeDoc{}, &models.SuggestionExposureLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
@@ -97,5 +97,42 @@ func TestSuggestionHandlerAdapterUnitQuestionPassthrough(t *testing.T) {
 	}
 	if _, err := adapter.NextQuestions(ctx, &suggestioncontract.NextQuestionsRequest{Query: "refund"}); err != nil {
 		t.Fatalf("NextQuestions passthrough: %v", err)
+	}
+}
+
+func TestSuggestionHandlerAdapterUnitExposureSummaryMapping(t *testing.T) {
+	db := newSuggestionUnitDB(t)
+	repo := suggestioninfra.NewGormRepository(db)
+	if err := repo.RecordExposure(context.Background(), suggestionapp.ExposureRecord{
+		SessionID: "s-1", Kind: "initial", Strategy: "public_knowledge_recency", Questions: []string{"Q1"},
+	}); err != nil {
+		t.Fatalf("seed initial exposure: %v", err)
+	}
+	if err := repo.RecordExposure(context.Background(), suggestionapp.ExposureRecord{
+		SessionID: "s-1", Kind: "next", Strategy: "public_knowledge_scored", Questions: []string{"Q2"},
+	}); err != nil {
+		t.Fatalf("seed next exposure: %v", err)
+	}
+	if err := repo.MarkExposureConverted(context.Background(), 2, "Q2", time.Now()); err != nil {
+		t.Fatalf("mark converted: %v", err)
+	}
+
+	adapter := suggestiondelivery.NewHandlerServiceAdapter(suggestionapp.NewService(repo))
+	summary, err := adapter.ExposureSummary(context.Background())
+	if err != nil {
+		t.Fatalf("ExposureSummary: %v", err)
+	}
+	if summary.TotalExposures != 2 || summary.ConvertedExposures != 1 {
+		t.Fatalf("summary totals = %+v, want 2/1", summary)
+	}
+	byKind := make(map[string]suggestioncontract.ExposureKindSummary, len(summary.ByKind))
+	for _, kind := range summary.ByKind {
+		byKind[kind.Kind] = kind
+	}
+	if byKind["initial"].TotalExposures != 2-1 || byKind["initial"].ConvertedExposures != 0 {
+		t.Fatalf("initial group = %+v", byKind["initial"])
+	}
+	if byKind["next"].ConvertedExposures != 1 {
+		t.Fatalf("next group = %+v", byKind["next"])
 	}
 }

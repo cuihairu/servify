@@ -61,7 +61,22 @@ func RegisterSuggestionRoutes(r *gin.RouterGroup, handler *SuggestionHandler) {
 	{
 		assist.GET("/suggest", handler.Suggest)
 		assist.POST("/suggest", handler.SuggestPost)
+		assist.GET("/suggestions/exposure-summary", handler.ExposureSummary)
 	}
+}
+
+// ExposureSummary 曝光/转化聚合（P2-0 RQ-5 管理面出口）：assist 权限组
+// 消费，返回全量曝光/转化计数与按 kind 分组，供运营侧核对推荐效果。
+func (h *SuggestionHandler) ExposureSummary(c *gin.Context) {
+	resp, err := h.service.ExposureSummary(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to summarize suggestion exposures", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    resp,
+	})
 }
 
 // InitialQuestions 客户侧首屏推荐问题（P2-0 RQ-1）：客户未输入前可点击

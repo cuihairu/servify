@@ -74,6 +74,12 @@
 - 对提交频率做独立限制
 - 运行基线要求为 `/public/csat/` 配置独立路径级限流
 
+### `/public/suggestions/*`
+
+- 只返回 `is_public` 知识文档标题，不携带工单/其他客户信息
+- 曝光归因每次成功响应落一行 `suggestion_exposure_logs`（写放大面），必须独立路径级限流（P2-0 RQ-5；staging 45rpm/生产 30rpm 基线）
+- 专用前缀在 `rate_limiting.paths` 中必须排在 `/public/` 之前（中间件按首个匹配前缀取限流）
+
 ### `/api/v1/auth/*` 匿名入口
 
 - `/login`、`/register`、`/refresh` 必须有独立路径级限流

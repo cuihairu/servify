@@ -111,6 +111,12 @@ func (s *Service) MatchSuggestionConversion(ctx context.Context, sessionID, cont
 	return nil
 }
 
+// ExposureSummary 曝光/转化聚合（P2-0 RQ-5 管理面最小口径）：透传仓储
+// 聚合，不做看板级加工；出口由 assist 权限组的管理路由消费。
+func (s *Service) ExposureSummary(ctx context.Context) (*ExposureSummary, error) {
+	return s.repo.ExposureSummary(ctx)
+}
+
 // NextQuestions 会话内上下文联想（P2-0 RQ-2）：以客户最近一条消息为
 // query，复用 Suggest 的 token 提取 / 打分内核，但客户侧只吐公开知识
 // 文档——相似工单标题可能携带其他客户的隐私信息，绝不进客户侧响应；

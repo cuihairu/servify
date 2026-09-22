@@ -12,4 +12,6 @@ type HandlerService interface {
 	InitialQuestions(ctx context.Context, req *suggestioncontract.InitialQuestionsRequest) (*suggestioncontract.InitialQuestionsResponse, error)
 	// NextQuestions 客户侧上下文联想问题（P2-0 RQ-2，公开路由消费）。
 	NextQuestions(ctx context.Context, req *suggestioncontract.NextQuestionsRequest) (*suggestioncontract.NextQuestionsResponse, error)
+	// ExposureSummary 曝光/转化聚合（P2-0 RQ-5，管理面路由消费）。
+	ExposureSummary(ctx context.Context) (*suggestioncontract.ExposureSummaryResponse, error)
 }

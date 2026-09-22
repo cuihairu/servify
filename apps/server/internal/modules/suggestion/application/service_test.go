@@ -28,6 +28,7 @@ type suggestionRepoStub struct {
 	openErr       error
 	markCalls     []suggestionMarkCall
 	markErr       error
+	summary       *suggestionapp.ExposureSummary
 }
 
 type suggestionMarkCall struct {
@@ -84,6 +85,9 @@ func (r *suggestionRepoStub) MarkExposureConverted(ctx context.Context, exposure
 }
 
 func (r *suggestionRepoStub) ExposureSummary(ctx context.Context) (*suggestionapp.ExposureSummary, error) {
+	if r.summary != nil {
+		return r.summary, nil
+	}
 	return &suggestionapp.ExposureSummary{}, nil
 }
 

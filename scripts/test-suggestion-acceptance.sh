@@ -349,6 +349,7 @@ EXPOSURE_CONVERSION_OK=skipped
 if [ -n "$DB_DSN" ] && [ -n "$SERVER_PID" ] && command -v node >/dev/null 2>&1 \
   && node -e 'process.exit(typeof WebSocket === "function" ? 0 : 1)' 2>/dev/null; then
   append_summary "step=exposure_conversion"
+  EXPOSURE_CONVERSION_OK=false
   request_json "GET" "$SERVIFY_URL/public/suggestions/initial?limit=8&session_id=s-acc-1"
   save_response "initial-questions-session" "$RESPONSE_BODY"
   append_summary "initial_session_http=$RESPONSE_STATUS"
@@ -401,14 +402,36 @@ PY
       sleep 1
     done
     append_summary "exposure_check=${EXPOSURE_CHECK:-no-run}"
+
+    # 管理面出口（assist 权限组）聚合数与库内明细对账：匿名 3 行（步骤
+    # 5-8 的 initial/next GET/next POST）+ 本步带 session 2 行 = 5；
+    # 转化仅本步 WS 命中 1 次且归在 next（最近一次未转化曝光）。
+    request_json "GET" "$SERVIFY_URL/api/assist/suggestions/exposure-summary" "" "$ADMIN_TOKEN"
+    save_response "exposure-summary" "$RESPONSE_BODY"
+    append_summary "exposure_summary_http=$RESPONSE_STATUS"
+    EXPOSURE_SUMMARY_CHECK=$(printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin).get("data") or {}
+    total = data.get("total_exposures", 0)
+    converted = data.get("converted_exposures", 0)
+    kinds = {k.get("kind"): k.get("converted_exposures") for k in (data.get("by_kind") or [])}
+    if total == 5 and converted == 1 and kinds.get("next") == 1 and kinds.get("initial") == 0:
+        print("ok")
+    else:
+        print("mismatch: total=%r converted=%r kinds=%r" % (total, converted, kinds))
+except Exception as exc:
+    print("parse_error: %s" % exc)
+' 2>/dev/null || true)
+    append_summary "exposure_summary_check=$EXPOSURE_SUMMARY_CHECK"
+
+    if [ "$EXPOSURE_CHECK" = "ok" ] && [ "$EXPOSURE_SUMMARY_CHECK" = "ok" ]; then
+      EXPOSURE_CONVERSION_OK=true
+    fi
   else
     append_summary "ws_send=failed"
   fi
-  if [ "$EXPOSURE_CONVERSION_OK" = "true" ]; then
-    append_summary "exposure_conversion_ok=true"
-  else
-    append_summary "exposure_conversion_ok=false"
-  fi
+  append_summary "exposure_conversion_ok=$EXPOSURE_CONVERSION_OK"
 else
   append_summary "exposure_conversion=skipped (external/mock mode or node WebSocket unavailable)"
 fi

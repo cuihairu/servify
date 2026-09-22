@@ -80,3 +80,17 @@ type NextQuestionsResponse struct {
 	Questions []RecommendedQuestion  `json:"questions"`
 	Meta      map[string]interface{} `json:"meta,omitempty"`
 }
+
+// ExposureKindSummary 曝光/转化聚合的单 kind 行。
+type ExposureKindSummary struct {
+	Kind               string `json:"kind"`
+	TotalExposures     int64  `json:"total_exposures"`
+	ConvertedExposures int64  `json:"converted_exposures"`
+}
+
+// ExposureSummaryResponse 曝光/转化聚合响应（P2-0 RQ-5 管理面最小口径）。
+type ExposureSummaryResponse struct {
+	TotalExposures     int64                 `json:"total_exposures"`
+	ConvertedExposures int64                 `json:"converted_exposures"`
+	ByKind             []ExposureKindSummary `json:"by_kind"`
+}
