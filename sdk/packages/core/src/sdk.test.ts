@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ServifySDK } from './sdk';
-import type { RemoteAssistRecordingState } from './types';
+import type { RemoteAssistRecordingState, ServifyRTCIceServer } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = Record<string, any>;
@@ -145,7 +145,8 @@ function createSDK(record: boolean): ServifySDK {
     apiUrl: 'http://localhost:8080',
     autoConnect: false,
     customerId: '1',
-    remoteAssist: { captureScreen: true, record },
+    // 录制链路测试不关心 ICE 下发：显式空列表走宿主覆盖口，避免额外 REST 噪音
+    remoteAssist: { captureScreen: true, record, iceServers: [] },
   });
   // 测试聚焦录制链路，直接注入已连接的 fake ws
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -356,5 +357,157 @@ describe('ServifySDK suggested questions', () => {
     const sdk = createPlainSDK();
 
     await expect(sdk.getNextQuestions('密码')).rejects.toThrow('boom');
+  });
+});
+
+describe('ServifySDK server ICE delivery', () => {
+  beforeEach(() => {
+    vi.stubGlobal('RTCPeerConnection', FakeRTCPeerConnection);
+    FakeRTCPeerConnection.instances = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  type PeerFactory = NonNullable<
+    Parameters<ServifySDK['startRemoteAssist']>[0]
+  >['peerConnectionFactory'];
+
+  function createIceSDK(peerFactory: PeerFactory): ServifySDK {
+    const sdk = new ServifySDK({
+      apiUrl: 'http://localhost:8080',
+      autoConnect: false,
+      customerId: '1',
+      remoteAssist: { peerConnectionFactory: peerFactory },
+    });
+    // 测试聚焦 ICE 回退链，直接注入已连接的 fake ws
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (sdk as AnyRecord).ws = { isConnected: () => true, send: vi.fn(async () => undefined) };
+    return sdk;
+  }
+
+  function capturePeerFactory(captured: Array<{ iceServers?: ServifyRTCIceServer[] }>): PeerFactory {
+    return (config) => {
+      captured.push(config);
+      return new FakeRTCPeerConnection() as unknown as RTCPeerConnection;
+    };
+  }
+
+  it('falls back to the REST ice-servers endpoint and caches the result', async () => {
+    const icePayload = {
+      success: true,
+      data: {
+        ice_servers: [
+          { urls: 'stun:stun.example.com:3478' },
+          { urls: 'turn:turn.example.com:3478', username: '1790000300', credential: 'hmac', ttl: 300 },
+        ],
+      },
+    };
+    let iceRequests = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/rtc/ice-servers')) {
+        iceRequests += 1;
+      }
+      return jsonResponse(icePayload);
+    }));
+
+    const captured: Array<{ iceServers?: ServifyRTCIceServer[] }> = [];
+    const sdk = createIceSDK(capturePeerFactory(captured));
+
+    await sdk.startRemoteAssist();
+    await sdk.endRemoteAssist();
+    await sdk.startRemoteAssist();
+
+    // 第二次 start 命中缓存，REST 只打一次
+    expect(iceRequests).toBe(1);
+    expect(captured[0].iceServers).toEqual(icePayload.data.ice_servers);
+    expect(captured[1].iceServers).toEqual(icePayload.data.ice_servers);
+  });
+
+  it('prefers host-provided iceServers over the server fallback', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { ice_servers: [{ urls: 'stun:server:3478' }] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const captured: Array<{ iceServers?: ServifyRTCIceServer[] }> = [];
+    const sdk = createIceSDK(capturePeerFactory(captured));
+
+    await sdk.startRemoteAssist({ iceServers: [{ urls: 'stun:host:3478' }] });
+
+    expect(captured[0].iceServers).toEqual([{ urls: 'stun:host:3478' }]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to an empty list when the REST endpoint fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      ({ ok: false, status: 500, json: async () => ({ success: false, error: 'boom' }) }) as unknown as Response,
+    ));
+
+    const captured: Array<{ iceServers?: ServifyRTCIceServer[] }> = [];
+    const sdk = createIceSDK(capturePeerFactory(captured));
+
+    await sdk.startRemoteAssist();
+
+    expect(captured[0].iceServers).toEqual([]);
+  });
+
+  it('consumes a pushed webrtc-ice-config without calling REST', async () => {
+    class PushFakeWebSocket {
+      static instances: PushFakeWebSocket[] = [];
+      readyState = 1;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onclose: ((event: { code: number; reason: string }) => void) | null = null;
+      onerror: ((event: unknown) => void) | null = null;
+      constructor() {
+        PushFakeWebSocket.instances.push(this);
+      }
+      send(): void {}
+      close(): void {}
+    }
+    let iceRequests = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/rtc/ice-servers')) {
+        iceRequests += 1;
+      }
+      return jsonResponse({ success: true, data: { ice_servers: [] } });
+    }));
+
+    const received: ServifyRTCIceServer[][] = [];
+    const captured: Array<{ iceServers?: ServifyRTCIceServer[] }> = [];
+    const sdk = new ServifySDK({
+      apiUrl: 'http://localhost:8080',
+      autoConnect: false,
+      customerId: '1',
+      remoteAssist: { peerConnectionFactory: capturePeerFactory(captured) },
+      webSocketFactory: (() => new PushFakeWebSocket() as unknown as WebSocket) as NonNullable<
+        ConstructorParameters<typeof ServifySDK>[0]
+      >['webSocketFactory'],
+    });
+    // 跳过 initialize 的 REST 建号（本测试只关心 WS 接线）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (sdk as AnyRecord).currentCustomer = { id: '1' };
+    sdk.on('webrtc:ice-config', (iceServers) => received.push(iceServers));
+
+    const connectPromise = sdk.connect();
+    await vi.waitFor(() => expect(PushFakeWebSocket.instances).toHaveLength(1));
+    PushFakeWebSocket.instances[0].onopen?.();
+    await connectPromise;
+
+    PushFakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({
+        type: 'webrtc-ice-config',
+        data: { ice_servers: [{ urls: 'stun:pushed:3478' }] },
+      }),
+    });
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toEqual([{ urls: 'stun:pushed:3478' }]);
+
+    await sdk.startRemoteAssist();
+    expect(captured[0].iceServers).toEqual([{ urls: 'stun:pushed:3478' }]);
+    expect(iceRequests).toBe(0);
+    sdk.disconnect();
   });
 });

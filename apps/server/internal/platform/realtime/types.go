@@ -28,3 +28,10 @@ type RTCGateway interface {
 	HandleICECandidate(sessionID string, candidate webrtc.ICECandidateInit) error
 	CloseConnection(sessionID string) error
 }
+
+// ICEConfigSource 是 ICE 下发的消费侧窄接口（REST 面 /api/v1/rtc/ice-servers
+// 用；WS 建联推送在 hub 侧经同名可选能力接口收敛到同一实现）。
+// 实现为 *WebRTCService；ok=false 表示没有任何可下发条目。
+type ICEConfigSource interface {
+	ICEConfigPayload() (map[string]interface{}, bool)
+}

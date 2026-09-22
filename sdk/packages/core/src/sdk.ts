@@ -32,6 +32,8 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   private currentAgent: Agent | null = null;
   private messageQueue: Message[] = [];
   private remoteAssistPeer: RTCPeerConnection | null = null;
+  // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取）。
+  private serverIceServers: ServifyRTCIceServer[] | null = null;
   private remoteAssistStream: MediaStream | null = null;
   private remoteAssistSessionId: string | null = null;
   private remoteAssistRecorder: MediaRecorder | null = null;
@@ -140,6 +142,10 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.ws.on('webrtc:answer', (answer) => this.emit('webrtc:answer', answer));
     this.ws.on('webrtc:candidate', (candidate) => this.emit('webrtc:candidate', candidate));
     this.ws.on('webrtc:state', (state) => this.updateRemoteAssistState(state));
+    this.ws.on('webrtc:ice-config', (iceServers) => {
+      this.serverIceServers = iceServers;
+      this.emit('webrtc:ice-config', iceServers);
+    });
     this.ws.on('error', (error) => this.emit('error', error));
 
     await this.ws.connect();
@@ -278,7 +284,8 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     // 重置残留媒体资源但保留已绑定的 assist 会话（宿主页可能在 start 前注入）
     await this.cleanupRemoteAssistMedia();
 
-    const iceServers = options?.iceServers || this.config.remoteAssist?.iceServers || [];
+    const iceServers =
+      options?.iceServers || this.config.remoteAssist?.iceServers || (await this.resolveServerIceServers());
     const peerFactory =
       options?.peerConnectionFactory ?? this.config.remoteAssist?.peerConnectionFactory;
     const peer = peerFactory
@@ -351,6 +358,20 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.updateRemoteAssistState('offered');
 
     return peer;
+  }
+
+  // 服务端下发为默认（docs/TURN_DEPLOYMENT.md 切片三）：优先消费 WS 建联推送的
+  // webrtc-ice-config 缓存，未拿到时回退 REST 面；两者皆空返回空数组（走 host 候选）。
+  // 宿主经 options/config 传入的 iceServers 始终最高优先级。
+  private async resolveServerIceServers(): Promise<ServifyRTCIceServer[]> {
+    if (this.serverIceServers && this.serverIceServers.length > 0) {
+      return this.serverIceServers;
+    }
+    const response = await this.api.getIceServers();
+    const servers =
+      response.success && response.data?.ice_servers ? response.data.ice_servers : [];
+    this.serverIceServers = servers;
+    return servers;
   }
 
   async acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void> {

@@ -175,6 +175,8 @@ func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*r
 	webrtcService := realtimeplatform.NewWebRTCService(ice, wsHub)
 	wsHub.SetWebRTCService(webrtcService)
 	rt.RTCGateway = realtimeplatform.NewWebRTCAdapter(webrtcService)
+	// REST 下发口与 WS 推送消费同一份装配结果（ICEConfigSource 由 *WebRTCService 实现）。
+	rt.RTCIceSource = webrtcService
 	rt.MessageRouter = realtimeplatform.NewMessageRouter(rt.AIService, wsHub, rt.DB)
 	wsHub.SetAIService(rt.AIService)
 	return webrtcService, nil

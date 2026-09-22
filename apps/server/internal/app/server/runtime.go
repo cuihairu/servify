@@ -60,6 +60,7 @@ type Runtime struct {
 	wsRuntime                websocketRunner
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
+	RTCIceSource             realtimeplatform.ICEConfigSource
 	MessageRouter            realtimeplatform.MessageRouterRuntime
 	ConversationHandler      conversationdelivery.HandlerService
 	VoiceCoordinator         *voicedelivery.Coordinator
@@ -242,6 +243,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		AIHandlerService:         rt.AIHandlerService,
 		RealtimeGateway:          rt.RealtimeGateway,
 		RTCGateway:               rt.RTCGateway,
+		RTCIceSource:             rt.RTCIceSource,
 		MessageRouter:            rt.MessageRouter,
 		ConversationHandler:      rt.ConversationHandler,
 		VoiceCoordinator:         rt.VoiceCoordinator,

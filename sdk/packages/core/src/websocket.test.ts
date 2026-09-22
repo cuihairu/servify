@@ -194,3 +194,56 @@ describe('WebSocketManager', () => {
     await expect(manager.connect()).rejects.toThrow('provide options.webSocketFactory');
   });
 });
+
+describe('WebSocketManager ice-config', () => {
+  afterEach(() => {
+    FakeWebSocket.instances = [];
+    vi.unstubAllGlobals();
+  });
+
+  it('normalizes webrtc-ice-config payloads and drops malformed entries', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+
+    const manager = new WebSocketManager({
+      url: 'ws://localhost:8080/api/v1/ws?session_id=ice',
+    });
+    const iceSpy = vi.fn();
+    manager.on('webrtc:ice-config', iceSpy);
+
+    const connectPromise = manager.connect();
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    FakeWebSocket.instances[0].open();
+    await connectPromise;
+
+    FakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({
+        type: 'webrtc-ice-config',
+        data: {
+          ice_servers: [
+            { urls: 'stun:stun.example.com:3478' },
+            { urls: ['turn:turn.example.com:3478'], username: '1790000300', credential: 'hmac', ttl: 300 },
+            { urls: 42 },
+            'not-an-object',
+            { username: 'missing-urls' },
+            null,
+          ],
+        },
+      }),
+    });
+    // 非 ice_servers 形状 / 整体非对象：归一为空数组
+    FakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ type: 'webrtc-ice-config', data: { ice_servers: 'junk' } }),
+    });
+    FakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ type: 'webrtc-ice-config', data: null }),
+    });
+
+    await vi.waitFor(() => expect(iceSpy).toHaveBeenCalledTimes(3));
+    expect(iceSpy.mock.calls[0][0]).toEqual([
+      { urls: 'stun:stun.example.com:3478' },
+      { urls: ['turn:turn.example.com:3478'], username: '1790000300', credential: 'hmac', ttl: 300 },
+    ]);
+    expect(iceSpy.mock.calls[1][0]).toEqual([]);
+    expect(iceSpy.mock.calls[2][0]).toEqual([]);
+  });
+});

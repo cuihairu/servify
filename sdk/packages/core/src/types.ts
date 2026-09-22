@@ -124,7 +124,8 @@ export interface WSMessage {
     | 'webrtc-offer'
     | 'webrtc-answer'
     | 'webrtc-candidate'
-    | 'webrtc-state-change';
+    | 'webrtc-state-change'
+    | 'webrtc-ice-config';
   data: unknown;
   session_id?: string;
   timestamp?: string;
@@ -136,6 +137,7 @@ export interface RemoteAssistConfig {
   audio?: boolean;
   /** 访客端本地录制屏幕共享，结束后自动上传并回写协助会话（默认 false） */
   record?: boolean;
+  /** 宿主覆盖口（最高优先级）；缺省消费服务端下发（WS webrtc-ice-config / REST ice-servers）。 */
   iceServers?: ServifyRTCIceServer[];
   /** RTCPeerConnection 工厂注入点：非 DOM 宿主替换全局构造（缺省 globalThis）。 */
   peerConnectionFactory?: (config: { iceServers?: ServifyRTCIceServer[] }) => RTCPeerConnection;
@@ -190,6 +192,8 @@ export interface ServifyRTCIceServer {
   username?: string;
   credential?: string;
   credentialType?: string;
+  /** TURN 时间限凭据的秒数（服务端 webrtc-ice-config / ice-servers 下发，供刷新规划）。 */
+  ttl?: number;
 }
 
 /** 远端媒体轨道的最小结构面（DOM MediaStreamTrack / RN 注入轨道同形）。 */
@@ -234,6 +238,7 @@ export type ServifyEventMap = {
   'webrtc:candidate': [candidate: ServifyRTCIceCandidateInit];
   'webrtc:track': [event: ServifyRTCTrackEvent];
   'webrtc:state': [state: RemoteAssistState];
+  'webrtc:ice-config': [iceServers: ServifyRTCIceServer[]];
   'remote-assist:session': [assistId: string];
   'remote-assist:recording': [state: RemoteAssistRecordingState];
 };

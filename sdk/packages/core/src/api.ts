@@ -1,4 +1,4 @@
-import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult } from './types';
+import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult, ServifyRTCIceServer } from './types';
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -323,26 +323,11 @@ export class ApiClient {
     );
   }
 
-  // WebRTC 相关 API
-  async startCall(sessionId: number, callType: 'audio' | 'video'): Promise<ApiResponse<{
-    call_id: number;
-    ice_servers: RTCIceServer[];
-  }>> {
-    return this.unsupported(
-      'WebRTC call REST endpoints are not exposed by the current server contract. Use WebSocket signaling instead.',
-      { session_id: sessionId, type: callType },
-    );
-  }
-
-  async endCall(callId: number): Promise<ApiResponse<void>> {
-    return this.unsupported('WebRTC call REST endpoints are not exposed by the current server contract.', callId);
-  }
-
-  async getCallStatus(callId: number): Promise<ApiResponse<{
-    status: string;
-    duration?: number;
-  }>> {
-    return this.unsupported('WebRTC call REST endpoints are not exposed by the current server contract.', callId);
+  // ICE 配置下发（docs/TURN_DEPLOYMENT.md 切片三）：取代旧 startCall/endCall/
+  // getCallStatus 的 unsupported 桩——服务端契约只有 ICE 配置面，呼叫模型从未存在；
+  // 信令本身走 WebSocket（webrtc-offer/webrtc-answer/webrtc-candidate）。
+  async getIceServers(): Promise<ApiResponse<{ ice_servers: ServifyRTCIceServer[] }>> {
+    return this.request<{ ice_servers: ServifyRTCIceServer[] }>('GET', '/api/v1/rtc/ice-servers');
   }
 
   // 设置认证头

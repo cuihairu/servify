@@ -27,6 +27,8 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	managementV1.GET("/ws/stats", wsHandler.GetStats)
 	managementV1.GET("/webrtc/stats", webrtcHandler.GetStats)
 	managementV1.GET("/webrtc/connections", webrtcHandler.GetConnections)
+	// ICE 配置下发（docs/TURN_DEPLOYMENT.md 切片三）：与 WS webrtc-ice-config 同形。
+	managementV1.GET("/rtc/ice-servers", handlers.NewRTCICEHandler(deps.RTCIceSource).GetIceServers)
 	managementV1.GET("/messages/platforms", messageHandler.GetPlatformStats)
 
 	aiAPI := managementV1.Group("/ai")

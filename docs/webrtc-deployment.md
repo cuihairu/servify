@@ -56,7 +56,7 @@ webrtc:
 
 装配链路：`wireRealtimeGateways`（`apps/server/internal/app/server/runtime_assembly.go`）经 `iceturn.Assemble`（`apps/server/internal/platform/iceturn/`）把 STUN 列表与 TURN 配置装配为 `ICEConfig`——TURN 启用时按 `username = 过期 Unix 秒`、`credential = base64(HMAC-SHA1(secret, username))` 生成**短时凭据**（默认 5 分钟）。服务端 PeerConnection 的 `ICEServers` 与客户端下发共用同一份装配结果。
 
-客户端下发：浏览器 WS 建联（`/api/v1/ws`）后，服务端立即推送一条 `webrtc-ice-config` 消息（`data.ice_servers[]`：STUN 项只有 `urls`；TURN 项另带 `username`/`credential`/`ttl` 秒数）。客户端凭 `ttl` 规划在到期前重连换取新凭据；SDK `remoteAssist.iceServers` 宿主覆盖口保留为最高优先级。
+客户端下发：浏览器 WS 建联（`/api/v1/ws`）后，服务端立即推送一条 `webrtc-ice-config` 消息（`data.ice_servers[]`：STUN 项只有 `urls`；TURN 项另带 `username`/`credential`/`ttl` 秒数）。同形 REST 面 `GET /api/v1/rtc/ice-servers`（鉴权同 `/webrtc/stats` 管理面）供客户端在凭据到期前主动刷新。SDK 取用顺序：宿主 `remoteAssist.iceServers` 覆盖口最高 → WS 推送缓存 → REST 兜底。
 
 部署要点：
 

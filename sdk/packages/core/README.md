@@ -50,6 +50,8 @@ The current server contract does not expose:
 - capability flag: `remote_assist@1`
 - WebSocket signaling events: `webrtc:offer`, `webrtc:answer`, `webrtc:candidate`, `webrtc:state`
 - `webrtc:state` also reflects server-pushed `webrtc-state-change` runtime updates
+- `webrtc:ice-config` fires with server-pushed ICE configuration (`webrtc-ice-config` message; TURN entries carry short-lived `username`/`credential`/`ttl`)
+- ICE resolution order in `startRemoteAssist`: host-provided `iceServers` wins; otherwise the SDK consumes the server-pushed config, falling back to `GET /api/v1/rtc/ice-servers`
 - runtime methods:
   - `startRemoteAssist({ captureScreen?: boolean, audio?: boolean, iceServers?: RTCIceServer[] })`
   - `acceptRemoteAnswer(answer)`

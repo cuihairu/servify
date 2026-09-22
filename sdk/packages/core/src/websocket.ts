@@ -7,7 +7,7 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory } from './types';
+import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer } from './types';
 
 export interface WebSocketManagerOptions {
   url: string;
@@ -252,6 +252,9 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       case 'webrtc-state-change':
         this.emit('webrtc:state', this.extractRemoteAssistState(message.data));
         break;
+      case 'webrtc-ice-config':
+        this.emit('webrtc:ice-config', this.extractIceServers(message.data));
+        break;
       default:
         this.log('未知消息类型:', message.type);
     }
@@ -407,6 +410,39 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       metadata: data,
       created_at: new Date().toISOString(),
     };
+  }
+
+  /** 归一化服务端下发的 webrtc-ice-config 负载；条目非法即丢弃，整体非法返回空。 */
+  private extractIceServers(data: unknown): ServifyRTCIceServer[] {
+    if (typeof data !== 'object' || data === null) {
+      return [];
+    }
+    const rawServers = (data as { ice_servers?: unknown }).ice_servers;
+    if (!Array.isArray(rawServers)) {
+      return [];
+    }
+    const servers: ServifyRTCIceServer[] = [];
+    for (const entry of rawServers) {
+      if (typeof entry !== 'object' || entry === null) {
+        continue;
+      }
+      const { urls, username, credential, ttl } = entry as Record<string, unknown>;
+      if (typeof urls !== 'string' && !Array.isArray(urls)) {
+        continue;
+      }
+      const server: ServifyRTCIceServer = { urls };
+      if (typeof username === 'string') {
+        server.username = username;
+      }
+      if (typeof credential === 'string') {
+        server.credential = credential;
+      }
+      if (typeof ttl === 'number' && Number.isFinite(ttl)) {
+        server.ttl = ttl;
+      }
+      servers.push(server);
+    }
+    return servers;
   }
 
   private extractICECandidate(data: unknown): RTCIceCandidateInit {

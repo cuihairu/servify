@@ -46,6 +46,7 @@ type Dependencies struct {
 	AIHandlerService         aidelivery.HandlerService
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
+	RTCIceSource             realtimeplatform.ICEConfigSource
 	MessageRouter            realtimeplatform.MessageRouterRuntime
 	VoiceCoordinator         *voicedelivery.Coordinator
 	VoiceProtocolRegistry    *voiceprotocol.Registry
