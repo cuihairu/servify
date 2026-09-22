@@ -71,7 +71,7 @@ class ServifyChat internal constructor(
     private var everConnected = false
 
     /** 入口编排（浮钮/面板），与门面生命周期同步。 */
-    private val entry = EntryOrchestrator(this, config.branding.primaryColor, scope)
+    private val entry = EntryOrchestrator(this, config, scope)
 
     private var localSeq = 0L
     private var streamingId: String? = null

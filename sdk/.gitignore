@@ -4,3 +4,4 @@ examples/*/dist/
 android/.gradle/
 android/**/build/
 android/.kotlin/
+android/local.properties

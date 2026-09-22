@@ -3,36 +3,50 @@ package servify.sdk.android
 import android.app.Activity
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.findViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import servify.sdk.android.model.SenderType
+import servify.sdk.android.ui.ChatPanel
+import servify.sdk.android.ui.ChatThemeDefaults
+import servify.sdk.android.ui.LocalServifyPrimary
+import servify.sdk.android.ui.PanelStyle
+import servify.sdk.android.ui.resolvePanelStyle
 import kotlin.math.max
 
 /**
  * 入口编排（平台规格 §4.2 show/hide / D8 三形态）：
  * 浮钮挂宿主 DecorView（宿主可完全自绘入口而不调 show，浮钮只是默认入口）；
- * 面板（抽屉/全屏）随 UI 刀接线。所有 View 更新 post 到主线程。
+ * 面板 = decorView 上的全屏 FrameLayout（scrim + 底部面板），主体经 [ChatPanel] 渲染，
+ * 形态（抽屉 ≤85% 屏高 / 全屏，小屏自动升级）由 [resolvePanelStyle] 决定。
+ * hide() 只摘面板、连接保持；所有 View 更新 post 到主线程。
  */
 internal class EntryOrchestrator(
     private val chat: ServifyChat,
-    private val primaryColor: Int?,
+    private val config: ServifyConfig,
     private val scope: CoroutineScope,
 ) {
 
     private var hostView: ViewGroup? = null
     private var button: FloatingButtonView? = null
     private var badgeJob: Job? = null
-    /** 面板打开状态（UI 刀前的占位：attach 即视为面板关闭，浮钮常驻）。 */
-    private var panelOpen = false
+    private var panelView: FrameLayout? = null
 
-    /** 浮钮点击回调：UI 刀接到面板打开动作。 */
+    /** 浮钮点击回调：缺省行为为打开面板，宿主/测试可覆盖。 */
     var onButtonTap: (() -> Unit)? = null
 
     fun attach(activity: Activity) {
@@ -40,29 +54,31 @@ internal class EntryOrchestrator(
         if (hostView === decor && button != null) return // 已挂同一窗口
         release() // activity 重建等场景：先清旧挂载再重挂
         hostView = decor
-        button = FloatingButtonView(activity, primaryColor).also { view ->
+        button = FloatingButtonView(activity, config.branding.primaryColor).also { view ->
             view.setOnClickListener {
-                panelOpen = !panelOpen
-                onButtonTap?.invoke()
+                (onButtonTap ?: { openPanel(activity) }).invoke()
             }
             decor.addView(view, defaultParams())
         }
         startBadge()
     }
 
-    /** 收起面板（hide()：连接保持，浮钮保留）。面板实装前仅翻状态位。 */
+    /** 收起面板（hide()：连接保持，浮钮保留）。 */
     fun detachPanel() {
-        panelOpen = false
+        panelView?.let { root ->
+            root.post { (root.parent as? ViewGroup)?.removeView(root) }
+        }
+        panelView = null
     }
 
-    /** 销毁清理：摘除浮钮、取消订阅。 */
+    /** 销毁清理：摘除浮钮与面板、取消订阅。 */
     fun release() {
         badgeJob?.cancel()
         badgeJob = null
+        detachPanel()
         button?.let { hostView?.removeView(it) }
         button = null
         hostView = null
-        panelOpen = false
     }
 
     private fun startBadge() {
@@ -75,10 +91,81 @@ internal class EntryOrchestrator(
         }
     }
 
+    private fun openPanel(activity: Activity) {
+        if (panelView != null) return
+        val decor = activity.window.decorView as? ViewGroup ?: return
+        // 生命周期桥探测（零 androidx.activity 编译依赖）：宿主未桥接（decorView 与
+        // content 都无 lifecycle owner，即非 ComponentActivity 且未手工桥接）→ 降级不挂面板。
+        val owners = resolveOwners(activity) ?: return
+
+        val root = FrameLayout(activity).apply {
+            layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        }
+        // 点 scrim 收面板（V1 无拖拽手势）。
+        val scrim = View(activity).apply {
+            setBackgroundColor(BACKDROP_COLOR)
+            setOnClickListener { detachPanel() }
+        }
+        root.addView(
+            scrim,
+            FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT),
+        )
+
+        val style = resolvePanelStyle(
+            config.presentationStyle,
+            activity.resources.configuration.screenHeightDp,
+        )
+        val panelHeight = if (style == PanelStyle.Drawer) {
+            (decor.height * DRAWER_HEIGHT_FRACTION).toInt().coerceAtLeast(dp(activity, 240))
+        } else {
+            MATCH_PARENT
+        }
+        val panel = ComposeView(activity).apply {
+            // 显式桥接（owner 已探测到，复制到面板视图自身，不依赖树上查找路径）。
+            // savedstate owner 不桥接：savedstate 不在依赖白名单，面板未用 rememberSaveable。
+            setViewTreeLifecycleOwner(owners)
+            setContent {
+                val primary = config.branding.primaryColor
+                CompositionLocalProvider(
+                    LocalServifyPrimary provides (
+                        primary?.let { Color(it) } ?: ChatThemeDefaults.DefaultPrimary
+                        ),
+                ) {
+                    ChatPanel(
+                        chat = chat,
+                        title = config.branding.title,
+                        welcomeText = config.branding.welcomeText.takeIf { it.isNotBlank() },
+                        onDismiss = { detachPanel() },
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
+                    )
+                }
+            }
+        }
+        root.addView(
+            panel,
+            FrameLayout.LayoutParams(MATCH_PARENT, panelHeight, Gravity.BOTTOM),
+        )
+        decor.addView(root, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        panelView = root
+    }
+
+    /**
+     * 探测宿主的生命周期 owner：decorView → content 容器逐级向上找
+     * （androidx.activity 的 ComponentActivity 会把自身桥到视图树上；纯 Activity 宿主没有）。
+     * 返回 null = 宿主不支持 ComposeView 挂载。
+     */
+    private fun resolveOwners(activity: Activity): androidx.lifecycle.LifecycleOwner? {
+        val decor = activity.window.decorView
+        val content = activity.findViewById<View>(android.R.id.content)
+        return decor.findViewTreeLifecycleOwner()
+            ?: content?.findViewTreeLifecycleOwner()
+    }
+
     private fun defaultParams(): FrameLayout.LayoutParams {
-        val margin = (16 * viewDensityScale()).toInt()
+        val density = button?.resources?.displayMetrics?.density ?: 1f
+        val margin = (16 * density).toInt()
         return FrameLayout.LayoutParams(dp(56), dp(56)).apply {
-            gravity = android.view.Gravity.END or android.view.Gravity.BOTTOM
+            gravity = Gravity.END or Gravity.BOTTOM
             rightMargin = margin
             bottomMargin = margin
         }
@@ -87,6 +174,16 @@ internal class EntryOrchestrator(
     private fun viewDensityScale(): Float = button?.resources?.displayMetrics?.density ?: 1f
 
     private fun dp(v: Int): Int = max(1, (v * viewDensityScale()).toInt())
+
+    private companion object {
+        const val DRAWER_HEIGHT_FRACTION = 0.85f
+        const val BACKDROP_COLOR = 0x52000000
+
+        fun dp(activity: Activity, v: Int): Int =
+            max(1, (v * activity.resources.displayMetrics.density).toInt())
+
+        const val MATCH_PARENT = ViewGroup.LayoutParams.MATCH_PARENT
+    }
 }
 
 /**
@@ -104,7 +201,7 @@ internal class FloatingButtonView(
         color = primaryColor ?: DEFAULT_PRIMARY
     }
     private val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
+        color = android.graphics.Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = dp(2f)
     }
@@ -112,7 +209,7 @@ internal class FloatingButtonView(
         color = BADGE_BG
     }
     private val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
+        color = android.graphics.Color.WHITE
         textSize = dp(11f)
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
