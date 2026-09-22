@@ -28,21 +28,23 @@
 - 不做语音/视频（后端 WebRTC 能力先服务远程协助，移动端 V1 不暴露，`createMobileCapabilitySet` 已将 voice/remote_assist 置 off，保持一致）;
 - 不做宿主 App 内的消息转发到系统短信/邮件等系统级集成。
 
-### 与 Web SDK 的能力对齐基线
+### 决策 D2：与 Web SDK 能力对齐——协议对齐是硬约束，访客可达面是真实边界
 
-Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packages/core` 源码为准，不以上线宣传为准）：
+Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packages/core` 源码与服务端路由注册为准，不以上线宣传为准）：
 
 | 能力 | Web 现状 | 移动端 V1 |
 |---|---|---|
 | 会话窗口 | 浮钮 + 底部面板（widget 自绘，绕过 SDK） | 浮钮 + 底部抽屉 + 全屏会话页 |
-| 消息收发 | WS `text-message` / `agent-message` / `ai-response` | 同协议，消息模型逐字段对齐 |
-| WebSocket 链路 | `/api/v1/ws?session_id=&access_token=`，心跳 30s，指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同参数；重连策略叠加前后台切换与网络可达性感知 |
+| 消息收发 | WS `text-message`（客户上行）/ `agent-message`（坐席）/ `ai-response` + `ai-response-delta`（AI 首答，流式增量 + 终帧） | 同协议，消息模型逐字段对齐 |
+| WebSocket 链路 | `/api/v1/ws?session_id=`（publicV1 组免认证；`access_token` 参数服务端**不消费**——握手仅要求 session_id 非空，Origin 白名单是唯一门槛），心跳 30s，指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同路径；重连策略叠加前后台切换与网络可达性感知；鉴权缺口见 D6 访客 token 方案 |
 | 未读与新消息通知 | **无任何实现**（无计数、无角标） | 客户端内未读计数为基线；系统推送为可选模块（D7） |
-| AI 首答与引用 | REST `/api/v1/ai/query` 返回 `sources`；WS `ai-response` 当前仅 `{content, confidence, source}`，引用字段依赖 `normalizeMessage` 把整个 `data` 塞进 `metadata` 透传 | 渲染 `metadata.sources`（服务端 WS 契约扩展后为一等字段），展示置信度不足时的降级话术 |
-| 转人工状态 | `session_update` / `agent_status`（assigned/typing）事件 | 同事件驱动状态机：ai → waiting_human → agent_assigned |
-| 工单创建入口 | REST `POST /api/tickets`（api-client 有封装，widget 未露出） | 会话页内"升级为工单"入口，带 AI 摘要预填 |
+| AI 首答与引用 | WS `ai-response` 帧一等携带 `{content, confidence, source}` + 编排附加输出 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略）；流式经 `ai-response-delta` 增量帧（2026-09 服务端已接出） | 增量拼接 + 完成帧替换渲染；引用来源可展开列表；置信门建议（next_action=handoff）透出"转人工"提示 |
+| 转人工状态 | `transfer_notification`（含 message/agent_id）/ `waiting_notification`（入队）两帧；widget 未特判，走"当 bot 文本渲染"的兜底分支。**注意：core SDK 声明并处理的 `session_update`/`agent_status` 帧服务端从不发送（死分支）** | 状态机改由真实帧驱动：ai_answering →（transfer/waiting_notification）→ waiting_human →（agent-message 到达）→ agent_chatting（见 D5 状态机） |
+| 工单创建入口 | REST `POST /api/tickets`（api-client 有封装，widget 未露出）——**管理面端点，访客不可达** | 会话页内"升级为工单"入口，带 AI 摘要预填；依赖访客可用端点（后端配套项，见 §10） |
 
-**为什么逐字段对齐而不是"移动端重新设计消息模型"**：07 号计划 M3 验收语明确"后续移动端 SDK 不会直接复制 Web SDK 结构"——这句话约束的是**代码结构**（不把 JS 的 EventEmitter/SDK 类层级照搬到原生），而不是**协议契约**。跨端协议不一致的代价是服务端要维护两套广播分支，消息历史的可移植性（换端续聊）也会断裂。因此：协议与消息模型对齐是硬约束，运行时结构按各平台惯例重构。
+**REST 面的访客可达性（策划时的关键事实核查）**：服务端现存 REST 端点几乎全部挂在管理面中间件链下（`AuthMiddleware` + `RequirePrincipalKinds("agent","admin","service")` + 资源权限）——包括本文曾计划依赖的 `/api/v1/ai/query`、`/api/tickets`、`/api/omni/sessions/:id/messages`。**访客客户端唯一现成通道就是 `/api/v1/ws`**。这直接约束了架构：移动端 V1 的实时收发、AI 首答（含流式）全部走 WS；"增量补拉""工单创建"两类 REST 依赖必须先有访客可用的服务端配套（§10 清单 #1/#4，推送注册同理见 #5），不能按管理面端点的参数形状直接假设可用。
+
+**为什么逐字段对齐而不是"移动端重新设计消息模型"**：07 号计划 M3 验收语明确"后续移动端 SDK 不会直接复制 Web SDK 结构"——这句话约束的是**代码结构**（不把 JS 的 EventEmitter/SDK 类层级照搬到原生），而不是**协议契约**。跨端协议不一致的代价是服务端要维护两套广播分支，消息历史的可移植性（换端续聊）也会断裂。因此：协议与消息模型对齐是硬约束，运行时结构按各平台惯例重构。对齐基线里的死分支（`session_update`/`agent_status`）不进移动端契约——对着不存在的服务端行为做兼容，只会把幻影帧固化成三端负担；它们作为 core SDK 的历史遗留另行清理。
 
 ---
 
@@ -94,8 +96,8 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 
 **结构（不共享代码，共享契约）**：
 
-1. **协议事实标准**：后端 `apps/server` 的 WS 契约（`/api/v1/ws`）+ REST 契约（`/api/omni/*`、`/api/v1/ai/query`、`/api/tickets`）是唯一事实源。
-2. **契约文档化**：新建 `sdk/PROTOCOL.md`，逐条列出消息类型、字段、方向、错误语义。首版直接从 `sdk/packages/core/src/types.ts` 与 `websocket.ts` 的 `handleMessage` 分支提炼，并补上 Web 端事实上存在但未成文的约定（`session_update`/`agent_status` 用 snake_case、其余 kebab-case 的历史混用**在移动端契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做，契约里显式标注两类命名并存的原因）。
+1. **协议事实标准**：后端 `apps/server` 的 WS 契约（`/api/v1/ws`，访客唯一现成通道）+ 访客可达 REST 契约（当前为零——`/api/omni/*`、`/api/v1/ai/query`、`/api/tickets` 均为管理面端点，访客配套端点见 §10 清单）是唯一事实源。
+2. **契约文档化**：新建 `sdk/PROTOCOL.md`，逐条列出消息类型、字段、方向、错误语义。首版直接从服务端广播点与 `sdk/packages/core/src/types.ts` 的 `handleMessage` 分支对照提炼（死分支帧剔除，见 D2），并补上 Web 端事实上存在但未成文的约定（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case 的历史混用**在移动端契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做，契约里显式标注两类命名并存的原因与逐帧归类表）。
 3. **互验测试**：Android/iOS 各建一组"契约回放测试"——用同一组 JSON 样例（放 `sdk/protocol-fixtures/`，与 core 测试共用）驱动反序列化与状态机断言。服务端 WS 契约变更时，改 fixtures 会让三端测试同时红，这比"人记得三处都改"可靠。
 
 **消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:72-83`）：
@@ -113,12 +115,13 @@ ConversationMessage {
 }
 ```
 
-**会话状态机（转人工链路的核心跨端契约）**：
+**会话状态机（转人工链路的核心跨端契约）**——转移事件全部使用服务端真实发送的帧（D2 事实核查结论）：
 
 ```
-ai_answering ──(ai-response, source=system/strategy=transfer)──> waiting_human
-waiting_human ──(agent_status: assigned)──> agent_chatting
-agent_chatting ──(session_update: closed)──> closed
+ai_answering ──(transfer_notification：已分配坐席)──> agent_chatting
+ai_answering ──(waiting_notification：入等待队列)──> waiting_human
+waiting_human ──(transfer_notification：队列派发)──> agent_chatting
+agent_chatting ──(system 帧或增量补拉发现会话 closed)──> closed
 任意状态 ──(WS 断连)──> reconnecting ──(恢复)──> 原状态 + 增量补拉（D7）
 ```
 
@@ -187,14 +190,14 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 1. `create`：载入持久化快照（app-core `SessionSnapshot` 对齐形：sessionId / lastMessageId / savedAt）；
 2. 惰性连接：首次 `show` 才建 WS（对齐 widget 的惰性策略——多数用户不点客服，不为其建连接）；
-3. 连接成功 → 用 `lastMessageId` 做增量补拉（REST `/api/omni/sessions/:id/messages`），合并本地消息表 → 未读计数按"agent/system 来源且本地未渲染过"累加；
+3. 连接成功 → 用 `lastMessageId` 做增量补拉，合并本地消息表 → 未读计数按"agent/system 来源且本地未渲染过"累加。**补拉通道 V1 按"访客可用会话消息端点"设计（§10 清单 #1，服务端待建）**——现存的 `/api/omni/sessions/:id/messages` 是管理面端点，访客不可达（D2 事实核查），M0 联调探针先用 WS 重放（重连后服务端无历史重发机制，探针阶段以"断连期间静默丢消息"为已知边界记录，不假装有补拉）；
 4. 前后台切换：后台不保活 WS（iOS 后台长连接本就不可靠），回前台时先探测再重连 + 增量补拉。
 
 **为什么 API 不提供"自定义消息页面视图控制器/Fragment"级别的 UI 注入点**：V1 的定制面收敛为品牌配置（标题、主色、欢迎语），这是行业 SDK 的成熟边界。暴露整页替换钩子等于承诺 UI 契约稳定，会显著拖慢后续迭代；真有深度定制需求的接入方应该走协议层自建 UI（PROTOCOL.md 支持这种用法）。
 
 ### 鉴权与安全（决策 D6 续）
 
-**现状缺口（必须正视）**：Web 端"身份"就是 `session_id` 查询参数——任何知道 session_id 的客户端都能收听该会话流。Web 侧靠"session_id 不出浏览器"侥幸安全，移动端不能复制这个假设（移动端常有多设备/换机/日志脱敏场景，id 泄露面更大）。
+**现状缺口（必须正视，经源码核实）**：WS 路由挂在 publicV1 组（无 AuthMiddleware），握手仅要求 `session_id` 非空即升级连接；URL 里的 `access_token` 参数服务端**不读取**——任何知道 session_id 的客户端都能收听该会话流，Origin 白名单（可配置放行所有来源）是唯一门槛。Web 侧靠"session_id 不出浏览器"侥幸安全，移动端不能复制这个假设（移动端常有多设备/换机/日志脱敏场景，id 泄露面更大）。
 
 **V1 方案：访客 token（guest token）**：
 
@@ -216,7 +219,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 - **底部抽屉（默认会话形态）**：Android 用 ModalBottomSheet（max 高度约 85% 屏高），iOS 用 sheet（`presentationDetents` 的 15 级替代实现）。**为什么默认抽屉**：客服会话是"业务中插曲"，半屏保留宿主上下文，用户可边看订单边问——这是嵌入式 SDK 区别于独立 App 的核心体验（呼应 D1）。
 - **全屏会话页**：宿主配置 `presentationStyle = .fullscreen` 时使用；小屏设备（高度 < 600dp）抽屉自动升级为全屏，避免半屏里键盘挤压出不可用布局。
 - **品牌注入**：主色、标题、欢迎语经 `Branding` 配置进入主题层；不提供 CSS 级/布局级定制（理由见第 5 节）。
-- **消息渲染**：AI 消息与坐席消息视觉区分（AI 带标识与"转人工"按钮）；引用来源（`metadata.sources`）以可展开的来源列表渲染（文档标题 + 得分排序），点击在应用内浏览器打开 `source` 链接——这是对齐 v1 产品范围"回答应带可追溯来源"的移动端承载。
+- **消息渲染**：AI 消息与坐席消息视觉区分（AI 带标识与"转人工"按钮）；AI 首答流式渲染——`ai-response-delta` 增量即到即拼，收到 `done=true` 的终末增量后再以 `ai-response` 终帧整体替换（增量拼接结果与终帧内容一致，替换是幂等收口）；流中断语义（终末增量已到但无 ai-response 终帧）= 保留已渲染部分 + 追加"回答中断，请重试"提示行，不静默清空也不自动重发；引用来源（`sources`）以可展开的来源列表渲染（文档标题 + 得分排序），点击在应用内浏览器打开链接——这是对齐 v1 产品范围"回答应带可追溯来源"的移动端承载；置信门建议（`next_action=handoff`）渲染为"转人工"按钮的强调态。
 - **未读呈现**：抽屉收起时浮钮角标计数；宿主自绘入口时经 `events.unreadCount` 自行呈现。
 
 ---
@@ -269,13 +272,13 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 **M0 — 协议契约与联调探针（无 UI）**
 
-- 产出：`sdk/PROTOCOL.md` 首版；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response 解析、agent_status 状态机转移全部经 fixtures 回放通过。
-- 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注）。
+- 产出：`sdk/PROTOCOL.md` 首版；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
+- 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、移动端契约不含"显式标注）。
 
 **M1 — Android SDK Alpha**
 
-- 产出：三形态 UI、消息收发、AI 首答（含引用渲染）、转人工状态机、未读计数、惰性连接与重连、访客 token 接入（含后端 guest token 端点——**后端配套项，需进后端排期**）。
-- 验收：① 契约回放测试全绿；② demo 宿主 App 集成 ≤ 10 行代码完成初始化 + 拉起；③ AAR 增量 ≤ 1.5MB（CI 体积门禁）；④ 弱网/断网/后台切换手工测试矩阵通过；⑤ 单元测试覆盖协议层与状态机（覆盖率不设 100% 目标，但状态机转移表必须穷举）。
+- 产出：三形态 UI、消息收发、AI 首答（流式渲染 + 引用展示 + 置信门提示）、转人工状态机、未读计数、惰性连接与重连、访客 token 接入（含后端 guest token 端点——**后端配套项，需进后端排期**）。
+- 验收：① 契约回放测试全绿；② demo 宿主 App 集成 ≤ 10 行代码完成初始化 + 拉起；③ AAR 增量 ≤ 1.5MB（CI 体积门禁）；④ 弱网/断网/后台切换手工测试矩阵通过（含流式中断的渲染降级）；⑤ 单元测试覆盖协议层与状态机（覆盖率不设 100% 目标，但状态机转移表必须穷举）。
 
 **M2 — iOS SDK Alpha**
 
@@ -298,12 +301,15 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 ## 10. 后端配套需求清单（SDK 依赖项，需进服务端排期）
 
+> 共同背景（D2 事实核查）：现存 REST 端点几乎全部挂在管理面中间件链下（认证 + agent/admin/service 主体 + 资源权限），访客唯一现成通道是 `/api/v1/ws`。下列 #1/#2/#5 本质是同一件事的三个面——**为访客开设最小可达面**，服务端排期时建议按"访客配套端点"一个设计评审收敛。
+
 | # | 需求 | 服务 SDK 阶段 | 现状 |
 |---|---|---|---|
-| 1 | 访客 token 签发端点 + WS 校验 | M1 | 无（session_id 即身份） |
-| 2 | WS `ai-response` 携带 `sources`（一等字段，非 metadata 透传） | M1 | ✅ 已落地（2026-09）：WS `ai-response` 现携带 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略，向后兼容），多轮上下文与置信转人工建议同批交付 |
-| 3 | 未读计数（服务端会话级未读数或客户端可推导的已读游标） | M1 | 无（客户端推导即可起步，服务端游标为增强） |
-| 4 | 推送 token 注册 + 会话消息推送下发 | M3 | app-core contract 已预留，服务端未实现 |
-| 5 | 工单创建接口接受 `ai_summary` 字段 | M3 | `/api/tickets` 存在，摘要字段未接 |
+| 1 | 访客可用的会话消息增量拉取端点（`lastMessageId` 游标语义） | M1 | 无——`/api/omni/sessions/:id/messages` 是管理面端点，访客 401 |
+| 2 | 访客 token 签发端点（server-to-server 换取）+ WS 握手校验接线 | M1 | 无——WS 握手免认证，`access_token` 参数不消费（见 D6） |
+| 3 | 未读计数（服务端会话级未读数或客户端可推导的已读游标） | M1 | 无（客户端推导即可起步，服务端游标为增强；与 #1 游标语义一并设计） |
+| 4 | 访客可用的工单创建端点，接受 `ai_summary` 字段 | M3 | 无——`/api/tickets` 是管理面端点（agent/admin/service + tickets 资源权限），且摘要字段未接 |
+| 5 | 推送 token 注册 + 会话消息推送下发 | M3 | app-core contract 已预留，服务端未实现 |
+| 6 | （已完成，记录在案）WS `ai-response` 携带 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略，向后兼容）+ `ai-response-delta` 流式帧（增量/终末增量/完整终帧三段契约，流中断语义明确） | M1 | ✅ 已落地（2026-09 AI 主链路智能化批次），M0 fixtures 可直接从服务端实现提炼 |
 
-> 其中 #2 已随 AI 主链路智能化批次完成；#1/#3 是移动端独立配套，服务端排期时可合并评审。
+> 其中 #6 随 AI 主链路智能化批次完成；#1/#2/#3 是移动端独立配套（游标与鉴权可合并评审）；#4/#5 服务 M3。
