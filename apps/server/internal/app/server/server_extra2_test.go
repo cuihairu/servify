@@ -158,3 +158,17 @@ func TestRegisterStaticServesExistingAssetFromDetectedRoot(t *testing.T) {
 		t.Fatalf("expected index html body, got %q", w.Body.String())
 	}
 }
+
+func TestBuildRuntimeFailsWhenTURNConfigIncomplete(t *testing.T) {
+	cfg := newRuntimeTestConfig(t)
+	// 装配层兜底 gate：URL 非空但 realm/secret 缺失，wireRealtimeGateways 必须拒绝。
+	cfg.WebRTC.TURN.URL = "turn:turn.example.com:3478"
+
+	_, err := BuildRuntime(cfg, logrus.New(), newRuntimeTestDB(t), nil, eventbus.NewInMemoryBus())
+	if err == nil {
+		t.Fatal("expected BuildRuntime to fail when TURN URL is set without realm/secret")
+	}
+	if !strings.Contains(err.Error(), "webrtc turn") {
+		t.Fatalf("expected webrtc turn gate error, got %v", err)
+	}
+}

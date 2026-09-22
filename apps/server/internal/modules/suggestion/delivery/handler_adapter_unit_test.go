@@ -136,3 +136,23 @@ func TestSuggestionHandlerAdapterUnitExposureSummaryMapping(t *testing.T) {
 		t.Fatalf("next group = %+v", byKind["next"])
 	}
 }
+
+func TestSuggestionHandlerAdapterUnitExposureSummaryError(t *testing.T) {
+	// 未建表的库：repo.ExposureSummary 查询报错 → adapter err 透传分支
+	name := strings.ReplaceAll(t.Name(), "/", "_")
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:suggestion_unit_"+name)), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	adapter := suggestiondelivery.NewHandlerServiceAdapter(suggestionapp.NewService(suggestioninfra.NewGormRepository(db)))
+	if _, err := adapter.ExposureSummary(context.Background()); err == nil {
+		t.Fatal("expected ExposureSummary error on unmigrated database")
+	}
+}

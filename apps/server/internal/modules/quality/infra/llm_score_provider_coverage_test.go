@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -64,5 +65,24 @@ func TestParseScoreOutputUnmarshalError(t *testing.T) {
 	_, err := parseScoreOutput("{not valid json}", testDimensions)
 	if err == nil || !strings.Contains(err.Error(), "invalid llm score output") {
 		t.Fatalf("malformed object must be tagged invalid output, got %v", err)
+	}
+}
+
+// TestLLMScoreProviderZeroTimeoutKeepsCallerContext 覆盖 TimeoutSeconds<=0 的
+// 防御分支（llm_score_provider.go:65）：绕过构造器归一，字面量构造零值超时，
+// 证明调用方 context 原样透传（不会套 WithTimeout(0) 立即超时）。
+func TestLLMScoreProviderZeroTimeoutKeepsCallerContext(t *testing.T) {
+	provider := &stubChatProvider{resp: llm.ChatResponse{Content: goodScoreJSON()}}
+	p := &LLMScoreProvider{provider: provider, cfg: LLMRuntimeConfig{TimeoutSeconds: 0}}
+
+	result, err := p.ScoreSession(context.Background(), application.ScoreRequest{
+		Turns:      []application.TranscriptTurn{{Role: "customer", Content: "你好", At: time.Now()}},
+		Dimensions: testDimensions,
+	})
+	if err != nil {
+		t.Fatalf("ScoreSession with zero timeout: %v", err)
+	}
+	if result.TotalScore <= 0 {
+		t.Fatalf("unexpected total score: %+v", result)
 	}
 }
