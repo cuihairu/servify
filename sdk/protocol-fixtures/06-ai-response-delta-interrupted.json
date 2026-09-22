@@ -4,7 +4,7 @@
   "frames": [
     {
       "type": "ai-response-delta",
-      "data": { "content_delta": "根据退货政策，商品签收后" },
+      "data": { "content_delta": "根据退货政策，商品签收后", "done": false },
       "session_id": "fixture-session",
       "timestamp": "2026-09-22T12:00:05Z"
     },

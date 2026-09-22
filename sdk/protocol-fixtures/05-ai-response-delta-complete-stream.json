@@ -4,13 +4,13 @@
   "frames": [
     {
       "type": "ai-response-delta",
-      "data": { "content_delta": "根据退货政策，" },
+      "data": { "content_delta": "根据退货政策，", "done": false },
       "session_id": "fixture-session",
       "timestamp": "2026-09-22T12:00:03Z"
     },
     {
       "type": "ai-response-delta",
-      "data": { "content_delta": "商品签收后 7 天内可无理由退货。" },
+      "data": { "content_delta": "商品签收后 7 天内可无理由退货。", "done": false },
       "session_id": "fixture-session",
       "timestamp": "2026-09-22T12:00:03Z"
     },
