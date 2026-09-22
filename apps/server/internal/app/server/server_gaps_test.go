@@ -286,6 +286,71 @@ func TestBuildRuntimeQualityLLMMissingKeyWarns(t *testing.T) {
 	}
 }
 
+// TestBuildRuntimeQualityAnthropicScorer provider=anthropic 时就绪判定看
+// anthropic.api_key：有 key 走 anthropic provider 装配打分器。
+func TestBuildRuntimeQualityAnthropicScorer(t *testing.T) {
+	cfg := newRuntimeTestConfig(t)
+	cfg.Quality.Enabled = true
+	cfg.Quality.LLM.Enabled = true
+	cfg.AI.Provider = "anthropic"
+	cfg.AI.Anthropic.APIKey = "quality-anthropic-key"
+	cfg.AI.OpenAI.APIKey = "" // openai key 缺席不得阻断 anthropic 打分
+
+	rt, err := BuildRuntime(cfg, logrus.New(), newRuntimeTestDB(t), nil, eventbus.NewInMemoryBus())
+	if err != nil {
+		t.Fatalf("BuildRuntime() error = %v", err)
+	}
+	defer func() { _ = rt.Stop(context.Background()) }()
+
+	if rt.QualityScanForWorker() == nil {
+		t.Fatal("expected quality service with anthropic scorer")
+	}
+}
+
+// TestBuildRuntimeQualityAnthropicMissingKeyWarns provider=anthropic 且全局
+// 段 key 为空：即使 openai key 在位也按选型判定未就绪，降级 rules-only。
+func TestBuildRuntimeQualityAnthropicMissingKeyWarns(t *testing.T) {
+	cfg := newRuntimeTestConfig(t)
+	cfg.Quality.Enabled = true
+	cfg.Quality.LLM.Enabled = true
+	cfg.AI.Provider = "anthropic"
+	cfg.AI.OpenAI.APIKey = "openai-key-present"
+
+	buf := &strings.Builder{}
+	logger := logrus.New()
+	logger.SetOutput(buf)
+
+	rt, err := BuildRuntime(cfg, logger, newRuntimeTestDB(t), nil, eventbus.NewInMemoryBus())
+	if err != nil {
+		t.Fatalf("BuildRuntime() error = %v", err)
+	}
+	defer func() { _ = rt.Stop(context.Background()) }()
+
+	if rt.QualityScanForWorker() == nil {
+		t.Fatal("quality must fall back to rules-only instead of disappearing")
+	}
+	if !strings.Contains(buf.String(), "falling back to rules-only") {
+		t.Fatalf("expected LLM fallback warning, got %q", buf.String())
+	}
+}
+
+// TestBuildRuntimeUnknownAIProviderFailsStartup 未知 provider：全局选型
+// 非法属于装配期硬错误——BuildAIAssembly 经 resolveLLMRuntime 拒绝启动，
+// 而不是降级到错误 provider 上静默运行（双层 gate 的装配层兜底；
+// config 层 InsecureDefaults 告警在 production/staging 会先拦下）。
+func TestBuildRuntimeUnknownAIProviderFailsStartup(t *testing.T) {
+	cfg := newRuntimeTestConfig(t)
+	cfg.Quality.Enabled = true
+	cfg.Quality.LLM.Enabled = true
+	cfg.AI.Provider = "bogus-provider"
+	cfg.AI.OpenAI.APIKey = "quality-test-key"
+
+	_, err := BuildRuntime(cfg, logrus.New(), newRuntimeTestDB(t), nil, eventbus.NewInMemoryBus())
+	if err == nil || !strings.Contains(err.Error(), "unknown provider") {
+		t.Fatalf("BuildRuntime() error = %v, want unknown provider rejection", err)
+	}
+}
+
 func TestBuildRuntimeQualityRulesOnly(t *testing.T) {
 	cfg := newRuntimeTestConfig(t)
 	cfg.Quality.Enabled = true

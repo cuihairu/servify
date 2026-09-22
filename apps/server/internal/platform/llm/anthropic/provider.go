@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -166,7 +167,7 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 		Stream:      true,
 	}
 	if payload.Model == "" {
-		payload.Model = "claude-3-haiku-20240307"
+		payload.Model = config.DefaultAnthropicModel
 	}
 	if payload.MaxTokens == 0 {
 		payload.MaxTokens = 1024
@@ -384,7 +385,7 @@ func (p *Provider) chatOnce(ctx context.Context, req llm.ChatRequest) (llm.ChatR
 		Tools:       make([]tool, 0, len(req.Tools)),
 	}
 	if payload.Model == "" {
-		payload.Model = "claude-3-haiku-20240307"
+		payload.Model = config.DefaultAnthropicModel
 	}
 	if payload.MaxTokens == 0 {
 		payload.MaxTokens = 1024

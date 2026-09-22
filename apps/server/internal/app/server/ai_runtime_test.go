@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	"servify/apps/server/internal/platform/llm/openai"
 	"strings"
 	"testing"
 
@@ -144,11 +145,11 @@ func TestBuildPgvectorAssemblyBranches(t *testing.T) {
 
 	// 无 DB 句柄：默认降级（warn 后返回 fallback），require 时启动失败。
 	fallback := &AIAssembly{}
-	asm, err := buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{}, fallback)
+	asm, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{}, fallback)
 	if err != nil || asm != fallback || asm.KnowledgeDriver != nil {
 		t.Fatalf("nil DB without require: asm=%v err=%v", asm, err)
 	}
-	if _, err := buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "requires a database connection") {
+	if _, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "requires a database connection") {
 		t.Fatalf("nil DB with require: err=%v", err)
 	}
 
@@ -157,22 +158,22 @@ func TestBuildPgvectorAssemblyBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	asm, err = buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{DB: db}, fallback)
+	asm, err = buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: db}, fallback)
 	if err != nil || asm != fallback || asm.KnowledgeDriver != nil {
 		t.Fatalf("nil embedding without require: asm=%v err=%v", asm, err)
 	}
-	if _, err := buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{DB: db, RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "requires embedding.provider") {
+	if _, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: db, RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "requires embedding.provider") {
 		t.Fatalf("nil embedding with require: err=%v", err)
 	}
 
 	// embedding 指向不可达地址：HealthCheck 失败，降级 / require 报错。
 	cfg.Embedding.OpenAI.APIKey = "test-key"
 	cfg.Embedding.OpenAI.BaseURL = "http://127.0.0.1:1"
-	asm, err = buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{DB: db}, fallback)
+	asm, err = buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: db}, fallback)
 	if err != nil || asm != fallback || asm.KnowledgeDriver != nil {
 		t.Fatalf("unhealthy pgvector without require: asm=%v err=%v", asm, err)
 	}
-	if _, err := buildPgvectorAssembly(baseAI, "k", "u", cfg, logger, AIAssemblyOptions{DB: db, RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "pgvector health check failed") {
+	if _, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: db, RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "pgvector health check failed") {
 		t.Fatalf("unhealthy pgvector with require: err=%v", err)
 	}
 }
@@ -203,7 +204,7 @@ func TestBuildPgvectorAssemblySuccess(t *testing.T) {
 	cfg.Embedding.OpenAI.BaseURL = embServer.URL
 
 	fallback := &AIAssembly{}
-	asm, err := buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, fallback)
+	asm, err := buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logrus.New(), AIAssemblyOptions{DB: db}, fallback)
 	if err != nil {
 		t.Fatalf("buildPgvectorAssembly() error = %v", err)
 	}
@@ -234,7 +235,7 @@ func TestBuildPgvectorAssemblyEmbeddingFactoryError(t *testing.T) {
 	cfg.Knowledge.Provider = "pgvector"
 	cfg.Embedding.Provider = "tei"
 
-	_, err = buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), "k", "u", cfg, logrus.New(), AIAssemblyOptions{DB: db}, &AIAssembly{})
+	_, err = buildPgvectorAssembly(aidelivery.NewAIService("test-key", "http://127.0.0.1:1"), openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logrus.New(), AIAssemblyOptions{DB: db}, &AIAssembly{})
 	if err == nil || !strings.Contains(err.Error(), "build embedding provider for pgvector") {
 		t.Fatalf("expected embedding factory error wrap, got %v", err)
 	}

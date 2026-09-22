@@ -113,6 +113,7 @@ cp config.yml config.local.yml
 # 必填项：
 #   jwt.secret — JWT 签名密钥
 #   ai.openai.api_key — OpenAI API Key
+#   ai.provider / ai.anthropic.api_key — 切换 Anthropic 时配置（provider: "anthropic"）
 #   database.* — PostgreSQL 连接参数（使用 PostgreSQL 时）
 ```
 
@@ -540,7 +541,7 @@ monitoring:
 - [ ] `security.rate_limiting.enabled` 设为 `true`
 - [ ] `log.level` 设为 `info`（不要用 `debug`）
 - [ ] `log.format` 设为 `json`
-- [ ] `ai.openai.api_key` 使用环境变量引用
+- [ ] `ai.openai.api_key` 使用环境变量引用（切换 Anthropic 时同理：`ai.provider: "anthropic"` + `ai.anthropic.api_key`）
 
 在首次部署或调整安全配置后，先执行严格校验：
 

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 )
 
@@ -199,7 +200,7 @@ func TestProviderChatRequestPayload(t *testing.T) {
 	}
 
 	payload := <-captured
-	if payload.Model != "claude-3-haiku-20240307" {
+	if payload.Model != config.DefaultAnthropicModel {
 		t.Fatalf("default model = %q", payload.Model)
 	}
 	if payload.MaxTokens != 1024 {
@@ -540,7 +541,7 @@ func TestProviderChatStreamHappyPath(t *testing.T) {
 	}
 
 	payload := <-captured
-	if payload.Model != "claude-3-haiku-20240307" || payload.MaxTokens != 1024 || !payload.Stream {
+	if payload.Model != config.DefaultAnthropicModel || payload.MaxTokens != 1024 || !payload.Stream {
 		t.Fatalf("payload defaults: model=%q max_tokens=%d stream=%v", payload.Model, payload.MaxTokens, payload.Stream)
 	}
 	if payload.System != "A\nB" {

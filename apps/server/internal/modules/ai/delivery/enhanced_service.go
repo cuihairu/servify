@@ -16,6 +16,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// AIRuntimeParams 编排出站 LLM 调用的模型参数，由装配层从 ai.provider
+// 对应的配置族导出（见 llm factory.RuntimeParams）。零值字段原样透传、
+// 由 provider 侧默认兜底——与 AIRequest.Model/Temperature 的既有语义一致。
+type AIRuntimeParams struct {
+	Model       string
+	Temperature float64
+	MaxTokens   int
+	TimeoutMs   int
+}
+
 // OrchestratedEnhancedAIService keeps the legacy enhanced AI surface while delegating query flow to the AI module.
 type OrchestratedEnhancedAIService struct {
 	base                     *AIService
@@ -30,6 +40,7 @@ type OrchestratedEnhancedAIService struct {
 	promMetrics              *svcmetrics.BusinessMetrics
 	logger                   *logrus.Logger
 	toolExecutor             *aimodule.ToolExecutor
+	runtimeParams            AIRuntimeParams
 }
 
 // AttachBusinessMetrics 注入进程级 Prometheus 业务指标（nil 安全，可链式）。
@@ -40,6 +51,17 @@ func (s *OrchestratedEnhancedAIService) AttachBusinessMetrics(m *svcmetrics.Busi
 		return s
 	}
 	s.promMetrics = m
+	return s
+}
+
+// WithRuntimeParams 注入出站模型参数（nil 安全，可链式，与
+// AttachBusinessMetrics 同款注入风格）。零值 = 不注入 = 历史行为
+// （provider 侧默认兜底），忘记链不会改变现状。
+func (s *OrchestratedEnhancedAIService) WithRuntimeParams(params AIRuntimeParams) *OrchestratedEnhancedAIService {
+	if s == nil {
+		return s
+	}
+	s.runtimeParams = params
 	return s
 }
 
@@ -119,6 +141,13 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		ConversationID: sessionID,
 		Query:          query,
 		SystemPrompt:   "你是 Servify 智能客服助手，请基于上下文给出准确、简洁、专业的中文回答。",
+		// 模型参数来自 ai.provider 对应配置族（见 WithRuntimeParams）：
+		// 此前 config 里 model/temperature/max_tokens 一直是死配置，这里
+		// 是它们唯一生效的入口。
+		Model:       s.runtimeParams.Model,
+		Temperature: s.runtimeParams.Temperature,
+		MaxTokens:   s.runtimeParams.MaxTokens,
+		TimeoutMs:   s.runtimeParams.TimeoutMs,
 		RetrievalPolicy: aimodule.RetrievalPolicy{
 			Enabled:   true,
 			TopK:      5,

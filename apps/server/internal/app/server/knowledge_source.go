@@ -34,10 +34,13 @@ type knowledgeSource struct {
 
 func (s knowledgeSource) present() bool { return s.driver != nil }
 
-// buildOrchestrated 用选定知识源构造编排服务。业务指标由调用方按需
-// AttachBusinessMetrics（启动期不挂、请求级挂——保持既有挂载不对称）。
-func (s knowledgeSource) buildOrchestrated(base *aidelivery.AIService, llmProvider llm.LLMProvider, logger *logrus.Logger) *aidelivery.OrchestratedEnhancedAIService {
-	return aidelivery.NewOrchestratedEnhancedAIService(base, llmProvider, s.driver, s.id, logger)
+// buildOrchestrated 用选定知识源构造编排服务，并注入出站模型参数
+// （ai.provider 对应配置族导出，零值 = provider 侧默认兜底）。业务指标
+// 由调用方按需 AttachBusinessMetrics（启动期不挂、请求级挂——保持既有
+// 挂载不对称）。
+func (s knowledgeSource) buildOrchestrated(base *aidelivery.AIService, llmProvider llm.LLMProvider, params aidelivery.AIRuntimeParams, logger *logrus.Logger) *aidelivery.OrchestratedEnhancedAIService {
+	return aidelivery.NewOrchestratedEnhancedAIService(base, llmProvider, s.driver, s.id, logger).
+		WithRuntimeParams(params)
 }
 
 type knowledgeSourceOptions struct {

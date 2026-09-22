@@ -86,5 +86,9 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
 	ragFlowConfig := s.resolver.ResolveRagFlow(ctx, nil)
-	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.logger, s.businessMeter)
+	aiCfg := config.AIConfig{}
+	if s.cfg != nil {
+		aiCfg = s.cfg.AI
+	}
+	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, aiCfg, s.logger, s.businessMeter)
 }

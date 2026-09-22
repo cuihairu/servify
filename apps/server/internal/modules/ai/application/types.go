@@ -46,6 +46,13 @@ type AIRequest struct {
 	Model string
 	// Temperature 采样温度透传；零值不写入请求体，同样落回 provider 默认。
 	Temperature float64
+	// MaxTokens 单次补全上限；零值由 provider 侧默认（openai 不下发、
+	// anthropic 兜底 1024）。
+	MaxTokens int
+	// TimeoutMs 出站 LLM 调用超时（毫秒）；零值走 provider 侧 30s 兜底。
+	// 经 ChatRequest.Options.TimeoutMs 生效，调用方更紧的外层 ctx 超时
+	// （WS 20s / REST 30s）依然先到先断。
+	TimeoutMs int
 }
 
 // AIResponse is the vendor-neutral output model for AI orchestration.

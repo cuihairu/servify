@@ -593,6 +593,8 @@ Planned implementations:
 
 The AI module only depends on the interfaces, not the provider DTOs.
 
+LLM 侧的构造统一收口在 `internal/platform/llm/factory`：`ai.provider` 全局选型（openai | anthropic）由装配层经 factory 实例化，openai 与 anthropic 均实现真实 Chat / ChatStream；编排层把 `ai.<provider>.model / temperature / max_tokens / timeout` 写入每次出站调用，零值由 provider 侧默认兜底。
+
 ## 11. Events
 
 Internal domain events should be explicit.

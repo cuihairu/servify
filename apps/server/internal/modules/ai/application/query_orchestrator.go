@@ -123,6 +123,8 @@ func (o *QueryOrchestrator) Handle(ctx context.Context, req AIRequest) (*AIRespo
 			Model:       req.Model,
 			Messages:    messages,
 			Temperature: req.Temperature,
+			MaxTokens:   req.MaxTokens,
+			Options:     llm.RequestOptions{TimeoutMs: req.TimeoutMs},
 		})
 		if err != nil {
 			o.metrics.RecordError("llm", "chat")
@@ -211,6 +213,8 @@ func (o *QueryOrchestrator) handleWithTools(ctx context.Context, req AIRequest, 
 			Messages:    messages,
 			Tools:       tools,
 			Temperature: req.Temperature,
+			MaxTokens:   req.MaxTokens,
+			Options:     llm.RequestOptions{TimeoutMs: req.TimeoutMs},
 		})
 		if err != nil {
 			span.RecordError(err)

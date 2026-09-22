@@ -13,6 +13,10 @@ import (
 
 const DefaultOpenAIModel = "gpt-4.1-mini"
 
+// DefaultAnthropicModel provider 侧模型兜底与配置默认值共用；历史默认
+// claude-3-haiku-20240307 已停更，切到当前主力 Sonnet 系。
+const DefaultAnthropicModel = "claude-sonnet-5"
+
 // InsecureJWTSecrets contains known insecure JWT secret values that must not be used in production.
 var InsecureJWTSecrets = map[string]bool{
 	"default-secret-key":                      true,
@@ -138,8 +142,24 @@ type DeepgramConfig struct {
 	APIKey string `yaml:"api_key"`
 }
 
+// AIConfig LLM 供应商配置：Provider 全局唯一决定走哪家实现（openai | anthropic，
+// 空 = openai），OpenAI/Anthropic 各自携带该供应商的参数面。model/temperature/
+// max_tokens/timeout 会在编排层写入每次 LLM 调用，零值由 provider 侧默认兜底。
+// 作用域覆盖（租户/工作区）当前仅覆盖 openai 族；anthropic 仅全局配置。
 type AIConfig struct {
-	OpenAI OpenAIConfig `yaml:"openai"`
+	Provider  string          `yaml:"provider" json:"provider,omitempty"`
+	OpenAI    OpenAIConfig    `yaml:"openai" json:"openai,omitempty"`
+	Anthropic AnthropicConfig `yaml:"anthropic" json:"anthropic,omitempty"`
+}
+
+// AnthropicConfig Anthropic（Claude 系列）接入参数。
+type AnthropicConfig struct {
+	APIKey      string        `yaml:"api_key" json:"api_key,omitempty"`
+	BaseURL     string        `yaml:"base_url" json:"base_url,omitempty"`
+	Model       string        `yaml:"model" json:"model,omitempty"`
+	Temperature float64       `yaml:"temperature" json:"temperature,omitempty"`
+	MaxTokens   int           `yaml:"max_tokens" json:"max_tokens,omitempty"`
+	Timeout     time.Duration `yaml:"timeout" json:"timeout,omitempty"`
 }
 
 type OpenAIConfig struct {
@@ -651,6 +671,15 @@ func InsecureDefaults(cfg *Config) []string {
 		warnings = append(warnings, "event_bus.provider is 'inmemory' (default); production and staging must use 'redis' for durable events")
 	}
 
+	// ai.provider 是全局 LLM 出站选型，非法值在装配层（llm factory）必然启动
+	// 失败；这里前置到配置层再拦一次，让 production/staging 在加载期就拿到
+	// 明确的报错而不是等到装配期。
+	switch aiProvider := strings.ToLower(strings.TrimSpace(cfg.AI.Provider)); aiProvider {
+	case "", "openai", "anthropic":
+	default:
+		warnings = append(warnings, fmt.Sprintf("ai.provider must be 'openai' or 'anthropic' (got %q)", aiProvider))
+	}
+
 	if strings.EqualFold(strings.TrimSpace(cfg.Upload.Provider), "s3") {
 		if strings.TrimSpace(cfg.Upload.S3.Bucket) == "" {
 			warnings = append(warnings, "upload.provider is s3 but upload.s3.bucket is empty")
@@ -868,6 +897,13 @@ func GetDefaultConfig() *Config {
 			OpenAI: OpenAIConfig{
 				BaseURL:     "https://api.openai.com/v1",
 				Model:       DefaultOpenAIModel,
+				Temperature: 0.7,
+				MaxTokens:   1000,
+				Timeout:     30 * time.Second,
+			},
+			Anthropic: AnthropicConfig{
+				BaseURL:     "https://api.anthropic.com/v1",
+				Model:       DefaultAnthropicModel,
 				Temperature: 0.7,
 				MaxTokens:   1000,
 				Timeout:     30 * time.Second,

@@ -296,7 +296,7 @@ func TestKnowledgeSourceBuildOrchestrated(t *testing.T) {
 	base := newKnowledgeSourceBaseAI()
 	logger := logrus.New()
 
-	empty := knowledgeSource{}.buildOrchestrated(base, &mock.Provider{}, logger)
+	empty := knowledgeSource{}.buildOrchestrated(base, &mock.Provider{}, aidelivery.AIRuntimeParams{}, logger)
 	status := empty.GetStatus(ctx)
 	if enabled, _ := status["knowledge_provider_enabled"].(bool); enabled {
 		t.Fatalf("expected provider disabled for empty source, got %+v", status)
@@ -304,7 +304,7 @@ func TestKnowledgeSourceBuildOrchestrated(t *testing.T) {
 
 	// weknora source：driver 与 id 同时就位，状态标签透传 provider 身份。
 	source := knowledgeSource{driver: &mockkp.Provider{}, id: "weknora"}
-	svc := source.buildOrchestrated(base, &mock.Provider{}, logger)
+	svc := source.buildOrchestrated(base, &mock.Provider{}, aidelivery.AIRuntimeParams{}, logger)
 	if enabled, _ := svc.GetStatus(ctx)["knowledge_provider_enabled"].(bool); !enabled {
 		t.Fatalf("expected provider enabled for weknora source")
 	}

@@ -9,6 +9,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
+	llmfactory "servify/apps/server/internal/platform/llm/factory"
 	"servify/apps/server/internal/platform/llm/openai"
 
 	"github.com/sirupsen/logrus"
@@ -103,20 +104,30 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 		return s.applyRuntimeOverrides(s.startup)
 	}
 	if s.resolver == nil {
-		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, s.logger, s.businessMeter))
+		return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, s.aiConfig(), s.logger, s.businessMeter))
 	}
 	openAIConfig := s.resolver.ResolveOpenAI(ctx, nil)
 	difyConfig := s.resolver.ResolveDify(ctx, nil)
 	weKnoraConfig := s.resolver.ResolveWeKnora(ctx, nil)
 	ragFlowConfig := s.resolver.ResolveRagFlow(ctx, nil)
-	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.logger, s.businessMeter))
+	return s.applyRuntimeOverrides(runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, s.aiConfig(), s.logger, s.businessMeter))
+}
+
+// aiConfig 返回全局 AI 配置段（provider 选型 + anthropic 参数族）；
+// nil cfg 安全（测试路径），退回零值 = openai 默认行为。
+func (s *scopedAIHandlerService) aiConfig() config.AIConfig {
+	if s == nil || s.cfg == nil {
+		return config.AIConfig{}
+	}
+	return s.cfg.AI
 }
 
 // runtimeServiceFromResolvedConfig 按解析后的租户/工作区配置重建编排服务。
 // 知识源选择与启动期 BuildAIAssembly 共用 selectKnowledgeSource 门面，但
 // checkHealth=false：请求级不做健康探测（不可达 BaseURL 也纯构造），运行期
-// 外部知识源故障由编排服务的 circuitBreaker 兜底。
-func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, ragFlowConfig config.RagFlowConfig, weKnoraConfig config.WeKnoraConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
+// 外部知识源故障由编排服务的 circuitBreaker 兜底。aiCfg 只取全局面
+// （provider 选型 + anthropic 参数），openai 参数面来自作用域解析结果。
+func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConfig config.DifyConfig, ragFlowConfig config.RagFlowConfig, weKnoraConfig config.WeKnoraConfig, aiCfg config.AIConfig, logger *logrus.Logger, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -128,9 +139,27 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 	})
 	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
+	factoryCfg := llmfactory.Config{
+		Provider:  aiCfg.Provider,
+		OpenAI:    openAIConfig,
+		Anthropic: aiCfg.Anthropic,
+	}
+	// 选型经 config 层与启动装配双层 gate 后必为合法值；异常时退回
+	// openai 直连（与历史行为一致）而不是让请求级重建整体失败。
+	llmProvider, err := llmfactory.New(factoryCfg)
+	if err != nil {
+		logger.Warnf("scoped AI rebuild: %v; falling back to openai provider", err)
+		llmProvider = openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL)
+	}
+	model, temperature, maxTokens, timeoutMs := llmfactory.RuntimeParams(factoryCfg)
 	// AttachBusinessMetrics 把进程级业务指标挂上（nil 安全），AI 请求打点
 	// 见 OrchestratedEnhancedAIService.ProcessQueryEnhanced。
-	return source.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger).
+	return source.buildOrchestrated(baseAI, llmProvider, aidelivery.AIRuntimeParams{
+		Model:       model,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+		TimeoutMs:   timeoutMs,
+	}, logger).
 		AttachBusinessMetrics(businessMeter)
 }
 

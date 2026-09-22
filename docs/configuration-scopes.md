@@ -243,6 +243,7 @@
 当前代码骨架：
 
 - `internal/platform/configscope.Resolver` 已支持 `portal`、`OpenAI`、`Dify / RAGFlow / WeKnora knowledge provider` 的 `tenant -> workspace -> runtime` provider 覆盖顺序
+- `ai.provider` 选型（`openai | anthropic`）为全局唯一决定，不走作用域覆盖；openai 族的作用域解析结果（key/base_url/model 等）会在编排层写入每次出站 LLM 调用，anthropic 仅消费全局 `ai.anthropic` 段——切换供应商改 `ai.provider` 一处即可，构造统一收口在 `internal/platform/llm/factory`
 - `internal/platform/configscope.Resolver` 现已支持 `session_risk` 的 `system -> tenant -> workspace -> runtime` 风险阈值解析链路
 - 已新增数据库持久化的 `TenantConfig` / `WorkspaceConfig` GORM provider；当前 public portal 已接入这套读取链路
 - 管理面已具备 tenant/workspace scoped config 的最小读写入口，当前覆盖 `portal` / `OpenAI` / knowledge provider / `session_risk`

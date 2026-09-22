@@ -12,7 +12,7 @@ import (
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	pgvectorkp "servify/apps/server/internal/platform/knowledgeprovider/pgvector"
-	"servify/apps/server/internal/platform/llm/openai"
+	"servify/apps/server/internal/platform/llm"
 
 	"gorm.io/gorm"
 
@@ -59,8 +59,13 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 
 	baseAI := aidelivery.NewAIService(openAIConfig.APIKey, openAIConfig.BaseURL)
 	baseAI.InitializeKnowledgeBase()
+	// LLM provider 与出站模型参数统一经 resolveLLMRuntime（ai.provider 选型）。
+	llmProvider, runtimeParams, err := resolveLLMRuntime(cfg, resolver)
+	if err != nil {
+		return nil, err
+	}
 	// 基础编排服务（无外部知识源）：无知识源运行与 pgvector 降级路径共用。
-	defaultService := knowledgeSource{}.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger)
+	defaultService := knowledgeSource{}.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
 	assembly := &AIAssembly{
 		Service:        aidelivery.NewHandlerServiceAdapter(defaultService),
 		RuntimeService: defaultService,
@@ -69,7 +74,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	// pgvector 自建知识库：knowledge.provider=pgvector 时优先于外部 provider，
 	// 复用主库连接与迁移已建的 knowledge_docs(vector(1536)) 表。
 	if strings.TrimSpace(cfg.Knowledge.Provider) == "pgvector" {
-		return buildPgvectorAssembly(baseAI, openAIConfig.APIKey, openAIConfig.BaseURL, cfg, logger, opts, assembly)
+		return buildPgvectorAssembly(baseAI, llmProvider, runtimeParams, cfg, logger, opts, assembly)
 	}
 
 	source, err := selectKnowledgeSource(ragFlowConfig, difyConfig, weKnoraConfig, knowledgeSourceOptions{
@@ -85,7 +90,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	if !source.present() {
 		return assembly, nil
 	}
-	enhanced := source.buildOrchestrated(baseAI, openai.NewProvider(openAIConfig.APIKey, openAIConfig.BaseURL), logger)
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
 	// 知识同步仅在 weknora 驱动下执行（dify/pgvector 的索引由各自平台/迁移管理）。
 	if source.id == "weknora" && opts.SyncKnowledgeBase {
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -100,9 +105,11 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 
 // buildPgvectorAssembly 装配 pgvector 自建知识库驱动；健康检查失败时按
 // requireKnowledgeProviderHealthy 决定启动失败或降级为无知识源运行。
+// LLM provider 与出站模型参数由调用方经 resolveLLMRuntime 统一构造后传入。
 func buildPgvectorAssembly(
 	baseAI *aidelivery.AIService,
-	apiKey, baseURL string,
+	llmProvider llm.LLMProvider,
+	runtimeParams aidelivery.AIRuntimeParams,
 	cfg *config.Config,
 	logger *logrus.Logger,
 	opts AIAssemblyOptions,
@@ -147,7 +154,7 @@ func buildPgvectorAssembly(
 		return fallback, nil
 	}
 	source := knowledgeSource{driver: driver, id: "pgvector"}
-	enhanced := source.buildOrchestrated(baseAI, openai.NewProvider(apiKey, baseURL), logger)
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
 	fallback.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
 	return fallback, nil
 }
