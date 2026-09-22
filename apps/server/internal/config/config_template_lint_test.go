@@ -38,12 +38,13 @@ type schemaNode struct {
 }
 
 var knownSensitiveLeafKeys = map[string]bool{
-	"password":          true,
-	"secret":            true,
-	"api_key":           true,
-	"secret_access_key": true,
-	"access_key_id":     true,
-	"auth_token":        true,
+	"password":           true,
+	"secret":             true,
+	"api_key":            true,
+	"secret_access_key":  true,
+	"access_key_id":      true,
+	"auth_token":         true,
+	"static_auth_secret": true, // webrtc.turn 时间限凭据的共享 secret（docs/TURN_DEPLOYMENT.md）
 }
 
 // buildSchema 从 Config 类型反射生成 schema 树。

@@ -2,11 +2,12 @@ package realtime
 
 import (
 	"github.com/pion/webrtc/v4"
+	"servify/apps/server/internal/platform/iceturn"
 	"testing"
 )
 
 func TestWebRTCService_NoConnectionErrors(t *testing.T) {
-	s := NewWebRTCService("stun:stun.l.google.com:19302", NewWebSocketHub())
+	s := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:stun.l.google.com:19302"}}, NewWebSocketHub())
 
 	if _, err := s.GetConnectionStats("nope"); err == nil {
 		t.Fatalf("expected error for missing connection stats")

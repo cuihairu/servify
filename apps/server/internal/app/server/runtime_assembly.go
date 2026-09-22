@@ -59,6 +59,7 @@ import (
 	workspaceinfra "servify/apps/server/internal/modules/workspace/infra"
 	svcerrors "servify/apps/server/internal/observability/errors"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
+	iceturn "servify/apps/server/internal/platform/iceturn"
 	"servify/apps/server/internal/platform/pstnprovider"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/sip"
@@ -158,13 +159,25 @@ func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
 	return routingapp.NewService(routingRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 }
 
-func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) *realtimeplatform.WebRTCService {
-	webrtcService := realtimeplatform.NewWebRTCService(rt.Config.WebRTC.STUNServer, wsHub)
+func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*realtimeplatform.WebRTCService, error) {
+	turn := iceturn.Config{
+		URL:              rt.Config.WebRTC.TURN.URL,
+		Realm:            rt.Config.WebRTC.TURN.Realm,
+		StaticAuthSecret: rt.Config.WebRTC.TURN.StaticAuthSecret,
+		TTL:              rt.Config.WebRTC.TURN.TTL,
+	}
+	// 装配层兜底 gate：与 config.InsecureDefaults 的零容忍告警成对（双层 gate）。
+	if err := turn.Validate(); err != nil {
+		return nil, fmt.Errorf("webrtc turn: %w", err)
+	}
+	ice := iceturn.Assemble(rt.Config.WebRTC.STUNServers, rt.Config.WebRTC.STUNServer, turn.WithDefaults(), time.Now())
+	rt.Logger.Infof("WebRTC ICE assembled: %s", ice.Describe())
+	webrtcService := realtimeplatform.NewWebRTCService(ice, wsHub)
 	wsHub.SetWebRTCService(webrtcService)
 	rt.RTCGateway = realtimeplatform.NewWebRTCAdapter(webrtcService)
 	rt.MessageRouter = realtimeplatform.NewMessageRouter(rt.AIService, wsHub, rt.DB)
 	wsHub.SetAIService(rt.AIService)
-	return webrtcService
+	return webrtcService, nil
 }
 
 func wireVoiceRuntime(rt *Runtime, webrtcService *realtimeplatform.WebRTCService) error {

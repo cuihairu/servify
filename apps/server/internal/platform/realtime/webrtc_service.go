@@ -9,6 +9,8 @@ import (
 
 	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
+
+	"servify/apps/server/internal/platform/iceturn"
 )
 
 type VoiceLifecycle interface {
@@ -21,7 +23,7 @@ type WebRTCService struct {
 	api         *webrtc.API
 	connections map[string]*WebRTCConnection
 	mutex       sync.RWMutex
-	stunServer  string
+	ice         iceturn.ICEConfig
 	wsHub       *WebSocketHub
 	voice       VoiceLifecycle
 }
@@ -56,16 +58,32 @@ type WebRTCSignal struct {
 	Data      interface{} `json:"data"`
 }
 
-func NewWebRTCService(stunServer string, wsHub *WebSocketHub) *WebRTCService {
+func NewWebRTCService(ice iceturn.ICEConfig, wsHub *WebSocketHub) *WebRTCService {
 	// 创建 WebRTC API
 	api := webrtc.NewAPI()
 
 	return &WebRTCService{
 		api:         api,
 		connections: make(map[string]*WebRTCConnection),
-		stunServer:  stunServer,
+		ice:         ice,
 		wsHub:       wsHub,
 	}
+}
+
+// iceServers 把装配好的 ICE 配置转为 pion ICEServer 列表（纯转换，便于测试）。
+func (s *WebRTCService) iceServers() []webrtc.ICEServer {
+	servers := make([]webrtc.ICEServer, 0, len(s.ice.STUNServers)+1)
+	for _, server := range s.ice.STUNServers {
+		servers = append(servers, webrtc.ICEServer{URLs: []string{server}})
+	}
+	if s.ice.TURNURL != "" {
+		servers = append(servers, webrtc.ICEServer{
+			URLs:       []string{s.ice.TURNURL},
+			Username:   s.ice.TURNUsername,
+			Credential: s.ice.TURNCredential,
+		})
+	}
+	return servers
 }
 
 func (s *WebRTCService) SetVoiceLifecycle(voice VoiceLifecycle) {
@@ -74,11 +92,7 @@ func (s *WebRTCService) SetVoiceLifecycle(voice VoiceLifecycle) {
 
 func (s *WebRTCService) CreatePeerConnection(sessionID string) (*WebRTCConnection, error) {
 	config := webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{s.stunServer},
-			},
-		},
+		ICEServers: s.iceServers(),
 	}
 
 	peerConnection, err := s.api.NewPeerConnection(config)

@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"servify/apps/server/internal/platform/iceturn"
 	"testing"
 	"time"
 
@@ -30,18 +31,59 @@ func newUnitWebRTCService(t *testing.T) (*WebRTCService, *unitVoiceLifecycle) {
 	t.Helper()
 	hub := NewWebSocketHub()
 	go hub.Run()
-	s := NewWebRTCService("stun:127.0.0.1:13478", hub)
+	s := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:127.0.0.1:13478"}}, hub)
 	voice := &unitVoiceLifecycle{}
 	s.SetVoiceLifecycle(voice)
 	return s, voice
 }
 
+func TestWebRTC_iceServersMapping(t *testing.T) {
+	stunOnly := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:a:3478"}}, NewWebSocketHub())
+	got := stunOnly.iceServers()
+	if len(got) != 1 || got[0].URLs[0] != "stun:a:3478" || got[0].Username != "" {
+		t.Fatalf("stun-only mapping = %+v, want single credential-free STUN", got)
+	}
+
+	withTurn := NewWebRTCService(iceturn.ICEConfig{
+		STUNServers:    []string{"stun:a:3478"},
+		TURNURL:        "turn:turn.example.com:3478",
+		TURNUsername:   "1790000300",
+		TURNCredential: "isReWBKNlmmMSS3VR4Xr9PtPqYE=",
+	}, NewWebSocketHub())
+	got = withTurn.iceServers()
+	if len(got) != 2 {
+		t.Fatalf("stun+turn mapping length = %d, want 2", len(got))
+	}
+	turn := got[1]
+	if turn.URLs[0] != "turn:turn.example.com:3478" || turn.Username != "1790000300" || turn.Credential != "isReWBKNlmmMSS3VR4Xr9PtPqYE=" {
+		t.Fatalf("TURN ICEServer = %+v, want url/username/credential carried over", turn)
+	}
+}
+
+func TestWebRTC_HandleOfferCreatePeerConnectionError(t *testing.T) {
+	hub := NewWebSocketHub()
+	go hub.Run()
+	// 非法 ICE URL 使 CreatePeerConnection 失败，HandleOffer 应原样上抛。
+	s := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"://not-a-valid-ice-url"}}, hub)
+	if _, err := s.HandleOffer("sess", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0"}); err == nil {
+		t.Fatal("expected HandleOffer to surface CreatePeerConnection error")
+	}
+}
+
 func TestWebRTC_CreatePeerConnection_InvalidStun(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()
-	s := NewWebRTCService("", hub)
+	// 空 ICE 配置合法（退化为 host 候选直连）；真正非法的是解析不了的 URL。
+	s := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"://not-a-valid-ice-url"}}, hub)
 	if _, err := s.CreatePeerConnection("sess"); err == nil {
-		t.Fatal("expected error for empty STUN server")
+		t.Fatal("expected error for malformed ICE URL")
+	}
+	// 空 ICE 配置（无 STUN/TURN）应能建连，走 host 候选。
+	empty := NewWebRTCService(iceturn.ICEConfig{}, hub)
+	if conn, err := empty.CreatePeerConnection("sess-empty-ice"); err != nil {
+		t.Fatalf("empty ICE config should create connection: %v", err)
+	} else {
+		_ = conn.PeerConnection.Close()
 	}
 }
 

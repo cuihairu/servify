@@ -36,6 +36,16 @@ voice:
   deepgram:
     api_key: "${DEEPGRAM_API_KEY}"
 
+webrtc:
+  # TURN 时间限凭据（docs/TURN_DEPLOYMENT.md）：${ENV} 未注入时为空即禁用；
+  # 启用需自建 coturn（use-auth-secret 模式）并注入以下环境变量。
+  # STUN 沿用代码默认值；大陆部署必须改掉 Google 默认（见 docs/webrtc-deployment.md 第 6 节）。
+  turn:
+    url: "${WEBRTC_TURN_URL}"
+    realm: "${WEBRTC_TURN_REALM}"
+    static_auth_secret: "${WEBRTC_TURN_STATIC_AUTH_SECRET}"
+    ttl: 5m
+
 jwt:
   secret: "${SERVIFY_JWT_SECRET}"
   expires_in: "12h"

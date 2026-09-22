@@ -250,4 +250,19 @@ func applyConfigEnvOverrides(cfg *config.Config) {
 	if v := os.Getenv("WEKNORA_KB_ID"); v != "" {
 		cfg.WeKnora.KnowledgeBaseID = v
 	}
+
+	// WebRTC ICE（docs/TURN_DEPLOYMENT.md）：TURN secret 属敏感配置，
+	// 生产经 env 注入而非落配置文件。
+	if v := os.Getenv("WEBRTC_STUN_SERVERS"); v != "" {
+		cfg.WebRTC.STUNServers = strings.Split(v, ",")
+	}
+	if v := os.Getenv("WEBRTC_TURN_URL"); v != "" {
+		cfg.WebRTC.TURN.URL = v
+	}
+	if v := os.Getenv("WEBRTC_TURN_REALM"); v != "" {
+		cfg.WebRTC.TURN.Realm = v
+	}
+	if v := os.Getenv("WEBRTC_TURN_STATIC_AUTH_SECRET"); v != "" {
+		cfg.WebRTC.TURN.StaticAuthSecret = v
+	}
 }

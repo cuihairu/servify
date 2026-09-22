@@ -113,6 +113,10 @@ func TestApplyConfigEnvOverrides(t *testing.T) {
 	t.Setenv("WEKNORA_API_KEY", "k3")
 	t.Setenv("WEKNORA_TENANT_ID", "tenant-9")
 	t.Setenv("WEKNORA_KB_ID", "kb-9")
+	t.Setenv("WEBRTC_STUN_SERVERS", "stun:a:3478,stun:b:3478")
+	t.Setenv("WEBRTC_TURN_URL", "turn:turn.example.com:3478")
+	t.Setenv("WEBRTC_TURN_REALM", "servify.example.com")
+	t.Setenv("WEBRTC_TURN_STATIC_AUTH_SECRET", "turn-secret-9")
 
 	applyConfigEnvOverrides(cfg)
 
@@ -125,6 +129,13 @@ func TestApplyConfigEnvOverrides(t *testing.T) {
 	if !cfg.WeKnora.Enabled || cfg.WeKnora.BaseURL != "http://weknora.example" || cfg.WeKnora.APIKey != "k3" ||
 		cfg.WeKnora.TenantID != "tenant-9" || cfg.WeKnora.KnowledgeBaseID != "kb-9" {
 		t.Fatalf("weknora overrides not applied: %+v", cfg.WeKnora)
+	}
+	if len(cfg.WebRTC.STUNServers) != 2 || cfg.WebRTC.STUNServers[0] != "stun:a:3478" || cfg.WebRTC.STUNServers[1] != "stun:b:3478" {
+		t.Fatalf("webrtc stun_servers override not applied: %+v", cfg.WebRTC.STUNServers)
+	}
+	if cfg.WebRTC.TURN.URL != "turn:turn.example.com:3478" || cfg.WebRTC.TURN.Realm != "servify.example.com" ||
+		cfg.WebRTC.TURN.StaticAuthSecret != "turn-secret-9" {
+		t.Fatalf("webrtc turn overrides not applied: %+v", cfg.WebRTC.TURN)
 	}
 
 	applyConfigEnvOverrides(nil)

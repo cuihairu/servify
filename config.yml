@@ -32,6 +32,17 @@ redis:
 
 webrtc:
   stun_server: "stun:stun.l.google.com:19302"
+  # 多 STUN 冗余（可选；配置后 stun_server 被忽略）。中国大陆部署勿留 Google 默认值。
+  # stun_servers:
+  #   - "stun:stun.qq.com:3478"
+  #   - "stun:stun.miwifi.com:3478"
+  # TURN 时间限凭据（docs/TURN_DEPLOYMENT.md；url 为空即禁用）。
+  # 启用需自建 coturn（use-auth-secret 模式），secret 生产经 env 注入：
+  # turn:
+  #   url: "turn:turn.example.com:3478"
+  #   realm: "servify.example.com"
+  #   static_auth_secret: "${TURN_STATIC_AUTH_SECRET}"
+  #   ttl: 5m
 
 voice:
   # Available providers: disabled, mock, twilio

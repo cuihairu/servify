@@ -94,7 +94,20 @@ type RedisConfig struct {
 }
 
 type WebRTCConfig struct {
-	STUNServer string `yaml:"stun_server"`
+	// STUNServer 是单值形态，保留向后兼容；stun_servers 列表非空时优先生效
+	// （docs/TURN_DEPLOYMENT.md 第 5 节配置面口径）。
+	STUNServer  string               `yaml:"stun_server"`
+	STUNServers []string             `yaml:"stun_servers"`
+	TURN        TURNCredentialConfig `yaml:"turn"`
+}
+
+// TURNCredentialConfig 对接 coturn use-auth-secret 时间限凭据模式：
+// secret 只存服务端，短时凭据运行时生成并经信令下发；URL 为空即禁用。
+type TURNCredentialConfig struct {
+	URL              string        `yaml:"url"`
+	Realm            string        `yaml:"realm"`
+	StaticAuthSecret string        `yaml:"static_auth_secret"`
+	TTL              time.Duration `yaml:"ttl"`
 }
 
 type VoiceConfig struct {
@@ -647,6 +660,21 @@ func InsecureDefaults(cfg *Config) []string {
 		}
 	}
 
+	// TURN 时间限凭据模式（docs/TURN_DEPLOYMENT.md）：启用即必须完整。
+	// secret 为空的典型原因是模板 ${ENV} 未注入——coturn 会拒绝所有
+	// allocation，远程协助在对称 NAT 下静默失去中继能力。
+	if strings.TrimSpace(cfg.WebRTC.TURN.URL) != "" {
+		if strings.TrimSpace(cfg.WebRTC.TURN.Realm) == "" {
+			warnings = append(warnings, "webrtc.turn.url is set but webrtc.turn.realm is empty")
+		}
+		if strings.TrimSpace(cfg.WebRTC.TURN.StaticAuthSecret) == "" {
+			warnings = append(warnings, "webrtc.turn.url is set but webrtc.turn.static_auth_secret is empty")
+		}
+		if cfg.WebRTC.TURN.TTL <= 0 {
+			warnings = append(warnings, "webrtc.turn.url is set but webrtc.turn.ttl is not positive")
+		}
+	}
+
 	if cfg.OIDC.Enabled {
 		if strings.TrimSpace(cfg.OIDC.Issuer) == "" {
 			warnings = append(warnings, "oidc.enabled is true but oidc.issuer is empty")
@@ -823,6 +851,10 @@ func GetDefaultConfig() *Config {
 		},
 		WebRTC: WebRTCConfig{
 			STUNServer: "stun:stun.l.google.com:19302",
+			TURN: TURNCredentialConfig{
+				// 默认禁用（URL 为空）；TTL 兜底与 iceturn.DefaultTTL 对齐。
+				TTL: 5 * time.Minute,
+			},
 		},
 		Voice: VoiceConfig{
 			RecordingProvider:  "disabled",

@@ -132,7 +132,10 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 	wireConversationRuntime(rt, wsHub)
 	state.routingService = wireRoutingRuntime(rt)
 
-	webrtcService := wireRealtimeGateways(rt, wsHub)
+	webrtcService, err := wireRealtimeGateways(rt, wsHub)
+	if err != nil {
+		return nil, err
+	}
 	if err := wireVoiceRuntime(rt, webrtcService); err != nil {
 		return nil, err
 	}

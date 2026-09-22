@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"servify/apps/server/internal/platform/iceturn"
 	"testing"
 
 	"github.com/pion/webrtc/v4"
@@ -11,7 +12,7 @@ import (
 func newTestWebRTCAdapter() *WebRTCAdapter {
 	hub := NewWebSocketHub()
 	go hub.Run()
-	return NewWebRTCAdapter(NewWebRTCService("stun:127.0.0.1:1", hub))
+	return NewWebRTCAdapter(NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"stun:127.0.0.1:1"}}, hub))
 }
 
 func TestWebRTCAdapter_MissingSessionErrors(t *testing.T) {
