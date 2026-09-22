@@ -1,0 +1,37 @@
+{
+  "provider": "mobile-probe",
+  "mode": "real",
+  "milestone": "SDK M0 验收②：建连 → AI 首答流式 → 转人工 → 坐席回复",
+  "servify_url": "http://127.0.0.1:18099",
+  "visitor_session": "mp-acc-session-1790108450",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "probe_build_ok": "true",
+    "mock_llm_ok": "true",
+    "ready_ok": "true",
+    "agent_online": "true",
+    "visitor_echo_ok": "true",
+    "ai_streaming_ok": "true",
+    "ai_final_ok": "true",
+    "handoff_ok": "true",
+    "agent_reply_ok": "true"
+  },
+  "evidence_files": [
+    "agent-create.txt",
+    "agent-online.txt",
+    "agent-send-message.txt",
+    "build-output.txt",
+    "manifest.json",
+    "mock-llm-log.txt",
+    "probe-build-output.txt",
+    "probe.log",
+    "ready.txt",
+    "register-admin.txt",
+    "register-agent.txt",
+    "server-log.txt",
+    "summary.txt"
+  ]
+}

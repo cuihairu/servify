@@ -66,7 +66,11 @@ fun main() {
     // 1) 客户消息 → 期望回显 + AI 首答（流式或单发）
     println("PROBE_STEP send-visitor-message")
     webSocket.sendText(FrameCodec.encodeTextMessage("你好，我想咨询退货政策", sessionId), true).join()
-    if (!stage.await("visitor-echo", timeoutSec) || !stage.await("ai-final", timeoutSec)) {
+    if (!stage.await("visitor-echo", timeoutSec)) {
+        probeFail(events)
+    }
+    println("PROBE_STEP visitor-echo-received")
+    if (!stage.await("ai-final", timeoutSec)) {
         probeFail(events)
     }
     println("PROBE_STEP ai-answer-complete streaming_deltas=${events.count { it is ProtocolEvent.AiDelta }}")

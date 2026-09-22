@@ -813,6 +813,24 @@ case "$PROVIDER" in
     require_file_listed "next-questions-post.json"
     require_file_listed "next-questions-missing-query.json"
     ;;
+  mobile-probe)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.probe_build_ok // ""' "true"
+    require_equals '.checks.mock_llm_ok // ""' "true"
+    require_equals '.checks.ready_ok // ""' "true"
+    require_equals '.checks.agent_online // ""' "true"
+    require_equals '.checks.visitor_echo_ok // ""' "true"
+    require_equals '.checks.ai_streaming_ok // ""' "true"
+    require_equals '.checks.ai_final_ok // ""' "true"
+    require_equals '.checks.handoff_ok // ""' "true"
+    require_equals '.checks.agent_reply_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "ready.txt"
+    require_file_listed "agent-online.txt"
+    require_file_listed "agent-send-message.txt"
+    require_file_listed "probe.log"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1

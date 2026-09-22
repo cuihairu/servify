@@ -2729,3 +2729,105 @@ func TestValidateAcceptanceManifestScriptRejectsPerfManifestWithoutWSReconciliat
 		t.Fatalf("expected failure reason in output, got %s", string(output))
 	}
 }
+
+func TestValidateAcceptanceManifestScriptAcceptsValidMobileProbeManifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":            "ok",
+		"ready.txt":              "HTTP/1.1 200 OK",
+		"agent-online.txt":       "HTTP/1.1 200 OK",
+		"agent-send-message.txt": "HTTP/1.1 200 OK",
+		"probe.log":              "PROBE_OK full chain",
+		"manifest.json": `{
+  "provider": "mobile-probe",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "probe_build_ok": "true",
+    "mock_llm_ok": "true",
+    "ready_ok": "true",
+    "agent_online": "true",
+    "visitor_echo_ok": "true",
+    "ai_streaming_ok": "true",
+    "ai_final_ok": "true",
+    "handoff_ok": "true",
+    "agent_reply_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "ready.txt",
+    "agent-online.txt",
+    "agent-send-message.txt",
+    "probe.log"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsMobileProbeWithoutFullChainVerdict(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":            "ok",
+		"ready.txt":              "HTTP/1.1 200 OK",
+		"agent-online.txt":       "HTTP/1.1 200 OK",
+		"agent-send-message.txt": "HTTP/1.1 200 OK",
+		"probe.log":              "PROBE_FAIL timeout",
+		// 缺 agent_reply_ok:没等到坐席回复就不算 M0 全链路通过。
+		"manifest.json": `{
+  "provider": "mobile-probe",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "probe_build_ok": "true",
+    "mock_llm_ok": "true",
+    "ready_ok": "true",
+    "agent_online": "true",
+    "visitor_echo_ok": "true",
+    "ai_streaming_ok": "true",
+    "ai_final_ok": "true",
+    "handoff_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "ready.txt",
+    "agent-online.txt",
+    "agent-send-message.txt",
+    "probe.log"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "agent_reply_ok") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
