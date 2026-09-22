@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
 
 - M0 ✅ 建连 → AI 首答流式 → 转人工 → 坐席回复（真机探针验收）
 - M1 刀 1-3 ✅ 工程/门面/UI（浮钮 + 抽屉/全屏面板 + 气泡/来源/置信门/未读）
-- M1 刀 4 ⏳ 持久化（SessionSnapshot / guestToken）
-- M1 刀 5 ⏳ 弱网/断网/后台切换验收矩阵
+- M1 刀 4 ✅ 会话连续性：内存级累积 + 未读可见性语义 + 流中断收口 + guestToken 握手参数（磁盘持久化按 D7 核查不做——补拉/推送端点均为服务端待建项，预留即死代码）
+- M1 刀 5 ✅ 验收矩阵与状态机穷举（连接状态机 5 测试 + 转人工 4 测试；真机手工项待执行，见 [ACCEPTANCE-M1.md](ACCEPTANCE-M1.md)）
 
 设计依据：`docs/mobile-sdk-design.md`（D3/D5/D8/D9）、`docs/mobile-sdk-platform-spec.md`（§4 API 冻结面）。
