@@ -53,6 +53,7 @@ func MigrationModels() []interface{} {
 		&models.RemoteAssistAnnotation{},
 		&models.AutomationTimer{},
 		&models.UserRecoveryCode{},
+		&models.SuggestionExposureLog{},
 	}
 }
 

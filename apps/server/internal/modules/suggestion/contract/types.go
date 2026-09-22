@@ -53,8 +53,11 @@ type RecommendedQuestion struct {
 }
 
 // InitialQuestionsRequest 首屏推荐问题请求（客户未输入任何内容）。
+// session_id 为客户侧会话标识（如 demo widget 的 WS sessionId），仅用于
+// 曝光/转化归因串联（P2-0 RQ-5），不参与检索。
 type InitialQuestionsRequest struct {
-	Limit int `json:"limit" form:"limit"`
+	Limit     int    `json:"limit" form:"limit"`
+	SessionID string `json:"session_id,omitempty" form:"session_id"`
 }
 
 // InitialQuestionsResponse 首屏推荐问题响应。

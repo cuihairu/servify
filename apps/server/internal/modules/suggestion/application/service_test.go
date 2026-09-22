@@ -21,6 +21,19 @@ type suggestionRepoStub struct {
 	publicDocLimit     int
 	publicDocTokens    []string
 	publicDocRows      []suggestionapp.KnowledgeDocCandidate
+	// 曝光/转化归因（P2-0 RQ-5）观测面
+	exposures     []suggestionapp.ExposureRecord
+	findOpenCalls int
+	openExposure  *suggestionapp.OpenExposure
+	openErr       error
+	markCalls     []suggestionMarkCall
+	markErr       error
+}
+
+type suggestionMarkCall struct {
+	id       uint
+	question string
+	at       time.Time
 }
 
 func (r *suggestionRepoStub) FindTicketCandidates(ctx context.Context, tokens []string, candidateMax int) ([]suggestionapp.TicketCandidate, error) {
@@ -50,6 +63,28 @@ func (r *suggestionRepoStub) FindPublicKnowledgeDocCandidates(ctx context.Contex
 	out := make([]suggestionapp.KnowledgeDocCandidate, len(r.publicDocRows))
 	copy(out, r.publicDocRows)
 	return out, nil
+}
+
+func (r *suggestionRepoStub) RecordExposure(ctx context.Context, rec suggestionapp.ExposureRecord) error {
+	r.exposures = append(r.exposures, rec)
+	return nil
+}
+
+func (r *suggestionRepoStub) FindLatestOpenExposure(ctx context.Context, sessionID string) (*suggestionapp.OpenExposure, error) {
+	r.findOpenCalls++
+	if r.openErr != nil {
+		return nil, r.openErr
+	}
+	return r.openExposure, nil
+}
+
+func (r *suggestionRepoStub) MarkExposureConverted(ctx context.Context, exposureID uint, question string, at time.Time) error {
+	r.markCalls = append(r.markCalls, suggestionMarkCall{id: exposureID, question: question, at: at})
+	return r.markErr
+}
+
+func (r *suggestionRepoStub) ExposureSummary(ctx context.Context) (*suggestionapp.ExposureSummary, error) {
+	return &suggestionapp.ExposureSummary{}, nil
 }
 
 func TestServiceSuggest_SortsAndTrimsResults(t *testing.T) {
@@ -186,6 +221,22 @@ func (r *suggestionRepoFailing) FindPublicKnowledgeDocs(ctx context.Context, lim
 
 func (r *suggestionRepoFailing) FindPublicKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
 	return nil, nil
+}
+
+func (r *suggestionRepoFailing) RecordExposure(ctx context.Context, rec suggestionapp.ExposureRecord) error {
+	return nil
+}
+
+func (r *suggestionRepoFailing) FindLatestOpenExposure(ctx context.Context, sessionID string) (*suggestionapp.OpenExposure, error) {
+	return nil, nil
+}
+
+func (r *suggestionRepoFailing) MarkExposureConverted(ctx context.Context, exposureID uint, question string, at time.Time) error {
+	return nil
+}
+
+func (r *suggestionRepoFailing) ExposureSummary(ctx context.Context) (*suggestionapp.ExposureSummary, error) {
+	return &suggestionapp.ExposureSummary{}, nil
 }
 
 func TestServiceSuggest_PropagatesRepoErrors(t *testing.T) {

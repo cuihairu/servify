@@ -69,7 +69,8 @@ func RegisterSuggestionRoutes(r *gin.RouterGroup, handler *SuggestionHandler) {
 func (h *SuggestionHandler) InitialQuestions(c *gin.Context) {
 	limit := parseIntDefault(c.Query("limit"), 8)
 	resp, err := h.service.InitialQuestions(c.Request.Context(), &suggestioncontract.InitialQuestionsRequest{
-		Limit: limit,
+		Limit:     limit,
+		SessionID: c.Query("session_id"),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to suggest initial questions", Message: err.Error()})

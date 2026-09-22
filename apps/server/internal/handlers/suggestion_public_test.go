@@ -58,7 +58,7 @@ func TestPublicSuggestionInitialQuestions(t *testing.T) {
 	r := newSuggestionPublicRouter(rec)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/public/suggestions/initial?limit=3", nil)
+	req := httptest.NewRequest(http.MethodGet, "/public/suggestions/initial?limit=3&session_id=s-1", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -67,7 +67,7 @@ func TestPublicSuggestionInitialQuestions(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"success":true`) || !strings.Contains(w.Body.String(), "如何重置密码") {
 		t.Fatalf("body = %s", w.Body.String())
 	}
-	if rec.initialReq == nil || rec.initialReq.Limit != 3 {
+	if rec.initialReq == nil || rec.initialReq.Limit != 3 || rec.initialReq.SessionID != "s-1" {
 		t.Fatalf("initialReq = %+v", rec.initialReq)
 	}
 }

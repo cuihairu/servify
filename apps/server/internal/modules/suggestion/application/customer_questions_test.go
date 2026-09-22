@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
@@ -188,4 +189,185 @@ func (r *errRepoStub) FindPublicKnowledgeDocs(ctx context.Context, limit int) ([
 
 func (r *errRepoStub) FindPublicKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
 	return nil, errors.New("boom")
+}
+
+func (r *errRepoStub) RecordExposure(ctx context.Context, rec suggestionapp.ExposureRecord) error {
+	return errors.New("boom")
+}
+
+func (r *errRepoStub) FindLatestOpenExposure(ctx context.Context, sessionID string) (*suggestionapp.OpenExposure, error) {
+	return nil, errors.New("boom")
+}
+
+func (r *errRepoStub) MarkExposureConverted(ctx context.Context, exposureID uint, question string, at time.Time) error {
+	return errors.New("boom")
+}
+
+func (r *errRepoStub) ExposureSummary(ctx context.Context) (*suggestionapp.ExposureSummary, error) {
+	return nil, errors.New("boom")
+}
+
+func TestServiceInitialQuestionsRecordsExposure(t *testing.T) {
+	t.Run("records session and returned questions", func(t *testing.T) {
+		repo := &suggestionRepoStub{
+			publicDocRows: []suggestionapp.KnowledgeDocCandidate{
+				{ID: 1, Title: " 密码重置指南 "},
+				{ID: 2, Title: "  "}, // 空白标题不入曝光列表
+			},
+		}
+		svc := suggestionapp.NewService(repo)
+
+		if _, err := svc.InitialQuestions(context.Background(), &suggestioncontract.InitialQuestionsRequest{SessionID: " s-1 "}); err != nil {
+			t.Fatalf("InitialQuestions() error = %v", err)
+		}
+		if len(repo.exposures) != 1 {
+			t.Fatalf("exposures = %d, want 1", len(repo.exposures))
+		}
+		rec := repo.exposures[0]
+		if rec.SessionID != "s-1" || rec.Kind != "initial" || rec.Strategy != "public_knowledge_recency" {
+			t.Fatalf("exposure = %+v", rec)
+		}
+		if !reflect.DeepEqual(rec.Questions, []string{"密码重置指南"}) {
+			t.Fatalf("exposed questions = %v", rec.Questions)
+		}
+	})
+
+	t.Run("nil request records empty session", func(t *testing.T) {
+		repo := &suggestionRepoStub{}
+		svc := suggestionapp.NewService(repo)
+		if _, err := svc.InitialQuestions(context.Background(), nil); err != nil {
+			t.Fatalf("InitialQuestions(nil) error = %v", err)
+		}
+		if len(repo.exposures) != 1 || repo.exposures[0].SessionID != "" || len(repo.exposures[0].Questions) != 0 {
+			t.Fatalf("exposures = %+v", repo.exposures)
+		}
+	})
+}
+
+func TestServiceNextQuestionsRecordsExposure(t *testing.T) {
+	repo := &suggestionRepoStub{
+		publicDocRows: []suggestionapp.KnowledgeDocCandidate{
+			{ID: 1, Title: "密码重置指南", Content: "密码 重置", Tags: "密码"},
+			{ID: 2, Title: "密码重置指南", Content: "密码 重置", Tags: "密码"}, // 同题去重
+		},
+	}
+	svc := suggestionapp.NewService(repo)
+
+	resp, err := svc.NextQuestions(context.Background(), &suggestioncontract.NextQuestionsRequest{Query: "密码", SessionID: "s-2", Limit: 5})
+	if err != nil {
+		t.Fatalf("NextQuestions() error = %v", err)
+	}
+	if len(repo.exposures) != 1 {
+		t.Fatalf("exposures = %d, want 1", len(repo.exposures))
+	}
+	rec := repo.exposures[0]
+	if rec.SessionID != "s-2" || rec.Kind != "next" || rec.Strategy != "public_knowledge_scored" {
+		t.Fatalf("exposure = %+v", rec)
+	}
+	// 只记实际返回（去重、截断后）的问题列表
+	want := make([]string, 0, len(resp.Questions))
+	for _, q := range resp.Questions {
+		want = append(want, q.Question)
+	}
+	if !reflect.DeepEqual(rec.Questions, want) || len(want) != 1 {
+		t.Fatalf("exposed = %v, want %v", rec.Questions, want)
+	}
+}
+
+func TestNormalizeQuestionText(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"collapses whitespace", "  如何   重置\t密码 \n? ", "如何 重置 密码 ?"},
+		{"lowercases ascii", "Reset  PASSWORD", "reset password"},
+		{"blank", "   ", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := suggestionapp.NormalizeQuestionText(tt.in); got != tt.want {
+				t.Fatalf("NormalizeQuestionText(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceMatchSuggestionConversion(t *testing.T) {
+	t.Run("blank session or content skips repo", func(t *testing.T) {
+		repo := &suggestionRepoStub{}
+		svc := suggestionapp.NewService(repo)
+		if err := svc.MatchSuggestionConversion(context.Background(), "", "密码"); err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", "   "); err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if repo.findOpenCalls != 0 || len(repo.markCalls) != 0 {
+			t.Fatalf("repo must not be touched, findOpenCalls=%d markCalls=%d", repo.findOpenCalls, len(repo.markCalls))
+		}
+	})
+
+	t.Run("no open exposure is a no-op", func(t *testing.T) {
+		repo := &suggestionRepoStub{}
+		svc := suggestionapp.NewService(repo)
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", "密码"); err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if len(repo.markCalls) != 0 {
+			t.Fatalf("markCalls = %+v", repo.markCalls)
+		}
+	})
+
+	t.Run("repo error propagates", func(t *testing.T) {
+		svc := suggestionapp.NewService(&errRepoStub{})
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", "密码"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("normalizes whitespace and case on hit", func(t *testing.T) {
+		repo := &suggestionRepoStub{
+			openExposure: &suggestionapp.OpenExposure{ID: 7, Questions: []string{"Reset  Password", "导出账单"}},
+		}
+		svc := suggestionapp.NewService(repo)
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", " reset password "); err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if len(repo.markCalls) != 1 {
+			t.Fatalf("markCalls = %+v", repo.markCalls)
+		}
+		mark := repo.markCalls[0]
+		// 归因回填的是曝光时的原文案，不是客户输入
+		if mark.id != 7 || mark.question != "Reset  Password" {
+			t.Fatalf("mark = %+v", mark)
+		}
+		if mark.at.IsZero() {
+			t.Fatal("mark time must be set")
+		}
+	})
+
+	t.Run("miss leaves exposure open", func(t *testing.T) {
+		repo := &suggestionRepoStub{
+			openExposure: &suggestionapp.OpenExposure{ID: 7, Questions: []string{"导出账单"}},
+		}
+		svc := suggestionapp.NewService(repo)
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", "重置密码"); err != nil {
+			t.Fatalf("error = %v", err)
+		}
+		if len(repo.markCalls) != 0 {
+			t.Fatalf("markCalls = %+v", repo.markCalls)
+		}
+	})
+
+	t.Run("mark error propagates", func(t *testing.T) {
+		repo := &suggestionRepoStub{
+			openExposure: &suggestionapp.OpenExposure{ID: 7, Questions: []string{"导出账单"}},
+			markErr:      errors.New("boom"),
+		}
+		svc := suggestionapp.NewService(repo)
+		if err := svc.MatchSuggestionConversion(context.Background(), "s-1", "导出账单"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }

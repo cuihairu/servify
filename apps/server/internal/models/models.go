@@ -549,3 +549,19 @@ type AgentGroupMember struct {
 	AgentUserID uint      `gorm:"not null;uniqueIndex:uniq_agent_group_members,priority:2" json:"agent_user_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// SuggestionExposureLog 客户侧推荐问题曝光/转化归因日志（P2-0 RQ-5，服务端
+// 归因口径）：曝光 = initial/next 接口成功返回（服务端落一行，questions 为
+// 本次曝光问题文案的 JSON 数组）；转化 = 该 session 后续客户消息与最近一次
+// 未转化曝光的问题列表规范化匹配命中（converted_question 非空即转化）。
+// session_id 为空（首屏未带会话标识）的曝光无法归因，仅计曝光。
+type SuggestionExposureLog struct {
+	ID                uint       `gorm:"primaryKey" json:"id"`
+	SessionID         string     `gorm:"index;default:''" json:"session_id"`
+	Kind              string     `gorm:"size:16" json:"kind"`     // initial|next
+	Strategy          string     `gorm:"size:64" json:"strategy"` // public_knowledge_recency|public_knowledge_scored
+	Questions         string     `gorm:"type:text" json:"questions"`
+	ConvertedQuestion string     `gorm:"size:512;default:''" json:"converted_question"`
+	ConvertedAt       *time.Time `json:"converted_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
