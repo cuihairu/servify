@@ -274,6 +274,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 - 产出：`sdk/PROTOCOL.md` 首版（✅ 已入库）；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
 - 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、移动端契约不含"显式标注）。
+- 状态（2026-09-22）：**已完成**。③ 由 PROTOCOL.md 达成（3bbee3e2）；① 样例集 10 例 + core 9 测试 / Android 10 测试同一套样例回放断言一致（39f2a67、2b96be6，含 CI `android-probe` job）；② `make mobile-probe-acceptance` 对真实服务跑通全链路并留档 manifest（ff8c49b，内嵌 OpenAI 兼容流式 mock LLM，`scripts/test-results/mobile-probe/manifest.json` overall=passed）。
 
 **M1 — Android SDK Alpha**
 
