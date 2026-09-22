@@ -280,6 +280,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 - 产出：三形态 UI、消息收发、AI 首答（流式渲染 + 引用展示 + 置信门提示）、转人工状态机、未读计数、惰性连接与重连、访客 token 接入（含后端 guest token 端点——**后端配套项，需进后端排期**）。
 - 验收：① 契约回放测试全绿；② demo 宿主 App 集成 ≤ 10 行代码完成初始化 + 拉起；③ AAR 增量 ≤ 1.5MB（CI 体积门禁）；④ 弱网/断网/后台切换手工测试矩阵通过（含流式中断的渲染降级）；⑤ 单元测试覆盖协议层与状态机（覆盖率不设 100% 目标，但状态机转移表必须穷举）。
+- 状态（2026-09-22）：**已完成（Android Alpha；真机手工项待执行，逐条锚定见 `sdk/android/ACCEPTANCE-M1.md`）**。① 同一样例集 core/Android 双端回放断言一致 + SDK 全量 65 测试全绿（39f2a67、2b96be6、42ba7f6）；② demo 集成 3 行（02bb8c1）；③ 体积门禁取 R8 口径（未混淆 Compose 全家桶增量 5MB+ 非验收口径，D9 核查记录），delta ≈1.19MB ≤ 1.5MB，CI 独立 step（02bb8c1）；④ 自动化项（断线重连/发送超时/流中断渲染降级/重连耗尽恢复/握手失败分类）CI 锚定全绿，真机手工项（前后台/飞行模式/蜂窝 WiFi 切换/转人工状态跨断线）⏳ 待执行——断连期间静默丢消息为 V1 已知边界（服务端无历史重发，不假装有补拉）；⑤ 转人工状态机 3 条合法转移 + 非法拒绝、连接状态机 §4.4 转移表（含 idle→connecting→connected、幂等 connect、重连耗尽→disconnected→connect 恢复）穷举（StateMachineTest 4 测试、ConnectionLifecycleTest 5 测试，42ba7f6）。访客 token：SDK 握手参数已就位（2214bb5，PROTOCOL §1 服务端当前不消费、向后兼容），guest token 端点为 §10 #2 后端配套项，进后端排期。
 
 **M2 — iOS SDK Alpha**
 
