@@ -16,7 +16,7 @@ import sys
 BINARY_EXTENSIONS = (
     ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp",
     ".woff", ".woff2", ".ttf", ".eot", ".otf",
-    ".mp3", ".mp4", ".pdf", ".zip", ".gz",
+    ".mp3", ".mp4", ".pdf", ".zip", ".gz", ".jar",
 )
 
 listing = subprocess.run(

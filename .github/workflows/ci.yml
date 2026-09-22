@@ -435,7 +435,8 @@ jobs:
 
       - name: Build and test Android protocol probe
         timeout-minutes: 15
-        run: ./gradlew -p sdk/android --no-daemon build
+        working-directory: sdk/android
+        run: ./gradlew --no-daemon build
 
   admin-checks:
     name: Admin Checks
