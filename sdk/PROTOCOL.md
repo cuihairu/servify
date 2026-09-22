@@ -1,0 +1,100 @@
+# Servify WS 协议契约（PROTOCOL）
+
+状态：M0 首版（策划文档 [docs/mobile-sdk-design.md](../docs/mobile-sdk-design.md) 决策 D5 规定的契约事实源）。本文逐条列出 WS 消息类型、字段、方向与错误语义，全部条目经服务端源码核实（引用 `apps/server` 文件行号）。**服务端 WS 契约变更时必须同步本文与 `sdk/protocol-fixtures/` 样例集**——fixtures 被 Web core 与移动端同一套回放测试消费，改 fixtures 三端测试同时红，这是契约不被单端悄悄漂移的机制保障。
+
+---
+
+## 1. 传输与鉴权
+
+| 项 | 契约 |
+|---|---|
+| 端点 | `GET /api/v1/ws`（`router_realtime.go:17`，publicV1 组免认证） |
+| 握手参数 | `session_id`（必填，空则 HTTP 400 `BadRequest`，`websocket_hub.go:247-254`）；`access_token` 参数**服务端不读取**（访客 token 端点落地前的已知缺口，见策划文档 D6） |
+| 唯一门槛 | Origin 白名单 `security.websocket_allowed_origins`（空配置放行所有来源，P2-5） |
+| 帧编码 | JSON 文本帧，形 `{type, data, session_id?, timestamp?}`（`WebSocketMessage` 序列化） |
+| 服务端广播语义 | 按 `session_id` 定向：`SessionID == ""` 广播全员，否则只投递同会话客户端（`websocket_hub.go:232`） |
+
+**移动端口径**：V1 逐字段沿用该握手形态；访客 token 落地后 `access_token` 开始被消费，客户端无需改握手代码、只需带上参数（向后兼容）。
+
+## 2. 心跳与保活（双向机制不同，勿混淆）
+
+| 方向 | 机制 | 服务端行为 |
+|---|---|---|
+| 服务端 → 客户端 | RFC 6455 协议层 Ping 控制帧，每 54s（`websocket_hub.go` writePump ticker） | 不等待应用层响应 |
+| 客户端 → 服务端 | 协议层 Pong（浏览器/原生库自动回，应用层不可见） | readPump 默认 pong 处理 |
+| Web core 现状 | 每 30s 发 JSON 帧 `{type:"system", data:{type:"ping"}}`（`websocket.ts` startHeartbeat） | **服务端 switch 无此 case，落 `Unknown message type: system` 警告日志**——该帧当前是无效流量 |
+
+**移动端口径**：不复制 JSON `system/ping` 帧（服务端不支持，见 §5 死分支表）；用平台原生保活——Android OkHttp `pingInterval`、iOS `URLSessionWebSocketTask.sendPing`，走协议层与服务端 54s Ping 天然对齐。若未来服务端支持应用层心跳帧，经 fixtures 契约变更流程接入。
+
+## 3. 客户端上行帧（服务端 readPump switch，`websocket_hub.go:321-333`）
+
+| type | 载荷 `data` | 语义 |
+|---|---|---|
+| `text-message` | `{content: string}`；`data` 为裸字符串也接受（`websocket_hub.go:185-190` 双形态提取） | 客户发言。服务端持久化 → 转人工判定 → AI 首答（流式）→ 广播回显（见下行同名列）。`content` 空白则静默丢弃 |
+| `webrtc-offer` / `webrtc-answer` / `webrtc-candidate` | SDP/ICE 对象 | WebRTC 信令。**移动端 V1 不消费不发送**（`createMobileCapabilitySet` voice/remote_assist 置 off） |
+| 其他任意 type | — | 服务端 `Unknown message type` 警告后丢弃（不回错误帧）——客户端发错类型不会得到显式失败，必须靠本契约约束 |
+
+## 4. 服务端下行帧（客户端按本表分发）
+
+### 4.1 会话消息类
+
+| type | 载荷 `data` | 语义 |
+|---|---|---|
+| `text-message` | 同上行（服务端把原消息广播回同会话全部客户端） | 客户自己消息的回显；客户端按 `data.content` 与本地待渲染消息去重 |
+| `agent-message` | `{content: string, sender: string}`（`conversation_workspace_handler.go:146`） | 坐席发言。**注意：core 的 `WSMessage.type` 联合类型漏列此帧但运行时有 case（`websocket.ts:209`）——契约以运行时行为为准，类型声明缺口随 core 清理补齐** |
+| `ai-response` | 必有 `{content: string, confidence: number, source: string}`；编排附加输出零值省略：`sources`（知识库命中数组，元素含 `document_id`/`title`/`content`/`score` 等）、`strategy`（产生方式，如 `llm`/`kp-<id>`）、`next_action`（`handoff` = 置信门建议转人工）、`handoff_reason`（如 `low_confidence`）（`websocket_hub.go` aiResponsePayload） | AI 首答终帧。增量流式时为拼接收口（见 4.2）；`next_action=handoff` 是建议元数据，转接仍由用户显式发起 |
+| `ai-response-delta` | `{content_delta: string, done: bool}` | 流式增量帧。契约三段：① 若干 `done=false` 增量即到即拼；② 终末增量 `content_delta=""` + `done=true`；③ 完整 `ai-response` 终帧（内容与拼接结果一致，整体替换是幂等收口）。**流中断语义**：终末增量已到但无 ai-response 终帧 = 本次回答失败——保留已渲染部分 + 提示重试，不自动重发 |
+
+### 4.2 转人工通知类（routing 模块，`handler_adapter.go:504-522`）
+
+| type | 载荷 `data` | 语义 |
+|---|---|---|
+| `transfer_notification` | `{message: string, agent_id: number, timestamp}` | 会话已分配坐席（含等待队列派发）。状态机 → `agent_chatting` |
+| `waiting_notification` | `{message: string, timestamp}` | 已入等待队列。状态机 → `waiting_human` |
+
+**转人工状态机**（策划文档 §4 同源，事件全部为真实帧）：
+
+```
+ai_answering ──(transfer_notification)──> agent_chatting
+ai_answering ──(waiting_notification)──> waiting_human
+waiting_human ──(transfer_notification)──> agent_chatting
+agent_chatting ──(增量补拉发现会话 closed)──> closed
+任意状态 ──(WS 断连)──> reconnecting ──(恢复)──> 原状态 + 增量补拉
+```
+
+### 4.3 WebRTC 信令类（移动端 V1 不消费，列出仅为契约完整性）
+
+`webrtc-answer`（offer 的 SDP 应答）、`webrtc-candidate`（ICE 候选）、`webrtc-ice-config`（ICE 服务器下发，与管理面 `GET /api/v1/rtc/ice-servers` 同形）、`webrtc-state-change`（连接状态）、`data-channel-message`。
+
+## 5. 服务端不发送的帧（core 类型声明的死分支——客户端契约不含）
+
+core `WSMessage.type` 联合（`types.ts:113-128`）声明了下表左列类型，服务端**零发射点**（全仓广播点核查结论，策划文档 D2）：
+
+| core 声明 | 现状 |
+|---|---|
+| `session_update` | 死分支（`websocket.ts:215` 有 case，永不触发）。会话关闭/状态变化移动端经增量补拉感知 |
+| `agent_status` | 死分支（`websocket.ts:218` 有 case，assigned/typing 形状已设计但从未接线） |
+| `typing` | 死分支。`channel/types.go` 的 `EventKindTyping` 是内部事件总线事件，不是 WS 帧 |
+| `message` | 死分支（`websocket.ts:206` 与 `text-message` 共用 case，服务端只发 `text-message`） |
+| `error` | 死分支。服务端 WS 路径不回错误帧：JSON 解析失败静默 continue、未知类型警告丢弃、HTTP 阶段错误走 400 响应体 |
+| `system` | 死分支（`websocket.ts:231` 等 pong，服务端不发——见 §2 心跳） |
+
+**为什么单独立表而不是直接从类型里删**：这些是"设计了但没接线"的预留形状，删类型声明是 core 仓库的清理决策（另行处理）；但**移动端契约必须明确不含它们**——对着不存在的服务端行为做兼容，会把幻影帧固化成三端负担。
+
+## 6. 客户端必须知道的边界语义
+
+1. **慢客户端强制断开**：服务端下行缓冲 256 帧，写满即 `close(client.Send)` 踢线（`websocket_hub.go:234-236`）——客户端必须及时消费下行；被踢后走重连。
+2. **无历史重发**：WS 断连期间服务端不缓存不重放；恢复后靠增量补拉对账（访客可用补拉端点见策划文档 §10 #1）。补拉到位前，"断连期间坐席是否说过话"不可知。
+3. **服务端无应用层 ACK**：客户端发送 `text-message` 成功的判据是收到自己的回显帧；超时未收到 = 发送失败（本地标记 + 手动重发，对齐 Web 行为）。
+4. **JSON 解析失败静默丢弃**：服务端 readPump 对畸形帧 `continue`，无错误回执。
+
+## 7. 命名约定（冻结现状，不借机改名）
+
+现存混用：kebab-case（`text-message`/`agent-message`/`ai-response`/`ai-response-delta`/`webrtc-*`）与 snake_case（`transfer_notification`/`waiting_notification`）。改名是服务端 breaking change，V1 不做；本契约与 fixtures 按逐帧现状冻结，每帧标注所属命名族，新增帧优先 kebab-case。
+
+## 8. fixtures 互验约定（M0 落地物）
+
+- 位置：`sdk/protocol-fixtures/`，与 core、Android、iOS 测试共用同一套 JSON 样例；
+- 每个样例 = `{name, direction, frame, expectations}`：`frame` 是原始 WS JSON，`expectations` 是反序列化与状态机断言的规范描述；
+- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、慢客户端边界（文档级用例）；
+- 服务端 WS 广播点变更 → 同一 PR 更新本文 + fixtures → 三端回放测试同时验证。

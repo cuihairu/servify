@@ -97,7 +97,7 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 **结构（不共享代码，共享契约）**：
 
 1. **协议事实标准**：后端 `apps/server` 的 WS 契约（`/api/v1/ws`，访客唯一现成通道）+ 访客可达 REST 契约（当前为零——`/api/omni/*`、`/api/v1/ai/query`、`/api/tickets` 均为管理面端点，访客配套端点见 §10 清单）是唯一事实源。
-2. **契约文档化**：新建 `sdk/PROTOCOL.md`，逐条列出消息类型、字段、方向、错误语义。首版直接从服务端广播点与 `sdk/packages/core/src/types.ts` 的 `handleMessage` 分支对照提炼（死分支帧剔除，见 D2），并补上 Web 端事实上存在但未成文的约定（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case 的历史混用**在移动端契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做，契约里显式标注两类命名并存的原因与逐帧归类表）。
+2. **契约文档化**：`sdk/PROTOCOL.md` 首版已入库（2026-09）——逐帧列明消息类型、载荷字段、方向与边界语义，全部条目经服务端源码核实并带文件行号锚点。事实核查的关键产出已固化进契约：core 类型声明的六个死分支帧（`session_update`/`agent_status`/`typing`/`message`/`error`/`system`）单独立表声明"移动端契约不含"；心跳双向机制澄清（服务端协议层 Ping 54s，Web core 的 JSON `system/ping` 帧服务端不处理——移动端走平台原生协议层保活）；慢客户端 256 帧缓冲踢线、发送成功判据=收到自己回显等边界语义成文。命名混用（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case）**在契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做。
 3. **互验测试**：Android/iOS 各建一组"契约回放测试"——用同一组 JSON 样例（放 `sdk/protocol-fixtures/`，与 core 测试共用）驱动反序列化与状态机断言。服务端 WS 契约变更时，改 fixtures 会让三端测试同时红，这比"人记得三处都改"可靠。
 
 **消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:72-83`）：
@@ -272,7 +272,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 **M0 — 协议契约与联调探针（无 UI）**
 
-- 产出：`sdk/PROTOCOL.md` 首版；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
+- 产出：`sdk/PROTOCOL.md` 首版（✅ 已入库）；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
 - 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、移动端契约不含"显式标注）。
 
 **M1 — Android SDK Alpha**
