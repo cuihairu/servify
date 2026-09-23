@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import SwiftUI
+import UIKit
 
 /**
  * 宿主入口（Kotlin 镜像：EntryOrchestrator + FloatingButtonView 的 SwiftUI 形态）：

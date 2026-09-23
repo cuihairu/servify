@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
@@ -79,6 +80,19 @@ class ServifyChatTest {
 
     private suspend fun CompletableDeferred<Unit>.awaitReady() {
         withTimeout(5_000) { await() }
+    }
+
+    /**
+     * 未读 StateFlow 的 deadline 轮询：handleFrame 内 emit(messages) 与 bumpUnread
+     * 之间存在窗口——collector 收到事件返回不代表同帧的 bumpUnread 已执行
+     * （MockWebServer 回调在 OkHttp 线程、断言在 runBlocking 线程，跨线程派发序无
+     * 保证）。CI 高负载偶发（2026-09-23 实锤：release 变体 AssertionError），与
+     * Go 侧"先落库后发事件窗口"同型——事件断言要 deadline 轮询，不裸读 value。
+     */
+    private suspend fun awaitUnread(expected: Int) {
+        withTimeout(5_000) {
+            while (chat.events.unreadCount.value != expected) delay(50)
+        }
     }
 
     /** 服务端 WS 监听器：把收到的 text-message 内容原样以回显帧发回。 */
@@ -193,7 +207,7 @@ class ServifyChatTest {
         chat.connect()
 
         withTimeout(5_000) { second.await() }
-        assertEquals(2, chat.events.unreadCount.value)
+        awaitUnread(2) // 等 bump 链收尾（跨线程窗口），保证 visible 后断言 0 是终态
 
         chat.onSessionVisible()
         assertEquals(0, chat.events.unreadCount.value)
