@@ -10,18 +10,21 @@ IOS_DIR="$(cd "$(dirname "$0")/../sdk/ios" && pwd)"
 
 cd "$IOS_DIR"
 rm -rf build
-xcodebuild build \
+# SwiftPM 包无 framework target——xcodebuild build 只出单对象文件，取 framework
+# 须走 archive（SKIP_INSTALL=NO 让 framework 装进 archive 的 Products/Library/Frameworks）。
+xcodebuild archive \
     -scheme ServifyKit \
     -destination 'generic/platform=iOS' \
+    -archivePath build/kit.xcarchive \
     -configuration Release \
-    -derivedDataPath build/dd \
     BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
     SKIP_INSTALL=NO \
     >/dev/null
 
-FRAMEWORK=$(find build/dd/Build/Products -maxdepth 2 -name 'ServifyKit.framework' -type d | head -1)
+FRAMEWORK=$(find build/kit.xcarchive -name 'ServifyKit.framework' -type d | head -1)
 if [ -z "$FRAMEWORK" ]; then
-    echo "FAIL: 未找到 ServifyKit.framework 构建产物" >&2
+    echo "FAIL: 未找到 ServifyKit.framework（archive 产物结构如下）" >&2
+    find build/kit.xcarchive/Products -maxdepth 4 2>/dev/null | head -40 >&2
     exit 1
 fi
 
