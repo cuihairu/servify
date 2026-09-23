@@ -43,7 +43,7 @@ public enum WireFrame: Equatable {
 }
 
 /// ai-response.sources 元素（pkg/weknora SearchResult 的 JSON 形状）。
-public struct KnowledgeSource: Equatable {
+public struct KnowledgeSource: Equatable, Sendable {
     public let documentId: String
     public let title: String
     public let content: String?

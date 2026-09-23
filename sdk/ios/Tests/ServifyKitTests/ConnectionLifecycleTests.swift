@@ -1,0 +1,95 @@
+import Testing
+
+@testable import ServifyKit
+
+/**
+ * 连接状态机转移表穷举（§4.4，M2 验收镜像 M1⑤）：
+ *
+ * ```
+ * idle ─(首次 connect/show)→ connecting → connected ─(断)→ reconnecting(n) → connected
+ *                                      └─(握手失败)→ disconnected
+ * disconnected ─(用户再次 connect/show)→ connecting；重连耗尽也落 disconnected
+ * connected/connecting 期间重复 connect = 无操作（幂等）
+ * ```
+ *
+ * Kotlin 镜像：ConnectionLifecycleTest.kt——用例名逐一对应防单侧漂移。
+ * 断线重连边（connected → reconnecting → connected）由
+ * ServifyChatTests.reconnectsAfterServerDrop 锚定；destroy → disconnected 由
+ * destroyIsIdempotentAndMarksDisconnected 锚定——本类不重复。
+ */
+struct ConnectionLifecycleTests {
+
+    private func makeChat(_ transports: [MockTransport], policy: ReconnectPolicy? = nil) -> ServifyChat {
+        ServifyChat(
+            config: try! ServifyConfig(apiUrl: "https://chat.example.com"),
+            sessionId: "test-session",
+            policy: policy ?? (try! ReconnectPolicy(maxAttempts: 3, initialDelayMs: 100, multiplier: 2, maxDelayMs: 400)),
+            echoTimeoutMs: 200,
+            wsUrlOverride: "ws://mock.test/api/v1/ws",
+            transportFactory: TransportSequence(transports).factory()
+        )
+    }
+
+    @Test func initialConnectionStateIsIdle() throws {
+        let chat = makeChat([MockTransport()])
+        #expect(chat.events.connectionState.value == .idle)
+    }
+
+    @Test func idlePassesThroughConnectingToConnected() async throws {
+        let plain = MockTransport()
+        let chat = makeChat([plain])
+        let states = chat.events.connectionState.makeStream()
+        try await chat.connect()
+
+        let connecting = try await nextMatching(states, where: { state in
+            if case .connecting = state { return true }
+            return false
+        })
+        #expect(connecting == .connecting)
+
+        plain.emitOpen()
+        try await awaitConnected(chat)
+    }
+
+    @Test func repeatedConnectWhileConnectedIsNoop() async throws {
+        let chat = makeChat([EchoTransport()])
+        try await chat.connect()
+        try await awaitConnected(chat)
+
+        // 幂等：不替换连接——原连接回显链路依旧可达。
+        try await chat.connect()
+        try await chat.sendMessage("仍在原连接")
+        #expect(chat.events.connectionState.value == .connected)
+    }
+
+    @Test func handshakeFailureBeforeEverConnectedMarksDisconnected() async throws {
+        let chat = makeChat([HandshakeRejectTransport(status: 404)])
+        let states = chat.events.connectionState.makeStream()
+
+        try await chat.connect()
+        let state = try await nextMatching(states, where: { $0 == .disconnected })
+        #expect(state == .disconnected)
+    }
+
+    @Test func reconnectExhaustionMarksDisconnectedAndConnectRecovers() async throws {
+        // 第一次连接成功后断线 → 重连 #1 握手被拒（404）→ 再次退避耗尽（maxAttempts=1：
+        // delayFor(1) 仍放行、delayFor(2)=null）→ disconnected。
+        let first = DropOnFirstMessageTransport()
+        let chat = makeChat(
+            [first, HandshakeRejectTransport(status: 404), EchoTransport()],
+            policy: try! ReconnectPolicy(maxAttempts: 1, initialDelayMs: 50, multiplier: 2, maxDelayMs: 100)
+        )
+        let states = chat.events.connectionState.makeStream()
+        try await chat.connect()
+        first.emitOpen()
+        try await awaitConnected(chat)
+
+        try await chat.sendMessage("触发断线") // 回显不来，按超时收尾
+        let disconnected = try await nextMatching(states, where: { $0 == .disconnected })
+        #expect(disconnected == .disconnected)
+
+        // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
+        try await chat.connect()
+        try await awaitConnected(chat)
+    }
+}
