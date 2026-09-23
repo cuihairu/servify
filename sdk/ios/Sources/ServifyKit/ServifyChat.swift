@@ -37,6 +37,10 @@ public final class ServifyChat: @unchecked Sendable {
     private let echoTimeoutMs: Int
     /// 测试注入：绕过 config.apiUrl（生产路径恒为 https/wss 派生的 wss 地址）。
     private let wsUrlOverride: String?
+    /// 测试注入：工单创建端点同款（生产路径恒为 apiUrl + /api/v1/tickets）。
+    private let ticketUrlOverride: String?
+    /// 工单创建 HTTP 出口（nil 时 Darwin 用 URLSession 生产实现；Linux 测试面须注入 mock）。
+    private let ticketHTTP: TicketHTTPPosting?
     private let transportFactory: () -> WebSocketTransport
 
     private let core = SessionCore()
@@ -81,6 +85,8 @@ public final class ServifyChat: @unchecked Sendable {
         policy: ReconnectPolicy = .standard,
         echoTimeoutMs: Int = ServifyChat.defaultEchoTimeoutMs,
         wsUrlOverride: String? = nil,
+        ticketUrlOverride: String? = nil,
+        ticketHTTP: TicketHTTPPosting? = nil,
         transportFactory: @escaping () -> WebSocketTransport
     ) {
         self.config = config
@@ -88,6 +94,8 @@ public final class ServifyChat: @unchecked Sendable {
         self.policy = policy
         self.echoTimeoutMs = echoTimeoutMs
         self.wsUrlOverride = wsUrlOverride
+        self.ticketUrlOverride = ticketUrlOverride
+        self.ticketHTTP = ticketHTTP
         self.transportFactory = transportFactory
         events = ServifyEvents(
             messages: _messages,
@@ -135,6 +143,84 @@ public final class ServifyChat: @unchecked Sendable {
                 _errors.emit(.sendTimeout(message: "no echo within \(echoTimeoutMs)ms"))
             }
         }
+    }
+
+    /**
+     * 会话页工单创建（M3，§10 #4：POST {apiUrl}/api/v1/tickets，免认证访客端点；
+     * Kotlin 镜像：ServifyChat.createTicket）。ai_summary 由会话历史自动组装
+     * （TicketSummary，坐席侧直接可读），无对话则不携带该字段。请求-响应语义：
+     * 成功返回回执、失败返回 nil（错误经错误流同步发出，与 sendMessage 同风格）
+     * ——调用方（UI 刀）按 nil 在表单上反馈。
+     */
+    public func createTicket(title: String, description: String? = nil) async -> TicketReceipt? {
+        let http: TicketHTTPPosting
+        #if canImport(Darwin)
+        http = ticketHTTP ?? URLSessionTicketHTTP()
+        #else
+        guard let injected = ticketHTTP else {
+            fatalError("TicketHTTP 仅在 Darwin 生产面可用；Linux 测试须注入 mock")
+        }
+        http = injected
+        #endif
+
+        let trimmedBase = ticketUrlOverride ?? (trimTrailingSlash(config.apiUrl) + "/api/v1/tickets")
+        var payload: [String: String] = [
+            "session_id": sessionId,
+            "title": title,
+        ]
+        if let description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["description"] = description
+        }
+        if let summary = TicketSummary.build(messages: historySnapshot()) {
+            payload["ai_summary"] = summary
+        }
+        let body: Data
+        do {
+            body = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            _errors.emit(.ticketFailed(message: "ticket body encode failed: \(error.localizedDescription)"))
+            return nil
+        }
+
+        let result: Result<(status: Int, data: Data), Error>
+        do {
+            result = .success(try await http.post(url: trimmedBase, body: body))
+        } catch {
+            result = .failure(error)
+        }
+
+        switch result {
+        case let .failure(error):
+            _errors.emit(.network(message: "ticket request failed: \(error.localizedDescription)"))
+            return nil
+        case let .success((status, data)):
+            if !(200..<300).contains(status) {
+                _errors.emit(.ticketFailed(message: "ticket http \(status): \(String(data: data.prefix(200), encoding: .utf8) ?? "")"))
+                return nil
+            }
+            guard let ticketId = Self.parseTicketId(from: data) else {
+                _errors.emit(.ticketFailed(message: "ticket response missing id: \(String(data: data.prefix(200), encoding: .utf8) ?? "")"))
+                return nil
+            }
+            return TicketReceipt(ticketId: ticketId)
+        }
+    }
+
+    /// Kotlin String.trimEnd('/') 同口径（逐字符去尾）。
+    private func trimTrailingSlash(_ value: String) -> String {
+        var result = value
+        while result.hasSuffix("/") { result.removeLast() }
+        return result
+    }
+
+    /// 服务端 models.Ticket JSON 仅取 id（畸形/缺 id 由调用方兜底 ticketFailed）。
+    private static func parseTicketId(from data: Data) -> Int64? {
+        guard
+            let root = try? JSONSerialization.jsonObject(with: data),
+            let object = root as? [String: Any],
+            let id = object["id"] as? Int64 ?? (object["id"] as? NSNumber)?.int64Value
+        else { return nil }
+        return id
     }
 
     /** 会话页可见时清零未读（§4.3 unreadCount 语义；UI 刀内部接线）。 */

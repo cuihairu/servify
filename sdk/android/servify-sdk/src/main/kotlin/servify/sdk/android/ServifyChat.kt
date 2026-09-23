@@ -19,13 +19,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.RequestBody.Companion.toRequestBody
 import servify.sdk.android.connect.ConnectionState
 import servify.sdk.android.connect.ReconnectPolicy
 import servify.sdk.android.core.ProtocolEvent
@@ -33,8 +42,10 @@ import servify.sdk.android.core.SessionCore
 import servify.sdk.android.model.AgentAssignment
 import servify.sdk.android.model.ConversationMessage
 import servify.sdk.android.model.SenderType
+import servify.sdk.android.model.TicketReceipt
 import servify.sdk.android.protocol.FrameCodec
 import servify.sdk.android.protocol.WireFrame
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -59,6 +70,8 @@ class ServifyChat internal constructor(
     private val echoTimeoutMs: Long = DEFAULT_ECHO_TIMEOUT_MS,
     /** 测试注入：绕过 config.apiUrl（生产路径恒为 https/wss 派生的 wss 地址）。 */
     private val wsUrlOverride: String? = null,
+    /** 测试注入：工单创建端点同款（生产路径恒为 apiUrl + /api/v1/tickets）。 */
+    private val ticketUrlOverride: String? = null,
 ) {
     private val core = SessionCore()
 
@@ -175,6 +188,48 @@ class ServifyChat internal constructor(
         sessionVisible = true
         _unreadCount.value = 0
     }
+
+    /**
+     * 会话页工单创建（M3，§10 #4：POST {apiUrl}/api/v1/tickets，免认证访客端点）。
+     * ai_summary 由会话历史自动组装（[TicketSummary]，坐席侧直接可读），无对话则
+     * 不携带该字段。请求-响应语义：成功返回回执、失败返回 null（错误经 _errors
+     * 流同步发出，与 sendMessage 同风格）——调用方（UI 刀）按 null 在表单上反馈。
+     */
+    suspend fun createTicket(title: String, description: String? = null): TicketReceipt? =
+        withContext(Dispatchers.IO) {
+            val url = (ticketUrlOverride ?: config.apiUrl.trimEnd('/') + "/api/v1/tickets")
+            val body = buildJsonObject {
+                put("session_id", sessionId)
+                put("title", title)
+                if (!description.isNullOrBlank()) put("description", description)
+                TicketSummary.build(historySnapshot())?.let { put("ai_summary", it) }
+            }.toString()
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: IOException) {
+                _errors.emit(ServifyError.Network("ticket request failed: ${e.message}"))
+                return@withContext null
+            }
+            response.use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    _errors.emit(ServifyError.TicketFailed("ticket http ${resp.code}: ${text.take(200)}"))
+                    return@withContext null
+                }
+                val id = runCatching {
+                    json.parseToJsonElement(text).jsonObject["id"]?.jsonPrimitive?.longOrNull
+                }.getOrNull()
+                if (id == null) {
+                    _errors.emit(ServifyError.TicketFailed("ticket response missing id: ${text.take(200)}"))
+                    return@withContext null
+                }
+                TicketReceipt(ticketId = id)
+            }
+        }
 
     /** 会话页收起（hide()/点 scrim）：连接保持，此后到达的消息计入未读。 */
     internal fun onSessionHidden() {
@@ -418,6 +473,9 @@ class ServifyChat internal constructor(
     companion object {
         /** 回显判据默认超时（PROTOCOL.md §6.3 成功判据的本地兜底）。 */
         const val DEFAULT_ECHO_TIMEOUT_MS = 10_000L
+
+        /** 工单响应解析（仅取 id 字段；与 FrameCodec 同款 ignoreUnknownKeys 口径）。 */
+        private val json = Json { ignoreUnknownKeys = true }
 
         /**
          * 构造门面（§4.2）：载入配置，不建连（惰性连接）；sessionId 由 SDK 生成
