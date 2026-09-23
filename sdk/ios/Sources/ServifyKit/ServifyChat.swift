@@ -245,6 +245,21 @@ public final class ServifyChat: @unchecked Sendable {
         return history
     }
 
+    /**
+     * 追加 SDK 自造的系统提示行（M3 工单创建成功提示等 UI 刀接线用；协议无此帧，
+     * 不计未读；Kotlin 镜像：appendSystemHint）——进 history，面板 hide/重开后随
+     * 快照回放。
+     */
+    func appendSystemHint(_ text: String) {
+        recordAndEmit(ConversationMessage(
+            id: nextId(),
+            sessionId: sessionId,
+            sender: .system,
+            content: text,
+            createdAt: now()
+        ))
+    }
+
     /** 销毁：断连接、取消未决重连、清累积快照。过期套接字回调经身份守卫自然失效。 */
     public func destroy() {
         stateLock.lock()
@@ -500,13 +515,7 @@ public final class ServifyChat: @unchecked Sendable {
         }
         stateLock.unlock()
         if let partial { _messages.emit(partial) }
-        recordAndEmit(ConversationMessage(
-            id: nextId(),
-            sessionId: sessionId,
-            sender: .system,
-            content: "回答中断，请重试",
-            createdAt: now()
-        ))
+        appendSystemHint("回答中断，请重试")
     }
 
     // MARK: - 守卫/助手
@@ -586,13 +595,7 @@ public final class ServifyChat: @unchecked Sendable {
     /// destroy 不提示——用户主动关闭不等于客服离线。
     private func notifyOfflineHint() {
         guard let text = config.branding.offlineText else { return }
-        recordAndEmit(ConversationMessage(
-            id: nextId(),
-            sessionId: sessionId,
-            sender: .system,
-            content: text,
-            createdAt: now()
-        ))
+        appendSystemHint(text)
     }
 }
 

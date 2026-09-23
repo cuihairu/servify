@@ -187,4 +187,21 @@ struct ConnectionLifecycleTests {
         // 用户主动销毁 ≠ 客服离线：不追加提示行。
         #expect(!chat.historySnapshot().contains { $0.sender == .system })
     }
+
+    /// Kotlin 镜像：appendSystemHintEntersHistoryAndStreamWithoutUnread
+    @Test func appendSystemHintEntersHistoryAndStreamWithoutUnread() async throws {
+        let chat = makeChat([EchoTransport()])
+        try await chat.connect()
+        try await awaitConnected(chat)
+
+        // makeStream 的 builder 同步注册（TestSupport 探针口径），先订阅再触发。
+        let messages = chat.events.messages.makeStream()
+        chat.appendSystemHint("工单 #42 已创建，客服将尽快处理")
+
+        let emitted = try await nextMatching(messages, where: { $0.sender == .system })
+        #expect(emitted.sessionId == "test-session")
+        // 进 history（面板 hide/重开后随快照回放）；不计未读。
+        #expect(chat.historySnapshot().filter { $0.sender == .system }.count == 1)
+        #expect(chat.events.unreadCount.value == 0)
+    }
 }

@@ -224,6 +224,26 @@ class ConnectionLifecycleTest {
         // 用户主动销毁 ≠ 客服离线：不追加提示行。
         assertTrue(chat.historySnapshot().none { it.sender == SenderType.System })
     }
+
+    @Test
+    fun appendSystemHintEntersHistoryAndStreamWithoutUnread() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        chat = newChat()
+        chat.connect()
+        awaitConnected()
+
+        // onSubscription：订阅注册完成后才触发 appendSystemHint（messages 无 replay，
+        // 先订阅再触发的竞态口诀在此不适用——订阅注册本身异步生效，须钩在订阅点后）。
+        val emitted = withTimeout(5_000) {
+            chat.events.messages
+                .onSubscription { chat.appendSystemHint("工单 #42 已创建，客服将尽快处理") }
+                .first { it.sender == SenderType.System }
+        }
+        assertEquals("test-session", emitted.sessionId)
+        // 进 history（面板 hide/重开后随快照回放）；不计未读。
+        assertEquals(1, chat.historySnapshot().count { it.sender == SenderType.System })
+        assertEquals(0, chat.events.unreadCount.value)
+    }
 }
 
 /** 服务器 WS listener：把收到的 text-message 以回显帧发回（回显判据）。 */

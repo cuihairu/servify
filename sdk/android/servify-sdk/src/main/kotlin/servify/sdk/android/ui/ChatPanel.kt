@@ -69,6 +69,7 @@ fun ChatPanel(
     val scope = rememberCoroutineScope()
     val connectionState by chat.events.connectionState.collectAsState()
     var statusLine by remember { mutableStateOf<String?>(null) }
+    var showTicketForm by remember { mutableStateOf(false) }
 
     LaunchedEffect(chat) {
         chat.events.messages.collect {
@@ -89,7 +90,12 @@ fun ChatPanel(
             .fillMaxSize()
             .background(ChatThemeDefaults.PageBackground),
     ) {
-        TitleBar(title, connectionLabel(connectionState), onDismiss)
+        TitleBar(
+            title,
+            connectionLabel(connectionState),
+            onDismiss,
+            onTicketClick = { showTicketForm = true },
+        )
         statusLine?.let { StatusLine(it) }
         MessageList(
             items = panelState.items(),
@@ -112,6 +118,17 @@ fun ChatPanel(
             },
         )
     }
+    if (showTicketForm) {
+        // 工单创建（M3）：成功提示行走门面 appendSystemHint（进 history，hide 后可回放）。
+        TicketFormOverlay(
+            onSubmit = { title, description ->
+                val receipt = runCatching { chat.createTicket(title, description) }.getOrNull()
+                receipt?.let { chat.appendSystemHint("工单 #${it.ticketId} 已创建，客服将尽快处理") }
+                receipt
+            },
+            onDismiss = { showTicketForm = false },
+        )
+    }
 }
 
 private fun connectionLabel(state: ConnectionState): String = when (state) {
@@ -123,7 +140,7 @@ private fun connectionLabel(state: ConnectionState): String = when (state) {
 }
 
 @Composable
-private fun TitleBar(title: String, status: String, onDismiss: () -> Unit) {
+private fun TitleBar(title: String, status: String, onDismiss: () -> Unit, onTicketClick: () -> Unit) {
     val primary = LocalServifyPrimary.current
     Column(modifier = Modifier.fillMaxWidth().background(primary).statusBarsPadding()) {
         Row(
@@ -143,6 +160,15 @@ private fun TitleBar(title: String, status: String, onDismiss: () -> Unit) {
                 ChatText(status, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp, maxLines = 1)
             }
             Spacer(Modifier.weight(1f))
+            ChatText(
+                "工单",
+                color = Color.White,
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onTicketClick)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
             ChatText(
                 "✕",
                 color = Color.White,

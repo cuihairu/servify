@@ -83,6 +83,18 @@ final class ChatPanelModel: ObservableObject {
     func requestHandoff() {
         send("请转人工客服")
     }
+
+    /// 工单创建（M3 刀 3b；Kotlin 镜像：ChatPanel 的 TicketFormOverlay onSubmit 接线）：
+    /// 成功提示行走门面 appendSystemHint（进 history，hide 后可回放）。
+    /// 返回是否创建成功（表单按此收起或展示重试提示）。
+    @MainActor
+    func createTicket(title: String, description: String?) async -> Bool {
+        guard let receipt = await chat.createTicket(title: title, description: description) else {
+            return false
+        }
+        chat.appendSystemHint("工单 #\(receipt.ticketId) 已创建，客服将尽快处理")
+        return true
+    }
 }
 
 /**
@@ -96,6 +108,7 @@ struct ChatPanel: View {
 
     @StateObject private var model: ChatPanelModel
     @State private var inputText = ""
+    @State private var showTicketForm = false
 
     init(chat: ServifyChat, title: String, welcomeText: String?, onDismiss: @escaping () -> Void) {
         self.chat = chat
@@ -114,6 +127,18 @@ struct ChatPanel: View {
         }
         .background(ChatThemeDefaults.pageBackground)
         .task { model.start() }
+        .overlay {
+            if showTicketForm {
+                // 工单创建表单（M3 刀 3b）：成功提示行走 appendSystemHint。
+                TicketFormOverlay(
+                    primary: primary,
+                    onSubmit: { titleText, detail in
+                        await model.createTicket(title: titleText, description: detail)
+                    },
+                    onDismiss: { showTicketForm = false }
+                )
+            }
+        }
     }
 
     private var primary: Color {
@@ -130,6 +155,15 @@ struct ChatPanel: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 Spacer()
+                Button {
+                    showTicketForm = true
+                } label: {
+                    Text("工单")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                }
                 Button(action: onDismiss) {
                     Text("✕")
                         .font(.system(size: 18))
@@ -329,6 +363,137 @@ struct ChatPanel: View {
 
     private func canSend(enabled: Bool) -> Bool {
         enabled && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+/**
+ * 工单创建表单（M3 刀 3b，Kotlin 镜像：TicketForm.kt；SwiftUI 全系统库，D9 零三方）：
+ * 标题必填 + 描述选填；ai_summary 由门面自动组装（TicketSummary），表单不收摘要。
+ * 提交经 `onSubmit`（门面 createTicket）——成功返回回执并收起表单，失败展示重试提示。
+ */
+private struct TicketFormOverlay: View {
+    let primary: Color
+    let onSubmit: (String, String?) async -> Bool
+    let onDismiss: () -> Void
+
+    @State private var titleText = ""
+    @State private var detail = ""
+    @State private var submitting = false
+    @State private var errorText: String?
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture { if !submitting { onDismiss() } }
+            VStack(alignment: .leading, spacing: 0) {
+                Text("创建工单")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(ChatThemeDefaults.textPrimary)
+                Text("会话摘要将随工单一并发给客服")
+                    .font(.system(size: 12))
+                    .foregroundColor(ChatThemeDefaults.textSecondary)
+                    .padding(.top, 4)
+                TicketFormField(
+                    hint: "问题标题",
+                    text: $titleText,
+                    enabled: !submitting,
+                    singleLine: true
+                )
+                .padding(.top, 16)
+                TicketFormField(
+                    hint: "补充描述（选填）",
+                    text: $detail,
+                    enabled: !submitting,
+                    singleLine: false
+                )
+                .padding(.top, 10)
+                if let errorText {
+                    Text(errorText)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.86, green: 0.15, blue: 0.15))
+                        .padding(.top, 8)
+                }
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Text("取消")
+                            .font(.system(size: 14))
+                            .foregroundColor(ChatThemeDefaults.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .disabled(submitting)
+                    Button {
+                        submit()
+                    } label: {
+                        Text(submitting ? "提交中…" : "提交")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(canSubmit ? primary : ChatThemeDefaults.divider)
+                            .cornerRadius(8)
+                    }
+                    .disabled(!canSubmit)
+                }
+                .padding(.top, 16)
+            }
+            .padding(20)
+            .background(ChatThemeDefaults.surfaceWhite)
+            .cornerRadius(16)
+            .padding(.horizontal, 24)
+            .onTapGesture {} // 消费卡片内点击，避免穿透到 scrim 关闭
+        }
+    }
+
+    private var canSubmit: Bool {
+        !titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !submitting
+    }
+
+    private func submit() {
+        let trimmedTitle = titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        submitting = true
+        errorText = nil
+        Task {
+            let created = await onSubmit(trimmedTitle, trimmedDetail.isEmpty ? nil : trimmedDetail)
+            submitting = false
+            if created {
+                onDismiss()
+            } else {
+                errorText = "创建失败，请稍后重试"
+            }
+        }
+    }
+}
+
+private struct TicketFormField: View {
+    let hint: String
+    @Binding var text: String
+    let enabled: Bool
+    let singleLine: Bool
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if text.isEmpty {
+                Text(hint)
+                    .font(.system(size: 14))
+                    .foregroundColor(ChatThemeDefaults.textSecondary)
+            }
+            TextField(hint, text: $text, axis: singleLine ? .horizontal : .vertical)
+                .font(.system(size: 14))
+                .foregroundColor(ChatThemeDefaults.textPrimary)
+                .lineLimit(singleLine ? 1 : 4)
+                .disabled(!enabled)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChatThemeDefaults.pageBackground)
+        .cornerRadius(10)
     }
 }
 #endif

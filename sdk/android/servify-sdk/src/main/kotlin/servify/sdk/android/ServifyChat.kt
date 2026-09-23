@@ -239,6 +239,22 @@ class ServifyChat internal constructor(
     /** 当前累积消息快照（面板初始化回放；同 id 后到覆盖，与渲染层合并规则一致）。 */
     internal fun historySnapshot(): List<ConversationMessage> = history.toList()
 
+    /**
+     * 追加 SDK 自造的系统提示行（M3 工单创建成功提示等 UI 刀接线用；协议无此帧，
+     * 不计未读）——进 history，面板 hide/重开后随快照回放。
+     */
+    internal fun appendSystemHint(text: String) {
+        recordAndEmit(
+            ConversationMessage(
+                id = nextId(),
+                sessionId = sessionId,
+                sender = SenderType.System,
+                content = text,
+                createdAt = now(),
+            ),
+        )
+    }
+
     /** 销毁：断连接、取消作用域（含未决重连）、移除 UI 挂载与累积快照。 */
     fun destroy() {
         entry.release()
@@ -410,15 +426,7 @@ class ServifyChat internal constructor(
             history[index] = partial
             _messages.tryEmit(partial)
         }
-        recordAndEmit(
-            ConversationMessage(
-                id = nextId(),
-                sessionId = sessionId,
-                sender = SenderType.System,
-                content = "回答中断，请重试",
-                createdAt = now(),
-            ),
-        )
+        appendSystemHint("回答中断，请重试")
     }
 
     private fun nextId(): String = "ws-${++localSeq}"
@@ -432,15 +440,7 @@ class ServifyChat internal constructor(
      */
     private fun notifyOfflineHint() {
         val text = config.branding.offlineText ?: return
-        recordAndEmit(
-            ConversationMessage(
-                id = nextId(),
-                sessionId = sessionId,
-                sender = SenderType.System,
-                content = text,
-                createdAt = now(),
-            ),
-        )
+        appendSystemHint(text)
     }
 
     private inner class WsListener : WebSocketListener() {
