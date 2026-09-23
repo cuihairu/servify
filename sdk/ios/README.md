@@ -3,7 +3,7 @@
 客服会话 SDK（M2 Alpha 进行中）：Swift + SwiftUI（D4）、零三方依赖（D9，由 Package.swift
 无 dependencies 声明结构性保证）、XCFramework 分发（≤2MB 门禁）。
 
-## 当前状态（M2 进行中：刀 1/2/3/4 已落地）
+## 当前状态（M2 Alpha 完成：刀 1—5 已落地；验收矩阵见 `ACCEPTANCE-M2.md`）
 
 - 协议层：`WireFrame` / `FrameCodec`（Kotlin `shared/protocol` 逐字段镜像，畸形帧降级
   Unknown 语义一致）。

@@ -286,6 +286,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 - 产出：与 M1 能力面一致的 iOS 版本 + Swift Package 分发。
 - 验收：① 同一套 fixtures 回放全绿；② XCFramework ≤ 2MB；③ demo 宿主集成 ≤ 10 行代码；④ Keychain 存储、后台切换、推送注册口联调通过。
+- 状态（2026-09-23）：**已完成（iOS Alpha；③ demo 工程与 ④ Keychain/推送注册口按分层如实标注，逐条锚定见 `sdk/ios/ACCEPTANCE-M2.md`）**。① protocol-fixtures 同一样例集 core/Android/Swift 三端回放断言一致（`FixtureReplayTests` 11 测试），SDK 全量 61 测试 Linux 全绿 + macOS `ios-macos` job 跑 Darwin 面 63（0f99bee 起，dda9e16/a646e2a/51d1bf0）；② 体积门禁取分发形态 zip 后字节 ≤2MB（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，SwiftPM 包打包须走 archive——c83199b 核查记录），CI 独立 step；③ 接入面已证（`ServifyView(config:)` 一行拉起），真实 demo 工程需 Xcode 项目文件，待 macOS 环境（M4 接入文档站阶段）落地；④ 后台切换的可见性语义已自动化锚定（unreadCountsOnlyWhileSessionHidden + historySnapshot 回放），流中断渲染降级同 Kotlin 锚定，Keychain 存储/推送注册口为 M3 面且依赖后端配套项（§10 #2/#3）——V1 匿名 session 模式无凭证存储需求，如实标注未实现；真机手工项（前后台/飞行模式/蜂窝 WiFi）同 M1 矩阵待执行。状态机穷举同 M1⑤ 口径（转人工 4 + 连接 §4.4 转移表 6 + 退避策略 4）；覆盖率取行级可覆盖面 100%（Darwin 分支由 macos job 覆盖，a646e2a）。
 
 **M3 — 推送 + 工单 + 品牌化收口（双端）**
 
