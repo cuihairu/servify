@@ -165,6 +165,21 @@ if missed_by_file:
     print("FAIL: 可覆盖面存在未覆盖行（豁免面之外）:", file=sys.stderr)
     for f, ls in missed_by_file.items():
         print(f"  {f}: {ls}", file=sys.stderr)
+    # 诊断 dump：漏行涉及的源码区间在各 function 条目下的 region 结构
+    # （CI 与本地计数分裂时的现场证据，本地绿时不输出）
+    bad_ranges = {}
+    for f, ls in missed_by_file.items():
+        bad_ranges[f] = (min(ls) - 15, max(ls) + 15)
+    for func in exp["data"][0]["functions"]:
+        for fid, path in enumerate(func["filenames"]):
+            hit = [r for r in func["regions"] if r[5] == fid and "/Tests/" not in path
+                   and any(r[0] <= ln <= r[2] for ln in range(bad_ranges.get(
+                       path.rsplit("/", 1)[-1], (10**9, -1))[0],
+                       bad_ranges.get(path.rsplit("/", 1)[-1], (0, 10**9))[1] + 1))]
+            if hit:
+                print(f"  FUNC {func['name'][:60]} count={func['count']}", file=sys.stderr)
+                for r in sorted(hit, key=lambda x: (x[0], x[1])):
+                    print(f"    [{r[0]},{r[1]}]-[{r[2]},{r[3]}] c={r[4]}", file=sys.stderr)
     sys.exit(1)
 
 print(f"OK: iOS SDK 可覆盖面（Linux 测试面）行级 100%——全量 {total} 行可计数，"
