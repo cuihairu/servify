@@ -22,7 +22,11 @@
   握手参数。事件流 `EventStream`/`StateStream`（SharedFlow/StateFlow 最小镜像：
   组播无 replay / 订阅先吐当前值，AsyncStream builder 同步注册——订阅后 emit 不丢）。
 - 测试：`ReconnectPolicyTests`（4）/ `ServifyChatTests`（13）/ `ConnectionLifecycleTests`
-  （5）与 Kotlin 用例名逐一对应（连接状态机 §4.4 转移表穷举同型）。
+  （6）/ `ServifyErrorTests`（2）与 Kotlin 用例名逐一对应（连接状态机 §4.4 转移表穷举
+  同型、错误七码对账 §4.5 同型）。
+- 覆盖率口径（本地 `swift test --enable-code-coverage` 行级聚合）：生产代码可覆盖面
+  100%（820/820 行）；唯一豁免 `ServifyChat.create` 的 Darwin 分支（`#if canImport(Darwin)`
+  在 Linux 编译不到，等价 Go 侧 `[no statements]` 口径，macOS CI 刀落地后自然覆盖）。
 - 尚未落地（后续刀）：SwiftUI 会话面板与浮钮（show/hide 接线）、XCFramework 打包与
   体积门禁（macOS CI）、Keychain/推送注册口（依赖后端配套项）。
 

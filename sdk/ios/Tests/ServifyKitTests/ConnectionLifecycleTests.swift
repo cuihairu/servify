@@ -71,6 +71,26 @@ struct ConnectionLifecycleTests {
         #expect(state == .disconnected)
     }
 
+    @Test func serverCloseAfterConnectedTriggersReconnect() async throws {
+        // 服务端主动关（1000 正常关码，闲置踢线/代理超时）对移动端同为断线：
+        // onClosed → §4.4 connected ─断→ reconnecting(1) → 退避后自动恢复。
+        let closing = MockTransport()
+        let chat = makeChat([closing, EchoTransport()])
+        let states = chat.events.connectionState.makeStream()
+        try await chat.connect()
+        closing.emitOpen()
+        try await awaitConnected(chat)
+
+        closing.emitClosed(code: 1000)
+        let reconnecting = try await nextMatching(states, where: { state in
+            if case .reconnecting = state { return true }
+            return false
+        })
+        #expect(reconnecting == .reconnecting(attempt: 1))
+        try await awaitConnected(chat)
+        #expect(chat.events.connectionState.value == .connected)
+    }
+
     @Test func reconnectExhaustionMarksDisconnectedAndConnectRecovers() async throws {
         // 第一次连接成功后断线 → 重连 #1 握手被拒（404）→ 再次退避耗尽（maxAttempts=1：
         // delayFor(1) 仍放行、delayFor(2)=null）→ disconnected。
