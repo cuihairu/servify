@@ -148,9 +148,11 @@ class ConnectionLifecycleTest {
         awaitConnected()
 
         chat.sendMessage("触发断线") // 回显不来，按超时收尾
+        // CI release 变体实测 echo 200ms + 两轮退避 + 升级往返在负载下会超 5s（35851752444），
+        // 预算放大到 15s——真挂死依然 fail，只是不再被 runner 噪声误杀。
         assertEquals(
             ConnectionState.Disconnected,
-            withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
+            withTimeout(15_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
         )
 
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
@@ -202,15 +204,14 @@ class ConnectionLifecycleTest {
         server.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(branding = Branding(offlineText = "客服当前不在线，请稍后再来"))
 
-        chat.connect()
-        assertEquals(
-            ConnectionState.Disconnected,
-            withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
-        )
-        val hint = withTimeout(5_000) {
-            chat.events.messages.first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
-        }
+        // onSubscription 钩在订阅点后才 connect：hint 是无 replay SharedFlow，回调线程
+        // 可能在断言开始前就发射（CI release 变体实测翻车——本地 debug 恰好没翻）。
+        val hint = chat.events.messages
+            .onSubscription { chat.connect() }
+            .first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
         assertEquals("test-session", hint.sessionId)
+        // notifyOfflineHint 在 set Disconnected 之后调用：hint 到达即蕴含终态已落。
+        assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
     }
 
     @Test

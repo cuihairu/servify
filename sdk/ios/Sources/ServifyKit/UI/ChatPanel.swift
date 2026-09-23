@@ -477,23 +477,41 @@ private struct TicketFormField: View {
     let singleLine: Bool
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            if text.isEmpty {
-                Text(hint)
-                    .font(.system(size: 14))
-                    .foregroundColor(ChatThemeDefaults.textSecondary)
+        Group {
+            if singleLine {
+                // 单行：TextField（iOS 15 兼容；axis: 参数是 iOS 16+，禁用）
+                ZStack(alignment: .leading) {
+                    if text.isEmpty { hintView }
+                    TextField(hint, text: $text)
+                        .font(.system(size: 14))
+                        .foregroundColor(ChatThemeDefaults.textPrimary)
+                        .disabled(!enabled)
+                }
+                .padding(.vertical, 4)
+            } else {
+                // 多行：TextEditor（iOS 14+）+ 手动 placeholder（对齐其内建内边距）
+                ZStack(alignment: .topLeading) {
+                    if text.isEmpty {
+                        hintView.padding(.top, 8).padding(.leading, 5)
+                    }
+                    TextEditor(text: $text)
+                        .font(.system(size: 14))
+                        .foregroundColor(ChatThemeDefaults.textPrimary)
+                        .frame(minHeight: 72)
+                        .disabled(!enabled)
+                }
             }
-            TextField(hint, text: $text, axis: singleLine ? .horizontal : .vertical)
-                .font(.system(size: 14))
-                .foregroundColor(ChatThemeDefaults.textPrimary)
-                .lineLimit(singleLine ? 1 : 4)
-                .disabled(!enabled)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChatThemeDefaults.pageBackground)
         .cornerRadius(10)
+    }
+
+    private var hintView: some View {
+        Text(hint)
+            .font(.system(size: 14))
+            .foregroundColor(ChatThemeDefaults.textSecondary)
     }
 }
 #endif
