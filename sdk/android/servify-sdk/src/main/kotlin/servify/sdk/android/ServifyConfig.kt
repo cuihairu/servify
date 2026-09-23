@@ -20,7 +20,8 @@ data class Branding(
  * 接入配置（平台规格 §4.1，V1 冻结面）。
  *
  * apiUrl 强制加密协议：非 https/wss 值构造期直接报错（对应错误码 config_invalid）。
- * M3 项（pushTokenProvider）随 M3 刀进入冻结面，避免无消费面的预留字段。
+ * pushTokenProvider（M3，D7 可选性）：宿主提供 FCM token 获取闭包则启用推送注册口
+ * （[ServifyChat.registerPushToken]），null = 不启用（默认，接入方零改动）。
  */
 data class ServifyConfig(
     val apiUrl: String,
@@ -28,6 +29,8 @@ data class ServifyConfig(
     val branding: Branding = Branding(),
     val presentationStyle: PresentationStyle = PresentationStyle.Drawer,
     val loggingEnabled: Boolean = false,
+    /** 推送 token 获取闭包（宿主 FCM 集成面）；null = 推送不启用。 */
+    val pushTokenProvider: (suspend () -> String?)? = null,
 ) {
     init {
         require(apiUrl.startsWith("https://") || apiUrl.startsWith("wss://")) {

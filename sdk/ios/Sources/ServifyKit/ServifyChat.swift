@@ -277,6 +277,26 @@ public final class ServifyChat: @unchecked Sendable {
         _connectionState.set(.disconnected)
     }
 
+    /**
+     * 推送注册口（M3，平台规格 §4 registerPushToken；D7 可选性；Kotlin 镜像）：
+     * - pushTokenProvider 未配置 → unsupported 错误（能力未启用）；
+     * - 配置但 provider 返回 nil（宿主未授权/无 token）→ 静默返回 false（非错误）；
+     * - 取到 token → 上报服务端推送端点。服务端端点未上线（§10 #5），过渡期报
+     *   unsupported——端点落地后仅补本方法的上报实现，冻结面不变。
+     */
+    public func registerPushToken() async -> Bool {
+        guard let provider = config.pushTokenProvider else {
+            _errors.emit(.unsupported(message: "push not configured"))
+            return false
+        }
+        guard let token = await provider(), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        // §10 #5 未上线：上报端点落地前 token 无处可报，过渡期显式 unsupported。
+        _errors.emit(.unsupported(message: "push registration endpoint not available"))
+        return false
+    }
+
     // MARK: - 连接生命周期
 
     private func openSocket() {

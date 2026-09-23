@@ -39,13 +39,17 @@ public struct ServifyConfig: Sendable {
     public let branding: Branding
     public let presentationStyle: PresentationStyle
     public let loggingEnabled: Bool
+    /// 推送 token 获取闭包（宿主 APNs 集成面；Kotlin 镜像：pushTokenProvider）；
+    /// nil = 推送不启用（默认，接入方零改动）。
+    public let pushTokenProvider: (@Sendable () async -> String?)?
 
     public init(
         apiUrl: String,
         guestToken: String? = nil,
         branding: Branding = Branding(),
         presentationStyle: PresentationStyle = .drawer,
-        loggingEnabled: Bool = false
+        loggingEnabled: Bool = false,
+        pushTokenProvider: (@Sendable () async -> String?)? = nil
     ) throws {
         guard apiUrl.hasPrefix("https://") || apiUrl.hasPrefix("wss://") else {
             throw ServifyError.configInvalid(
@@ -57,5 +61,6 @@ public struct ServifyConfig: Sendable {
         self.branding = branding
         self.presentationStyle = presentationStyle
         self.loggingEnabled = loggingEnabled
+        self.pushTokenProvider = pushTokenProvider
     }
 }

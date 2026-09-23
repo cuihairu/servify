@@ -266,6 +266,28 @@ class ServifyChat internal constructor(
         _connectionState.value = ConnectionState.Disconnected
     }
 
+    /**
+     * 推送注册口（M3，平台规格 §4 registerPushToken；D7 可选性）：
+     * - [ServifyConfig.pushTokenProvider] 未配置 → Unsupported 错误（能力未启用）；
+     * - 配置但 provider 返回 null（宿主未授权/无 token）→ 静默返回 false（非错误）；
+     * - 取到 token → 上报服务端推送端点。服务端端点未上线（§10 #5），过渡期报
+     *   Unsupported——端点落地后仅补本方法的上报实现，冻结面不变。
+     */
+    suspend fun registerPushToken(): Boolean {
+        val provider = config.pushTokenProvider
+        if (provider == null) {
+            _errors.emit(ServifyError.Unsupported("push not configured"))
+            return false
+        }
+        val token = provider()
+        if (token.isNullOrBlank()) {
+            return false
+        }
+        // §10 #5 未上线：上报端点落地前 token 无处可报，过渡期显式 unsupported。
+        _errors.emit(ServifyError.Unsupported("push registration endpoint not available"))
+        return false
+    }
+
     private fun openSocket() {
         val url = buildWsUrl(config.apiUrl, wsUrlOverride, config.guestToken)
         val request = Request.Builder().url(url).build()
