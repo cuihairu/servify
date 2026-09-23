@@ -30,9 +30,10 @@
 
 ## ③ 对外交付物（AAR/XCFramework 产物流程）就绪 ✅（发布动作仍由维护者手动执行）
 
-- **CI 产物归档（f4a129d）**：android job 上传 `servify-sdk-aar`（servify-sdk-release.aar），
-  ios-macos job 上传 `servify-kit-xcframework`（build/ServifyKit.xcframework.zip，即分发形态）；
-  均 `if-no-files-found: error`（路径错明确红）+ retention 30 天（产物可重建）。
+- **CI 产物归档（f4a129d，路径修正）**：android job 上传 `servify-sdk-aar`（servify-sdk-release.aar），
+  ios-macos job 上传 `servify-kit-xcframework`（`sdk/ios/build/ServifyKit.xcframework.zip`——体积门禁
+  脚本 cd 进 sdk/ios，产物留在该目录；即分发形态）；均 `if-no-files-found: error`（路径错明确红）+
+  retention 30 天（产物可重建）。
 - **获取路径文档化**：接入指南 §2（CI artifact / 本地构建命令双路径）。
 - **SwiftPM 远程引用的边界**（如实记录）：`sdk/ios/Package.swift` 不在仓库根，远程
   `.package(url:)` 引用不可用；V1 接入路径为 XCFramework 手动嵌入，远程分发需独立

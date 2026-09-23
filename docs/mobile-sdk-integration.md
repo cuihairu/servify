@@ -23,7 +23,7 @@ API 语义逐一镜像。本页面向接入方；协议细节见 `sdk/PROTOCOL.m
 - **Android**：CI `android` job 的 AAR 产物，或本地构建：
   `cd sdk/android && ./gradlew :servify-sdk:assembleRelease`（产物 `servify-sdk/build/outputs/aar/`）。
 - **iOS**：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`），CI `ios-macos` job 产物，
-  或本地构建：`sdk/scripts/check-ios-sdk-size.sh`（产物 `build/ServifyKit.xcframework`）。
+  或本地构建：`sdk/scripts/check-ios-sdk-size.sh`（产物 `sdk/ios/build/ServifyKit.xcframework`）。
 - CocoaPods 不提供（M3 评估结论：SPM/XCFramework 单轨，按需重建触发条件见
   [评估文档](/mobile-sdk-cocoapods-evaluation)）。
 

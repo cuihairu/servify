@@ -503,14 +503,14 @@ jobs:
         timeout-minutes: 15
         run: ./scripts/check-ios-sdk-size.sh
 
-      # M4 验收③（产物流程就绪）：分发形态 zip 即接入方拿到的形态，体积门禁脚本
-      # 末尾产物保留在仓库根 build/（不清理），此处归档。
+      # M4 验收③（产物流程就绪）：分发形态 zip 即接入方拿到的形态。体积门禁脚本
+      # cd 进 sdk/ios 后把产物留在 sdk/ios/build/（不清理），此处归档。
       - name: Upload XCFramework artifact
         timeout-minutes: 3
         uses: actions/upload-artifact@v7
         with:
           name: servify-kit-xcframework
-          path: build/ServifyKit.xcframework.zip
+          path: sdk/ios/build/ServifyKit.xcframework.zip
           if-no-files-found: error
           retention-days: 30
 
