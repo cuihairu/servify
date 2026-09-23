@@ -86,7 +86,7 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 
 **为什么不用第三方网络/WS 库（Starscream 等）**：`URLSessionWebSocketTask` 原生覆盖连接、收发、ping（`sendPing`）能力，且随系统自动获得 TLS 与代理配置的正确行为；第三方库引入 1-2 个依赖传递与 App Store 隐私清单负担，无对应收益。
 
-**分发形态**：XCFramework + Swift Package Manager 二进制分发为主（接入方零 CocoaPods 配置），CocoaPods spec 作为兼容层维护到 M3 评估去留。禁入依赖（iOS）：任何三方网络/序列化/DI 库，序列化用 `Codable`。
+**分发形态**：XCFramework + Swift Package Manager 二进制分发为主（接入方零 CocoaPods 配置），CocoaPods spec 作为兼容层维护到 M3 评估去留（✅ 已评估，2026-09-23：SPM-only 单轨维持，零已知 CocoaPods-only 接入方不建 spec，按需重建触发条件见 `docs/mobile-sdk-cocoapods-evaluation.md`）。禁入依赖（iOS）：任何三方网络/序列化/DI 库，序列化用 `Codable`。
 
 ---
 
@@ -292,6 +292,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 - 产出：FCM/APNs 可选推送模块、会话页工单创建入口（AI 摘要预填）、Branding 全量配置、CocoaPods 兼容层评估。
 - 验收：① 推送端到端（后台 → 系统 → 点开 → 增量补拉 → 未读归零）双端通过；② 工单创建携带 AI 摘要且坐席侧可见；③ 体积门禁持续绿。
+- 状态（2026-09-23）：**代码面完成（双端；验收① 推送端到端待服务端/凭证配套，如实标注，不假装可验收；逐条锚定见 `sdk/ACCEPTANCE-M3.md`）**。刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4；迁移水位断言随 000011 递增 337f613/9a36216）→ 刀 3a createTicket 门面 + TicketSummary 摘要（7b6ced4）→ 刀 3b 双端 UI 入口（11ae3df，iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）。① SDK 侧注册口就位：`pushTokenProvider` 未配置→unsupported / provider 返 nil→静默（宿主未授权是正常态）/ 有 token→过渡期 unsupported（§10 #5 端点落地后仅补上报实现，冻结面不变，5a81558 双端 6 用例镜像）；端到端链路（后台→系统→点开→增量补拉→未读归零）依赖 §10 #5 推送下发 + §10 #1 游标端点 + FCM/APNs 凭证（P1-1），未通；offlineText 断线提示双端锚定（握手失败/重连耗尽/销毁不提示/不计未读，ConnectionLifecycleTest ↔ ConnectionLifecycleTests 用例名逐一对应）。② 双端闭环：门面 createTicket 自动组 ai_summary（TicketSummary 最近 10 条，[访客]/[AI]/[客服] 标注，System 提示行跳过，空则不带键）+ UI 入口（标题必填/描述选填/提交中禁用/失败重试提示/成功 appendSystemHint 进 history 不计未读）+ 服务端三包测试（orchestration 5 + delivery 3 + handlers 5）；坐席侧可见走管理面既有 tickets 列表/详情（同表同响应链，ai_summary 进 ticketResponse），无新开发面。③ 体积门禁持续绿：Android R8 口径 + iOS 分发 zip 口径 CI 独立 step 每次 push 复核，M3 期间无漂移。CocoaPods 兼容层评估：`docs/mobile-sdk-cocoapods-evaluation.md`——零已知 CocoaPods-only 接入方，SPM-only 单轨维持，按需重建触发条件已记录，复核时点 M4 文档站定稿。真机手工项（推送/前后台/弱网）随验收①外部配套一并待执行。
 
 **M4 — 稳定化与接入就绪**
 
@@ -311,8 +312,8 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 | 1 | 访客可用的会话消息增量拉取端点（`lastMessageId` 游标语义） | M1 | 无——`/api/omni/sessions/:id/messages` 是管理面端点，访客 401 |
 | 2 | 访客 token 签发端点（server-to-server 换取）+ WS 握手校验接线 | M1 | 无——WS 握手免认证，`access_token` 参数不消费（见 D6） |
 | 3 | 未读计数（服务端会话级未读数或客户端可推导的已读游标） | M1 | 无（客户端推导即可起步，服务端游标为增强；与 #1 游标语义一并设计） |
-| 4 | 访客可用的工单创建端点，接受 `ai_summary` 字段 | M3 | 无——`/api/tickets` 是管理面端点（agent/admin/service + tickets 资源权限），且摘要字段未接 |
-| 5 | 推送 token 注册 + 会话消息推送下发 | M3 | app-core contract 已预留，服务端未实现 |
+| 4 | 访客可用的工单创建端点，接受 `ai_summary` 字段 | M3 | ✅ 已落地（M3 刀 2，48813a6）：`POST /api/v1/tickets` 免认证（与 WS 同 `/api/v1` 前缀），`session_id`/`title` 必填 + `description`/`ai_summary`；分类/优先级/来源服务端固定默认值，租户 scope 从 session 行继承；迁移 000011_ticket_ai_summary；坐席侧管理面 tickets 列表/详情同表同响应链自然可见（状态史/自动派单/`ticket.created` 事件同构） |
+| 5 | 推送 token 注册 + 会话消息推送下发 | M3 | 服务端未实现（P1-1 凭证阻塞一并排队）；SDK 侧注册口过渡语义已就位（M3 刀 4，5a81558）：`pushTokenProvider` 未配置→unsupported、provider 返回 nil→静默（宿主未授权是正常态）、有 token→过渡期 unsupported（端点落地后仅补上报实现，冻结面不变） |
 | 6 | （已完成，记录在案）WS `ai-response` 携带 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略，向后兼容）+ `ai-response-delta` 流式帧（增量/终末增量/完整终帧三段契约，流中断语义明确） | M1 | ✅ 已落地（2026-09 AI 主链路智能化批次），M0 fixtures 可直接从服务端实现提炼 |
 
 > 其中 #6 随 AI 主链路智能化批次完成；#1/#2/#3 是移动端独立配套（游标与鉴权可合并评审）；#4/#5 服务 M3。

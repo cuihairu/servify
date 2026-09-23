@@ -280,7 +280,7 @@ docker run -p 8080:8080 \
 
 ## 📦 SDK 与渠道预留
 
-当前只实现 Web 方向，但架构已经预留多端 SDK 和多渠道接入。
+当前只实现 Web 方向，但架构已经预留多端 SDK 和多渠道接入。（更新：Android/iOS 原生 SDK 已随移动端里程碑 M1–M3 落地（`sdk/android`、`sdk/ios`，SwiftPM/XCFramework 分发），设计与验收见 `docs/mobile-sdk-design.md`；多渠道接入仍是扩展边界。）
 
 ```mermaid
 flowchart TB
@@ -308,7 +308,7 @@ flowchart TB
 设计约束：
 
 - `sdk/packages/core` 只放跨端 contract，不放浏览器 UI 逻辑
-- Web SDK 先实现，API/App SDK 只保留目录和协议设计
+- Web SDK 已实现；App SDK（Android/iOS）已按 `docs/mobile-sdk-design.md` 落地原生实现（协议契约与 Web 对齐，运行时结构按各平台惯例）；API SDK 仍只保留目录和协议设计
 - 渠道接入统一映射到 `conversation` 和 `routing`，不允许直接穿透到旧 service
 
 ---

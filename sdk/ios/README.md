@@ -1,9 +1,9 @@
 # Servify iOS SDK（ServifyKit）
 
-客服会话 SDK（M2 Alpha 进行中）：Swift + SwiftUI（D4）、零三方依赖（D9，由 Package.swift
-无 dependencies 声明结构性保证）、XCFramework 分发（≤2MB 门禁）。
+客服会话 SDK（M3 代码面完成）：Swift + SwiftUI（D4）、零三方依赖（D9，由 Package.swift
+无 dependencies 声明结构性保证）、SwiftPM/XCFramework 分发（≤2MB 门禁）。
 
-## 当前状态（M2 Alpha 完成：刀 1—5 已落地；验收矩阵见 `ACCEPTANCE-M2.md`）
+## 当前状态（M2 Alpha 完成；M3 代码面完成——工单创建 + 推送注册口 + 离线提示，验收矩阵见 `ACCEPTANCE-M2.md` 与 `../ACCEPTANCE-M3.md`）
 
 - 协议层：`WireFrame` / `FrameCodec`（Kotlin `shared/protocol` 逐字段镜像，畸形帧降级
   Unknown 语义一致）。
@@ -38,7 +38,28 @@
   事件流 → @Published 薄接线）——§4.2 show/hide 语义（首展 connect、可见清未读、
   收起连接保持未读累计）、D8 浮钮角标/抽屉/全屏、转人工按钮与来源列表同 Kotlin。
   SwiftUI 编译验证由 ios-macos job 的 xcodebuild 承担（Linux/纯 swift test 编译不到）。
-- 尚未落地（后续刀）：Keychain/推送注册口（依赖后端配套项，M3 面）。
+- 尚未落地：Keychain（V1 匿名 session 无凭证存储需求；推送注册口已随 M3 刀 4 落地——
+  `ServifyConfig(pushTokenProvider:)` + `registerPushToken()` 过渡语义，服务端端点上线后
+  仅补上报实现）。
+
+## M3 API（工单 / 推送注册口 / 离线提示）
+
+```swift
+let config = try ServifyConfig(
+    apiUrl: "https://your-servify-host",
+    branding: Branding(offlineText: "客服当前不在线，请稍后再来"), // 断线后系统提示行，选填
+    pushTokenProvider: { await fetchAPNsToken() } // 宿主 APNs 集成面，nil = 推送不启用（默认）
+)
+
+// 访客工单创建：服务端组装会话摘要（最近 10 条）随单提交，成功返回工单号
+let receipt = await chat.createTicket(title: "无法登录", description: "选填补充")
+
+// 推送注册：服务端端点上线前为过渡语义（未配置/端点未上线 → error 流 unsupported；
+// 宿主未授权无 token → 静默 false，非错误）
+_ = await chat.registerPushToken()
+```
+
+工单创建也可从会话面板标题栏"工单"按钮发起（表单：标题必填 + 描述选填，摘要自动组装）。
 
 ## 本地开发
 

@@ -1,7 +1,8 @@
 # Servify Android SDK
 
-客服会话 SDK（M1 Alpha）：WS 长连接、AI 首答流式渲染、转人工状态机、未读计数、
-惰性连接与自动重连、浮动按钮 + 抽屉/全屏会话面板。
+客服会话 SDK（M3 代码面完成）：WS 长连接、AI 首答流式渲染、转人工状态机、未读计数、
+惰性连接与自动重连、浮动按钮 + 抽屉/全屏会话面板、访客工单创建（AI 摘要预填）、
+推送注册口、离线提示（Branding）。
 
 ## 集成（M1 验收②：≤10 行）
 
@@ -26,6 +27,25 @@ class MainActivity : ComponentActivity() {
 - 事件订阅：`chat.events`（§4.3 聚合面：`messages` / `unreadCount` / `connectionState` /
   `reconnecting` / `agentAssigned` / `waitingInQueue` / `error`）。
 - `destroy()`：摘除全部 UI、断开连接、取消协程作用域。
+
+## M3 API（工单 / 推送注册口 / 离线提示）
+
+```kotlin
+val config = ServifyConfig(
+    apiUrl = "https://your-servify-host",
+    branding = Branding(offlineText = "客服当前不在线，请稍后再来"), // 断线后系统提示行，选填
+    pushTokenProvider = { fetchFcmToken() }, // 宿主 FCM 集成面，null = 推送不启用（默认）
+)
+
+// 访客工单创建：服务端组装会话摘要（最近 10 条）随单提交，成功返回工单号
+val receipt = chat.createTicket(title = "无法登录", description = "选填补充")
+
+// 推送注册：服务端端点上线前为过渡语义（未配置/端点未上线 → error 流 unsupported；
+// 宿主未授权无 token → 静默 false，非错误）
+chat.registerPushToken()
+```
+
+工单创建也可从会话面板标题栏"工单"按钮发起（表单：标题必填 + 描述选填，摘要自动组装）。
 
 ## 要求与约束
 
@@ -52,5 +72,6 @@ class MainActivity : ComponentActivity() {
 - M1 刀 1-3 ✅ 工程/门面/UI（浮钮 + 抽屉/全屏面板 + 气泡/来源/置信门/未读）
 - M1 刀 4 ✅ 会话连续性：内存级累积 + 未读可见性语义 + 流中断收口 + guestToken 握手参数（磁盘持久化按 D7 核查不做——补拉/推送端点均为服务端待建项，预留即死代码）
 - M1 刀 5 ✅ 验收矩阵与状态机穷举（连接状态机 5 测试 + 转人工 4 测试；真机手工项待执行，见 [ACCEPTANCE-M1.md](ACCEPTANCE-M1.md)）
+- M3 ✅ 代码面：offlineText 离线提示 → createTicket 门面 + AI 摘要 → 工单 UI 入口 → pushTokenProvider 注册口（过渡语义；推送端到端待服务端配套，见 [../ACCEPTANCE-M3.md](../ACCEPTANCE-M3.md)）
 
 设计依据：`docs/mobile-sdk-design.md`（D3/D5/D8/D9）、`docs/mobile-sdk-platform-spec.md`（§4 API 冻结面）。
