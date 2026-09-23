@@ -3,7 +3,7 @@
 客服会话 SDK（M2 Alpha 进行中）：Swift + SwiftUI（D4）、零三方依赖（D9，由 Package.swift
 无 dependencies 声明结构性保证）、XCFramework 分发（≤2MB 门禁）。
 
-## 当前状态（M2 进行中：刀 1/2/4 已落地）
+## 当前状态（M2 进行中：刀 1/2/3/4 已落地）
 
 - 协议层：`WireFrame` / `FrameCodec`（Kotlin `shared/protocol` 逐字段镜像，畸形帧降级
   Unknown 语义一致）。
@@ -31,8 +31,14 @@
   Transport`/`create` 工厂，`CreateFactoryTests` 仅 Darwin 编译）+ XCFramework 打包与
   体积门禁（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，
   分发形态 zip 后 ≤2MB，D9/M2 验收②）。
-- 尚未落地（后续刀）：SwiftUI 会话面板与浮钮（show/hide 接线，依赖 macOS job 先行——
-  SwiftUI 在 Linux 编译不了）、Keychain/推送注册口（依赖后端配套项）。
+- UI（刀 3，`UI/` 目录）：纯逻辑层无平台条件（`ChatUiState`——toChatListItems 纯映射 /
+  `ChatPanelState` reducer / `resolvePanelStyle` 形态选择 / `isRightAligned`，Linux
+  单测穷举，Kotlin `ChatUiStateTest`/`ChatPanelStateTest` 镜像）；SwiftUI 层
+  `#if canImport(UIKit)`（`ChatPanel` 面板 + `ServifyView` 浮钮入口，`ChatPanelModel`
+  事件流 → @Published 薄接线）——§4.2 show/hide 语义（首展 connect、可见清未读、
+  收起连接保持未读累计）、D8 浮钮角标/抽屉/全屏、转人工按钮与来源列表同 Kotlin。
+  SwiftUI 编译验证由 ios-macos job 的 xcodebuild 承担（Linux/纯 swift test 编译不到）。
+- 尚未落地（后续刀）：Keychain/推送注册口（依赖后端配套项，M3 面）。
 
 ## 本地开发
 
