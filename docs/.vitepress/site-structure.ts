@@ -30,6 +30,7 @@ const productPages = [
   '/deployment',
   '/webrtc-deployment',
   '/local-development',
+  '/mobile-sdk-integration',
 ];
 
 const operationsPages = [
@@ -60,6 +61,7 @@ export const docsNav = [
   { text: '产品', link: '/v1-product-scope' },
   { text: '架构', link: '/ARCHITECTURE' },
   { text: '部署', link: '/deployment' },
+  { text: 'SDK 接入', link: '/mobile-sdk-integration' },
   {
     text: '运行与安全',
     items: [
