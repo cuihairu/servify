@@ -298,6 +298,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 - 产出：接入文档站（VitePress 移动端章节）、断线/弱网自动化测试矩阵、崩溃与性能基线（会话页首帧 < 300ms、内存增量 < 30MB）。
 - 验收：① 双端 demo 连续 72h 长稳（重连循环、前后台往返）无泄漏；② 文档站构建绿并挂载发布位；③对外交付物（AAR/XCFramework 产物流程）就绪——**发布动作本身仍由维护者手动执行，SDK 仓库不内置任何自动发版步骤**。
+- 状态（2026-09-23）：**可交付面完成（② ③ ✅；① 与性能基线为环境依赖项如实标注待执行；逐条锚定与 72h 执行方案见 `sdk/ACCEPTANCE-M4.md`）**。② 接入指南 `docs/mobile-sdk-integration.md`（双端，API 签名经源码核对）+ nav/sidebar 挂载 + 本地 vitepress build 绿 + docs-pages.yml 既有自动发布（6ba98c7）；③ CI 产物归档 servify-sdk-aar / servify-kit-xcframework（`if-no-files-found: error`，retention 30 天，f4a129d）+ 获取路径文档化 + SwiftPM 远程引用边界如实记录（`sdk/ios/Package.swift` 不在仓库根，V1 为 XCFramework 手动嵌入，远程分发待维护者手动建独立 distribution 仓库）；弱网矩阵经缺口分析确认已由 M1-M3 锚定面穷举（高延迟回显/断线重连/耗尽/握手失败/流中断/退避序列，镜像用例逐一对应），延迟注入不触达新路径、不添加时间敏感用例；① 72h 长稳与性能基线（首帧 < 300ms、内存 < 30MB）阻塞于 GitHub Actions 6h job 上限 + 本机无真机/模拟器 + demo 工程待 macOS（M2 验收③同源约束）——执行方案（压力脚本/判据/留档口径）已在验收矩阵冻结，环境到位后照单执行。
 
 **明确排除项（记录不做的决定，防止范围回弹）**：坐席移动端、语音/视频、富媒体消息（图片/文件）、离线发送队列、消息撤回/编辑、多语言内置（V1 中文，Branding 预留 i18n 钩子）。
 
