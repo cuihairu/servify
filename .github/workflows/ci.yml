@@ -442,6 +442,33 @@ jobs:
         timeout-minutes: 15
         run: ./scripts/check-android-sdk-size.sh
 
+  ios-swift:
+    name: iOS SDK (Swift)
+    # 锁 ubuntu-24.04：swift.org 的 26.04 平台 tarball 首版带了旧编译的 Testing.swiftmodule
+    # （6.4.0-RELEASE 实测），24.04 是成熟平台面；runner 与 setup 均用 24.04 口径。
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        timeout-minutes: 3
+        uses: actions/checkout@v7
+
+      - name: Setup Swift 6.4.0
+        timeout-minutes: 12
+        run: |
+          SWIFT_URL="https://download.swift.org/swift-6.4.0-release/ubuntu2404/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-ubuntu24.04.tar.gz"
+          curl -sL -o /tmp/swift.tar.gz "$SWIFT_URL"
+          mkdir -p "$HOME/.swift" && tar -xzf /tmp/swift.tar.gz -C "$HOME/.swift" --strip-components=1
+          echo "$HOME/.swift/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Build and test ServifyKit (fixtures replay, M2 acceptance #1)
+        timeout-minutes: 8
+        working-directory: sdk/ios
+        run: swift test
+
   admin-checks:
     name: Admin Checks
     runs-on: ubuntu-latest
