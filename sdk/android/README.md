@@ -56,6 +56,14 @@ chat.registerPushToken()
 - 体积门禁（M1 验收③）：宿主（R8 开启）集成增量 ≤ 1.5MB，
   由 `scripts/check-android-sdk-size.sh` 用 demo vs demo-baseline 两 APK 差值校验。
 - AAR 自带 consumer-rules.pro（kotlinx.serialization 的 R8 规则），宿主无需手工配置。
+- 覆盖率口径（门禁脚本化）：`scripts/check-android-sdk-coverage.sh`——JVM 单测可达面
+  （逻辑层：core/protocol/model/connect + 门面逻辑）行级 100% 硬断言（AGP 内置 jacoco
+  `createDebugUnitTestCoverageReport` 出报告，CI android-probe job 执行），与 Go 侧
+  `TEST_COVERAGE_TARGET=100` 同纪律；豁免面为 framework/渲染层（Compose `ui/` 包、
+  `EntryOrchestrator`/`FloatingButtonView`、`ServifyChat.show/hide` 桥接、send-rejected
+  与 `onClosed` 环境不可注入路径）——JVM 单测无 Android runtime，D9 白名单冻结不引
+  Robolectric，由编译期 + 真机手工项覆盖。豁免行以源码 `coverage-exempt` 注释锚定，
+  脚本反向校验清单漂移。
 
 ## 模块
 

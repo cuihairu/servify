@@ -194,4 +194,24 @@ struct CreateTicketTests {
         let error = try await nextMatching(errors, where: { $0.code == "ticket_failed" })
         #expect(error.code == "ticket_failed")
     }
+
+    @Test func createTicketDerivesUrlFromApiUrlTrimmingTrailingSlash() async throws {
+        // 无 override 的生产路径：URL 由 apiUrl 派生（尾斜杠修剪 + /api/v1/tickets 拼接）
+        let http = MockTicketHTTP()
+        http.enqueue(.success((201, Data(#"{"id":9}"#.utf8))))
+        let transport = MockTransport()
+        let chat = ServifyChat(
+            config: try! ServifyConfig(apiUrl: "https://chat.example.com/"),
+            sessionId: "test-session",
+            echoTimeoutMs: 200,
+            wsUrlOverride: "ws://mock.test/api/v1/ws",
+            ticketHTTP: http,
+            transportFactory: { transport }
+        )
+
+        let receipt = await chat.createTicket(title: "咨询")
+
+        #expect(receipt?.ticketId == 9)
+        #expect(http.postedURL == "https://chat.example.com/api/v1/tickets")
+    }
 }

@@ -75,6 +75,27 @@ struct ConnectionLifecycleTests {
         #expect(state == .disconnected)
     }
 
+    @Test func handshakeIoFailureWithoutStatusEmitsNetworkAndDisconnected() async throws {
+        // 握手失败三分支的 else 面：IO 类失败（连接拒绝等）无 HTTP status → network
+        // （区别于 4xx → handshakeRejected / 5xx → serverUnavailable）。
+        // Kotlin 镜像：ServifyChatTest.handshakeIoFailureWithoutStatusEmitsNetworkAndDisconnected
+        let plain = MockTransport()
+        let chat = makeChat([plain])
+        let errors = chat.events.error.makeStream()
+        let states = chat.events.connectionState.makeStream()
+
+        try await chat.connect()
+        plain.emitFailure(TransportLost()) // 无 httpStatus
+
+        let error = try await nextMatching(errors)
+        guard case .network = error else {
+            Issue.record("expected network, got \(error)")
+            return
+        }
+        let state = try await nextMatching(states, where: { $0 == .disconnected })
+        #expect(state == .disconnected)
+    }
+
     @Test func serverCloseAfterConnectedTriggersReconnect() async throws {
         // 服务端主动关（1000 正常关码，闲置踢线/代理超时）对移动端同为断线：
         // onClosed → §4.4 connected ─断→ reconnecting(1) → 退避后自动恢复。

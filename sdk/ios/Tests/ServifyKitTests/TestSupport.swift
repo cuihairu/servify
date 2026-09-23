@@ -121,6 +121,19 @@ final class HandshakeRejectTransport: MockTransport {
     }
 }
 
+/// 发送拒绝（镜像 okhttp 已 closing 套接字的 send=false——SDK 侧 "websocket send
+/// rejected" 错误路径；Android 真传输不可注入，此面为 iOS 独有锚定）。
+final class SendRejectingTransport: MockTransport {
+    override init() {
+        super.init()
+        autoOpen = true
+    }
+
+    override func send(_: String) -> Bool {
+        false
+    }
+}
+
 /// 按收到的客户消息序号下发不同服务端帧（镜像 ScriptedListener）：
 /// 1=坐席消息、2=流式增量+终帧、3+=坐席消息。
 final class ScriptedTransport: MockTransport {
@@ -192,6 +205,14 @@ enum TestFrames {
 
     static func waiting(_ message: String) -> String {
         "{\"type\":\"waiting_notification\",\"data\":{\"message\":\"\(message)\"},\"session_id\":\"test-session\"}"
+    }
+
+    static func webrtcOffer() -> String {
+        "{\"type\":\"webrtc-offer\",\"data\":{},\"session_id\":\"test-session\"}"
+    }
+
+    static func unknownKind() -> String {
+        "{\"type\":\"totally-unknown-kind\",\"data\":{}}"
     }
 }
 

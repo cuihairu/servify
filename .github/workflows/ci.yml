@@ -442,6 +442,16 @@ jobs:
         timeout-minutes: 15
         run: ./scripts/check-android-sdk-size.sh
 
+      # 覆盖率门禁：JVM 单测可达面（逻辑层）行级 100%（豁免面=framework/渲染层，
+      # 清单与漂移锚定见脚本头）——与 Go TEST_COVERAGE_TARGET=100 同纪律。
+      - name: Coverage gate (JVM-reachable logic layer 100%)
+        timeout-minutes: 10
+        working-directory: sdk/android
+        run: |
+          ./gradlew --no-daemon :servify-sdk:createDebugUnitTestCoverageReport
+          chmod +x ../../scripts/check-android-sdk-coverage.sh
+          ../../scripts/check-android-sdk-coverage.sh
+
       # M4 验收③（产物流程就绪）：AAR 作为接入方可取产物随 CI 归档（可重建，30 天足够）。
       - name: Upload AAR artifact
         timeout-minutes: 3
@@ -477,7 +487,15 @@ jobs:
       - name: Build and test ServifyKit (fixtures replay, M2 acceptance #1)
         timeout-minutes: 8
         working-directory: sdk/ios
-        run: swift test
+        run: swift test --enable-code-coverage
+
+      # 覆盖率门禁：Linux 测试面行级 100%（豁免面=Darwin 分支/防御行，清单与
+      # 漂移锚定见脚本头）——Android/Go 同纪律；Darwin 面由 ios-macos job 覆盖。
+      - name: Coverage gate (Linux-testable 100%)
+        timeout-minutes: 5
+        run: |
+          chmod +x scripts/check-ios-sdk-coverage.sh
+          ./scripts/check-ios-sdk-coverage.sh
 
   ios-macos:
     name: iOS SDK (macOS Darwin face)

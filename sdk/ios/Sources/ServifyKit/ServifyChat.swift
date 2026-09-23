@@ -17,6 +17,8 @@ public final class ServifyChat: @unchecked Sendable {
     /// 构造门面（§4.2）：载入配置，不建连（惰性连接）；sessionId 由 SDK 生成
     /// （"m-" + UUID，D5/PROTOCOL §1 匿名 session 模式）。
     /// 重复 create 由接入方避免（单例语义，文档明示）。
+    /// coverage-exempt（Darwin 分支）：Linux 编译面仅 fatalError 守卫路径，
+    /// 生产路径由 ios-macos job 的 CreateFactoryTests 覆盖（M2 豁免口径）。
     public static func create(config: ServifyConfig) -> ServifyChat {
         #if canImport(Darwin)
         return ServifyChat(
@@ -158,6 +160,8 @@ public final class ServifyChat: @unchecked Sendable {
         http = ticketHTTP ?? URLSessionTicketHTTP()
         #else
         guard let injected = ticketHTTP else {
+            // coverage-exempt（Darwin 分支）：Linux 测试面必注入 mock，守卫不可达；
+            // 生产路径由 macos 构建面覆盖（M2 豁免口径）。
             fatalError("TicketHTTP 仅在 Darwin 生产面可用；Linux 测试须注入 mock")
         }
         http = injected
@@ -178,6 +182,8 @@ public final class ServifyChat: @unchecked Sendable {
         do {
             body = try JSONSerialization.data(withJSONObject: payload)
         } catch {
+            // coverage-exempt（防御行）：payload 是 [String: String]（property-list 类型），
+            // JSONSerialization 对它不可失败——catch 面无法经任何输入触达，纯 API 契约兜底。
             _errors.emit(.ticketFailed(message: "ticket body encode failed: \(error.localizedDescription)"))
             return nil
         }

@@ -9,11 +9,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import servify.sdk.android.core.HandoffState
 import servify.sdk.android.core.ProtocolEvent
 import servify.sdk.android.core.SessionCore
 import servify.sdk.android.protocol.FrameCodec
+import servify.sdk.android.protocol.WireFrame
 
 /**
  * 契约回放测试：消费 sdk/protocol-fixtures/ 全部样例（与 core 回放测试同一套文件，
@@ -180,6 +182,56 @@ class FixtureReplayTest {
         val fixture = fixtureByKind("webrtc-ignored-by-mobile")
         val events = replay(fixture)
         assertEquals(listOf(ProtocolEvent.WebRtcIgnored("webrtc-offer")), events)
+    }
+
+    // ---- FrameCodec 解码边界（fixtures 之外的畸形/变体输入，容错语义见 PROTOCOL §3） ----
+
+    @Test
+    fun malformedJsonDecodesToUnknownWithoutThrowing() {
+        val frame = FrameCodec.decode("{not json")
+        assertIs<WireFrame.Unknown>(frame)
+        assertEquals("<malformed-json>", frame.type)
+        assertEquals(null, frame.sessionId)
+    }
+
+    @Test
+    fun missingTypeDecodesToUnknown() {
+        // missing-type 分支不透传 sessionId（解码器在 type 判定前即短路）
+        val frame = FrameCodec.decode("""{"data":{},"session_id":"s1"}""")
+        assertIs<WireFrame.Unknown>(frame)
+        assertEquals("<missing-type>", frame.type)
+        assertEquals(null, frame.sessionId)
+    }
+
+    @Test
+    fun textMessageBareStringDataDecodesToVisitorEcho() {
+        // data 双形态之裸字符串（PROTOCOL §3，服务端两种都接受）
+        val frame = FrameCodec.decode("""{"type":"text-message","data":"直接文本","session_id":"s1"}""")
+        assertIs<WireFrame.VisitorEcho>(frame)
+        assertEquals("直接文本", frame.content)
+    }
+
+    @Test
+    fun textMessageWithoutDataDecodesToUnknown() {
+        // data 缺失（null）三分支的 else 面：无法构造回显判据 → Unknown 而非抛错
+        val frame = FrameCodec.decode("""{"type":"text-message","session_id":"s1"}""")
+        assertIs<WireFrame.Unknown>(frame)
+        assertEquals("text-message", frame.type)
+    }
+
+    @Test
+    fun aiResponseMissingConfidenceDecodesToUnknown() {
+        // 终帧基础三字段缺一即 Unknown（confidence 是成功判据的必需面）
+        val frame = FrameCodec.decode("""{"type":"ai-response","data":{"content":"x","source":"kb"}}""")
+        assertIs<WireFrame.Unknown>(frame)
+        assertEquals("ai-response", frame.type)
+    }
+
+    @Test
+    fun transferNotificationMissingAgentIdDecodesToUnknown() {
+        val frame = FrameCodec.decode("""{"type":"transfer_notification","data":{"message":"m"}}""")
+        assertIs<WireFrame.Unknown>(frame)
+        assertEquals("transfer_notification", frame.type)
     }
 
     private fun JsonObject.expectations(): JsonObject = this["expectations"]!!.jsonObject

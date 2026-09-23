@@ -77,6 +77,9 @@ class StreamingAssemblerTest {
         assertEquals("你好，客服为您服务", asm.rendered)
         assertEquals(true, asm.finalMatchesConcatenation)
         assertFalse(asm.interrupted)
+        // 终态观测旗标：终末增量已到 + 终帧已到（渲染层收口判据）
+        assertTrue(asm.terminalDeltaSeen)
+        assertTrue(asm.finalSeen)
     }
 
     @Test
@@ -94,6 +97,9 @@ class StreamingAssemblerTest {
         assertTrue(asm.onFinal("单发回答"))
         assertEquals("单发回答", asm.rendered)
         assertEquals(null, asm.finalMatchesConcatenation)
+        // 单发直收：终帧已到、终末增量未到
+        assertTrue(asm.finalSeen)
+        assertFalse(asm.terminalDeltaSeen)
     }
 
     @Test

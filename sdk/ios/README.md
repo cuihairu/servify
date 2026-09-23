@@ -24,9 +24,12 @@
 - 测试：`ReconnectPolicyTests`（4）/ `ServifyChatTests`（13）/ `ConnectionLifecycleTests`
   （6）/ `ServifyErrorTests`（2）与 Kotlin 用例名逐一对应（连接状态机 §4.4 转移表穷举
   同型、错误七码对账 §4.5 同型）。
-- 覆盖率口径（本地 `swift test --enable-code-coverage` 行级聚合）：生产代码可覆盖面
-  100%（820/820 行）；唯一豁免 `ServifyChat.create` 的 Darwin 分支（`#if canImport(Darwin)`
-  在 Linux 编译不到，等价 Go 侧 `[no statements]` 口径）。
+- 覆盖率口径（门禁脚本化，M4 后）：`scripts/check-ios-sdk-coverage.sh`——Linux 测试面
+  行级 100% 硬断言（976 行可计数，CI ios-swift job 随 swift test 执行）；豁免面 11 行
+  双类：Darwin 分支（`ServifyChat.create`/`TicketHTTP` 守卫，`#if canImport(Darwin)`
+  生产路径由 `ios-macos` job 的 `CreateFactoryTests` 覆盖，等价 Go 侧 `[no statements]`
+  口径）与不可触达防御行（ticket body encode catch——payload 为 property-list 类型）。
+  豁免行以源码 `coverage-exempt` 注释锚定，脚本反向校验清单漂移。
 - macOS CI（刀 4）：`ios-macos` job 锁 macos-15——Darwin 专属面（`URLSessionWebSocket
   Transport`/`create` 工厂，`CreateFactoryTests` 仅 Darwin 编译）+ XCFramework 打包与
   体积门禁（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，

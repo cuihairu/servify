@@ -142,13 +142,16 @@ class ServifyChat internal constructor(
     /**
      * 拉起会话 UI（§4.2：抽屉或全屏，首次调用触发 WS 连接）。
      * 挂起连接经内部作用域异步发起，宿主无需协程上下文。
+     * coverage-exempt（framework 面）：body 依赖 Activity/EntryOrchestrator（Android
+     * runtime，JVM 单测无此环境；白名单冻结不引 Robolectric），由编译期 + 真机手工项覆盖。
      */
     fun show(hostActivity: Activity) {
         scope.launch { connect() }
         entry.attach(hostActivity)
     }
 
-    /** 收起会话 UI，连接保持（§4.2）。浮钮入口保留；面板收起属 UI 刀接线。 */
+    /** 收起会话 UI，连接保持（§4.2）。浮钮入口保留；面板收起属 UI 刀接线。
+     * coverage-exempt（framework 面）：同 [show]。 */
     fun hide() {
         entry.detachPanel()
     }
@@ -167,6 +170,9 @@ class ServifyChat internal constructor(
             val echoGate = EchoGate(text, CompletableDeferred())
             pendingEcho.set(echoGate)
             val sent = ws.send(FrameCodec.encodeTextMessage(text, sessionId))
+            // coverage-exempt（okhttp 不可注入）：sent=false 需"当前 socket 已 closing 而
+            // onClosed 未回调"的窗口——真 OkHttp 的 close 状态机不暴露注入口，无 mock 接缝，
+            // 强行时序凑测必 flaky；生产面该行由 WS 协议栈自身兜底（send 拒绝即断线）。
             if (!sent) {
                 pendingEcho.set(null)
                 _errors.emit(ServifyError.Network("websocket send rejected (closing)"))
@@ -490,6 +496,10 @@ class ServifyChat internal constructor(
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            // coverage-exempt（MockWebServer close 族传播全断）：客户端发起 close(1000)
+            // 的协议对称回执在 MockWebServer 下同样不传播（loopReader 阻塞同源），onClosed
+            // 无法在环回环境触发——路径逻辑与 onFailure 断线支同构（置空 + 退避重连），
+            // 重连段已由 disconnectForTesting 系用例锚定。
             if (webSocket !== this@ServifyChat.webSocket) return
             // §4.4：connected ─(断)→ reconnecting。服务端主动关（闲置踢线/代理超时）
             // 对移动端同为断线，按退避策略恢复（D7 增量补拉的挂载点）。

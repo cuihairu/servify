@@ -303,6 +303,78 @@ class ServifyChatTest {
         assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
     }
 
+    @Test
+    fun sendMessageWithoutConnectionEmitsNetworkError() = runBlocking {
+        // 惰性连接语义：未 connect 直接 send → 立即 network 错误，不挂起不伪造成功
+        chat = newChat()
+
+        val ready = CompletableDeferred<Unit>()
+        val failure = chat.events.error.awaitWhenSubscribed(ready)
+        ready.awaitReady()
+
+        chat.sendMessage("未连接时发送")
+
+        assertIs<ServifyError.Network>(withTimeout(5_000) { failure.await() })
+        assertEquals(ConnectionState.Idle, chat.events.connectionState.value)
+    }
+
+    @Test
+    fun handshakeIoFailureWithoutStatusEmitsNetworkAndDisconnected() = runBlocking {
+        // 握手失败三分支的 else 面：IO 类失败（连接拒绝）无 HTTP status → Network
+        // （区别于 4xx → HandshakeRejected / 5xx → ServerUnavailable）
+        server.shutdown()
+        chat = newChat()
+
+        val ready = CompletableDeferred<Unit>()
+        val failure = chat.events.error.awaitWhenSubscribed(ready)
+        ready.awaitReady()
+
+        chat.connect()
+
+        assertIs<ServifyError.Network>(withTimeout(5_000) { failure.await() })
+        assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
+    }
+
+    @Test
+    fun webrtcAndUnknownFramesAreContractIgnoredFacade() = runBlocking {
+        // 门面层的契约忽略（PROTOCOL §3/§6.4）：webrtc 信令族与未知帧不产生消息/错误/
+        // 状态扰动，且不影响后续正常帧处理（证明非连接性故障被静默吞掉）
+        server.enqueue(
+            MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                    webSocket.send("""{"type":"webrtc-offer","data":{},"session_id":"test-session"}""")
+                    webSocket.send("""{"type":"totally-unknown-kind","data":{}}""")
+                    webSocket.send("""{"type":"agent-message","data":{"content":"坐席A"},"session_id":"test-session"}""")
+                }
+            }),
+        )
+        chat = newChat()
+
+        val ready = CompletableDeferred<Unit>()
+        val agent = chat.events.messages.awaitWhenSubscribed(ready) { it.sender == SenderType.Agent }
+        ready.awaitReady()
+
+        chat.connect()
+
+        assertEquals("坐席A", withTimeout(5_000) { agent.await() }.content)
+        // 契约忽略的两帧不在历史里（历史仅正常帧一条）
+        assertEquals(1, chat.historySnapshot().size)
+        assertEquals(ConnectionState.Connected, chat.events.connectionState.value)
+    }
+
+    @Test
+    fun createBuildsJvmClientAndSessionIdOnHostlessContext() = runBlocking {
+        // 构造门面在 JVM 无 Android runtime 可执行（context 可选、V1 不消费）：
+        // 工厂冒烟——OkHttp pingInterval 组装 + "m-" UUID 会话前缀（D5/PROTOCOL §1）
+        val created = ServifyChat.create(null, ServifyConfig(apiUrl = "https://chat.example.com"))
+        try {
+            assertTrue(created.sessionId.startsWith("m-"))
+            assertTrue(created.sessionId.length > "m-".length)
+        } finally {
+            created.destroy()
+        }
+    }
+
     // ---- 刀 4：会话连续性（累积/未读可见性/流中断收口）与 guestToken 握手 ----
 
     /** 按收到的客户消息序号下发不同服务端帧：1=坐席消息、2=流式增量+终帧、3=坐席消息。 */

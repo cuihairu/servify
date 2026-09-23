@@ -28,6 +28,14 @@ android {
         compose = true
     }
 
+    // 覆盖率口径（AGP 内置 jacoco，零新依赖）：单测覆盖率报告走
+    // ./gradlew createDebugUnitTestCoverageReport（HTML/Xml 落 build/reports/coverage）。
+    buildTypes {
+        getByName("debug") {
+            enableUnitTestCoverage = true
+        }
+    }
+
     sourceSets.getByName("main") {
         java.srcDirs("src/main/kotlin", "../shared/protocol", "../shared/core")
     }

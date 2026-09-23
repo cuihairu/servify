@@ -51,7 +51,7 @@ struct ServifyChatTests {
         let chat = makeChat(seq: TransportSequence([silent]), echoTimeoutMs: 250)
         let errors = chat.events.error.makeStream()
         try await chat.connect()
-        silent.emitOpen() // 空 listener：升级即连（镜像 withWebSocketUpgrade(object :) {}）
+        silent.emitOpen() // 空 listener：升级即连（镜像 withWebSocketUpgrade(object :) {})
         try await awaitConnected(chat)
         try await chat.sendMessage("无人回显")
 
@@ -61,6 +61,58 @@ struct ServifyChatTests {
             return
         }
         #expect(error.retryable)
+    }
+
+    @Test func sendMessageWithoutConnectionEmitsNetworkError() async throws {
+        // 惰性连接语义：未 connect 直接 send → 立即 network 错误，不挂起不伪造成功
+        let chat = makeChat()
+        let errors = chat.events.error.makeStream()
+
+        await chat.sendMessage("未连接时发送")
+
+        let error = try await nextMatching(errors)
+        guard case .network = error else {
+            Issue.record("expected network, got \(error)")
+            return
+        }
+        #expect(chat.events.connectionState.value == .idle)
+    }
+
+    @Test func sendRejectedEmitsNetworkErrorWithoutSendTimeout() async throws {
+        // 已 closing 套接字的 send=false：清理 pendingEcho + network 错误（不进回显等待）
+        let chat = makeChat(seq: TransportSequence([SendRejectingTransport()]))
+        let errors = chat.events.error.makeStream()
+        try await chat.connect()
+        try await awaitConnected(chat)
+
+        await chat.sendMessage("发送被拒")
+
+        let error = try await nextMatching(errors)
+        guard case .network = error else {
+            Issue.record("expected network, got \(error)")
+            return
+        }
+    }
+
+    @Test func webrtcAndUnknownFramesAreContractIgnoredFacade() async throws {
+        // 门面层的契约忽略（PROTOCOL §3/§6.4）：webrtc 信令族与未知帧不产生消息/错误/
+        // 状态扰动，且不影响后续正常帧处理（证明非连接性故障被静默吞掉）。
+        // Kotlin 镜像：ServifyChatTest.webrtcAndUnknownFramesAreContractIgnoredFacade
+        let scripted = ScriptedTransport()
+        let chat = makeChat(seq: TransportSequence([scripted]))
+        let messages = chat.events.messages.makeStream()
+        try await chat.connect()
+        try await awaitConnected(chat)
+
+        scripted.emitMessage(TestFrames.webrtcOffer())
+        scripted.emitMessage(TestFrames.unknownKind())
+
+        // 契约忽略后连接与收发链路完好：正常帧照常驱动
+        scripted.emitMessage(TestFrames.agentMessage("坐席A"))
+        let msg = try await nextMatching(messages, where: { $0.sender == .agent })
+        #expect(msg.content == "坐席A")
+        #expect(chat.historySnapshot().count == 1)
+        #expect(chat.events.connectionState.value == .connected)
     }
 
     // MARK: - 握手失败
@@ -204,6 +256,9 @@ struct ServifyChatTests {
             chat.buildWsUrl("https://chat.example.com", override, "tok en&x=1")
                 == "\(override)?access_token=tok+en%26x%3D1"
         )
+
+        // wss:// 直通分支：已是 ws scheme 时原样使用（不再加 wss:// 前缀）
+        #expect(chat.buildWsUrl("wss://chat.example.com", nil, nil).hasPrefix("wss://chat.example.com/api/v1/ws?"))
     }
 
     @Test func historySnapshotAccumulatesAndMergesStreamById() async throws {
