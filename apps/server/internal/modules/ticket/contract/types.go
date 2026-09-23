@@ -14,6 +14,16 @@ type CreateTicketRequest struct {
 	CustomFields map[string]interface{} `json:"custom_fields"`
 }
 
+// CreateVisitorTicketRequest 是访客工单创建的最小面（M3 移动 SDK 配套 §10 #4）：
+// 免认证通道按 session 归属租户 scope，分类/优先级/来源由服务端固定默认值
+// （general/normal/chat），自定义字段与标签不开放给访客。
+type CreateVisitorTicketRequest struct {
+	SessionID   string `json:"session_id" binding:"required"`
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description"`
+	AISummary   string `json:"ai_summary"`
+}
+
 type UpdateTicketRequest struct {
 	Title        *string                `json:"title"`
 	Description  *string                `json:"description"`

@@ -5552,6 +5552,58 @@
                     }
                 }
             }
+        },
+        "/api/v1/tickets": {
+            "post": {
+                "description": "访客（免认证）从会话页创建工单；按 session 归属租户 scope，携带 AI 会话摘要",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "工单"
+                ],
+                "summary": "创建访客工单",
+                "parameters": [
+                    {
+                        "description": "访客工单信息",
+                        "name": "ticket",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/contract.CreateVisitorTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Ticket"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -5954,6 +6006,27 @@
                     "type": "string"
                 },
                 "tags": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "contract.CreateVisitorTicketRequest": {
+            "type": "object",
+            "required": [
+                "session_id",
+                "title"
+            ],
+            "properties": {
+                "ai_summary": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "session_id": {
                     "type": "string"
                 },
                 "title": {
@@ -7607,6 +7680,10 @@
                 },
                 "agent_id": {
                     "type": "integer"
+                },
+                "ai_summary": {
+                    "description": "访客工单创建时的 AI 会话摘要（M3 §10 #4）",
+                    "type": "string"
                 },
                 "attachments": {
                     "type": "array",

@@ -336,14 +336,18 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 		state.wsHub.SetSuggestionConversionService(suggestionModule)
 	}
 	rt.GamificationService = gamificationdelivery.NewHandlerService(rt.DB)
-	rt.TicketHandlerService = ticketdelivery.NewHandlerServiceWithDependencies(ticketdelivery.HandlerAssemblyDependencies{
+	ticketHandler := ticketdelivery.NewHandlerServiceWithDependencies(ticketdelivery.HandlerAssemblyDependencies{
 		DB:           rt.DB,
 		Logger:       rt.Logger,
 		Bus:          rt.Bus,
 		SLA:          slaService,
 		Satisfaction: satisfactionService,
 	}).AttachBusinessMetrics(rt.BusinessMetrics)
+	rt.TicketHandlerService = ticketHandler
 	rt.TicketReaderService = ticketdelivery.NewReaderServiceAdapter(rt.DB)
+	// 访客工单（M3 §10 #4）：与管理面 ticket 装配同源复用（同一 adapter 实现
+	// VisitorTicketService 窄接口），路由挂 /api/v1 免认证链。
+	rt.VisitorTicketService = ticketHandler
 
 	// 出站 Webhook：订阅 bus 事件入队（同步、只落库），投递与重试全部走后台 worker。
 	webhookService := webhookapp.NewService(webhookinfra.NewGormRepository(rt.DB), rt.Logger)

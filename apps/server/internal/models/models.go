@@ -131,6 +131,7 @@ type Ticket struct {
 	WorkspaceID string         `gorm:"index:idx_tickets_scope" json:"workspace_id"`
 	Title       string         `gorm:"not null" json:"title"`
 	Description string         `gorm:"type:text" json:"description"`
+	AISummary   string         `gorm:"type:text" json:"ai_summary"` // 访客工单创建时的 AI 会话摘要（M3 §10 #4）
 	CustomerID  uint           `gorm:"index" json:"customer_id"`
 	AgentID     *uint          `gorm:"index" json:"agent_id"`
 	SessionID   *string        `gorm:"index" json:"session_id"`

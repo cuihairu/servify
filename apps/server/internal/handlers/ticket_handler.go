@@ -21,6 +21,7 @@ type ticketResponse struct {
 	ID           uint                   `json:"id"`
 	Title        string                 `json:"title"`
 	Description  string                 `json:"description,omitempty"`
+	AISummary    string                 `json:"ai_summary,omitempty"`
 	CustomerID   uint                   `json:"customer_id"`
 	CustomerName string                 `json:"customer_name,omitempty"`
 	AgentID      *uint                  `json:"agent_id,omitempty"`
@@ -48,6 +49,7 @@ func buildTicketResponse(ticket *models.Ticket) *ticketResponse {
 		ID:           ticket.ID,
 		Title:        ticket.Title,
 		Description:  ticket.Description,
+		AISummary:    ticket.AISummary,
 		CustomerID:   ticket.CustomerID,
 		AgentID:      ticket.AgentID,
 		SessionID:    ticket.SessionID,

@@ -70,6 +70,7 @@ type Runtime struct {
 	AgentHandlerService      agentdelivery.HandlerService
 	AgentGroupService        agentdelivery.AgentGroupService
 	TicketHandlerService     ticketdelivery.HandlerService
+	VisitorTicketService     ticketdelivery.VisitorTicketService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      satisfactiondelivery.SatisfactionService
@@ -254,6 +255,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		AgentHandlerService:      rt.AgentHandlerService,
 		AgentGroupService:        rt.AgentGroupService,
 		TicketHandlerService:     rt.TicketHandlerService,
+		VisitorTicketService:     rt.VisitorTicketService,
 		TicketReaderService:      rt.TicketReaderService,
 		TransferHandlerService:   rt.TransferHandlerService,
 		SatisfactionService:      rt.SatisfactionService,

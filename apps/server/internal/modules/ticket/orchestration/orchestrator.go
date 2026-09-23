@@ -141,6 +141,43 @@ func (o *TicketOrchestrator) PrepareCreateTicket(ctx context.Context, req *ticke
 	}, nil
 }
 
+// PrepareCreateVisitorTicket 准备访客（免认证）工单（M3 移动 SDK 配套 §10 #4）：
+// 会话必须已存在（工单从会话页发起，消息往来已建 session 行），租户 scope 从
+// session 行原样继承（与 realtime 侧消息持久化同一口径；scope 落在 ticket 上，
+// repo 的 applyTicketScopeFields 不覆盖非空值）。访客无 customer 主体
+// （CustomerID=0，与 messages.UserID=0 同语义），分类/优先级/来源由服务端
+// 固定默认值，自定义字段与标签不开放。
+func (o *TicketOrchestrator) PrepareCreateVisitorTicket(ctx context.Context, req *ticketcontract.CreateVisitorTicketRequest) (*TicketCreatePreparation, error) {
+	if req == nil {
+		return nil, fmt.Errorf("request required")
+	}
+	if req.Title == "" {
+		return nil, fmt.Errorf("title required")
+	}
+	var session models.Session
+	if err := o.db.First(&session, "id = ?", req.SessionID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("session not found: %s", req.SessionID)
+		}
+		return nil, fmt.Errorf("session lookup failed: %w", err)
+	}
+
+	ticket := &models.Ticket{
+		Title:       req.Title,
+		Description: req.Description,
+		AISummary:   req.AISummary,
+		CustomerID:  0,
+		Category:    "general",
+		Priority:    "normal",
+		Status:      "open",
+		Source:      "chat",
+		TenantID:    session.TenantID,
+		WorkspaceID: session.WorkspaceID,
+		SessionID:   &req.SessionID,
+	}
+	return &TicketCreatePreparation{Ticket: ticket}, nil
+}
+
 func (o *TicketOrchestrator) ApplyCreateTicketSideEffects(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error) {
 	if ticket == nil {
 		return nil, fmt.Errorf("ticket required")

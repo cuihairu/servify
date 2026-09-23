@@ -15,6 +15,9 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	wsHandler := handlers.NewWebSocketHandler(deps.RealtimeGateway)
 	publicV1 := r.Group("/api/v1")
 	publicV1.GET("/ws", wsHandler.HandleWebSocket)
+	// 访客工单创建（M3 移动 SDK 配套 §10 #4）：访客配套 REST 与 WS 同前缀，
+	// 按 session 归属租户 scope，坐席侧管理面 tickets 列表自然可见。
+	publicV1.POST("/tickets", handlers.NewVisitorTicketHandler(deps.VisitorTicketService, deps.Logger).CreateVisitorTicket)
 
 	webrtcHandler := handlers.NewWebRTCHandler(deps.RTCGateway)
 	messageHandler := handlers.NewMessageHandler(deps.MessageRouter)

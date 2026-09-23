@@ -274,6 +274,20 @@ definitions:
     - customer_id
     - title
     type: object
+  contract.CreateVisitorTicketRequest:
+    properties:
+      ai_summary:
+        type: string
+      description:
+        type: string
+      session_id:
+        type: string
+      title:
+        type: string
+    required:
+    - session_id
+    - title
+    type: object
   contract.DashboardStats:
     properties:
       active_sessions:
@@ -1390,6 +1404,9 @@ definitions:
         $ref: '#/definitions/models.User'
       agent_id:
         type: integer
+      ai_summary:
+        description: '访客工单创建时的 AI 会话摘要（M3 §10 #4）'
+        type: string
       attachments:
         items:
           $ref: '#/definitions/models.TicketFile'
@@ -5291,4 +5308,38 @@ paths:
       summary: 回写远程协助录制元数据（访客面）
       tags:
       - 远程协助
+  /api/v1/tickets:
+    post:
+      consumes:
+      - application/json
+      description: 访客（免认证）从会话页创建工单；按 session 归属租户 scope，携带 AI 会话摘要
+      parameters:
+      - description: 访客工单信息
+        in: body
+        name: ticket
+        required: true
+        schema:
+          $ref: '#/definitions/contract.CreateVisitorTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Ticket'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 创建访客工单
+      tags:
+      - 工单
 swagger: "2.0"

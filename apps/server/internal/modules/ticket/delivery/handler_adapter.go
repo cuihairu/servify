@@ -53,6 +53,12 @@ type ticketStatsQueryService interface {
 	GetTicketStats(ctx context.Context, agentID *uint) (*ticketapp.TicketStatsDTO, error)
 }
 
+// VisitorTicketService 是访客工单创建的窄契约（M3 移动 SDK 配套 §10 #4）：
+// 免认证 REST 通道唯一可用的工单写入口，独立于管理面 HandlerService 膨胀面。
+type VisitorTicketService interface {
+	CreateVisitorTicket(ctx context.Context, req *ticketcontract.CreateVisitorTicketRequest) (*models.Ticket, error)
+}
+
 func NewHandlerServiceAdapter(db *gorm.DB, cmd *ticketapp.CommandService, orchestrator *ticketorchestration.TicketOrchestrator) *HandlerServiceAdapter {
 	repo := ticketinfra.NewGormRepository(db)
 	if cmd == nil {
@@ -88,6 +94,31 @@ func (a *HandlerServiceAdapter) CreateTicket(ctx context.Context, req *ticketcon
 
 func (a *HandlerServiceAdapter) GetTicketByID(ctx context.Context, ticketID uint) (*models.Ticket, error) {
 	return a.repo.LoadTicketModelByID(ctx, ticketID)
+}
+
+// CreateVisitorTicket 处理访客工单：scope 已由 orchestrator 从 session 继承并
+// 落在 ticket 上（访客 ctx 无认证 scope，repo 不覆盖非空值），其余链路与
+// 管理面创建同构（状态史 + 指标 + 自动派单/事件广播——坐席侧即时可见）。
+func (a *HandlerServiceAdapter) CreateVisitorTicket(ctx context.Context, req *ticketcontract.CreateVisitorTicketRequest) (*models.Ticket, error) {
+	prepared, err := a.orchestrator.PrepareCreateVisitorTicket(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	initialStatus := &models.TicketStatus{
+		UserID:     0,
+		FromStatus: "",
+		ToStatus:   "open",
+		Reason:     "访客工单创建",
+	}
+	if err := a.repo.CreateTicketModelWithCustomFieldsAndStatus(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus); err != nil {
+		return nil, err
+	}
+	tenantID := prepared.Ticket.TenantID
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	a.metrics.RecordTicketCreated(tenantID, prepared.Ticket.Priority)
+	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
 }
 
 func (a *HandlerServiceAdapter) UpdateTicket(ctx context.Context, ticketID uint, req *ticketcontract.UpdateTicketRequest, userID uint) (*models.Ticket, error) {
