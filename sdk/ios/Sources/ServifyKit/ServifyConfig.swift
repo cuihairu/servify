@@ -12,15 +12,20 @@ public struct Branding: Sendable {
     /// 平台色；nil = 平台默认主色（UI 层自行取默认主题色）。
     public var primaryColor: UInt32?
     public var welcomeText: String
+    /// 离线提示（V1 品牌基础配置四件套收口，M3）：disconnected 终态（握手失败/重连耗尽）
+    /// 时追加的系统提示行；nil = 不展示（默认，接入方零改动）。
+    public var offlineText: String?
 
     public init(
         title: String = "在线客服",
         primaryColor: UInt32? = nil,
-        welcomeText: String = "您好，请问有什么可以帮您？"
+        welcomeText: String = "您好，请问有什么可以帮您？",
+        offlineText: String? = nil
     ) {
         self.title = title
         self.primaryColor = primaryColor
         self.welcomeText = welcomeText
+        self.offlineText = offlineText
     }
 }
 

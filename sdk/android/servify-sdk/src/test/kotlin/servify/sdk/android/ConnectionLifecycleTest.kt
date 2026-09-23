@@ -21,6 +21,7 @@ import org.junit.Before
 import org.junit.Test
 import servify.sdk.android.connect.ConnectionState
 import servify.sdk.android.connect.ReconnectPolicy
+import servify.sdk.android.model.SenderType
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -57,9 +58,12 @@ class ConnectionLifecycleTest {
         server.shutdown()
     }
 
-    private fun newChat(policy: ReconnectPolicy = ReconnectPolicy(maxAttempts = 3, initialDelayMs = 100, multiplier = 2, maxDelayMs = 400)): ServifyChat =
+    private fun newChat(
+        policy: ReconnectPolicy = ReconnectPolicy(maxAttempts = 3, initialDelayMs = 100, multiplier = 2, maxDelayMs = 400),
+        branding: Branding = Branding(),
+    ): ServifyChat =
         ServifyChat(
-            config = ServifyConfig(apiUrl = "https://chat.example.com"),
+            config = ServifyConfig(apiUrl = "https://chat.example.com", branding = branding),
             sessionId = "test-session",
             client = OkHttpClient(),
             scope = chatScope,
@@ -153,6 +157,72 @@ class ConnectionLifecycleTest {
         server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat.connect()
         awaitConnected()
+    }
+
+    /** M3 Branding 四件套收口：offlineText 在 disconnected 终态（耗尽/握手失败）追加系统提示行。 */
+
+    @Test
+    fun offlineHintEmittedOnReconnectExhaustionWhenConfigured() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(DropOnFirstMessage()))
+        server.enqueue(MockResponse().setResponseCode(404))
+        chat = newChat(
+            policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100),
+            branding = Branding(offlineText = "客服当前不在线，请稍后再来"),
+        )
+        chat.connect()
+        awaitConnected()
+
+        // 提示行走无 replay 的 SharedFlow——先订阅再触发（与 Swift 侧用例同序）。
+        val hintDeferred = chatScope.async {
+            chat.events.messages.first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
+        }
+        chat.sendMessage("触发断线") // 回显不来，按超时收尾
+        val hint = withTimeout(5_000) { hintDeferred.await() }
+        assertEquals("test-session", hint.sessionId)
+        // 提示行是 SDK 自造 UI 状态行（同流中断提示），不计未读。
+        assertEquals(0, chat.events.unreadCount.value)
+    }
+
+    @Test
+    fun offlineHintOmittedWhenNotConfigured() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(DropOnFirstMessage()))
+        server.enqueue(MockResponse().setResponseCode(404))
+        chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
+        chat.connect()
+        awaitConnected()
+
+        chat.sendMessage("触发断线")
+        withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } }
+        // 默认 offlineText=null：快照无任何 System 提示行（流中断提示仅在有活跃流时出现，此处无流）。
+        assertEquals(0, chat.historySnapshot().count { it.sender == SenderType.System })
+    }
+
+    @Test
+    fun offlineHintEmittedOnHandshakeFailureWhenConfigured() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(404))
+        chat = newChat(branding = Branding(offlineText = "客服当前不在线，请稍后再来"))
+
+        chat.connect()
+        assertEquals(
+            ConnectionState.Disconnected,
+            withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
+        )
+        val hint = withTimeout(5_000) {
+            chat.events.messages.first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
+        }
+        assertEquals("test-session", hint.sessionId)
+    }
+
+    @Test
+    fun offlineHintNotEmittedOnDestroy() = runBlocking {
+        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        chat = newChat(branding = Branding(offlineText = "客服当前不在线，请稍后再来"))
+        chat.connect()
+        awaitConnected()
+
+        chat.destroy()
+        // 用户主动销毁 ≠ 客服离线：不追加提示行。
+        assertTrue(chat.historySnapshot().none { it.sender == SenderType.System })
     }
 }
 

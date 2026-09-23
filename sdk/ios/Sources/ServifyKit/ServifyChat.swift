@@ -253,6 +253,7 @@ public final class ServifyChat: @unchecked Sendable {
             }
             _errors.emit(err)
             _connectionState.set(.disconnected)
+            notifyOfflineHint()
             return
         }
         scheduleReconnect()
@@ -268,6 +269,7 @@ public final class ServifyChat: @unchecked Sendable {
         guard let delayMs = policy.delayFor(attempt) else {
             _errors.emit(.network(message: "reconnect exhausted after \(policy.maxAttempts) attempts"))
             _connectionState.set(.disconnected)
+            notifyOfflineHint()
             return
         }
         _reconnecting.emit(attempt)
@@ -491,6 +493,20 @@ public final class ServifyChat: @unchecked Sendable {
 
     private func now() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    /// 离线提示（Branding.offlineText）：disconnected 终态（握手失败/重连耗尽）时追加的
+    /// 系统提示行——同流中断提示模式：SDK 自造的 UI 状态行（协议无此帧），不计未读。
+    /// destroy 不提示——用户主动关闭不等于客服离线。
+    private func notifyOfflineHint() {
+        guard let text = config.branding.offlineText else { return }
+        recordAndEmit(ConversationMessage(
+            id: nextId(),
+            sessionId: sessionId,
+            sender: .system,
+            content: text,
+            createdAt: now()
+        ))
     }
 }
 

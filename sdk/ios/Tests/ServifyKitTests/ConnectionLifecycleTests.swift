@@ -19,9 +19,13 @@ import Testing
  */
 struct ConnectionLifecycleTests {
 
-    private func makeChat(_ transports: [MockTransport], policy: ReconnectPolicy? = nil) -> ServifyChat {
+    private func makeChat(
+        _ transports: [MockTransport],
+        policy: ReconnectPolicy? = nil,
+        branding: Branding = Branding()
+    ) -> ServifyChat {
         ServifyChat(
-            config: try! ServifyConfig(apiUrl: "https://chat.example.com"),
+            config: try! ServifyConfig(apiUrl: "https://chat.example.com", branding: branding),
             sessionId: "test-session",
             policy: policy ?? (try! ReconnectPolicy(maxAttempts: 3, initialDelayMs: 100, multiplier: 2, maxDelayMs: 400)),
             echoTimeoutMs: 200,
@@ -111,5 +115,76 @@ struct ConnectionLifecycleTests {
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
         try await chat.connect()
         try await awaitConnected(chat)
+    }
+
+    // MARK: - M3 Branding 四件套收口：offlineText 在 disconnected 终态追加系统提示行。
+
+    @Test func offlineHintEmittedOnReconnectExhaustionWhenConfigured() async throws {
+        // 第一次连接成功后断线 → 重连 #1 握手被拒（404）→ 再次退避耗尽 → disconnected。
+        let first = DropOnFirstMessageTransport()
+        let chat = makeChat(
+            [first, HandshakeRejectTransport(status: 404), EchoTransport()],
+            policy: try! ReconnectPolicy(maxAttempts: 1, initialDelayMs: 50, multiplier: 2, maxDelayMs: 100),
+            branding: Branding(offlineText: "客服当前不在线，请稍后再来")
+        )
+        try await chat.connect()
+        first.emitOpen()
+        try await awaitConnected(chat)
+
+        let states = chat.events.connectionState.makeStream()
+        let messages = chat.events.messages.makeStream()
+        try await chat.sendMessage("触发断线") // 回显不来，按超时收尾
+        let disconnected = try await nextMatching(states, where: { $0 == .disconnected })
+        #expect(disconnected == .disconnected)
+        let hint = try await nextMatching(messages, where: {
+            $0.sender == .system && $0.content == "客服当前不在线，请稍后再来"
+        })
+        #expect(hint.sessionId == "test-session")
+        // 提示行是 SDK 自造 UI 状态行（同流中断提示），不计未读。
+        #expect(chat.events.unreadCount.value == 0)
+    }
+
+    @Test func offlineHintOmittedWhenNotConfigured() async throws {
+        let first = DropOnFirstMessageTransport()
+        let chat = makeChat(
+            [first, HandshakeRejectTransport(status: 404), EchoTransport()],
+            policy: try! ReconnectPolicy(maxAttempts: 1, initialDelayMs: 50, multiplier: 2, maxDelayMs: 100)
+        )
+        try await chat.connect()
+        first.emitOpen()
+        try await awaitConnected(chat)
+
+        let states = chat.events.connectionState.makeStream()
+        try await chat.sendMessage("触发断线")
+        _ = try await nextMatching(states, where: { $0 == .disconnected })
+        // 默认 offlineText=nil：快照无任何 System 提示行（流中断提示仅在有活跃流时出现，此处无流）。
+        #expect(!chat.historySnapshot().contains { $0.sender == .system })
+    }
+
+    @Test func offlineHintEmittedOnHandshakeFailureWhenConfigured() async throws {
+        let chat = makeChat(
+            [HandshakeRejectTransport(status: 404)],
+            branding: Branding(offlineText: "客服当前不在线，请稍后再来")
+        )
+        let states = chat.events.connectionState.makeStream()
+        let messages = chat.events.messages.makeStream()
+
+        try await chat.connect()
+        let state = try await nextMatching(states, where: { $0 == .disconnected })
+        #expect(state == .disconnected)
+        let hint = try await nextMatching(messages, where: {
+            $0.sender == .system && $0.content == "客服当前不在线，请稍后再来"
+        })
+        #expect(hint.sessionId == "test-session")
+    }
+
+    @Test func offlineHintNotEmittedOnDestroy() async throws {
+        let chat = makeChat([EchoTransport()], branding: Branding(offlineText: "客服当前不在线，请稍后再来"))
+        try await chat.connect()
+        try await awaitConnected(chat)
+
+        chat.destroy()
+        // 用户主动销毁 ≠ 客服离线：不追加提示行。
+        #expect(!chat.historySnapshot().contains { $0.sender == .system })
     }
 }

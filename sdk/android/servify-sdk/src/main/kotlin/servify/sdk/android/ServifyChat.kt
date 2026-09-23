@@ -232,6 +232,7 @@ class ServifyChat internal constructor(
                 },
             )
             _connectionState.value = ConnectionState.Disconnected
+            notifyOfflineHint()
             return
         }
         scheduleReconnect()
@@ -244,6 +245,7 @@ class ServifyChat internal constructor(
         if (delayMs == null) {
             _errors.tryEmit(ServifyError.Network("reconnect exhausted after ${policy.maxAttempts} attempts"))
             _connectionState.value = ConnectionState.Disconnected
+            notifyOfflineHint()
             return
         }
         _reconnecting.tryEmit(reconnectAttempt)
@@ -367,6 +369,24 @@ class ServifyChat internal constructor(
     private fun nextId(): String = "ws-${++localSeq}"
 
     private fun now(): Long = System.currentTimeMillis()
+
+    /**
+     * 离线提示（Branding.offlineText）：disconnected 终态（握手失败/重连耗尽）时追加的
+     * 系统提示行——同流中断提示模式：SDK 自造的 UI 状态行（协议无此帧），不计未读。
+     * destroy 不提示——用户主动关闭不等于客服离线。
+     */
+    private fun notifyOfflineHint() {
+        val text = config.branding.offlineText ?: return
+        recordAndEmit(
+            ConversationMessage(
+                id = nextId(),
+                sessionId = sessionId,
+                sender = SenderType.System,
+                content = text,
+                createdAt = now(),
+            ),
+        )
+    }
 
     private inner class WsListener : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {

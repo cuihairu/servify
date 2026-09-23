@@ -9,6 +9,11 @@ data class Branding(
     /** ARGB 主色；null = 平台默认主色（UI 层自行取默认主题色）。 */
     val primaryColor: Int? = null,
     val welcomeText: String = "您好，请问有什么可以帮您？",
+    /**
+     * 离线提示（V1 品牌基础配置四件套收口，M3）：disconnected 终态（握手失败/重连耗尽）
+     * 时追加的系统提示行；null = 不展示（默认，接入方零改动）。
+     */
+    val offlineText: String? = null,
 )
 
 /**
