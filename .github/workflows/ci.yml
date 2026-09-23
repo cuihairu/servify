@@ -442,6 +442,16 @@ jobs:
         timeout-minutes: 15
         run: ./scripts/check-android-sdk-size.sh
 
+      # M4 验收③（产物流程就绪）：AAR 作为接入方可取产物随 CI 归档（可重建，30 天足够）。
+      - name: Upload AAR artifact
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v7
+        with:
+          name: servify-sdk-aar
+          path: sdk/android/servify-sdk/build/outputs/aar/servify-sdk-release.aar
+          if-no-files-found: error
+          retention-days: 30
+
   ios-swift:
     name: iOS SDK (Swift)
     # 锁 ubuntu-24.04：swift.org 的 26.04 平台 tarball 首版带了旧编译的 Testing.swiftmodule
@@ -492,6 +502,17 @@ jobs:
       - name: XCFramework size gate (M2 acceptance #2, D9 ≤2MB)
         timeout-minutes: 15
         run: ./scripts/check-ios-sdk-size.sh
+
+      # M4 验收③（产物流程就绪）：分发形态 zip 即接入方拿到的形态，体积门禁脚本
+      # 末尾产物保留在仓库根 build/（不清理），此处归档。
+      - name: Upload XCFramework artifact
+        timeout-minutes: 3
+        uses: actions/upload-artifact@v7
+        with:
+          name: servify-kit-xcframework
+          path: build/ServifyKit.xcframework.zip
+          if-no-files-found: error
+          retention-days: 30
 
   admin-checks:
     name: Admin Checks
