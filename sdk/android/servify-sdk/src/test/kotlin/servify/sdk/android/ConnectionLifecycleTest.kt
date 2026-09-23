@@ -76,19 +76,6 @@ class ConnectionLifecycleTest {
         withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Connected } }
     }
 
-    /** 服务器 listener：首条客户消息后断开（onMessage 内同步 cancel，唯一可靠断开手法）。 */
-    private class DropOnFirstMessage : WebSocketListener() {
-        @Volatile
-        private var seen = false
-
-        override fun onMessage(webSocket: WebSocket, text: String) {
-            if (!seen) {
-                seen = true
-                webSocket.cancel()
-            }
-        }
-    }
-
     @Test
     fun initialConnectionStateIsIdle() {
         chat = newChat()
@@ -139,17 +126,18 @@ class ConnectionLifecycleTest {
 
     @Test
     fun reconnectExhaustionMarksDisconnectedAndConnectRecovers() = runBlocking {
-        // 第一次连接成功后断线 → 重连 #1 握手被拒（404）→ 再次退避耗尽（maxAttempts=1：
-        // delayFor(1) 仍放行、delayFor(2)=null）→ disconnected。
-        server.enqueue(MockResponse().withWebSocketUpgrade(DropOnFirstMessage()))
+        // 首连成功后客户端本地断开 → 重连 #1 握手被拒（404）→ 已建连后失败走
+        // scheduleReconnect：maxAttempts=1 的 delayFor(2)=null → 耗尽 → disconnected。
+        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         server.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
         awaitConnected()
 
-        chat.sendMessage("触发断线") // 回显不来，按超时收尾
-        // CI release 变体实测 echo 200ms + 两轮退避 + 升级往返在负载下会超 5s（35851752444），
-        // 预算放大到 15s——真挂死依然 fail，只是不再被 runner 噪声误杀。
+        // 断线触发用本地 cancel（接缝）：server 端 cancel() 的传播在 CI 偶发丢失
+        // （35855565576，15s 预算都等不到 onFailure），本地 cancel 零传播、与真实
+        // 断线同路径。预算保留 15s 防回归。
+        chat.disconnectForTesting()
         assertEquals(
             ConnectionState.Disconnected,
             withTimeout(15_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
@@ -165,7 +153,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintEmittedOnReconnectExhaustionWhenConfigured() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(DropOnFirstMessage()))
+        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         server.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(
             policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100),
@@ -178,7 +166,7 @@ class ConnectionLifecycleTest {
         val hintDeferred = chatScope.async {
             chat.events.messages.first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
         }
-        chat.sendMessage("触发断线") // 回显不来，按超时收尾
+        chat.disconnectForTesting() // 本地断开（同 reconnectExhaustion 用例：零传播依赖）
         val hint = withTimeout(5_000) { hintDeferred.await() }
         assertEquals("test-session", hint.sessionId)
         // 提示行是 SDK 自造 UI 状态行（同流中断提示），不计未读。
@@ -187,13 +175,13 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintOmittedWhenNotConfigured() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(DropOnFirstMessage()))
+        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         server.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
         awaitConnected()
 
-        chat.sendMessage("触发断线")
+        chat.disconnectForTesting()
         withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } }
         // 默认 offlineText=null：快照无任何 System 提示行（流中断提示仅在有活跃流时出现，此处无流）。
         assertEquals(0, chat.historySnapshot().count { it.sender == SenderType.System })

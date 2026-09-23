@@ -295,6 +295,17 @@ class ServifyChat internal constructor(
     }
 
     /**
+     * 测试接缝：客户端本地断开。CI 环境下 server 端 `cancel()` 的断线传播偶发丢失
+     * （MockWebServer WS teardown 同源问题——连接 close 类操作依赖读循环传播），
+     * 重连类用例会等满整个超时预算（35855565576）。本地 cancel 立即在客户端触发
+     * onFailure，与真实断线走同一条 onTransportFailure → scheduleReconnect 路径，
+     * 用例因此完全确定。
+     */
+    internal fun disconnectForTesting() {
+        webSocket?.cancel()
+    }
+
+    /**
      * 最终 WS URL：apiUrl 推导或宿主显式 override；guestToken 非空时带 `access_token`
      * 查询参数（PROTOCOL §1：服务端当前不消费，访客 token 端点落地后自动生效，向后兼容）。
      * 注意不能用 HttpUrl 二次解析——ws/wss scheme 不在 okhttp HttpUrl 的合法集内，手工拼接。

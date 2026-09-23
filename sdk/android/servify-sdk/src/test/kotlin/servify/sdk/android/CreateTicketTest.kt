@@ -6,6 +6,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ import org.junit.Before
 import org.junit.Test
 import servify.sdk.android.connect.ReconnectPolicy
 import servify.sdk.android.model.SenderType
+import servify.sdk.android.model.TicketReceipt
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -113,23 +115,31 @@ class CreateTicketTest {
         chat = newChat()
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"Session not found"}"""))
 
-        val errorSeen = chatScope.async { chat.events.error.first { it.code == "ticket_failed" } }
-        val receipt = chat.createTicket("打不开页面")
+        // onSubscription 钩订阅点后触发：error 是无 replay 的 SharedFlow，async 先订阅
+        // 再触发的调度窗口在 release 变体下会丢事件（订阅注册异步生效）。
+        var receipt: TicketReceipt? = TicketReceipt(-1)
+        val errorSeen = chat.events.error
+            .onSubscription { receipt = chat.createTicket("打不开页面") }
+            .first { it.code == "ticket_failed" }
 
         assertNull(receipt)
-        assertEquals("ticket_failed", withTimeout(5_000) { errorSeen.await().code })
+        assertEquals("ticket_failed", errorSeen.code)
     }
 
     @Test
     fun createTicketReturnsNullAndEmitsNetworkOnIoFailure() = runBlocking {
-        // 端口 1 无监听 → 连接拒绝 → IOException → Network 错误
+        // 端口 1 无监听 → 连接拒绝 → IOException → Network 错误。
         chat = newChat(ticketUrlOverride = "http://127.0.0.1:1/api/v1/tickets")
         server.shutdown()
-        val errorSeen = chatScope.async { chat.events.error.first { it.code == "network" } }
-        val receipt = chat.createTicket("打不开页面")
+        // 连接拒绝在微秒级完成，先订阅再触发（async）的竞态窗口在此必踩
+        // （release 变体实测 5s 超时丢事件）——onSubscription 钩订阅点后触发。
+        var receipt: TicketReceipt? = TicketReceipt(-1)
+        val errorSeen = chat.events.error
+            .onSubscription { receipt = chat.createTicket("打不开页面") }
+            .first { it.code == "network" }
 
         assertNull(receipt)
-        assertEquals("network", withTimeout(5_000) { errorSeen.await().code })
+        assertEquals("network", errorSeen.code)
     }
 
     @Test
@@ -137,10 +147,13 @@ class CreateTicketTest {
         chat = newChat()
         server.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"open"}"""))
 
-        val errorSeen = chatScope.async { chat.events.error.first { it.code == "ticket_failed" } }
-        val receipt = chat.createTicket("打不开页面")
+        // onSubscription 同前两用例（消无 replay 流的订阅窗口竞态）。
+        var receipt: TicketReceipt? = TicketReceipt(-1)
+        val errorSeen = chat.events.error
+            .onSubscription { receipt = chat.createTicket("打不开页面") }
+            .first { it.code == "ticket_failed" }
 
         assertNull(receipt)
-        assertEquals("ticket_failed", withTimeout(5_000) { errorSeen.await().code })
+        assertEquals("ticket_failed", errorSeen.code)
     }
 }
