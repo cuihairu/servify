@@ -3,33 +3,8 @@ import Testing
 
 @testable import ServifyKit
 
-// MARK: - MockTicketHTTP（Kotlin 侧 MockWebServer 的镜像：记录请求、回放响应）
-
-private struct TicketHTTPFailure: Error {}
-
-private final class MockTicketHTTP: TicketHTTPPosting, @unchecked Sendable {
-    private(set) var postedURL: String?
-    private(set) var postedBody: Data?
-
-    /// 队列化响应：先入先出；Error 抛出、(status, json) 正常返回。空队列默认 201+id。
-    private var queue: [Result<(status: Int, data: Data), Error>] = []
-
-    func enqueue(_ result: Result<(status: Int, data: Data), Error>) {
-        queue.append(result)
-    }
-
-    func post(url: String, body: Data) async throws -> (status: Int, data: Data) {
-        postedURL = url
-        postedBody = body
-        guard let result = queue.isEmpty ? nil : queue.removeFirst() else {
-            return (201, Data("{}".utf8))
-        }
-        switch result {
-        case let .success(pair): return pair
-        case let .failure(error): throw error
-        }
-    }
-}
+// MARK: - MockTicketHTTP 见 MockTicketHTTP.swift（CreateTicketTests /
+// RegisterPushTokenTests 共用）
 
 // MARK: - 摘要纯逻辑（Kotlin 镜像：TicketSummaryTest.kt——用例名逐一对应）
 

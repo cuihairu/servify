@@ -40,8 +40,9 @@ val config = ServifyConfig(
 // 访客工单创建：服务端组装会话摘要（最近 10 条）随单提交，成功返回工单号
 val receipt = chat.createTicket(title = "无法登录", description = "选填补充")
 
-// 推送注册：服务端端点上线前为过渡语义（未配置/端点未上线 → error 流 unsupported；
-// 宿主未授权无 token → 静默 false，非错误）
+// 推送注册：POST {apiUrl}/api/v1/push/register，体 {session_id, platform, token}；
+// 未配置 provider → unsupported；宿主未授权无 token → 静默 false（非错误）；
+// 网络/HTTP 失败 → network + false（可重报）
 chat.registerPushToken()
 ```
 
@@ -80,6 +81,6 @@ chat.registerPushToken()
 - M1 刀 1-3 ✅ 工程/门面/UI（浮钮 + 抽屉/全屏面板 + 气泡/来源/置信门/未读）
 - M1 刀 4 ✅ 会话连续性：内存级累积 + 未读可见性语义 + 流中断收口 + guestToken 握手参数（磁盘持久化按 D7 核查不做——补拉/推送端点均为服务端待建项，预留即死代码）
 - M1 刀 5 ✅ 验收矩阵与状态机穷举（连接状态机 5 测试 + 转人工 4 测试；真机手工项待执行，见 [ACCEPTANCE-M1.md](ACCEPTANCE-M1.md)）
-- M3 ✅ 代码面：offlineText 离线提示 → createTicket 门面 + AI 摘要 → 工单 UI 入口 → pushTokenProvider 注册口（过渡语义；推送端到端待服务端配套，见 [../ACCEPTANCE-M3.md](../ACCEPTANCE-M3.md)）
+- M3 ✅ 代码面：offlineText 离线提示 → createTicket 门面 + AI 摘要 → 工单 UI 入口 → pushTokenProvider 注册口 + 真实上报（服务端 §10 #5 注册端点已通；推送下发仍待 FCM/APNs 凭证配套，见 [../ACCEPTANCE-M3.md](../ACCEPTANCE-M3.md)）
 
 设计依据：`docs/mobile-sdk-design.md`（D3/D5/D8/D9）、`docs/mobile-sdk-platform-spec.md`（§4 API 冻结面）。

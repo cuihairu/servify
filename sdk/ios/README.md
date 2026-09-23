@@ -46,9 +46,9 @@
   事件流 → @Published 薄接线）——§4.2 show/hide 语义（首展 connect、可见清未读、
   收起连接保持未读累计）、D8 浮钮角标/抽屉/全屏、转人工按钮与来源列表同 Kotlin。
   SwiftUI 编译验证由 ios-macos job 的 xcodebuild 承担（Linux/纯 swift test 编译不到）。
-- 尚未落地：Keychain（V1 匿名 session 无凭证存储需求；推送注册口已随 M3 刀 4 落地——
-  `ServifyConfig(pushTokenProvider:)` + `registerPushToken()` 过渡语义，服务端端点上线后
-  仅补上报实现）。
+- 尚未落地：Keychain（V1 匿名 session 无凭证存储需求；推送注册链路已随 M3 刀 5 通——
+  `ServifyConfig(pushTokenProvider:)` + `registerPushToken()` 真实上报
+  `POST /api/v1/push/register`，服务端端点已落地；下发侧仍待 APNs/FCM 凭证配套）。
 
 ## M3 API（工单 / 推送注册口 / 离线提示）
 
@@ -62,8 +62,9 @@ let config = try ServifyConfig(
 // 访客工单创建：服务端组装会话摘要（最近 10 条）随单提交，成功返回工单号
 let receipt = await chat.createTicket(title: "无法登录", description: "选填补充")
 
-// 推送注册：服务端端点上线前为过渡语义（未配置/端点未上线 → error 流 unsupported；
-// 宿主未授权无 token → 静默 false，非错误）
+// 推送注册：POST {apiUrl}/api/v1/push/register，体 {session_id, platform, token}；
+// 未配置 provider → unsupported；宿主未授权无 token → 静默 false（非错误）；
+// 网络/HTTP 失败 → network + false（可重报）
 _ = await chat.registerPushToken()
 ```
 

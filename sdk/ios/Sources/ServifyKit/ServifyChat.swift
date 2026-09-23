@@ -41,7 +41,10 @@ public final class ServifyChat: @unchecked Sendable {
     private let wsUrlOverride: String?
     /// 测试注入：工单创建端点同款（生产路径恒为 apiUrl + /api/v1/tickets）。
     private let ticketUrlOverride: String?
-    /// 工单创建 HTTP 出口（nil 时 Darwin 用 URLSession 生产实现；Linux 测试面须注入 mock）。
+    /// 测试注入：推送注册端点（生产路径恒为 apiUrl + /api/v1/push/register）。
+    private let pushUrlOverride: String?
+    /// REST 出站 HTTP 通道（工单创建/推送注册共用；nil 时 Darwin 用 URLSession
+    /// 生产实现，Linux 测试面须注入 mock）。
     private let ticketHTTP: TicketHTTPPosting?
     private let transportFactory: () -> WebSocketTransport
 
@@ -88,6 +91,7 @@ public final class ServifyChat: @unchecked Sendable {
         echoTimeoutMs: Int = ServifyChat.defaultEchoTimeoutMs,
         wsUrlOverride: String? = nil,
         ticketUrlOverride: String? = nil,
+        pushUrlOverride: String? = nil,
         ticketHTTP: TicketHTTPPosting? = nil,
         transportFactory: @escaping () -> WebSocketTransport
     ) {
@@ -97,6 +101,7 @@ public final class ServifyChat: @unchecked Sendable {
         self.echoTimeoutMs = echoTimeoutMs
         self.wsUrlOverride = wsUrlOverride
         self.ticketUrlOverride = ticketUrlOverride
+        self.pushUrlOverride = pushUrlOverride
         self.ticketHTTP = ticketHTTP
         self.transportFactory = transportFactory
         events = ServifyEvents(
@@ -154,18 +159,35 @@ public final class ServifyChat: @unchecked Sendable {
      * 成功返回回执、失败返回 nil（错误经错误流同步发出，与 sendMessage 同风格）
      * ——调用方（UI 刀）按 nil 在表单上反馈。
      */
-    public func createTicket(title: String, description: String? = nil) async -> TicketReceipt? {
-        let http: TicketHTTPPosting
+    /// REST 出站通道解析（工单创建/推送注册共用）：Darwin 用 URLSession 生产
+    /// 实现（可注入覆盖），Linux 测试面必注入 mock。
+    private func resolveHTTP() -> TicketHTTPPosting {
         #if canImport(Darwin)
-        http = ticketHTTP ?? URLSessionTicketHTTP()
+        return ticketHTTP ?? URLSessionTicketHTTP()
         #else
         guard let injected = ticketHTTP else {
             // coverage-exempt（Darwin 分支）：Linux 测试面必注入 mock，守卫不可达；
             // 生产路径由 macos 构建面覆盖（M2 豁免口径）。
             fatalError("TicketHTTP 仅在 Darwin 生产面可用；Linux 测试须注入 mock")
         }
-        http = injected
+        return injected
         #endif
+    }
+
+    /// REST JSON body 编码（工单创建/推送注册共用）：payload 为 [String: String]
+    /// （property-list 类型），JSONSerialization 对它不可失败——catch 面无法经
+    /// 任何输入触达，纯 API 契约兜底（coverage-exempt 防御行锚定于此一处）。
+    private static func encodeRestBody(_ payload: [String: String]) -> Data {
+        do {
+            return try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            // coverage-exempt（防御行）：[String: String] 编码不可失败，见上注释。
+            return Data()
+        }
+    }
+
+    public func createTicket(title: String, description: String? = nil) async -> TicketReceipt? {
+        let http = resolveHTTP()
 
         let trimmedBase = ticketUrlOverride ?? (trimTrailingSlash(config.apiUrl) + "/api/v1/tickets")
         var payload: [String: String] = [
@@ -178,15 +200,7 @@ public final class ServifyChat: @unchecked Sendable {
         if let summary = TicketSummary.build(messages: historySnapshot()) {
             payload["ai_summary"] = summary
         }
-        let body: Data
-        do {
-            body = try JSONSerialization.data(withJSONObject: payload)
-        } catch {
-            // coverage-exempt（防御行）：payload 是 [String: String]（property-list 类型），
-            // JSONSerialization 对它不可失败——catch 面无法经任何输入触达，纯 API 契约兜底。
-            _errors.emit(.ticketFailed(message: "ticket body encode failed: \(error.localizedDescription)"))
-            return nil
-        }
+        let body = Self.encodeRestBody(payload)
 
         let result: Result<(status: Int, data: Data), Error>
         do {
@@ -287,8 +301,10 @@ public final class ServifyChat: @unchecked Sendable {
      * 推送注册口（M3，平台规格 §4 registerPushToken；D7 可选性；Kotlin 镜像）：
      * - pushTokenProvider 未配置 → unsupported 错误（能力未启用）；
      * - 配置但 provider 返回 nil（宿主未授权/无 token）→ 静默返回 false（非错误）；
-     * - 取到 token → 上报服务端推送端点。服务端端点未上线（§10 #5），过渡期报
-     *   unsupported——端点落地后仅补本方法的上报实现，冻结面不变。
+     * - 取到 token → POST {apiUrl}/api/v1/push/register（§10 #5，免认证访客
+     *   端点；session_id/platform=ios/token，同 session+platform 服务端幂等）。
+     *   成功 true；IO/HTTP 失败经错误流发 network（七码冻结面无 push 专用码，
+     *   network 可重试语义与"注册可重报"一致）并返回 false。
      */
     public func registerPushToken() async -> Bool {
         guard let provider = config.pushTokenProvider else {
@@ -298,9 +314,33 @@ public final class ServifyChat: @unchecked Sendable {
         guard let token = await provider(), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return false
         }
-        // §10 #5 未上线：上报端点落地前 token 无处可报，过渡期显式 unsupported。
-        _errors.emit(.unsupported(message: "push registration endpoint not available"))
-        return false
+
+        let http = resolveHTTP()
+        let url = pushUrlOverride ?? (trimTrailingSlash(config.apiUrl) + "/api/v1/push/register")
+        let body = Self.encodeRestBody([
+            "session_id": sessionId,
+            "platform": "ios",
+            "token": token,
+        ])
+
+        let result: Result<(status: Int, data: Data), Error>
+        do {
+            result = .success(try await http.post(url: url, body: body))
+        } catch {
+            result = .failure(error)
+        }
+
+        switch result {
+        case let .failure(error):
+            _errors.emit(.network(message: "push register failed: \(error.localizedDescription)"))
+            return false
+        case let .success((status, data)):
+            if !(200..<300).contains(status) {
+                _errors.emit(.network(message: "push register http \(status): \(String(data: data.prefix(200), encoding: .utf8) ?? "")"))
+                return false
+            }
+            return true
+        }
     }
 
     // MARK: - 连接生命周期

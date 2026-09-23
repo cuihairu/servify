@@ -38,6 +38,7 @@ import (
 	macroapp "servify/apps/server/internal/modules/macro/application"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	macroinfra "servify/apps/server/internal/modules/macro/infra"
+	pushdelivery "servify/apps/server/internal/modules/push/delivery"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -348,6 +349,10 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	// 访客工单（M3 §10 #4）：与管理面 ticket 装配同源复用（同一 adapter 实现
 	// VisitorTicketService 窄接口），路由挂 /api/v1 免认证链。
 	rt.VisitorTicketService = ticketHandler
+
+	// 推送注册（M3 §10 #5）：免认证访客端点写入口（编排校验 + 幂等落库），
+	// 路由挂 /api/v1 免认证链；下发侧消费按 session 查最新 token（凭证到位后接线）。
+	rt.PushRegistrationService = pushdelivery.NewPushRegistrationAdapter(rt.DB)
 
 	// 出站 Webhook：订阅 bus 事件入队（同步、只落库），投递与重试全部走后台 worker。
 	webhookService := webhookapp.NewService(webhookinfra.NewGormRepository(rt.DB), rt.Logger)

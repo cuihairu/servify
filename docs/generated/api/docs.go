@@ -5499,6 +5499,58 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/api/v1/push/register": {
+            "post": {
+                "description": "访客（免认证）上报 FCM/APNs 推送 token；按 session 归属租户 scope，同 session+platform 幂等（重复注册保活、换 token 更新）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "推送"
+                ],
+                "summary": "注册访客推送 token",
+                "parameters": [
+                    {
+                        "description": "推送注册信息",
+                        "name": "registration",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/contract.RegisterPushTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/contract.PushTokenRegistration"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/remote-assist/{id}/recording": {
             "post": {
                 "description": "访客经 /api/v1/upload 上传录制文件后，把 key/时长/大小挂到对应协助会话；校验该协助归属当前访客的会话",
@@ -6117,6 +6169,42 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "priority": {
+                    "type": "string"
+                }
+            }
+        },
+        "contract.PushTokenRegistration": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "contract.RegisterPushTokenRequest": {
+            "type": "object",
+            "required": [
+                "platform",
+                "session_id",
+                "token"
+            ],
+            "properties": {
+                "platform": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }

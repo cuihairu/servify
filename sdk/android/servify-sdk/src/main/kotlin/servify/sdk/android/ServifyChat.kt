@@ -72,6 +72,8 @@ class ServifyChat internal constructor(
     private val wsUrlOverride: String? = null,
     /** 测试注入：工单创建端点同款（生产路径恒为 apiUrl + /api/v1/tickets）。 */
     private val ticketUrlOverride: String? = null,
+    /** 测试注入：推送注册端点（生产路径恒为 apiUrl + /api/v1/push/register）。 */
+    private val pushUrlOverride: String? = null,
 ) {
     private val core = SessionCore()
 
@@ -276,8 +278,10 @@ class ServifyChat internal constructor(
      * 推送注册口（M3，平台规格 §4 registerPushToken；D7 可选性）：
      * - [ServifyConfig.pushTokenProvider] 未配置 → Unsupported 错误（能力未启用）；
      * - 配置但 provider 返回 null（宿主未授权/无 token）→ 静默返回 false（非错误）；
-     * - 取到 token → 上报服务端推送端点。服务端端点未上线（§10 #5），过渡期报
-     *   Unsupported——端点落地后仅补本方法的上报实现，冻结面不变。
+     * - 取到 token → POST {apiUrl}/api/v1/push/register（§10 #5，免认证访客端点；
+     *   session_id/platform=android/token，同 session+platform 服务端幂等）。
+     *   成功 true；IO/HTTP 失败经错误流发 Network（七码冻结面无 push 专用码，
+     *   Network 可重试语义与"注册可重报"一致）并返回 false。
      */
     suspend fun registerPushToken(): Boolean {
         val provider = config.pushTokenProvider
@@ -289,9 +293,31 @@ class ServifyChat internal constructor(
         if (token.isNullOrBlank()) {
             return false
         }
-        // §10 #5 未上线：上报端点落地前 token 无处可报，过渡期显式 unsupported。
-        _errors.emit(ServifyError.Unsupported("push registration endpoint not available"))
-        return false
+        return withContext(Dispatchers.IO) {
+            val url = (pushUrlOverride ?: config.apiUrl.trimEnd('/') + "/api/v1/push/register")
+            val body = buildJsonObject {
+                put("session_id", sessionId)
+                put("platform", "android")
+                put("token", token)
+            }.toString()
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: IOException) {
+                _errors.emit(ServifyError.Network("push register failed: ${e.message}"))
+                return@withContext false
+            }
+            response.use { resp ->
+                if (!resp.isSuccessful) {
+                    _errors.emit(ServifyError.Network("push register http ${resp.code}"))
+                    return@withContext false
+                }
+                true
+            }
+        }
     }
 
     private fun openSocket() {

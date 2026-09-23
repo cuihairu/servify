@@ -566,3 +566,19 @@ type SuggestionExposureLog struct {
 	ConvertedAt       *time.Time `json:"converted_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
+
+// PushToken 推送注册（M3 移动 SDK 配套 §10 #5）：移动端 SDK 经免认证访客端点
+// 上报的 FCM/APNs token，按 session 绑定租户 scope（继承 session 行）。同
+// (session_id, platform) 幂等：重复注册保活、换 token 更新——SDK 侧 provider
+// 每次 connect 均可重报。token 为敏感面不回显（json:"-"，响应走摘要 DTO）；
+// 下发侧按 session 查最新 token（平台 → 通道映射：ios=APNs，android=FCM）。
+type PushToken struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	TenantID    string    `gorm:"index:idx_push_tokens_scope" json:"tenant_id"`
+	WorkspaceID string    `gorm:"index:idx_push_tokens_scope" json:"workspace_id"`
+	SessionID   string    `gorm:"index:idx_push_tokens_session_platform;default:''" json:"session_id"`
+	Platform    string    `gorm:"index:idx_push_tokens_session_platform;size:16" json:"platform"` // ios|android
+	Token       string    `gorm:"type:text" json:"-"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

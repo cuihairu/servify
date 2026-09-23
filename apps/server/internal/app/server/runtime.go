@@ -22,6 +22,7 @@ import (
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
+	pushdelivery "servify/apps/server/internal/modules/push/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -71,6 +72,7 @@ type Runtime struct {
 	AgentGroupService        agentdelivery.AgentGroupService
 	TicketHandlerService     ticketdelivery.HandlerService
 	VisitorTicketService     ticketdelivery.VisitorTicketService
+	PushRegistrationService  pushdelivery.PushRegistrationService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      satisfactiondelivery.SatisfactionService
@@ -256,6 +258,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		AgentGroupService:        rt.AgentGroupService,
 		TicketHandlerService:     rt.TicketHandlerService,
 		VisitorTicketService:     rt.VisitorTicketService,
+		PushRegistrationService:  rt.PushRegistrationService,
 		TicketReaderService:      rt.TicketReaderService,
 		TransferHandlerService:   rt.TransferHandlerService,
 		SatisfactionService:      rt.SatisfactionService,

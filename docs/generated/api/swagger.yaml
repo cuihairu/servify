@@ -338,6 +338,30 @@ definitions:
       priority:
         type: string
     type: object
+  contract.PushTokenRegistration:
+    properties:
+      id:
+        type: integer
+      platform:
+        type: string
+      session_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  contract.RegisterPushTokenRequest:
+    properties:
+      platform:
+        type: string
+      session_id:
+        type: string
+      token:
+        type: string
+    required:
+    - platform
+    - session_id
+    - token
+    type: object
   contract.RemoteAssistTicketStats:
     properties:
       avg_close_hours:
@@ -5265,6 +5289,41 @@ paths:
   /api/v1/conversations/{id}/messages:
     get:
       responses: {}
+  /api/v1/push/register:
+    post:
+      consumes:
+      - application/json
+      description: 访客（免认证）上报 FCM/APNs 推送 token；按 session 归属租户 scope，同 session+platform
+        幂等（重复注册保活、换 token 更新）
+      parameters:
+      - description: 推送注册信息
+        in: body
+        name: registration
+        required: true
+        schema:
+          $ref: '#/definitions/contract.RegisterPushTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/contract.PushTokenRegistration'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 注册访客推送 token
+      tags:
+      - 推送
   /api/v1/remote-assist/{id}/recording:
     post:
       consumes:

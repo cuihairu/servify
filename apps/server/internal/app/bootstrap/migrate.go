@@ -54,6 +54,7 @@ func MigrationModels() []interface{} {
 		&models.AutomationTimer{},
 		&models.UserRecoveryCode{},
 		&models.SuggestionExposureLog{},
+		&models.PushToken{},
 	}
 }
 

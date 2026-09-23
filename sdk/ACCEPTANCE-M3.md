@@ -2,13 +2,13 @@
 
 对应 `docs/mobile-sdk-design.md` M3 验收条款 ①—③。双端共同里程碑（M1=Android、M2=iOS 各自收口后，M3 起双端同刀推进，用例名逐一镜像防单侧漂移）。自动化项逐条锚定测试与提交；依赖外部环境的项如实标注执行状态——**未执行的项不勾**。
 
-刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）。
+刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）。
 
-## ① 推送端到端 ⏳ 外部配套未通，SDK 侧注册口就位（如实标注）
+## ① 推送端到端 ⏳ 下发侧外部配套未通，注册链路已通（如实标注）
 
-- **注册口过渡语义（自动化锚定 ✅，5a81558）**：`registerPushToken()` 三分支——`pushTokenProvider` 未配置→`unsupported`("push not configured")；配置但 provider 返 null/nil→静默 `false`（宿主未授权是正常态，非错误）；取到 token→过渡期 `unsupported`("push registration endpoint not available")（§10 #5 端点落地后仅补上报实现，冻结面不变）。测试：`RegisterPushTokenTest`（Kotlin 3）↔ `RegisterPushTokenTests`（Swift 3），用例名逐一对应。
+- **注册链路（自动化锚定 ✅，刀 5）**：`registerPushToken()` 真实上报 `POST {apiUrl}/api/v1/push/register`，体 `{session_id, platform, token}`（platform 服务端固定 ios/android）；2xx→`true`；IO 失败→`network` + `false`；非 2xx→`network`(http 状态码) + `false`（注册可重报，network 可重试语义一致）。保留前两分支语义不变：`pushTokenProvider` 未配置→`unsupported`("push not configured")；provider 返 null/nil→静默 `false`（宿主未授权是正常态，非错误）。服务端：迁移 000012_push_tokens（幂等键 session_id+platform，重复注册保活同一行刷新 token+updated_at，换平台独立行；token 落库但 JSON 面不回显），三包测试 orchestration 5 + delivery 7 + handlers 5。测试：`RegisterPushTokenTest`（Kotlin 6）↔ `RegisterPushTokenTests`（Swift 6），用例名逐一对应。
 - **Branding offlineText 断线提示（自动化锚定 ✅，刀 1 4fd2ead）**：配置后在重连耗尽/握手失败落 disconnected 终态时追加系统提示行（进 history 可回放、不计未读）；未配置不出行；用户主动 destroy 不提示。测试：`ConnectionLifecycleTest` / `ConnectionLifecycleTests` 的 offlineHint 四用例 + `appendSystemHintEntersHistoryAndStreamWithoutUnread`（无 replay 流的用 onSubscription 钩订阅点后触发，消 CI release 变体竞态）。
-- **端到端链路 ⏳**：后台 → 系统 → 点开 → 增量补拉 → 未读归零。三重外部依赖（不阻塞代码面收口）：§10 #5 推送 token 注册 + 下发（服务端未实现）、§10 #1 访客消息增量游标端点、FCM/APNs 凭证（P1-1，凭证等置维持原状）。服务端端点落地后 SDK 侧仅需补 registerPushToken 上报实现。
+- **端到端链路 ⏳**：后台 → 系统 → 点开 → 增量补拉 → 未读归零。注册链路已通（刀 5：服务端 §10 #5 注册端点 + SDK 双端上报）；仍缺三重外部依赖（不阻塞代码面收口）：推送**下发**（服务端 sender，FCM/APNs 凭证 P1-1 阻塞联调）、§10 #1 访客消息增量游标端点、真机推送环境。
 - **真机手工项 ⏳（外部配套到位后执行）**：后台收推送展示、点开通知进会话页、增量补拉后未读归零、前台期间不重复推送、进程被杀后 cold start 补拉。
 
 ## ② 工单创建携带 AI 摘要且坐席侧可见 ✅（SDK + 服务端闭环）
@@ -38,4 +38,4 @@
 
 ## 后端配套依赖（不阻塞 M3 代码面收口）
 
-§10 #5（推送注册 + 下发，P1-1 凭证一并排队）、#1（访客增量游标端点）、#2（guest token 签发）。#4 已随刀 2 落地（见验收②）。
+§10 #5 下发侧（推送 sender，P1-1 凭证阻塞联调；注册端点已随刀 5 落地）、#1（访客增量游标端点）、#2（guest token 签发）。#4 已随刀 2 落地（见验收②）。

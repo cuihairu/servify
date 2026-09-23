@@ -18,6 +18,9 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	// 访客工单创建（M3 移动 SDK 配套 §10 #4）：访客配套 REST 与 WS 同前缀，
 	// 按 session 归属租户 scope，坐席侧管理面 tickets 列表自然可见。
 	publicV1.POST("/tickets", handlers.NewVisitorTicketHandler(deps.VisitorTicketService, deps.Logger).CreateVisitorTicket)
+	// 推送 token 注册（M3 移动 SDK 配套 §10 #5）：SDK connect 后上报
+	// FCM/APNs token，按 session 归属租户 scope，同 session+platform 幂等。
+	publicV1.POST("/push/register", handlers.NewVisitorPushHandler(deps.PushRegistrationService, deps.Logger).RegisterPushToken)
 
 	webrtcHandler := handlers.NewWebRTCHandler(deps.RTCGateway)
 	messageHandler := handlers.NewMessageHandler(deps.MessageRouter)
