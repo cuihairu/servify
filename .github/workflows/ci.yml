@@ -491,11 +491,19 @@ jobs:
 
       # 覆盖率门禁：Linux 测试面行级 100%（豁免面=Darwin 分支/防御行，清单与
       # 漂移锚定见脚本头）——Android/Go 同纪律；Darwin 面由 ios-macos job 覆盖。
+      # 已知 CI runner 偶发 profile 计数丢失（35906115877/35908589013 对照：
+      # 同代码同口径一轮红一轮绿，失败行集漂移）→ 首跑失败先清 profraw 重跑
+      # 测试复检一次，二次失败才真红（脚本会 dump region 诊断现场）。
       - name: Coverage gate (Linux-testable 100%)
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: |
           chmod +x scripts/check-ios-sdk-coverage.sh
-          ./scripts/check-ios-sdk-coverage.sh
+          if ! ./scripts/check-ios-sdk-coverage.sh; then
+            echo "::warning::覆盖率门禁首跑未过：清 profraw 重跑测试后复检（CI 计数间歇丢失缓解）"
+            rm -f sdk/ios/.build/debug/codecov/*.profraw sdk/ios/.build/coverage-merged.profdata
+            (cd sdk/ios && swift test --enable-code-coverage)
+            ./scripts/check-ios-sdk-coverage.sh
+          fi
 
   ios-macos:
     name: iOS SDK (macOS Darwin face)

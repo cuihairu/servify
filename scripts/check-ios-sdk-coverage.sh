@@ -7,7 +7,8 @@
 # 内联决策可不同），执行计数落在内联副本 region、独立副本 region 计 0，show
 # 文本对同行多 region 不取 max → 真实覆盖的行被报成未覆盖（run 35902599190
 # 实锤：finalizeInterruptedStream 测试断言全过但 show 口径报 6 行 0）。
-# export 聚合口径对副本免疫，双环境结果一致。
+# export 精确口径对副本噪声免疫。另：CI runner 偶发 profile 计数丢失（35906115877
+# 与 35908589013 同代码同口径一红一绿、失败行集漂移），由 CI step 的自愈重试兜底。
 #
 # 豁免面（与 ACCEPTANCE-M2 同源口径）：
 # - Darwin 分支（ServifyChat.create / TicketHTTP fatalError 守卫）：Linux 编译得到

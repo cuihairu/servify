@@ -25,11 +25,14 @@
   （6）/ `ServifyErrorTests`（2）与 Kotlin 用例名逐一对应（连接状态机 §4.4 转移表穷举
   同型、错误七码对账 §4.5 同型）。
 - 覆盖率口径（门禁脚本化，M4 后）：`scripts/check-ios-sdk-coverage.sh`——Linux 测试面
-  行级 100% 硬断言（976 行可计数，CI ios-swift job 随 swift test 执行）；豁免面 11 行
-  双类：Darwin 分支（`ServifyChat.create`/`TicketHTTP` 守卫，`#if canImport(Darwin)`
-  生产路径由 `ios-macos` job 的 `CreateFactoryTests` 覆盖，等价 Go 侧 `[no statements]`
-  口径）与不可触达防御行（ticket body encode catch——payload 为 property-list 类型）。
-  豁免行以源码 `coverage-exempt` 注释锚定，脚本反向校验清单漂移。
+  行级 100% 硬断言（651 行可计数，CI ios-swift job 随 swift test 执行；llvm-cov
+  export 精确口径：跨 function 条目取 max + 条目内最内层 region，对内联副本与
+  嵌套 region 两类计数噪声免疫）；豁免面 13 行双类：Darwin 分支（`ServifyChat.create`
+  /`TicketHTTP` 守卫，`#if canImport(Darwin)` 生产路径由 `ios-macos` job 的
+  `CreateFactoryTests` 覆盖，等价 Go 侧 `[no statements]` 口径）与不可触达防御行
+  （ticket body encode catch——payload 为 property-list 类型）。豁免行以源码
+  `coverage-exempt` 注释锚定，脚本反向校验清单漂移；CI runner 偶发 profile 计数
+  丢失由 gate step 内建自愈重试兜底（清 profraw 重跑测试复检一次）。
 - macOS CI（刀 4）：`ios-macos` job 锁 macos-15——Darwin 专属面（`URLSessionWebSocket
   Transport`/`create` 工厂，`CreateFactoryTests` 仅 Darwin 编译）+ XCFramework 打包与
   体积门禁（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，
