@@ -3,7 +3,7 @@
 客服会话 SDK（M2 Alpha 进行中）：Swift + SwiftUI（D4）、零三方依赖（D9，由 Package.swift
 无 dependencies 声明结构性保证）、XCFramework 分发（≤2MB 门禁）。
 
-## 当前状态（M2 刀 2）
+## 当前状态（M2 进行中：刀 1/2/4 已落地）
 
 - 协议层：`WireFrame` / `FrameCodec`（Kotlin `shared/protocol` 逐字段镜像，畸形帧降级
   Unknown 语义一致）。
@@ -26,9 +26,13 @@
   同型、错误七码对账 §4.5 同型）。
 - 覆盖率口径（本地 `swift test --enable-code-coverage` 行级聚合）：生产代码可覆盖面
   100%（820/820 行）；唯一豁免 `ServifyChat.create` 的 Darwin 分支（`#if canImport(Darwin)`
-  在 Linux 编译不到，等价 Go 侧 `[no statements]` 口径，macOS CI 刀落地后自然覆盖）。
-- 尚未落地（后续刀）：SwiftUI 会话面板与浮钮（show/hide 接线）、XCFramework 打包与
-  体积门禁（macOS CI）、Keychain/推送注册口（依赖后端配套项）。
+  在 Linux 编译不到，等价 Go 侧 `[no statements]` 口径）。
+- macOS CI（刀 4）：`ios-macos` job 锁 macos-15——Darwin 专属面（`URLSessionWebSocket
+  Transport`/`create` 工厂，`CreateFactoryTests` 仅 Darwin 编译）+ XCFramework 打包与
+  体积门禁（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，
+  分发形态 zip 后 ≤2MB，D9/M2 验收②）。
+- 尚未落地（后续刀）：SwiftUI 会话面板与浮钮（show/hide 接线，依赖 macOS job 先行——
+  SwiftUI 在 Linux 编译不了）、Keychain/推送注册口（依赖后端配套项）。
 
 ## 本地开发
 

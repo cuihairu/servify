@@ -469,6 +469,30 @@ jobs:
         working-directory: sdk/ios
         run: swift test
 
+  ios-macos:
+    name: iOS SDK (macOS Darwin face)
+    # 刀 4：Darwin 专属面（URLSessionWebSocketTransport / create 工厂）只能在 macOS
+    # 编译验证；XCFramework ≤2MB 门禁（D9 / M2 验收②）也依赖 xcodebuild。
+    # 锁 macos-15：runner 标签随 macos-latest 漂移会换 Xcode 大版本（与 ubuntu 锁 24.04 同因）。
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        timeout-minutes: 3
+        uses: actions/checkout@v7
+
+      - name: Build and test ServifyKit (Darwin face incl. URLSession transport)
+        timeout-minutes: 15
+        working-directory: sdk/ios
+        run: swift test
+
+      - name: XCFramework size gate (M2 acceptance #2, D9 ≤2MB)
+        timeout-minutes: 15
+        run: ./scripts/check-ios-sdk-size.sh
+
   admin-checks:
     name: Admin Checks
     runs-on: ubuntu-latest
