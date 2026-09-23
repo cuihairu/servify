@@ -45,9 +45,14 @@ struct AsyncMutexTests {
                 log.record("b-start")
             }
         }
-        // B 的挂起（waiters.append）是 acquire 同步段，启动后毫秒级完成；
-        // 此 sleep 只是挂载屏障（同 awaitSnapshot 轮询性质），非被测行为时序
-        try await Task.sleep(nanoseconds: 200_000_000)
+        // 轮询确认 B 已挂起进 waiters（release 的唤醒段覆盖即由此确定）——
+        // 不用 sleep 屏障：CI 慢机调度下 sleep 窗口内 B 可能尚未执行 acquire，
+        // 晚到走快路径会让唤醒段漂出覆盖面
+        let deadline = Date().addingTimeInterval(5)
+        while mutex.pendingWaiterCount == 0 {
+            if Date() > deadline { throw TestError.timeout }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
 
         releaseA.set()
         await taskA.value

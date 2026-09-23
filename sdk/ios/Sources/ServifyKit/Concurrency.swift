@@ -26,6 +26,15 @@ final class AsyncMutex: @unchecked Sendable {
         }
     }
 
+    /// 测试锚点：排队中的续体数（0 = 无竞争挂起）。竞争测试据此轮询确认
+    /// 「后来者确已挂起」后再放行持有者——替代 sleep 屏障（CI 慢机调度下
+    /// sleep 窗口不可靠，后来者可能晚到走快路径，唤醒段覆盖漂移）。
+    var pendingWaiterCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return waiters.count
+    }
+
     private func release() {
         lock.lock()
         if waiters.isEmpty {

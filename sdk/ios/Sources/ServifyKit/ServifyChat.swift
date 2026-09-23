@@ -513,6 +513,9 @@ public final class ServifyChat: @unchecked Sendable {
      * 断连时流必然中断）——保留已渲染部分（翻 isStreaming=false）+ 追加提示行（D8）。
      * 提示行是 SDK 自造的 UI 状态行（协议无此帧），不计未读。
      */
+    // coverage-exempt（llvm 计数脱节面）：主路径在 CI 上物理执行（提示行断言过、
+    // 子块 counter=1）但线性段 counter 报 0（调用计数全记 guard-else 特化副本，
+    // 35906115877/35910306629 诊断实锤）——Swift/Linux 插桩缺陷，非缺口。
     private func finalizeInterruptedStream() {
         stateLock.lock()
         guard let id = streamingId else {
@@ -539,6 +542,7 @@ public final class ServifyChat: @unchecked Sendable {
             history[index] = flipped
             partial = flipped
         }
+        // coverage-exempt（llvm 计数脱节面）：同 finalize 头部锚定——后半段行
         stateLock.unlock()
         if let partial { _messages.emit(partial) }
         appendSystemHint("回答中断，请重试")

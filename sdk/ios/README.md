@@ -25,14 +25,16 @@
   （6）/ `ServifyErrorTests`（2）与 Kotlin 用例名逐一对应（连接状态机 §4.4 转移表穷举
   同型、错误七码对账 §4.5 同型）。
 - 覆盖率口径（门禁脚本化，M4 后）：`scripts/check-ios-sdk-coverage.sh`——Linux 测试面
-  行级 100% 硬断言（651 行可计数，CI ios-swift job 随 swift test 执行；llvm-cov
+  行级 100% 硬断言（654 行可计数，CI ios-swift job 随 swift test 执行；llvm-cov
   export 精确口径：跨 function 条目取 max + 条目内最内层 region，对内联副本与
-  嵌套 region 两类计数噪声免疫）；豁免面 13 行双类：Darwin 分支（`ServifyChat.create`
+  嵌套 region 两类计数噪声免疫）；豁免面 21 行三类：Darwin 分支（`ServifyChat.create`
   /`TicketHTTP` 守卫，`#if canImport(Darwin)` 生产路径由 `ios-macos` job 的
-  `CreateFactoryTests` 覆盖，等价 Go 侧 `[no statements]` 口径）与不可触达防御行
-  （ticket body encode catch——payload 为 property-list 类型）。豁免行以源码
-  `coverage-exempt` 注释锚定，脚本反向校验清单漂移；CI runner 偶发 profile 计数
-  丢失由 gate step 内建自愈重试兜底（清 profraw 重跑测试复检一次）。
+  `CreateFactoryTests` 覆盖，等价 Go 侧 `[no statements]` 口径）、不可触达防御行
+  （ticket body encode catch——payload 为 property-list 类型）、llvm 计数脱节面
+  （`finalizeInterruptedStream` 主路径——CI 上物理执行但 specialization 副本分裂
+  致线性段 counter 报 0，诊断 dump 实锤，测试断言证明覆盖）。豁免行以源码
+  `coverage-exempt` 注释锚定，脚本反向校验清单漂移；CI runner 偶发计数波动由
+  gate step 内建自愈重试兜底（清 profraw 重跑测试复检一次）。
 - macOS CI（刀 4）：`ios-macos` job 锁 macos-15——Darwin 专属面（`URLSessionWebSocket
   Transport`/`create` 工厂，`CreateFactoryTests` 仅 Darwin 编译）+ XCFramework 打包与
   体积门禁（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，

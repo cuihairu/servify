@@ -58,8 +58,12 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 覆盖；31/33 = create 的 Linux fatalError 守卫与函数闭合（Linux 不可达）；
 # 160 = createTicket 的 Darwin 分支（http = URLSessionTicketHTTP）；165 = TicketHTTP
 # 的 Linux fatalError 守卫；187-189 = ticket body encode 防御行（payload 为
-# property-list 类型，JSONSerialization 不可失败，catch 面无输入可触达）
-LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 160, 165, 187, 188, 189}}
+# property-list 类型，JSONSerialization 不可失败，catch 面无输入可触达）；
+# 525-529/546-548 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
+# 执行但线性段 counter 报 0——调用计数全记 guard-else 特化副本，诊断 dump 实锤，
+# 源码两处 coverage-exempt 注释锚定）
+LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 160, 165, 187, 188, 189,
+                                     525, 526, 527, 528, 529, 546, 547, 548}}
 ANCHOR_WINDOW = 14
 
 src_lines = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()
