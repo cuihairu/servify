@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
+	pushinfra "servify/apps/server/internal/modules/push/infra"
+	"strings"
 	"time"
 
 	agentapp "servify/apps/server/internal/modules/agent/application"
@@ -182,6 +184,38 @@ func wireEmailRuntime(rt *Runtime, conversationService *conversationapp.Service)
 
 	// 坐席回复按会话渠道出站：email 渠道启用时把 agent 消息回发访客邮箱
 	NewChannelOutboundDispatcher(rt.DB, rt.emailAdapter, rt.Logger).Register(rt.Bus)
+}
+
+// wirePushRuntime 按需构建移动端推送下发通道（enabled=false 时不构建任何组件）。
+// 双层 gate 兜底层：凭证畸形（服务账号 JSON / .p8 解析失败）在装配处返回
+// error 拒绝启动——config.InsecureDefaults 的 warning 面已在 production
+// 拒绝缺凭证，这里拦"配了但坏"。双通道都未配凭证时静默不订阅（告警面已提示）。
+func wirePushRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) error {
+	cfg := rt.Config.Push
+	if !cfg.Enabled {
+		return nil
+	}
+	var fcm *pushinfra.FCMClient
+	if raw := strings.TrimSpace(cfg.FCM.CredentialsJSON); raw != "" {
+		client, err := pushinfra.NewFCMClient(raw)
+		if err != nil {
+			return fmt.Errorf("push.fcm: %w", err)
+		}
+		fcm = client
+	}
+	var apns *pushinfra.APNsClient
+	if strings.TrimSpace(cfg.APNs.PrivateKey) != "" {
+		client, err := pushinfra.NewAPNsClient(cfg.APNs.KeyID, cfg.APNs.TeamID, cfg.APNs.BundleID, cfg.APNs.PrivateKey, cfg.APNs.Sandbox)
+		if err != nil {
+			return fmt.Errorf("push.apns: %w", err)
+		}
+		apns = client
+	}
+	if fcm == nil && apns == nil {
+		return nil
+	}
+	NewPushOutboundDispatcher(rt.DB, wsHub, fcm, apns, rt.Logger).Register(rt.Bus)
+	return nil
 }
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {

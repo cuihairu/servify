@@ -368,6 +368,22 @@ embedding:
 #     use_starttls: true
 #     skip_verify: false
 
+# 移动端推送下发（FCM Android / APNs iOS）：坐席回复推给离线访客
+# 默认关闭；消费 push_tokens 注册行，访客 WS 在线时不推（前台抑制）
+# push:
+#   enabled: false
+#   fcm:
+#     # Firebase 服务账号 JSON 全文（建议 ${FCM_CREDENTIALS_JSON} 环境变量注入）
+#     credentials_json: ""
+#   apns:
+#     key_id: ""
+#     team_id: ""
+#     bundle_id: "com.example.app"
+#     # .p8 私钥全文（建议 ${APNS_PRIVATE_KEY} 环境变量注入）
+#     private_key: ""
+#     # 沙箱网关（TestFlight/开发证书用 true）
+#     sandbox: false
+
 # 质检全链路：定时扫描已结束会话 → 规则质检（违禁词/响应超时/首次响应）→ LLM 打分（可选）
 # 默认关闭；LLM 打分独立开关，无 key 时降级为 rules-only
 # quality:

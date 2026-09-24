@@ -474,6 +474,20 @@ func (h *WebSocketHub) GetClientCount() int {
 	return len(h.clients)
 }
 
+// IsSessionConnected 报告指定访客会话当前是否持有活跃 WS 连接
+// （clients 键是连接 ID，广播靠 SessionID 匹配；在线判定同样按 SessionID 遍历）。
+// 推送下发用它做前台抑制：访客在线时不发系统推送。
+func (h *WebSocketHub) IsSessionConnected(sessionID string) bool {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	for _, client := range h.clients {
+		if client.SessionID == sessionID {
+			return true
+		}
+	}
+	return false
+}
+
 func asSessionDescription(data interface{}) (webrtc.SessionDescription, error) {
 	switch v := data.(type) {
 	case webrtc.SessionDescription:

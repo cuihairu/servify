@@ -45,6 +45,8 @@ var knownSensitiveLeafKeys = map[string]bool{
 	"access_key_id":      true,
 	"auth_token":         true,
 	"static_auth_secret": true, // webrtc.turn 时间限凭据的共享 secret（docs/TURN_DEPLOYMENT.md）
+	"credentials_json":   true, // push.fcm 服务账号 JSON 全文
+	"private_key":        true, // push.apns .p8 私钥全文
 }
 
 // buildSchema 从 Config 类型反射生成 schema 树。

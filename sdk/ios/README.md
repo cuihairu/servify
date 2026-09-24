@@ -48,7 +48,7 @@
   SwiftUI 编译验证由 ios-macos job 的 xcodebuild 承担（Linux/纯 swift test 编译不到）。
 - 尚未落地：Keychain（V1 匿名 session 无凭证存储需求；推送注册链路已随 M3 刀 5 通——
   `ServifyConfig(pushTokenProvider:)` + `registerPushToken()` 真实上报
-  `POST /api/v1/push/register`，服务端端点已落地；下发侧仍待 APNs/FCM 凭证配套）。
+  `POST /api/v1/push/register`，服务端端点已落地；下发编排 + APNs/FCM 传输已随刀 6 代码面落地，真实凭证联调待配套）。
 
 ## M3 API（工单 / 推送注册口 / 离线提示）
 

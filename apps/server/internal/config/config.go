@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -62,6 +63,7 @@ type Config struct {
 	Quality    QualityConfig    `yaml:"quality"`
 	Routing    RoutingConfig    `yaml:"routing"`
 	Automation AutomationConfig `yaml:"automation"`
+	Push       PushConfig       `yaml:"push"`
 }
 
 type ServerConfig struct {
@@ -547,6 +549,32 @@ type EmailConfig struct {
 	SMTP                EmailSMTPConfig `yaml:"smtp" json:"smtp,omitempty"`
 }
 
+// PushConfig 配置移动端推送下发（FCM Android / APNs iOS）。
+// 消费 push_tokens 注册行（迁移 000012），零新表；enabled=false 时零组件不订阅事件。
+// 真机凭证联调依赖 FCM 服务账号 / APNs 密钥（P1-1）；HTTP 传输与编排面已就绪。
+type PushConfig struct {
+	Enabled bool           `yaml:"enabled" json:"enabled,omitempty"`
+	FCM     PushFCMConfig  `yaml:"fcm" json:"fcm,omitempty"`
+	APNs    PushAPNsConfig `yaml:"apns" json:"apns,omitempty"`
+}
+
+// PushFCMConfig 是 Android 通道（FCM HTTP v1）。CredentialsJSON 为 Firebase
+// 服务账号 JSON 全文（client_email/private_key 必备，project_id 由此解析）。
+type PushFCMConfig struct {
+	CredentialsJSON string `yaml:"credentials_json" json:"-"`
+}
+
+// PushAPNsConfig 是 iOS 通道（APNs token-based）。PrivateKey 为 .p8 文件全文（PEM）。
+type PushAPNsConfig struct {
+	KeyID    string `yaml:"key_id" json:"key_id,omitempty"`
+	TeamID   string `yaml:"team_id" json:"team_id,omitempty"`
+	BundleID string `yaml:"bundle_id" json:"bundle_id,omitempty"`
+	// PrivateKey 是 APNs 签名私钥（ES256，敏感面不进日志/JSON）
+	PrivateKey string `yaml:"private_key" json:"-"`
+	// Sandbox 走沙箱网关（api.sandbox.push.apple.com）
+	Sandbox bool `yaml:"sandbox" json:"sandbox,omitempty"`
+}
+
 // EmailSMTPConfig 是出站 SMTP 配置（本期 Send 通路就绪，生产触发点留待后续版本）
 type EmailSMTPConfig struct {
 	Host     string `yaml:"host" json:"host,omitempty"`
@@ -758,8 +786,42 @@ func InsecureDefaults(cfg *Config) []string {
 			warnings = append(warnings, "email.enabled is true but email.smtp.host is empty; outbound email cannot be sent")
 		}
 	}
+	if cfg.Push.Enabled {
+		fcmReady := pushFCMCredentialsValid(cfg.Push.FCM.CredentialsJSON) == ""
+		apns := cfg.Push.APNs
+		apnsReady := strings.TrimSpace(apns.PrivateKey) != ""
+		if !fcmReady && !apnsReady {
+			warnings = append(warnings, "push.enabled is true but push.fcm/push.apns credentials are both missing; dispatch subscribes nothing")
+		}
+		if apnsReady && (strings.TrimSpace(apns.KeyID) == "" || strings.TrimSpace(apns.TeamID) == "" || strings.TrimSpace(apns.BundleID) == "") {
+			warnings = append(warnings, "push.apns is partially configured; push.apns.key_id/team_id/bundle_id are all required with private_key")
+		}
+	}
 
 	return warnings
+}
+
+// pushFCMCredentialsValid 校验 FCM 服务账号 JSON：可解析且 client_email/
+// private_key 齐备；返回首个问题（空串 = 合法）。
+func pushFCMCredentialsValid(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "credentials_json is empty"
+	}
+	var svc struct {
+		ClientEmail string `json:"client_email"`
+		PrivateKey  string `json:"private_key"`
+		ProjectID   string `json:"project_id"`
+	}
+	if err := json.Unmarshal([]byte(raw), &svc); err != nil {
+		return "credentials_json is not valid JSON: " + err.Error()
+	}
+	if strings.TrimSpace(svc.ClientEmail) == "" {
+		return "credentials_json missing client_email"
+	}
+	if strings.TrimSpace(svc.PrivateKey) == "" {
+		return "credentials_json missing private_key"
+	}
+	return ""
 }
 
 // ValidateResult contains the result of config validation
@@ -1149,7 +1211,12 @@ func GetDefaultConfig() *Config {
 				Port:        587,
 				UseSTARTTLS: true,
 			},
+		}, Push: PushConfig{
+			// 推送下发默认关闭；启用需 fcm.credentials_json 或 apns 凭证组，
+			// production 下缺凭证告警即拒绝启动（见 InsecureDefaults）
+			Enabled: false,
 		},
+
 		Quality: QualityConfig{
 			// 质检默认关闭；LLM 打分独立开关（无 key 时 rules-only）
 			Enabled:             false,
