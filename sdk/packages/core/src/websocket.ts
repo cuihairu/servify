@@ -7,7 +7,7 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer, AiStreamDeltaUpdate, AiStreamEndUpdate } from './types';
+import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer, AiStreamDeltaUpdate, AiStreamEndUpdate, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
 import { StreamingAssembler } from './streaming';
 
 export interface WebSocketManagerOptions {
@@ -213,6 +213,12 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       case 'ai-response-delta':
         this.handleStreamDelta(message.data);
         break;
+      case 'transfer_notification':
+        this.handleTransferNotification(message.data);
+        break;
+      case 'waiting_notification':
+        this.handleWaitingNotification(message.data);
+        break;
       case 'webrtc-offer':
         this.emit('webrtc:offer', message.data as RTCSessionDescriptionInit);
         break;
@@ -366,6 +372,24 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       const update: AiStreamEndUpdate = { id: ended.id, interrupted: true, content: ended.content };
       this.emit('ai-stream:end', update);
     }
+  }
+
+  /** 转人工通知（PROTOCOL §4.2）：坐席已接入（含等待队列派发）。纯事件流，不渲染消息、不动会话状态——对齐移动端 agentAssigned 语义。 */
+  private handleTransferNotification(data: unknown): void {
+    if (typeof data !== 'object' || data === null) return;
+    const { message, agent_id } = data as Record<string, unknown>;
+    if (typeof message !== 'string' || typeof agent_id !== 'number') return;
+    const update: TransferAssignmentUpdate = { agentId: agent_id, message };
+    this.emit('transfer:assigned', update);
+  }
+
+  /** 排队通知（PROTOCOL §4.2）：已入等待队列。同上，纯事件流——对齐移动端 waitingInQueue 语义。 */
+  private handleWaitingNotification(data: unknown): void {
+    if (typeof data !== 'object' || data === null) return;
+    const { message } = data as Record<string, unknown>;
+    if (typeof message !== 'string') return;
+    const update: TransferWaitingUpdate = { message };
+    this.emit('transfer:waiting', update);
   }
 
   private normalizeMessage(message: WSMessage, senderType: Message['sender_type'], isAIResponse = false): Message {

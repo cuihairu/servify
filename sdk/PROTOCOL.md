@@ -49,8 +49,8 @@
 
 | type | 载荷 `data` | 语义 |
 |---|---|---|
-| `transfer_notification` | `{message: string, agent_id: number, timestamp}` | 会话已分配坐席（含等待队列派发）。状态机 → `agent_chatting` |
-| `waiting_notification` | `{message: string, timestamp}` | 已入等待队列。状态机 → `waiting_human` |
+| `transfer_notification` | `{message: string, agent_id: number, timestamp}` | 会话已分配坐席（含等待队列派发）。状态机 → `agent_chatting`。**core 消费形态（随转人工刀接入，三端闭环）**：经独立事件 `transfer:assigned`（负载 `{agentId, message}`，camelCase）透出，同时清 `transfer:waiting` 排队态（对应 waiting_human → agent_chatting 转移）；纯事件流，不渲染消息、不动会话状态——与移动端 `agentAssigned` 同构 |
+| `waiting_notification` | `{message: string, timestamp}` | 已入等待队列。状态机 → `waiting_human`。**core 消费形态**：经独立事件 `transfer:waiting`（负载 `{message}`）透出——与移动端 `waitingInQueue` 同构 |
 
 **转人工状态机**（策划文档 §4 同源，事件全部为真实帧）：
 

@@ -118,6 +118,8 @@ export interface WSMessage {
     | 'agent-message'
     | 'ai-response'
     | 'ai-response-delta'
+    | 'transfer_notification'
+    | 'waiting_notification'
     | 'webrtc-offer'
     | 'webrtc-answer'
     | 'webrtc-candidate'
@@ -139,6 +141,17 @@ export interface AiStreamEndUpdate {
   id: string;
   interrupted: boolean;
   content?: string;
+}
+
+/** 转人工通知（transfer:assigned 负载）：会话已分配坐席（含等待队列派发）。纯事件流，不渲染消息、不动会话状态——对齐移动端 agentAssigned 语义。 */
+export interface TransferAssignmentUpdate {
+  agentId: number;
+  message: string;
+}
+
+/** 排队通知（transfer:waiting 负载）：已入等待队列——对齐移动端 waitingInQueue 语义。 */
+export interface TransferWaitingUpdate {
+  message: string;
 }
 
 export interface RemoteAssistConfig {
@@ -248,6 +261,8 @@ export type ServifyEventMap = {
   'webrtc:ice-config': [iceServers: ServifyRTCIceServer[]];
   'ai-stream:delta': [update: AiStreamDeltaUpdate];
   'ai-stream:end': [update: AiStreamEndUpdate];
+  'transfer:assigned': [update: TransferAssignmentUpdate];
+  'transfer:waiting': [update: TransferWaitingUpdate];
   'remote-assist:session': [assistId: string];
   'remote-assist:recording': [state: RemoteAssistRecordingState];
 };

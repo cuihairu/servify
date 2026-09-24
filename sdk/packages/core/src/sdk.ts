@@ -149,6 +149,8 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.ws.on('message', (message) => this.handleIncomingMessage(message));
     this.ws.on('ai-stream:delta', (update) => this.emit('ai-stream:delta', update));
     this.ws.on('ai-stream:end', (update) => this.emit('ai-stream:end', update));
+    this.ws.on('transfer:assigned', (update) => this.emit('transfer:assigned', update));
+    this.ws.on('transfer:waiting', (update) => this.emit('transfer:waiting', update));
     this.ws.on('webrtc:offer', (offer) => this.emit('webrtc:offer', offer));
     this.ws.on('webrtc:answer', (answer) => this.emit('webrtc:answer', answer));
     this.ws.on('webrtc:candidate', (candidate) => this.emit('webrtc:candidate', candidate));

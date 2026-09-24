@@ -10,6 +10,8 @@ import {
   ServifyRTCTrackEvent,
   AiStreamDeltaUpdate,
   AiStreamEndUpdate,
+  TransferAssignmentUpdate,
+  TransferWaitingUpdate,
 } from '@servify/core';
 
 // 流式气泡的伪 Message：ai-stream:delta 按 id upsert（内容为累计全量），
@@ -43,6 +45,9 @@ export function useChat() {
   const session = ref<ChatSession | null>(null);
   const messages = ref<Message[]>([]);
   const agent = ref<Agent | null>(null);
+  // 转人工通知（对齐移动端 agentAssigned/waitingInQueue），不渲染消息行
+  const agentAssigned = ref<TransferAssignmentUpdate | null>(null);
+  const waitingInQueue = ref<TransferWaitingUpdate | null>(null);
   const isLoading = ref(false);
   const error = ref<Error | null>(null);
 
@@ -86,6 +91,8 @@ export function useChat() {
       session.value = null;
       messages.value = [];
       agent.value = null;
+      agentAssigned.value = null;
+      waitingInQueue.value = null;
     } catch (err) {
       error.value = err as Error;
       throw err;
@@ -137,6 +144,8 @@ export function useChat() {
     session.value = null;
     messages.value = [];
     agent.value = null;
+    agentAssigned.value = null;
+    waitingInQueue.value = null;
   };
 
   const handleError = (errorEvent: Error) => {
@@ -167,6 +176,16 @@ export function useChat() {
     });
   };
 
+  // 转人工通知：坐席接入（含等待队列派发）时清排队态（waiting_human → agent_chatting）
+  const handleTransferAssigned = (update: TransferAssignmentUpdate) => {
+    agentAssigned.value = update;
+    waitingInQueue.value = null;
+  };
+
+  const handleTransferWaiting = (update: TransferWaitingUpdate) => {
+    waitingInQueue.value = update;
+  };
+
   // 生命周期
   onMounted(() => {
     // 注册事件监听器
@@ -176,6 +195,8 @@ export function useChat() {
     sdk.on('error', handleError);
     sdk.on('ai-stream:delta', handleStreamDelta);
     sdk.on('ai-stream:end', handleStreamEnd);
+    sdk.on('transfer:assigned', handleTransferAssigned);
+    sdk.on('transfer:waiting', handleTransferWaiting);
 
     // 获取当前状态
     session.value = sdk.getSession();
@@ -190,6 +211,8 @@ export function useChat() {
     sdk.off('error', handleError);
     sdk.off('ai-stream:delta', handleStreamDelta);
     sdk.off('ai-stream:end', handleStreamEnd);
+    sdk.off('transfer:assigned', handleTransferAssigned);
+    sdk.off('transfer:waiting', handleTransferWaiting);
   });
 
   return {
@@ -197,6 +220,8 @@ export function useChat() {
     session,
     messages,
     agent,
+    agentAssigned,
+    waitingInQueue,
     isLoading,
     error,
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ChatSession, Message, Ticket, AiStreamDeltaUpdate, AiStreamEndUpdate } from '@servify/core';
+import type { ChatSession, Message, Ticket, AiStreamDeltaUpdate, AiStreamEndUpdate, TransferAssignmentUpdate, TransferWaitingUpdate } from '@servify/core';
 import { useServify } from './RNProvider';
 
 // 流式气泡的伪 Message：ai-stream:delta 按 id upsert（内容为累计全量），
@@ -32,6 +32,10 @@ function streamBubble(id: string, content: string): Message {
 export interface UseChatReturn {
   session: ChatSession | null;
   messages: Message[];
+  /** 最近一次转人工通知（transfer_notification：坐席已接入），null = 尚未转人工。 */
+  agentAssigned: TransferAssignmentUpdate | null;
+  /** 最近一次排队通知（waiting_notification：已入等待队列），null = 未排队。 */
+  waitingInQueue: TransferWaitingUpdate | null;
   isLoading: boolean;
   error: Error | null;
   startChat: (options?: { priority?: 'low' | 'normal' | 'high' | 'urgent'; message?: string }) => Promise<void>;
@@ -43,6 +47,9 @@ export function useChat(): UseChatReturn {
   const { sdk } = useServify();
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  // 转人工通知（对齐移动端 agentAssigned/waitingInQueue），不渲染消息行
+  const [agentAssigned, setAgentAssigned] = useState<TransferAssignmentUpdate | null>(null);
+  const [waitingInQueue, setWaitingInQueue] = useState<TransferWaitingUpdate | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -94,6 +101,8 @@ export function useChat(): UseChatReturn {
       await sdk.endSession();
       setSession(null);
       setMessages([]);
+      setAgentAssigned(null);
+      setWaitingInQueue(null);
     } catch (err) {
       setError(err as Error);
       throw err;
@@ -114,6 +123,18 @@ export function useChat(): UseChatReturn {
     const handleSessionEnded = () => {
       setSession(null);
       setMessages([]);
+      setAgentAssigned(null);
+      setWaitingInQueue(null);
+    };
+
+    // 转人工通知：坐席接入（含等待队列派发）时清排队态（waiting_human → agent_chatting）
+    const handleTransferAssigned = (update: TransferAssignmentUpdate) => {
+      setAgentAssigned(update);
+      setWaitingInQueue(null);
+    };
+
+    const handleTransferWaiting = (update: TransferWaitingUpdate) => {
+      setWaitingInQueue(update);
     };
     const handleError = (nextError: Error) => {
       setError(nextError);
@@ -151,6 +172,8 @@ export function useChat(): UseChatReturn {
     sdk.on('error', handleError);
     sdk.on('ai-stream:delta', handleStreamDelta);
     sdk.on('ai-stream:end', handleStreamEnd);
+    sdk.on('transfer:assigned', handleTransferAssigned);
+    sdk.on('transfer:waiting', handleTransferWaiting);
 
     return () => {
       sdk.off('message', handleMessage);
@@ -159,12 +182,16 @@ export function useChat(): UseChatReturn {
       sdk.off('error', handleError);
       sdk.off('ai-stream:delta', handleStreamDelta);
       sdk.off('ai-stream:end', handleStreamEnd);
+      sdk.off('transfer:assigned', handleTransferAssigned);
+      sdk.off('transfer:waiting', handleTransferWaiting);
     };
   }, [sdk]);
 
   return {
     session,
     messages,
+    agentAssigned,
+    waitingInQueue,
     isLoading,
     error,
     startChat,

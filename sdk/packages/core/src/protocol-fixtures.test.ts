@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WebSocketManager } from './websocket';
-import type { Message } from './types';
+import type { Message, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
 
 /**
  * 契约回放测试：用 sdk/protocol-fixtures/ 同一套样例喂 core 的 WS 分发，
@@ -11,8 +11,8 @@ import type { Message } from './types';
  *
  * Android/iOS 探针消费同一套样例（M0 验收①"双端同一套样例断言一致"）；
  * 端级偏差在样例 expectations 内显式声明（如 webrtc 帧两端分叉），
- * core 已知缺口（transfer_notification / waiting_notification
- * 当前无 case 落 default 忽略）在对应用例内显式断言，见 PROTOCOL.md §4/§5。
+ * 转人工两帧（transfer_notification / waiting_notification）经 transfer:* 独立
+ * 事件面三端闭环（移动端 agentAssigned/waitingInQueue 同构），见 PROTOCOL.md §4.2。
  */
 
 interface FixtureExpectations {
@@ -234,10 +234,11 @@ describe('protocol fixtures replay (core)', () => {
     expect(ends).toEqual([{ id: deltas[0].id, interrupted: true, content: parts.join('') }]);
   });
 
-  it('replays transfer and waiting notifications: core ignores both (known gap), documented not fabricated', async () => {
+  it('replays transfer and waiting notifications: real handoff frames drive transfer events (three-end closure)', async () => {
     // transfer_notification / waiting_notification 是转人工状态机的真实驱动帧
-    // （PROTOCOL.md §4.2），core 当前 switch 无 case 落 default——Web 端感知转人工
-    // 走会话状态的其他路径。移动端契约含这两帧（Android 探针回放断言状态转移）。
+    // （PROTOCOL.md §4.2）：core 经独立事件面 transfer:assigned / transfer:waiting
+    // 透出（纯事件流，不渲染消息、不动会话状态——对齐移动端
+    // agentAssigned/waitingInQueue），负载取自样例 assert 词汇。
     for (const kind of ['transfer', 'waiting'] as const) {
       FakeWebSocket.instances = [];
       vi.unstubAllGlobals();
@@ -245,14 +246,25 @@ describe('protocol fixtures replay (core)', () => {
       const { manager, socket } = await connectManager();
       const messages: Message[] = [];
       const errors: unknown[] = [];
+      const assigned: TransferAssignmentUpdate[] = [];
+      const waiting: TransferWaitingUpdate[] = [];
       manager.on('message', (m) => messages.push(m));
       manager.on('error', (e) => errors.push(e));
+      manager.on('transfer:assigned', (u) => assigned.push(u));
+      manager.on('transfer:waiting', (u) => waiting.push(u));
 
       socket.feed(fixture.frame!);
 
       expect(messages).toHaveLength(0);
       expect(errors).toHaveLength(0);
-      expect(fixture.expectations.state?.length).toBeGreaterThan(0);
+      const asserted = fixture.expectations.assert as { message: string; agent_id?: number };
+      if (kind === 'transfer') {
+        expect(assigned).toEqual([{ agentId: asserted.agent_id, message: asserted.message }]);
+        expect(waiting).toHaveLength(0);
+      } else {
+        expect(waiting).toEqual([{ message: asserted.message }]);
+        expect(assigned).toHaveLength(0);
+      }
     }
   });
 
