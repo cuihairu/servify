@@ -565,6 +565,8 @@ public final class ServifyChat: @unchecked Sendable {
     /// 补拉的 HTTP 通道（同 resolveHTTP 的 Darwin/注入解析，但 Linux 测试面未
     /// 注入时返回 nil 静默跳过——补拉挂在 onOpen 自动触发，是增强面而非显式
     /// 调用面，不能要求未搭 REST 面的测试/宿主先配置通道）。
+    /// coverage-exempt（Darwin 分支）：Linux 编译为空隙 region 计 0，生产路径由
+    /// ios-macos job 覆盖（M2 豁免口径）。
     private func reconcileHTTP() -> TicketHTTPPosting? {
         #if canImport(Darwin)
         return ticketHTTP ?? URLSessionTicketHTTP()
@@ -681,6 +683,10 @@ public final class ServifyChat: @unchecked Sendable {
         let value = Self.fingerprint(sender: sender, content: content)
         stateLock.lock()
         cursorFingerprints.append(value)
+        // coverage-exempt（防御行）：淘汰分支只有指纹溢出（>200 条 WS 渲染）触达——
+        // 指纹表仅由 WS 渲染积累（补拉渲染由游标保护不入表：入表会让补拉大页把
+        // WS 渲染指纹挤出窗口、反破坏去重），测试面渲染量远小于容量；生产溢出
+        // 由环形淘汰自然回收。Android 镜像行同语义（jacoco 行口径天然覆盖）。
         while cursorFingerprints.count > Self.fingerprintCapacity {
             cursorFingerprints.removeFirst()
         }

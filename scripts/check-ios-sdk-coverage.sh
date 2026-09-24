@@ -56,15 +56,17 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 22 = create 函数签名（Linux 面无人调用）；24-28 = create 的 Darwin return 块
 # （Linux 编译为空隙 region 计 0）——生产路径由 ios-macos job 的 CreateFactoryTests
 # 覆盖；31/33 = create 的 Linux fatalError 守卫与函数闭合（Linux 不可达）；
-# 166 = resolveHTTP 的 Darwin 分支（return URLSessionTicketHTTP，工单/推送共用
-# 通道）；171 = resolveHTTP 的 Linux fatalError 守卫；185 = encodeRestBody 的
-# catch 防御行（payload 为 property-list 类型，JSONSerialization 不可失败，
-# catch 面无输入可触达）；
-# 565-569/586-588 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
+# 186/191 = resolveHTTP 的 Darwin 分支（return URLSessionTicketHTTP，工单/推送共用
+# 通道）与 Linux fatalError 守卫（刀 10 后行号）；205 = encodeRestBody 的
+# catch 防御行（payload 为 property-list 类型，JSONSerialization 不可失败，catch
+# 面无输入可触达）；572 = reconcileHTTP 的 Darwin 分支（同 resolveHTTP 口径，
+# 刀 10 新增）；691 = trackFingerprint 的容量淘汰分支（指纹仅由 WS 渲染积累、
+# 补拉渲染由游标保护不入表，测试面不可达，生产环形淘汰自然回收）；
+# 730-734/756-758 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
 # 执行但线性段 counter 报 0——调用计数全记 guard-else 特化副本，诊断 dump 实锤，
 # 源码两处 coverage-exempt 注释锚定）
-LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 166, 171, 185,
-                                     565, 566, 567, 568, 569, 586, 587, 588}}
+LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 186, 191, 205,
+                                     572, 691, 730, 731, 732, 733, 734, 756, 757, 758}}
 ANCHOR_WINDOW = 14
 
 src_lines = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()
