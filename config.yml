@@ -169,6 +169,14 @@ security:
     content_security_policy: ""
   max_body_bytes: 0 # 0 disables the global request-body cap
   websocket_allowed_origins: [] # empty admits all origins (WebView guests)
+  # Guest WS handshake token (mobile SDK §10 #2 / design D6). Defaults keep
+  # legacy behavior (handshake without token); when required is true the
+  # host backend exchanges a service-scoped POST /api/v1/guest/session call
+  # for a short-lived token and the SDK sends it as access_token on /ws.
+  # Required + a default jwt.secret is rejected at startup (forgeable).
+  guest_token:
+    required: false
+    ttl: 24h # issuance lifetime; non-positive falls back to 24h
   rbac:
     enabled: true
     roles:

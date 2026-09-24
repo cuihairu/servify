@@ -316,6 +316,17 @@ type SecurityConfig struct {
 	Headers                 SecurityHeadersConfig `yaml:"headers"`
 	MaxBodyBytes            int64                 `yaml:"max_body_bytes"`
 	WebsocketAllowedOrigins []string              `yaml:"websocket_allowed_origins"`
+	// GuestToken 控制访客 WS 握手 token 校验（§10 #2 / 设计文档 D6）。
+	// 默认关闭以保持既有部署行为不变；开启后 /api/v1/ws 必须携带
+	// /api/v1/guest/session 签发的短期 token。
+	GuestToken GuestTokenConfig `yaml:"guest_token"`
+}
+
+// GuestTokenConfig 是访客 token 校验开关与签发参数。
+type GuestTokenConfig struct {
+	Required bool `yaml:"required"`
+	// TTL 是签发有效期；非正值在装配层归一到默认 24h（不作为告警面）。
+	TTL time.Duration `yaml:"ttl"`
 }
 
 // SecurityHeadersConfig 控制统一安全响应头。HSTS 默认关闭：TLS 通常在
@@ -798,6 +809,12 @@ func InsecureDefaults(cfg *Config) []string {
 		}
 	}
 
+	// 访客 token（§10 #2 / D6）与 jwt.secret 同信任域自签自验：required
+	// 开启而 secret 仍是默认值时，任何人都可自签合法访客 token 握手 WS。
+	if cfg.Security.GuestToken.Required && InsecureJWTSecrets[cfg.JWT.Secret] {
+		warnings = append(warnings, "security.guest_token.required is true but jwt.secret is using a default value; guest tokens are forgeable")
+	}
+
 	return warnings
 }
 
@@ -1107,6 +1124,11 @@ func GetDefaultConfig() *Config {
 				Enabled:          true,
 				CleanupInterval:  24 * time.Hour,
 				CleanupBatchSize: 500,
+			},
+			// 访客 token 校验默认关闭（兼容既有部署）；TTL 默认 24h。
+			GuestToken: GuestTokenConfig{
+				Required: false,
+				TTL:      24 * time.Hour,
 			},
 			SessionRisk: SessionRiskPolicyConfig{
 				HotRefreshWindowMinutes:    15,

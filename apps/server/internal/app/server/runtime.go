@@ -93,6 +93,7 @@ type Runtime struct {
 	AssistHandlerService     assistdelivery.HandlerService
 	APIKeyService            apikeydelivery.HandlerService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
+	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 	BusinessMetrics          *svcmetrics.BusinessMetrics
@@ -135,7 +136,11 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 
 	wsHub := wireRealtimeRuntime(rt)
 	state.wsHub = wsHub
-	attachSessionHistory(rt, aiAssembly, wireConversationRuntime(rt, wsHub))
+	historyAdapter, err := wireConversationRuntime(rt, wsHub)
+	if err != nil {
+		return nil, err
+	}
+	attachSessionHistory(rt, aiAssembly, historyAdapter)
 	if err := wirePushRuntime(rt, wsHub); err != nil {
 		return nil, err
 	}
@@ -283,6 +288,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		AssistHandlerService:     rt.AssistHandlerService,
 		APIKeyService:            rt.APIKeyService,
 		OpenConversationReader:   rt.OpenConversationReader,
+		GuestTokenIssuer:         rt.GuestTokenIssuer,
 		OIDCProvider:             rt.OIDCProvider,
 		HTTPMetrics:              rt.HTTPMetrics,
 	}

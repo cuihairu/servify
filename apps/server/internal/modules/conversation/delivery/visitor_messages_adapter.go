@@ -29,9 +29,10 @@ type VisitorMessagesPage struct {
 	HasMore  bool
 }
 
-// VisitorMessagesAdapter 桥接 handler 与会话服务：会话必须已存在（SDK 握手
-// /api/v1/ws?session_id= 建连后服务端已建 session 行），存在性校验把「会话
-// 失效」与「没有新消息」区分开（404 vs 200 空页）；has_more 以 limit+1 探测。
+// VisitorMessagesAdapter 桥接 handler 与会话服务：会话必须已存在（行在
+// 首条消息持久化时建——PersistTextMessage 的 Resume 未命中即 Create，
+// 而非 WS 握手时），存在性校验把「会话失效」与「没有新消息」区分开
+// （404 vs 200 空页）；has_more 以 limit+1 探测。
 type VisitorMessagesAdapter struct {
 	service *application.Service
 	db      *gorm.DB

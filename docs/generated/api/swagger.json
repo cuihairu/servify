@@ -5488,6 +5488,57 @@
                 "responses": {}
             }
         },
+        "/api/v1/guest/session": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "为访客会话签发绑定 session_id 的短期 HS256 token（宿主后端持 service API key 调用）；token 不要求会话行已存在（行在首条消息持久化时建），有效期由 security.guest_token.ttl 决定（默认 24h）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "会话"
+                ],
+                "summary": "签发访客 WS 握手 token",
+                "parameters": [
+                    {
+                        "description": "访客会话标识",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GuestSessionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.GuestSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/push/register": {
             "post": {
                 "description": "访客（免认证）上报 FCM/APNs 推送 token；按 session 归属租户 scope，同 session+platform 幂等（重复注册保活、换 token 更新）",
@@ -6958,6 +7009,31 @@
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GuestSessionRequest": {
+            "type": "object",
+            "required": [
+                "session_id"
+            ],
+            "properties": {
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GuestSessionResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "integer"
+                },
+                "token_type": {
                     "type": "string"
                 }
             }

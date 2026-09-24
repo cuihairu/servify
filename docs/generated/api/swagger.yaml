@@ -839,6 +839,22 @@ definitions:
       message:
         type: string
     type: object
+  handlers.GuestSessionRequest:
+    properties:
+      session_id:
+        type: string
+    required:
+    - session_id
+    type: object
+  handlers.GuestSessionResponse:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: integer
+      token_type:
+        type: string
+    type: object
   handlers.PaginatedResponse:
     properties:
       data: {}
@@ -5317,6 +5333,39 @@ paths:
   /api/v1/conversations/{id}/messages:
     get:
       responses: {}
+  /api/v1/guest/session:
+    post:
+      consumes:
+      - application/json
+      description: 为访客会话签发绑定 session_id 的短期 HS256 token（宿主后端持 service API key 调用）；token
+        不要求会话行已存在（行在首条消息持久化时建），有效期由 security.guest_token.ttl 决定（默认 24h）
+      parameters:
+      - description: 访客会话标识
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GuestSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.GuestSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 签发访客 WS 握手 token
+      tags:
+      - 会话
   /api/v1/push/register:
     post:
       consumes:

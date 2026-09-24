@@ -2,7 +2,7 @@
 
 对应 `docs/mobile-sdk-design.md` M3 验收条款 ①—③。双端共同里程碑（M1=Android、M2=iOS 各自收口后，M3 起双端同刀推进，用例名逐一镜像防单侧漂移）。自动化项逐条锚定测试与提交；依赖外部环境的项如实标注执行状态——**未执行的项不勾**。
 
-刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）→ 刀 6 推送下发编排 + FCM/APNs HTTP 传输（服务端代码面：dispatcher + 手搓 JWT 双传输 + config push 节，真凭证联调 P1-1 如实留白）→ 刀 7 服务端访客消息增量拉取端点（§10 #1：`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标 + has_more 探测，SDK 双端接入待联调）。
+刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）→ 刀 6 推送下发编排 + FCM/APNs HTTP 传输（服务端代码面：dispatcher + 手搓 JWT 双传输 + config push 节，真凭证联调 P1-1 如实留白）→ 刀 7 服务端访客消息增量拉取端点（§10 #1：`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标 + has_more 探测，SDK 双端接入待联调） → 刀 8 服务端访客 token 签发 + WS 握手校验接线（§10 #2 / D6 落地：`POST /api/v1/guest/session` service 链签发 HS256 短期 token、hub 按 `security.guest_token.required` 三层校验 401 拒升级、config gate + 装配兜底双层拒启动；SDK 侧 guestToken 握手参数先行就位 2214bb5 向后兼容）。
 
 ## ① 推送端到端 ⏳ 真实凭证联调未通，注册链路 + 下发代码面已通（如实标注）
 
@@ -39,4 +39,4 @@
 
 ## 后端配套依赖（不阻塞 M3 代码面收口）
 
-§10 #5 下发侧真实凭证联调（FCM 服务账号 / APNs .p8，P1-1；注册端点刀 5 + 下发编排与 HTTP 传输刀 6 均已落地）、#2（guest token 签发）。#1 已随刀 7 落地（`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标，SDK 双端接入待联调）、#4 已随刀 2 落地（见验收②）。
+§10 #5 下发侧真实凭证联调（FCM 服务账号 / APNs .p8，P1-1；注册端点刀 5 + 下发编排与 HTTP 传输刀 6 均已落地）、#2（guest token 签发——已随刀 8 落地，见上）。#1 已随刀 7 落地（`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标，SDK 双端接入待联调）、#4 已随刀 2 落地（见验收②）。

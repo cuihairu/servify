@@ -91,6 +91,11 @@ type WebSocketHub struct {
 	rtcService websocketRTCService
 	// 可选：客户侧推荐曝光/转化归因（未设置则跳过）
 	conversionService suggestionConversionRuntime
+	// 可选：访客 token 握手校验（§10 #2，security.guest_token.required
+	// 开启时装配）——nil 保持既有行为（access_token 不消费，向后兼容）；
+	// 非 nil 时握手必须带有效 token（签名+时效+session 绑定），否则 401
+	// 拒绝升级。
+	tokenValidator func(sessionID, accessToken string) error
 }
 
 // websocketAllowedOrigins 是 WS 建连的 Origin 白名单（P2-5 第一刀）。
@@ -178,6 +183,27 @@ func (h *WebSocketHub) SetSuggestionConversionService(svc suggestionConversionRu
 	h.conversionService = svc
 }
 
+// SetTokenValidator 注入访客 token 握手校验（§10 #2；nil 恢复免校验的
+// 既有行为——required 开关关闭时的装配态）。
+func (h *WebSocketHub) SetTokenValidator(validator func(sessionID, accessToken string) error) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.tokenValidator = validator
+}
+
+// currentTokenValidator 在 RLock 下快照校验函数，握手路径与装配期注入不竞态。
+func (h *WebSocketHub) currentTokenValidator() func(sessionID, accessToken string) error {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	return h.tokenValidator
+}
+
+// CurrentTokenValidator 是校验闭包的导出只读面：装配层测试与诊断用它
+// 确认 required 开启后握手校验已挂载（nil = 既有免校验行为）。
+func (h *WebSocketHub) CurrentTokenValidator() func(sessionID, accessToken string) error {
+	return h.currentTokenValidator()
+}
+
 // textMessageContent 提取文本消息内容：Data 为对象时取 content 字段，
 // 为字符串时取原值，其余格式返回空串。
 func textMessageContent(data interface{}) string {
@@ -251,6 +277,19 @@ func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 			"message": "session_id is required",
 		})
 		return
+	}
+
+	// 访客 token 强制校验（§10 #2）：校验器仅在 security.guest_token.required
+	// 开启时装配；nil 保持既有免认证行为（access_token 不消费）。校验失败
+	// （缺失/畸形/过期/会话不匹配）一律 401 拒绝升级。
+	if validator := h.currentTokenValidator(); validator != nil {
+		if err := validator(sessionID, c.Query("access_token")); err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "Unauthorized",
+				"message": "invalid access_token: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)

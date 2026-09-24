@@ -117,7 +117,7 @@ func wireRealtimeRuntime(rt *Runtime) *realtimeplatform.WebSocketHub {
 	return wsHub
 }
 
-func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) *conversationdelivery.WebSocketMessageAdapter {
+func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*conversationdelivery.WebSocketMessageAdapter, error) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
@@ -129,8 +129,19 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) 
 	// lastMessageId 单调游标分页），路由挂 /api/v1 免认证链；conversation
 	// 服务同源复用（同一 ListMessagesAfter 查询链）。
 	rt.VisitorMessagesService = conversationdelivery.NewVisitorMessagesAdapter(conversationService, rt.DB)
+	// 访客 token 签发与 WS 握手校验（M3 §10 #2 / D6）：与 jwt.secret 同信任
+	// 域自签自验。装配层兜底空白 secret 拒启动（config gate 的第二层）；
+	// required 开启时 hub 挂校验闭包，关闭保持既有免校验握手行为。
+	guestIssuer, err := conversationdelivery.NewGuestTokenService(rt.Config.JWT.Secret, rt.Config.Security.GuestToken.TTL)
+	if err != nil {
+		return nil, fmt.Errorf("guest token issuer: %w", err)
+	}
+	rt.GuestTokenIssuer = guestIssuer
+	if rt.Config.Security.GuestToken.Required {
+		wsHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
+	}
 	wireEmailRuntime(rt, conversationService)
-	return historyAdapter
+	return historyAdapter, nil
 }
 
 // attachSessionHistory 把会话历史读取口回填给 AI 面（多轮上下文）：

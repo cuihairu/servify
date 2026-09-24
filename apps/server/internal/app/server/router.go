@@ -79,6 +79,7 @@ type Dependencies struct {
 	AssistHandlerService     assistdelivery.HandlerService
 	APIKeyService            apikeydelivery.HandlerService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
+	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 }

@@ -65,4 +65,8 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	serviceV1.Use(middleware.EnforceRequestScope())
 	serviceV1.Use(middleware.RequirePrincipalKinds("service"))
 	serviceV1.POST("/metrics/ingest", ingest.Ingest)
+	// 访客 token 签发（M3 移动 SDK 配套 §10 #2 / 设计文档 D6）：宿主后端持
+	// service API key 为访客会话换取 WS 握手 token（guest session 面不暴露
+	// 在免认证链，签发权收敛在服务信任域内）。
+	serviceV1.POST("/guest/session", handlers.NewVisitorGuestSessionHandler(deps.GuestTokenIssuer, deps.Logger).Issue)
 }
