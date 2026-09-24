@@ -137,6 +137,9 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) 
 		return nil, fmt.Errorf("guest token issuer: %w", err)
 	}
 	rt.GuestTokenIssuer = guestIssuer
+	// 访客未读数/已读游标（M3 §10 #3）：同一 conversation service 与
+	// 会话存在性口径（首条消息持久化建行），免认证 REST 面与 §10 #1 同构。
+	rt.VisitorReadService = conversationdelivery.NewVisitorReadAdapter(conversationService, rt.DB)
 	if rt.Config.Security.GuestToken.Required {
 		wsHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
 	}

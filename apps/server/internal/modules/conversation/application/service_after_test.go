@@ -47,3 +47,39 @@ var errServiceDown = &serviceError{"down"}
 type serviceError struct{ msg string }
 
 func (e *serviceError) Error() string { return e.msg }
+
+// TestServiceMarkVisitorReadAndUnread 锚定 §10 #3 已读游标服务面的入参守卫
+// 与仓储透传语义。
+func TestServiceMarkVisitorReadAndUnread(t *testing.T) {
+	svc := NewService(&scriptedRepo{}, nil)
+
+	if err := svc.MarkVisitorRead(context.Background(), "  ", "1"); err == nil || err.Error() != "conversation_id required" {
+		t.Fatalf("expected conversation_id required, got %v", err)
+	}
+	if err := svc.MarkVisitorRead(context.Background(), "conv-1", " "); err == nil || err.Error() != "message_id required" {
+		t.Fatalf("expected message_id required, got %v", err)
+	}
+	if _, _, err := svc.VisitorUnreadCount(context.Background(), " "); err == nil || err.Error() != "conversation_id required" {
+		t.Fatalf("expected conversation_id required, got %v", err)
+	}
+
+	repo := &scriptedRepo{}
+	svc = NewService(repo, nil)
+	if err := svc.MarkVisitorRead(context.Background(), "conv-1", "2"); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+	count, cursor, err := svc.VisitorUnreadCount(context.Background(), "conv-1")
+	if err != nil {
+		t.Fatalf("unread: %v", err)
+	}
+	if count != 0 || cursor != "0" {
+		t.Fatalf("unexpected state: count=%d cursor=%s", count, cursor)
+	}
+
+	if err := NewService(&scriptedRepo{markReadErr: errServiceDown}, nil).MarkVisitorRead(context.Background(), "conv-1", "2"); err == nil {
+		t.Fatal("expected mark read repo error passthrough")
+	}
+	if _, _, err := NewService(&scriptedRepo{unreadCountErr: errServiceDown}, nil).VisitorUnreadCount(context.Background(), "conv-1"); err == nil {
+		t.Fatal("expected unread repo error passthrough")
+	}
+}

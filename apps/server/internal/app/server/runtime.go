@@ -94,6 +94,7 @@ type Runtime struct {
 	APIKeyService            apikeydelivery.HandlerService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
+	VisitorReadService       conversationdelivery.VisitorReadService
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 	BusinessMetrics          *svcmetrics.BusinessMetrics
@@ -289,6 +290,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		APIKeyService:            rt.APIKeyService,
 		OpenConversationReader:   rt.OpenConversationReader,
 		GuestTokenIssuer:         rt.GuestTokenIssuer,
+		VisitorReadService:       rt.VisitorReadService,
 		OIDCProvider:             rt.OIDCProvider,
 		HTTPMetrics:              rt.HTTPMetrics,
 	}

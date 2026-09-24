@@ -80,6 +80,7 @@ type Dependencies struct {
 	APIKeyService            apikeydelivery.HandlerService
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
+	VisitorReadService       conversationdelivery.VisitorReadService
 	OIDCProvider             *oidcplatform.Provider
 	HTTPMetrics              *svcmetrics.HTTPMetrics
 }

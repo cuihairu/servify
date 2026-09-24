@@ -16,13 +16,15 @@ type scriptedRepo struct {
 	conversations map[string]*domain.Conversation
 	messages      []domain.ConversationMessage
 
-	createErr     error
-	getErr        error
-	updateErr     error
-	appendErr     error
-	listErr       error
-	listBeforeErr error
-	listAfterErr  error
+	createErr      error
+	getErr         error
+	updateErr      error
+	appendErr      error
+	listErr        error
+	listBeforeErr  error
+	listAfterErr   error
+	markReadErr    error
+	unreadCountErr error
 
 	listAfterLimit  int
 	listAfterCursor string
@@ -107,6 +109,14 @@ func (s *scriptedRepo) ListMessagesBefore(ctx context.Context, conversationID st
 	}
 	out := make([]domain.ConversationMessage, 0, len(s.messages))
 	return append(out, s.messages...), nil
+}
+
+func (s *scriptedRepo) MarkVisitorRead(ctx context.Context, conversationID, messageID string) error {
+	return s.markReadErr
+}
+
+func (s *scriptedRepo) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
+	return 0, "0", s.unreadCountErr
 }
 
 func TestServiceCreateConversationValidation(t *testing.T) {

@@ -109,6 +109,14 @@ func (s *stubConversationRepo) ListSessions(ctx context.Context, query OpenSessi
 	return s.sessions, int64(len(s.sessions)), nil
 }
 
+func (s *stubConversationRepo) MarkVisitorRead(ctx context.Context, conversationID, messageID string) error {
+	return s.err
+}
+
+func (s *stubConversationRepo) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
+	return 0, "0", s.err
+}
+
 type stubConversationPublisher struct {
 	events []eventbus.Event
 	err    error

@@ -144,6 +144,26 @@ func (s *Service) ListMessagesAfter(ctx context.Context, conversationID string, 
 	return out, nil
 }
 
+// MarkVisitorRead 推进访客已读游标（§10 #3）：透传仓储游标语义（消息必须
+// 存在于该会话、游标只前进），入参守卫与本文件其他访客面方法一致。
+func (s *Service) MarkVisitorRead(ctx context.Context, conversationID string, messageID string) error {
+	if strings.TrimSpace(conversationID) == "" {
+		return fmt.Errorf("conversation_id required")
+	}
+	if strings.TrimSpace(messageID) == "" {
+		return fmt.Errorf("message_id required")
+	}
+	return s.repo.MarkVisitorRead(ctx, conversationID, messageID)
+}
+
+// VisitorUnreadCount 返回访客未读数与当前已读游标（§10 #3）。
+func (s *Service) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
+	if strings.TrimSpace(conversationID) == "" {
+		return 0, "", fmt.Errorf("conversation_id required")
+	}
+	return s.repo.VisitorUnreadCount(ctx, conversationID)
+}
+
 func (s *Service) AssignAgent(ctx context.Context, conversationID string, agentID uint) (*ConversationDTO, error) {
 	if strings.TrimSpace(conversationID) == "" {
 		return nil, fmt.Errorf("conversation_id required")

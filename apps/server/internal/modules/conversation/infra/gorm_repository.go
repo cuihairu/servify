@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -172,6 +173,46 @@ func (r *GormRepository) ListMessagesAfter(ctx context.Context, conversationID s
 		out = append(out, mapMessage(item))
 	}
 	return out, nil
+}
+
+// MarkVisitorRead 推进访客已读游标（§10 #3）：messageID 必须是该会话
+// 真实存在的消息（不存在或属于其他会话一律契约性拒绝），UPDATE 条件带
+// `visitor_read_message_id < ?` 保证游标只前进不后退（迟到乱序的已读
+// 上报不回退）。
+func (r *GormRepository) MarkVisitorRead(ctx context.Context, conversationID string, messageID string) error {
+	var pivot models.Message
+	if err := r.db.WithContext(ctx).
+		Where("session_id = ?", conversationID).
+		First(&pivot, "id = ?", messageID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("invalid message cursor: %s", messageID)
+		}
+		return err
+	}
+	return applyConversationScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx).
+		Where("id = ?", conversationID).
+		Where("visitor_read_message_id < ?", pivot.ID).
+		UpdateColumn("visitor_read_message_id", pivot.ID).Error
+}
+
+// VisitorUnreadCount 返回访客未读数与当前已读游标（§10 #3）：口径与
+// SDK D7 客户端推导一致——只计 agent/system 来源且 ID 大于游标的消息
+// （客户上行与 AI 首答不计：前者是访客自己发的，后者在客户端即时流式
+// 渲染天然已读）。
+func (r *GormRepository) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
+	var session models.Session
+	if err := r.db.WithContext(ctx).First(&session, "id = ?", conversationID).Error; err != nil {
+		return 0, "", err
+	}
+	var count int64
+	if err := applyConversationScope(r.db.WithContext(ctx).Model(&models.Message{}), ctx).
+		Where("session_id = ?", conversationID).
+		Where("id > ?", session.VisitorReadMessageID).
+		Where("sender IN ?", []string{"agent", "system"}).
+		Count(&count).Error; err != nil {
+		return 0, "", err
+	}
+	return count, strconv.FormatInt(session.VisitorReadMessageID, 10), nil
 }
 
 // ListSessions 开放 API 只读分页查询；沿用请求作用域（租户/工作区）过滤。

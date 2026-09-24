@@ -24,6 +24,11 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	// 访客消息增量拉取（M3 移动 SDK 配套 §10 #1）：lastMessageId 游标语义，
 	// 与 WS 同 /api/v1 前缀；会话不存在 404 / 游标非法 400。
 	publicV1.GET("/sessions/:session_id/messages", handlers.NewVisitorMessagesHandler(deps.VisitorMessagesService, deps.Logger).ListAfter)
+	// 访客未读数/已读游标（M3 移动 SDK 配套 §10 #3）：游标只前进、口径与
+	// SDK D7 客户端推导一致（agent/system 来源）；会话不存在 404 / 游标
+	// 非法 400。
+	publicV1.POST("/sessions/:session_id/read", handlers.NewVisitorReadHandler(deps.VisitorReadService, deps.Logger).MarkRead)
+	publicV1.GET("/sessions/:session_id/unread", handlers.NewVisitorReadHandler(deps.VisitorReadService, deps.Logger).Unread)
 
 	webrtcHandler := handlers.NewWebRTCHandler(deps.RTCGateway)
 	messageHandler := handlers.NewMessageHandler(deps.MessageRouter)

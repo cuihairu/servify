@@ -245,6 +245,10 @@ type Session struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 
+	// 访客已读游标（§10 #3）：访客最后一条已读消息 ID（messages.id 单调序，
+	// 只前进不后退）；未读数 = agent/system 消息中 ID 大于该游标的条数。
+	VisitorReadMessageID int64 `gorm:"default:0" json:"visitor_read_message_id"`
+
 	User     User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	Agent    *User     `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
 	Ticket   *Ticket   `gorm:"foreignKey:TicketID" json:"ticket,omitempty"`

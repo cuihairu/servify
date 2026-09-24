@@ -27,6 +27,14 @@ func (s *stubConversationRepo) ListSessions(ctx context.Context, query conversat
 	return nil, 0, nil
 }
 
+func (s *stubConversationRepo) MarkVisitorRead(ctx context.Context, conversationID, messageID string) error {
+	return nil
+}
+
+func (s *stubConversationRepo) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
+	return 0, "0", nil
+}
+
 func (s *stubConversationRepo) CreateConversation(ctx context.Context, conversation *conversationdomain.Conversation) error {
 	if s.conversations == nil {
 		s.conversations = map[string]*conversationdomain.Conversation{}

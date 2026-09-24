@@ -5726,6 +5726,106 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/sessions/{session_id}/read": {
+            "post": {
+                "description": "访客（免认证）以 last_read_message_id 推进会话已读游标并返回推进后的未读数与游标回显；游标只前进不后退，消息不存在或不属于该会话 400，会话不存在 404",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "会话"
+                ],
+                "summary": "推进访客已读游标",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "已读游标",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.VisitorReadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.VisitorReadState"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sessions/{session_id}/unread": {
+            "get": {
+                "description": "访客（免认证）查询会话未读数（只计 agent/system 来源且 ID 大于已读游标）与当前游标回显；会话不存在 404",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "会话"
+                ],
+                "summary": "查询访客未读状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.VisitorReadState"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tickets": {
             "post": {
                 "description": "访客（免认证）从会话页创建工单；按 session 归属租户 scope，携带 AI 会话摘要",
@@ -6794,6 +6894,17 @@ const docTemplate = `{
                 }
             }
         },
+        "delivery.VisitorReadState": {
+            "type": "object",
+            "properties": {
+                "last_read_message_id": {
+                    "type": "string"
+                },
+                "unread_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "handlers.AddAnnotationRequest": {
             "type": "object"
         },
@@ -7136,6 +7247,17 @@ const docTemplate = `{
                 "priority": {
                     "type": "integer",
                     "example": 10
+                }
+            }
+        },
+        "handlers.VisitorReadRequest": {
+            "type": "object",
+            "required": [
+                "last_read_message_id"
+            ],
+            "properties": {
+                "last_read_message_id": {
+                    "type": "string"
                 }
             }
         },
@@ -7942,6 +8064,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.User"
                 },
                 "user_id": {
+                    "type": "integer"
+                },
+                "visitor_read_message_id": {
+                    "description": "访客已读游标（§10 #3）：访客最后一条已读消息 ID（messages.id 单调序，\n只前进不后退）；未读数 = agent/system 消息中 ID 大于该游标的条数。",
                     "type": "integer"
                 },
                 "workspace_id": {
