@@ -223,6 +223,24 @@
       m.appendChild(b);
       msgs.appendChild(m);
       msgs.scrollTop = msgs.scrollHeight;
+      return b;
+    }
+
+    // ── 流式气泡（PROTOCOL §4.1 三段契约）──────────────────────
+    // ① 若干 done=false 增量即到即拼（打字机光标）；② 终末增量 done=true 封笔；
+    // ③ ai-response 终帧整体覆写幂等收口。断连时无终帧 = 流中断：
+    // 定格部分内容 + 提示重试（对齐三端语义；仅终末增量的空流不算中断）。
+    var streaming = null;
+
+    function closeStreamingOnDisconnect() {
+      if (!streaming) return;
+      if (streaming.content) {
+        streaming.bubble.textContent = streaming.content;
+        addMsg('system', '回答中断，请重试');
+      } else {
+        streaming.bubble.parentNode.parentNode.removeChild(streaming.bubble.parentNode);
+      }
+      streaming = null;
     }
 
     function sendMsg() {
@@ -292,6 +310,7 @@
     // Client events
     client.on('status', function (s) {
       connected = s === 'connected';
+      if (s === 'disconnected' || s === 'error') closeStreamingOnDisconnect();
       var label = { connecting: '连接中...', connected: '已连接', disconnected: '连接断开', error: '连接失败' };
       headerStatus.textContent = label[s] || s;
       if (s === 'connected') {
@@ -304,13 +323,22 @@
     client.on('message', function (msg) {
       if (!msg) return;
 
-      // AI response
+      // AI response（终帧）：流式气泡整体覆写幂等收口；无流时照常渲染
       if (msg.type === 'ai-response' && msg.data) {
         var data = msg.data;
+        var finalText = '';
         if (typeof data === 'object' && data.content) {
-          addMsg('bot', data.content);
+          finalText = data.content;
         } else if (typeof data === 'string') {
-          addMsg('bot', data);
+          finalText = data;
+        }
+        if (finalText) {
+          if (streaming) {
+            streaming.bubble.textContent = finalText;
+            streaming = null;
+          } else {
+            addMsg('bot', finalText);
+          }
         }
         return;
       }
@@ -330,6 +358,24 @@
       // 排队通知（PROTOCOL §4.2）：已入等待队列——同上
       if (msg.type === 'waiting_notification' && msg.data && typeof msg.data === 'object' && msg.data.message) {
         addMsg('system', msg.data.message);
+        return;
+      }
+
+      // 流式增量（PROTOCOL §4.1）：即到即拼的打字机气泡（▌ 光标）；
+      // 终末增量只封笔，等 ai-response 终帧收口；封笔后的迟到增量丢弃
+      if (msg.type === 'ai-response-delta' && msg.data && typeof msg.data === 'object') {
+        var d = msg.data;
+        if (typeof d.content_delta === 'string' && typeof d.done === 'boolean') {
+          if (!streaming) {
+            streaming = { bubble: addMsg('bot', ''), content: '', done: false };
+          }
+          if (!streaming.done) {
+            if (d.content_delta) streaming.content += d.content_delta;
+            if (d.done) streaming.done = true;
+            streaming.bubble.textContent = streaming.content + (streaming.done ? '' : '▌');
+            msgs.scrollTop = msgs.scrollHeight;
+          }
+        }
         return;
       }
 
