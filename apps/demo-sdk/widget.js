@@ -379,13 +379,20 @@
         return;
       }
 
-      // Any other message type
-      if (msg.data) {
-        var content = typeof msg.data === 'object'
-          ? (msg.data.content || JSON.stringify(msg.data))
-          : String(msg.data);
-        if (content) addMsg('bot', content);
+      // 坐席发言（PROTOCOL §4.1）：真实聊天气泡
+      if (msg.type === 'agent-message' && msg.data && typeof msg.data === 'object' && msg.data.content) {
+        addMsg('bot', msg.data.content);
+        return;
       }
+
+      // WebRTC 信令（PROTOCOL §4.3）：widget 非远程协助 UI，契约内帧显式静默（同移动端 V1 口径）
+      if (msg.type === 'webrtc-offer' || msg.type === 'webrtc-answer' || msg.type === 'webrtc-candidate' ||
+          msg.type === 'webrtc-state-change' || msg.type === 'webrtc-ice-config' || msg.type === 'data-channel-message') {
+        return;
+      }
+
+      // 未知帧：契约口径是忽略而非报错（PROTOCOL §8），warn 便于调试、不进气泡
+      console.warn('[ServifyWidget] unknown frame type:', msg.type);
     });
 
     client.on('error', function (e) {
