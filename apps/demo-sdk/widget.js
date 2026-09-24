@@ -321,6 +321,18 @@
         return;
       }
 
+      // 转人工通知（PROTOCOL §4.2）：坐席接入（含等待队列派发）——居中提示条
+      if (msg.type === 'transfer_notification' && msg.data && typeof msg.data === 'object' && msg.data.message) {
+        addMsg('system', msg.data.message);
+        return;
+      }
+
+      // 排队通知（PROTOCOL §4.2）：已入等待队列——同上
+      if (msg.type === 'waiting_notification' && msg.data && typeof msg.data === 'object' && msg.data.message) {
+        addMsg('system', msg.data.message);
+        return;
+      }
+
       // Any other message type
       if (msg.data) {
         var content = typeof msg.data === 'object'
@@ -359,6 +371,8 @@
 .servify-widget .sw-msg-user .sw-bubble { background:' + color + '; color:#fff; border-bottom-right-radius:4px; }\
 .servify-widget .sw-msg-bot { align-self:flex-start; }\
 .servify-widget .sw-msg-bot .sw-bubble { background:#f0f0f0; color:#333; border-bottom-left-radius:4px; }\
+.servify-widget .sw-msg-system { align-self:center; max-width:100%; }\
+.servify-widget .sw-msg-system .sw-bubble { background:none; color:#888; font-size:12px; text-align:center; padding:2px 8px; }\
 .servify-widget .sw-suggests { display:none; padding:8px 12px 0; background:#fff; }\
 .servify-widget .sw-suggest-hint { font-size:11px; color:#999; margin-bottom:6px; }\
 .servify-widget .sw-suggest-chips { display:flex; flex-wrap:wrap; gap:6px; }\
