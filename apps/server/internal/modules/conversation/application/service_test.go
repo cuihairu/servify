@@ -95,6 +95,16 @@ func (s *stubConversationRepo) ListMessagesBefore(ctx context.Context, conversat
 	return out, nil
 }
 
+func (s *stubConversationRepo) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]domain.ConversationMessage, error) {
+	items := s.messages[conversationID]
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	out := make([]domain.ConversationMessage, 0, len(items))
+	out = append(out, items...)
+	return out, nil
+}
+
 func (s *stubConversationRepo) ListSessions(ctx context.Context, query OpenSessionListQuery) ([]domain.Conversation, int64, error) {
 	return s.sessions, int64(len(s.sessions)), nil
 }

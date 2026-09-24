@@ -17,6 +17,12 @@ type stubConversationRepo struct {
 	messages      map[string][]conversationdomain.ConversationMessage
 }
 
+func (s *stubConversationRepo) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]conversationdomain.ConversationMessage, error) {
+	items := s.messages[conversationID]
+	out := make([]conversationdomain.ConversationMessage, 0, len(items))
+	return append(out, items...), nil
+}
+
 func (s *stubConversationRepo) ListSessions(ctx context.Context, query conversationapp.OpenSessionListQuery) ([]conversationdomain.Conversation, int64, error) {
 	return nil, 0, nil
 }

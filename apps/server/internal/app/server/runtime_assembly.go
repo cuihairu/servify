@@ -125,6 +125,10 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) 
 	wsHub.SetConversationMessageWriter(historyAdapter)
 	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。
 	rt.OpenConversationReader = conversationdelivery.NewOpenConversationAdapter(conversationService)
+	// 访客消息增量拉取（M3 §10 #1）：免认证访客端点读入口（会话存在校验 +
+	// lastMessageId 单调游标分页），路由挂 /api/v1 免认证链；conversation
+	// 服务同源复用（同一 ListMessagesAfter 查询链）。
+	rt.VisitorMessagesService = conversationdelivery.NewVisitorMessagesAdapter(conversationService, rt.DB)
 	wireEmailRuntime(rt, conversationService)
 	return historyAdapter
 }

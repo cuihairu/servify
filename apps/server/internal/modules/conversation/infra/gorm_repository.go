@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,6 +132,37 @@ func (r *GormRepository) ListMessagesBefore(ctx context.Context, conversationID 
 	}
 	var items []models.Message
 	if err := q.Order("created_at DESC").
+		Limit(limit).
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.ConversationMessage, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapMessage(item))
+	}
+	return out, nil
+}
+
+// ListMessagesAfter 按消息 ID 单调游标向后翻页（访客增量补拉 §10 #1）：
+// 自增主键序保证严格追加序（created_at 同秒多条会错序漏拉）；空游标从会话
+// 头开始；非数字游标契约性拒绝（客户端游标只能来自本端点/WS 消息 id）。
+func (r *GormRepository) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]domain.ConversationMessage, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var afterID int64
+	if afterMessageID != "" {
+		parsed, err := strconv.ParseInt(strings.TrimSpace(afterMessageID), 10, 64)
+		if err != nil || parsed < 0 {
+			return nil, fmt.Errorf("invalid message cursor: %s", afterMessageID)
+		}
+		afterID = parsed
+	}
+	var items []models.Message
+	if err := applyConversationScope(r.db.WithContext(ctx), ctx).
+		Where("session_id = ?", conversationID).
+		Where("id > ?", afterID).
+		Order("id ASC").
 		Limit(limit).
 		Find(&items).Error; err != nil {
 		return nil, err

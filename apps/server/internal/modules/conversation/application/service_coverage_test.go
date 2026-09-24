@@ -22,6 +22,10 @@ type scriptedRepo struct {
 	appendErr     error
 	listErr       error
 	listBeforeErr error
+	listAfterErr  error
+
+	listAfterLimit  int
+	listAfterCursor string
 
 	listLimit        int
 	listBeforeLimit  int
@@ -80,6 +84,16 @@ func (s *scriptedRepo) ListRecentMessages(ctx context.Context, conversationID st
 	s.listLimit = limit
 	if s.listErr != nil {
 		return nil, s.listErr
+	}
+	out := make([]domain.ConversationMessage, 0, len(s.messages))
+	return append(out, s.messages...), nil
+}
+
+func (s *scriptedRepo) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]domain.ConversationMessage, error) {
+	s.listAfterLimit = limit
+	s.listAfterCursor = afterMessageID
+	if s.listAfterErr != nil {
+		return nil, s.listAfterErr
 	}
 	out := make([]domain.ConversationMessage, 0, len(s.messages))
 	return append(out, s.messages...), nil

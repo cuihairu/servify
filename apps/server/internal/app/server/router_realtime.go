@@ -21,6 +21,9 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	// 推送 token 注册（M3 移动 SDK 配套 §10 #5）：SDK connect 后上报
 	// FCM/APNs token，按 session 归属租户 scope，同 session+platform 幂等。
 	publicV1.POST("/push/register", handlers.NewVisitorPushHandler(deps.PushRegistrationService, deps.Logger).RegisterPushToken)
+	// 访客消息增量拉取（M3 移动 SDK 配套 §10 #1）：lastMessageId 游标语义，
+	// 与 WS 同 /api/v1 前缀；会话不存在 404 / 游标非法 400。
+	publicV1.GET("/sessions/:session_id/messages", handlers.NewVisitorMessagesHandler(deps.VisitorMessagesService, deps.Logger).ListAfter)
 
 	webrtcHandler := handlers.NewWebRTCHandler(deps.RTCGateway)
 	messageHandler := handlers.NewMessageHandler(deps.MessageRouter)

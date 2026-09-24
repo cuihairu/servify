@@ -88,6 +88,12 @@ func (s *scriptedConversationRepo) ListRecentMessages(ctx context.Context, conve
 	return append(out, items...), nil
 }
 
+func (s *scriptedConversationRepo) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]conversationdomain.ConversationMessage, error) {
+	items := s.messages[conversationID]
+	out := make([]conversationdomain.ConversationMessage, 0, len(items))
+	return append(out, items...), nil
+}
+
 func (s *scriptedConversationRepo) ListMessagesBefore(ctx context.Context, conversationID string, beforeMessageID string, limit int) ([]conversationdomain.ConversationMessage, error) {
 	if s.listBeforeErr != nil {
 		return nil, s.listBeforeErr

@@ -73,6 +73,7 @@ type Runtime struct {
 	TicketHandlerService     ticketdelivery.HandlerService
 	VisitorTicketService     ticketdelivery.VisitorTicketService
 	PushRegistrationService  pushdelivery.PushRegistrationService
+	VisitorMessagesService   conversationdelivery.VisitorMessagesService
 	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
 	TransferHandlerService   routingdelivery.HandlerService
 	SatisfactionService      satisfactiondelivery.SatisfactionService
@@ -262,6 +263,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		TicketHandlerService:     rt.TicketHandlerService,
 		VisitorTicketService:     rt.VisitorTicketService,
 		PushRegistrationService:  rt.PushRegistrationService,
+		VisitorMessagesService:   rt.VisitorMessagesService,
 		TicketReaderService:      rt.TicketReaderService,
 		TransferHandlerService:   rt.TransferHandlerService,
 		SatisfactionService:      rt.SatisfactionService,

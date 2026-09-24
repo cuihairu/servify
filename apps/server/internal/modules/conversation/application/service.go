@@ -124,6 +124,26 @@ func (s *Service) ListMessagesBefore(ctx context.Context, conversationID string,
 	return out, nil
 }
 
+// ListMessagesAfter 访客增量补拉（§10 #1）：按消息 ID 单调游标向后翻页，
+// 返回升序增量与"是否可能还有更多"由交付层按 limit+1 探测组装。
+func (s *Service) ListMessagesAfter(ctx context.Context, conversationID string, afterMessageID string, limit int) ([]ConversationMessageDTO, error) {
+	if strings.TrimSpace(conversationID) == "" {
+		return nil, fmt.Errorf("conversation_id required")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	items, err := s.repo.ListMessagesAfter(ctx, conversationID, afterMessageID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ConversationMessageDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, MapMessage(item))
+	}
+	return out, nil
+}
+
 func (s *Service) AssignAgent(ctx context.Context, conversationID string, agentID uint) (*ConversationDTO, error) {
 	if strings.TrimSpace(conversationID) == "" {
 		return nil, fmt.Errorf("conversation_id required")
