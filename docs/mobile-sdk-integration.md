@@ -84,7 +84,7 @@ struct ContentView: View {
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `apiUrl` | String | 必填 | 服务端地址，须 `https://`/`wss://` 前缀（否则构造期报 `config_invalid`）；无尾斜杠、无路径后缀，SDK 自行拼 WS 与 REST 路径 |
-| `guestToken` | String? | null | 访客 token（服务端签发端点为配套待建项，当前握手不消费、向后兼容） |
+| `guestToken` | String? | null | 访客 token（服务端 `POST /api/v1/guest/session` 签发，宿主后端持 service key 换取；`security.guest_token.required=false`（默认）时握手不消费，开启后强制校验签名/时效/会话绑定、失败 401 拒升级） |
 | `branding` | Branding | 全默认 | 品牌化四件套，见下表 |
 | `presentationStyle` | Drawer / FullScreen | Drawer | 面板形态 |
 | `loggingEnabled` | Bool | false | 调试日志 |
@@ -125,9 +125,10 @@ _ = await chat.registerPushToken()
   提交，成功返回 `TicketReceipt(ticketId)`，会话内出现系统提示行"工单 #N 已创建…"；
   失败返回 null 且 `error` 流给出错误（IO→`network`、非 2xx/畸形→`ticket_failed`）。也可从
   会话面板标题栏"工单"按钮发起（表单：标题必填 + 描述选填）。
-- **registerPushToken**（服务端推送端点上线前的过渡语义）：未配置 provider→`error` 流
-  `unsupported`；provider 返回 null（宿主未授权，正常态）→静默 false，**非错误**；取到 token
-  →过渡期 `unsupported`（端点落地后仅补上报实现，接入代码不变）。
+- **registerPushToken**：未配置 provider→`error` 流 `unsupported`；provider 返回 null
+  （宿主未授权，正常态）→静默 false，**非错误**；取到 token→真实上报
+  `POST {apiUrl}/api/v1/push/register`（2xx→`true`；IO/HTTP 失败→`false`，可重报）。
+  服务端下发编排与 FCM/APNs 传输已就位（离线访客收推送），端到端真实凭证联调进行中。
 - **offlineText**：断线（重连耗尽/握手失败）后自动追加系统提示行；用户主动关闭面板不提示。
 
 ## 6. 事件流（`chat.events`）
@@ -166,5 +167,9 @@ hide 期间消息不丢）。
 ## 9. V1 边界（明确不做的，防止接入误期许）
 
 离线发送队列、消息撤回/编辑、富媒体消息（图片/文件）、坐席移动端、多语言内置
-（V1 中文，Branding 预留 i18n 钩子）。断连期间的客户消息不自动补发（服务端无历史
-重发端点，§10 #1 配套待建项）；Keychain 凭证存储不在 V1（匿名 session 无凭证）。
+（V1 中文，Branding 预留 i18n 钩子）。断连期间的客户消息不自动补发——服务端增量
+拉取端点已就位（`GET /api/v1/sessions/:session_id/messages`，`after_id` 游标），
+SDK V1 尚未接入自动补拉，断连期间消息以重连后的 WS 为准（补拉接入列入联调项）；
+服务端未读游标端点同样已就位（`POST /api/v1/sessions/:session_id/read` +
+`GET .../unread`），SDK V1 未读以客户端推导为准。Keychain 凭证存储不在 V1
+（匿名 session 无凭证）。

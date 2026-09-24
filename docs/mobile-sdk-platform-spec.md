@@ -81,7 +81,7 @@
 | `show(hostActivity / presentingVC)` | 拉起会话 UI（抽屉或全屏）；首次调用触发 WS 连接 | UI 参数是宿主当前前台上下文，SDK 不自行推断 |
 | `hide()` | 收起会话 UI，连接保持 | 前后台切换由 SDK 内部处理（策划 §5 时序 4），接入方无需挂钩 |
 | `sendMessage(text)` | 发送 `text-message`；成功判据=收到自己回显帧（PROTOCOL.md §6.3），超时本地标记失败 | V1 仅 text；挂起函数 / async |
-| `createTicket(subject, aiSummaryIncluded)` | 升级为工单（M3）；依赖访客工单端点（策划 §10 #4） | 端点未上线的过渡期行为：返回 `unsupported` 错误码而非静默成功 |
+| `createTicket(subject, aiSummaryIncluded)` | 升级为工单（M3）：真实上报 `POST /api/v1/tickets`（§10 #4 已落地），体含 session_id + 标题/描述 + 自动组装的 AI 会话摘要 | 成功返回 `TicketReceipt(ticketId)`；失败返回 null 且 `error` 流给码（IO→`network`、非 2xx/畸形→`ticket_failed`），不静默成功 |
 | `registerPushToken()`（M3） | 调 `pushTokenProvider` 取 token → 按 app-core `PushTokenRegistration` 形状上报 | `pushTokenProvider` 未配置时调用返回 `unsupported` |
 | `destroy()` | 断连接、取消作用域、清订阅；快照保留（下次 create 恢复） | 宿主真正退出时调用；普通退后台**不要**调用 |
 
@@ -122,7 +122,7 @@ disconnected ──(用户再次打开会话页)──> connecting
 | `server_unavailable` | 握手 5xx | true |
 | `handshake_rejected` | 400 session_id 缺失 / Origin 白名单拒绝 | false（配置问题） |
 | `send_timeout` | 发送后超时未见回显 | true |
-| `unsupported` | 调用 M3 能力但配套未启用/端点未上线 | false |
+| `unsupported` | 调用 M3 能力但配套未启用（如 `pushTokenProvider` 未配置） | false |
 | `ticket_failed` | M3 工单创建失败 | true |
 
 ### 4.6 app-core 契约映射（已预留四契约，落地对应关系）
