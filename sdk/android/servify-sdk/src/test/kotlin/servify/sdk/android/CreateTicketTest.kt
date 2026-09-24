@@ -32,12 +32,15 @@ import kotlin.test.assertTrue
 class CreateTicketTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var bypass: ReconcileBypassDispatcher
     private lateinit var chatScope: CoroutineScope
     private lateinit var chat: ServifyChat
 
     @Before
     fun setUp() {
         server = MockWebServer()
+        bypass = ReconcileBypassDispatcher()
+        server.dispatcher = bypass
         server.start()
         chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -58,6 +61,7 @@ class CreateTicketTest {
             policy = ReconnectPolicy(maxAttempts = 3, initialDelayMs = 100, multiplier = 2, maxDelayMs = 400),
             echoTimeoutMs = 200,
             wsUrlOverride = server.url("/api/v1/ws").toString(),
+            messagesUrlOverride = server.url("/api/v1/sessions/test-session/messages").toString(),
             ticketUrlOverride = ticketUrlOverride,
         )
 
@@ -70,10 +74,15 @@ class CreateTicketTest {
                 )
             }
         }
-        server.enqueue(MockResponse().withWebSocketUpgrade(wsListener))
-        val received = chatScope.async { chat.events.messages.first { it.sender == SenderType.Agent } }
-        chat.connect()
-        withTimeout(5_000) { received.await() }
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(wsListener))
+        // 订阅注册完成才 connect（onSubscription 钩）：async 调度的订阅注册是异步
+        // 的，onOpen 帧可先于订阅到达——release 变体必现丢帧（35940978983 同源；
+        // onOpen 新增的补拉 Task 进一步放大了该窗口）。
+        withTimeout(5_000) {
+            chat.events.messages
+                .onSubscription { chat.connect() }
+                .first { it.sender == SenderType.Agent }
+        }
     }
 
     @Test
@@ -81,7 +90,7 @@ class CreateTicketTest {
         chat = newChat()
         seedHistoryViaAgentMessage(chat)
 
-        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":42,"status":"open"}"""))
+        bypass.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":42,"status":"open"}"""))
         val receipt = chat.createTicket("打不开页面", "按钮无响应")
 
         assertEquals(42L, receipt?.ticketId)
@@ -100,7 +109,7 @@ class CreateTicketTest {
     @Test
     fun createTicketOmitsSummaryAndDescriptionWhenAbsent() = runBlocking {
         chat = newChat()
-        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":7}"""))
+        bypass.enqueue(MockResponse().setResponseCode(201).setBody("""{"id":7}"""))
 
         val receipt = chat.createTicket("咨询")
         assertEquals(7L, receipt?.ticketId)
@@ -113,7 +122,7 @@ class CreateTicketTest {
     @Test
     fun createTicketReturnsNullAndEmitsTicketFailedOnHttpError() = runBlocking {
         chat = newChat()
-        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"Session not found"}"""))
+        bypass.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"Session not found"}"""))
 
         // onSubscription 钩订阅点后触发：error 是无 replay 的 SharedFlow，async 先订阅
         // 再触发的调度窗口在 release 变体下会丢事件（订阅注册异步生效）。
@@ -145,7 +154,7 @@ class CreateTicketTest {
     @Test
     fun createTicketReturnsNullAndEmitsTicketFailedOnMalformedBody() = runBlocking {
         chat = newChat()
-        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"open"}"""))
+        bypass.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"open"}"""))
 
         // onSubscription 同前两用例（消无 replay 流的订阅窗口竞态）。
         var receipt: TicketReceipt? = TicketReceipt(-1)

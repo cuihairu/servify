@@ -43,6 +43,8 @@ public final class ServifyChat: @unchecked Sendable {
     private let ticketUrlOverride: String?
     /// 测试注入：推送注册端点（生产路径恒为 apiUrl + /api/v1/push/register）。
     private let pushUrlOverride: String?
+    /// 测试注入：断线补拉端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/messages）。
+    private let messagesUrlOverride: String?
     /// REST 出站 HTTP 通道（工单创建/推送注册共用；nil 时 Darwin 用 URLSession
     /// 生产实现，Linux 测试面须注入 mock）。
     private let ticketHTTP: TicketHTTPPosting?
@@ -70,6 +72,22 @@ public final class ServifyChat: @unchecked Sendable {
     private var streamingId: String?
     private var streamedContent = ""
 
+    /// 服务端消息游标（§10 #1 增量拉取端点）：仅由补拉结果推进（WS 帧不带服务端
+    /// 消息 ID）；nil = 尚未拉过（下次补拉从会话头全量）。
+    private var lastServerMessageId: Int64?
+
+    /// 补拉去重指纹（"sender组|content"）：游标确立后 WS 渲染过的消息。服务端对
+    /// 客户/坐席消息先落库后广播，故 WS 渲染的消息必然已在补拉窗口内——重连补拉
+    /// 若把它们拉回（id > 游标，因上次补拉后渲染），按指纹跳过渲染与未读、游标照
+    /// 推进。AI 回答不落库、系统提示不走 WS，天然无重复面。不做收尾清空（对账
+    /// 在途时到达的帧会被清空抹掉、制造重复），由容量环形淘汰回收。
+    private var cursorFingerprints: [String] = []
+
+    /// 补拉分页参数（Kotlin 镜像同值）：单页 100 条、至多 10 页、指纹容量 200。
+    static let reconcilePageLimit = 100
+    static let maxReconcilePages = 10
+    static let fingerprintCapacity = 200
+
     /// 串行发送闸：防止并发 sendMessage 互相覆盖 pendingEcho。
     private let sendMutex = AsyncMutex()
 
@@ -92,6 +110,7 @@ public final class ServifyChat: @unchecked Sendable {
         wsUrlOverride: String? = nil,
         ticketUrlOverride: String? = nil,
         pushUrlOverride: String? = nil,
+        messagesUrlOverride: String? = nil,
         ticketHTTP: TicketHTTPPosting? = nil,
         transportFactory: @escaping () -> WebSocketTransport
     ) {
@@ -102,6 +121,7 @@ public final class ServifyChat: @unchecked Sendable {
         self.wsUrlOverride = wsUrlOverride
         self.ticketUrlOverride = ticketUrlOverride
         self.pushUrlOverride = pushUrlOverride
+        self.messagesUrlOverride = messagesUrlOverride
         self.ticketHTTP = ticketHTTP
         self.transportFactory = transportFactory
         events = ServifyEvents(
@@ -393,6 +413,7 @@ public final class ServifyChat: @unchecked Sendable {
         reconnectAttempt = 0
         stateLock.unlock()
         _connectionState.set(.connected)
+        Task { [weak self] in await self?.reconcileMessages() }
     }
 
     fileprivate func handleClosed() {
@@ -465,6 +486,7 @@ public final class ServifyChat: @unchecked Sendable {
         switch frame {
         case let .visitorEcho(_, _, content):
             emitMessage(.customer, content)
+            trackFingerprint(sender: "customer", content: content)
             stateLock.lock()
             let gate = pendingEcho
             stateLock.unlock()
@@ -472,6 +494,7 @@ public final class ServifyChat: @unchecked Sendable {
 
         case let .agentMessage(_, _, content, _):
             emitMessage(.agent, content)
+            trackFingerprint(sender: "agent", content: content)
             // 未读 = 面板不可见时到达的坐席/AI 内容（设计 §移动端未读口径）。
             bumpUnreadIfHidden()
 
@@ -513,6 +536,7 @@ public final class ServifyChat: @unchecked Sendable {
                 confidence: confidence,
                 nextAction: nextAction
             ))
+            trackFingerprint(sender: "ai", content: content)
             bumpUnreadIfHidden()
 
         case let .transferNotification(_, _, message, agentId):
@@ -524,6 +548,143 @@ public final class ServifyChat: @unchecked Sendable {
         case .webRtcSignal, .unknown:
             break // 移动端契约显式忽略
         }
+    }
+
+    // MARK: - 断线补拉（D7 流程 3；§10 #1 端点；Kotlin 镜像：reconcileMessages）
+
+    /**
+     * 增量补拉：连接成功（onOpen）后对账断连窗口内错过的消息。逐页 GET
+     * /api/v1/sessions/{id}/messages?after_id=<游标>（升序，has_more 续拉），
+     * 合并进 history 并发事件流；agent/ai 来源在面板不可见时计未读（与 WS 帧
+     * 口径同构；customer 回显与 system 提示不计）。
+     *
+     * 全失败面静默：会话行未建过（404，首连/未发过消息）与 IO/HTTP 错误都不
+     * 影响 WS 使用，游标不动、下次连接重新对账。游标与服务端 ID 仅在此链内
+     * 自持（WS 帧无服务端 ID）；指纹去重见 cursorFingerprints。
+     */
+    /// 补拉的 HTTP 通道（同 resolveHTTP 的 Darwin/注入解析，但 Linux 测试面未
+    /// 注入时返回 nil 静默跳过——补拉挂在 onOpen 自动触发，是增强面而非显式
+    /// 调用面，不能要求未搭 REST 面的测试/宿主先配置通道）。
+    private func reconcileHTTP() -> TicketHTTPPosting? {
+        #if canImport(Darwin)
+        return ticketHTTP ?? URLSessionTicketHTTP()
+        #else
+        return ticketHTTP
+        #endif
+    }
+
+    func reconcileMessages() async {
+        guard let http = reconcileHTTP() else { return }
+        var rounds = 0
+        while rounds < Self.maxReconcilePages {
+            rounds += 1
+            let after = currentCursor()
+            let base = messagesUrlOverride ?? (trimTrailingSlash(config.apiUrl)
+                + "/api/v1/sessions/" + Self.formEncode(sessionId) + "/messages")
+            var url = base + "?limit=\(Self.reconcilePageLimit)"
+            if let after { url += "&after_id=\(after)" }
+
+            let result: Result<(status: Int, data: Data), Error>
+            do {
+                result = .success(try await http.get(url: url))
+            } catch {
+                return
+            }
+            guard case let .success((status, data)) = result else { return }
+            // 404 = 会话行未建过（行在首条消息持久化时建），无历史可拉——正常态。
+            guard (200..<300).contains(status) else { return }
+            guard
+                let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let entries = root["messages"] as? [Any]
+            else { return }
+
+            for entry in entries {
+                // 元素级跳过（畸形条目不打死整页，Kotlin 镜像同语义）。
+                guard let message = entry as? [String: Any] else { continue }
+                guard
+                    let idText = message["id"] as? String,
+                    let id = Int64(idText.trimmingCharacters(in: .whitespaces))
+                else { continue }
+                let sender = message["sender"] as? String ?? ""
+                let content = message["content"] as? String ?? ""
+                // 游标只前进：指纹命中（本地已渲染）也推进——服务端落库事实已确认。
+                if advanceCursorAndCheckFingerprint(id: id, key: Self.fingerprint(sender: sender, content: content)) {
+                    continue
+                }
+                switch sender {
+                case "agent":
+                    emitMessage(.agent, content)
+                    bumpUnreadIfHidden()
+                case "ai":
+                    recordAndEmit(ConversationMessage(
+                        id: "srv-\(id)",
+                        sessionId: sessionId,
+                        sender: .system,
+                        content: content,
+                        createdAt: now(),
+                        isAiResponse: true
+                    ))
+                    bumpUnreadIfHidden()
+                case "system":
+                    recordAndEmit(ConversationMessage(
+                        id: "srv-\(id)",
+                        sessionId: sessionId,
+                        sender: .system,
+                        content: content,
+                        createdAt: now()
+                    ))
+                default:
+                    // customer：首连全量回放会话历史时要进 history（重连增量的本地
+                    // 已渲染份由指纹跳过）；customer 来源不计未读。
+                    recordAndEmit(ConversationMessage(
+                        id: "srv-\(id)",
+                        sessionId: sessionId,
+                        sender: .customer,
+                        content: content,
+                        createdAt: now()
+                    ))
+                }
+            }
+            if (root["has_more"] as? Bool) != true { break }
+        }
+        // 不在收尾清空指纹表：对账在途期间到达的 WS 帧（渲染+入表）会被清空抹掉，
+        // 随后的重连补拉即重复渲染（Kotlin 侧实测可复现的竞态窗口）。容量环形
+        // 淘汰足够——游标未确立窗口的渲染量远小于容量；补拉渲染与后续补拉之间
+        // 由游标保护，指纹表只需覆盖「游标确立前的 WS 渲染」。
+    }
+
+    /// 补拉去重键（与 cursorFingerprints 同构；服务端 sender 直接入键）。
+    private static func fingerprint(sender: String, content: String) -> String {
+        "\(sender)|\(content)"
+    }
+
+    /// 当前游标快照（同步临界区；async 上下文禁裸 lock/unlock——Swift 6 不可用）。
+    private func currentCursor() -> Int64? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return lastServerMessageId
+    }
+
+    /// 游标推进 + 指纹查重（同一临界区）：返回 true = 本地已渲染，调用方跳过。
+    private func advanceCursorAndCheckFingerprint(id: Int64, key: String) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        // 游标只前进：指纹命中（本地已渲染）也推进——服务端落库事实已确认。
+        if lastServerMessageId == nil || id > lastServerMessageId! {
+            lastServerMessageId = id
+        }
+        return cursorFingerprints.contains(key)
+    }
+
+    /// WS 渲染时积累指纹（仅历史性消息；SDK 自造提示行不入——服务端无对应行）。
+    private func trackFingerprint(sender: String, content: String) {
+        let value = Self.fingerprint(sender: sender, content: content)
+        stateLock.lock()
+        cursorFingerprints.append(value)
+        while cursorFingerprints.count > Self.fingerprintCapacity {
+            cursorFingerprints.removeFirst()
+        }
+        stateLock.unlock()
     }
 
     private func emitMessage(_ sender: SenderType, _ content: String) {

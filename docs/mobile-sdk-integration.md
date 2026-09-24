@@ -167,9 +167,10 @@ hide 期间消息不丢）。
 ## 9. V1 边界（明确不做的，防止接入误期许）
 
 离线发送队列、消息撤回/编辑、富媒体消息（图片/文件）、坐席移动端、多语言内置
-（V1 中文，Branding 预留 i18n 钩子）。断连期间的客户消息不自动补发——服务端增量
-拉取端点已就位（`GET /api/v1/sessions/:session_id/messages`，`after_id` 游标），
-SDK V1 尚未接入自动补拉，断连期间消息以重连后的 WS 为准（补拉接入列入联调项）；
-服务端未读游标端点同样已就位（`POST /api/v1/sessions/:session_id/read` +
-`GET .../unread`），SDK V1 未读以客户端推导为准。Keychain 凭证存储不在 V1
-（匿名 session 无凭证）。
+（V1 中文，Branding 预留 i18n 钩子）。断连期间的客户消息不自动补发（发送超时按
+失败标记，手动重发）——**重连成功后 SDK 自动增量补拉**（`GET
+/api/v1/sessions/:session_id/messages`，`after_id` 游标 + has_more 续拉）：断连
+期间坐席/AI 的消息自动合并进 history 并计未读，接入方无需自行对账；服务端未读
+游标端点同样已就位（`POST /api/v1/sessions/:session_id/read` +
+`GET .../unread`），SDK V1 未读以客户端推导为准（服务端游标是宿主需要跨入口
+一致未读时的增强面）。Keychain 凭证存储不在 V1（匿名 session 无凭证）。

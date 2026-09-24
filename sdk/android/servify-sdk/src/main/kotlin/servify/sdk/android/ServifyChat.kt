@@ -22,6 +22,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -74,6 +76,8 @@ class ServifyChat internal constructor(
     private val ticketUrlOverride: String? = null,
     /** 测试注入：推送注册端点（生产路径恒为 apiUrl + /api/v1/push/register）。 */
     private val pushUrlOverride: String? = null,
+    /** 测试注入：增量补拉端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/messages）。 */
+    private val messagesUrlOverride: String? = null,
 ) {
     private val core = SessionCore()
 
@@ -107,6 +111,22 @@ class ServifyChat internal constructor(
     private val pendingEcho = AtomicReference<EchoGate?>(null)
 
     private class EchoGate(val expectedContent: String, val gate: CompletableDeferred<Unit>)
+
+    /**
+     * 服务端消息游标（§10 #1 增量拉取端点）：仅由补拉结果推进（WS 帧不带服务端
+     * 消息 ID）；null = 尚未拉过（下次补拉从会话头全量）。
+     */
+    @Volatile
+    private var lastServerMessageId: Long? = null
+
+    /**
+     * 补拉去重指纹（"sender组|content"）：游标确立后 WS 渲染过的消息。服务端对
+     * 客户/坐席消息先落库后广播，故 WS 渲染的消息必然已在补拉窗口内——重连补拉
+     * 若把它们拉回（id > 游标，因上次补拉后渲染），按指纹跳过渲染与未读、游标照
+     * 推进。AI 回答不落库、系统提示不走 WS，天然无重复面。不做收尾清空（对账
+     * 在途时到达的帧会被 clear 抹掉、制造重复），由容量环形淘汰回收。
+     */
+    private val cursorFingerprints = java.util.concurrent.ConcurrentLinkedQueue<String>()
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     private val _messages = MutableSharedFlow<ConversationMessage>(extraBufferCapacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -320,6 +340,114 @@ class ServifyChat internal constructor(
         }
     }
 
+    /**
+     * 增量补拉（D7 流程 3；§10 #1 端点）：连接成功（onOpen）后对账断连窗口内
+     * 错过的消息。逐页 GET /api/v1/sessions/{id}/messages?after_id=<游标>（升序，
+     * has_more 续拉），合并进 history 并发事件流；agent/ai 来源在面板不可见时
+     * 计未读（与 WS 帧口径同构；customer 回显与 system 提示不计）。
+     *
+     * 全失败面静默：会话行未建过（404，首连/未发过消息）与 IO/HTTP 错误都不
+     * 影响 WS 使用，游标不动、下次连接重新对账。游标与服务端 ID 仅在此链内
+     * 自持（WS 帧无服务端 ID）；指纹去重见 [cursorFingerprints]。
+     */
+    internal suspend fun reconcileMessages() {
+        var rounds = 0
+        while (rounds++ < MAX_RECONCILE_PAGES) {
+            val after = lastServerMessageId
+            val base = messagesUrlOverride
+                ?: config.apiUrl.trimEnd('/') + "/api/v1/sessions/" +
+                    java.net.URLEncoder.encode(sessionId, "UTF-8") + "/messages"
+            val url = buildString {
+                append(base)
+                append("?limit=")
+                append(RECONCILE_PAGE_LIMIT)
+                if (after != null) {
+                    append("&after_id=")
+                    append(after)
+                }
+            }
+            val request = Request.Builder().url(url).get().build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: IOException) {
+                return
+            }
+            val page = response.use { resp ->
+                // 404 = 会话行未建过（行在首条消息持久化时建），无历史可拉——正常态。
+                if (resp.code == 404) return
+                if (!resp.isSuccessful) return
+                val text = resp.body?.string().orEmpty()
+                runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return
+            }
+            val messages = page["messages"] as? kotlinx.serialization.json.JsonArray ?: return
+            for (element in messages) {
+                val obj = runCatching { element.jsonObject }.getOrNull() ?: continue
+                val id = obj["id"]?.jsonPrimitive?.contentOrNull?.trim()?.toLongOrNull() ?: continue
+                val sender = obj["sender"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val content = obj["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                // 游标只前进：指纹命中（本地已渲染）也推进——服务端落库事实已确认。
+                if (lastServerMessageId == null || id > lastServerMessageId!!) {
+                    lastServerMessageId = id
+                }
+                if (cursorFingerprints.contains(fingerprint(sender, content))) continue
+                when (sender) {
+                    "agent" -> {
+                        emitMessage(SenderType.Agent, content)
+                        if (!sessionVisible) _unreadCount.value += 1
+                    }
+                    "ai" -> {
+                        recordAndEmit(
+                            ConversationMessage(
+                                id = "srv-$id",
+                                sessionId = sessionId,
+                                sender = SenderType.System,
+                                content = content,
+                                createdAt = now(),
+                                isAiResponse = true,
+                            ),
+                        )
+                        if (!sessionVisible) _unreadCount.value += 1
+                    }
+                    "system" -> recordAndEmit(
+                        ConversationMessage(
+                            id = "srv-$id",
+                            sessionId = sessionId,
+                            sender = SenderType.System,
+                            content = content,
+                            createdAt = now(),
+                        ),
+                    )
+                    else -> recordAndEmit(
+                        // customer：首连全量回放会话历史时要进 history（重连增量的
+                        // 本地已渲染份由指纹跳过）；customer 来源不计未读。
+                        ConversationMessage(
+                            id = "srv-$id",
+                            sessionId = sessionId,
+                            sender = SenderType.Customer,
+                            content = content,
+                            createdAt = now(),
+                        ),
+                    )
+                }
+            }
+            val hasMore = page["has_more"]?.jsonPrimitive?.booleanOrNull == true
+            if (!hasMore) break
+        }
+        // 不在收尾清空指纹表：对账在途期间到达的 WS 帧（渲染+入表）会被 clear
+        // 抹掉，随后的重连补拉即重复渲染（竞态窗口实测可复现）。容量环形淘汰
+        // 足够——游标未确立窗口的渲染量远小于 200；补拉渲染与后续补拉之间由
+        // 游标保护，指纹表只需覆盖「游标确立前的 WS 渲染」。
+    }
+
+    /** 补拉去重键（与 [cursorFingerprints] 同构；服务端 sender 直接入键）。 */
+    private fun fingerprint(sender: String, content: String): String = "$sender|$content"
+
+    /** WS 渲染时积累指纹（仅历史性消息；SDK 自造提示行不入——服务端无对应行）。 */
+    private fun trackFingerprint(sender: String, content: String) {
+        cursorFingerprints.add(fingerprint(sender, content))
+        while (cursorFingerprints.size > FINGERPRINT_CAPACITY) cursorFingerprints.poll()
+    }
+
     private fun openSocket() {
         val url = buildWsUrl(config.apiUrl, wsUrlOverride, config.guestToken)
         val request = Request.Builder().url(url).build()
@@ -402,12 +530,14 @@ class ServifyChat internal constructor(
         when (frame) {
             is WireFrame.VisitorEcho -> {
                 emitMessage(SenderType.Customer, frame.content)
+                trackFingerprint("customer", frame.content)
                 pendingEcho.get()?.let { gate ->
                     if (gate.expectedContent == frame.content) gate.gate.complete(Unit)
                 }
             }
             is WireFrame.AgentMessage -> {
                 emitMessage(SenderType.Agent, frame.content)
+                trackFingerprint("agent", frame.content)
                 // 未读 = 面板不可见时到达的坐席/AI 内容（设计 §移动端未读口径）。
                 if (!sessionVisible) _unreadCount.value += 1
             }
@@ -448,6 +578,7 @@ class ServifyChat internal constructor(
                         nextAction = frame.nextAction,
                     ),
                 )
+                trackFingerprint("ai", frame.content)
                 if (!sessionVisible) _unreadCount.value += 1
             }
             is WireFrame.TransferNotification -> {
@@ -517,6 +648,9 @@ class ServifyChat internal constructor(
             everConnected = true
             reconnectAttempt = 0
             _connectionState.value = ConnectionState.Connected
+            // D7 流程 3：连接成功即对账断连窗口（首连也拉——固定 session_id 接入时
+            // 回放会话既有历史；新 session 拉空页/404 静默）。异步不阻塞帧消费。
+            scope.launch { reconcileMessages() }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -545,6 +679,15 @@ class ServifyChat internal constructor(
     companion object {
         /** 回显判据默认超时（PROTOCOL.md §6.3 成功判据的本地兜底）。 */
         const val DEFAULT_ECHO_TIMEOUT_MS = 10_000L
+
+        /** 补拉单页 limit（服务端 clamp 上限 200 内；一页覆盖常规断线窗口）。 */
+        private const val RECONCILE_PAGE_LIMIT = 100
+
+        /** 补拉最大页数（has_more 续拉圈数上限，防服务端异常增长拖住连接线程）。 */
+        private const val MAX_RECONCILE_PAGES = 10
+
+        /** 指纹表容量上限（游标确立后 WS 渲染条数的环形窗口）。 */
+        private const val FINGERPRINT_CAPACITY = 200
 
         /** 工单响应解析（仅取 id 字段；与 FrameCodec 同款 ignoreUnknownKeys 口径）。 */
         private val json = Json { ignoreUnknownKeys = true }

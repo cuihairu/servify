@@ -41,12 +41,15 @@ import kotlin.test.assertTrue
 class ConnectionLifecycleTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var bypass: ReconcileBypassDispatcher
     private lateinit var chatScope: CoroutineScope
     private lateinit var chat: ServifyChat
 
     @Before
     fun setUp() {
         server = MockWebServer()
+        bypass = ReconcileBypassDispatcher()
+        server.dispatcher = bypass
         server.start()
         chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -70,6 +73,7 @@ class ConnectionLifecycleTest {
             policy = policy,
             echoTimeoutMs = 200,
             wsUrlOverride = server.url("/api/v1/ws").toString(),
+            messagesUrlOverride = server.url("/api/v1/sessions/test-session/messages").toString(),
         )
 
     private suspend fun awaitConnected() {
@@ -84,7 +88,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun idlePassesThroughConnectingToConnected() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {}))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {}))
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
@@ -100,7 +104,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun repeatedConnectWhileConnectedIsNoop() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat()
         chat.connect()
         awaitConnected()
@@ -114,7 +118,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun handshakeFailureBeforeEverConnectedMarksDisconnected() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(404))
+        bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat()
 
         chat.connect()
@@ -128,8 +132,8 @@ class ConnectionLifecycleTest {
     fun reconnectExhaustionMarksDisconnectedAndConnectRecovers() = runBlocking {
         // 首连成功后客户端本地断开 → 重连 #1 握手被拒（404）→ 已建连后失败走
         // scheduleReconnect：maxAttempts=1 的 delayFor(2)=null → 耗尽 → disconnected。
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
-        server.enqueue(MockResponse().setResponseCode(404))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
         awaitConnected()
@@ -144,7 +148,7 @@ class ConnectionLifecycleTest {
         )
 
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat.connect()
         awaitConnected()
     }
@@ -153,8 +157,8 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintEmittedOnReconnectExhaustionWhenConfigured() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
-        server.enqueue(MockResponse().setResponseCode(404))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(
             policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100),
             branding = Branding(offlineText = "客服当前不在线，请稍后再来"),
@@ -175,8 +179,8 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintOmittedWhenNotConfigured() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
-        server.enqueue(MockResponse().setResponseCode(404))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
         awaitConnected()
@@ -189,7 +193,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintEmittedOnHandshakeFailureWhenConfigured() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(404))
+        bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(branding = Branding(offlineText = "客服当前不在线，请稍后再来"))
 
         // onSubscription 钩在订阅点后才 connect：hint 是无 replay SharedFlow，回调线程
@@ -204,7 +208,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun offlineHintNotEmittedOnDestroy() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat(branding = Branding(offlineText = "客服当前不在线，请稍后再来"))
         chat.connect()
         awaitConnected()
@@ -216,7 +220,7 @@ class ConnectionLifecycleTest {
 
     @Test
     fun appendSystemHintEntersHistoryAndStreamWithoutUnread() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat()
         chat.connect()
         awaitConnected()

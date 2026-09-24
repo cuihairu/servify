@@ -40,12 +40,15 @@ import kotlin.test.assertTrue
 class ServifyChatTest {
 
     private lateinit var server: MockWebServer
+    private lateinit var bypass: ReconcileBypassDispatcher
     private lateinit var chatScope: CoroutineScope
     private lateinit var chat: ServifyChat
 
     @Before
     fun setUp() {
         server = MockWebServer()
+        bypass = ReconcileBypassDispatcher()
+        server.dispatcher = bypass
         server.start()
         chatScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -66,6 +69,7 @@ class ServifyChatTest {
             policy = policy,
             echoTimeoutMs = echoTimeoutMs,
             wsUrlOverride = server.url("/api/v1/ws").toString(),
+            messagesUrlOverride = server.url("/api/v1/sessions/test-session/messages").toString(),
         )
 
     /** 订阅就绪后返回事件；ready 在 collector 真正挂上后放行调用方。 */
@@ -106,7 +110,7 @@ class ServifyChatTest {
 
     @Test
     fun sendMessageCompletesOnEchoAndEmitsCustomerMessage() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
@@ -123,7 +127,7 @@ class ServifyChatTest {
 
     @Test
     fun sendMessageTimesOutWithoutEchoAndEmitsSendTimeout() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {}))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(object : WebSocketListener() {}))
         chat = newChat(echoTimeoutMs = 250)
 
         val ready = CompletableDeferred<Unit>()
@@ -141,7 +145,7 @@ class ServifyChatTest {
 
     @Test
     fun handshake500MarksServerUnavailableAndDisconnected() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(500))
+        bypass.enqueue(MockResponse().setResponseCode(500))
         chat = newChat()
 
         val ready = CompletableDeferred<Unit>()
@@ -156,7 +160,7 @@ class ServifyChatTest {
 
     @Test
     fun deltaStreamAssemblesBubblesThenFinalCarriesSources() = runBlocking {
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                     webSocket.send("""{"type":"ai-response-delta","data":{"content_delta":"根据","done":false}}""")
@@ -190,7 +194,7 @@ class ServifyChatTest {
 
     @Test
     fun agentMessagesDriveUnreadAndVisibleClearsIt() = runBlocking {
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                     webSocket.send("""{"type":"agent-message","data":{"content":"第一条","sender":"MP Agent"}}""")
@@ -215,7 +219,7 @@ class ServifyChatTest {
 
     @Test
     fun transferNotificationEmitsAgentAssignment() = runBlocking {
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                     webSocket.send(
@@ -237,7 +241,7 @@ class ServifyChatTest {
 
     @Test
     fun waitingNotificationEmitsQueueEvent() = runBlocking {
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                     webSocket.send("""{"type":"waiting_notification","data":{"message":"前方还有 1 位等待"},"session_id":"test-session"}""")
@@ -261,14 +265,14 @@ class ServifyChatTest {
         // close(1000)/SocketPolicy 均不传播为客户端回调（handleWebSocketUpgrade 同步
         // loopReader 阻塞，DISCONNECT_AT_END 的 socket.close() 执行不到；onOpen 时序上
         // 服务端 writer 尚未建立）；onMessage 里 cancel() 是实测唯一可靠断开。
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     webSocket.cancel()
                 }
             }),
         )
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat()
 
         chat.connect()
@@ -293,7 +297,7 @@ class ServifyChatTest {
 
     @Test
     fun destroyIsIdempotentAndMarksDisconnected() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat = newChat()
         chat.connect()
         awaitConnected()
@@ -339,7 +343,7 @@ class ServifyChatTest {
     fun webrtcAndUnknownFramesAreContractIgnoredFacade() = runBlocking {
         // 门面层的契约忽略（PROTOCOL §3/§6.4）：webrtc 信令族与未知帧不产生消息/错误/
         // 状态扰动，且不影响后续正常帧处理（证明非连接性故障被静默吞掉）
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                     webSocket.send("""{"type":"webrtc-offer","data":{},"session_id":"test-session"}""")
@@ -419,7 +423,7 @@ class ServifyChatTest {
 
     @Test
     fun historySnapshotAccumulatesAndMergesStreamById() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
         chat = newChat(echoTimeoutMs = 100)
         chat.connect()
         awaitConnected()
@@ -441,7 +445,7 @@ class ServifyChatTest {
 
     @Test
     fun unreadCountsOnlyWhileSessionHidden() = runBlocking {
-        server.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(ScriptedListener()))
         chat = newChat(echoTimeoutMs = 100)
         chat.connect()
         awaitConnected()
@@ -477,7 +481,7 @@ class ServifyChatTest {
         // 断线即流中断（PROTOCOL §4.1）：保留已渲染 + 提示行；提示行不计未读。
         // 服务器断开必须走 onMessage 内同步 cancel()（外部线程/SocketPolicy/onOpen 均不传播，
         // 见 reconnectsAfterServerDrop 注释）；delta 与断开拆两条消息时序驱动。
-        server.enqueue(
+        bypass.enqueue(
             MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
                 @Volatile
                 private var count = 0
