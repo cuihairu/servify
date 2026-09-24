@@ -418,8 +418,11 @@ public final class ServifyChat: @unchecked Sendable {
             } else {
                 err = .network(message: "handshake failed: \(error.localizedDescription)")
             }
-            _errors.emit(err)
+            // 顺序契约：先定终态再发 error——错误流消费与状态读取在并发面无
+            // happens-before，先 error 后 state 会让「收到 error 即读状态」拿到
+            // 旧值（与 Kotlin ServifyChat 镜像，35940978983 负载窗口复现）。
             _connectionState.set(.disconnected)
+            _errors.emit(err)
             notifyOfflineHint()
             return
         }
@@ -434,8 +437,8 @@ public final class ServifyChat: @unchecked Sendable {
         let attempt = reconnectAttempt
         stateLock.unlock()
         guard let delayMs = policy.delayFor(attempt) else {
-            _errors.emit(.network(message: "reconnect exhausted after \(policy.maxAttempts) attempts"))
             _connectionState.set(.disconnected)
+            _errors.emit(.network(message: "reconnect exhausted after \(policy.maxAttempts) attempts"))
             notifyOfflineHint()
             return
         }

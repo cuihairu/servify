@@ -360,6 +360,10 @@ class ServifyChat internal constructor(
         webSocket = null
         if (!everConnected) {
             // §4.4：握手失败 → disconnected（配置/服务端问题，退避重试无意义）。
+            // 顺序契约：先定终态再发 error——SharedFlow 消费者与 StateFlow 读取
+            // 在不同协程，先 error 后 state 会让「收到 error 即读状态」拿到旧值
+            // （35940978983 负载窗口复现）。
+            _connectionState.value = ConnectionState.Disconnected
             _errors.tryEmit(
                 when {
                     httpStatus != null && httpStatus >= 500 -> ServifyError.ServerUnavailable("handshake $httpStatus: ${t.message}")
@@ -367,7 +371,6 @@ class ServifyChat internal constructor(
                     else -> ServifyError.Network("handshake failed: ${t.message}")
                 },
             )
-            _connectionState.value = ConnectionState.Disconnected
             notifyOfflineHint()
             return
         }
@@ -379,8 +382,8 @@ class ServifyChat internal constructor(
         reconnectAttempt += 1
         val delayMs = policy.delayFor(reconnectAttempt)
         if (delayMs == null) {
-            _errors.tryEmit(ServifyError.Network("reconnect exhausted after ${policy.maxAttempts} attempts"))
             _connectionState.value = ConnectionState.Disconnected
+            _errors.tryEmit(ServifyError.Network("reconnect exhausted after ${policy.maxAttempts} attempts"))
             notifyOfflineHint()
             return
         }
