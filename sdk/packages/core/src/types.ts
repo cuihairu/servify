@@ -109,18 +109,14 @@ export interface CustomerSatisfaction {
   created_at: string;
 }
 
-// WebSocket 消息类型
+// WebSocket 消息类型（契约面 = 服务端真实发射集，见 sdk/PROTOCOL.md §3-§4；
+// 服务端零发射点的六帧（message/session_update/agent_status/typing/error/system）
+// 已随 core 清理移除——§5 留有边界记录）
 export interface WSMessage {
   type:
-    | 'message'
     | 'text-message'
     | 'agent-message'
     | 'ai-response'
-    | 'session_update'
-    | 'agent_status'
-    | 'typing'
-    | 'error'
-    | 'system'
     | 'webrtc-offer'
     | 'webrtc-answer'
     | 'webrtc-candidate'
@@ -226,10 +222,7 @@ export type ServifyEventMap = {
   'reconnecting': [attempt: number];
   'message': [message: Message];
   'session_created': [session: ChatSession];
-  'session_updated': [session: ChatSession];
   'session_ended': [session: ChatSession];
-  'agent_assigned': [agent: Agent];
-  'agent_typing': [isTyping: boolean];
   'error': [error: Error];
   'ticket_created': [ticket: Ticket];
   'ticket_updated': [ticket: Ticket];

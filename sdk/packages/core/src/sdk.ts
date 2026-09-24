@@ -36,7 +36,6 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   private currentCustomer: Customer | null = null;
   private currentSession: ChatSession | null = null;
   private currentAgent: Agent | null = null;
-  private messageQueue: Message[] = [];
   // 断线补拉状态（D7 流程 3；§10 #1 端点消费；Android/iOS M3 刀 10 同构）：
   // 游标仅由补拉结果推进（WS 帧无服务端消息 ID）；指纹表只由 WS 渲染积累，
   // 补拉渲染由游标保护不入表——入表会让补拉大页把 WS 渲染指纹挤出容量窗口、
@@ -148,15 +147,6 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.ws.on('disconnected', (reason) => this.emit('disconnected', reason));
     this.ws.on('reconnecting', (attempt) => this.emit('reconnecting', attempt));
     this.ws.on('message', (message) => this.handleIncomingMessage(message));
-    this.ws.on('session_updated', (session) => {
-      this.currentSession = session;
-      this.emit('session_updated', session);
-    });
-    this.ws.on('agent_assigned', (agent) => {
-      this.currentAgent = agent;
-      this.emit('agent_assigned', agent);
-    });
-    this.ws.on('agent_typing', (isTyping) => this.emit('agent_typing', isTyping));
     this.ws.on('webrtc:offer', (offer) => this.emit('webrtc:offer', offer));
     this.ws.on('webrtc:answer', (answer) => this.emit('webrtc:answer', answer));
     this.ws.on('webrtc:candidate', (candidate) => this.emit('webrtc:candidate', candidate));
@@ -578,7 +568,6 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
 
   // 私有方法：处理收到的消息
   private handleIncomingMessage(message: Message): void {
-    this.messageQueue.push(message);
     // WS 渲染点积累补拉指纹（键 = 服务端 sender 原词 + content，与补拉结果
     // 同键空间；sender_type/is_ai_response 反查与 WS 帧映射一一对应）。
     const sender = message.sender_type === 'system'

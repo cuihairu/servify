@@ -44,10 +44,7 @@ export class VanillaServifySDK {
     this.sdk.on('disconnected', (reason) => this.triggerCallback('disconnected', reason));
     this.sdk.on('message', (message) => this.triggerCallback('message', message));
     this.sdk.on('session_created', (session) => this.triggerCallback('sessionCreated', session));
-    this.sdk.on('session_updated', (session) => this.triggerCallback('sessionUpdated', session));
     this.sdk.on('session_ended', (session) => this.triggerCallback('sessionEnded', session));
-    this.sdk.on('agent_assigned', (agent) => this.triggerCallback('agentAssigned', agent));
-    this.sdk.on('agent_typing', (isTyping) => this.triggerCallback('agentTyping', isTyping));
     this.sdk.on('error', (error) => this.triggerCallback('error', error));
     this.sdk.on('ticket_created', (ticket) => this.triggerCallback('ticketCreated', ticket));
     this.sdk.on('webrtc:offer', (offer) => this.triggerCallback('webrtc:offer', offer));

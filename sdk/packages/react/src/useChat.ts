@@ -9,7 +9,6 @@ export interface UseChatReturn {
   agent: Agent | null;
   isLoading: boolean;
   error: Error | null;
-  isAgentTyping: boolean;
 
   // 方法
   startChat: (options?: {
@@ -32,7 +31,6 @@ export function useChat(): UseChatReturn {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [isAgentTyping, setIsAgentTyping] = useState(false);
 
   // 开始聊天
   const startChat = useCallback(async (options?: {
@@ -140,22 +138,10 @@ export function useChat(): UseChatReturn {
       setSession(session);
     };
 
-    const handleSessionUpdated = (session: ChatSession) => {
-      setSession(session);
-    };
-
     const handleSessionEnded = (_session: ChatSession) => {
       setSession(null);
       setMessages([]);
       setAgent(null);
-    };
-
-    const handleAgentAssigned = (agent: Agent) => {
-      setAgent(agent);
-    };
-
-    const handleAgentTyping = (typing: boolean) => {
-      setIsAgentTyping(typing);
     };
 
     const handleError = (error: Error) => {
@@ -165,10 +151,7 @@ export function useChat(): UseChatReturn {
     // 注册事件监听器
     sdk.on('message', handleMessage);
     sdk.on('session_created', handleSessionCreated);
-    sdk.on('session_updated', handleSessionUpdated);
     sdk.on('session_ended', handleSessionEnded);
-    sdk.on('agent_assigned', handleAgentAssigned);
-    sdk.on('agent_typing', handleAgentTyping);
     sdk.on('error', handleError);
 
     // 获取当前状态
@@ -179,10 +162,7 @@ export function useChat(): UseChatReturn {
     return () => {
       sdk.off('message', handleMessage);
       sdk.off('session_created', handleSessionCreated);
-      sdk.off('session_updated', handleSessionUpdated);
       sdk.off('session_ended', handleSessionEnded);
-      sdk.off('agent_assigned', handleAgentAssigned);
-      sdk.off('agent_typing', handleAgentTyping);
       sdk.off('error', handleError);
     };
   }, [sdk]);
@@ -193,7 +173,6 @@ export function useChat(): UseChatReturn {
     agent,
     isLoading,
     error,
-    isAgentTyping,
     startChat,
     sendMessage,
     endChat,

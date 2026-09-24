@@ -39,12 +39,12 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 | WebSocket 链路 | `/api/v1/ws?session_id=`（publicV1 组免认证；`access_token` 参数可选——默认不消费，`security.guest_token.required` 开启后握手强制校验签名/时效/会话绑定，校验失败 401 拒升级），心跳 30s，指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同路径；重连策略叠加前后台切换与网络可达性感知；鉴权见 D6 访客 token 方案（✅ 服务端已随刀 8 落地） |
 | 未读与新消息通知 | **无任何实现**（无计数、无角标） | 客户端内未读计数为基线；系统推送为可选模块（D7） |
 | AI 首答与引用 | WS `ai-response` 帧一等携带 `{content, confidence, source}` + 编排附加输出 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略）；流式经 `ai-response-delta` 增量帧（2026-09 服务端已接出） | 增量拼接 + 完成帧替换渲染；引用来源可展开列表；置信门建议（next_action=handoff）透出"转人工"提示 |
-| 转人工状态 | `transfer_notification`（含 message/agent_id）/ `waiting_notification`（入队）两帧；widget 未特判，走"当 bot 文本渲染"的兜底分支。**注意：core SDK 声明并处理的 `session_update`/`agent_status` 帧服务端从不发送（死分支）** | 状态机改由真实帧驱动：ai_answering →（transfer/waiting_notification）→ waiting_human →（agent-message 到达）→ agent_chatting（见 D5 状态机） |
+| 转人工状态 | `transfer_notification`（含 message/agent_id）/ `waiting_notification`（入队）两帧；widget 未特判，走"当 bot 文本渲染"的兜底分支。**注意：core SDK 曾声明并处理的 `session_update`/`agent_status` 帧服务端从不发送（死分支，已随 core 清理刀从类型与运行时中移除）** | 状态机改由真实帧驱动：ai_answering →（transfer/waiting_notification）→ waiting_human →（agent-message 到达）→ agent_chatting（见 D5 状态机） |
 | 工单创建入口 | REST `POST /api/tickets`（api-client 有封装，widget 未露出）——**管理面端点，访客不可达** | 会话页内"升级为工单"入口，带 AI 摘要预填；依赖访客可用端点（后端配套项，见 §10） |
 
 **REST 面的访客可达性（策划时的关键事实核查）**：服务端现存 REST 端点几乎全部挂在管理面中间件链下（`AuthMiddleware` + `RequirePrincipalKinds("agent","admin","service")` + 资源权限）——包括本文曾计划依赖的 `/api/v1/ai/query`、`/api/tickets`、`/api/omni/sessions/:id/messages`。**访客客户端唯一现成通道就是 `/api/v1/ws`**。这直接约束了架构：移动端 V1 的实时收发、AI 首答（含流式）全部走 WS；"增量补拉""工单创建"两类 REST 依赖必须先有访客可用的服务端配套（§10 清单 #1/#4，推送注册同理见 #5），不能按管理面端点的参数形状直接假设可用。
 
-**为什么逐字段对齐而不是"移动端重新设计消息模型"**：07 号计划 M3 验收语明确"后续移动端 SDK 不会直接复制 Web SDK 结构"——这句话约束的是**代码结构**（不把 JS 的 EventEmitter/SDK 类层级照搬到原生），而不是**协议契约**。跨端协议不一致的代价是服务端要维护两套广播分支，消息历史的可移植性（换端续聊）也会断裂。因此：协议与消息模型对齐是硬约束，运行时结构按各平台惯例重构。对齐基线里的死分支（`session_update`/`agent_status`）不进移动端契约——对着不存在的服务端行为做兼容，只会把幻影帧固化成三端负担；它们作为 core SDK 的历史遗留另行清理。
+**为什么逐字段对齐而不是"移动端重新设计消息模型"**：07 号计划 M3 验收语明确"后续移动端 SDK 不会直接复制 Web SDK 结构"——这句话约束的是**代码结构**（不把 JS 的 EventEmitter/SDK 类层级照搬到原生），而不是**协议契约**。跨端协议不一致的代价是服务端要维护两套广播分支，消息历史的可移植性（换端续聊）也会断裂。因此：协议与消息模型对齐是硬约束，运行时结构按各平台惯例重构。对齐基线里的死分支（`session_update`/`agent_status`）不进移动端契约——对着不存在的服务端行为做兼容，只会把幻影帧固化成三端负担；这一历史遗留已随 core 清理刀闭环（类型联合与运行时 case 整体移除，四框架包消费面同步摘除，PROTOCOL §5 留边界记录）。
 
 ---
 
@@ -97,7 +97,7 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 **结构（不共享代码，共享契约）**：
 
 1. **协议事实标准**：后端 `apps/server` 的 WS 契约（`/api/v1/ws`，访客唯一现成通道）+ 访客可达 REST 契约（当前为零——`/api/omni/*`、`/api/v1/ai/query`、`/api/tickets` 均为管理面端点，访客配套端点见 §10 清单）是唯一事实源。
-2. **契约文档化**：`sdk/PROTOCOL.md` 首版已入库（2026-09）——逐帧列明消息类型、载荷字段、方向与边界语义，全部条目经服务端源码核实并带文件行号锚点。事实核查的关键产出已固化进契约：core 类型声明的六个死分支帧（`session_update`/`agent_status`/`typing`/`message`/`error`/`system`）单独立表声明"移动端契约不含"；心跳双向机制澄清（服务端协议层 Ping 54s，Web core 的 JSON `system/ping` 帧服务端不处理——移动端走平台原生协议层保活）；慢客户端 256 帧缓冲踢线、发送成功判据=收到自己回显等边界语义成文。命名混用（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case）**在契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做。
+2. **契约文档化**：`sdk/PROTOCOL.md` 首版已入库（2026-09）——逐帧列明消息类型、载荷字段、方向与边界语义，全部条目经服务端源码核实并带文件行号锚点。事实核查的关键产出已固化进契约：core 类型声明的六个死分支帧（`session_update`/`agent_status`/`typing`/`message`/`error`/`system`）单独立表声明"移动端契约不含"（**后续 core 清理刀已将其从类型联合与运行时整体移除，§5 表保留为边界记录**）；心跳双向机制澄清（服务端协议层 Ping 54s，Web core 的 JSON `system/ping` 帧服务端不处理——移动端走平台原生协议层保活；**该 JSON 心跳后续亦已从 core 移除**）；慢客户端 256 帧缓冲踢线、发送成功判据=收到自己回显等边界语义成文。命名混用（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case）**在契约里冻结现状、不借机改名**——改名是服务端 breaking change，V1 不做。
 3. **互验测试**：Android/iOS 各建一组"契约回放测试"——用同一组 JSON 样例（放 `sdk/protocol-fixtures/`，与 core 测试共用）驱动反序列化与状态机断言。服务端 WS 契约变更时，改 fixtures 会让三端测试同时红，这比"人记得三处都改"可靠。
 
 **消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:72-83`）：
@@ -279,7 +279,7 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 **M0 — 协议契约与联调探针（无 UI）**
 
 - 产出：`sdk/PROTOCOL.md` 首版（✅ 已入库）；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
-- 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、移动端契约不含"显式标注）。
+- 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、客户端契约不含"显式标注——该标注随 core 清理刀固化为 PROTOCOL §5 边界记录，类型面已同步收敛）。
 - 状态（2026-09-22）：**已完成**。③ 由 PROTOCOL.md 达成（3bbee3e2）；① 样例集 10 例 + core 9 测试 / Android 10 测试同一套样例回放断言一致（39f2a67、2b96be6，含 CI `android-probe` job）；② `make mobile-probe-acceptance` 对真实服务跑通全链路并留档 manifest（ff8c49b，内嵌 OpenAI 兼容流式 mock LLM，`scripts/test-results/mobile-probe/manifest.json` overall=passed）。
 
 **M1 — Android SDK Alpha**

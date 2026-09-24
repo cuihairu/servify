@@ -9,7 +9,6 @@ const ChatDemo: React.FC = () => {
     agent,
     isLoading,
     error,
-    isAgentTyping,
     startChat,
     sendMessage,
     endChat,
@@ -228,8 +227,6 @@ const ChatDemo: React.FC = () => {
           </div>
         )}
       </div>
-
-      {isAgentTyping && <div className="typing-indicator">Agent is typing...</div>}
 
       <div className="controls">
         <div className="input-group">

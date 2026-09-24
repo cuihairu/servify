@@ -5,7 +5,6 @@ import { useServify } from './RNProvider';
 export interface UseChatReturn {
   session: ChatSession | null;
   messages: Message[];
-  isAgentTyping: boolean;
   isLoading: boolean;
   error: Error | null;
   startChat: (options?: { priority?: 'low' | 'normal' | 'high' | 'urgent'; message?: string }) => Promise<void>;
@@ -17,7 +16,6 @@ export function useChat(): UseChatReturn {
   const { sdk } = useServify();
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isAgentTyping, setIsAgentTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -69,7 +67,6 @@ export function useChat(): UseChatReturn {
       await sdk.endSession();
       setSession(null);
       setMessages([]);
-      setIsAgentTyping(false);
     } catch (err) {
       setError(err as Error);
       throw err;
@@ -91,9 +88,6 @@ export function useChat(): UseChatReturn {
       setSession(null);
       setMessages([]);
     };
-    const handleAgentTyping = (typing: boolean) => {
-      setIsAgentTyping(typing);
-    };
     const handleError = (nextError: Error) => {
       setError(nextError);
     };
@@ -101,14 +95,12 @@ export function useChat(): UseChatReturn {
     sdk.on('message', handleMessage);
     sdk.on('session_created', handleSessionCreated);
     sdk.on('session_ended', handleSessionEnded);
-    sdk.on('agent_typing', handleAgentTyping);
     sdk.on('error', handleError);
 
     return () => {
       sdk.off('message', handleMessage);
       sdk.off('session_created', handleSessionCreated);
       sdk.off('session_ended', handleSessionEnded);
-      sdk.off('agent_typing', handleAgentTyping);
       sdk.off('error', handleError);
     };
   }, [sdk]);
@@ -116,7 +108,6 @@ export function useChat(): UseChatReturn {
   return {
     session,
     messages,
-    isAgentTyping,
     isLoading,
     error,
     startChat,

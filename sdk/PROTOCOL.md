@@ -22,9 +22,9 @@
 |---|---|---|
 | 服务端 → 客户端 | RFC 6455 协议层 Ping 控制帧，每 54s（`websocket_hub.go` writePump ticker） | 不等待应用层响应 |
 | 客户端 → 服务端 | 协议层 Pong（浏览器/原生库自动回，应用层不可见） | readPump 默认 pong 处理 |
-| Web core 现状 | 每 30s 发 JSON 帧 `{type:"system", data:{type:"ping"}}`（`websocket.ts` startHeartbeat） | **服务端 switch 无此 case，落 `Unknown message type: system` 警告日志**——该帧当前是无效流量 |
+| Web core 现状 | 无应用层心跳——保活完全交给协议层（浏览器对服务端 54s Ping 自动 Pong）；曾有的 JSON `{type:"system", data:{type:"ping"}}` 30s 心跳已随 core 清理移除（服务端 switch 无此 case，纯无效流量） | — |
 
-**移动端口径**：不复制 JSON `system/ping` 帧（服务端不支持，见 §5 死分支表）；用平台原生保活——Android OkHttp `pingInterval`、iOS `URLSessionWebSocketTask.sendPing`，走协议层与服务端 54s Ping 天然对齐。若未来服务端支持应用层心跳帧，经 fixtures 契约变更流程接入。
+**移动端口径**：与 Web core 同口径——协议层保活对齐服务端 54s Ping（Android OkHttp `pingInterval`、iOS `URLSessionWebSocketTask.sendPing`），不发任何应用层心跳帧。若未来服务端支持应用层心跳帧，经 fixtures 契约变更流程接入。
 
 ## 3. 客户端上行帧（服务端 readPump switch，`websocket_hub.go:321-333`）
 
@@ -66,20 +66,20 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 `webrtc-answer`（offer 的 SDP 应答）、`webrtc-candidate`（ICE 候选）、`webrtc-ice-config`（ICE 服务器下发，与管理面 `GET /api/v1/rtc/ice-servers` 同形）、`webrtc-state-change`（连接状态）、`data-channel-message`。
 
-## 5. 服务端不发送的帧（core 类型声明的死分支——客户端契约不含）
+## 5. 服务端不发送的帧（客户端契约不含——类型与运行时均已收敛）
 
-core `WSMessage.type` 联合（`types.ts:113-128`）声明了下表左列类型，服务端**零发射点**（全仓广播点核查结论，策划文档 D2）：
+以下帧类型在 core 的历史版本中曾声明于 `WSMessage.type` 联合并带运行时 case，但服务端**零发射点**（全仓广播点核查结论，策划文档 D2）。core 清理刀已将它们从类型联合与 `websocket.ts` switch 中整体移除——现契约面 = §3-§4 所列服务端真实发射集，本表保留为边界记录，防止未来误把幻影帧加回：
 
-| core 声明 | 现状 |
+| 已移除声明 | 死因 |
 |---|---|
-| `session_update` | 死分支（`websocket.ts:215` 有 case，永不触发）。会话关闭/状态变化移动端经增量补拉感知 |
-| `agent_status` | 死分支（`websocket.ts:218` 有 case，assigned/typing 形状已设计但从未接线） |
-| `typing` | 死分支。`channel/types.go` 的 `EventKindTyping` 是内部事件总线事件，不是 WS 帧 |
-| `message` | 死分支（`websocket.ts:206` 与 `text-message` 共用 case，服务端只发 `text-message`） |
-| `error` | 死分支。服务端 WS 路径不回错误帧：JSON 解析失败静默 continue、未知类型警告丢弃、HTTP 阶段错误走 400 响应体 |
-| `system` | 死分支（`websocket.ts:231` 等 pong，服务端不发——见 §2 心跳） |
+| `session_update` | 服务端零发射。会话关闭/状态变化客户端经增量补拉感知（§6 #2） |
+| `agent_status` | 服务端零发射。assigned/typing 形状曾设计但从未接线；随之移除的还有 core 事件 `session_updated`/`agent_assigned`/`agent_typing` 与 react/vue/vanilla/react-native 四包对它们的消费 |
+| `typing` | 服务端零发射。`channel/types.go` 的 `EventKindTyping` 是内部事件总线事件，不是 WS 帧 |
+| `message` | 服务端只发 `text-message`（§4.1 回显），无独立 `message` 帧 |
+| `error` | 服务端 WS 路径不回错误帧：JSON 解析失败静默 continue、未知类型警告丢弃、HTTP 阶段错误走 400 响应体 |
+| `system` | 服务端零发射。JSON 心跳已移除（见 §2），客户端不再发送也就无需该类型 |
 
-**为什么单独立表而不是直接从类型里删**：这些是"设计了但没接线"的预留形状，删类型声明是 core 仓库的清理决策（另行处理）；但**移动端契约必须明确不含它们**——对着不存在的服务端行为做兼容，会把幻影帧固化成三端负担。
+新增帧类型的唯一入口：服务端广播点落地 + 本文档新增条目 + fixtures 样例 + 三端回放测试同步（§8 流程），禁止客户端单侧预留。
 
 ## 6. 客户端必须知道的边界语义
 

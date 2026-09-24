@@ -7,12 +7,11 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, ChatSession, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer } from './types';
+import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer } from './types';
 
 export interface WebSocketManagerOptions {
   url: string;
   protocols?: string | string[];
-  heartbeatInterval?: number;
   debug?: boolean;
   reconnectPolicy?: ReconnectPolicy;
   authProvider?: AuthProvider;
@@ -45,7 +44,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   private options: NormalizedWebSocketManagerOptions;
   private reconnectAttemptCount = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
   private subscribers = new Set<(message: WSMessage) => void>();
   readonly kind = 'websocket';
@@ -58,7 +56,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
 
     this.options = {
       protocols: [],
-      heartbeatInterval: 30000,
       debug: false,
       reconnectPolicy,
       authProvider: options.authProvider,
@@ -95,7 +92,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
         this.log('WebSocket 连接成功');
         this.reconnectAttemptCount = 0;
         this.state = 'connected';
-        this.startHeartbeat();
         this.emit('connected');
         resolve();
       };
@@ -112,7 +108,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
 
       this.ws.onclose = (event) => {
         this.log('WebSocket 连接关闭:', event.code, event.reason);
-        this.stopHeartbeat();
         this.state = this.isManualClose ? 'closed' : 'idle';
         this.emit('disconnected', event.reason || '连接关闭');
 
@@ -145,7 +140,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   async disconnect(): Promise<void> {
     this.isManualClose = true;
     this.state = 'closed';
-    this.stopHeartbeat();
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -202,7 +196,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
     }
 
       switch (message.type) {
-      case 'message':
       case 'text-message':
         this.emit('message', this.normalizeMessage(message, 'customer'));
         break;
@@ -211,34 +204,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
         break;
       case 'ai-response':
         this.emit('message', this.normalizeMessage(message, 'system', true));
-        break;
-      case 'session_update':
-        this.emit('session_updated', message.data as ChatSession);
-        break;
-      case 'agent_status':
-        if (typeof message.data === 'object' && message.data !== null) {
-          const agentStatus = message.data as {
-            type?: 'assigned' | 'typing';
-            agent?: ServifyEventMap['agent_assigned'][0];
-            typing?: boolean;
-          };
-
-          if (agentStatus.type === 'assigned' && agentStatus.agent) {
-            this.emit('agent_assigned', agentStatus.agent);
-          } else if (agentStatus.type === 'typing' && typeof agentStatus.typing === 'boolean') {
-            this.emit('agent_typing', agentStatus.typing);
-          }
-        }
-        break;
-      case 'error':
-        this.emit('error', new Error(this.extractMessageText(message.data) || 'Unknown error'));
-        break;
-      case 'system':
-        // 处理系统消息，如心跳响应
-        if (typeof message.data === 'object' && message.data !== null && 'type' in message.data && message.data.type === 'pong') {
-          // 心跳响应处理
-          this.log('收到心跳响应');
-        }
         break;
       case 'webrtc-offer':
         this.emit('webrtc:offer', message.data as RTCSessionDescriptionInit);
@@ -311,26 +276,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
     }, delay);
   }
 
-  private startHeartbeat(): void {
-    this.stopHeartbeat();
-
-    this.heartbeatTimer = setInterval(() => {
-      if (this.isConnected()) {
-        void this.send({
-          type: 'system',
-          data: { type: 'ping', timestamp: new Date().toISOString() }
-        }).catch(() => undefined);
-      }
-    }, this.options.heartbeatInterval);
-  }
-
-  private stopHeartbeat(): void {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
   private log(...args: unknown[]): void {
     if (this.options.debug) {
       console.warn('[ServifyWS]', ...args);
@@ -374,14 +319,6 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       retryable: false,
       details: { url: this.options.url },
     });
-  }
-
-  private extractMessageText(data: unknown): string | null {
-    if (typeof data === 'object' && data !== null && 'message' in data && typeof data.message === 'string') {
-      return data.message;
-    }
-
-    return null;
   }
 
   private normalizeMessage(message: WSMessage, senderType: Message['sender_type'], isAIResponse = false): Message {

@@ -19,7 +19,6 @@ export function useChat() {
   const agent = ref<Agent | null>(null);
   const isLoading = ref(false);
   const error = ref<Error | null>(null);
-  const isAgentTyping = ref(false);
 
   // 开始聊天
   const startChat = async (options?: {
@@ -108,22 +107,10 @@ export function useChat() {
     session.value = newSession;
   };
 
-  const handleSessionUpdated = (updatedSession: ChatSession) => {
-    session.value = updatedSession;
-  };
-
   const handleSessionEnded = () => {
     session.value = null;
     messages.value = [];
     agent.value = null;
-  };
-
-  const handleAgentAssigned = (newAgent: Agent) => {
-    agent.value = newAgent;
-  };
-
-  const handleAgentTyping = (typing: boolean) => {
-    isAgentTyping.value = typing;
   };
 
   const handleError = (errorEvent: Error) => {
@@ -135,10 +122,7 @@ export function useChat() {
     // 注册事件监听器
     sdk.on('message', handleMessage);
     sdk.on('session_created', handleSessionCreated);
-    sdk.on('session_updated', handleSessionUpdated);
     sdk.on('session_ended', handleSessionEnded);
-    sdk.on('agent_assigned', handleAgentAssigned);
-    sdk.on('agent_typing', handleAgentTyping);
     sdk.on('error', handleError);
 
     // 获取当前状态
@@ -150,10 +134,7 @@ export function useChat() {
     // 移除事件监听器
     sdk.off('message', handleMessage);
     sdk.off('session_created', handleSessionCreated);
-    sdk.off('session_updated', handleSessionUpdated);
     sdk.off('session_ended', handleSessionEnded);
-    sdk.off('agent_assigned', handleAgentAssigned);
-    sdk.off('agent_typing', handleAgentTyping);
     sdk.off('error', handleError);
   });
 
@@ -164,7 +145,6 @@ export function useChat() {
     agent,
     isLoading,
     error,
-    isAgentTyping,
 
     // 方法
     startChat,

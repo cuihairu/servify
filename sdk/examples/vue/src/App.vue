@@ -15,7 +15,6 @@ const {
   agent,
   isLoading,
   error,
-  isAgentTyping,
   startChat,
   sendMessage,
   endChat,
@@ -191,8 +190,6 @@ async function handleFileChange(event: Event) {
       />
       <div v-if="!remoteStream" class="preview-empty">No remote media stream yet.</div>
     </section>
-
-    <div v-if="isAgentTyping" class="typing-indicator">Agent is typing...</div>
 
     <section class="controls">
       <div class="input-group">
