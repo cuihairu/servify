@@ -1,4 +1,4 @@
-import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult, ServifyRTCIceServer } from './types';
+import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult, ServifyRTCIceServer, VisitorMessage } from './types';
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -158,6 +158,25 @@ export class ApiClient {
       },
       message: response.message,
     };
+  }
+
+  // 访客消息增量拉取（§10 #1，服务端刀 7 端点）：免认证访客唯一消息读入口，
+  // 与 /api/omni 管理面 helpers（访客不可达）分属两条通道。404=会话行未建过
+  // （首连常态），非 2xx / IO / 畸形体均归一为 success:false，由调用方
+  // （重连对账）按全失败面静默处理。
+  async getVisitorMessages(sessionId: string | number, options?: {
+    afterId?: number;
+    limit?: number;
+  }): Promise<ApiResponse<{ messages: VisitorMessage[]; has_more: boolean }>> {
+    const params = new URLSearchParams();
+    params.append('limit', String(options?.limit ?? 100));
+    if (options?.afterId !== undefined) {
+      params.append('after_id', String(options.afterId));
+    }
+    return this.request(
+      'GET',
+      `/api/v1/sessions/${encodeURIComponent(String(sessionId))}/messages?${params.toString()}`,
+    );
   }
 
   // AI 相关 API

@@ -268,6 +268,18 @@ export interface WebRTCCall {
   duration?: number;
 }
 
+// 访客补拉端点（§10 #1，GET /api/v1/sessions/:id/messages）单条消息 DTO：
+// id 为服务端单调数字游标（字符串承载），sender ∈ customer/agent/system/ai。
+export interface VisitorMessage {
+  id: string;
+  conversation_id: string;
+  sender: string;
+  kind: string;
+  content: string;
+  metadata?: Record<string, string>;
+  created_at: string;
+}
+
 // 客户侧推荐问题（P2-0）：首屏热门 / 会话内上下文联想。
 // question 即可直接作为 query 发起提问的可点击文案。
 export interface RecommendedQuestion {

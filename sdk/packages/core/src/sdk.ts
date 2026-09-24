@@ -23,6 +23,12 @@ import {
   NextQuestionsResult,
 } from './types';
 
+// 断线补拉参数（与 Android/iOS M3 刀 10 同构镜像）：页大小 100、最多 10 轮
+// （1000 条封顶，超过留给下次连接续拉）、指纹表容量 200。
+const RECONCILE_PAGE_LIMIT = 100;
+const RECONCILE_MAX_PAGES = 10;
+const RECONCILE_FINGERPRINT_CAPACITY = 200;
+
 export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientSession<Record<string, unknown>, ServifyEventMap> {
   private config: ServifyConfig;
   private api: ApiClient;
@@ -31,6 +37,14 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   private currentSession: ChatSession | null = null;
   private currentAgent: Agent | null = null;
   private messageQueue: Message[] = [];
+  // 断线补拉状态（D7 流程 3；§10 #1 端点消费；Android/iOS M3 刀 10 同构）：
+  // 游标仅由补拉结果推进（WS 帧无服务端消息 ID）；指纹表只由 WS 渲染积累，
+  // 补拉渲染由游标保护不入表——入表会让补拉大页把 WS 渲染指纹挤出容量窗口、
+  // 反破坏「游标确立前 WS 已渲染」的去重。
+  private reconcileCursor: number | null = null;
+  private reconcileFingerprints = new Set<string>();
+  private reconcileInFlight = false;
+  private reconcileQueued = false;
   private remoteAssistPeer: RTCPeerConnection | null = null;
   // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取）。
   private serverIceServers: ServifyRTCIceServer[] | null = null;
@@ -125,7 +139,12 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     });
 
     // 转发 WebSocket 事件
-    this.ws.on('connected', () => this.emit('connected'));
+    this.ws.on('connected', () => {
+      this.emit('connected');
+      // D7 流程 3：连接成功即对账断连窗口（首连也拉——固定 sessionId 接入时
+      // 回放会话既有历史；新 session 404/空页静默）。异步不阻塞帧消费。
+      void this.reconcileMissedMessages();
+    });
     this.ws.on('disconnected', (reason) => this.emit('disconnected', reason));
     this.ws.on('reconnecting', (attempt) => this.emit('reconnecting', attempt));
     this.ws.on('message', (message) => this.handleIncomingMessage(message));
@@ -560,7 +579,125 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   // 私有方法：处理收到的消息
   private handleIncomingMessage(message: Message): void {
     this.messageQueue.push(message);
+    // WS 渲染点积累补拉指纹（键 = 服务端 sender 原词 + content，与补拉结果
+    // 同键空间；sender_type/is_ai_response 反查与 WS 帧映射一一对应）。
+    const sender = message.sender_type === 'system'
+      ? (message.is_ai_response ? 'ai' : 'system')
+      : message.sender_type;
+    this.trackReconcileFingerprint(sender, message.content);
     this.emit('message', message);
+  }
+
+  /**
+   * 增量补拉（D7 流程 3；§10 #1 端点）：连接成功后对账断连窗口内错过的消息。
+   * 逐页 GET /api/v1/sessions/{id}/messages?after_id=<游标>（升序，has_more
+   * 续拉），结果以 'message' 事件发出——embedder 渲染面零改动；sender 映射
+   * 与 WS 帧口径同构（ai→system+is_ai_response，未知 sender 按 customer 回放）。
+   *
+   * 全失败面静默：会话行未建过（404，首连/未发过消息的常态）与 IO/HTTP 错误
+   * 都不影响 WS 使用，游标不动、下次连接重新对账。游标与服务端 ID 仅在此链内
+   * 自持；指纹命中只跳过渲染、游标照常推进（服务端落库事实已确认）。收尾不清
+   * 指纹表：对账在途期间到达的 WS 帧会被清表抹掉，随后的重连补拉即重复渲染
+   * （Android 侧实测可复现的竞态）；容量环形淘汰足够。
+   */
+  private async reconcileMissedMessages(): Promise<void> {
+    if (this.reconcileInFlight) {
+      // 重连风暴下的串行化：在途对账结束后补跑一次，游标保证不重复渲染。
+      this.reconcileQueued = true;
+      return;
+    }
+    this.reconcileInFlight = true;
+    try {
+      let rounds = 0;
+      while (rounds++ < RECONCILE_MAX_PAGES) {
+        const page = await this.api.getVisitorMessages(
+          this.resolveRealtimeSessionID(),
+          { afterId: this.reconcileCursor ?? undefined, limit: RECONCILE_PAGE_LIMIT },
+        );
+        if (!page.success || !page.data || !Array.isArray(page.data.messages)) {
+          return; // 404/HTTP/IO/畸形体全静默：不动游标，下次连接重新对账
+        }
+        for (const entry of page.data.messages) {
+          const parsed = this.parseVisitorMessage(entry);
+          if (!parsed) continue;
+          if (this.reconcileCursor === null || parsed.numericId > this.reconcileCursor) {
+            this.reconcileCursor = parsed.numericId;
+          }
+          const key = `${parsed.sender}|${parsed.content}`;
+          if (this.reconcileFingerprints.has(key)) continue;
+          this.emit('message', parsed.message);
+        }
+        if (page.data.has_more !== true) return;
+      }
+    } finally {
+      this.reconcileInFlight = false;
+      if (this.reconcileQueued) {
+        this.reconcileQueued = false;
+        void this.reconcileMissedMessages();
+      }
+    }
+  }
+
+  /**
+   * 单条补拉结果解析：id 非数字 / content、sender 形状非法即跳过（条目级防御，
+   * 与 Android/iOS 刀 10 镜像——游标契约只认数字单调 ID）。id 前缀 srv- 与
+   * WS 渲染的 ws- 本地 id 区分，embedder 可据此幂等去重。
+   */
+  private parseVisitorMessage(entry: unknown): {
+    numericId: number;
+    sender: string;
+    content: string;
+    message: Message;
+  } | null {
+    if (typeof entry !== 'object' || entry === null) {
+      return null;
+    }
+    const dto = entry as Record<string, unknown>;
+    const rawId = typeof dto.id === 'string' ? dto.id.trim() : '';
+    const numericId = Number.parseInt(rawId, 10);
+    if (rawId === '' || !Number.isSafeInteger(numericId)) {
+      return null;
+    }
+    if (typeof dto.content !== 'string' || typeof dto.sender !== 'string') {
+      return null;
+    }
+
+    const isAi = dto.sender === 'ai';
+    const senderType: Message['sender_type'] = isAi
+      ? 'system'
+      : dto.sender === 'agent'
+        ? 'agent'
+        : dto.sender === 'system'
+          ? 'system'
+          : 'customer';
+    return {
+      numericId,
+      sender: dto.sender,
+      content: dto.content,
+      message: {
+        id: `srv-${numericId}`,
+        session_id: typeof dto.conversation_id === 'string' || typeof dto.conversation_id === 'number'
+          ? dto.conversation_id
+          : this.resolveRealtimeSessionID(),
+        sender_type: senderType,
+        content: dto.content,
+        message_type: 'text',
+        is_ai_response: isAi,
+        created_at: typeof dto.created_at === 'string' ? dto.created_at : new Date().toISOString(),
+      },
+    };
+  }
+
+  /** 补拉指纹入表（容量环形淘汰，最旧先出）。 */
+  private trackReconcileFingerprint(sender: string, content: string): void {
+    this.reconcileFingerprints.add(`${sender}|${content}`);
+    while (this.reconcileFingerprints.size > RECONCILE_FINGERPRINT_CAPACITY) {
+      const oldest = this.reconcileFingerprints.values().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.reconcileFingerprints.delete(oldest);
+    }
   }
 
   private resolveRealtimeSessionID(): string {

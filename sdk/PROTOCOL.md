@@ -41,7 +41,7 @@
 | type | 载荷 `data` | 语义 |
 |---|---|---|
 | `text-message` | 同上行（服务端把原消息广播回同会话全部客户端） | 客户自己消息的回显；客户端按 `data.content` 与本地待渲染消息去重 |
-| `agent-message` | `{content: string, sender: string}`（`conversation_workspace_handler.go:146`） | 坐席发言。**注意：core 的 `WSMessage.type` 联合类型漏列此帧但运行时有 case（`websocket.ts:209`）——契约以运行时行为为准，类型声明缺口随 core 清理补齐** |
+| `agent-message` | `{content: string, sender: string}`（`conversation_workspace_handler.go:146`） | 坐席发言。core 类型联合与运行时 case 均已列此帧（契约三端对齐） |
 | `ai-response` | 必有 `{content: string, confidence: number, source: string}`；编排附加输出零值省略：`sources`（知识库命中数组，元素含 `document_id`/`title`/`content`/`score` 等）、`strategy`（产生方式，如 `llm`/`kp-<id>`）、`next_action`（`handoff` = 置信门建议转人工）、`handoff_reason`（如 `low_confidence`）（`websocket_hub.go` aiResponsePayload） | AI 首答终帧。增量流式时为拼接收口（见 4.2）；`next_action=handoff` 是建议元数据，转接仍由用户显式发起 |
 | `ai-response-delta` | `{content_delta: string, done: bool}` | 流式增量帧。契约三段：① 若干 `done=false` 增量即到即拼；② 终末增量 `content_delta=""` + `done=true`；③ 完整 `ai-response` 终帧（内容与拼接结果一致，整体替换是幂等收口）。**流中断语义**：终末增量已到但无 ai-response 终帧 = 本次回答失败——保留已渲染部分 + 提示重试，不自动重发 |
 
@@ -84,7 +84,7 @@ core `WSMessage.type` 联合（`types.ts:113-128`）声明了下表左列类型�
 ## 6. 客户端必须知道的边界语义
 
 1. **慢客户端强制断开**：服务端下行缓冲 256 帧，写满即 `close(client.Send)` 踢线（`websocket_hub.go:234-236`）——客户端必须及时消费下行；被踢后走重连。
-2. **无历史重发**：WS 断连期间服务端不缓存不重放；恢复后靠增量补拉对账（访客补拉端点 `GET /api/v1/sessions/:session_id/messages?after_id=` 见策划文档 §10 #1；移动 SDK 双端已随 M3 刀 10 在重连成功后自动对账；Web core（含基于它的 react/vue/vanilla）暂未接入——重连仅恢复连接，断连期间消息静默丢失为 Web SDK 现状边界（补拉端点已访客可达，接入属 core 清理面另行处理）。
+2. **无历史重发**：WS 断连期间服务端不缓存不重放；恢复后靠增量补拉对账（访客补拉端点 `GET /api/v1/sessions/:session_id/messages?after_id=` 见策划文档 §10 #1）。移动 SDK 双端（M3 刀 10）与 Web core（含 react/vue/vanilla，随 core 补拉刀）均已在连接成功后自动对账：connected 触发（首连也拉——固定 session_id 回放既有历史）、`after_id` 游标续拉、指纹表去重「游标确立前 WS 已渲染」窗口（补拉渲染不入表、收尾不清表）、404/IO/HTTP 全失败面静默。
 3. **服务端无应用层 ACK**：客户端发送 `text-message` 成功的判据是收到自己的回显帧；超时未收到 = 发送失败（本地标记 + 手动重发，对齐 Web 行为）。
 4. **JSON 解析失败静默丢弃**：服务端 readPump 对畸形帧 `continue`，无错误回执。
 
