@@ -140,10 +140,10 @@ migrate-verify:
 	tables=$$(docker exec servify-migrate-verify psql -U postgres -d servify -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'"); \
 	echo "schema_migrations: version=$$version dirty=$$dirty tables=$$tables"; \
 	docker rm -f servify-migrate-verify >/dev/null; \
-	if [ "$$version" != "12" ] || [ "$$dirty" != "f" ] || [ "$$tables" != "49" ]; then \
-		echo "migrate-verify FAILED: expected version=12 dirty=f tables=49"; exit 1; \
+	if [ "$$version" != "13" ] || [ "$$dirty" != "f" ] || [ "$$tables" != "49" ]; then \
+		echo "migrate-verify FAILED: expected version=13 dirty=f tables=49"; exit 1; \
 	fi
-	@echo "migrate-verify passed: version=12 dirty=false, 49 tables created, second run was a no-op"
+	@echo "migrate-verify passed: version=13 dirty=false, 49 tables created, second run was a no-op"
 
 # Clean build artifacts
 clean:
