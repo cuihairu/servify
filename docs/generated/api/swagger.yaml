@@ -1,4 +1,23 @@
 definitions:
+  application.ConversationMessageDTO:
+    properties:
+      content:
+        type: string
+      conversation_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      kind:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      sender:
+        type: string
+    type: object
   application.SLAComplianceTrend:
     properties:
       compliance_rate:
@@ -646,6 +665,15 @@ definitions:
         type: string
       tags:
         type: string
+    type: object
+  delivery.VisitorMessagesPage:
+    properties:
+      hasMore:
+        type: boolean
+      messages:
+        items:
+          $ref: '#/definitions/application.ConversationMessageDTO'
+        type: array
     type: object
   handlers.AddAnnotationRequest:
     type: object
@@ -5367,6 +5395,46 @@ paths:
       summary: 回写远程协助录制元数据（访客面）
       tags:
       - 远程协助
+  /api/v1/sessions/{session_id}/messages:
+    get:
+      description: 访客（免认证）按消息 ID 单调游标拉取晚于游标的会话消息（升序）；after_id 为空从会话头拉全量，has_more 为
+        true 时以末条消息 id 续拉
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: 游标：晚于此消息 ID 的增量；空=从会话头拉全量
+        in: query
+        name: after_id
+        type: string
+      - description: 单页上限（默认 50，最大 200）
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/delivery.VisitorMessagesPage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 访客增量拉取会话消息
+      tags:
+      - 会话
   /api/v1/tickets:
     post:
       consumes:

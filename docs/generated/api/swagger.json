@@ -5605,6 +5605,65 @@
                 }
             }
         },
+        "/api/v1/sessions/{session_id}/messages": {
+            "get": {
+                "description": "访客（免认证）按消息 ID 单调游标拉取晚于游标的会话消息（升序）；after_id 为空从会话头拉全量，has_more 为 true 时以末条消息 id 续拉",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "会话"
+                ],
+                "summary": "访客增量拉取会话消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "游标：晚于此消息 ID 的增量；空=从会话头拉全量",
+                        "name": "after_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "单页上限（默认 50，最大 200）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/delivery.VisitorMessagesPage"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tickets": {
             "post": {
                 "description": "访客（免认证）从会话页创建工单；按 session 归属租户 scope，携带 AI 会话摘要",
@@ -5659,6 +5718,35 @@
         }
     },
     "definitions": {
+        "application.ConversationMessageDTO": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "conversation_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "sender": {
+                    "type": "string"
+                }
+            }
+        },
         "application.SLAComplianceTrend": {
             "type": "object",
             "properties": {
@@ -6627,6 +6715,20 @@
                 },
                 "tags": {
                     "type": "string"
+                }
+            }
+        },
+        "delivery.VisitorMessagesPage": {
+            "type": "object",
+            "properties": {
+                "hasMore": {
+                    "type": "boolean"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.ConversationMessageDTO"
+                    }
                 }
             }
         },
