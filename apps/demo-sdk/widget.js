@@ -236,6 +236,7 @@
       if (!streaming) return;
       if (streaming.content) {
         streaming.bubble.textContent = streaming.content;
+        rememberContent(streaming.content);
         addMsg('system', '回答中断，请重试');
       } else {
         streaming.bubble.parentNode.parentNode.removeChild(streaming.bubble.parentNode);
@@ -243,10 +244,52 @@
       streaming = null;
     }
 
+    // ── 断线补拉（PROTOCOL §6 #2；对齐 core D7 增量补拉口径）──
+    // 访客端点 GET /api/v1/sessions/{id}/messages 免认证；connected 触发
+    // （首连也拉——sessionId 指向既有会话时回放历史）。WS 帧不带服务端
+    // 消息 id（回显是原帧广播），游标只能由补拉响应末条 id 推进；「WS 已
+    // 渲染」窗口靠内容指纹去重：渲染入口记账、补拉查账跳过。比 core 的
+    // 指纹表 + 200 容量窗口简化（演示壳无窗口管理诉求；同内容多消息在
+    // 补拉窗口内只显示首条）。404=会话行未建（首条消息前），失败全静默。
+    var reconcileCursor = null;
+    var seenContents = {};
+
+    function rememberContent(text) {
+      if (text) seenContents[text] = true;
+    }
+
+    function reconcileMessages() {
+      if (!sessionId || !root.fetch) return;
+      var url = baseUrl + '/api/v1/sessions/' + encodeURIComponent(sessionId) + '/messages' +
+        (reconcileCursor ? '?after_id=' + encodeURIComponent(reconcileCursor) : '');
+      root.fetch(url)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (page) {
+          if (!page || !page.messages || !page.messages.length) return;
+          var last = null;
+          page.messages.forEach(function (m) {
+            if (m && m.id) last = m.id;
+            var content = m && typeof m.content === 'string' ? m.content : '';
+            if (!content || seenContents[content]) return;
+            seenContents[content] = true;
+            var role = m.sender === 'system' ? 'system' : (m.sender === 'customer' ? 'user' : 'bot');
+            addMsg(role, content);
+          });
+          if (page.has_more && last) {
+            reconcileCursor = last;
+            reconcileMessages();
+          } else if (last) {
+            reconcileCursor = last;
+          }
+        })
+        .catch(function () { /* 静默：网络/HTTP 失败绝不破坏 WS 主链路 */ });
+    }
+
     function sendMsg() {
       var text = input.value.trim();
       if (!text) return;
       addMsg('user', text);
+      rememberContent(text);
       input.value = '';
       client.send(text);
       refreshSuggests(text);
@@ -314,6 +357,7 @@
       var label = { connecting: '连接中...', connected: '已连接', disconnected: '连接断开', error: '连接失败' };
       headerStatus.textContent = label[s] || s;
       if (s === 'connected') {
+        reconcileMessages();
         input.placeholder = '输入消息...';
       } else {
         input.placeholder = s === 'connecting' ? '正在连接...' : '未连接';
@@ -333,6 +377,7 @@
           finalText = data;
         }
         if (finalText) {
+          rememberContent(finalText);
           if (streaming) {
             streaming.bubble.textContent = finalText;
             streaming = null;
@@ -351,12 +396,14 @@
 
       // 转人工通知（PROTOCOL §4.2）：坐席接入（含等待队列派发）——居中提示条
       if (msg.type === 'transfer_notification' && msg.data && typeof msg.data === 'object' && msg.data.message) {
+        rememberContent(msg.data.message);
         addMsg('system', msg.data.message);
         return;
       }
 
       // 排队通知（PROTOCOL §4.2）：已入等待队列——同上
       if (msg.type === 'waiting_notification' && msg.data && typeof msg.data === 'object' && msg.data.message) {
+        rememberContent(msg.data.message);
         addMsg('system', msg.data.message);
         return;
       }
@@ -381,6 +428,7 @@
 
       // 坐席发言（PROTOCOL §4.1）：真实聊天气泡
       if (msg.type === 'agent-message' && msg.data && typeof msg.data === 'object' && msg.data.content) {
+        rememberContent(msg.data.content);
         addMsg('bot', msg.data.content);
         return;
       }
