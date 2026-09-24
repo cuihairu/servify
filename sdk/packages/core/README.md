@@ -34,6 +34,7 @@ const sdk = createWebServifySDK({
 - `sendMessage()` sends `text-message` frames over WebSocket
 - Session history and lifecycle helpers use `/api/omni/sessions/*`
 - Reconnect reconcile: after every successful WebSocket connect (first connect included), the SDK pulls `GET /api/v1/sessions/{session_id}/messages?after_id=` (the visitor-only endpoint) and re-emits messages missed while disconnected as regular `message` events — pagination via `after_id` cursor + `has_more`, dedup of the pre-cursor WS window via a fingerprint table, and silence on all failures (404 = session row not created yet, IO/HTTP errors never break the WS flow). `/api/omni/sessions/*` history helpers remain admin-surface utilities (unreachable for visitors)
+- AI streaming: `ai-response-delta` frames assemble into `ai-stream:delta` events (content = running total; upsert the bubble by `id`) plus one `ai-stream:end` — `interrupted: false` after the final `ai-response` `message` (drop the bubble, the final frame supersedes), `true` on disconnect mid-stream (keep the partial content and prompt a retry; no timeout — same semantics as the mobile SDKs). Streaming never emits `message` events, so the reconcile fingerprint table stays untouched; not subscribing is safe (final frames render as before)
 - AI uses `/api/v1/ai/query` and `/api/v1/ai/status`
 - Upload uses `/api/v1/upload`
 - Satisfaction submission uses `/api/satisfactions`

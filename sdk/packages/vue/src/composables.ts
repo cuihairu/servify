@@ -8,7 +8,33 @@ import {
   RemoteAssistStartOptions,
   RemoteAssistState,
   ServifyRTCTrackEvent,
+  AiStreamDeltaUpdate,
+  AiStreamEndUpdate,
 } from '@servify/core';
+
+// 流式气泡的伪 Message：ai-stream:delta 按 id upsert（内容为累计全量），
+// end(interrupted=false) 移除让位终帧、true 定格内容并追加重试提示行。
+function upsertMessage(list: Message[], next: Message): void {
+  const index = list.findIndex((m) => m.id === next.id);
+  if (index === -1) {
+    list.push(next);
+  } else {
+    list[index] = next;
+  }
+}
+
+function streamBubble(id: string, content: string): Message {
+  return {
+    id,
+    session_id: '',
+    sender_type: 'system',
+    content,
+    message_type: 'text',
+    is_ai_response: true,
+    metadata: {},
+    created_at: new Date().toISOString(),
+  };
+}
 
 export function useChat() {
   const sdk = useServify();
@@ -117,6 +143,30 @@ export function useChat() {
     error.value = errorEvent;
   };
 
+  const handleStreamDelta = (update: AiStreamDeltaUpdate) => {
+    upsertMessage(messages.value, streamBubble(update.id, update.content));
+  };
+
+  const handleStreamEnd = (update: AiStreamEndUpdate) => {
+    if (!update.interrupted) {
+      // ai-response 终帧 message 已先入列，流式气泡让位
+      messages.value = messages.value.filter((m) => m.id !== update.id);
+      return;
+    }
+    // 流中断：气泡定格部分内容 + 重试提示行（对齐 Android D8；协议无此帧，SDK 自造 UI 行）
+    upsertMessage(messages.value, streamBubble(update.id, update.content ?? ''));
+    upsertMessage(messages.value, {
+      id: `${update.id}-hint`,
+      session_id: '',
+      sender_type: 'system',
+      content: '回答中断，请重试',
+      message_type: 'text',
+      is_ai_response: false,
+      metadata: {},
+      created_at: new Date().toISOString(),
+    });
+  };
+
   // 生命周期
   onMounted(() => {
     // 注册事件监听器
@@ -124,6 +174,8 @@ export function useChat() {
     sdk.on('session_created', handleSessionCreated);
     sdk.on('session_ended', handleSessionEnded);
     sdk.on('error', handleError);
+    sdk.on('ai-stream:delta', handleStreamDelta);
+    sdk.on('ai-stream:end', handleStreamEnd);
 
     // 获取当前状态
     session.value = sdk.getSession();
@@ -136,6 +188,8 @@ export function useChat() {
     sdk.off('session_created', handleSessionCreated);
     sdk.off('session_ended', handleSessionEnded);
     sdk.off('error', handleError);
+    sdk.off('ai-stream:delta', handleStreamDelta);
+    sdk.off('ai-stream:end', handleStreamEnd);
   });
 
   return {

@@ -11,7 +11,7 @@ import type { Message } from './types';
  *
  * Android/iOS 探针消费同一套样例（M0 验收①"双端同一套样例断言一致"）；
  * 端级偏差在样例 expectations 内显式声明（如 webrtc 帧两端分叉），
- * core 已知缺口（ai-response-delta / transfer_notification / waiting_notification
+ * core 已知缺口（transfer_notification / waiting_notification
  * 当前无 case 落 default 忽略）在对应用例内显式断言，见 PROTOCOL.md §4/§5。
  */
 
@@ -173,38 +173,65 @@ describe('protocol fixtures replay (core)', () => {
     }
   });
 
-  it('replays the complete delta stream: deltas are ignored (known core gap) and the final frame carries the full content', async () => {
-    // core 当前无 ai-response-delta case（PROTOCOL.md §4.1 delta 三段契约中的
-    // 增量段对 core 是 default 忽略——向后兼容语义，Web 端流式渲染待 core 清理刀补齐）。
-    // 契约断言收敛在终帧：拼接结果与 ai-response 终帧内容一致。
+  it('replays the complete delta stream: deltas assemble into ai-stream:delta updates, the final frame supersedes', async () => {
+    // 三段契约（PROTOCOL.md §4.1）：① 增量即到即拼（ai-stream:delta content 为
+    // 累计全量）；② 终末增量只做标记不发事件；③ ai-response 终帧照常走 message
+    // （幂等收口），随发 ai-stream:end(interrupted=false) 让 UI 移除流式气泡。
     const fixture = fixtures.find((f) => f.expectations.kind === 'ai-stream-complete')!;
     const { manager, socket } = await connectManager();
     const messages: Message[] = [];
+    const deltas: Array<{ id: string; content: string }> = [];
+    const ends: Array<{ id: string; interrupted: boolean }> = [];
     manager.on('message', (m) => messages.push(m));
+    manager.on('ai-stream:delta', (u) => deltas.push(u));
+    manager.on('ai-stream:end', (u) => ends.push(u));
 
     for (const frame of fixture.frames!) {
       socket.feed(frame);
     }
 
+    // 增量段：content_parts 逐条累计（同 id 稳定，UI upsert）
+    const parts = fixture.expectations.assert.content_parts as string[];
+    expect(deltas).toHaveLength(parts.length);
+    expect(new Set(deltas.map((d) => d.id)).size).toBe(1);
+    parts.forEach((_, i) => {
+      expect(deltas[i].content).toBe(parts.slice(0, i + 1).join(''));
+    });
+    // 终末增量（content_delta="" + done=true）不产生事件
+    // 终帧：message 幂等收口 + end(interrupted=false)
     expect(messages).toHaveLength(1);
     expect(messages[0].content).toBe(fixture.expectations.assert.final_content);
     expect(messages[0].is_ai_response).toBe(true);
+    expect(ends).toEqual([{ id: deltas[0].id, interrupted: false }]);
   });
 
-  it('replays the interrupted stream: core receives no fallback message and does not fabricate one', async () => {
-    // 流中断语义（PROTOCOL.md §4.1）：终末增量已到但无 ai-response 终帧 = 本次回答失败。
-    // core 当前不消费 delta 帧，自然不会补发终帧——断言零 message。
+  it('replays the interrupted stream: partial content is kept on disconnect close, no fabricated final', async () => {
+    // 流中断语义（PROTOCOL.md §4.1）：终末增量已到但无 ai-response 终帧 = 本次
+    // 回答失败。core 无超时器（对齐 Android 门面），中断在断连时收口——
+    // ai-stream:end(interrupted=true) 携带部分内容，UI 保留气泡并提示重试。
     const fixture = fixtures.find((f) => f.expectations.kind === 'ai-stream-interrupted')!;
     const { manager, socket } = await connectManager();
     const messages: Message[] = [];
+    const deltas: Array<{ id: string; content: string }> = [];
+    const ends: Array<{ id: string; interrupted: boolean; content?: string }> = [];
     manager.on('message', (m) => messages.push(m));
+    manager.on('ai-stream:delta', (u) => deltas.push(u));
+    manager.on('ai-stream:end', (u) => ends.push(u));
 
     for (const frame of fixture.frames!) {
       socket.feed(frame);
     }
 
+    // 流式期：增量即到即拼，终末增量无事件，不 fabricate 终帧
+    const parts = fixture.expectations.assert.content_parts as string[];
+    expect(deltas).toHaveLength(parts.length);
+    expect(deltas[deltas.length - 1].content).toBe(parts.join(''));
     expect(messages).toHaveLength(0);
-    expect(fixture.expectations.assert.no_final_frame).toBe(true);
+    expect(ends).toHaveLength(0);
+
+    // 断连收口：end(interrupted=true) 保留部分内容
+    socket.close();
+    expect(ends).toEqual([{ id: deltas[0].id, interrupted: true, content: parts.join('') }]);
   });
 
   it('replays transfer and waiting notifications: core ignores both (known gap), documented not fabricated', async () => {

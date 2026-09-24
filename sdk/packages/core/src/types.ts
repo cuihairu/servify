@@ -117,6 +117,7 @@ export interface WSMessage {
     | 'text-message'
     | 'agent-message'
     | 'ai-response'
+    | 'ai-response-delta'
     | 'webrtc-offer'
     | 'webrtc-answer'
     | 'webrtc-candidate'
@@ -125,6 +126,19 @@ export interface WSMessage {
   data: unknown;
   session_id?: string;
   timestamp?: string;
+}
+
+/** 流式气泡的增量更新（ai-stream:delta 负载）：content 为累计全量，UI 按 id upsert。 */
+export interface AiStreamDeltaUpdate {
+  id: string;
+  content: string;
+}
+
+/** 流收口事件（ai-stream:end 负载）：interrupted=false 时 ai-response 终帧 message 已先期 emit，UI 应移除流式气泡让位终帧（content 省略）；true 时流中断（断连收口），content=保留的部分内容，UI 保留气泡并提示重试。 */
+export interface AiStreamEndUpdate {
+  id: string;
+  interrupted: boolean;
+  content?: string;
 }
 
 export interface RemoteAssistConfig {
@@ -232,6 +246,8 @@ export type ServifyEventMap = {
   'webrtc:track': [event: ServifyRTCTrackEvent];
   'webrtc:state': [state: RemoteAssistState];
   'webrtc:ice-config': [iceServers: ServifyRTCIceServer[]];
+  'ai-stream:delta': [update: AiStreamDeltaUpdate];
+  'ai-stream:end': [update: AiStreamEndUpdate];
   'remote-assist:session': [assistId: string];
   'remote-assist:recording': [state: RemoteAssistRecordingState];
 };

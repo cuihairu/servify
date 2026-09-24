@@ -7,7 +7,8 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer } from './types';
+import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer, AiStreamDeltaUpdate, AiStreamEndUpdate } from './types';
+import { StreamingAssembler } from './streaming';
 
 export interface WebSocketManagerOptions {
   url: string;
@@ -46,6 +47,8 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   private reconnectTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
   private subscribers = new Set<(message: WSMessage) => void>();
+  /** ai-response-delta 三段流式契约的拼接状态（断连时在 onclose 单点收口）。 */
+  private assembler = new StreamingAssembler();
   readonly kind = 'websocket';
   state: TransportState = 'idle';
 
@@ -108,6 +111,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
 
       this.ws.onclose = (event) => {
         this.log('WebSocket 连接关闭:', event.code, event.reason);
+        this.closeStreamOnDisconnect();
         this.state = this.isManualClose ? 'closed' : 'idle';
         this.emit('disconnected', event.reason || '连接关闭');
 
@@ -204,6 +208,10 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
         break;
       case 'ai-response':
         this.emit('message', this.normalizeMessage(message, 'system', true));
+        this.closeStreamOnFinal();
+        break;
+      case 'ai-response-delta':
+        this.handleStreamDelta(message.data);
         break;
       case 'webrtc-offer':
         this.emit('webrtc:offer', message.data as RTCSessionDescriptionInit);
@@ -319,6 +327,45 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       retryable: false,
       details: { url: this.options.url },
     });
+  }
+
+  /**
+   * ai-response-delta 增量帧：畸形负载静默忽略；内容增量发 ai-stream:delta
+   * （content 为累计全量，UI 按 id upsert）；终末增量只做标记不发事件。
+   */
+  private handleStreamDelta(data: unknown): void {
+    if (typeof data !== 'object' || data === null) {
+      return;
+    }
+    const { content_delta, done } = data as Record<string, unknown>;
+    if (typeof content_delta !== 'string' || typeof done !== 'boolean') {
+      return;
+    }
+    const outcome = this.assembler.onDelta(content_delta, done);
+    if (outcome === 'appended') {
+      const update: AiStreamDeltaUpdate = {
+        id: this.assembler.currentId ?? '',
+        content: this.assembler.content,
+      };
+      this.emit('ai-stream:delta', update);
+    }
+  }
+
+  /** 终帧收口：先发终帧 message（调用方已完成）再发 ai-stream:end 让 UI 移除流式气泡。 */
+  private closeStreamOnFinal(): void {
+    const ended = this.assembler.closeOnFinal();
+    if (ended) {
+      this.emit('ai-stream:end', { id: ended.id, interrupted: false });
+    }
+  }
+
+  /** 断连收口（onclose 单点，主动 close 与异常断连都经此）：中断流通知 UI 保留部分内容。 */
+  private closeStreamOnDisconnect(): void {
+    const ended = this.assembler.closeOnDisconnect();
+    if (ended) {
+      const update: AiStreamEndUpdate = { id: ended.id, interrupted: true, content: ended.content };
+      this.emit('ai-stream:end', update);
+    }
   }
 
   private normalizeMessage(message: WSMessage, senderType: Message['sender_type'], isAIResponse = false): Message {

@@ -1,6 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useServify } from './ServifyProvider';
-import { ChatSession, Message, Agent } from '@servify/core';
+import { ChatSession, Message, Agent, AiStreamDeltaUpdate, AiStreamEndUpdate } from '@servify/core';
+
+// 流式气泡的伪 Message：ai-stream:delta 按 id upsert（内容为累计全量），
+// end(interrupted=false) 移除让位终帧、true 定格内容并追加重试提示行。
+function upsertMessage(prev: Message[], next: Message): Message[] {
+  const index = prev.findIndex((m) => m.id === next.id);
+  if (index === -1) return [...prev, next];
+  const copy = [...prev];
+  copy[index] = next;
+  return copy;
+}
+
+function removeMessage(prev: Message[], id: string): Message[] {
+  return prev.filter((m) => m.id !== id);
+}
+
+function streamBubble(id: string, content: string): Message {
+  return {
+    id,
+    session_id: '',
+    sender_type: 'system',
+    content,
+    message_type: 'text',
+    is_ai_response: true,
+    metadata: {},
+    created_at: new Date().toISOString(),
+  };
+}
 
 export interface UseChatReturn {
   // 状态
@@ -148,11 +175,39 @@ export function useChat(): UseChatReturn {
       setError(error);
     };
 
+    const handleStreamDelta = (update: AiStreamDeltaUpdate) => {
+      setMessages(prev => upsertMessage(prev, streamBubble(update.id, update.content)));
+    };
+
+    const handleStreamEnd = (update: AiStreamEndUpdate) => {
+      setMessages(prev => {
+        if (!update.interrupted) {
+          // ai-response 终帧 message 已先入列，流式气泡让位
+          return removeMessage(prev, update.id);
+        }
+        // 流中断：气泡定格部分内容 + 重试提示行（对齐 Android D8；协议无此帧，SDK 自造 UI 行）
+        let next = upsertMessage(prev, streamBubble(update.id, update.content ?? ''));
+        next = upsertMessage(next, {
+          id: `${update.id}-hint`,
+          session_id: '',
+          sender_type: 'system',
+          content: '回答中断，请重试',
+          message_type: 'text',
+          is_ai_response: false,
+          metadata: {},
+          created_at: new Date().toISOString(),
+        });
+        return next;
+      });
+    };
+
     // 注册事件监听器
     sdk.on('message', handleMessage);
     sdk.on('session_created', handleSessionCreated);
     sdk.on('session_ended', handleSessionEnded);
     sdk.on('error', handleError);
+    sdk.on('ai-stream:delta', handleStreamDelta);
+    sdk.on('ai-stream:end', handleStreamEnd);
 
     // 获取当前状态
     setSession(sdk.getSession());
@@ -164,6 +219,8 @@ export function useChat(): UseChatReturn {
       sdk.off('session_created', handleSessionCreated);
       sdk.off('session_ended', handleSessionEnded);
       sdk.off('error', handleError);
+      sdk.off('ai-stream:delta', handleStreamDelta);
+      sdk.off('ai-stream:end', handleStreamEnd);
     };
   }, [sdk]);
 

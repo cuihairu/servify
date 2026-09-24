@@ -43,7 +43,7 @@
 | `text-message` | 同上行（服务端把原消息广播回同会话全部客户端） | 客户自己消息的回显；客户端按 `data.content` 与本地待渲染消息去重 |
 | `agent-message` | `{content: string, sender: string}`（`conversation_workspace_handler.go:146`） | 坐席发言。core 类型联合与运行时 case 均已列此帧（契约三端对齐） |
 | `ai-response` | 必有 `{content: string, confidence: number, source: string}`；编排附加输出零值省略：`sources`（知识库命中数组，元素含 `document_id`/`title`/`content`/`score` 等）、`strategy`（产生方式，如 `llm`/`kp-<id>`）、`next_action`（`handoff` = 置信门建议转人工）、`handoff_reason`（如 `low_confidence`）（`websocket_hub.go` aiResponsePayload） | AI 首答终帧。增量流式时为拼接收口（见 4.2）；`next_action=handoff` 是建议元数据，转接仍由用户显式发起 |
-| `ai-response-delta` | `{content_delta: string, done: bool}` | 流式增量帧。契约三段：① 若干 `done=false` 增量即到即拼；② 终末增量 `content_delta=""` + `done=true`；③ 完整 `ai-response` 终帧（内容与拼接结果一致，整体替换是幂等收口）。**流中断语义**：终末增量已到但无 ai-response 终帧 = 本次回答失败——保留已渲染部分 + 提示重试，不自动重发 |
+| `ai-response-delta` | `{content_delta: string, done: bool}` | 流式增量帧。契约三段：① 若干 `done=false` 增量即到即拼；② 终末增量 `content_delta=""` + `done=true`；③ 完整 `ai-response` 终帧（内容与拼接结果一致，整体替换是幂等收口）。**流中断语义**：终末增量已到但无 ai-response 终帧 = 本次回答失败——保留已渲染部分 + 提示重试，不自动重发。**core 消费形态（随流式刀接入，三端闭环）**：增量经独立事件 `ai-stream:delta`（content 为累计全量，UI 按 id upsert 气泡）/ `ai-stream:end`（interrupted=false 移除气泡让位终帧、true 保留部分内容并提示重试）透出，不走 `message` 事件——避免稀释"完整消息"语义并隔离补拉指纹表；中断收口只在断连时（无超时器，与 Android 同口径） |
 
 ### 4.2 转人工通知类（routing 模块，`handler_adapter.go:504-522`）
 

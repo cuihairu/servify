@@ -43,6 +43,8 @@ export class VanillaServifySDK {
     this.sdk.on('connected', () => this.triggerCallback('connected'));
     this.sdk.on('disconnected', (reason) => this.triggerCallback('disconnected', reason));
     this.sdk.on('message', (message) => this.triggerCallback('message', message));
+    this.sdk.on('ai-stream:delta', (update) => this.triggerCallback('ai-stream:delta', update));
+    this.sdk.on('ai-stream:end', (update) => this.triggerCallback('ai-stream:end', update));
     this.sdk.on('session_created', (session) => this.triggerCallback('sessionCreated', session));
     this.sdk.on('session_ended', (session) => this.triggerCallback('sessionEnded', session));
     this.sdk.on('error', (error) => this.triggerCallback('error', error));
