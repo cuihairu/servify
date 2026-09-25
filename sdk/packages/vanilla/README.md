@@ -26,3 +26,10 @@ Forwarded events:
 - `webrtc:candidate`
 - `webrtc:track`
 - `webrtc:state`
+
+## Streaming & Human Handoff
+
+The vanilla surface also forwards the core Web SDK streaming and handoff event surfaces:
+
+- `ai-stream:delta` / `ai-stream:end` — AI streaming contract (see `sdk/PROTOCOL.md` §4.1)
+- `transfer:assigned` (`{agentId, message}`) / `transfer:waiting` (`{message}`) — human-handoff state-stream events mirroring the mobile `agentAssigned`/`waitingInQueue` flows; pure events, they never render `message` rows

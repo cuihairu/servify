@@ -7,6 +7,8 @@ const ChatDemo: React.FC = () => {
     session,
     messages,
     agent,
+    agentAssigned,
+    waitingInQueue,
     isLoading,
     error,
     startChat,
@@ -171,6 +173,15 @@ const ChatDemo: React.FC = () => {
           This example uses the current WebSocket-first chat flow. Session history still reads from
           <code>/api/omni/sessions/:id/messages</code>.
         </div>
+
+        {waitingInQueue && (
+          <div className="message system">Waiting in queue: {waitingInQueue.message}</div>
+        )}
+        {agentAssigned && (
+          <div className="message system">
+            Agent #{agentAssigned.agentId} assigned: {agentAssigned.message}
+          </div>
+        )}
 
         {messages.map((message) => (
           <div key={String(message.id)} className={`message ${message.sender_type}`}>

@@ -131,12 +131,6 @@
         .file-input {
             display: none;
         }
-        .typing-indicator {
-            font-style: italic;
-            color: #666;
-            padding: 10px;
-            text-align: center;
-        }
         .assist-panel {
             margin-top: 16px;
             padding: 16px;
@@ -207,10 +201,6 @@
             </div>
         </div>
 
-        <div id="typing-indicator" class="typing-indicator" style="display: none;">
-            Agent is typing...
-        </div>
-
         <div class="controls">
             <div class="input-group">
                 <input type="text" id="message-input" placeholder="Type a message for the realtime channel..." maxlength="1000">
@@ -265,7 +255,6 @@
         const statusText = document.getElementById('status-text');
         const agentInfo = document.getElementById('agent-info');
         const agentName = document.getElementById('agent-name');
-        const typingIndicator = document.getElementById('typing-indicator');
         const fileInput = document.getElementById('file-input');
         const startBtn = document.getElementById('start-btn');
         const endBtn = document.getElementById('end-btn');
@@ -316,14 +305,37 @@
             agentInfo.style.display = 'none';
         });
 
-        servify.on('agentAssigned', (agent) => {
-            agentName.textContent = agent.name;
+        servify.on('transfer:assigned', (update) => {
+            agentName.textContent = `#${update.agentId}`;
             agentInfo.style.display = 'block';
-            addMessage('system', `Agent ${agent.name} joined the conversation.`);
+            addMessage('system', update.message);
         });
 
-        servify.on('agentTyping', (isTyping) => {
-            typingIndicator.style.display = isTyping ? 'block' : 'none';
+        servify.on('transfer:waiting', (update) => {
+            addMessage('system', update.message);
+        });
+
+        // AI 流式回复（PROTOCOL §4.1）：按 id upsert 单个气泡；ai-response 终帧经
+        // message 事件接管渲染，此处流式气泡在 ai-stream:end 后移除让位。
+        const streamBubbles = {};
+        servify.on('ai-stream:delta', (update) => {
+            let bubble = streamBubbles[update.id];
+            if (!bubble) {
+                bubble = addMessage('system', '');
+                streamBubbles[update.id] = bubble;
+            }
+            bubble.textContent = update.content + '▌';
+        });
+
+        servify.on('ai-stream:end', (update) => {
+            const bubble = streamBubbles[update.id];
+            if (!bubble) return;
+            delete streamBubbles[update.id];
+            if (update.interrupted) {
+                bubble.textContent = `${update.content} (interrupted, please retry)`;
+            } else {
+                bubble.remove();
+            }
         });
 
         servify.on('error', (error) => {
@@ -501,6 +513,7 @@
 
             chatArea.appendChild(messageDiv);
             chatArea.scrollTop = chatArea.scrollHeight;
+            return messageDiv;
         }
 
         messageInput.addEventListener('keypress', (event) => {

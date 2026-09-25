@@ -13,6 +13,8 @@ const {
   session,
   messages,
   agent,
+  agentAssigned,
+  waitingInQueue,
   isLoading,
   error,
   startChat,
@@ -166,6 +168,13 @@ async function handleFileChange(event: Event) {
       <div class="message system">
         This example uses the current WebSocket-first chat flow. Session history still reads from
         <code>/api/omni/sessions/:id/messages</code>.
+      </div>
+
+      <div v-if="waitingInQueue" class="message system">
+        Waiting in queue: {{ waitingInQueue.message }}
+      </div>
+      <div v-if="agentAssigned" class="message system">
+        Agent #{{ agentAssigned.agentId }} assigned: {{ agentAssigned.message }}
       </div>
 
       <div v-for="message in messages" :key="String(message.id)" class="message" :class="message.sender_type">

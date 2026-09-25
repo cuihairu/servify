@@ -16,6 +16,20 @@ npm install @servify/react-native
 remote_assist / voice 在协商层返回 `disabled` 拒绝(headless 不带
 屏幕共享与 WebRTC 语音面)。
 
+## 转人工与流式
+
+`useChat()` 暴露两个事件驱动状态(纯状态流,不渲染 `message` 行,
+对齐 core README 的 Human handoff 条目):
+
+- `agentAssigned: TransferAssignmentUpdate | null` — 由
+  `transfer:assigned` (`{agentId, message}`) 置位;指派同时清空
+  `waitingInQueue`(`waiting_human → agent_chatting` 转移)
+- `waitingInQueue: TransferWaitingUpdate | null` — 由
+  `transfer:waiting` (`{message}`) 置位
+
+两者在 `sessionEnded` / `endChat()` 时清空。AI 流式经 core
+`ai-stream:delta` / `ai-stream:end` 事件消费(见 `sdk/PROTOCOL.md` §4.1)。
+
 ## 快速开始
 
 ```tsx
