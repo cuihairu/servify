@@ -76,3 +76,11 @@ uploads/
 apps/server/uploads/
 internal/handlers/uploads/
 apps/website/.wrangler/cache/
+
+# swag 散落 byproduct（正主在 docs/generated/api/，勿提交）
+/docs/docs.go
+/docs/swagger.json
+/docs/swagger.yaml
+
+# 探针产物（时间戳漂移，勿提交）
+/scripts/test-results/mobile-probe/manifest.json
