@@ -44,6 +44,11 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   private reconcileFingerprints = new Set<string>();
   private reconcileInFlight = false;
   private reconcileQueued = false;
+  // 未读数（§4.3 unreadCount 语义；Android/iOS 同构）：面板不可见时到达的坐席/AI
+  // 内容 +1，可见时清零。customer 回显、system 提示（transfer/waiting 通知与
+  // SDK 自造行）、流式 delta 不计（终帧才计）。
+  private sessionVisible = false;
+  private unreadCountValue = 0;
   private remoteAssistPeer: RTCPeerConnection | null = null;
   // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取）。
   private serverIceServers: ServifyRTCIceServer[] | null = null;
@@ -599,7 +604,37 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       ? (message.is_ai_response ? 'ai' : 'system')
       : message.sender_type;
     this.trackReconcileFingerprint(sender, message.content);
+    if (sender === 'agent' || sender === 'ai') this.bumpUnreadIfHidden();
     this.emit('message', message);
+  }
+
+  // ── 未读数（§4.3；Android onSessionVisible/Hidden 同构）──
+
+  /** 当前未读数快照。 */
+  get unreadCount(): number {
+    return this.unreadCountValue;
+  }
+
+  /** 会话页可见：清零未读（宿主在展示面板/页面时接线）。 */
+  markSessionVisible(): void {
+    this.sessionVisible = true;
+    this.setUnreadCount(0);
+  }
+
+  /** 会话页收起：连接保持，此后到达的坐席/AI 内容计入未读。 */
+  markSessionHidden(): void {
+    this.sessionVisible = false;
+  }
+
+  /** 面板不可见时 +1 并广播；可见时不动（渲染即消费）。 */
+  private bumpUnreadIfHidden(): void {
+    if (!this.sessionVisible) this.setUnreadCount(this.unreadCountValue + 1);
+  }
+
+  private setUnreadCount(count: number): void {
+    if (count === this.unreadCountValue) return;
+    this.unreadCountValue = count;
+    this.emit('unread-change', count);
   }
 
   /**
@@ -639,6 +674,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
           }
           const key = `${parsed.sender}|${parsed.content}`;
           if (this.reconcileFingerprints.has(key)) continue;
+          if (parsed.sender === 'agent' || parsed.sender === 'ai') this.bumpUnreadIfHidden();
           this.emit('message', parsed.message);
         }
         if (page.data.has_more !== true) return;

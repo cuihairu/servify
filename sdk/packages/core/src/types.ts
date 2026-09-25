@@ -268,6 +268,7 @@ export type ServifyEventMap = {
   'ai-stream:end': [update: AiStreamEndUpdate];
   'transfer:assigned': [update: TransferAssignmentUpdate];
   'transfer:waiting': [update: TransferWaitingUpdate];
+  'unread-change': [count: number];
   'remote-assist:session': [assistId: string];
   'remote-assist:recording': [state: RemoteAssistRecordingState];
 };
