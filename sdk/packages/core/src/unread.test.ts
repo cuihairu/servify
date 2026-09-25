@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ServifySDK } from './sdk';
-import type { Message, WebSocketFactory } from './types';
+import type { WebSocketFactory } from './types';
 
 /**
  * 未读数（§4.3 unreadCount 语义；Android/iOS 同构镜像）：面板不可见时到达的
@@ -71,6 +71,7 @@ describe('ServifySDK unread count (§4.3)', () => {
   }
 
   async function connectOpen(sdk: ServifySDK): Promise<FakeWebSocket> {
+    await sdk.initialize();
     const connectPromise = sdk.connect();
     await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
     const socket = FakeWebSocket.instances[0];

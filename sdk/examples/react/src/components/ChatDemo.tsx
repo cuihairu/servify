@@ -9,12 +9,14 @@ const ChatDemo: React.FC = () => {
     agent,
     agentAssigned,
     waitingInQueue,
+    unreadCount,
     isLoading,
     error,
     startChat,
     sendMessage,
     endChat,
     uploadFile,
+    markSessionVisible,
   } = useChat();
 
   const { askAI } = useAI();
@@ -39,6 +41,11 @@ const ChatDemo: React.FC = () => {
 
     remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream]);
+
+  // 示例页面即会话页：可见即清零未读（§4.3 unreadCount 接线演示）
+  useEffect(() => {
+    markSessionVisible();
+  }, [markSessionVisible]);
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !session) {
@@ -177,6 +184,7 @@ const ChatDemo: React.FC = () => {
         {waitingInQueue && (
           <div className="message system">Waiting in queue: {waitingInQueue.message}</div>
         )}
+        <div className="message system">Unread: {unreadCount}</div>
         {agentAssigned && (
           <div className="message system">
             Agent #{agentAssigned.agentId} assigned: {agentAssigned.message}

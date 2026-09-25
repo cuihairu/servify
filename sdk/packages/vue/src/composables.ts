@@ -48,6 +48,8 @@ export function useChat() {
   // 转人工通知（对齐移动端 agentAssigned/waitingInQueue），不渲染消息行
   const agentAssigned = ref<TransferAssignmentUpdate | null>(null);
   const waitingInQueue = ref<TransferWaitingUpdate | null>(null);
+  // 未读数（§4.3；面板不可见时到达的坐席/AI 内容，可见即清零）
+  const unreadCount = ref(0);
   const isLoading = ref(false);
   const error = ref<Error | null>(null);
 
@@ -93,6 +95,7 @@ export function useChat() {
       agent.value = null;
       agentAssigned.value = null;
       waitingInQueue.value = null;
+      unreadCount.value = 0;
     } catch (err) {
       error.value = err as Error;
       throw err;
@@ -146,6 +149,7 @@ export function useChat() {
     agent.value = null;
     agentAssigned.value = null;
     waitingInQueue.value = null;
+    unreadCount.value = 0;
   };
 
   const handleError = (errorEvent: Error) => {
@@ -186,6 +190,14 @@ export function useChat() {
     waitingInQueue.value = update;
   };
 
+  const handleUnreadChange = (count: number) => {
+    unreadCount.value = count;
+  };
+
+  // 会话页可见性接线（对齐移动端 onSessionVisible/Hidden）
+  const markSessionVisible = () => sdk.markSessionVisible();
+  const markSessionHidden = () => sdk.markSessionHidden();
+
   // 生命周期
   onMounted(() => {
     // 注册事件监听器
@@ -197,6 +209,7 @@ export function useChat() {
     sdk.on('ai-stream:end', handleStreamEnd);
     sdk.on('transfer:assigned', handleTransferAssigned);
     sdk.on('transfer:waiting', handleTransferWaiting);
+    sdk.on('unread-change', handleUnreadChange);
 
     // 获取当前状态
     session.value = sdk.getSession();
@@ -213,6 +226,7 @@ export function useChat() {
     sdk.off('ai-stream:end', handleStreamEnd);
     sdk.off('transfer:assigned', handleTransferAssigned);
     sdk.off('transfer:waiting', handleTransferWaiting);
+    sdk.off('unread-change', handleUnreadChange);
   });
 
   return {
@@ -222,6 +236,7 @@ export function useChat() {
     agent,
     agentAssigned,
     waitingInQueue,
+    unreadCount,
     isLoading,
     error,
 
@@ -229,6 +244,8 @@ export function useChat() {
     startChat,
     sendMessage,
     endChat,
+    markSessionVisible,
+    markSessionHidden,
     loadMessages,
     uploadFile,
   };

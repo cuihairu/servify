@@ -47,6 +47,7 @@ export class VanillaServifySDK {
     this.sdk.on('ai-stream:end', (update) => this.triggerCallback('ai-stream:end', update));
     this.sdk.on('transfer:assigned', (update) => this.triggerCallback('transfer:assigned', update));
     this.sdk.on('transfer:waiting', (update) => this.triggerCallback('transfer:waiting', update));
+    this.sdk.on('unread-change', (count) => this.triggerCallback('unread-change', count));
     this.sdk.on('session_created', (session) => this.triggerCallback('sessionCreated', session));
     this.sdk.on('session_ended', (session) => this.triggerCallback('sessionEnded', session));
     this.sdk.on('error', (error) => this.triggerCallback('error', error));
@@ -245,6 +246,24 @@ export class VanillaServifySDK {
    */
   isConnected(): boolean {
     return this.sdk.isConnected();
+  }
+
+  /**
+   * 当前未读数（§4.3；面板不可见时到达的坐席/AI 内容）
+   */
+  getUnreadCount(): number {
+    return this.sdk.unreadCount;
+  }
+
+  /**
+   * 会话页可见性接线（可见即清零未读；对齐移动端 onSessionVisible/Hidden）
+   */
+  markSessionVisible(): void {
+    this.sdk.markSessionVisible();
+  }
+
+  markSessionHidden(): void {
+    this.sdk.markSessionHidden();
   }
 
   /**

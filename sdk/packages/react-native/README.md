@@ -27,6 +27,11 @@ remote_assist / voice 在协商层返回 `disabled` 拒绝(headless 不带
 - `waitingInQueue: TransferWaitingUpdate | null` — 由
   `transfer:waiting` (`{message}`) 置位
 
+- `unreadCount: number` — 未读数（§4.3）:会话页隐藏（`markSessionHidden()`）时
+  到达的坐席/AI 内容 +1,`markSessionVisible()` 清零
+- `markSessionVisible()` / `markSessionHidden()` — 会话页可见性接线（对齐移动端
+  `onSessionVisible`/`onSessionHidden`）
+
 两者在 `sessionEnded` / `endChat()` 时清空。AI 流式经 core
 `ai-stream:delta` / `ai-stream:end` 事件消费(见 `sdk/PROTOCOL.md` §4.1)。
 

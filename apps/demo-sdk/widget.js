@@ -174,7 +174,10 @@
     panel.appendChild(msgs);
     panel.appendChild(suggests);
     panel.appendChild(inputArea);
+    var badge = el('div', 'sw-badge', '0');
+    badge.style.display = 'none';
     wrap.appendChild(btn);
+    wrap.appendChild(badge);
     wrap.appendChild(panel);
 
     // Inject styles
@@ -186,6 +189,22 @@
     }
 
     document.body.appendChild(wrap);
+
+    // ── 未读数（§4.3 口径；面板不可见时到达的坐席/AI 内容）──
+
+    var unread = 0;
+    function setUnread(n) {
+      unread = n;
+      if (n > 0) {
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    function bumpUnreadIfHidden() {
+      if (!panelOpen) setUnread(unread + 1);
+    }
 
     // ── Client ────────────────────────────────────────────────
 
@@ -199,6 +218,7 @@
       if (panelOpen) {
         panel.classList.add('open');
         btn.innerHTML = closeSvg;
+        setUnread(0);
         btn.style.borderRadius = '50%';
         input.focus();
         if (!connected) client.connect();
@@ -274,6 +294,7 @@
             seenContents[content] = true;
             var role = m.sender === 'system' ? 'system' : (m.sender === 'customer' ? 'user' : 'bot');
             addMsg(role, content);
+            if (role === 'bot') bumpUnreadIfHidden();
           });
           if (page.has_more && last) {
             reconcileCursor = last;
@@ -384,6 +405,7 @@
           } else {
             addMsg('bot', finalText);
           }
+          bumpUnreadIfHidden();
         }
         return;
       }
@@ -430,6 +452,7 @@
       if (msg.type === 'agent-message' && msg.data && typeof msg.data === 'object' && msg.data.content) {
         rememberContent(msg.data.content);
         addMsg('bot', msg.data.content);
+        bumpUnreadIfHidden();
         return;
       }
 
@@ -456,6 +479,7 @@
     return '\
 .servify-widget { position:fixed; right:24px; bottom:24px; z-index:99999; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-size:14px; }\
 .servify-widget * { box-sizing:border-box; }\
+.servify-widget .sw-badge { position:absolute; right:-2px; bottom:44px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:#e53e3e; color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.3); pointer-events:none; }\
 .servify-widget .sw-trigger { width:56px; height:56px; border-radius:50%; border:none; color:#fff; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; transition:transform .2s,box-shadow .2s; }\
 .servify-widget .sw-trigger:hover { transform:scale(1.1); box-shadow:0 6px 24px rgba(0,0,0,.3); }\
 .servify-widget .sw-panel { position:absolute; right:0; bottom:68px; width:380px; height:520px; background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,.15); display:none; flex-direction:column; overflow:hidden; }\

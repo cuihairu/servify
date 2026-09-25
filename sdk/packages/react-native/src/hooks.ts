@@ -36,11 +36,16 @@ export interface UseChatReturn {
   agentAssigned: TransferAssignmentUpdate | null;
   /** 最近一次排队通知（waiting_notification：已入等待队列），null = 未排队。 */
   waitingInQueue: TransferWaitingUpdate | null;
+  /** 未读数（§4.3；面板不可见时到达的坐席/AI 内容，可见即清零）。 */
+  unreadCount: number;
   isLoading: boolean;
   error: Error | null;
   startChat: (options?: { priority?: 'low' | 'normal' | 'high' | 'urgent'; message?: string }) => Promise<void>;
   sendMessage: (content: string, options?: { type?: 'text' | 'image' | 'file'; attachments?: string[] }) => Promise<void>;
   endChat: () => Promise<void>;
+  /** 会话页可见性接线（§4.3 unreadCount；对齐移动端 onSessionVisible/Hidden）。 */
+  markSessionVisible: () => void;
+  markSessionHidden: () => void;
 }
 
 export function useChat(): UseChatReturn {
@@ -50,8 +55,13 @@ export function useChat(): UseChatReturn {
   // 转人工通知（对齐移动端 agentAssigned/waitingInQueue），不渲染消息行
   const [agentAssigned, setAgentAssigned] = useState<TransferAssignmentUpdate | null>(null);
   const [waitingInQueue, setWaitingInQueue] = useState<TransferWaitingUpdate | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // 会话页可见性接线（§4.3 unreadCount；对齐移动端 onSessionVisible/Hidden）
+  const markSessionVisible = useCallback(() => sdk?.markSessionVisible(), [sdk]);
+  const markSessionHidden = useCallback(() => sdk?.markSessionHidden(), [sdk]);
 
   const startChat = useCallback(async (options?: {
     priority?: 'low' | 'normal' | 'high' | 'urgent';
@@ -136,6 +146,10 @@ export function useChat(): UseChatReturn {
     const handleTransferWaiting = (update: TransferWaitingUpdate) => {
       setWaitingInQueue(update);
     };
+
+    const handleUnreadChange = (count: number) => {
+      setUnreadCount(count);
+    };
     const handleError = (nextError: Error) => {
       setError(nextError);
     };
@@ -174,6 +188,7 @@ export function useChat(): UseChatReturn {
     sdk.on('ai-stream:end', handleStreamEnd);
     sdk.on('transfer:assigned', handleTransferAssigned);
     sdk.on('transfer:waiting', handleTransferWaiting);
+    sdk.on('unread-change', handleUnreadChange);
 
     return () => {
       sdk.off('message', handleMessage);
@@ -184,6 +199,7 @@ export function useChat(): UseChatReturn {
       sdk.off('ai-stream:end', handleStreamEnd);
       sdk.off('transfer:assigned', handleTransferAssigned);
       sdk.off('transfer:waiting', handleTransferWaiting);
+      sdk.off('unread-change', handleUnreadChange);
     };
   }, [sdk]);
 
@@ -192,11 +208,14 @@ export function useChat(): UseChatReturn {
     messages,
     agentAssigned,
     waitingInQueue,
+    unreadCount,
     isLoading,
     error,
     startChat,
     sendMessage,
     endChat,
+    markSessionVisible,
+    markSessionHidden,
   };
 }
 

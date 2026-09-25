@@ -16,6 +16,7 @@ Examples live in `sdk/examples/react`.
 
 - `agentAssigned: TransferAssignmentUpdate | null` — set by `transfer:assigned` (`{agentId, message}`); an assignment also clears `waitingInQueue` (the `waiting_human → agent_chatting` transition)
 - `waitingInQueue: TransferWaitingUpdate | null` — set by `transfer:waiting` (`{message}`)
+- `unreadCount: state<number>` — unread count (§4.3): incremented while the session page is hidden (`markSessionHidden()`), cleared by `markSessionVisible()`; agent/AI content only
 
 Both are pure state-stream surfaces: they never render `message` rows and are cleared on `sessionEnded` / `endChat()`. AI streaming is available through the core `ai-stream:delta` / `ai-stream:end` events (see `sdk/PROTOCOL.md` §4.1).
 

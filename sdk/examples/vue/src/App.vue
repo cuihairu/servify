@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import {
   useServifyReady,
   useChat,
@@ -15,15 +15,22 @@ const {
   agent,
   agentAssigned,
   waitingInQueue,
+  unreadCount,
   isLoading,
   error,
   startChat,
   sendMessage,
   endChat,
   uploadFile,
+  markSessionVisible,
 } = useChat();
 const { askAI } = useAI();
 const { submitRating } = useSatisfaction();
+
+// 示例页面即会话页：可见即清零未读（§4.3 unreadCount 接线演示）
+onMounted(() => {
+  markSessionVisible();
+});
 const {
   state: remoteAssistState,
   isActive: remoteAssistActive,
@@ -170,6 +177,7 @@ async function handleFileChange(event: Event) {
         <code>/api/omni/sessions/:id/messages</code>.
       </div>
 
+      <div class="message system">Unread: {{ unreadCount }}</div>
       <div v-if="waitingInQueue" class="message system">
         Waiting in queue: {{ waitingInQueue.message }}
       </div>
