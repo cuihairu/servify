@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ServifySDK } from './sdk';
+import { ServifyError } from './contracts/errors';
 import type { RemoteAssistRecordingState, ServifyRTCIceServer } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -521,5 +522,82 @@ describe('ServifySDK server ICE delivery', () => {
     expect(captured[0].iceServers).toEqual([{ urls: 'stun:pushed:3478' }]);
     expect(iceRequests).toBe(0);
     sdk.disconnect();
+  });
+});
+
+describe('ServifySDK sendMessage echo confirmation (PROTOCOL §6.3)', () => {
+  function createSendReadySDK(
+    impl: (message: unknown, expectedContent: string) => Promise<void>,
+  ): { sdk: ServifySDK; calls: string[] } {
+    const sdk = new ServifySDK({ apiUrl: 'http://localhost:8080', autoConnect: false, customerId: '1' });
+    // 测试聚焦 sendMessage 门面链路，直注已连接 fake 传输（同 ICE 测试手法）
+    const calls: string[] = [];
+    (sdk as AnyRecord).currentSession = { id: 'ws_e2e', status: 'active' };
+    (sdk as AnyRecord).ws = {
+      isConnected: () => true,
+      sendWithEchoConfirmation: async (message: unknown, expectedContent: string) => {
+        calls.push(expectedContent);
+        await impl(message, expectedContent);
+      },
+    };
+    return { sdk, calls };
+  }
+
+  it('resolves the local message once the echo confirmation succeeds', async () => {
+    const { sdk } = createSendReadySDK(async () => undefined);
+
+    const sent = await sdk.sendMessage('你好');
+
+    expect(sent.content).toBe('你好');
+    expect(sent.session_id).toBe('ws_e2e');
+    expect(sent.sender_type).toBe('customer');
+  });
+
+  it('propagates echo timeout as retryable transport_timeout (no fabricated success)', async () => {
+    const { sdk } = createSendReadySDK(async () => {
+      throw new ServifyError('No echo within 10000ms', { code: 'transport_timeout', retryable: true });
+    });
+
+    await expect(sdk.sendMessage('你好')).rejects.toMatchObject({
+      code: 'transport_timeout',
+      retryable: true,
+    });
+  });
+
+  it('serializes concurrent sends so at most one echo is pending at a time', async () => {
+    let releaseFirst: () => void = () => undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const { sdk, calls } = createSendReadySDK(async (_message, expected) => {
+      if (expected === '第一句') await firstGate;
+    });
+
+    const first = sdk.sendMessage('第一句');
+    const second = sdk.sendMessage('第二句');
+
+    // 第一条回显未到时，第二条不得进入发送（对齐移动端 sendMutex 串行）
+    await vi.waitFor(() => expect(calls).toEqual(['第一句']));
+    releaseFirst();
+    await Promise.all([first, second]);
+    expect(calls).toEqual(['第一句', '第二句']);
+  });
+
+  it('lets the next send proceed after a failed one (chain does not swallow)', async () => {
+    let failing = true;
+    const { sdk, calls } = createSendReadySDK(async () => {
+      if (failing) throw new ServifyError('No echo within 10000ms', { code: 'transport_timeout', retryable: true });
+    });
+
+    await expect(sdk.sendMessage('第一句')).rejects.toMatchObject({ code: 'transport_timeout' });
+    failing = false;
+    await sdk.sendMessage('第二句');
+    expect(calls).toEqual(['第一句', '第二句']);
+  });
+
+  it('throws when there is no active session', async () => {
+    const sdk = new ServifySDK({ apiUrl: 'http://localhost:8080', autoConnect: false, customerId: '1' });
+
+    await expect(sdk.sendMessage('你好')).rejects.toThrow('No active session');
   });
 });

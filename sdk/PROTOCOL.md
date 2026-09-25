@@ -85,7 +85,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 1. **慢客户端强制断开**：服务端下行缓冲 256 帧，写满即 `close(client.Send)` 踢线（`websocket_hub.go:234-236`）——客户端必须及时消费下行；被踢后走重连。
 2. **无历史重发**：WS 断连期间服务端不缓存不重放；恢复后靠增量补拉对账（访客补拉端点 `GET /api/v1/sessions/:session_id/messages?after_id=` 见策划文档 §10 #1）。移动 SDK 双端（M3 刀 10）与 Web core（含 react/vue/vanilla，随 core 补拉刀）均已在连接成功后自动对账：connected 触发（首连也拉——固定 session_id 回放既有历史）、`after_id` 游标续拉、指纹表去重「游标确立前 WS 已渲染」窗口（补拉渲染不入表、收尾不清表）、404/IO/HTTP 全失败面静默。
-3. **服务端无应用层 ACK**：客户端发送 `text-message` 成功的判据是收到自己的回显帧；超时未收到 = 发送失败（本地标记 + 手动重发，对齐 Web 行为）。
+3. **服务端无应用层 ACK**：客户端发送 `text-message` 成功的判据是收到自己的回显帧；超时未收到 = 发送失败（本地标记 + 手动重发）。移动双端以 `EchoGate`（内容匹配 + 10s 超时 + `sendMutex` 串行）实现并 emit retryable 的发送超时错误；Web core 同口径落位（`sendWithEchoConfirmation`：内容匹配闸 + `echoTimeoutMs` 默认 10s + promise 链串行，超时 reject retryable 的 `transport_timeout`——不本地伪造成功）；demo widget 展示壳仍 fire-and-forget（无错误面，不在此契约内）。
 4. **JSON 解析失败静默丢弃**：服务端 readPump 对畸形帧 `continue`，无错误回执。
 
 ## 7. 命名约定（冻结现状，不借机改名）

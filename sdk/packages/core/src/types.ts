@@ -26,6 +26,11 @@ export interface ServifyConfig {
    * 缺省 createWebCapabilitySet()。
    */
   capabilities?: CapabilitySet;
+  /**
+   * 回显判据超时（PROTOCOL §6.3）：text-message 发送后等待自己回显帧的上限，
+   * 超时 sendMessage reject retryable 的 transport_timeout。缺省 10s（对齐移动端）。
+   */
+  echoTimeoutMs?: number;
 }
 
 /** WebSocket 传输工厂：返回宿主平台的 WebSocket 实例（浏览器/RN 同形 API）。 */

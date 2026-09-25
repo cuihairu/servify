@@ -134,6 +134,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       authProvider: this.config.authProvider,
       onTokenRefreshRequired: this.config.onTokenRefreshRequired,
       webSocketFactory: this.config.webSocketFactory,
+      echoTimeoutMs: this.config.echoTimeoutMs,
       debug: this.config.debug,
     });
 
@@ -208,8 +209,25 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     return this.currentSession;
   }
 
-  // 发送消息
+  // 发送消息（PROTOCOL §6.3：成功判据=收到自己回显帧，超时 reject retryable 的
+  // transport_timeout）。sendChain 串行化并发调用——同一时刻至多一个未决发送
+  // （对齐移动端 sendMutex；回显按内容匹配，串行保证旧回显不误完成新发送）。
+  private sendChain: Promise<unknown> = Promise.resolve();
+
   async sendMessage(content: string, options?: {
+    type?: 'text' | 'image' | 'file';
+    attachments?: string[];
+    metadata?: Record<string, unknown>;
+  }): Promise<Message> {
+    const run = this.sendChain.then(() => this.doSendMessage(content, options));
+    this.sendChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private async doSendMessage(content: string, options?: {
     type?: 'text' | 'image' | 'file';
     attachments?: string[];
     metadata?: Record<string, unknown>;
@@ -234,15 +252,18 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       await this.connect();
     }
 
-    await this.ws?.send({
-      type: 'text-message',
-      data: {
-        content,
-        message_type: options?.type || 'text',
-        attachments: options?.attachments,
-        metadata: options?.metadata,
+    await this.ws?.sendWithEchoConfirmation(
+      {
+        type: 'text-message',
+        data: {
+          content,
+          message_type: options?.type || 'text',
+          attachments: options?.attachments,
+          metadata: options?.metadata,
+        },
       },
-    });
+      content,
+    );
 
     return messageData;
   }

@@ -247,3 +247,116 @@ describe('WebSocketManager ice-config', () => {
     expect(iceSpy.mock.calls[2][0]).toEqual([]);
   });
 });
+
+describe('WebSocketManager echo confirmation (PROTOCOL §6.3)', () => {
+  afterEach(() => {
+    FakeWebSocket.instances = [];
+    vi.unstubAllGlobals();
+  });
+
+  async function createConnectedManager(echoTimeoutMs?: number): Promise<{
+    manager: WebSocketManager;
+    ws: FakeWebSocket;
+  }> {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const manager = new WebSocketManager({
+      url: 'ws://localhost:8080/api/v1/ws',
+      ...(echoTimeoutMs !== undefined ? { echoTimeoutMs } : {}),
+    });
+    const connectPromise = manager.connect();
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    const ws = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    ws.open();
+    await connectPromise;
+    return { manager, ws };
+  }
+
+  function echoFrame(content: string): { data: string } {
+    return { data: JSON.stringify({ type: 'text-message', data: { content } }) };
+  }
+
+  it('completes the pending send when the echoed text-message arrives', async () => {
+    const { manager, ws } = await createConnectedManager();
+
+    const pending = manager.sendWithEchoConfirmation(
+      { type: 'text-message', data: { content: '你好' } },
+      '你好',
+    );
+
+    ws.onmessage?.(echoFrame('你好'));
+    await pending;
+  });
+
+  it('rejects with retryable transport_timeout when no echo arrives', async () => {
+    const { manager } = await createConnectedManager(25);
+
+    await expect(
+      manager.sendWithEchoConfirmation({ type: 'text-message', data: { content: '你好' } }, '你好'),
+    ).rejects.toMatchObject({
+      code: 'transport_timeout',
+      retryable: true,
+      name: 'ServifyError',
+    });
+  });
+
+  it('ignores echoes with different content (stale echo does not complete a new send)', async () => {
+    const { manager, ws } = await createConnectedManager(25);
+
+    const pending = manager.sendWithEchoConfirmation(
+      { type: 'text-message', data: { content: '第二句' } },
+      '第二句',
+    );
+
+    // 迟到的旧回显不解闸
+    ws.onmessage?.(echoFrame('第一句'));
+    await expect(pending).rejects.toMatchObject({ code: 'transport_timeout' });
+
+    // 超时清闸后，下一次发送照常确认
+    const next = manager.sendWithEchoConfirmation(
+      { type: 'text-message', data: { content: '第二句' } },
+      '第二句',
+    );
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    FakeWebSocket.instances[0].onmessage?.(echoFrame('第二句'));
+    await next;
+  });
+
+  it('clears the gate and rethrows when the underlying send fails', async () => {
+    const { manager } = await createConnectedManager();
+
+    await manager.disconnect();
+
+    await expect(
+      manager.sendWithEchoConfirmation({ type: 'text-message', data: { content: '你好' } }, '你好'),
+    ).rejects.toMatchObject({ code: 'transport_disconnected' });
+
+    // 发送失败已清闸：重连后旧内容回显不会误完成新发送
+    const reconnect = manager.connect();
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+    const ws2 = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    ws2.open();
+    await reconnect;
+
+    const next = manager.sendWithEchoConfirmation(
+      { type: 'text-message', data: { content: '你好' } },
+      '你好',
+    );
+    ws2.onmessage?.(echoFrame('你好'));
+    await next;
+  });
+
+  it('propagates a non-text-message frame without touching the gate', async () => {
+    const { manager, ws } = await createConnectedManager(25);
+
+    const pending = manager.sendWithEchoConfirmation(
+      { type: 'text-message', data: { content: '你好' } },
+      '你好',
+    );
+
+    // 无关帧（畸形 data / 非字符串 content）不炸不解闸
+    ws.onmessage?.({ data: JSON.stringify({ type: 'text-message', data: null }) });
+    ws.onmessage?.({ data: JSON.stringify({ type: 'agent-message', data: { content: '你好' } }) });
+
+    await expect(pending).rejects.toMatchObject({ code: 'transport_timeout' });
+  });
+});

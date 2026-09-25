@@ -118,7 +118,13 @@ describe('createRNServifySDK', () => {
     FakeWebSocket.instances[0].open();
 
     await pending;
-    await instance.sdk.sendMessage('你好,需要帮助');
+    // PROTOCOL §6.3 回显确认：sendMessage 等自己的回显帧，挂起时喂回显帧完成发送
+    const pendingSend = instance.sdk.sendMessage('你好,需要帮助');
+    await vi.waitFor(() => expect(FakeWebSocket.instances[0].sent.length).toBeGreaterThan(0));
+    FakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({ type: 'text-message', data: { content: '你好,需要帮助' } }),
+    });
+    await pendingSend;
 
     const frames = FakeWebSocket.instances[0].sent.map((frame) => JSON.parse(frame) as {
       type: string;

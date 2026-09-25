@@ -19,6 +19,8 @@ export interface WebSocketManagerOptions {
   onTokenRefreshRequired?: () => Promise<void>;
   /** WebSocket 工厂注入点；缺省用 globalThis.WebSocket（非 DOM 宿主需自行注入）。 */
   webSocketFactory?: WebSocketFactory;
+  /** 回显判据超时（PROTOCOL §6.3）：发送后等待自己回显帧的上限，生产默认 10s。 */
+  echoTimeoutMs?: number;
 }
 
 // 默认构造：运行时探测全局 WebSocket，缺失时给出可操作的错误信息。
@@ -40,6 +42,9 @@ type NormalizedWebSocketManagerOptions = Omit<
   authProvider?: AuthProvider;
 };
 
+/** 回显判据默认超时（PROTOCOL §6.3 成功判据的本地兜底；对齐移动端 EchoGate 10s）。 */
+const DEFAULT_ECHO_TIMEOUT_MS = 10_000;
+
 export class WebSocketManager extends EventEmitter<ServifyEventMap> implements Transport<WSMessage, WSMessage> {
   private ws: WebSocket | null = null;
   private options: NormalizedWebSocketManagerOptions;
@@ -49,6 +54,13 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
   private subscribers = new Set<(message: WSMessage) => void>();
   /** ai-response-delta 三段流式契约的拼接状态（断连时在 onclose 单点收口）。 */
   private assembler = new StreamingAssembler();
+  /**
+   * 回显确认闸（PROTOCOL §6.3 对齐移动端 EchoGate）：text-message 发送后等待自己的
+   * 回显帧，按内容匹配——迟到的旧回显不会误完成下一次发送。JS 事件循环单线程，
+   * 无需移动端的 mutex/atomic；并发发送由 sdk.ts 的 promise 链串行化保证
+   * 「同一时刻至多一个未决」。
+   */
+  private pendingEcho: { expectedContent: string; resolve: () => void } | null = null;
   readonly kind = 'websocket';
   state: TransportState = 'idle';
 
@@ -66,6 +78,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       ...options,
       // 展开后再兜底：调用方显式传 undefined 也不会覆盖掉默认工厂
       webSocketFactory: options.webSocketFactory ?? createDefaultWebSocket,
+      echoTimeoutMs: options.echoTimeoutMs ?? DEFAULT_ECHO_TIMEOUT_MS,
     };
   }
 
@@ -186,6 +199,55 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /**
+   * 发送并等待回显确认（PROTOCOL §6.3：成功判据=收到自己的回显帧；超时 throw
+   * retryable 的 transport_timeout——不本地伪造成功）。对齐移动端 EchoGate 口径。
+   * 断线不提前清闸：回显永远到不了，等超时路径自然收口（同移动端）。
+   */
+  async sendWithEchoConfirmation(message: WSMessage, expectedContent: string): Promise<void> {
+    const timeoutMs = this.options.echoTimeoutMs;
+    const gate = new Promise<void>((resolve) => {
+      this.pendingEcho = { expectedContent, resolve };
+    });
+    try {
+      await this.send(message);
+    } catch (error) {
+      if (this.pendingEcho?.expectedContent === expectedContent) this.pendingEcho = null;
+      throw error;
+    }
+    let timer: NodeJS.Timeout | null = null;
+    try {
+      await Promise.race([
+        gate,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            if (this.pendingEcho?.expectedContent === expectedContent) this.pendingEcho = null;
+            reject(
+              new ServifyError(`No echo within ${timeoutMs}ms`, {
+                code: 'transport_timeout',
+                retryable: true,
+                details: { expectedContent },
+              }),
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /** 回显帧（text-message）按内容匹配闸——内容不符不动闸（旧回显不误完成新发送）。 */
+  private resolvePendingEcho(data: unknown): void {
+    if (!this.pendingEcho || typeof data !== 'object' || data === null) return;
+    const { content } = data as Record<string, unknown>;
+    if (typeof content === 'string' && content === this.pendingEcho.expectedContent) {
+      const gate = this.pendingEcho;
+      this.pendingEcho = null;
+      gate.resolve();
+    }
+  }
+
   subscribe(handler: (message: WSMessage) => void): () => void {
     this.subscribers.add(handler);
     return () => {
@@ -202,6 +264,7 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
       switch (message.type) {
       case 'text-message':
         this.emit('message', this.normalizeMessage(message, 'customer'));
+        this.resolvePendingEcho(message.data);
         break;
       case 'agent-message':
         this.emit('message', this.normalizeMessage(message, 'agent'));
