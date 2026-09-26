@@ -163,8 +163,8 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 
 | 阶段 | 范围 | 依赖 |
 | --- | --- | --- |
-| **Phase 0（本轮，已落地）** | 聊天文本翻译：`modules/translation` + `POST /api/v1/translation/translate`（管理面）；mock provider 单测全覆盖 | 无新增依赖（复用 `platform/llm`） |
-| Phase 0.5 | 访客面同端点（SDK 对坐席消息即时翻译）+ SDK `metadata.translation` 字段约定 | 访客面路由 + SDK 契约 |
+| **Phase 0（已落地）** | 聊天文本翻译：`modules/translation` + `POST /api/v1/translation/translate`；mock provider 单测全覆盖 | 无新增依赖（复用 `platform/llm`） |
+| **Phase 0.5（服务端半边已落地）** | 访客面同端点：路由单一注册点、AuthMiddleware 即可（访客 token 可调，`router_auth.go`）；剩 SDK 半边：`metadata.translation` 字段约定 + SDK 便捷调用 | SDK 契约（`sdk/PROTOCOL.md` + fixtures） |
 | Phase 1 | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；批量子段翻译（历史消息） | 会话语言偏好存储（translation/infra） |
 | Phase 2 | 语音链路 MVP：ASR 流式接入 + 分句 + 逐句翻译 + 字幕 WS 帧 + TTS 客户端播放 | ASR/TTS provider 抽象（`platform/asr`、`platform/tts`）与配置面 |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
