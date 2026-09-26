@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 )
 
 type sessionTransferRuntime interface {
@@ -58,6 +60,14 @@ type suggestionConversionRuntime interface {
 	MatchSuggestionConversion(ctx context.Context, sessionID string, content string) error
 }
 
+// sessionTranslationRuntime 是会话消息自动翻译的可选能力（Phase 1 刀二，
+// docs/realtime-translation-design.md §1.4）：文本落库后异步翻译并按会话
+// 广播 message-translated 帧。用可选接口而非扩既有接口，既有测试桩无需
+// 跟随改动；未注入或无偏好时静默跳过。
+type sessionTranslationRuntime interface {
+	TranslateSessionMessage(ctx context.Context, sessionID string, text string) (*translationdelivery.SessionTranslation, error)
+}
+
 type WebSocketMessage struct {
 	Type      string      `json:"type"`
 	Data      interface{} `json:"data"`
@@ -91,6 +101,8 @@ type WebSocketHub struct {
 	rtcService websocketRTCService
 	// 可选：客户侧推荐曝光/转化归因（未设置则跳过）
 	conversionService suggestionConversionRuntime
+	// 可选：会话消息自动翻译（Phase 1 刀二，未设置则跳过）
+	translationService sessionTranslationRuntime
 	// 可选：访客 token 握手校验（§10 #2，security.guest_token.required
 	// 开启时装配）——nil 保持既有行为（access_token 不消费，向后兼容）；
 	// 非 nil 时握手必须带有效 token（签名+时效+session 绑定），否则 401
@@ -181,6 +193,14 @@ func (h *WebSocketHub) SetSuggestionConversionService(svc suggestionConversionRu
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.conversionService = svc
+}
+
+// SetSessionTranslationService 注入会话消息自动翻译服务（Phase 1 刀二，
+// 可选；nil 保持纯广播行为）。
+func (h *WebSocketHub) SetSessionTranslationService(svc sessionTranslationRuntime) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.translationService = svc
 }
 
 // SetTokenValidator 注入访客 token 握手校验（§10 #2；nil 恢复免校验的
@@ -429,8 +449,46 @@ func (c *WebSocketClient) handleTextMessage(message WebSocketMessage) {
 	// 转发给 AI 服务处理
 	go c.processMessageWithAI(message)
 
+	// 会话消息自动翻译（Phase 1 刀二，docs/realtime-translation-design.md
+	// §1.4）：落库后的异步旁路，与 AI 首答同走 goroutine 不阻塞广播；
+	// 无偏好与 provider 未配置都视为功能未开启静默跳过，其余失败只记
+	// Warn，不影响消息主链路。
+	hub.mutex.RLock()
+	translator := hub.translationService
+	hub.mutex.RUnlock()
+	if translator != nil {
+		if content := textMessageContent(message.Data); strings.TrimSpace(content) != "" {
+			go c.translateSessionMessage(translator, content)
+		}
+	}
+
 	// 广播消息
 	c.Hub.broadcast <- message
+}
+
+// translateSessionMessage 翻译单条已落库文本并广播 message-translated 帧
+// （译文与原文并存，客户端按 original 关联）；失败不回传任何帧。
+func (c *WebSocketClient) translateSessionMessage(translator sessionTranslationRuntime, text string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := translator.TranslateSessionMessage(ctx, c.SessionID, text)
+	if err != nil {
+		if !errors.Is(err, translationdelivery.ErrTranslationUnavailable) {
+			logrus.WithFields(logrus.Fields{
+				"session_id": c.SessionID,
+			}).Warnf("Session message translation failed: %v", err)
+		}
+		return
+	}
+	if result == nil {
+		return
+	}
+	c.Hub.broadcast <- WebSocketMessage{
+		Type:      "message-translated",
+		Data:      result,
+		SessionID: c.SessionID,
+		Timestamp: time.Now(),
+	}
 }
 
 func (c *WebSocketClient) handleWebRTCOffer(message WebSocketMessage) {

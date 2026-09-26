@@ -1030,10 +1030,16 @@
 
 ## 当前恢复点
 
-- 附注（2026-09-26，**实时翻译 Phase 1 刀一已落地**——会话语言偏好存储 + 管理面 REST 面）：本工作流按 `docs/realtime-translation-design.md` §6 分刀推进（Phase 0 聊天文本翻译已落地；Phase 1 自动翻译）。
+- 附注（2026-09-26，**实时翻译 Phase 1 刀二服务端半边已落地**——hub `message-translated` 帧，访客 → 坐席方向）：
+  - 状态：`[-]`（Phase 1 推进中，刀三待做）
+  - 最近进展：hub 新增可选能力 `sessionTranslationRuntime`（`SetSessionTranslationService` 注入，未注入/无偏好/provider 未配置一律静默，其余失败只记 Warn）：`handleTextMessage` 落库后与 AI 首答同走 goroutine，翻译并按会话广播 `message-translated` 帧（Data `{original, content, source_lang, target_lang}`，关联靠 `original`，无消息 ID 可挂）。translation/delivery 新增 `RealtimeTranslateService` 契约 + 适配器（组合 `SessionPreferenceReader` + `TranslateInvoker`，二者均为结构化窄接口，模块门面 `aiAssembly.Translation` 零适配接入）；装配 `wireAIRuntime` DB 块内复用同一偏好服务实例，`wireRealtimeGateways` 注入 hub。§5 流程同步：PROTOCOL.md 新增 §4.5 + fixtures `11-message-translated.json` + 三端回放（core 注解帧语义不并入 messages / Android+iOS `UnknownIgnored` 显式忽略，KNOWN_KINDS 三处同步）。文档：`realtime-translation-design.md` §1.4/§6 状态同步。
+  - 下一步：**刀三**——坐席 → 访客方向自动翻译（注入口 `ConversationWorkspaceHandler.SendMessage`，同一应用服务复用）与访客面偏好读写（经会话绑定校验）；三端消费半边（core 事件面 + admin 渲染）视产品节奏接入。
+  - 阻塞项：无
+  - 完成证据（刀二）：代码 `platform/realtime/websocket_hub.go`（接口/字段/setter/hook/translateSessionMessage）+ `modules/translation/delivery/realtime_{contract,adapter}.go` + `app/server/{runtime.go,router.go,runtime_assembly.go}`；测试 hub 五子用例（帧载荷/无偏好静默/不可用与原始错误零帧/未接线与空白内容跳过）+ delivery 适配器五子用例，触包（platform-realtime / translation 各包）逐函数 100%；边界规则新增 hub setter pinned require + `runtime|Translation realtime` 行，`check-module-boundaries.sh` 绿。本机环境局限：Android gradle 单测因 maven central 403（egress 代理）无法本地跑，Kotlin 用例镜像既有 `UnknownIgnored` 形状、由 CI android-probe 兜底。
+  - 附注（2026-09-26，**刀一已落地**——会话语言偏好存储 + 管理面 REST 面）：本工作流按 `docs/realtime-translation-design.md` §6 分刀推进（Phase 0 聊天文本翻译已落地；Phase 1 自动翻译）。
   - 状态：`[-]`（Phase 1 推进中）
   - 最近进展：**刀一落地**——`modules/translation` 四层补齐偏好面：domain `TranslationLanguagePreference`（每会话至多一行，`conversation_session_id` 唯一）、infra `GormPreferenceRepository`（pg 迁移 000015 / sqlite AutoMigrate 双轨，scoped 读命中即原行更新，未命中走 `OnConflict DoNothing` + scoped 复查，跨 scope 撞行返回冲突错误而非覆盖）、application `PreferenceService`（校验/小写规范化与 `Translate` 同口径，租户/工作区取自认证 ctx 不接受自报）、delivery `PreferenceHandlerService` + adapter、handlers `TranslationPreferenceHandler`（哨兵错误→400、未配置→503、跨 scope→409、其余→500）；管理面 `GET/PUT/DELETE /api/v1/translation/preferences/:session_id` 挂 `managementV1` 组，未装配时不注册（无 DB 部署形态）。迁移水位断言三处（`Makefile migrate-verify` / `ci.yml` 迁移验证 / 备份恢复对账）同步 14→15、表数 49→50。文档：`realtime-translation-design.md` 新增 §1.3（偏好面链路与口径）、§1.4（刀二帧契约设计）。
-  - 下一步：**刀二**——hub 在消息落库后按该偏好异步翻译并广播 `message-translated` 帧（访客 → 坐席方向；坐席 → 访客方向与访客面偏好读写留后续刀）。
+  - 下一步：**刀二**——hub 在消息落库后按该偏好异步翻译并广播 `message-translated` 帧（访客 → 坐席方向；坐席 → 访客方向与访客面偏好读写留后续刀）。（已落地，见上方刀二恢复点）
   - 阻塞项：无（刀二不依赖外部凭证）
   - 完成证据（刀一）：代码 `apps/server/internal/modules/translation/{domain,application,delivery,infra}` + `apps/server/internal/handlers/translation_preference_handler.go` + `apps/server/internal/app/server/{router_realtime.go,runtime.go,runtime_assembly.go}` + `apps/server/internal/app/bootstrap/migrations/000015_translation_language_preferences.up.sql`；门禁 `scripts/run-tests.sh` 100.0%（合并口径）+ 触包逐包 100%（translation 三包 / handlers / app-server / bootstrap / models / platform-realtime）+ race 绿 + `check-module-boundaries.sh` 绿 + `check-repo-hygiene.sh` / `check-text-encoding.sh` / `check-acceptance-evidence.sh` 绿 + `go vet` 绿 + swag 重生成 `swagger.json`/`swagger.yaml` 与入库产物逐字节一致。
 

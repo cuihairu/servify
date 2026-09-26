@@ -41,6 +41,7 @@ const KNOWN_KINDS = [
   'waiting',
   'unknown-ignored',
   'webrtc-ignored-by-mobile',
+  'message-translated',
 ];
 
 function loadFixtures(): Fixture[] {
@@ -279,6 +280,31 @@ describe('protocol fixtures replay (core)', () => {
     expect(() => socket.feed(fixture.frame!)).not.toThrow();
     expect(messages).toHaveLength(0);
     expect(errors).toHaveLength(0);
+  });
+
+  it('replays the message-translated frame: parallel annotation — not a message, never an error', async () => {
+    // message-translated（PROTOCOL.md §4.5，Phase 1 刀二服务端半边）：译文是
+    // 原文的并行注解帧——core 当前不并入 messages（消费半边后续刀接入），
+    // 但必须保证：不抛错、不产 message 事件、载荷字段与 fixture 断言一致。
+    const fixture = fixtures.find((f) => f.expectations.kind === 'message-translated')!;
+    const { manager, socket } = await connectManager();
+    const messages: Message[] = [];
+    const errors: unknown[] = [];
+    manager.on('message', (m) => messages.push(m));
+    manager.on('error', (e) => errors.push(e));
+
+    expect(() => socket.feed(fixture.frame!)).not.toThrow();
+    expect(messages).toHaveLength(0);
+    expect(errors).toHaveLength(0);
+
+    // 服务端载荷契约：四字段并存（关联靠 original，无消息 ID 可挂）
+    const data = (fixture.frame as { data: Record<string, unknown> }).data;
+    expect(data).toMatchObject({
+      original: fixture.expectations.assert.original,
+      content: fixture.expectations.assert.content,
+      source_lang: fixture.expectations.assert.source_lang,
+      target_lang: fixture.expectations.assert.target_lang,
+    });
   });
 
   it('replays the webrtc frame: the explicit dual-end fork — core consumes, mobile contract does not', async () => {

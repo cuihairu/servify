@@ -117,6 +117,10 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	if rt.DB != nil {
 		prefService := translationapp.NewPreferenceService(translationinfra.NewGormPreferenceRepository(rt.DB))
 		rt.TranslationPreferenceHandlerService = translationdelivery.NewPreferenceHandlerService(prefService)
+		// 刀二：hub 自动翻译旁路复用同一偏好服务与翻译门面（aiAssembly.
+		// Translation 即 HandlerService 门面，结构化满足 TranslateInvoker）；
+		// 无偏好/provider 未配置由契约静默跳过，错误由 hub 记 Warn。
+		rt.RealtimeTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService)
 	}
 	return aiAssembly, nil
 }
@@ -272,6 +276,10 @@ func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*r
 	rt.RTCIceSource = webrtcService
 	rt.MessageRouter = realtimeplatform.NewMessageRouter(rt.AIService, wsHub, rt.DB)
 	wsHub.SetAIService(rt.AIService)
+	// 刀二：hub 自动翻译旁路（可选；未装配保持纯广播行为）。
+	if rt.RealtimeTranslateService != nil {
+		wsHub.SetSessionTranslationService(rt.RealtimeTranslateService)
+	}
 	return webrtcService, nil
 }
 

@@ -18,6 +18,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	"servify/apps/server/internal/platform/iceturn"
 )
 
@@ -672,4 +673,125 @@ func TestWebSocketHub_RegisterICEConfigBranches(t *testing.T) {
 	if fullHub.GetClientCount() != 1 {
 		t.Fatalf("congested client should stay registered, got %d", fullHub.GetClientCount())
 	}
+}
+
+// unitSessionTranslationService 会话消息自动翻译的测试替身（刀二）。
+type unitSessionTranslationService struct {
+	calls   atomic.Int64
+	gotText string
+	result  *translationdelivery.SessionTranslation
+	err     error
+}
+
+func (u *unitSessionTranslationService) TranslateSessionMessage(_ context.Context, sessionID, text string) (*translationdelivery.SessionTranslation, error) {
+	u.calls.Add(1)
+	u.gotText = text
+	return u.result, u.err
+}
+
+// TestWebSocket_HandleTextMessageSessionTranslation 刀二：文本落库后按会话
+// 偏好异步翻译并广播 message-translated 帧；无偏好/provider 未配置静默，
+// 其余失败不回帧且不影响消息主链路。
+func TestWebSocket_HandleTextMessageSessionTranslation(t *testing.T) {
+	newTranslationHub := func(svc *unitSessionTranslationService) (*WebSocketHub, *WebSocketClient) {
+		hub := NewWebSocketHub()
+		go hub.Run()
+		hub.SetSessionTranslationService(svc)
+		client := &WebSocketClient{ID: "c", SessionID: "s-trans", Send: make(chan WebSocketMessage, 4), Hub: hub}
+		hub.register <- client
+		time.Sleep(20 * time.Millisecond)
+		return hub, client
+	}
+
+	t.Run("translated frame broadcast with payload", func(t *testing.T) {
+		svc := &unitSessionTranslationService{result: &translationdelivery.SessionTranslation{
+			Original: "bonjour", Content: "hello", SourceLang: "fr", TargetLang: "en",
+		}}
+		_, client := newTranslationHub(svc)
+
+		client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "bonjour"}})
+
+		seen := map[string]int{}
+		var translated *WebSocketMessage
+		for i := 0; i < 2; i++ {
+			msg := waitForMessage(t, client.Send)
+			seen[msg.Type]++
+			if msg.Type == "message-translated" {
+				translated = &msg
+			}
+		}
+		if seen["text-message"] != 1 || seen["message-translated"] != 1 {
+			t.Fatalf("expected echo + translation, got %v", seen)
+		}
+		if svc.calls.Load() != 1 || svc.gotText != "bonjour" {
+			t.Fatalf("translate calls=%d text=%q", svc.calls.Load(), svc.gotText)
+		}
+		if translated.SessionID != "s-trans" {
+			t.Fatalf("frame session = %q", translated.SessionID)
+		}
+		payload, ok := translated.Data.(*translationdelivery.SessionTranslation)
+		if !ok || payload.Content != "hello" || payload.Original != "bonjour" || payload.SourceLang != "fr" || payload.TargetLang != "en" {
+			t.Fatalf("frame data = %+v", translated.Data)
+		}
+	})
+
+	t.Run("no preference skips silently", func(t *testing.T) {
+		svc := &unitSessionTranslationService{}
+		_, client := newTranslationHub(svc)
+
+		client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: "hello"})
+
+		if waitForMessage(t, client.Send).Type != "text-message" {
+			t.Fatal("expected broadcast echo")
+		}
+		time.Sleep(40 * time.Millisecond)
+		if svc.calls.Load() != 1 {
+			t.Fatalf("translate calls = %d, want 1 (nil result path)", svc.calls.Load())
+		}
+		select {
+		case extra := <-client.Send:
+			t.Fatalf("no frame expected for unset preference, got %s", extra.Type)
+		default:
+		}
+	})
+
+	t.Run("unavailable and raw errors emit no frame", func(t *testing.T) {
+		for name, svc := range map[string]*unitSessionTranslationService{
+			"unavailable": {err: translationdelivery.ErrTranslationUnavailable},
+			"raw error":   {err: errors.New("provider 502")},
+		} {
+			t.Run(name, func(t *testing.T) {
+				_, client := newTranslationHub(svc)
+				client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: "hello"})
+				if waitForMessage(t, client.Send).Type != "text-message" {
+					t.Fatal("broadcast must survive translation failure")
+				}
+				time.Sleep(40 * time.Millisecond)
+				select {
+				case extra := <-client.Send:
+					t.Fatalf("failure must not emit %s frame", extra.Type)
+				default:
+				}
+			})
+		}
+	})
+
+	t.Run("unwired service and blank content skip", func(t *testing.T) {
+		hub := NewWebSocketHub()
+		go hub.Run()
+		client := &WebSocketClient{ID: "c", SessionID: "s-none", Send: make(chan WebSocketMessage, 2), Hub: hub}
+		hub.register <- client
+		time.Sleep(20 * time.Millisecond)
+
+		client.handleTextMessage(WebSocketMessage{Type: "text-message", Data: map[string]interface{}{"content": "  "}})
+		if waitForMessage(t, client.Send).Type != "text-message" {
+			t.Fatal("expected broadcast echo")
+		}
+		time.Sleep(40 * time.Millisecond)
+		select {
+		case extra := <-client.Send:
+			t.Fatalf("blank content must stay pure broadcast, got %s", extra.Type)
+		default:
+		}
+	})
 }

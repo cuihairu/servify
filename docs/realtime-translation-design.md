@@ -1,7 +1,8 @@
 # 实时翻译设计（语音 + 聊天文本）
 
 > 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 刀一已落地
-> （会话语言偏好存储与 REST 面）。
+> （会话语言偏好存储与 REST 面）+ 刀二服务端半边已落地（hub
+> message-translated 帧，访客 → 坐席方向；三端消费半边后续刀）。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -103,7 +104,7 @@
 - 语言标签与 `translate` 端点同口径：BCP-47 常用子集、统一小写
   （`zh-CN` → `zh-cn`），非法标签 400。
 
-### 1.4 会话消息自动翻译帧（Phase 1 刀二，设计已定）
+### 1.4 会话消息自动翻译帧（Phase 1 刀二，服务端半边已落地）
 
 ```
 访客 WS text-message 落库
@@ -223,7 +224,7 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 0（已落地）** | 聊天文本翻译：`modules/translation` + `POST /api/v1/translation/translate`；mock provider 单测全覆盖 | 无新增依赖（复用 `platform/llm`） |
 | **Phase 0.5（服务端半边已落地）** | 访客面同端点：路由单一注册点、AuthMiddleware 即可（访客 token 可调，`router_auth.go`）；剩 SDK 半边：`metadata.translation` 字段约定 + SDK 便捷调用 | SDK 契约（`sdk/PROTOCOL.md` + fixtures） |
 | **Phase 1 刀一（已落地）** | 会话语言偏好存储 + 管理面 REST 面（`translation/infra` GORM 仓储、pg 迁移 000015、`GET/PUT/DELETE /api/v1/translation/preferences/:session_id`）；见 §1.3 | 无新增依赖 |
-| **Phase 1 刀二** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
+| **Phase 1 刀二（服务端半边已落地）** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
 | **Phase 1 刀三** | 访客面偏好读写（经会话绑定校验，访客只可改自己的会话）；坐席 → 访客方向自动翻译 | 刀二 |
 | Phase 1 收尾 | 批量子段翻译（历史消息） | 刀二 |
 | Phase 2 | 语音链路 MVP：ASR 流式接入 + 分句 + 逐句翻译 + 字幕 WS 帧 + TTS 客户端播放 | ASR/TTS provider 抽象（`platform/asr`、`platform/tts`）与配置面 |

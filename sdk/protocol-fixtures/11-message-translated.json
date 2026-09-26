@@ -1,0 +1,26 @@
+{
+  "name": "message-translated",
+  "direction": "server-to-client",
+  "frame": {
+    "type": "message-translated",
+    "data": {
+      "original": "你好，我想咨询退货政策",
+      "content": "Hello, I would like to ask about the return policy",
+      "source_lang": "zh",
+      "target_lang": "en"
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-26T12:00:00Z"
+  },
+  "expectations": {
+    "kind": "message-translated",
+    "assert": {
+      "original": "你好，我想咨询退货政策",
+      "content": "Hello, I would like to ask about the return policy",
+      "source_lang": "zh",
+      "target_lang": "en",
+      "core": "annotation frame: parallel to text-message, never merged into messages, never an error (SDK consumption half lands separately)",
+      "mobile": "ignored silently as an unknown type (UnknownIgnored)"
+    }
+  }
+}

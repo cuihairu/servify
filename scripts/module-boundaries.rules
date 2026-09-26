@@ -54,6 +54,7 @@ require|apps/server/internal/app/server/ai_runtime.go|Service[[:space:]]+aideliv
 require|apps/server/internal/app/server/ai_runtime.go|RuntimeService[[:space:]]+aidelivery\.RuntimeService|AI assembly must keep a separate runtime AI contract for non-handler callers.
 runtime|Translation handlers|TranslationHandlerService|translationdelivery\.HandlerService
 runtime|Translation preference handlers|TranslationPreferenceHandlerService|translationdelivery\.PreferenceHandlerService
+runtime|Translation realtime|RealtimeTranslateService|translationdelivery\.RealtimeTranslateService
 forbid|apps/server/internal/app/server/ai_runtime.go|LegacyService[[:space:]]+\*services\.AIService|AI assembly must not expose the legacy concrete AI service.
 require|apps/server/internal/app/server/runtime.go|CustomerHandlerService[[:space:]]+customerdelivery\.HandlerService|Runtime must expose customer via customerdelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|CustomerHandlerService[[:space:]]*=.*customerdelivery\.NewHandlerService\(rt\.DB\)|Runtime must assemble customer handlers directly from module delivery.
@@ -90,6 +91,7 @@ require|apps/server/internal/app/server/runtime.go|SLAService[[:space:]]+sladeli
 require|apps/server/internal/app/server/router.go|SLAService[[:space:]]+sladelivery\.SLAService|Router dependencies must expose SLA via the sla delivery contract.
 require|apps/server/internal/platform/realtime/websocket_hub.go|transferService[[:space:]]+sessionTransferRuntime|WebSocket hub must store the session transfer runtime interface.
 require|apps/server/internal/platform/realtime/websocket_hub.go|func \(h \*WebSocketHub\) SetSessionTransferService\(svc sessionTransferRuntime\)|WebSocket hub must accept the session transfer runtime interface.
+require|apps/server/internal/platform/realtime/websocket_hub.go|func \(h \*WebSocketHub\) SetSessionTranslationService\(svc sessionTranslationRuntime\)|WebSocket hub must accept the session translation runtime interface.
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|LoadTransferSession\(ctx context\.Context, sessionID string\) \(\*TransferSession, error\)|Conversation runtime contract must expose transfer session loading.
 require|apps/server/internal/modules/conversation/delivery/runtime_contract.go|SyncWaitingAssignment\(ctx context\.Context, tx \*gorm\.DB, sessionID string, customerID uint\) error|Conversation runtime contract must expose waiting assignment syncing.
 require|apps/server/internal/app/server/runtime_assembly.go|Conversation:[[:space:]]+conversationdelivery\.NewRuntimeAdapter\(rt\.DB, rt\.Bus\)|Main runtime must wire session transfer conversation runtime with DB-backed adapter.

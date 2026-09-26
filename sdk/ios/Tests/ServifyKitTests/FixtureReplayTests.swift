@@ -84,6 +84,7 @@ final class FixtureReplayTests: XCTestCase {
                 "waiting",
                 "unknown-ignored",
                 "webrtc-ignored-by-mobile",
+                "message-translated",
             ]
         )
     }
@@ -195,6 +196,14 @@ final class FixtureReplayTests: XCTestCase {
         let fixtures = try loadFixtures()
         let events = try replay(fixtureByKind("unknown-ignored", fixtures))
         XCTAssertEqual(events, [.unknownIgnored(type: "session_update")])
+    }
+
+    func testMessageTranslatedIsParallelAnnotationIgnoredByMobile() throws {
+        // message-translated（PROTOCOL.md §4.5）：移动端契约 = 按未知类型静默
+        // 忽略（unknownIgnored），消费半边后续刀接入。Kotlin 镜像同名用例。
+        let fixtures = try loadFixtures()
+        let events = try replay(fixtureByKind("message-translated", fixtures))
+        XCTAssertEqual(events, [.unknownIgnored(type: "message-translated")])
     }
 
     func testWebrtcSignalIsExplicitlyIgnoredByMobileContract() throws {

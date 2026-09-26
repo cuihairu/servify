@@ -75,8 +75,24 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 | `translation` | string | 该消息的译文文本 |
 | `translation_lang` | string | 译文语言标签（BCP-47 子集，如 `en`/`zh-CN`） |
 
-- 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——Phase 1 计划的 `message-translated` 帧落地时按 §5 流程接入（服务端广播点 + 本文 + fixtures + 三端回放测试），此前**不存在**该帧；
+- 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——WS 侧译文走 §4.5 的 `message-translated` 帧（按 §5 流程接入：服务端广播点 + 本文 + fixtures + 三端回放测试已同步落地）；
 - 客户端口径：未知 metadata 键一律忽略（§6 既有边界语义）；读到 `translation` 键时可视需要优先展示译文、原文兜底（core 提供 `readMessageTranslation` 读取器）；客户端**不得**自行写入这两个键——译文由服务端/坐席侧盖章，客户端写入视为伪造。
+
+### 4.5 翻译帧 `message-translated`（Phase 1 刀二，服务端广播已落地）
+
+会话开启语言偏好（管理面 `GET/PUT/DELETE /api/v1/translation/preferences/:session_id`，docs/realtime-translation-design.md §1.3）后，访客文本消息**落库后**由服务端异步旁路翻译并按会话广播本帧（docs/realtime-translation-design.md §1.4）：
+
+```json
+{ "type": "message-translated",
+  "data": { "original": "…原文…", "content": "…译文…", "source_lang": "zh", "target_lang": "en" },
+  "session_id": "…", "timestamp": "…" }
+```
+
+- **独立帧而非改写 `text-message`**：不识别本帧的既有客户端行为完全不变（switch 落 default 忽略）；译文与原文并存、可对照折叠；
+- **关联靠 `original`**：翻译是落库后的异步旁路，没有消息 ID 可挂（会话写入口只返回 error）。客户端按"内容相同、且是本会话最近一条未挂译文的消息"匹配；同内容连续重复消息的匹配结果可能后到覆盖，属已知边界；
+- **失败零帧**：无偏好与 provider 未配置都静默跳过（不发帧），其余失败只记服务端日志——客户端不存在"翻译失败"态；
+- **方向边界**：当前只接访客 → 坐席方向（hub 落库路径）；坐席 → 访客方向后续刀接入（同一契约）；
+- **三端消费状态**：core / Android / iOS 当前按 §5 流程以"注解帧"回放（不并入 messages、不报错）；消费半边（事件面/渲染）后续刀接入，届时更新 fixtures expectations 的端级偏差声明。
 
 ## 5. 服务端不发送的帧（客户端契约不含——类型与运行时均已收敛）
 
@@ -109,5 +125,5 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - 位置：`sdk/protocol-fixtures/`，与 core、Android、iOS 测试共用同一套 JSON 样例；
 - 每个样例 = `{name, direction, frame | frames, expectations}`：单帧场景用 `frame`（原始 WS JSON），多帧场景（流式三段契约）用 `frames` 数组按序排列；`expectations` 是两端共用的断言词汇表——`kind`（协议语义分类：`visitor-echo`/`agent-message`/`ai-final`/`ai-stream-complete`/`ai-stream-interrupted`/`transfer`/`waiting`/`unknown-ignored`/`webrtc-ignored-by-mobile`）、`assert`（关键字段与拼接/缺省断言）、`state`（转人工状态机合法转移对，见 §4.2）；
 - 两端断言的"一致"指：同一 `kind` 与 `assert` 语义在各自已实现的契约范围内必须得出相同结论；已知的端级偏差在样例内显式声明（如 `webrtc-ignored-by-mobile` 对 core 是消费事件、对移动端是忽略）；
-- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、慢客户端边界（文档级用例）；
+- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、message-translated（注解帧，三端不并入 messages 的显式契约，§4.5）、慢客户端边界（文档级用例）；
 - 服务端 WS 广播点变更 → 同一 PR 更新本文 + fixtures → 三端回放测试同时验证。

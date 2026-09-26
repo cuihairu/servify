@@ -69,6 +69,7 @@ class FixtureReplayTest {
                 "waiting",
                 "unknown-ignored",
                 "webrtc-ignored-by-mobile",
+                "message-translated",
             ),
             kinds,
         )
@@ -175,6 +176,15 @@ class FixtureReplayTest {
         val fixture = fixtureByKind("unknown-ignored")
         val events = replay(fixture)
         assertEquals(listOf(ProtocolEvent.UnknownIgnored("session_update")), events)
+    }
+
+    @Test
+    fun messageTranslatedIsParallelAnnotationIgnoredByMobile() {
+        // message-translated（PROTOCOL.md §4.5）：移动端契约 = 按未知类型静默
+        // 忽略（UnknownIgnored），消费半边后续刀接入。
+        val fixture = fixtureByKind("message-translated")
+        val events = replay(fixture)
+        assertEquals(listOf(ProtocolEvent.UnknownIgnored("message-translated")), events)
     }
 
     @Test
