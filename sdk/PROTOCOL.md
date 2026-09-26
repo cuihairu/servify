@@ -75,8 +75,9 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 | `translation` | string | 该消息的译文文本 |
 | `translation_lang` | string | 译文语言标签（BCP-47 子集，如 `en`/`zh-CN`） |
 
-- 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——WS 侧译文走 §4.5 的 `message-translated` 帧（按 §5 流程接入：服务端广播点 + 本文 + fixtures + 三端回放测试已同步落地）；工作台历史分页（`GET /api/v1/omni/sessions/:id/messages`）也由服务端按 agent 读向偏好批量标注这两个键（Phase 1 收尾，docs/realtime-translation-design.md §1.5——只写响应不落库）；
-- 客户端口径：未知 metadata 键一律忽略（§6 既有边界语义）；读到 `translation` 键时可视需要优先展示译文、原文兜底（core 提供 `readMessageTranslation` 读取器）；客户端**不得**自行写入这两个键——译文由服务端/坐席侧盖章，客户端写入视为伪造。
+- 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——WS 侧译文走 §4.5 的 `message-translated` 帧（按 §5 流程接入：服务端广播点 + 本文 + fixtures + 三端回放测试已同步落地）；工作台历史分页（`GET /api/omni/sessions/:id/messages`，omni 面无 `/v1` 前缀）也由服务端按 agent 读向偏好批量标注这两个键（Phase 1 收尾，docs/realtime-translation-design.md §1.5——只写响应不落库）；
+- 客户端口径：未知 metadata 键一律忽略（§6 既有边界语义）；读到 `translation` 键时可视需要优先展示译文、原文兜底（core 提供 `readMessageTranslation` 读取器，管理端工作台按同口径本地实现同一读取逻辑）；客户端**不得**自行写入这两个键——译文由服务端/坐席侧盖章，客户端写入视为伪造。
+- 管理端消费状态：工作台会话页已消费——顶部语言下拉读写 §4.5 的偏好端点（管理端主体落 agent 读向），访客消息按 `translation` 键并排展示译文并带 `translation_lang` 标签，无译文键则只显示原文。管理端无会话消息 WS 订阅（只有远程协助信令 socket），故本节的 metadata 路径是其唯一译文载体。
 
 ### 4.5 翻译帧 `message-translated`（Phase 1 刀二/刀三，服务端双向广播已落地）
 

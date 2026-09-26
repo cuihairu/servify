@@ -156,6 +156,15 @@ declare namespace API {
     created_at: string;
   }
 
+  /**
+   * 会话翻译语言偏好（读向由服务端按认证主体推导，请求方不自报）。
+   * target_lang 为空串表示未设置自动翻译。
+   */
+  interface TranslationPreference {
+    session_id: string;
+    target_lang: string;
+  }
+
   // ---- 知识库文档 ----
   interface KnowledgeDoc {
     id: number;

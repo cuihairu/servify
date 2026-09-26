@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ProTable, ProCard } from '@ant-design/pro-components';
 import type { ProColumns } from '@ant-design/pro-components';
 import {
@@ -30,6 +30,11 @@ import {
 } from '@/services/conversation';
 import { createTicket } from '@/services/ticket';
 import { getWorkspaceOverview } from '@/services/workspace';
+import {
+  getTranslationPreference,
+  setTranslationPreference,
+  clearTranslationPreference,
+} from '@/services/translation';
 import { endAssistSession, getIceServers, startAssistSession } from '@/services/remoteAssist';
 import type { RTCIceServerEntry } from '@/services/remoteAssist';
 import AssistReviewPanel from './components/AssistReviewPanel';
@@ -48,6 +53,40 @@ const SENDER_MAP: Record<string, { label: string; color: string }> = {
   ai: { label: 'AI', color: '#722ed1' },
   system: { label: '系统', color: '#999' },
 };
+
+// 自动翻译的坐席读向目标语言（BCP-47 风格；OFF = 关闭，服务端即不再标注译文）。
+// 语言清单是下拉便利项，不限制取值——服务端接受任意合法语言标签。
+const TRANSLATION_OFF = '';
+const TRANSLATION_LANG_OPTIONS = [
+  { value: TRANSLATION_OFF, label: '关闭自动翻译' },
+  { value: 'zh-CN', label: '中文（简体）' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
+  { value: 'ko', label: '한국어' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'fr', label: 'Français' },
+  { value: 'es', label: 'Español' },
+  { value: 'pt', label: 'Português' },
+  { value: 'ru', label: 'Русский' },
+  { value: 'ar', label: 'العربية' },
+];
+
+// 消息 metadata 译文保留键（PROTOCOL.md §4.4 / sdk TRANSLATION_METADATA_KEYS）：
+// translation=译文、translation_lang=译文语言标签。服务端盖章、客户端只读。
+const TRANSLATION_TEXT_KEY = 'translation';
+const TRANSLATION_LANG_KEY = 'translation_lang';
+
+// 读出消息译文：无译文键返回 null（渲染方回退原文）；只有译文键没有语言键时
+// 语言为空串（语言未知仍展示译文）。与 core 的 readMessageTranslation 同口径。
+function readMessageTranslation(
+  metadata?: Record<string, string>,
+): { text: string; lang: string } | null {
+  const text = metadata?.[TRANSLATION_TEXT_KEY];
+  if (!text) {
+    return null;
+  }
+  return { text, lang: metadata?.[TRANSLATION_LANG_KEY] ?? '' };
+}
 
 interface ConversationRecord {
   id: string;
@@ -123,6 +162,9 @@ const ConversationPage: React.FC = () => {
   const [messageLoading, setMessageLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<API.ConversationMessage[]>([]);
+  // 坐席读向自动翻译偏好（Phase 1 刀三存储面 + 收尾历史标注）：空串 = 关闭。
+  const [translationLang, setTranslationLang] = useState(TRANSLATION_OFF);
+  const [translationSaving, setTranslationSaving] = useState(false);
   const [draft, setDraft] = useState('');
   const [hasMore, setHasMore] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -204,6 +246,74 @@ const ConversationPage: React.FC = () => {
     };
     fetchMessages();
   }, [selectedId, scrollToBottom]);
+
+  // 读回当前会话的坐席读向翻译偏好（读向由服务端按认证主体推导，请求方不带
+  // 角色）。未设置时 target_lang 为空串——即关闭，不是错误。偏好与消息列表
+  // 同 key 各自独立拉取：偏好失败不影响消息加载。
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedId) {
+      setTranslationLang(TRANSLATION_OFF);
+      return undefined;
+    }
+    (async () => {
+      try {
+        const result = await getTranslationPreference(selectedId);
+        if (cancelled) return;
+        setTranslationLang(result?.data?.target_lang || TRANSLATION_OFF);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('获取翻译偏好失败:', error);
+        setTranslationLang(TRANSLATION_OFF);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
+  // 下拉选项 = 便利清单 + 当前已存语言（已存值不在清单里时补一项，否则选择器
+  // 只能显示裸语言标签）。服务端接受任意合法语言标签，清单不构成限制。
+  const translationLangOptions = useMemo(() => {
+    if (!translationLang || TRANSLATION_LANG_OPTIONS.some((o) => o.value === translationLang)) {
+      return TRANSLATION_LANG_OPTIONS;
+    }
+    return [...TRANSLATION_LANG_OPTIONS, { value: translationLang, label: translationLang }];
+  }, [translationLang]);
+
+  // 切换坐席读向翻译目标语言：写偏好后重拉消息，让服务端按新偏好重新标注
+  // metadata 译文（译文只写响应不落库，所以必须重拉才生效）。已结束会话同样
+  // 允许切换——历史标注对存量会话一样有用，只是不再有新消息要翻译。
+  const handleTranslationLangChange = async (next: string) => {
+    if (!selectedId || next === translationLang) return;
+    const previous = translationLang;
+    setTranslationLang(next);
+    setTranslationSaving(true);
+    try {
+      if (next === TRANSLATION_OFF) {
+        await clearTranslationPreference(selectedId);
+      } else {
+        await setTranslationPreference(selectedId, next);
+      }
+      setMessageLoading(true);
+      try {
+        const result = await getConversationMessages(selectedId, { limit: 50 });
+        setMessages(result?.data || []);
+        setHasMore((result?.data || []).length >= 50);
+      } catch (error) {
+        console.error('刷新会话消息失败:', error);
+        message.error('刷新会话消息失败');
+      } finally {
+        setMessageLoading(false);
+      }
+    } catch (error) {
+      console.error('设置翻译偏好失败:', error);
+      message.error('设置翻译偏好失败，请重试');
+      setTranslationLang(previous);
+    } finally {
+      setTranslationSaving(false);
+    }
+  };
 
   const handleLoadMore = async () => {
     if (!selectedId || messages.length === 0) return;
@@ -751,6 +861,16 @@ const ConversationPage: React.FC = () => {
                 <Tag>{selectedSession.platform || 'unknown'}</Tag>
                 <span>{selectedSession.customer_name || '未识别客户'}</span>
                 <span>{selectedSession.agent_name || '待分配客服'}</span>
+                <Tooltip title="把客户消息自动翻译成下面的语言后并排显示（只影响本工作台读向，不改写原文）">
+                  <Select
+                    size="small"
+                    style={{ width: 160 }}
+                    value={translationLang}
+                    loading={translationSaving}
+                    options={translationLangOptions}
+                    onChange={handleTranslationLangChange}
+                  />
+                </Tooltip>
                 {!isClosed && (
                   <>
                     {isWaiting && (
@@ -905,6 +1025,9 @@ const ConversationPage: React.FC = () => {
                     const background = isAgent ? '#1677ff' : '#fff';
                     const color = isAgent ? '#fff' : '#000';
                     const senderCfg = SENDER_MAP[item.sender] || { label: item.sender, color: '#999' };
+                    // 译文只在服务端盖章（PROTOCOL §4.4 metadata 保留键）时出现：
+                    // 无译文键就只显示原文，翻译是增强而非替代。
+                    const translation = readMessageTranslation(item.metadata);
                     return (
                       <div key={item.id} style={{ display: 'flex', justifyContent: align, marginBottom: 12 }}>
                         <div style={{
@@ -918,6 +1041,23 @@ const ConversationPage: React.FC = () => {
                             <span>{new Date(item.created_at).toLocaleString()}</span>
                           </div>
                           <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{item.content}</div>
+                          {translation && (
+                            <div
+                              data-testid={`message-translation-${item.id}`}
+                              style={{
+                                marginTop: 6, paddingTop: 6,
+                                borderTop: `1px dashed ${isAgent ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.12)'}`,
+                                fontSize: 13,
+                                color: isAgent ? 'rgba(255,255,255,0.85)' : '#595959',
+                                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                              }}
+                            >
+                              {translation.text}
+                              {translation.lang && (
+                                <Tag style={{ marginLeft: 6, fontSize: 11 }}>{translation.lang}</Tag>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

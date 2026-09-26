@@ -1030,7 +1030,14 @@
 
 ## 当前恢复点
 
-- 附注（2026-09-26，**实时翻译 Phase 1 收尾已落地**——历史消息批量子段翻译，Phase 1 至此全部落地）：
+- 附注（2026-09-26，**实时翻译消费半边已落地**——core 事件面 + 管理端工作台渲染，Phase 1 全链路收口）：
+  - 状态：`[-]`（Phase 0/1 服务端 + core SDK + 管理端全部落地；剩移动端消费与 Phase 2 语音，视产品节奏）
+  - 最近进展：**core SDK 消费半边**——`WSMessage` 联合加入 `message-translated` + 同名事件（载荷 `MessageTranslation`），`handleMessage` 新增 case 发射独立事件（不并入 messages、不产 message/error，载荷异常原样透传由消费方判定）；fixtures 回放升级为断言事件携带完整载荷，移动端维持 `UnknownIgnored` 显式偏差。**管理端工作台消费半边**——新增 `services/translation.ts`（偏好 GET/PUT/DELETE，读向由服务端按认证主体推导，请求方不带角色）+ `typings.d.ts` 的 `TranslationPreference`；会话页顶部加坐席读向语言下拉（切语言写偏好后重拉历史，因为译文只写响应不落库，必须重拉才生效；写失败回滚选择器），访客消息按 §4.4 metadata 保留键并排渲染译文 + `translation_lang` 标签，无译文键只显示原文；气泡底色随 agent/访客自适应译文配色。文档：设计文档新增 §1.6 + 阶段表新增"消费半边"行 + 头部状态；PROTOCOL.md §4.4 补管理端消费状态行。
+  - 已知边界：管理端**没有**会话消息 WS 订阅（只有远程协助信令 socket），故其译文载体只有历史 metadata 路径——`message-translated` 实时帧在管理端不消费（core SDK 侧已消费）。译文气泡的实时刷新靠历史重拉，不做增量推送。管理端无测试框架（门禁 = typecheck + build，均绿）；`npm run lint` 的 69 errors 全是仓内既有的"eslint 无法解析 TS"逐文件 parsing error（基线 68，新增 `services/translation.ts` 一个文件 +1，与其余 service 文件同款，非本轮引入的代码问题）。
+  - 下一步：Phase 2 语音实时翻译（设计文档 §1.2/§2，依赖流式 ASR/分句策略）；移动端消费半边（Android/iOS 渲染 `message-translated` + 补拉 metadata 译文，届时更新 fixtures 的 `mobile` 断言）视产品节奏接入。
+  - 阻塞项：无
+  - 完成证据：core `websocket.test.ts` 新增 message-translated 事件用例 + `protocol-fixtures.test.ts` 回放升级（core 12 文件 88 tests 绿，lint 0 errors）；管理端 `tsc --noEmit` 0 错误、`max build` 通过；仓内脚本 hygiene/encoding/acceptance-evidence/module-boundaries/generate-assets 全绿。`apps/demo-sdk` 产物顺带修复——自 22b9efe 起从未重新生成（committed 产物缺 `translateText`），本轮重建补齐 `translateText` + `message-translated`，构建幂等、CI 漂移检查恢复通过。
+  - 附注（2026-09-26，**实时翻译 Phase 1 收尾已落地**——历史消息批量子段翻译，Phase 1 至此全部落地）：
   - 状态：`[-]`（Phase 0/1 全部落地；剩三端消费半边与 Phase 2 语音，视产品节奏）
   - 最近进展：application 新增 `BatchTranslate`（多段合并单次 LLM 调用：`<<<SEG n>>>` 编号分段协议，标记序列必须恰好 `1..N`——缺失/乱序/越界/重复/正文注入段标记一律判失配并整批退回逐条 `Translate` 保底；单段直接走原路径；段数上限 `MaxBatchTexts=20`，哨兵错误 `ErrTranslationBatchTooLarge`）。delivery 新增 `HistoryTranslateService` 契约 + 适配器（读向绑定与实时适配器同构，工作台历史面用 agent 读向；`HandlerService` 契约与模块门面同步扩展 `BatchTranslate`）。handlers `ListMessages` 落地 `annotateHistory`：页内访客侧（sender ≠ agent）未带译文的非空消息批量翻译，译文以 §4.4 metadata 保留键（`translation`/`translation_lang`）附在响应 DTO——只写响应不落库，任何失败静默。装配层新增 agent 读向实例接线（runtime/Dependencies/assembly/management 四处）。**core 消费半边同轮落地**：`WSMessage` 联合加入 `message-translated` + 同名事件（载荷 `MessageTranslation`），fixtures 回放升级为断言事件携带完整载荷（不并入 messages、不产 message/error），移动端维持 `UnknownIgnored` 显式偏差。文档：设计文档新增 §1.5 + 头部状态/阶段表更新；PROTOCOL.md §4.4/§4.5 同步。
   - 已知边界：会话消息存储（`models.Message`）暂无 metadata 列——工作台历史标注为响应级、不持久化（每次翻页重译，成本治理留 Phase 3 配额）；存储列与跨页缓存留后续刀。
