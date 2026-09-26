@@ -100,6 +100,19 @@ func (r *fakeVoiceRuntime) startedCount() int {
 	return len(r.sessions)
 }
 
+// sinkForSession 按会话取启动时捕获的 sink：readPump 调度顺序不保证与建
+// 连顺序一致，多连接测试不能按槽位下标对号。
+func (r *fakeVoiceRuntime) sinkForSession(sessionID string) translationdelivery.VoiceStreamSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, s := range r.sessions {
+		if s == sessionID {
+			return r.sinks[i]
+		}
+	}
+	return nil
+}
+
 // newVoiceTestHub 起 hub 事件循环 + httptest 语音通道端点，返回 hub 与
 // 通道 URL。
 func newVoiceTestHub(t *testing.T, runtime translationdelivery.VoiceStreamStarter) (*VoiceHub, string) {
@@ -432,8 +445,12 @@ func TestVoiceChannelSessionIsolation(t *testing.T) {
 
 	waitForStarts(t, runtime, 2)
 
-	// s1 的产出不得漏到 s2。
-	runtime.sinks[0].OnCaption(translationapp.VoiceCaption{Seq: 1, Source: "a", Translated: "a"})
+	// s1 的产出不得漏到 s2（sink 按会话对号：readPump 调度顺序不定）。
+	sinkA := runtime.sinkForSession("s1")
+	if sinkA == nil {
+		t.Fatal("s1 sink not captured")
+	}
+	sinkA.OnCaption(translationapp.VoiceCaption{Seq: 1, Source: "a", Translated: "a"})
 	frameA := readVoiceFrame(t, connA)
 	if frameA["type"] != "translation-final" {
 		t.Fatalf("s1 frame = %+v", frameA)
@@ -646,6 +663,7 @@ func TestVoiceChannelPongRefreshesReadDeadline(t *testing.T) {
 		t.Fatal("server-side voice client never built")
 	}
 	waitForStarts(t, runtime, 1)
+	keepaliveStop := make(chan struct{})
 
 	// 客户端持续读：消费服务端 ping 与任何下行帧（读侧不堵，客户端写方向
 	// 才能持续推进）。
