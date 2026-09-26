@@ -34,3 +34,11 @@ func (a *HandlerServiceAdapter) Translate(ctx context.Context, cmd TranslateComm
 	}
 	return a.service.Translate(ctx, cmd)
 }
+
+// BatchTranslate 批量透传应用服务；nil 适配器同 Translate 降级口径。
+func (a *HandlerServiceAdapter) BatchTranslate(ctx context.Context, cmd BatchTranslateCommand) (BatchTranslateResult, error) {
+	if a == nil || a.service == nil {
+		return BatchTranslateResult{}, ErrTranslationUnavailable
+	}
+	return a.service.BatchTranslate(ctx, cmd)
+}

@@ -1030,10 +1030,17 @@
 
 ## 当前恢复点
 
-- 附注（2026-09-26，**实时翻译 Phase 1 刀三已落地**——viewer 角色维度偏好双面 + 坐席 → 访客方向翻译）：
+- 附注（2026-09-26，**实时翻译 Phase 1 收尾已落地**——历史消息批量子段翻译，Phase 1 至此全部落地）：
+  - 状态：`[-]`（Phase 0/1 全部落地；剩三端消费半边与 Phase 2 语音，视产品节奏）
+  - 最近进展：application 新增 `BatchTranslate`（多段合并单次 LLM 调用：`<<<SEG n>>>` 编号分段协议，标记序列必须恰好 `1..N`——缺失/乱序/越界/重复/正文注入段标记一律判失配并整批退回逐条 `Translate` 保底；单段直接走原路径；段数上限 `MaxBatchTexts=20`，哨兵错误 `ErrTranslationBatchTooLarge`）。delivery 新增 `HistoryTranslateService` 契约 + 适配器（读向绑定与实时适配器同构，工作台历史面用 agent 读向；`HandlerService` 契约与模块门面同步扩展 `BatchTranslate`）。handlers `ListMessages` 落地 `annotateHistory`：页内访客侧（sender ≠ agent）未带译文的非空消息批量翻译，译文以 §4.4 metadata 保留键（`translation`/`translation_lang`）附在响应 DTO——只写响应不落库，任何失败静默。装配层新增 agent 读向实例接线（runtime/Dependencies/assembly/management 四处）。文档：设计文档新增 §1.5 + 头部状态/阶段表更新；PROTOCOL.md §4.4 补工作台历史标注载体说明。
+  - 已知边界：会话消息存储（`models.Message`）暂无 metadata 列——工作台历史标注为响应级、不持久化（每次翻页重译，成本治理留 Phase 3 配额）；存储列与跨页缓存留后续刀。
+  - 下一步：Phase 2 语音实时翻译（设计文档 §1.2/§2，依赖流式 ASR/分句策略）；三端消费半边（core 事件面 + admin 渲染 + 移动端补拉译文展示）视产品节奏接入。
+  - 阻塞项：无
+  - 完成证据（收尾）：测试 application `batch_test.go`（校验六子用例 + 分段协议/退路/段号溢出/退路中断/注入行首行中两态 + 单段错误透传，`batch.go` 逐函数 100%）+ delivery `history_adapter_test.go`/`handler_adapter_test.go`（批量透传、nil 降级、viewer 贯穿，包 100%）+ handlers `cvh_agent_translate_test.go` 历史标注四子用例（标注/无偏好/失败/已带译文不重译）+ 发送口钩子新增原始错误分支（包 100%）。门禁与本条目同轮全量绿（见提交）。
+  - 附注（2026-09-26，**刀三已落地**——viewer 角色维度偏好双面 + 坐席 → 访客方向翻译）：
   - 状态：`[-]`（Phase 1 推进中，剩批量子段翻译收尾）
   - 最近进展：偏好表加 viewer 角色维度（domain `(session_id, viewer_role)` 复合唯一、pg 迁移 000016 `viewer_role` 列 + 索引重建、application `PreferenceStore` 三方法全部带 `viewerRole`、`ErrTranslationViewerInvalid` 校验）；REST 面从管理面组迁到与 translate 端点同款单一双面注册点（AuthMiddleware 认证即可），读向由服务端按认证主体推导——end_user → visitor 读向并强制会话绑定（token `session_id` 必须 = 路径参数，否则 403），其余主体 → agent 读向；坐席 → 访客方向翻译落地：`ConversationWorkspaceHandler` 注入可选 `RealtimeTranslateService`，`SendMessage` 落库/广播成功后异步旁路（30s 超时、`ErrTranslationUnavailable` 静默、其余 Warn），广播与刀二同契约 `message-translated` 帧；装配层构造两个绑定读向的实例（hub 用 agent 读向、发送口用 visitor 读向）。迁移水位断言三处同步 15→16（表数不变 50）。
-  - 下一步：**Phase 1 收尾**——历史消息批量子段翻译；三端消费半边（core 事件面 + admin 渲染）视产品节奏接入。
+  - 下一步：**Phase 1 收尾**——历史消息批量子段翻译；三端消费半边（core 事件面 + admin 渲染）视产品节奏接入。（已落地，见上方收尾恢复点）
   - 阻塞项：无
   - 完成证据（刀三）：代码 `modules/translation/{domain/models.go,application/preference.go,infra/gorm_preference_repository.go,delivery/preference_{contract,adapter}.go,delivery/realtime_{contract,adapter}.go}` + `handlers/{translation_preference_handler.go,conversation_workspace_handler.go}` + `app/server/{router_auth.go,router_realtime.go,router.go,runtime.go,runtime_assembly.go,router_management.go}` + `bootstrap/migrations/000016_translation_preference_viewer_role.up.sql`；测试 application（角色校验/双角色规范化/读向隔离）、infra（`TestPreferenceViewerRolesAreIndependent` 双角色共存互不覆盖删除）、delivery（viewer 贯穿构造期绑定）、handlers（访客绑定 403 三态 + viewer 贯穿）、路由面（end_user 绑定/跨会话 403/无 claim 403/agent 读向）、`cvh_agent_translate_test.go` 发送口钩子四子用例（帧载荷/无偏好零帧/不可用静默/nil 保持主链路）；边界规则新增 `runtime|Translation visitor realtime` 行。门禁与本条目同轮全量绿（见提交）。
   - 附注（2026-09-26，**刀二服务端半边已落地**——hub `message-translated` 帧，访客 → 坐席方向）：

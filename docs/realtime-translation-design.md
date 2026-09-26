@@ -1,9 +1,9 @@
 # 实时翻译设计（语音 + 聊天文本）
 
-> 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 刀一已落地
-> （会话语言偏好存储与 REST 面）+ 刀二服务端半边已落地（hub
-> message-translated 帧，访客 → 坐席方向）+ 刀三已落地（viewer 角色维度
-> 偏好双面 + 坐席 → 访客方向翻译；三端消费半边后续刀）。
+> 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 全部落地
+> （刀一偏好存储与 REST 面、刀二 hub message-translated 帧、刀三 viewer
+> 角色双面 + 坐席 → 访客方向翻译、收尾历史消息批量标注；三端消费半边
+> 后续刀）。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -143,6 +143,36 @@
   = 坐席 → 访客，消费 visitor 读向）。同一应用服务
   （`RealtimeTranslateService`）构造期绑定读向的两个实例，非新链路。
 
+### 1.5 历史消息批量标注（Phase 1 收尾，已落地）
+
+工作台历史分页（`GET /api/v1/omni/sessions/:id/messages`）在该会话设有
+agent 读向偏好时，把页内**访客侧**（sender ≠ agent）未带译文的非空消息
+合并为一次批量翻译，译文以 §4.4 的 metadata 保留键
+（`translation`/`translation_lang`）附在响应 DTO 上：
+
+```
+ListMessages 加载 + 时间序整理
+  └─ annotateHistory（同步，响应前）
+       ├─ 过滤：sender == agent / 空内容 / 已带 translation 键 → 跳过
+       ├─ HistoryTranslateService（agent 读向）：无偏好 → 静默原样返回
+       ├─ application.BatchTranslate：多段合并单次 LLM 调用
+       │    （编号分段协议 <<<SEG n>>>，标记序列必须恰好 1..N，
+       │      失配/注入扰动 → 自动退回逐条 Translate，fail fast 上抛）
+       └─ 译文只写响应 DTO，不回写存储；任何失败静默（历史加载不受影响）
+```
+
+口径要点：
+
+- **只写响应不落库**：偏好随时可改，译文落库会造成语言陈旧与回滚困难；
+  代价是每次翻页都重新翻译（成本治理见 §3.2 Phase 3 配额）。
+- **批量退路保底**：分段协议失配（模型漏段/乱序/空段/正文注入段标记）时
+  整批退回逐条 `Translate`，行为不差于单条链路；provider 错误 fail fast。
+- **已知边界**：会话消息存储（`models.Message`）暂无 metadata 列——访客
+  补拉 DTO 的 metadata 字段走另一条装配路径，工作台历史标注为响应级、
+  不持久化；存储列与跨页缓存留后续刀。
+- **段数上限**：单批 ≤ `MaxBatchTexts`（20），超限返回哨兵错误
+  `ErrTranslationBatchTooLarge`；历史分页 ≤ 200 由调用方分批。
+
 ## 2. 延迟预算与分句策略
 
 ### 2.1 预算（语音端到端，说出 → 对方看到/听到）
@@ -239,7 +269,7 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 1 刀一（已落地）** | 会话语言偏好存储 + 管理面 REST 面（`translation/infra` GORM 仓储、pg 迁移 000015、`GET/PUT/DELETE /api/v1/translation/preferences/:session_id`）；见 §1.3 | 无新增依赖 |
 | **Phase 1 刀二（服务端半边已落地）** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
 | **Phase 1 刀三（已落地）** | 偏好表 viewer 角色维度（迁移 000016，`(session_id, viewer_role)` 复合唯一）+ 双面单一注册点（end_user 经会话绑定校验读写 visitor 读向）+ 坐席 → 访客方向自动翻译（`SendMessage` 发送口异步旁路） | 刀二 |
-| Phase 1 收尾 | 批量子段翻译（历史消息） | 刀二 |
+| **Phase 1 收尾（已落地）** | 历史消息批量子段翻译：工作台历史分页按 agent 读向批量翻译访客消息，译文以 §4.4 metadata 保留键附在响应 DTO（不落库）；见 §1.5 | 刀三 |
 | Phase 2 | 语音链路 MVP：ASR 流式接入 + 分句 + 逐句翻译 + 字幕 WS 帧 + TTS 客户端播放 | ASR/TTS provider 抽象（`platform/asr`、`platform/tts`）与配置面 |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 

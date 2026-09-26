@@ -9,12 +9,14 @@ import (
 	translationapp "servify/apps/server/internal/modules/translation/application"
 )
 
-// rtTranslateStub 翻译门面替身：捕获入参并注入结果/错误。
+// rtTranslateStub 翻译门面替身：捕获入参并注入结果/错误（单条 + 批量）。
 type rtTranslateStub struct {
-	calls  atomic.Int64
-	gotCmd translationapp.TranslateCommand
-	result translationapp.TranslateResult
-	err    error
+	calls       atomic.Int64
+	gotCmd      translationapp.TranslateCommand
+	gotBatchCmd translationapp.BatchTranslateCommand
+	result      translationapp.TranslateResult
+	batchResult []string
+	err         error
 }
 
 func (s *rtTranslateStub) Translate(_ context.Context, cmd translationapp.TranslateCommand) (translationapp.TranslateResult, error) {
@@ -24,6 +26,15 @@ func (s *rtTranslateStub) Translate(_ context.Context, cmd translationapp.Transl
 		return translationapp.TranslateResult{}, s.err
 	}
 	return s.result, nil
+}
+
+func (s *rtTranslateStub) BatchTranslate(_ context.Context, cmd translationapp.BatchTranslateCommand) (translationapp.BatchTranslateResult, error) {
+	s.calls.Add(1)
+	s.gotBatchCmd = cmd
+	if s.err != nil {
+		return translationapp.BatchTranslateResult{}, s.err
+	}
+	return translationapp.BatchTranslateResult{Texts: s.batchResult, TargetLang: cmd.TargetLang}, nil
 }
 
 // rtPrefsStub 偏好读取替身：记录 (sessionID, viewer) 查询对。

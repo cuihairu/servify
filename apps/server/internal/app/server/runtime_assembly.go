@@ -124,6 +124,9 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 		// provider 未配置由契约静默跳过，错误由消费方记 Warn。
 		rt.RealtimeTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleAgent)
 		rt.RealtimeVisitorTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleVisitor)
+		// Phase 1 收尾：工作台历史面批量标注复用同一偏好服务与门面，
+		// 消费 agent 读向（坐席读访客消息的译文）。
+		rt.HistoryTranslateService = translationdelivery.NewHistoryTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleAgent)
 	}
 	return aiAssembly, nil
 }

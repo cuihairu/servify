@@ -26,6 +26,10 @@ func (s *cvhTranslationService) Translate(_ context.Context, cmd translationdeli
 	return s.result, s.err
 }
 
+func (s *cvhTranslationService) BatchTranslate(_ context.Context, cmd translationdelivery.BatchTranslateCommand) (translationdelivery.BatchTranslateResult, error) {
+	return translationdelivery.BatchTranslateResult{Texts: []string{}, TargetLang: cmd.TargetLang}, s.err
+}
+
 func cvhTranslationRouter(svc *cvhTranslationService) *gin.Engine {
 	r := dxcRouter()
 	r.POST("/api/v1/translation/translate", NewTranslationHandler(svc).Translate)

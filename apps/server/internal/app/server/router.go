@@ -56,43 +56,46 @@ type Dependencies struct {
 	// RealtimeVisitorTranslateService 坐席消息自动翻译（Phase 1 刀三，坐席
 	// 发送口消费，visitor 读向）。
 	RealtimeVisitorTranslateService translationdelivery.RealtimeTranslateService
-	RealtimeGateway                 realtimeplatform.RealtimeGateway
-	RTCGateway                      realtimeplatform.RTCGateway
-	RTCIceSource                    realtimeplatform.ICEConfigSource
-	MessageRouter                   realtimeplatform.MessageRouterRuntime
-	VoiceCoordinator                *voicedelivery.Coordinator
-	VoiceProtocolRegistry           *voiceprotocol.Registry
-	CustomerHandlerService          customerdelivery.HandlerService
-	ConversationHandler             conversationdelivery.HandlerService
-	AgentHandlerService             agentdelivery.HandlerService
-	AgentGroupService               agentdelivery.AgentGroupService
-	TicketHandlerService            ticketdelivery.HandlerService
-	VisitorTicketService            ticketdelivery.VisitorTicketService
-	PushRegistrationService         pushdelivery.PushRegistrationService
-	VisitorMessagesService          conversationdelivery.VisitorMessagesService
-	TicketReaderService             *ticketdelivery.ReaderServiceAdapter
-	TransferHandlerService          routingdelivery.HandlerService
-	SatisfactionService             satisfactiondelivery.SatisfactionService
-	WorkspaceService                workspacedelivery.HandlerService
-	MacroService                    macrodelivery.HandlerService
-	AppIntegrationService           appintegrationdelivery.HandlerService
-	CustomFieldService              customfielddelivery.HandlerService
-	StatisticsHandlerService        analyticsdelivery.HandlerService
-	SLAService                      sladelivery.SLAService
-	ShiftService                    shiftdelivery.HandlerService
-	AutomationHandlerService        automationdelivery.HandlerService
-	KnowledgeDocHandler             knowledgedelivery.HandlerService
-	SuggestionService               suggestiondelivery.HandlerService
-	GamificationService             gamificationdelivery.HandlerService
-	WebhookHandlerService           webhookdelivery.HandlerService
-	QualityHandlerService           qualitydelivery.HandlerService
-	AssistHandlerService            assistdelivery.HandlerService
-	APIKeyService                   apikeydelivery.HandlerService
-	OpenConversationReader          conversationdelivery.OpenConversationReader
-	GuestTokenIssuer                conversationdelivery.GuestTokenIssuer
-	VisitorReadService              conversationdelivery.VisitorReadService
-	OIDCProvider                    *oidcplatform.Provider
-	HTTPMetrics                     *svcmetrics.HTTPMetrics
+	// HistoryTranslateService 历史消息批量标注（Phase 1 收尾，工作台历史
+	// 面消费，agent 读向）。
+	HistoryTranslateService  translationdelivery.HistoryTranslateService
+	RealtimeGateway          realtimeplatform.RealtimeGateway
+	RTCGateway               realtimeplatform.RTCGateway
+	RTCIceSource             realtimeplatform.ICEConfigSource
+	MessageRouter            realtimeplatform.MessageRouterRuntime
+	VoiceCoordinator         *voicedelivery.Coordinator
+	VoiceProtocolRegistry    *voiceprotocol.Registry
+	CustomerHandlerService   customerdelivery.HandlerService
+	ConversationHandler      conversationdelivery.HandlerService
+	AgentHandlerService      agentdelivery.HandlerService
+	AgentGroupService        agentdelivery.AgentGroupService
+	TicketHandlerService     ticketdelivery.HandlerService
+	VisitorTicketService     ticketdelivery.VisitorTicketService
+	PushRegistrationService  pushdelivery.PushRegistrationService
+	VisitorMessagesService   conversationdelivery.VisitorMessagesService
+	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
+	TransferHandlerService   routingdelivery.HandlerService
+	SatisfactionService      satisfactiondelivery.SatisfactionService
+	WorkspaceService         workspacedelivery.HandlerService
+	MacroService             macrodelivery.HandlerService
+	AppIntegrationService    appintegrationdelivery.HandlerService
+	CustomFieldService       customfielddelivery.HandlerService
+	StatisticsHandlerService analyticsdelivery.HandlerService
+	SLAService               sladelivery.SLAService
+	ShiftService             shiftdelivery.HandlerService
+	AutomationHandlerService automationdelivery.HandlerService
+	KnowledgeDocHandler      knowledgedelivery.HandlerService
+	SuggestionService        suggestiondelivery.HandlerService
+	GamificationService      gamificationdelivery.HandlerService
+	WebhookHandlerService    webhookdelivery.HandlerService
+	QualityHandlerService    qualitydelivery.HandlerService
+	AssistHandlerService     assistdelivery.HandlerService
+	APIKeyService            apikeydelivery.HandlerService
+	OpenConversationReader   conversationdelivery.OpenConversationReader
+	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
+	VisitorReadService       conversationdelivery.VisitorReadService
+	OIDCProvider             *oidcplatform.Provider
+	HTTPMetrics              *svcmetrics.HTTPMetrics
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

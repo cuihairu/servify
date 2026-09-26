@@ -20,6 +20,10 @@ func (stubTranslationHandlerService) Translate(_ context.Context, cmd translatio
 	}, nil
 }
 
+func (stubTranslationHandlerService) BatchTranslate(_ context.Context, cmd translationdelivery.BatchTranslateCommand) (translationdelivery.BatchTranslateResult, error) {
+	return translationdelivery.BatchTranslateResult{Texts: []string{}, TargetLang: cmd.TargetLang}, nil
+}
+
 // TestBuildRouter_VisitorTranslationRoute 访客面翻译路由（Phase 0.5 服务端半边）：
 // 匿名 401；访客（end_user）令牌放行——与坐席面同契约、同服务实例。
 func TestBuildRouter_VisitorTranslationRoute(t *testing.T) {

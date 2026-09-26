@@ -21,10 +21,11 @@ type SessionPreferenceReader interface {
 	GetSessionLanguage(ctx context.Context, sessionID, viewer string) (string, error)
 }
 
-// TranslateInvoker 翻译出站面（HandlerService.Translate 同形，模块门面
+// TranslateInvoker 翻译出站面（HandlerService 同形：单条 + 批量，模块门面
 // 直接满足，装配层零适配注入）。
 type TranslateInvoker interface {
 	Translate(ctx context.Context, cmd TranslateCommand) (TranslateResult, error)
+	BatchTranslate(ctx context.Context, cmd BatchTranslateCommand) (BatchTranslateResult, error)
 }
 
 // RealtimeTranslateService 会话消息自动翻译契约（Phase 1 刀二，hub 消费）：

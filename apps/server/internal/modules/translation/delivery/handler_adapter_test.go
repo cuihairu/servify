@@ -25,6 +25,43 @@ func TestHandlerServiceAdapterTranslates(t *testing.T) {
 	}
 }
 
+// TestHandlerServiceAdapterBatchTranslate 批量透传链路（Phase 1 收尾）：
+// 多段合并单次调用、nil 面 503 语义降级、provider 故障原样上抛。
+func TestHandlerServiceAdapterBatchTranslate(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("batch passthrough", func(t *testing.T) {
+		provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "<<<SEG 1>>>\nHello\n<<<SEG 2>>>\nHi there"}}
+		adapter := NewTranslationHandlerService(provider, translationapp.RuntimeParams{Model: "m"})
+		got, err := adapter.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"你好", "你好啊"}, TargetLang: "en"})
+		if err != nil {
+			t.Fatalf("BatchTranslate() error = %v", err)
+		}
+		if len(got.Texts) != 2 || got.Texts[0] != "Hello" || got.Texts[1] != "Hi there" || got.TargetLang != "en" {
+			t.Fatalf("unexpected result: %+v", got)
+		}
+	})
+
+	t.Run("nil llm degrades to unavailable", func(t *testing.T) {
+		unconfigured := NewTranslationHandlerService(nil, translationapp.RuntimeParams{})
+		if _, err := unconfigured.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"hi"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationUnavailable) {
+			t.Fatalf("nil llm error = %v, want ErrTranslationUnavailable", err)
+		}
+		var nilAdapter *HandlerServiceAdapter
+		if _, err := nilAdapter.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"hi"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationUnavailable) {
+			t.Fatalf("nil adapter error = %v, want ErrTranslationUnavailable", err)
+		}
+	})
+
+	t.Run("provider error passes through", func(t *testing.T) {
+		boom := errors.New("upstream boom")
+		failing := NewTranslationHandlerService(&mockllm.Provider{ChatError: boom}, translationapp.RuntimeParams{})
+		if _, err := failing.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"hi"}, TargetLang: "en"}); !errors.Is(err, boom) {
+			t.Fatalf("provider error = %v, want wrapped boom", err)
+		}
+	})
+}
+
 // TestHandlerServiceAdapterErrorPaths 未配置降级与 provider 故障透传。
 func TestHandlerServiceAdapterErrorPaths(t *testing.T) {
 	ctx := context.Background()
