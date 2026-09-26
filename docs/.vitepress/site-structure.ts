@@ -27,6 +27,8 @@ const productPages = [
   '/architecture-review-2026',
   '/architecture-redesign-plan',
   '/remote-assistance',
+  '/remote-assistance-status',
+  '/realtime-translation-design',
   '/deployment',
   '/webrtc-deployment',
   '/local-development',
