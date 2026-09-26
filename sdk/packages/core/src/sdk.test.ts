@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ServifySDK } from './sdk';
 import { ServifyError } from './contracts/errors';
+import type { AuthProvider } from './contracts/auth-provider';
 import type { RemoteAssistRecordingState, ServifyRTCIceServer } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -599,5 +600,89 @@ describe('ServifySDK sendMessage echo confirmation (PROTOCOL §6.3)', () => {
     const sdk = new ServifySDK({ apiUrl: 'http://localhost:8080', autoConnect: false, customerId: '1' });
 
     await expect(sdk.sendMessage('你好')).rejects.toThrow('No active session');
+  });
+});
+
+describe('ServifySDK chat text translation (Phase 0.5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function createPlainSDK(authProvider?: AuthProvider): ServifySDK {
+    return new ServifySDK({
+      apiUrl: 'http://localhost:8080',
+      autoConnect: false,
+      customerId: '1',
+      ...(authProvider ? { authProvider } : {}),
+    });
+  }
+
+  it('posts the translate request with payload and authProvider token', async () => {
+    const requests: Array<{ url: string; method: string; body: string; headers: Record<string, string> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      requests.push({
+        url: String(url),
+        method: init?.method || 'GET',
+        body: String(init?.body ?? ''),
+        headers: (init?.headers as Record<string, string>) || {},
+      });
+      return jsonResponse({ success: true, data: { text: 'Hello', source_lang: 'auto', target_lang: 'en' } });
+    }));
+    const sdk = createPlainSDK({ getToken: async () => ({ accessToken: 'guest-token' }) });
+
+    const result = await sdk.translateText('你好', 'en');
+
+    expect(result).toEqual({ text: 'Hello', source_lang: 'auto', target_lang: 'en' });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe('http://localhost:8080/api/v1/translation/translate');
+    expect(requests[0].method).toBe('POST');
+    expect(JSON.parse(requests[0].body)).toEqual({ text: '你好', target_lang: 'en' });
+    expect(requests[0].headers['Authorization']).toBe('Bearer guest-token');
+  });
+
+  it('forwards source_lang only when provided', async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      bodies.push(String(init?.body ?? ''));
+      return jsonResponse({ success: true, data: { text: 'Bonjour', source_lang: 'en', target_lang: 'fr' } });
+    }));
+    const sdk = createPlainSDK();
+
+    await sdk.translateText('hello', 'fr', { sourceLang: 'en' });
+
+    expect(JSON.parse(bodies[0])).toEqual({ text: 'hello', target_lang: 'fr', source_lang: 'en' });
+  });
+
+  it('rejects empty text and empty target lang client-side without hitting the network', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const sdk = createPlainSDK();
+
+    await expect(sdk.translateText('   ', 'en')).rejects.toThrow('text is required');
+    await expect(sdk.translateText('你好', '  ')).rejects.toThrow('target_lang is required');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('throws the server error message on failure', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      ({ ok: false, status: 503, json: async () => ({ success: false, error: 'translation unavailable' }) }) as unknown as Response,
+    ));
+    const sdk = createPlainSDK();
+
+    await expect(sdk.translateText('你好', 'en')).rejects.toThrow('translation unavailable');
+  });
+
+  it('falls back to anonymous when the authProvider token rejects', async () => {
+    const headers: Array<Record<string, string>> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      headers.push((init?.headers as Record<string, string>) || {});
+      return jsonResponse({ success: true, data: { text: 'Hello', source_lang: 'auto', target_lang: 'en' } });
+    }));
+    const sdk = createPlainSDK({ getToken: async () => { throw new Error('token provider down'); } });
+
+    const result = await sdk.translateText('你好', 'en');
+
+    expect(result.text).toBe('Hello');
+    expect(headers[0]['Authorization']).toBeUndefined();
   });
 });

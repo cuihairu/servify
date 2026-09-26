@@ -310,6 +310,16 @@ export interface VisitorMessage {
   created_at: string;
 }
 
+// 聊天文本翻译（Phase 0.5，docs/realtime-translation-design.md）：
+// POST /api/v1/translation/translate 响应数据。source_lang 为 'auto'
+// 表示服务端未指定源语言；译文载体与消息 metadata 保留键约定见
+// contracts/translation.ts（TRANSLATION_METADATA_KEYS / readMessageTranslation）。
+export interface TranslationResult {
+  text: string;
+  source_lang: string;
+  target_lang: string;
+}
+
 // 客户侧推荐问题（P2-0）：首屏热门 / 会话内上下文联想。
 // question 即可直接作为 query 发起提问的可点击文案。
 export interface RecommendedQuestion {

@@ -66,6 +66,18 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 `webrtc-answer`（offer 的 SDP 应答）、`webrtc-candidate`（ICE 候选）、`webrtc-ice-config`（ICE 服务器下发，与管理面 `GET /api/v1/rtc/ice-servers` 同形）、`webrtc-state-change`（连接状态）、`data-channel-message`。
 
+### 4.4 消息 metadata 保留键（翻译；Phase 0.5 约定，非新帧）
+
+聊天文本翻译走 REST 端点 `POST /api/v1/translation/translate`（坐席/访客两面共用，AuthMiddleware 认证即可；`source_lang` 缺省为 `auto`，响应 `{text, source_lang, target_lang}`），本节只冻结消息上的**译文载体约定**，不新增 WS 帧：
+
+| metadata 键 | 形态 | 语义 |
+|---|---|---|
+| `translation` | string | 该消息的译文文本 |
+| `translation_lang` | string | 译文语言标签（BCP-47 子集，如 `en`/`zh-CN`） |
+
+- 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——Phase 1 计划的 `message-translated` 帧落地时按 §5 流程接入（服务端广播点 + 本文 + fixtures + 三端回放测试），此前**不存在**该帧；
+- 客户端口径：未知 metadata 键一律忽略（§6 既有边界语义）；读到 `translation` 键时可视需要优先展示译文、原文兜底（core 提供 `readMessageTranslation` 读取器）；客户端**不得**自行写入这两个键——译文由服务端/坐席侧盖章，客户端写入视为伪造。
+
 ## 5. 服务端不发送的帧（客户端契约不含——类型与运行时均已收敛）
 
 以下帧类型在 core 的历史版本中曾声明于 `WSMessage.type` 联合并带运行时 case，但服务端**零发射点**（全仓广播点核查结论，策划文档 D2）。core 清理刀已将它们从类型联合与 `websocket.ts` switch 中整体移除——现契约面 = §3-§4 所列服务端真实发射集，本表保留为边界记录，防止未来误把幻影帧加回：

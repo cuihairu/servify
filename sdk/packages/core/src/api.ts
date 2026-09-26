@@ -1,4 +1,4 @@
-import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult, ServifyRTCIceServer, VisitorMessage } from './types';
+import { ApiResponse, Customer, ChatSession, Message, Ticket, CustomerSatisfaction, InitialQuestionsResult, NextQuestionsResult, ServifyRTCIceServer, TranslationResult, VisitorMessage } from './types';
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -348,6 +348,30 @@ export class ApiClient {
       `/api/v1/remote-assist/${encodeURIComponent(String(assistId))}/recording`,
       meta,
     );
+  }
+
+  // 聊天文本翻译（Phase 0.5，docs/realtime-translation-design.md）：单条消息
+  // 粒度翻译端点，坐席与访客两面共用（AuthMiddleware 认证即可）。访客面
+  // token 由 guest session 签发、经 options.token 注入 Authorization 头；
+  // 空 text/target_lang 客户端先行拒绝（与服务端 400 语义一致，省一次往返）。
+  async translateText(text: string, targetLang: string, options?: {
+    sourceLang?: string;
+    token?: string;
+  }): Promise<ApiResponse<TranslationResult>> {
+    if (!text.trim()) {
+      return { success: false, error: 'text is required' };
+    }
+    if (!targetLang.trim()) {
+      return { success: false, error: 'target_lang is required' };
+    }
+    const headers: Record<string, string> | undefined = options?.token
+      ? { Authorization: `Bearer ${options.token}` }
+      : undefined;
+    return this.request<TranslationResult>('POST', '/api/v1/translation/translate', {
+      text,
+      target_lang: targetLang,
+      ...(options?.sourceLang ? { source_lang: options.sourceLang } : {}),
+    }, headers ? { headers } : undefined);
   }
 
   // ICE 配置下发（docs/TURN_DEPLOYMENT.md 切片三）：取代旧 startCall/endCall/

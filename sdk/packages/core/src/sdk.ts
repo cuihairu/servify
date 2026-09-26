@@ -21,6 +21,7 @@ import {
   ServifyRTCIceCandidateInit,
   InitialQuestionsResult,
   NextQuestionsResult,
+  TranslationResult,
 } from './types';
 
 // 断线补拉参数（与 Android/iOS M3 刀 10 同构镜像）：页大小 100、最多 10 轮
@@ -485,6 +486,39 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     }
 
     return response.data;
+  }
+
+  // 聊天文本翻译便捷入口（Phase 0.5，docs/realtime-translation-design.md）：
+  // 对坐席/AI 消息按需调用翻译端点（渲染译文可用 readMessageTranslation 读
+  // metadata 保留键）。认证与 WS 握手同源——config.authProvider 可用时自动
+  // 附 Bearer token（访客面 guest session token 由此进入）；未配置时匿名
+  // 发出，由服务端 401 兜底。
+  async translateText(text: string, targetLang: string, options?: {
+    sourceLang?: string;
+  }): Promise<TranslationResult> {
+    const token = await this.resolveRestAuthToken();
+    const response = await this.api.translateText(text, targetLang, {
+      sourceLang: options?.sourceLang,
+      token: token ?? undefined,
+    });
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to translate text');
+    }
+
+    return response.data;
+  }
+
+  private async resolveRestAuthToken(): Promise<string | null> {
+    if (!this.config.authProvider) {
+      return null;
+    }
+    try {
+      const token = await this.config.authProvider.getToken();
+      return token?.accessToken ?? null;
+    } catch (error) {
+      this.log('解析访问 token 失败，翻译请求将以匿名身份发出', error);
+      return null;
+    }
   }
 
   // 客户侧推荐问题（P2-0）：公开路由，无需登录态；首屏在会话建立前后

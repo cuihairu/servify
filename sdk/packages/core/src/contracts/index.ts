@@ -5,4 +5,5 @@ export * from './errors';
 export * from './event-emitter';
 export * from './reconnect';
 export * from './serializer';
+export * from './translation';
 export * from './transport';
