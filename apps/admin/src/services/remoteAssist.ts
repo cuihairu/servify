@@ -53,3 +53,19 @@ export async function addAnnotation(assistSessionId: number, body: AnnotationPay
 export async function deleteAnnotation(id: number) {
   return request<{ message: string }>(`${API}/annotations/${id}`, { method: 'DELETE' });
 }
+
+/** 服务端下发的单条 ICE 服务器条目（与 WS webrtc-ice-config 帧同形；
+ * TURN 条目带 username/credential/ttl，ttl 为凭据剩余秒数） */
+export interface RTCIceServerEntry {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+  ttl?: number;
+}
+
+/** 服务端装配的 ICE 配置（GET /api/v1/rtc/ice-servers，docs/TURN_DEPLOYMENT.md
+ * 切片三）：坐席端建 PC 前取用（RA-6），替代硬编码公网 STUN——严格网络下由
+ * 服务端配置的 TURN 兜住建连。网关未装配 503 / 空配置空列表，调用方自行兜底 */
+export async function getIceServers() {
+  return request<{ ice_servers: RTCIceServerEntry[] }>('/api/v1/rtc/ice-servers');
+}

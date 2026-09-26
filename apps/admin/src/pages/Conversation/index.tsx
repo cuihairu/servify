@@ -30,7 +30,8 @@ import {
 } from '@/services/conversation';
 import { createTicket } from '@/services/ticket';
 import { getWorkspaceOverview } from '@/services/workspace';
-import { endAssistSession, startAssistSession } from '@/services/remoteAssist';
+import { endAssistSession, getIceServers, startAssistSession } from '@/services/remoteAssist';
+import type { RTCIceServerEntry } from '@/services/remoteAssist';
 import AssistReviewPanel from './components/AssistReviewPanel';
 import { navigateTo, useQueryParam } from '@/lib/navigation';
 
@@ -146,6 +147,9 @@ const ConversationPage: React.FC = () => {
   const remoteAssistPeerRef = useRef<RTCPeerConnection | null>(null);
   const remoteAssistSocketRef = useRef<WebSocket | null>(null);
   const remoteAssistStreamRef = useRef<MediaStream | null>(null);
+  // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取，
+  // RA-6）：跨协助尝试缓存，TURN 凭据过期由下次 REST 回退自然刷新。
+  const remoteAssistIceServersRef = useRef<RTCIceServerEntry[] | null>(null);
   const remoteAssistVideoRef = useRef<HTMLVideoElement | null>(null);
   const assistSessionIdRef = useRef<number | null>(null);
 
@@ -348,6 +352,26 @@ const ConversationPage: React.FC = () => {
     setRemoteAssistState(nextState);
   }, []);
 
+  // 坐席端 ICE 解析（RA-6）：服务端下发优先（WS webrtc-ice-config 推送缓存，
+  // 回退 REST /api/v1/rtc/ice-servers，与访客 SDK 同口径），两者皆空才退回
+  // 公网 STUN 兜底——严格网络（禁公网 STUN 出口）下由服务端配置的 TURN 兜住。
+  const resolveRemoteAssistIceServers = useCallback(async (): Promise<RTCIceServerEntry[]> => {
+    const pushed = remoteAssistIceServersRef.current;
+    if (pushed && pushed.length > 0) {
+      return pushed;
+    }
+    try {
+      const { ice_servers: fetched } = await getIceServers();
+      if (Array.isArray(fetched) && fetched.length > 0) {
+        remoteAssistIceServersRef.current = fetched;
+        return fetched;
+      }
+    } catch {
+      // REST 面失败（网关未装配 503 等）走公网 STUN 兜底
+    }
+    return [{ urls: 'stun:stun.l.google.com:19302' }];
+  }, []);
+
   const handleStartRemoteAssist = useCallback(async () => {
     if (!selectedId) {
       message.warning('请先选择会话');
@@ -394,7 +418,7 @@ const ConversationPage: React.FC = () => {
 
         try {
           const peer = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            iceServers: await resolveRemoteAssistIceServers(),
           });
           remoteAssistPeerRef.current = peer;
 
@@ -456,6 +480,16 @@ const ConversationPage: React.FC = () => {
           socket.onmessage = async (event) => {
             try {
               const payload = JSON.parse(event.data);
+              if (payload.type === 'webrtc-ice-config' && payload.data) {
+                // hub 建联即推送（RA-6）：缓存供本次/下次建 PC 使用；
+                // 本次的 PC 已按 REST 回退结果建好，推送仅刷新缓存。
+                const servers = payload.data.ice_servers;
+                if (Array.isArray(servers) && servers.length > 0) {
+                  remoteAssistIceServersRef.current = servers;
+                }
+                return;
+              }
+
               if (payload.type === 'webrtc-answer' && payload.data) {
                 await peer.setRemoteDescription(payload.data);
                 setRemoteAssistState('connecting');
@@ -513,7 +547,7 @@ const ConversationPage: React.FC = () => {
       setRemoteAssistSignalState('failed');
       setRemoteAssistOperating(false);
     }
-  }, [selectedId, teardownRemoteAssist]);
+  }, [selectedId, teardownRemoteAssist, resolveRemoteAssistIceServers]);
 
   const handleEndRemoteAssist = useCallback(async () => {
     teardownRemoteAssist('ended');
