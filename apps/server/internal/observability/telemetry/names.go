@@ -17,6 +17,7 @@ const (
 	MetricAIRequestsTotal      = "ai_requests_total"
 	MetricAIRequestDuration    = "ai_request_duration_seconds"
 	MetricAILLMTokenUsage      = "ai_llm_tokens_total"
+	MetricVoiceTransSentences  = "voice_translation_sentences_total"
 	MetricRateLimitDropped     = "ratelimit_dropped_total"
 
 	// Event bus metrics

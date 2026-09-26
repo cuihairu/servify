@@ -70,7 +70,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 ### 4.4 消息 metadata 保留键（翻译；Phase 0.5 约定，非新帧）
 
-聊天文本翻译走 REST 端点 `POST /api/v1/translation/translate`（坐席/访客两面共用，AuthMiddleware 认证即可；`source_lang` 缺省为 `auto`，响应 `{text, source_lang, target_lang}`），本节只冻结消息上的**译文载体约定**，不新增 WS 帧：
+聊天文本翻译走 REST 端点 `POST /api/v1/translation/translate`（坐席/访客两面共用，AuthMiddleware 认证即可；`source_lang` 缺省为 `auto`，响应 `{text, source_lang, target_lang}`，另有可选计量字段 `provider`/`token_usage`（provider 回传 usage 时出现，omitempty，Phase 2 刀二d 成本计量面，消费方可忽略）），本节只冻结消息上的**译文载体约定**，不新增 WS 帧：
 
 | metadata 键 | 形态 | 语义 |
 |---|---|---|

@@ -13,4 +13,5 @@ func TestBusinessMetricsNilReceiverNoop(t *testing.T) {
 	m.RecordRoutingDecision("tenant-1", "round_robin", "success")
 	m.RecordAIRequest("weknora", "", "success", "primary", 0.5)
 	m.RecordAILLMTokens("weknora", "input", 10)
+	m.RecordVoiceTranslationSentence("translated")
 }

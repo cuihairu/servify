@@ -82,6 +82,35 @@ func TestBusinessMetrics_RecordAILLMTokens(t *testing.T) {
 	t.Fatal("expected ai_llm_tokens_total metric")
 }
 
+func TestBusinessMetrics_RecordVoiceTranslationSentence(t *testing.T) {
+	reg := NewRegistry()
+	bm := NewBusinessMetrics(reg)
+
+	bm.RecordVoiceTranslationSentence("translated")
+	bm.RecordVoiceTranslationSentence("caption_only")
+	bm.RecordVoiceTranslationSentence("degraded")
+	bm.RecordVoiceTranslationSentence("degraded")
+
+	mfs, _ := reg.Gatherer().Gather()
+	found := false
+	for _, mf := range mfs {
+		if mf.GetName() != "voice_translation_sentences_total" {
+			continue
+		}
+		found = true
+		byOutcome := map[string]float64{}
+		for _, m := range mf.GetMetric() {
+			byOutcome[m.GetLabel()[0].GetValue()] = m.GetCounter().GetValue()
+		}
+		if byOutcome["translated"] != 1 || byOutcome["caption_only"] != 1 || byOutcome["degraded"] != 2 {
+			t.Fatalf("unexpected outcome counts: %v", byOutcome)
+		}
+	}
+	if !found {
+		t.Fatal("expected voice_translation_sentences_total metric")
+	}
+}
+
 func TestBusinessMetrics_RecordTicketCreated(t *testing.T) {
 	reg := NewRegistry()
 	bm := NewBusinessMetrics(reg)

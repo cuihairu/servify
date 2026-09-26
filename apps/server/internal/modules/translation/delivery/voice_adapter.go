@@ -4,7 +4,9 @@ import (
 	"context"
 	"strings"
 
+	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/asr"
+	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/tts"
 
 	translationapp "servify/apps/server/internal/modules/translation/application"
@@ -19,12 +21,34 @@ type voiceChannelAdapter struct {
 	prefs      SessionPreferenceReader
 	recognizer asr.Recognizer
 	synth      tts.Synthesizer // nil = 仅字幕形态（TTS 未配置的合法降级）
+	obs        translationapp.VoiceObserver
 }
 
 // NewVoiceChannelService 创建语音翻译通道服务。recognizer 为 nil 视作
-// 未配置（ErrTranslationUnavailable）；synth 可为 nil（仅字幕）。
-func NewVoiceChannelService(translator TranslateInvoker, prefs SessionPreferenceReader, recognizer asr.Recognizer, synth tts.Synthesizer) VoiceStreamStarter {
-	return &voiceChannelAdapter{translator: translator, prefs: prefs, recognizer: recognizer, synth: synth}
+// 未配置（ErrTranslationUnavailable）；synth 可为 nil（仅字幕）；
+// metrics 可为 nil（不计量）。
+func NewVoiceChannelService(translator TranslateInvoker, prefs SessionPreferenceReader, recognizer asr.Recognizer, synth tts.Synthesizer, metrics *svcmetrics.BusinessMetrics) VoiceStreamStarter {
+	var obs translationapp.VoiceObserver
+	if metrics != nil {
+		obs = &voiceMetricsObserver{metrics: metrics}
+	}
+	return &voiceChannelAdapter{translator: translator, prefs: prefs, recognizer: recognizer, synth: synth, obs: obs}
+}
+
+// voiceMetricsObserver 管线逐句产出 → 业务计量桥（设计文档 §3.2 会话级
+// 计量落 rt.BusinessMetrics 既有口；token 计量复用 ai_llm_tokens 的
+// input/output 口径）。
+type voiceMetricsObserver struct {
+	metrics *svcmetrics.BusinessMetrics
+}
+
+func (o *voiceMetricsObserver) OnSentenceOutcome(outcome string) {
+	o.metrics.RecordVoiceTranslationSentence(outcome)
+}
+
+func (o *voiceMetricsObserver) OnTranslateTokens(provider string, usage llm.TokenUsage) {
+	o.metrics.RecordAILLMTokens(provider, "input", usage.InputTokens)
+	o.metrics.RecordAILLMTokens(provider, "output", usage.OutputTokens)
 }
 
 // StartAudioStream 见 VoiceStreamStarter 契约。管线随流启动，Close 收尾
@@ -55,7 +79,7 @@ func (a *voiceChannelAdapter) StartAudioStream(ctx context.Context, sessionID, s
 		cancel()
 		return nil, err
 	}
-	pipeline := translationapp.NewVoicePipeline(a.translator, a.synth, sink, "", targetLang)
+	pipeline := translationapp.NewVoicePipeline(a.translator, a.synth, sink, "", targetLang, a.obs)
 	go pipeline.Run(streamCtx, events)
 	return &voiceAudioStream{session: session, cancel: cancel}, nil
 }

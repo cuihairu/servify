@@ -15,6 +15,7 @@ type BusinessMetrics struct {
 	aiRequests           *prometheus.CounterVec
 	aiRequestDuration    *prometheus.HistogramVec
 	aiLLMTokens          *prometheus.CounterVec
+	voiceTransSentences  *prometheus.CounterVec
 }
 
 // NewBusinessMetrics creates and registers business metric collectors.
@@ -49,6 +50,10 @@ func NewBusinessMetrics(reg *Registry) *BusinessMetrics {
 			Name: telemetry.MetricAILLMTokenUsage,
 			Help: "Total number of LLM tokens consumed.",
 		}, []string{telemetry.LabelProvider, telemetry.LabelTokenType}),
+		voiceTransSentences: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: telemetry.MetricVoiceTransSentences,
+			Help: "Total number of voice translation sentences produced.",
+		}, []string{telemetry.LabelOutcome}),
 	}
 
 	reg.MustRegister(
@@ -59,6 +64,7 @@ func NewBusinessMetrics(reg *Registry) *BusinessMetrics {
 		m.aiRequests,
 		m.aiRequestDuration,
 		m.aiLLMTokens,
+		m.voiceTransSentences,
 	)
 	return m
 }
@@ -111,4 +117,14 @@ func (m *BusinessMetrics) RecordAILLMTokens(provider, tokenType string, count in
 		return
 	}
 	m.aiLLMTokens.WithLabelValues(provider, tokenType).Add(float64(count))
+}
+
+// RecordVoiceTranslationSentence increments the per-sentence voice pipeline
+// outcome counter (translated=字幕+音频；caption_only=译文仅字幕；degraded=
+// 降级原文；设计文档 §3.2 会话级计量)。
+func (m *BusinessMetrics) RecordVoiceTranslationSentence(outcome string) {
+	if m == nil {
+		return
+	}
+	m.voiceTransSentences.WithLabelValues(outcome).Inc()
 }

@@ -282,8 +282,10 @@ core SDK（访客侧，实时）
 （单条消息 < $0.0001）。
 
 控制手段：按租户配置开关与配额（复用 configscope 租户覆盖模式）、
-逐句预算熔断（超时句降级为仅字幕/仅原文）、会话级 token 计量落
-business metrics（既有 `rt.BusinessMetrics` 口）。
+逐句预算熔断（超时句降级为仅字幕/仅原文，Phase 2 刀二d 已落地：单句 5s
+超时走既有降级面）、会话级 token 计量落 business metrics（既有
+`rt.BusinessMetrics` 口，刀二d 已落地：`voice_translation_sentences_total`
++ 复用 `ai_llm_tokens_total`；租户配额限流仍属 Phase 3）。
 
 ## 4. 隐私与安全
 
@@ -334,6 +336,7 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 2 刀二b-2 服务端语音通道（已落地）** | 独立 WS 通道 `/api/v1/ws/voice`（§1.2：音频帧不挤会话 WS 下行缓冲）：`delivery/voice_contract.go`（`VoiceStreamStarter`/`VoiceAudioStream` 契约 + app 类型别名桥接）+ `delivery/voice_adapter.go`（每流组装"ASR 会话 + 语音管线"，说话方→读向对偶：visitor 说话查 agent 读向）+ `platform/realtime/voice_hub.go`（握手校验 session_id/speaker/token、按会话广播、慢客户端踢线与会话 WS 同口径、voice-error 收线、失败零帧）+ 装配接线（`ai.asr` 配置门控：未配置不注册路由；guest token 校验与会话 WS 同源）+ 安全面目录登记 `public-realtime-voice`（`app/server/security_surface.go`，与 `/api/v1/ws` 同信任域、限流沿用其前缀条目）。下行帧族协议三件套（PROTOCOL §9 + fixtures + 三端回放）是刀二b-3 | 无新增依赖 |
 | **Phase 2 刀二b-3 协议三件套（已落地）** | `sdk/PROTOCOL.md` §9（语音通道握手/上行形态/下行帧族四帧 + `turn_seq`/`seq` 语义 + `voice-error` 词表与连接级语义 + 三端消费状态）+ `sdk/protocol-fixtures/` 语音帧族四样例（12-15，`channel: "voice"` 标注）+ 三端回放：core `VoiceChannel`（`sdk/packages/core/src/voice.ts`：握手参数拼装、下行四帧必需字段校验 → `voice:delta/final/audio/error` 事件（载荷线序 snake_case）、`sendAudio` 二进制上行、无自动重连）+ fixtures 回放断言（四帧全载荷事件 + 会话通道对误入语音帧忽略）+ Android/iOS 会话核心 `UnknownIgnored` 断言（端级偏差声明；语音通道客户端与三端上行/字幕渲染消费是后续刀） | 无新增依赖（core 零新增 npm 依赖） |
 | **Phase 2 刀二c Web 上行 + 字幕渲染（已落地）** | core `MicCapture`（`sdk/packages/core/src/voice-capture.ts`）：纯函数三件（`floatToPcm16` clamp 量化 / `resampleLinear` 线性插值重采样 / `pcm16ToLeBytes` DataView 显式小端）+ `MicCapture` 采集图（getUserMedia → ScriptProcessor → 零增益 mute → destination；generation 作废在途 start 防 stop 竞态；`capture_denied`/`capture_unavailable`/`capture_already_active` 错误归一；ports 注入对齐 webSocketFactory 口径）+ vanilla UMD 全局挂载（`window.Servify.MicCapture/VoiceChannel` 等六件——UMD exports 被 window.Servify 类赋值覆盖，named 导出在浏览器不可达，工具集挂类上）+ demo 挂件（`apps/demo-sdk/widget.js`）：麦克风按钮（能力探测降级，旧缓存包不出现）+ 会话 id 一处生成多通道共用 + `voice:delta` 直播行（每说话方一条）+ `voice:final` 终句字幕（译文+原文小字+降级标注）+ `voice:audio` 播报（自动播放被拦退化 ▶ 按钮）+ 会话通道断线联动语音收线。移动端上行/字幕渲染仍按产品节奏 | 无新增依赖（core/vanilla 零新增 npm 依赖） |
+| **Phase 2 刀二d 成本控制收口（已落地）** | §3.2 控制手段落地：逐句预算熔断——`VoicePipeline` 对翻译/TTS 各加单句超时（5s，远小于 provider 传输层 30s 兜底，P50 预算 600ms/800ms 的裕量上限），超限句按既有降级面走（翻译超限降级原文、合成超限仅字幕），管线不断；会话拆除中的在途句不产出字幕不计降级（收线≠熔断）。业务计量——`VoiceObserver` 观测面（产出 outcome 词表 `translated`/`caption_only`/`degraded` + 逐句 token 消费）经 delivery 桥接 `rt.BusinessMetrics` 既有口：新计数器 `voice_translation_sentences_total{outcome}`，token 复用 `ai_llm_tokens_total{provider,token_type}`；`TranslateResult` 增可选计量字段 `provider`/`token_usage`（omitempty，PROTOCOL §5 已注）。租户配置开关维持既有 `ai.asr` 装配门控；租户配额限流仍属 Phase 3 | 无新增依赖 |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 
 各阶段验收：单测（mock provider 零网络）+ golden 回归（提示词劣化检测）+

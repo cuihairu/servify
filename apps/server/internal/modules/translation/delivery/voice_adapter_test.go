@@ -8,7 +8,9 @@ import (
 	"time"
 
 	translationapp "servify/apps/server/internal/modules/translation/application"
+	"servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/asr"
+	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/tts"
 )
 
@@ -157,29 +159,29 @@ func TestVoiceChannelAdapterUnconfigured(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("nil recognizer", func(t *testing.T) {
-		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, nil, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("err = %v, want ErrTranslationUnavailable", err)
 		}
 	})
 	t.Run("nil prefs", func(t *testing.T) {
-		if _, err := NewVoiceChannelService(&rtTranslateStub{}, nil, &vaRecognizerStub{}, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := NewVoiceChannelService(&rtTranslateStub{}, nil, &vaRecognizerStub{}, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("err = %v, want ErrTranslationUnavailable", err)
 		}
 	})
 	t.Run("no preference means inactive channel", func(t *testing.T) {
-		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: ""}, &vaRecognizerStub{}, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrVoiceChannelInactive) {
+		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: ""}, &vaRecognizerStub{}, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, ErrVoiceChannelInactive) {
 			t.Fatalf("err = %v, want ErrVoiceChannelInactive", err)
 		}
 	})
 	t.Run("preference read error propagates", func(t *testing.T) {
 		boom := errors.New("db down")
-		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{err: boom}, &vaRecognizerStub{}, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, boom) {
+		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{err: boom}, &vaRecognizerStub{}, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, boom) {
 			t.Fatalf("err = %v, want wrapped boom", err)
 		}
 	})
 	t.Run("asr new session failure", func(t *testing.T) {
 		boom := errors.New("dial refused")
-		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, &vaRecognizerStub{newSessErr: boom}, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, boom) {
+		if _, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, &vaRecognizerStub{newSessErr: boom}, nil, nil).StartAudioStream(ctx, "s", VoiceSpeakerVisitor, &vaSink{}); !errors.Is(err, boom) {
 			t.Fatalf("err = %v, want boom", err)
 		}
 	})
@@ -196,7 +198,7 @@ func TestVoiceChannelAdapterReadDirection(t *testing.T) {
 		{VoiceSpeakerAgent, ViewerRoleVisitor},
 	} {
 		prefs := &rtPrefsStub{lang: "en"}
-		stream, err := NewVoiceChannelService(&rtTranslateStub{}, prefs, &vaRecognizerStub{}, nil).StartAudioStream(context.Background(), "s", tc.speaker, &vaSink{})
+		stream, err := NewVoiceChannelService(&rtTranslateStub{}, prefs, &vaRecognizerStub{}, nil, nil).StartAudioStream(context.Background(), "s", tc.speaker, &vaSink{})
 		if err != nil {
 			t.Fatalf("speaker=%s: %v", tc.speaker, err)
 		}
@@ -211,7 +213,7 @@ func TestVoiceChannelAdapterReadDirection(t *testing.T) {
 // 固定 pcm16 24kHz 单声道上行格式。
 func TestVoiceChannelAdapterSessionShape(t *testing.T) {
 	recognizer := &vaRecognizerStub{}
-	stream, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, recognizer, nil).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, &vaSink{})
+	stream, err := NewVoiceChannelService(&rtTranslateStub{}, &rtPrefsStub{lang: "en"}, recognizer, nil, nil).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, &vaSink{})
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -232,7 +234,7 @@ func TestVoiceChannelAdapterEndToEnd(t *testing.T) {
 	recognizer := &vaRecognizerStub{}
 	sink := &vaSink{}
 
-	stream, err := NewVoiceChannelService(translator, &rtPrefsStub{lang: "en"}, recognizer, synth).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, sink)
+	stream, err := NewVoiceChannelService(translator, &rtPrefsStub{lang: "en"}, recognizer, synth, nil).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, sink)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -271,6 +273,58 @@ func TestVoiceChannelAdapterEndToEnd(t *testing.T) {
 	}
 }
 
+// TestVoiceChannelAdapterMetrics 逐句产出计量经 observer 落 BusinessMetrics
+// （§3.2 会话级计量既有口）：翻译成功句计 voice_translation_sentences_total
+// {outcome="translated"}，token 消费累加 ai_llm_tokens_total 的 input/output。
+func TestVoiceChannelAdapterMetrics(t *testing.T) {
+	reg := metrics.NewRegistry()
+	bm := metrics.NewBusinessMetrics(reg)
+	translator := &rtTranslateStub{result: translationapp.TranslateResult{
+		Text:       "Hello",
+		TargetLang: "en",
+		Provider:   "mock",
+		TokenUsage: &llm.TokenUsage{InputTokens: 11, OutputTokens: 7},
+	}}
+	recognizer := &vaRecognizerStub{}
+	sink := &vaSink{}
+
+	stream, err := NewVoiceChannelService(translator, &rtPrefsStub{lang: "en"}, recognizer, &vaSynthStub{}, bm).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, sink)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	recognizer.session.events <- asr.Event{Kind: asr.EventFinal, Seq: 1, Text: "你好。"}
+	waitVoiceCaptions(t, sink, 1)
+	if err := stream.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	mfs, err := reg.Gatherer().Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	sentences := map[string]float64{}
+	tokens := map[string]float64{}
+	for _, mf := range mfs {
+		switch mf.GetName() {
+		case "voice_translation_sentences_total":
+			for _, m := range mf.GetMetric() {
+				sentences[m.GetLabel()[0].GetValue()] = m.GetCounter().GetValue()
+			}
+		case "ai_llm_tokens_total":
+			for _, m := range mf.GetMetric() {
+				labels := m.GetLabel()
+				tokens[labels[0].GetValue()+":"+labels[1].GetValue()] = m.GetCounter().GetValue()
+			}
+		}
+	}
+	if sentences["translated"] != 1 || len(sentences) != 1 {
+		t.Fatalf("sentence outcomes = %v, want translated=1 only", sentences)
+	}
+	if tokens["mock:input"] != 11 || tokens["mock:output"] != 7 {
+		t.Fatalf("token usage = %v, want mock:input=11 mock:output=7", tokens)
+	}
+}
+
 // TestVoiceChannelAdapterCaptionOnly TTS 未配置（nil synth）= 仅字幕合法
 // 降级：字幕照常产出，无音频帧。
 func TestVoiceChannelAdapterCaptionOnly(t *testing.T) {
@@ -278,7 +332,7 @@ func TestVoiceChannelAdapterCaptionOnly(t *testing.T) {
 	recognizer := &vaRecognizerStub{}
 	sink := &vaSink{}
 
-	stream, err := NewVoiceChannelService(translator, &rtPrefsStub{lang: "en"}, recognizer, nil).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, sink)
+	stream, err := NewVoiceChannelService(translator, &rtPrefsStub{lang: "en"}, recognizer, nil, nil).StartAudioStream(context.Background(), "s", VoiceSpeakerVisitor, sink)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}

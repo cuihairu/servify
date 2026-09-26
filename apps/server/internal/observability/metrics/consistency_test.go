@@ -44,6 +44,7 @@ var allMetricNames = []string{
 	telemetry.MetricWorkerJobDuration,
 	telemetry.MetricWorkerActiveJobs,
 	telemetry.MetricErrorsTotal,
+	telemetry.MetricVoiceTransSentences,
 }
 
 // builtinMetricNames 是 runtime collectors 直接产出、不经 telemetry 常量的指标。

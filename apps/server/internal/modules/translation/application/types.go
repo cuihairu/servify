@@ -3,6 +3,8 @@ package application
 import (
 	"errors"
 	"fmt"
+
+	"servify/apps/server/internal/platform/llm"
 )
 
 // 翻译应用层错误（delivery 侧映射 HTTP 状态；provider 故障原样上抛由
@@ -45,9 +47,13 @@ type TranslateCommand struct {
 	Context    string
 }
 
-// TranslateResult 翻译产出；Text 为可直接展示的译文。
+// TranslateResult 翻译产出；Text 为可直接展示的译文。Provider/TokenUsage
+// 为可选计量面（§3.2 成本计量）：provider 未回传 usage 时为空，REST 响应
+// 中以 omitempty 保持既有形状可忽略。
 type TranslateResult struct {
-	Text       string `json:"text"`
-	SourceLang string `json:"source_lang"`
-	TargetLang string `json:"target_lang"`
+	Text       string          `json:"text"`
+	SourceLang string          `json:"source_lang"`
+	TargetLang string          `json:"target_lang"`
+	Provider   string          `json:"provider,omitempty"`
+	TokenUsage *llm.TokenUsage `json:"token_usage,omitempty"`
 }

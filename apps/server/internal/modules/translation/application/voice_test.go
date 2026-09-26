@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,27 @@ import (
 	"servify/apps/server/internal/platform/tts"
 	mocktts "servify/apps/server/internal/platform/tts/mock"
 )
+
+// SentenceTranslatorStub 可编程翻译替身（Satisfies translationapp.SentenceTranslator）。
+type SentenceTranslatorStub struct {
+	Text  string
+	Err   error
+	Delay time.Duration // >0 时阻塞至延迟到达或 ctx 释放（预算熔断/收线守卫用例）
+}
+
+func (s *SentenceTranslatorStub) Translate(ctx context.Context, cmd translationapp.TranslateCommand) (translationapp.TranslateResult, error) {
+	if s.Delay > 0 {
+		select {
+		case <-time.After(s.Delay):
+		case <-ctx.Done():
+			return translationapp.TranslateResult{}, ctx.Err()
+		}
+	}
+	if s.Err != nil {
+		return translationapp.TranslateResult{}, s.Err
+	}
+	return translationapp.TranslateResult{Text: s.Text}, nil
+}
 
 // recordedAudio 一段产出音频（句序 + 字节 + 格式）。
 type recordedAudio struct {
@@ -80,7 +102,7 @@ func runPipeline(t *testing.T, provider *mockllm.Provider, synth tts.Synthesizer
 	t.Helper()
 	sink := &recordingSink{}
 	p := translationapp.NewVoicePipeline(
-		translationapp.NewService(provider, testParams), synth, sink, "zh", "en")
+		translationapp.NewService(provider, testParams), synth, sink, "zh", "en", nil)
 	ch := make(chan asr.Event, len(events)+1)
 	for _, ev := range events {
 		ch <- ev
@@ -165,7 +187,7 @@ func TestVoicePipelineDegradesOnTranslateFailure(t *testing.T) {
 
 func TestVoicePipelineNilTranslateDegradesAll(t *testing.T) {
 	sink := &recordingSink{}
-	p := translationapp.NewVoicePipeline(nil, &mocktts.Provider{}, sink, "zh", "en")
+	p := translationapp.NewVoicePipeline(nil, &mocktts.Provider{}, sink, "zh", "en", nil)
 	ch := make(chan asr.Event, 1)
 	ch <- asr.Event{Kind: asr.EventFinal, Seq: 1, Text: "你好。"}
 	close(ch)
@@ -284,7 +306,7 @@ func TestVoicePipelineContextTailClamped(t *testing.T) {
 }
 
 func TestVoicePipelineRunReturnsOnContextCancel(t *testing.T) {
-	p := translationapp.NewVoicePipeline(nil, nil, &recordingSink{}, "zh", "en")
+	p := translationapp.NewVoicePipeline(nil, nil, &recordingSink{}, "zh", "en", nil)
 	ch := make(chan asr.Event) // 永不入事件：Run 只能经 ctx 退出
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -297,5 +319,115 @@ func TestVoicePipelineRunReturnsOnContextCancel(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("Run must return promptly on context cancel")
+	}
+}
+
+// recordingObserver 录制逐句产出计量（outcome 词表 + token 消费）。
+type recordingObserver struct {
+	mu       sync.Mutex
+	outcomes []string
+	tokens   []string // "provider:input:output" 形态快照
+}
+
+func (o *recordingObserver) OnSentenceOutcome(outcome string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.outcomes = append(o.outcomes, outcome)
+}
+
+func (o *recordingObserver) OnTranslateTokens(provider string, usage llm.TokenUsage) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.tokens = append(o.tokens, fmt.Sprintf("%s:%d:%d", provider, usage.InputTokens, usage.OutputTokens))
+}
+
+func (o *recordingObserver) snapshot() (outcomes, tokens []string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string{}, o.outcomes...), append([]string{}, o.tokens...)
+}
+
+// drivePipeline 直接构造管线并驱动单句事件（obs 注入路径；runPipeline 固定
+// nil obs 不动）。
+func drivePipeline(t *testing.T, translate translationapp.SentenceTranslator, synth tts.Synthesizer, obs translationapp.VoiceObserver) *recordingSink {
+	t.Helper()
+	sink := &recordingSink{}
+	p := translationapp.NewVoicePipeline(translate, synth, sink, "zh", "en", obs)
+	ch := make(chan asr.Event, 1)
+	ch <- asr.Event{Kind: asr.EventFinal, Seq: 1, Text: "你好。"}
+	close(ch)
+	done := make(chan struct{})
+	go func() {
+		p.Run(context.Background(), ch)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not return")
+	}
+	return sink
+}
+
+func TestVoicePipelineObserverTranslatedOutcomeAndTokens(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{
+		Content:    "hello",
+		Provider:   "mock",
+		TokenUsage: &llm.TokenUsage{InputTokens: 11, OutputTokens: 7},
+	}}
+	obs := &recordingObserver{}
+	sink := drivePipeline(t, translationapp.NewService(provider, testParams), &mocktts.Provider{Audio: []byte("mp3")}, obs)
+
+	outcomes, tokens := obs.snapshot()
+	if len(outcomes) != 1 || outcomes[0] != translationapp.VoiceOutcomeTranslated {
+		t.Fatalf("outcomes = %+v, want [translated]", outcomes)
+	}
+	if _, _, _, audios, _ := sink.snapshot(); len(audios) != 1 {
+		t.Fatalf("translated sentence must emit audio: %+v", audios)
+	}
+	if len(tokens) != 1 || tokens[0] != "mock:11:7" {
+		t.Fatalf("tokens = %+v, want [mock:11:7]", tokens)
+	}
+}
+
+func TestVoicePipelineObserverCaptionOnlyWithoutSynth(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{
+		Content:    "hello",
+		Provider:   "mock",
+		TokenUsage: &llm.TokenUsage{InputTokens: 5, OutputTokens: 3},
+	}}
+	obs := &recordingObserver{}
+	drivePipeline(t, translationapp.NewService(provider, testParams), nil, obs)
+
+	outcomes, tokens := obs.snapshot()
+	if len(outcomes) != 1 || outcomes[0] != translationapp.VoiceOutcomeCaptionOnly {
+		t.Fatalf("outcomes = %+v, want [caption_only]", outcomes)
+	}
+	if len(tokens) != 1 || tokens[0] != "mock:5:3" {
+		t.Fatalf("tokens = %+v, want [mock:5:3]", tokens)
+	}
+}
+
+func TestVoicePipelineObserverDegradedOnTranslateFailure(t *testing.T) {
+	obs := &recordingObserver{}
+	sink := drivePipeline(t, &SentenceTranslatorStub{Err: errors.New("llm boom")}, &mocktts.Provider{}, obs)
+
+	outcomes, _ := obs.snapshot()
+	if len(outcomes) != 1 || outcomes[0] != translationapp.VoiceOutcomeDegraded {
+		t.Fatalf("outcomes = %+v, want [degraded]", outcomes)
+	}
+	if _, _, captions, _, _ := sink.snapshot(); len(captions) != 1 || !captions[0].Degraded {
+		t.Fatalf("captions = %+v, want degraded original", captions)
+	}
+}
+
+func TestVoicePipelineObserverCaptionOnlyOnSynthFailure(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "hello"}}
+	obs := &recordingObserver{}
+	drivePipeline(t, translationapp.NewService(provider, testParams), &mocktts.Provider{Error: errors.New("tts down")}, obs)
+
+	outcomes, _ := obs.snapshot()
+	if len(outcomes) != 1 || outcomes[0] != translationapp.VoiceOutcomeCaptionOnly {
+		t.Fatalf("outcomes = %+v, want [caption_only]", outcomes)
 	}
 }

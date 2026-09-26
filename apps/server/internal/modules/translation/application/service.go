@@ -75,7 +75,13 @@ func (s *Service) Translate(ctx context.Context, cmd TranslateCommand) (Translat
 	if translated == "" {
 		return TranslateResult{}, ErrTranslationEmptyOutput
 	}
-	return TranslateResult{Text: translated, SourceLang: source, TargetLang: target}, nil
+	return TranslateResult{
+		Text:       translated,
+		SourceLang: source,
+		TargetLang: target,
+		Provider:   resp.Provider,
+		TokenUsage: resp.TokenUsage,
+	}, nil
 }
 
 // buildTranslationMessages 组装翻译提示词：system 定角色与纪律，

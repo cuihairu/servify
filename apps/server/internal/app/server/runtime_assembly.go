@@ -147,7 +147,7 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 			case !errors.Is(ttsErr, tts.ErrNotConfigured):
 				rt.Logger.Errorf("voice translation tts disabled (tts factory): %v", ttsErr)
 			}
-			rt.VoiceTranslationRuntime = translationdelivery.NewVoiceChannelService(aiAssembly.Translation, prefService, recognizer, synth)
+			rt.VoiceTranslationRuntime = translationdelivery.NewVoiceChannelService(aiAssembly.Translation, prefService, recognizer, synth, rt.BusinessMetrics)
 		case !errors.Is(asrErr, asr.ErrNotConfigured):
 			rt.Logger.Errorf("voice translation disabled (asr factory): %v", asrErr)
 		}
