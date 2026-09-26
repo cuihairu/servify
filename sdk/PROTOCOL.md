@@ -92,7 +92,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - **关联靠 `original`**：翻译是落库后的异步旁路，没有消息 ID 可挂（会话写入口只返回 error）。客户端按"内容相同、且是本会话最近一条未挂译文的消息"匹配；同内容连续重复消息的匹配结果可能后到覆盖，属已知边界；
 - **失败零帧**：无偏好与 provider 未配置都静默跳过（不发帧），其余失败只记服务端日志——客户端不存在"翻译失败"态；
 - **方向边界**：两个方向都已接（Phase 1 刀二 hub 落库路径 = 访客 → 坐席，刀三坐席发送口路径 = 坐席 → 访客），共用同一帧型与同一 `original` 关联语义——坐席会话里两方向帧可能并存，客户端按 `original` 内容匹配各自方向的消息；
-- **三端消费状态**：core / Android / iOS 当前按 §5 流程以"注解帧"回放（不并入 messages、不报错）；消费半边（事件面/渲染）后续刀接入，届时更新 fixtures expectations 的端级偏差声明。
+- **三端消费状态**：core 已消费——`message-translated` 为 `WSMessage` 联合成员并发射同名事件（载荷 `MessageTranslation`），渲染方按 `original` 关联、原文兜底；fixtures 回放断言"事件携带完整载荷、不并入 messages、不产 message/error"。Android / iOS 维持 `UnknownIgnored` 显式忽略（消费半边视产品节奏接入，届时更新 fixtures expectations 的端级偏差声明）。
 
 ## 5. 服务端不发送的帧（客户端契约不含——类型与运行时均已收敛）
 

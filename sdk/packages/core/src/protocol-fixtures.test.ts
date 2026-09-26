@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WebSocketManager } from './websocket';
-import type { Message, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
+import type { Message, MessageTranslation, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
 
 /**
  * 契约回放测试：用 sdk/protocol-fixtures/ 同一套样例喂 core 的 WS 分发，
@@ -282,24 +282,27 @@ describe('protocol fixtures replay (core)', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('replays the message-translated frame: parallel annotation — not a message, never an error', async () => {
-    // message-translated（PROTOCOL.md §4.5，Phase 1 刀二服务端半边）：译文是
-    // 原文的并行注解帧——core 当前不并入 messages（消费半边后续刀接入），
-    // 但必须保证：不抛错、不产 message 事件、载荷字段与 fixture 断言一致。
+  it('replays the message-translated frame: parallel annotation consumed via its own event — not a message, never an error', async () => {
+    // message-translated（PROTOCOL.md §4.5，Phase 1 服务端半边 + core 消费
+    // 半边）：译文是原文的并行注解帧——core 以独立 message-translated 事件
+    // 消费（渲染方按 original 关联、原文兜底），不并入 messages、不抛错、
+    // 不产 message 事件；载荷字段与 fixture 断言一致。
     const fixture = fixtures.find((f) => f.expectations.kind === 'message-translated')!;
     const { manager, socket } = await connectManager();
     const messages: Message[] = [];
     const errors: unknown[] = [];
+    const translations: MessageTranslation[] = [];
     manager.on('message', (m) => messages.push(m));
     manager.on('error', (e) => errors.push(e));
+    manager.on('message-translated', (t) => translations.push(t));
 
     expect(() => socket.feed(fixture.frame!)).not.toThrow();
     expect(messages).toHaveLength(0);
     expect(errors).toHaveLength(0);
 
-    // 服务端载荷契约：四字段并存（关联靠 original，无消息 ID 可挂）
-    const data = (fixture.frame as { data: Record<string, unknown> }).data;
-    expect(data).toMatchObject({
+    // core 端消费：独立事件携带完整载荷（关联靠 original，无消息 ID 可挂）
+    expect(translations).toHaveLength(1);
+    expect(translations[0]).toMatchObject({
       original: fixture.expectations.assert.original,
       content: fixture.expectations.assert.content,
       source_lang: fixture.expectations.assert.source_lang,

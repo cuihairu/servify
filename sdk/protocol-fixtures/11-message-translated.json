@@ -19,7 +19,7 @@
       "content": "Hello, I would like to ask about the return policy",
       "source_lang": "zh",
       "target_lang": "en",
-      "core": "annotation frame: parallel to text-message, never merged into messages, never an error (SDK consumption half lands separately)",
+      "core": "annotation frame consumed via its own message-translated event: parallel to text-message, never merged into messages, never an error",
       "mobile": "ignored silently as an unknown type (UnknownIgnored)"
     }
   }

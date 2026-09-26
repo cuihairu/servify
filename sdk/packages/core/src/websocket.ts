@@ -7,7 +7,7 @@ import {
   shouldReconnect,
 } from './contracts/reconnect';
 import type { Transport, TransportConnectOptions, TransportSendOptions, ReconnectPolicy, TransportState } from './contracts/transport';
-import { WSMessage, ServifyEventMap, Message, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer, AiStreamDeltaUpdate, AiStreamEndUpdate, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
+import { WSMessage, ServifyEventMap, Message, MessageTranslation, RemoteAssistRuntimeState, RemoteAssistState, WebSocketFactory, ServifyRTCIceServer, AiStreamDeltaUpdate, AiStreamEndUpdate, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
 import { StreamingAssembler } from './streaming';
 
 export interface WebSocketManagerOptions {
@@ -268,6 +268,11 @@ export class WebSocketManager extends EventEmitter<ServifyEventMap> implements T
         break;
       case 'agent-message':
         this.emit('message', this.normalizeMessage(message, 'agent'));
+        break;
+      case 'message-translated':
+        // 译文注解帧（PROTOCOL §4.5）：独立事件、不并入 messages、
+        // payload 异常时按原样透传由消费方自行判定（绝不是错误）。
+        this.emit('message-translated', message.data as MessageTranslation);
         break;
       case 'ai-response':
         this.emit('message', this.normalizeMessage(message, 'system', true));

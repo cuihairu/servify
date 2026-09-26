@@ -121,6 +121,7 @@ export interface WSMessage {
   type:
     | 'text-message'
     | 'agent-message'
+    | 'message-translated'
     | 'ai-response'
     | 'ai-response-delta'
     | 'transfer_notification'
@@ -253,6 +254,7 @@ export type ServifyEventMap = {
   'disconnected': [reason: string];
   'reconnecting': [attempt: number];
   'message': [message: Message];
+  'message-translated': [translation: MessageTranslation];
   'session_created': [session: ChatSession];
   'session_ended': [session: ChatSession];
   'error': [error: Error];
@@ -316,6 +318,16 @@ export interface VisitorMessage {
 // contracts/translation.ts（TRANSLATION_METADATA_KEYS / readMessageTranslation）。
 export interface TranslationResult {
   text: string;
+  source_lang: string;
+  target_lang: string;
+}
+
+// message-translated 帧载荷（Phase 1，PROTOCOL.md §4.5）：会话消息的自动
+// 译文注解——与原文并存、按 original 关联（不并入 messages、绝不是错误）；
+// 历史消息的译文改走 metadata 保留键（readMessageTranslation）。
+export interface MessageTranslation {
+  original: string;
+  content: string;
   source_lang: string;
   target_lang: string;
 }

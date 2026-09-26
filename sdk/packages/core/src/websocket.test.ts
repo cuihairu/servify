@@ -163,6 +163,48 @@ describe('WebSocketManager', () => {
     expect(stateSpy).toHaveBeenCalledWith('connected');
   });
 
+  it('emits message-translated as an annotation event without touching messages (PROTOCOL §4.5)', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+
+    const manager = new WebSocketManager({
+      url: 'ws://localhost:8080/api/v1/ws?session_id=test-session',
+    });
+
+    const translatedSpy = vi.fn();
+    const messageSpy = vi.fn();
+    manager.on('message-translated', translatedSpy);
+    manager.on('message', messageSpy);
+
+    const connectPromise = manager.connect();
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    FakeWebSocket.instances[0].open();
+    await connectPromise;
+
+    FakeWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({
+        type: 'message-translated',
+        data: {
+          original: '你好，我想咨询退货政策',
+          content: 'Hello, I would like to ask about the return policy',
+          source_lang: 'zh',
+          target_lang: 'en',
+        },
+        session_id: 'fixture-session',
+      }),
+    });
+
+    // 注解帧语义：译文经独立事件暴露（按 original 关联渲染），绝不并入
+    // messages、绝不产生 error。
+    expect(translatedSpy).toHaveBeenCalledTimes(1);
+    expect(translatedSpy).toHaveBeenCalledWith({
+      original: '你好，我想咨询退货政策',
+      content: 'Hello, I would like to ask about the return policy',
+      source_lang: 'zh',
+      target_lang: 'en',
+    });
+    expect(messageSpy).not.toHaveBeenCalled();
+  });
+
   it('creates the transport socket through the injected factory', async () => {
     const created: FakeWebSocket[] = [];
     const factory = vi.fn((url: string, protocols?: string | string[]) => {
