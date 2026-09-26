@@ -131,7 +131,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、message-translated（注解帧，三端不并入 messages 的显式契约，§4.5）、语音帧族四样例（translation-delta/final/audio + voice-error，`channel: "voice"` 标注——core 经 VoiceChannel 消费、移动端会话核心按忽略断言，§9.2）、慢客户端边界（文档级用例）；
 - 服务端 WS 广播点变更 → 同一 PR 更新本文 + fixtures → 三端回放测试同时验证。
 
-## 9. 语音翻译通道 `/api/v1/ws/voice`（Phase 2 刀二b-2/b-3，独立 WS 通道）
+## 9. 语音翻译通道 `/api/v1/ws/voice`（Phase 2 刀二b-2/b-3/c，独立 WS 通道）
 
 语音实时翻译的专用通道（docs/realtime-translation-design.md §1.2）：持续二进制音频上行不挤会话 WS 的 256 帧下行缓冲，会话 WS 契约（§1-§7）零变更。服务端实现 `platform/realtime/voice_hub.go`；`ai.asr` 未配置的部署在装配层不注册该路由（路由不存在 = 404，无半装配形态）。
 
@@ -168,5 +168,5 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 ### 9.2 三端消费状态
 
-- **core 已消费**：`VoiceChannel`（`sdk/packages/core/src/voice.ts`）承载本通道下行——`voice:delta`/`voice:final`/`voice:audio`/`voice:error` 四个独立事件（载荷保持线序 snake_case，与 `MessageTranslation` 同族）；`sendAudio()` 提供二进制上行传输（麦克风采集是宿主/demo 层职责）；无自动重连（语音流是活体采集会话，服务端无续传，重启说话是用户显式动作）。fixtures 回放断言四帧全载荷事件 + 会话通道管理器对误入语音帧静默忽略；
+- **core 已消费（上行 + 下行）**：`VoiceChannel`（`sdk/packages/core/src/voice.ts`）承载本通道下行——`voice:delta`/`voice:final`/`voice:audio`/`voice:error` 四个独立事件（载荷保持线序 snake_case，与 `MessageTranslation` 同族）；`sendAudio()` 提供二进制上行传输。上行采集由 `MicCapture`（`sdk/packages/core/src/voice-capture.ts`，刀二c）补齐：getUserMedia → ScriptProcessor → pcm16 24kHz 小端分片（选 ScriptProcessor 而非 AudioWorklet：processor 模块经 Blob URL 加载会被服务端 `default-src 'self'` CSP 拦截，ScriptProcessor 无模块加载全浏览器可用）；无自动重连（语音流是活体采集会话，服务端无续传，重启说话是用户显式动作）。fixtures 回放断言四帧全载荷事件 + 会话通道管理器对误入语音帧静默忽略；demo 挂件（`apps/demo-sdk/widget.js`）消费两类的端到端形态：麦克风按钮 + 字幕气泡 + 译文播放；
 - **Android / iOS**：会话通道核心按未知类型静默忽略语音帧（`UnknownIgnored`——两通道零共享，会话通道不该见到这些帧）；语音通道客户端与上行/字幕渲染消费是后续刀，届时更新本节与 fixtures 端级偏差声明。

@@ -269,6 +269,62 @@ describe('MicCapture', () => {
     await capture.stop();
   });
 
+  it('aborts a pending start when stop arrives mid-permission (stale generation)', async () => {
+    // 授权弹窗停留期间 stop：授权回来后必须只停刚拿到的轨，绝不接线。
+    let releaseGum: (stream: MediaStream) => void = () => {};
+    const gum = vi.fn(
+      (): Promise<MediaStream> =>
+        new Promise<MediaStream>((resolve) => {
+          releaseGum = resolve;
+        }),
+    );
+    const stream = new FakeMediaStream();
+    const track = { stop: vi.fn() };
+    stream.tracks.push(track);
+    const ctx = new FakeAudioContext();
+    const capture = new MicCapture({
+      ports: {
+        getUserMedia: gum as unknown as (constraints: MediaStreamConstraints) => Promise<MediaStream>,
+        audioContextFactory: vi.fn((): AudioContext => ctx as unknown as AudioContext),
+      },
+    });
+    const pending = capture.start(() => {});
+    await Promise.resolve(); // 让 start 悬在 getUserMedia
+    const stopping = capture.stop();
+    releaseGum(stream as unknown as MediaStream);
+    await pending;
+    await stopping;
+    expect(track.stop).toHaveBeenCalled(); // 拿到的轨被立即停掉
+    expect(ctx.processor.onaudioprocess).toBeNull(); // 采集图从未接线
+    expect(capture.isActive()).toBe(false);
+    // 作废后的 start 不占坑：可以重新 start
+    const restarted = new MicCapture({ ports: makePorts(new FakeMediaStream(), new FakeAudioContext()) });
+    await restarted.start(() => {});
+    expect(restarted.isActive()).toBe(true);
+    await restarted.stop();
+  });
+
+  it('rejects a start while another start is pending', async () => {
+    let releaseGum: (stream: MediaStream) => void = () => {};
+    const gum = vi.fn(
+      (): Promise<MediaStream> =>
+        new Promise<MediaStream>((resolve) => {
+          releaseGum = resolve;
+        }),
+    );
+    const capture = new MicCapture({
+      ports: {
+        getUserMedia: gum as unknown as (constraints: MediaStreamConstraints) => Promise<MediaStream>,
+        audioContextFactory: vi.fn((): AudioContext => new FakeAudioContext() as unknown as AudioContext),
+      },
+    });
+    const pending = capture.start(() => {});
+    await expect(capture.start(() => {})).rejects.toMatchObject({ code: 'capture_already_active' });
+    capture.stop();
+    releaseGum(new FakeMediaStream() as unknown as MediaStream);
+    await pending;
+  });
+
   it('stop tears down tracks, graph and context', async () => {
     const { capture, graph } = await startCapture({});
     const track = { stop: vi.fn() };

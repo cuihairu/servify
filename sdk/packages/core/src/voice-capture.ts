@@ -84,10 +84,15 @@ export interface MicCaptureOptions {
  * 收到小端 pcm16 分片 → `stop()` 收线（停轨、断图、关 AudioContext）。
  * 不可复用错误以 ServifyError 透出：权限拒绝 capture_denied、设备缺失/无
  * getUserMedia capture_unavailable、重复 start capture_already_active。
+ *
+ * start 是多步异步（授权弹窗可停留数秒）：stop 在途中到达时以 generation
+ * 作废在途 start——授权回来后发现已过代，立即停轨退出，不接线不留活口。
  */
 export class MicCapture {
   private readonly options: MicCaptureOptions;
   private active = false;
+  private starting = false;
+  private generation = 0;
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
@@ -103,7 +108,7 @@ export class MicCapture {
   }
 
   async start(onChunk: (pcmLe: Uint8Array) => void): Promise<void> {
-    if (this.active) {
+    if (this.active || this.starting) {
       throw new ServifyError('Mic capture already active', {
         code: 'capture_already_active',
         retryable: false,
@@ -111,42 +116,53 @@ export class MicCapture {
     }
     const getUserMedia = this.resolveGetUserMedia();
     const createCtx = this.resolveAudioContextFactory();
-
-    let stream: MediaStream;
+    const gen = ++this.generation;
+    this.starting = true;
     try {
-      stream = await getUserMedia({ audio: true });
-    } catch (error) {
-      throw mapCaptureError(error);
-    }
-
-    const ctx = createCtx();
-    const source = ctx.createMediaStreamSource(stream);
-    const processor = ctx.createScriptProcessor(4096, 1, 1);
-    const mute = ctx.createGain();
-    mute.gain.value = 0;
-
-    processor.onaudioprocess = (event: AudioProcessingEvent) => {
-      const input = event.inputBuffer.getChannelData(0);
-      const pcm = resampleLinear(floatToPcm16(input), ctx.sampleRate, this.targetRate());
-      if (pcm.length > 0) {
-        onChunk(pcm16ToLeBytes(pcm));
+      let stream: MediaStream;
+      try {
+        stream = await getUserMedia({ audio: true });
+      } catch (error) {
+        throw mapCaptureError(error);
       }
-    };
-    source.connect(processor);
-    processor.connect(mute);
-    mute.connect(ctx.destination);
+      if (gen !== this.generation) {
+        // start 途中被 stop：只停刚拿到的轨，绝不接线。
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
 
-    this.stream = stream;
-    this.ctx = ctx;
-    this.source = source;
-    this.processor = processor;
-    this.mute = mute;
-    this.active = true;
-    this.log('麦克风采集已启动', ctx.sampleRate, '→', this.targetRate(), 'Hz');
+      const ctx = createCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+
+      processor.onaudioprocess = (event: AudioProcessingEvent) => {
+        const input = event.inputBuffer.getChannelData(0);
+        const pcm = resampleLinear(floatToPcm16(input), ctx.sampleRate, this.targetRate());
+        if (pcm.length > 0) {
+          onChunk(pcm16ToLeBytes(pcm));
+        }
+      };
+      source.connect(processor);
+      processor.connect(mute);
+      mute.connect(ctx.destination);
+
+      this.stream = stream;
+      this.ctx = ctx;
+      this.source = source;
+      this.processor = processor;
+      this.mute = mute;
+      this.active = true;
+      this.log('麦克风采集已启动', ctx.sampleRate, '→', this.targetRate(), 'Hz');
+    } finally {
+      this.starting = false;
+    }
   }
 
-  /** 收线：停轨 → 断图 → 关上下文。幂等；close 失败不阻断收尾。 */
+  /** 收线：作废在途 start → 停轨 → 断图 → 关上下文。幂等；close 失败不阻断收尾。 */
   async stop(): Promise<void> {
+    this.generation++; // 作废在途 start（见 start 内的代数检查）
     this.active = false;
     if (this.processor) {
       this.processor.onaudioprocess = null;

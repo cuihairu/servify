@@ -68,6 +68,40 @@ await client.endRemoteAssist();
 - 专门坐席协助工作台
 - 双端标准化演示系统
 
+## 语音翻译（PROTOCOL §9）
+
+语音实时翻译走独立 WS 通道 `/api/v1/ws/voice`（音频上行 + 字幕/译文音频下行，
+两通道零共享）。SDK 侧由 `window.Servify` 上的两件工具承载：
+
+- `Servify.VoiceChannel`：语音通道客户端——`voice:delta`/`voice:final`/`voice:audio`/`voice:error`
+  四个下行事件 + `sendAudio()` 二进制上行；无自动重连（重启说话是用户显式动作）。
+- `Servify.MicCapture`：麦克风采集 → pcm16 24kHz 单声道小端分片（ScriptProcessor
+  路线，CSP `default-src 'self'` 友好；AudioWorklet 的 Blob URL 模块会被拦）。
+
+```js
+const channel = new Servify.VoiceChannel({
+  url: 'ws://localhost:8080/api/v1/ws/voice',
+  sessionId: 'ws_1699000000000', // 与会话通道同一 session id
+  speaker: 'visitor',
+});
+
+channel.on('voice:final', (u) => console.log('字幕', u.speaker, u.content, u.degraded));
+channel.on('voice:audio', (u) => new Audio('data:audio/mpeg;base64,' + u.audio).play());
+
+await channel.connect();
+const capture = new Servify.MicCapture();
+await capture.start((chunk) => channel.sendAudio(chunk)); // Uint8Array 小端分片
+// 收线
+await capture.stop();
+channel.disconnect();
+```
+
+`widget.js` 已内建端到端形态：面板头部出现麦克风按钮（能力探测——旧缓存包
+没有上述两类时按钮不出现），点击起会话：`voice:delta` 渲染"正在说"直播行、
+`voice:final` 渲染终句字幕（译文 + 原文小字 + 未翻译标注）、`voice:audio` 自动
+播放（被浏览器自动播放策略拦截时退化为 ▶ 按钮）、会话通道断线或面板关闭
+联动语音收线。需要服务端装配 `ai.asr`（未装配时路由不存在，语音连接失败提示）。
+
 ## 示例入口
 
 - React：`sdk/examples/react`

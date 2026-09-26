@@ -11,7 +11,9 @@
 > （独立 WS 通道 `/api/v1/ws/voice`：音频上行 + 字幕/音频下行帧族，
 > 装配层 `ai.asr` 配置门控）+ 刀二b-3 协议三件套已落地（PROTOCOL §9 +
 > fixtures 语音帧族四样例 + 三端回放：core `VoiceChannel` 消费半边 +
-> Android/iOS 会话核心忽略断言）；三端语音上行/字幕渲染消费后续刀。
+> Android/iOS 会话核心忽略断言）+ 刀二c Web 语音上行/字幕渲染已落地
+> （core `MicCapture` 采集 + demo 挂件麦克风按钮/字幕气泡/译文播放；
+> Android/iOS 上行与字幕渲染按产品节奏后续刀）。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -55,8 +57,13 @@
 
 ```
 采集端（浏览器/SDK）
-  ├─ getUserMedia(Audio) → AudioWorklet 20ms 帧 → Opus 编码
-  │    （可走 WebRTC 与远程协助同 PC，也可独立 DataChannel/WS 二进制帧）
+  ├─ getUserMedia(Audio) → ScriptProcessor → pcm16 24kHz 单声道小端分片
+  │    （刀二c 落地面：raw pcm16 走独立 WS 二进制帧 `/api/v1/ws/voice`，
+  │     PROTOCOL §9。选 ScriptProcessor 而非原设的 AudioWorklet+Opus：
+  │     AudioWorklet 的 processor 模块经 Blob URL 加载，会被服务端
+  │     `default-src 'self'` CSP 拦截；ScriptProcessor 无模块加载全浏览器
+  │     可用，代价仅主线程回调——已弃用但各厂商无移除时间表。Opus 编码
+  │     留给移动端/带宽受限形态再评估，Web 面先以 raw pcm16 闭环）
   ▼
 服务端 translation pipeline（每说话方一条）
   1. 流式识别 ASR        ：WebSocket 流式协议（Deepgram/火山/阿里/AssemblyAI，
@@ -229,7 +236,7 @@ core SDK（访客侧，实时）
 
 | 环节 | 预算（P50） | 说明 |
 | --- | --- | --- |
-| 采集+编码+上行 | ≤ 120ms | Opus 20ms 帧 + 网络往返 |
+| 采集+编码+上行 | ≤ 120ms | Web 面为 ScriptProcessor 回调 + pcm16 分片（≈85–170ms 粒度）+ 网络往返；Opus 20ms 帧形态见 §1.2 采集端注 |
 | ASR partial | ≤ 300ms | 流式协议天然增量；partial 只驱动"正在说"反馈 |
 | 分句触发 | 0–700ms | 静音 500ms 或标点/语义边界即触发，见下 |
 | LLM 翻译 | ≤ 600ms | 逐句短文本；ChatStream 首 token ≤ 300ms 可提前下发 |
@@ -326,6 +333,7 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 2 刀二b-1 管线半边（已落地）** | 分句器 `modules/translation/domain.SentenceAssembler`（§2.2 双触发先到先切：标点/60 字上限沿字符位单趟扫描、VAD 尾点 Flush、同 seq 二次 final 覆盖、轮切换防御性收残）+ 语音管线 `application.VoicePipeline`（每说话方一条：ASR 事件流 → 分句 → 逐句翻译带上一句原文+译文尾窗 ≤ 200 字 → TTS 逐句合成；`VoiceSink` 产出接口交付层适配，partial 只透传"正在说"；翻译失败句降级原文不合成、TTS 失败句仅字幕，管线不断）+ `TranslateCommand.Context` 上下文尾窗提示词扩展。WS 面（音频上行 + 字幕帧族，过 PROTOCOL §5 流程）是刀二b-2 | 无新增依赖 |
 | **Phase 2 刀二b-2 服务端语音通道（已落地）** | 独立 WS 通道 `/api/v1/ws/voice`（§1.2：音频帧不挤会话 WS 下行缓冲）：`delivery/voice_contract.go`（`VoiceStreamStarter`/`VoiceAudioStream` 契约 + app 类型别名桥接）+ `delivery/voice_adapter.go`（每流组装"ASR 会话 + 语音管线"，说话方→读向对偶：visitor 说话查 agent 读向）+ `platform/realtime/voice_hub.go`（握手校验 session_id/speaker/token、按会话广播、慢客户端踢线与会话 WS 同口径、voice-error 收线、失败零帧）+ 装配接线（`ai.asr` 配置门控：未配置不注册路由；guest token 校验与会话 WS 同源）+ 安全面目录登记 `public-realtime-voice`（`app/server/security_surface.go`，与 `/api/v1/ws` 同信任域、限流沿用其前缀条目）。下行帧族协议三件套（PROTOCOL §9 + fixtures + 三端回放）是刀二b-3 | 无新增依赖 |
 | **Phase 2 刀二b-3 协议三件套（已落地）** | `sdk/PROTOCOL.md` §9（语音通道握手/上行形态/下行帧族四帧 + `turn_seq`/`seq` 语义 + `voice-error` 词表与连接级语义 + 三端消费状态）+ `sdk/protocol-fixtures/` 语音帧族四样例（12-15，`channel: "voice"` 标注）+ 三端回放：core `VoiceChannel`（`sdk/packages/core/src/voice.ts`：握手参数拼装、下行四帧必需字段校验 → `voice:delta/final/audio/error` 事件（载荷线序 snake_case）、`sendAudio` 二进制上行、无自动重连）+ fixtures 回放断言（四帧全载荷事件 + 会话通道对误入语音帧忽略）+ Android/iOS 会话核心 `UnknownIgnored` 断言（端级偏差声明；语音通道客户端与三端上行/字幕渲染消费是后续刀） | 无新增依赖（core 零新增 npm 依赖） |
+| **Phase 2 刀二c Web 上行 + 字幕渲染（已落地）** | core `MicCapture`（`sdk/packages/core/src/voice-capture.ts`）：纯函数三件（`floatToPcm16` clamp 量化 / `resampleLinear` 线性插值重采样 / `pcm16ToLeBytes` DataView 显式小端）+ `MicCapture` 采集图（getUserMedia → ScriptProcessor → 零增益 mute → destination；generation 作废在途 start 防 stop 竞态；`capture_denied`/`capture_unavailable`/`capture_already_active` 错误归一；ports 注入对齐 webSocketFactory 口径）+ vanilla UMD 全局挂载（`window.Servify.MicCapture/VoiceChannel` 等六件——UMD exports 被 window.Servify 类赋值覆盖，named 导出在浏览器不可达，工具集挂类上）+ demo 挂件（`apps/demo-sdk/widget.js`）：麦克风按钮（能力探测降级，旧缓存包不出现）+ 会话 id 一处生成多通道共用 + `voice:delta` 直播行（每说话方一条）+ `voice:final` 终句字幕（译文+原文小字+降级标注）+ `voice:audio` 播报（自动播放被拦退化 ▶ 按钮）+ 会话通道断线联动语音收线。移动端上行/字幕渲染仍按产品节奏 | 无新增依赖（core/vanilla 零新增 npm 依赖） |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 
 各阶段验收：单测（mock provider 零网络）+ golden 回归（提示词劣化检测）+
