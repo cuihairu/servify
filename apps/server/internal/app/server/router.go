@@ -48,43 +48,45 @@ type Dependencies struct {
 	AIHandlerService          aidelivery.HandlerService
 	AICopilot                 *aidelivery.AgentCopilotService
 	TranslationHandlerService translationdelivery.HandlerService
-	RealtimeGateway           realtimeplatform.RealtimeGateway
-	RTCGateway                realtimeplatform.RTCGateway
-	RTCIceSource              realtimeplatform.ICEConfigSource
-	MessageRouter             realtimeplatform.MessageRouterRuntime
-	VoiceCoordinator          *voicedelivery.Coordinator
-	VoiceProtocolRegistry     *voiceprotocol.Registry
-	CustomerHandlerService    customerdelivery.HandlerService
-	ConversationHandler       conversationdelivery.HandlerService
-	AgentHandlerService       agentdelivery.HandlerService
-	AgentGroupService         agentdelivery.AgentGroupService
-	TicketHandlerService      ticketdelivery.HandlerService
-	VisitorTicketService      ticketdelivery.VisitorTicketService
-	PushRegistrationService   pushdelivery.PushRegistrationService
-	VisitorMessagesService    conversationdelivery.VisitorMessagesService
-	TicketReaderService       *ticketdelivery.ReaderServiceAdapter
-	TransferHandlerService    routingdelivery.HandlerService
-	SatisfactionService       satisfactiondelivery.SatisfactionService
-	WorkspaceService          workspacedelivery.HandlerService
-	MacroService              macrodelivery.HandlerService
-	AppIntegrationService     appintegrationdelivery.HandlerService
-	CustomFieldService        customfielddelivery.HandlerService
-	StatisticsHandlerService  analyticsdelivery.HandlerService
-	SLAService                sladelivery.SLAService
-	ShiftService              shiftdelivery.HandlerService
-	AutomationHandlerService  automationdelivery.HandlerService
-	KnowledgeDocHandler       knowledgedelivery.HandlerService
-	SuggestionService         suggestiondelivery.HandlerService
-	GamificationService       gamificationdelivery.HandlerService
-	WebhookHandlerService     webhookdelivery.HandlerService
-	QualityHandlerService     qualitydelivery.HandlerService
-	AssistHandlerService      assistdelivery.HandlerService
-	APIKeyService             apikeydelivery.HandlerService
-	OpenConversationReader    conversationdelivery.OpenConversationReader
-	GuestTokenIssuer          conversationdelivery.GuestTokenIssuer
-	VisitorReadService        conversationdelivery.VisitorReadService
-	OIDCProvider              *oidcplatform.Provider
-	HTTPMetrics               *svcmetrics.HTTPMetrics
+	// TranslationPreferenceHandlerService 会话翻译语言偏好（Phase 1 刀一）。
+	TranslationPreferenceHandlerService translationdelivery.PreferenceHandlerService
+	RealtimeGateway                     realtimeplatform.RealtimeGateway
+	RTCGateway                          realtimeplatform.RTCGateway
+	RTCIceSource                        realtimeplatform.ICEConfigSource
+	MessageRouter                       realtimeplatform.MessageRouterRuntime
+	VoiceCoordinator                    *voicedelivery.Coordinator
+	VoiceProtocolRegistry               *voiceprotocol.Registry
+	CustomerHandlerService              customerdelivery.HandlerService
+	ConversationHandler                 conversationdelivery.HandlerService
+	AgentHandlerService                 agentdelivery.HandlerService
+	AgentGroupService                   agentdelivery.AgentGroupService
+	TicketHandlerService                ticketdelivery.HandlerService
+	VisitorTicketService                ticketdelivery.VisitorTicketService
+	PushRegistrationService             pushdelivery.PushRegistrationService
+	VisitorMessagesService              conversationdelivery.VisitorMessagesService
+	TicketReaderService                 *ticketdelivery.ReaderServiceAdapter
+	TransferHandlerService              routingdelivery.HandlerService
+	SatisfactionService                 satisfactiondelivery.SatisfactionService
+	WorkspaceService                    workspacedelivery.HandlerService
+	MacroService                        macrodelivery.HandlerService
+	AppIntegrationService               appintegrationdelivery.HandlerService
+	CustomFieldService                  customfielddelivery.HandlerService
+	StatisticsHandlerService            analyticsdelivery.HandlerService
+	SLAService                          sladelivery.SLAService
+	ShiftService                        shiftdelivery.HandlerService
+	AutomationHandlerService            automationdelivery.HandlerService
+	KnowledgeDocHandler                 knowledgedelivery.HandlerService
+	SuggestionService                   suggestiondelivery.HandlerService
+	GamificationService                 gamificationdelivery.HandlerService
+	WebhookHandlerService               webhookdelivery.HandlerService
+	QualityHandlerService               qualitydelivery.HandlerService
+	AssistHandlerService                assistdelivery.HandlerService
+	APIKeyService                       apikeydelivery.HandlerService
+	OpenConversationReader              conversationdelivery.OpenConversationReader
+	GuestTokenIssuer                    conversationdelivery.GuestTokenIssuer
+	VisitorReadService                  conversationdelivery.VisitorReadService
+	OIDCProvider                        *oidcplatform.Provider
+	HTTPMetrics                         *svcmetrics.HTTPMetrics
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

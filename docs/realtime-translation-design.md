@@ -1,6 +1,7 @@
 # 实时翻译设计（语音 + 聊天文本）
 
-> 状态：预研设计 + Phase 0 已落地（聊天文本翻译）。
+> 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 刀一已落地
+> （会话语言偏好存储与 REST 面）。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -71,6 +72,62 @@
   媒体桥接（RA-7）共用 SFU-lite 基建。
 - **每说话方一条 pipeline**，双向翻译 = 两条 pipeline 独立运行，避免
   单 pipeline 语言状态互相污染。
+
+### 1.3 会话语言偏好（Phase 1 刀一，已落地）
+
+自动翻译的开关是**会话级**的：坐席为某个客服会话设一次目标语言，该会话之后
+到达的消息才走自动翻译。因此偏好存储是 Phase 1 的前置依赖（Phase 0 的
+`translate` 端点是"一次性、无状态"口径，不依赖任何存储）。
+
+```
+坐席 admin
+  └─ 管理面（agent/admin/service 主体 + 租户 scope 中间件）
+       GET    /api/v1/translation/preferences/:session_id   查询（未设置=200 空串）
+       PUT    /api/v1/translation/preferences/:session_id   upsert 目标语言
+       DELETE /api/v1/translation/preferences/:session_id   清除（幂等）
+            └─ modules/translation
+                 ├─ application.PreferenceService（校验/规范化：BCP-47 子集、小写）
+                 └─ infra.GormPreferenceRepository（pg 迁移 000015 / sqlite AutoMigrate）
+```
+
+设计口径（与 assist/macro 等模块同款，避免同一仓两套租户语义）：
+
+- **租户/工作区取自认证 ctx**，不接受请求方自报；读写面按 scope 收紧，
+  scope 为空即不过滤（本地 dev / 存量链路兼容）。
+- **跨 scope 命中与不存在同语义**（不回显存在性）：upsert 撞上他租户同
+  `conversation_session_id` 的行时返回 409，而不是覆盖或报错"已存在"。
+- **偏好表与会话表解耦**：允许先于首条消息设置偏好（会话由首条消息建行），
+  因此本表不挂 conversations 外键。
+- **未设置不是错误**：读取返回 `target_lang=""` + 200；清除无行也返回 200。
+  自动翻译链路据此"无偏好即不翻译"（见 §1.4）。
+- 语言标签与 `translate` 端点同口径：BCP-47 常用子集、统一小写
+  （`zh-CN` → `zh-cn`），非法标签 400。
+
+### 1.4 会话消息自动翻译帧（Phase 1 刀二，设计已定）
+
+```
+访客 WS text-message 落库
+  └─ hub 异步（与 AI 首答同样走 goroutine，不阻塞广播）
+       ├─ 读该会话语言偏好：无偏好 → 静默跳过（不发帧、不记错误）
+       ├─ Translate(原文 → target_lang)：与 Phase 0 同 provider/同出站参数
+       └─ 广播 message-translated（按 session_id，与原文广播同通道）
+            Data: {original, content, source_lang, target_lang}
+```
+
+帧契约要点：
+
+- **独立帧而非改写 `text-message`**：不识别新帧的既有客户端行为完全不变
+  （core SDK 的 switch 落 default 忽略），译文与原文并存、可对照折叠。
+- **关联靠 `original`**：翻译是落库后的异步旁路，没有消息 ID 可挂（当前
+  会话写入口只返回 error，不回传 message id）。客户端按"内容相同、且是本会话
+  最近一条未挂译文的消息"匹配；同内容连续重复消息的匹配结果可能后到覆盖，
+  属已知边界。
+- **失败只记 Warn**：翻译是增强能力，不影响消息主链路；provider 未配置
+  （`ErrTranslationUnavailable`）视为"功能未开启"静默跳过，避免未部署 AI 的
+  部署每条消息刷警告。
+- **方向边界**：刀二只接访客 → 坐席方向（hub 落库路径）。坐席 → 访客方向
+  的注入口是 `ConversationWorkspaceHandler.SendMessage`，需要单独一刀
+  （同一应用服务复用，非新链路）。
 
 ## 2. 延迟预算与分句策略
 
@@ -165,7 +222,10 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | --- | --- | --- |
 | **Phase 0（已落地）** | 聊天文本翻译：`modules/translation` + `POST /api/v1/translation/translate`；mock provider 单测全覆盖 | 无新增依赖（复用 `platform/llm`） |
 | **Phase 0.5（服务端半边已落地）** | 访客面同端点：路由单一注册点、AuthMiddleware 即可（访客 token 可调，`router_auth.go`）；剩 SDK 半边：`metadata.translation` 字段约定 + SDK 便捷调用 | SDK 契约（`sdk/PROTOCOL.md` + fixtures） |
-| Phase 1 | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；批量子段翻译（历史消息） | 会话语言偏好存储（translation/infra） |
+| **Phase 1 刀一（已落地）** | 会话语言偏好存储 + 管理面 REST 面（`translation/infra` GORM 仓储、pg 迁移 000015、`GET/PUT/DELETE /api/v1/translation/preferences/:session_id`）；见 §1.3 | 无新增依赖 |
+| **Phase 1 刀二** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
+| **Phase 1 刀三** | 访客面偏好读写（经会话绑定校验，访客只可改自己的会话）；坐席 → 访客方向自动翻译 | 刀二 |
+| Phase 1 收尾 | 批量子段翻译（历史消息） | 刀二 |
 | Phase 2 | 语音链路 MVP：ASR 流式接入 + 分句 + 逐句翻译 + 字幕 WS 帧 + TTS 客户端播放 | ASR/TTS provider 抽象（`platform/asr`、`platform/tts`）与配置面 |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 

@@ -1030,6 +1030,13 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-26，**实时翻译 Phase 1 刀一已落地**——会话语言偏好存储 + 管理面 REST 面）：本工作流按 `docs/realtime-translation-design.md` §6 分刀推进（Phase 0 聊天文本翻译已落地；Phase 1 自动翻译）。
+  - 状态：`[-]`（Phase 1 推进中）
+  - 最近进展：**刀一落地**——`modules/translation` 四层补齐偏好面：domain `TranslationLanguagePreference`（每会话至多一行，`conversation_session_id` 唯一）、infra `GormPreferenceRepository`（pg 迁移 000015 / sqlite AutoMigrate 双轨，scoped 读命中即原行更新，未命中走 `OnConflict DoNothing` + scoped 复查，跨 scope 撞行返回冲突错误而非覆盖）、application `PreferenceService`（校验/小写规范化与 `Translate` 同口径，租户/工作区取自认证 ctx 不接受自报）、delivery `PreferenceHandlerService` + adapter、handlers `TranslationPreferenceHandler`（哨兵错误→400、未配置→503、跨 scope→409、其余→500）；管理面 `GET/PUT/DELETE /api/v1/translation/preferences/:session_id` 挂 `managementV1` 组，未装配时不注册（无 DB 部署形态）。迁移水位断言三处（`Makefile migrate-verify` / `ci.yml` 迁移验证 / 备份恢复对账）同步 14→15、表数 49→50。文档：`realtime-translation-design.md` 新增 §1.3（偏好面链路与口径）、§1.4（刀二帧契约设计）。
+  - 下一步：**刀二**——hub 在消息落库后按该偏好异步翻译并广播 `message-translated` 帧（访客 → 坐席方向；坐席 → 访客方向与访客面偏好读写留后续刀）。
+  - 阻塞项：无（刀二不依赖外部凭证）
+  - 完成证据（刀一）：代码 `apps/server/internal/modules/translation/{domain,application,delivery,infra}` + `apps/server/internal/handlers/translation_preference_handler.go` + `apps/server/internal/app/server/{router_realtime.go,runtime.go,runtime_assembly.go}` + `apps/server/internal/app/bootstrap/migrations/000015_translation_language_preferences.up.sql`；门禁 `scripts/run-tests.sh` 100.0%（合并口径）+ 触包逐包 100%（translation 三包 / handlers / app-server / bootstrap / models / platform-realtime）+ race 绿 + `check-module-boundaries.sh` 绿 + `check-repo-hygiene.sh` / `check-text-encoding.sh` / `check-acceptance-evidence.sh` 绿 + `go vet` 绿 + swag 重生成 `swagger.json`/`swagger.yaml` 与入库产物逐字节一致。
+
 - 附注（2026-09-22，「AI 帮忙回信息」主链路智能化四批收官）：按用户指令把该主链路做成产品亮点，按价值排序分四批交付 + 一笔门禁修复，全部提交推 main；**完成证据锚定最终树 1a7fe17 → CI run 35767697076 绿（覆盖 batch a/b + boundary 修复 + batch d 全部提交，此前 run 均被 push cancel-in-progress 取消故以本 run 为准）**：
   - **batch c 模型配置现代化（fafac8d，CI 35754005213 绿）**：`ai.provider` 选型接线（openai | anthropic 统一经 `platform/llm/factory` 实例化，双 provider 均实现真实 Chat/ChatStream），`ai.<provider>.model/temperature/max_tokens/timeout` 从死配置变生效配置（编排层每次出站调用写入，零值 provider 侧默认兜底）。
   - **batch a AI 首答质量三件套（7a454e8）**：多轮上下文经 `SessionHistoryLoader` 窄接口拉取会话近期消息（AI 模块不反向依赖 conversation，适配器按形状实现）；答案带引用透出（`sources`/`strategy` 随 REST 响应与 WS `ai-response` 帧透出）；`ai.handoff` 置信门——首答 confidence 低于阈值只产出 `next_action=handoff` 建议元数据（不改写答案、不执行转接）。该提交首跑 CI（35757374379）failure：Script Checks 的 gamification 计时 flake（步骤 4/8）中止 job，**掩盖了靠后步骤的真实边界违规**（historyAdapter 变量中介打破 rules 内联 pinned 正则）；rerun 过 flake 后边界违规显形，修复见下；教训已入 CI 硬约束清单第 17 条（步骤顺序失败掩盖后续门禁；rules 正则禁 `|`；pinned 优先变量形态）。

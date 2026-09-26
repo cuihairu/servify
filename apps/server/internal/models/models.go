@@ -5,6 +5,7 @@ import (
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	qualitydomain "servify/apps/server/internal/modules/quality/domain"
+	translationdomain "servify/apps/server/internal/modules/translation/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"time"
 )
@@ -462,6 +463,11 @@ type RemoteAssistSession = assistdomain.RemoteAssistSession
 // RemoteAssistAnnotation 远程协助标注。定义已迁至 modules/assist/domain，
 // 此处保留类型别名供 legacy 引用方使用（assist_handler.go 的 swag 注解亦经此别名解析）。
 type RemoteAssistAnnotation = assistdomain.RemoteAssistAnnotation
+
+// TranslationLanguagePreference 会话翻译语言偏好。定义已迁至
+// modules/translation/domain，此处保留类型别名供 legacy 引用方使用
+// （migrate 注册与 swag 注解经此别名解析）。
+type TranslationLanguagePreference = translationdomain.TranslationLanguagePreference
 
 // KnowledgeDoc 知识库文档。定义已迁至 modules/knowledge/domain（向量列
 // 值对象 Embedding 一并随迁，见 embedding.go），此处保留类型别名供 legacy

@@ -55,6 +55,7 @@ func MigrationModels() []interface{} {
 		&models.UserRecoveryCode{},
 		&models.SuggestionExposureLog{},
 		&models.PushToken{},
+		&models.TranslationLanguagePreference{},
 	}
 }
 

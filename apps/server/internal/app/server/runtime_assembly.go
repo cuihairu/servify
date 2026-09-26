@@ -54,6 +54,9 @@ import (
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	suggestioninfra "servify/apps/server/internal/modules/suggestion/infra"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	translationapp "servify/apps/server/internal/modules/translation/application"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
+	translationinfra "servify/apps/server/internal/modules/translation/infra"
 	voiceapp "servify/apps/server/internal/modules/voice/application"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
@@ -108,6 +111,13 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics)
 	rt.AICopilot = aiAssembly.Copilot
 	rt.TranslationHandlerService = aiAssembly.Translation
+	// 会话翻译语言偏好（Phase 1 刀一，docs/realtime-translation-design.md）：
+	// 存储依赖主库；无 DB 部署形态不装配（端点不注册，与 translate 端点
+	// 的 nil 安全口径一致）。
+	if rt.DB != nil {
+		prefService := translationapp.NewPreferenceService(translationinfra.NewGormPreferenceRepository(rt.DB))
+		rt.TranslationPreferenceHandlerService = translationdelivery.NewPreferenceHandlerService(prefService)
+	}
 	return aiAssembly, nil
 }
 

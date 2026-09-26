@@ -5944,6 +5944,137 @@
                 }
             }
         },
+        "/api/v1/translation/preferences/{session_id}": {
+            "get": {
+                "description": "返回会话当前的自动翻译目标语言；未设置时 target_lang 为空串（200，不是 404）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "翻译"
+                ],
+                "summary": "查询会话翻译语言偏好",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "客服会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "upsert 会话的自动翻译目标语言（BCP-47 风格，如 en/zh-CN，大小写不敏感）；重复设置覆盖",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "翻译"
+                ],
+                "summary": "设置会话翻译语言偏好",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "客服会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "目标语言",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TranslationPreferenceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "清除会话的自动翻译目标语言；无偏好时同样返回 200（幂等）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "翻译"
+                ],
+                "summary": "清除会话翻译语言偏好",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "客服会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/translation/translate": {
             "post": {
                 "description": "单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；AI 未装配 503；模型上游故障 502；超时 504",
@@ -7384,6 +7515,18 @@
                 "text": {
                     "type": "string",
                     "example": "请问订单什么时候发货？"
+                }
+            }
+        },
+        "handlers.TranslationPreferenceRequest": {
+            "type": "object",
+            "required": [
+                "target_lang"
+            ],
+            "properties": {
+                "target_lang": {
+                    "type": "string",
+                    "example": "en"
                 }
             }
         },

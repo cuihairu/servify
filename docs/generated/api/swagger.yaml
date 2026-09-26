@@ -932,6 +932,14 @@ definitions:
     - target_lang
     - text
     type: object
+  handlers.TranslationPreferenceRequest:
+    properties:
+      target_lang:
+        example: en
+        type: string
+    required:
+    - target_lang
+    type: object
   handlers.UpdateGroupRequest:
     properties:
       description:
@@ -5692,6 +5700,93 @@ paths:
       summary: 创建访客工单
       tags:
       - 工单
+  /api/v1/translation/preferences/{session_id}:
+    delete:
+      description: 清除会话的自动翻译目标语言；无偏好时同样返回 200（幂等）
+      parameters:
+      - description: 客服会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+      summary: 清除会话翻译语言偏好
+      tags:
+      - 翻译
+    get:
+      description: 返回会话当前的自动翻译目标语言；未设置时 target_lang 为空串（200，不是 404）
+      parameters:
+      - description: 客服会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+      summary: 查询会话翻译语言偏好
+      tags:
+      - 翻译
+    put:
+      consumes:
+      - application/json
+      description: upsert 会话的自动翻译目标语言（BCP-47 风格，如 en/zh-CN，大小写不敏感）；重复设置覆盖
+      parameters:
+      - description: 客服会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: 目标语言
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.TranslationPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.QueryResponse'
+      summary: 设置会话翻译语言偏好
+      tags:
+      - 翻译
   /api/v1/translation/translate:
     post:
       consumes:

@@ -1,4 +1,3 @@
-// Package domain contains translation domain concepts.
-// Phase 0（聊天文本翻译）为无状态 LLM 封装，尚无独立领域实体；
-// 后续阶段（按消息缓存/租户语言偏好）的模型落位于此。
+// Package domain 持有翻译模块的领域概念：Phase 0 为无状态 LLM 封装，
+// Phase 1 起落位会话语言偏好等持久化模型（见 models.go）。
 package domain
