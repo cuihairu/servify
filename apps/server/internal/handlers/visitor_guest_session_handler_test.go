@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type stubGuestIssuer struct {
@@ -75,14 +76,22 @@ func TestVisitorGuestSessionIssueBadRequests(t *testing.T) {
 	}
 }
 
-// TestVisitorGuestSessionIssueIssuerError 锚定签发失败 500 兜底。
+// TestVisitorGuestSessionIssueIssuerError 锚定签发失败 500 兜底：带
+// logger 时走错误日志分支，nil logger 时同样 500（日志面非关键路径）。
 func TestVisitorGuestSessionIssueIssuerError(t *testing.T) {
-	h := NewVisitorGuestSessionHandler(&stubGuestIssuer{err: errors.New("boom")}, nil)
+	h := NewVisitorGuestSessionHandler(&stubGuestIssuer{err: errors.New("boom")}, logrus.New())
 
 	c, recorder := newGuestSessionContext(`{"session_id":"sess-9"}`)
 	h.Issue(c)
 
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	h = NewVisitorGuestSessionHandler(&stubGuestIssuer{err: errors.New("boom")}, nil)
+	c, recorder = newGuestSessionContext(`{"session_id":"sess-9"}`)
+	h.Issue(c)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("nil logger: status = %d", recorder.Code)
 	}
 }
