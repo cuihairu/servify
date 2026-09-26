@@ -155,6 +155,17 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 			recordingHandler.RespondConsent)
 	}
 
+	// 聊天文本实时翻译（Phase 0/0.5，docs/realtime-translation-design.md）：
+	// 坐席与访客两面共用的单条消息翻译端点。单一注册点（与 /api/v1/upload
+	// 同款：AuthMiddleware 认证即可，无主体种类限制），未装配时不注册
+	// （nil 安全由装配层保证，不会出现匿名可打的降级端点）。
+	// 租户级用量配额见设计文档 §3.2（Phase 3）。
+	if deps.TranslationHandlerService != nil {
+		r.POST("/api/v1/translation/translate",
+			middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...),
+			handlers.NewTranslationHandler(deps.TranslationHandlerService).Translate)
+	}
+
 	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")
 	if isS3 {
 		// S3 模式：/uploads/<key> 302 到现签 presigned URL（或 public_base_url），

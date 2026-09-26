@@ -57,11 +57,6 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	aiAPI.PUT("/knowledge-provider/disable", aiHandler.DisableKnowledgeProvider)
 	aiAPI.POST("/circuit-breaker/reset", aiHandler.ResetCircuitBreaker)
 
-	// 聊天文本实时翻译（Phase 0）：坐席面单条消息粒度；与 AI 组同鉴权
-	// （agent/admin/service + EnforceRequestScope）。语音链路按
-	// docs/realtime-translation-design.md 分阶段接入。
-	managementV1.POST("/translation/translate", handlers.NewTranslationHandler(deps.TranslationHandlerService).Translate)
-
 	aggregator := handlers.NewMetricsAggregator()
 	ingest := handlers.NewMetricsIngestHandler(aggregator)
 	// 客户端上报指标桥接进 prometheus /metrics 端点；条件与 health.go 的
