@@ -57,18 +57,9 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	aiAPI.PUT("/knowledge-provider/disable", aiHandler.DisableKnowledgeProvider)
 	aiAPI.POST("/circuit-breaker/reset", aiHandler.ResetCircuitBreaker)
 
-	// 会话翻译语言偏好（Phase 1 刀一，docs/realtime-translation-design.md）：
-	// 坐席为客服会话设置自动翻译目标语言；scope 由认证中间件注入 ctx、
-	// 服务端自取（与 managementV1 组链一致）；未装配时不注册（无 DB 部署
-	// 形态）。与 translate 端点不同面：偏好是会话级设置，走管理面；
-	// 访客面在刀三经会话绑定校验接入。
-	if deps.TranslationPreferenceHandlerService != nil {
-		translationAPI := managementV1.Group("/translation")
-		prefHandler := handlers.NewTranslationPreferenceHandler(deps.TranslationPreferenceHandlerService)
-		translationAPI.GET("/preferences/:session_id", prefHandler.GetPreference)
-		translationAPI.PUT("/preferences/:session_id", prefHandler.PutPreference)
-		translationAPI.DELETE("/preferences/:session_id", prefHandler.DeletePreference)
-	}
+	// 会话翻译语言偏好（Phase 1 刀一起管理面注册；刀三起与 translate 端点
+	// 同款单一双面注册点，迁至 router_auth.go：agent/visitor 主体两面共用，
+	// 读向按认证主体推导，访客面经会话绑定校验）。
 
 	aggregator := handlers.NewMetricsAggregator()
 	ingest := handlers.NewMetricsIngestHandler(aggregator)

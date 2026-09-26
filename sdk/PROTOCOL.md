@@ -78,9 +78,9 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - 载体：消息 `metadata` map（访客补拉 DTO `VisitorMessage.metadata` 已有该字段）。WS 帧当前不携带 metadata——WS 侧译文走 §4.5 的 `message-translated` 帧（按 §5 流程接入：服务端广播点 + 本文 + fixtures + 三端回放测试已同步落地）；
 - 客户端口径：未知 metadata 键一律忽略（§6 既有边界语义）；读到 `translation` 键时可视需要优先展示译文、原文兜底（core 提供 `readMessageTranslation` 读取器）；客户端**不得**自行写入这两个键——译文由服务端/坐席侧盖章，客户端写入视为伪造。
 
-### 4.5 翻译帧 `message-translated`（Phase 1 刀二，服务端广播已落地）
+### 4.5 翻译帧 `message-translated`（Phase 1 刀二/刀三，服务端双向广播已落地）
 
-会话开启语言偏好（管理面 `GET/PUT/DELETE /api/v1/translation/preferences/:session_id`，docs/realtime-translation-design.md §1.3）后，访客文本消息**落库后**由服务端异步旁路翻译并按会话广播本帧（docs/realtime-translation-design.md §1.4）：
+会话开启语言偏好（双面 `GET/PUT/DELETE /api/v1/translation/preferences/:session_id`，读向按认证主体推导，docs/realtime-translation-design.md §1.3）后，两个方向各由服务端异步旁路翻译并按会话广播本帧（docs/realtime-translation-design.md §1.4）：访客文本消息落库后（hub 路径，消费 agent 读向）、坐席消息发送后（发送口路径，消费 visitor 读向）：
 
 ```json
 { "type": "message-translated",
@@ -91,7 +91,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - **独立帧而非改写 `text-message`**：不识别本帧的既有客户端行为完全不变（switch 落 default 忽略）；译文与原文并存、可对照折叠；
 - **关联靠 `original`**：翻译是落库后的异步旁路，没有消息 ID 可挂（会话写入口只返回 error）。客户端按"内容相同、且是本会话最近一条未挂译文的消息"匹配；同内容连续重复消息的匹配结果可能后到覆盖，属已知边界；
 - **失败零帧**：无偏好与 provider 未配置都静默跳过（不发帧），其余失败只记服务端日志——客户端不存在"翻译失败"态；
-- **方向边界**：当前只接访客 → 坐席方向（hub 落库路径）；坐席 → 访客方向后续刀接入（同一契约）；
+- **方向边界**：两个方向都已接（Phase 1 刀二 hub 落库路径 = 访客 → 坐席，刀三坐席发送口路径 = 坐席 → 访客），共用同一帧型与同一 `original` 关联语义——坐席会话里两方向帧可能并存，客户端按 `original` 内容匹配各自方向的消息；
 - **三端消费状态**：core / Android / iOS 当前按 §5 流程以"注解帧"回放（不并入 messages、不报错）；消费半边（事件面/渲染）后续刀接入，届时更新 fixtures expectations 的端级偏差声明。
 
 ## 5. 服务端不发送的帧（客户端契约不含——类型与运行时均已收敛）

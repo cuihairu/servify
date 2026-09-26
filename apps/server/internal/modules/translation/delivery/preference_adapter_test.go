@@ -15,26 +15,26 @@ func TestPreferenceHandlerServiceAdapter(t *testing.T) {
 
 	t.Run("nil inner store degrades to unavailable", func(t *testing.T) {
 		adapter := NewPreferenceHandlerService(translationapp.NewPreferenceService(nil))
-		if _, err := adapter.SetSessionLanguage(ctx, "conv-1", "en"); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := adapter.SetSessionLanguage(ctx, "conv-1", ViewerRoleAgent, "en"); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("SetSessionLanguage error = %v, want ErrTranslationUnavailable", err)
 		}
-		if _, err := adapter.GetSessionLanguage(ctx, "conv-1"); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := adapter.GetSessionLanguage(ctx, "conv-1", ViewerRoleAgent); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("GetSessionLanguage error = %v, want ErrTranslationUnavailable", err)
 		}
-		if err := adapter.ClearSessionLanguage(ctx, "conv-1"); !errors.Is(err, ErrTranslationUnavailable) {
+		if err := adapter.ClearSessionLanguage(ctx, "conv-1", ViewerRoleAgent); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("ClearSessionLanguage error = %v, want ErrTranslationUnavailable", err)
 		}
 	})
 
 	t.Run("nil adapter is nil-safe", func(t *testing.T) {
 		var nilAdapter *preferenceHandlerServiceAdapter
-		if _, err := nilAdapter.SetSessionLanguage(ctx, "conv-1", "en"); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := nilAdapter.SetSessionLanguage(ctx, "conv-1", ViewerRoleAgent, "en"); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("SetSessionLanguage nil adapter error = %v", err)
 		}
-		if _, err := nilAdapter.GetSessionLanguage(ctx, "conv-1"); !errors.Is(err, ErrTranslationUnavailable) {
+		if _, err := nilAdapter.GetSessionLanguage(ctx, "conv-1", ViewerRoleAgent); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("GetSessionLanguage nil adapter error = %v", err)
 		}
-		if err := nilAdapter.ClearSessionLanguage(ctx, "conv-1"); !errors.Is(err, ErrTranslationUnavailable) {
+		if err := nilAdapter.ClearSessionLanguage(ctx, "conv-1", ViewerRoleAgent); !errors.Is(err, ErrTranslationUnavailable) {
 			t.Fatalf("ClearSessionLanguage nil adapter error = %v", err)
 		}
 	})

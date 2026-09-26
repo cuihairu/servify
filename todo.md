@@ -1030,7 +1030,13 @@
 
 ## 当前恢复点
 
-- 附注（2026-09-26，**实时翻译 Phase 1 刀二服务端半边已落地**——hub `message-translated` 帧，访客 → 坐席方向）：
+- 附注（2026-09-26，**实时翻译 Phase 1 刀三已落地**——viewer 角色维度偏好双面 + 坐席 → 访客方向翻译）：
+  - 状态：`[-]`（Phase 1 推进中，剩批量子段翻译收尾）
+  - 最近进展：偏好表加 viewer 角色维度（domain `(session_id, viewer_role)` 复合唯一、pg 迁移 000016 `viewer_role` 列 + 索引重建、application `PreferenceStore` 三方法全部带 `viewerRole`、`ErrTranslationViewerInvalid` 校验）；REST 面从管理面组迁到与 translate 端点同款单一双面注册点（AuthMiddleware 认证即可），读向由服务端按认证主体推导——end_user → visitor 读向并强制会话绑定（token `session_id` 必须 = 路径参数，否则 403），其余主体 → agent 读向；坐席 → 访客方向翻译落地：`ConversationWorkspaceHandler` 注入可选 `RealtimeTranslateService`，`SendMessage` 落库/广播成功后异步旁路（30s 超时、`ErrTranslationUnavailable` 静默、其余 Warn），广播与刀二同契约 `message-translated` 帧；装配层构造两个绑定读向的实例（hub 用 agent 读向、发送口用 visitor 读向）。迁移水位断言三处同步 15→16（表数不变 50）。
+  - 下一步：**Phase 1 收尾**——历史消息批量子段翻译；三端消费半边（core 事件面 + admin 渲染）视产品节奏接入。
+  - 阻塞项：无
+  - 完成证据（刀三）：代码 `modules/translation/{domain/models.go,application/preference.go,infra/gorm_preference_repository.go,delivery/preference_{contract,adapter}.go,delivery/realtime_{contract,adapter}.go}` + `handlers/{translation_preference_handler.go,conversation_workspace_handler.go}` + `app/server/{router_auth.go,router_realtime.go,router.go,runtime.go,runtime_assembly.go,router_management.go}` + `bootstrap/migrations/000016_translation_preference_viewer_role.up.sql`；测试 application（角色校验/双角色规范化/读向隔离）、infra（`TestPreferenceViewerRolesAreIndependent` 双角色共存互不覆盖删除）、delivery（viewer 贯穿构造期绑定）、handlers（访客绑定 403 三态 + viewer 贯穿）、路由面（end_user 绑定/跨会话 403/无 claim 403/agent 读向）、`cvh_agent_translate_test.go` 发送口钩子四子用例（帧载荷/无偏好零帧/不可用静默/nil 保持主链路）；边界规则新增 `runtime|Translation visitor realtime` 行。门禁与本条目同轮全量绿（见提交）。
+  - 附注（2026-09-26，**刀二服务端半边已落地**——hub `message-translated` 帧，访客 → 坐席方向）：
   - 状态：`[-]`（Phase 1 推进中，刀三待做）
   - 最近进展：hub 新增可选能力 `sessionTranslationRuntime`（`SetSessionTranslationService` 注入，未注入/无偏好/provider 未配置一律静默，其余失败只记 Warn）：`handleTextMessage` 落库后与 AI 首答同走 goroutine，翻译并按会话广播 `message-translated` 帧（Data `{original, content, source_lang, target_lang}`，关联靠 `original`，无消息 ID 可挂）。translation/delivery 新增 `RealtimeTranslateService` 契约 + 适配器（组合 `SessionPreferenceReader` + `TranslateInvoker`，二者均为结构化窄接口，模块门面 `aiAssembly.Translation` 零适配接入）；装配 `wireAIRuntime` DB 块内复用同一偏好服务实例，`wireRealtimeGateways` 注入 hub。§5 流程同步：PROTOCOL.md 新增 §4.5 + fixtures `11-message-translated.json` + 三端回放（core 注解帧语义不并入 messages / Android+iOS `UnknownIgnored` 显式忽略，KNOWN_KINDS 三处同步）。文档：`realtime-translation-design.md` §1.4/§6 状态同步。
   - 下一步：**刀三**——坐席 → 访客方向自动翻译（注入口 `ConversationWorkspaceHandler.SendMessage`，同一应用服务复用）与访客面偏好读写（经会话绑定校验）；三端消费半边（core 事件面 + admin 渲染）视产品节奏接入。

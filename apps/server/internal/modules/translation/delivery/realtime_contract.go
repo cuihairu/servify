@@ -15,9 +15,10 @@ type SessionTranslation struct {
 }
 
 // SessionPreferenceReader 会话语言偏好读取面（PreferenceService 同形，
-// 结构化满足零适配）。
+// 结构化满足零适配）；viewer 由装配期绑定的 RealtimeTranslateService 实现
+// 固定（hub 消费 agent 读向、坐席发送口消费 visitor 读向）。
 type SessionPreferenceReader interface {
-	GetSessionLanguage(ctx context.Context, sessionID string) (string, error)
+	GetSessionLanguage(ctx context.Context, sessionID, viewer string) (string, error)
 }
 
 // TranslateInvoker 翻译出站面（HandlerService.Translate 同形，模块门面

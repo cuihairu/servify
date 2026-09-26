@@ -85,7 +85,7 @@ func TestConversationWorkspaceHandler_ListMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -129,7 +129,7 @@ func TestConversationWorkspaceHandler_SendMessage(t *testing.T) {
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
 	realtime := &stubRealtimeGateway{}
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), realtime)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), realtime, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -172,7 +172,7 @@ func TestConversationWorkspaceHandler_AssignAgent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -193,7 +193,7 @@ func TestConversationWorkspaceHandler_Transfer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -224,7 +224,7 @@ func TestConversationWorkspaceHandler_CloseSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -252,7 +252,7 @@ func TestConversationWorkspaceHandler_GetSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -279,7 +279,7 @@ func TestConversationWorkspaceHandler_GetSession_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -298,7 +298,7 @@ func TestConversationWorkspaceHandler_ListMessages_Pagination(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -347,7 +347,7 @@ func TestConversationWorkspaceHandler_SendMessage_InvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -367,7 +367,7 @@ func TestConversationWorkspaceHandler_SendMessage_BlankContent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -388,7 +388,7 @@ func TestConversationWorkspaceHandler_SendMessage_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -409,7 +409,7 @@ func TestConversationWorkspaceHandler_AssignAgent_InvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -429,7 +429,7 @@ func TestConversationWorkspaceHandler_ListMessages_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -448,7 +448,7 @@ func TestConversationWorkspaceHandler_AssignAgent_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -469,7 +469,7 @@ func TestConversationWorkspaceHandler_Transfer_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")
@@ -490,7 +490,7 @@ func TestConversationWorkspaceHandler_CloseSession_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := newConversationWorkspaceTestDB(t)
 	service := seedConversation(t, db)
-	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil)
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
 
 	router := gin.New()
 	group := router.Group("/api")

@@ -5957,7 +5957,7 @@ const docTemplate = `{
         },
         "/api/v1/translation/preferences/{session_id}": {
             "get": {
-                "description": "返回会话当前的自动翻译目标语言；未设置时 target_lang 为空串（200，不是 404）",
+                "description": "返回会话当前的自动翻译目标语言（坐席主体读 agent 读向，访客主体读自己的 visitor 读向）；未设置时 target_lang 为空串（200，不是 404）",
                 "produces": [
                     "application/json"
                 ],
@@ -5987,6 +5987,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.QueryResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
@@ -5996,7 +6002,7 @@ const docTemplate = `{
                 }
             },
             "put": {
-                "description": "upsert 会话的自动翻译目标语言（BCP-47 风格，如 en/zh-CN，大小写不敏感）；重复设置覆盖",
+                "description": "upsert 当前主体读向的自动翻译目标语言（BCP-47 风格，如 en/zh-CN，大小写不敏感）；重复设置覆盖。访客主体只能设置自己会话的 visitor 读向",
                 "consumes": [
                     "application/json"
                 ],
@@ -6038,6 +6044,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/handlers.QueryResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
@@ -6047,7 +6059,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "清除会话的自动翻译目标语言；无偏好时同样返回 200（幂等）",
+                "description": "清除当前主体读向的自动翻译目标语言；无偏好时同样返回 200（幂等）。访客主体只能清除自己会话的 visitor 读向",
                 "produces": [
                     "application/json"
                 ],
@@ -6073,6 +6085,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/handlers.QueryResponse"
                         }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -8,18 +9,24 @@ import (
 	"time"
 
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type ConversationWorkspaceHandler struct {
-	service  conversationdelivery.HandlerService
-	realtime realtimeplatform.RealtimeGateway
+	service    conversationdelivery.HandlerService
+	realtime   realtimeplatform.RealtimeGateway
+	translator translationdelivery.RealtimeTranslateService
 }
 
-func NewConversationWorkspaceHandler(service conversationdelivery.HandlerService, realtime realtimeplatform.RealtimeGateway) *ConversationWorkspaceHandler {
-	return &ConversationWorkspaceHandler{service: service, realtime: realtime}
+// NewConversationWorkspaceHandler 创建会话工作台处理器；translator 为可选
+// 依赖（Phase 1 刀三：坐席 → 访客方向自动翻译，按会话 visitor 读向偏好
+// 异步翻译并广播 message-translated 帧；未注入时保持既有行为）。
+func NewConversationWorkspaceHandler(service conversationdelivery.HandlerService, realtime realtimeplatform.RealtimeGateway, translator translationdelivery.RealtimeTranslateService) *ConversationWorkspaceHandler {
+	return &ConversationWorkspaceHandler{service: service, realtime: realtime, translator: translator}
 }
 
 func (h *ConversationWorkspaceHandler) GetSession(c *gin.Context) {
@@ -153,9 +160,40 @@ func (h *ConversationWorkspaceHandler) SendMessage(c *gin.Context) {
 		})
 	}
 
+	// 坐席 → 访客方向自动翻译（Phase 1 刀三，docs/realtime-translation-
+	// design.md §1.4）：与 hub 刀二同一契约/同一帧型，落库广播后的异步
+	// 旁路（消费会话 visitor 读向偏好）；无偏好与 provider 未配置静默，
+	// 其余失败只记日志，不影响消息主链路。
+	if h.translator != nil {
+		go h.translateAgentMessage(sessionID, content)
+	}
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Message: "Message sent successfully",
 		Data:    item,
+	})
+}
+
+// translateAgentMessage 翻译单条坐席消息并广播 message-translated 帧；
+// 失败不回传任何帧。
+func (h *ConversationWorkspaceHandler) translateAgentMessage(sessionID, text string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result, err := h.translator.TranslateSessionMessage(ctx, sessionID, text)
+	if err != nil {
+		if !errors.Is(err, translationdelivery.ErrTranslationUnavailable) {
+			logrus.WithField("session_id", sessionID).Warnf("Agent message translation failed: %v", err)
+		}
+		return
+	}
+	if result == nil || h.realtime == nil {
+		return
+	}
+	h.realtime.SendToSession(sessionID, realtimeplatform.Message{
+		Type:      "message-translated",
+		Data:      result,
+		SessionID: sessionID,
+		Timestamp: time.Now(),
 	})
 }
 

@@ -117,10 +117,13 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	if rt.DB != nil {
 		prefService := translationapp.NewPreferenceService(translationinfra.NewGormPreferenceRepository(rt.DB))
 		rt.TranslationPreferenceHandlerService = translationdelivery.NewPreferenceHandlerService(prefService)
-		// 刀二：hub 自动翻译旁路复用同一偏好服务与翻译门面（aiAssembly.
-		// Translation 即 HandlerService 门面，结构化满足 TranslateInvoker）；
-		// 无偏好/provider 未配置由契约静默跳过，错误由 hub 记 Warn。
-		rt.RealtimeTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService)
+		// 刀二/刀三：落库旁路的自动翻译复用同一偏好服务与翻译门面
+		// （aiAssembly.Translation 即 HandlerService 门面，结构化满足
+		// TranslateInvoker），仅偏好读向不同——hub 消费 agent 读向（访客
+		// → 坐席），坐席发送口消费 visitor 读向（坐席 → 访客）。无偏好/
+		// provider 未配置由契约静默跳过，错误由消费方记 Warn。
+		rt.RealtimeTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleAgent)
+		rt.RealtimeVisitorTranslateService = translationdelivery.NewRealtimeTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleVisitor)
 	}
 	return aiAssembly, nil
 }

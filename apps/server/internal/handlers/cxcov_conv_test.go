@@ -38,7 +38,7 @@ func (s *cxcConversationService) Close(ctx context.Context, sessionID string) (*
 
 func TestCxcConversationWorkspaceTransferInvalidBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := NewConversationWorkspaceHandler(&cxcConversationService{}, nil)
+	handler := NewConversationWorkspaceHandler(&cxcConversationService{}, nil, nil)
 	r := gin.New()
 	r.POST("/api/omni/sessions/:id/transfer", handler.Transfer)
 
@@ -55,7 +55,7 @@ func TestCxcConversationWorkspaceTransferInvalidBody(t *testing.T) {
 
 func TestCxcConversationWorkspaceServiceUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := NewConversationWorkspaceHandler(nil, nil)
+	handler := NewConversationWorkspaceHandler(nil, nil, nil)
 	r := gin.New()
 	RegisterConversationWorkspaceRoutes(r.Group("/api"), handler)
 

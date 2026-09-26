@@ -55,6 +55,7 @@ require|apps/server/internal/app/server/ai_runtime.go|RuntimeService[[:space:]]+
 runtime|Translation handlers|TranslationHandlerService|translationdelivery\.HandlerService
 runtime|Translation preference handlers|TranslationPreferenceHandlerService|translationdelivery\.PreferenceHandlerService
 runtime|Translation realtime|RealtimeTranslateService|translationdelivery\.RealtimeTranslateService
+runtime|Translation visitor realtime|RealtimeVisitorTranslateService|translationdelivery\.RealtimeTranslateService
 forbid|apps/server/internal/app/server/ai_runtime.go|LegacyService[[:space:]]+\*services\.AIService|AI assembly must not expose the legacy concrete AI service.
 require|apps/server/internal/app/server/runtime.go|CustomerHandlerService[[:space:]]+customerdelivery\.HandlerService|Runtime must expose customer via customerdelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|CustomerHandlerService[[:space:]]*=.*customerdelivery\.NewHandlerService\(rt\.DB\)|Runtime must assemble customer handlers directly from module delivery.

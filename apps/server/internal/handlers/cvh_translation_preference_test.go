@@ -18,16 +18,20 @@ var _ translationdelivery.PreferenceHandlerService = (*cvhTranslationPreferenceS
 // cvhTranslationPreferenceService 偏好服务 inline mock：捕获参数 + 注入结果/错误。
 type cvhTranslationPreferenceService struct {
 	setSessionID string
+	setViewer    string
 	setLang      string
 	setResult    string
 	getSessionID string
+	getViewer    string
 	getLang      string
 	clearID      string
+	clearViewer  string
 	err          error
 }
 
-func (s *cvhTranslationPreferenceService) SetSessionLanguage(_ context.Context, sessionID, targetLang string) (string, error) {
+func (s *cvhTranslationPreferenceService) SetSessionLanguage(_ context.Context, sessionID, viewer, targetLang string) (string, error) {
 	s.setSessionID = sessionID
+	s.setViewer = viewer
 	s.setLang = targetLang
 	if s.err != nil {
 		return "", s.err
@@ -35,21 +39,39 @@ func (s *cvhTranslationPreferenceService) SetSessionLanguage(_ context.Context, 
 	return s.setResult, nil
 }
 
-func (s *cvhTranslationPreferenceService) GetSessionLanguage(_ context.Context, sessionID string) (string, error) {
+func (s *cvhTranslationPreferenceService) GetSessionLanguage(_ context.Context, sessionID, viewer string) (string, error) {
 	s.getSessionID = sessionID
+	s.getViewer = viewer
 	if s.err != nil {
 		return "", s.err
 	}
 	return s.getLang, nil
 }
 
-func (s *cvhTranslationPreferenceService) ClearSessionLanguage(_ context.Context, sessionID string) error {
+func (s *cvhTranslationPreferenceService) ClearSessionLanguage(_ context.Context, sessionID, viewer string) error {
 	s.clearID = sessionID
+	s.clearViewer = viewer
 	return s.err
 }
 
-func cvhTranslationPreferenceRouter(svc *cvhTranslationPreferenceService) *gin.Engine {
+// cvhPrincipal 模拟认证中间件注入的主体上下文（principal_kind / session_id）。
+type cvhPrincipal struct {
+	kind      string
+	sessionID string
+}
+
+func cvhTranslationPreferenceRouter(svc *cvhTranslationPreferenceService, principals ...cvhPrincipal) *gin.Engine {
 	r := dxcRouter()
+	if len(principals) > 0 {
+		p := principals[0]
+		r.Use(func(c *gin.Context) {
+			c.Set("principal_kind", p.kind)
+			if p.sessionID != "" {
+				c.Set("session_id", p.sessionID)
+			}
+			c.Next()
+		})
+	}
 	h := NewTranslationPreferenceHandler(svc)
 	r.GET("/api/v1/translation/preferences/:session_id", h.GetPreference)
 	r.PUT("/api/v1/translation/preferences/:session_id", h.PutPreference)
@@ -83,6 +105,38 @@ func TestCvhTranslationPreferenceGet(t *testing.T) {
 		assert.Contains(t, w.Body.String(), `"target_lang":""`)
 	})
 
+	t.Run("agent principal reads agent viewer role", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		w := dxcDo(cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "agent"}), http.MethodGet, path, "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, translationdelivery.ViewerRoleAgent, svc.getViewer)
+	})
+
+	t.Run("bound visitor reads visitor viewer role", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{getLang: "ja"}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-1"})
+		w := dxcDo(router, http.MethodGet, path, "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, translationdelivery.ViewerRoleVisitor, svc.getViewer)
+		assert.Contains(t, w.Body.String(), `"target_lang":"ja"`)
+	})
+
+	t.Run("cross session visitor is forbidden before service call", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-other"})
+		w := dxcDo(router, http.MethodGet, path, "")
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Empty(t, svc.getSessionID, "service must not be reached on session mismatch")
+	})
+
+	t.Run("visitor without session claim is forbidden", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user"})
+		w := dxcDo(router, http.MethodGet, path, "")
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Empty(t, svc.getSessionID)
+	})
+
 	t.Run("service errors map to status codes", func(t *testing.T) {
 		cases := []struct {
 			name string
@@ -91,6 +145,7 @@ func TestCvhTranslationPreferenceGet(t *testing.T) {
 		}{
 			{"unavailable 503", translationdelivery.ErrTranslationUnavailable, http.StatusServiceUnavailable},
 			{"session required 400", translationdelivery.ErrTranslationSessionRequired, http.StatusBadRequest},
+			{"viewer invalid 400", translationdelivery.ErrTranslationViewerInvalid, http.StatusBadRequest},
 			{"conflict 409", translationdelivery.ErrTranslationPrefConflict, http.StatusConflict},
 			{"unknown 500", errors.New("db exploded"), http.StatusInternalServerError},
 		}
@@ -117,6 +172,22 @@ func TestCvhTranslationPreferencePut(t *testing.T) {
 		assert.Contains(t, w.Body.String(), `"target_lang":"zh-cn"`)
 	})
 
+	t.Run("bound visitor upserts visitor role", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{setResult: "ja"}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-9"})
+		w := dxcDo(router, http.MethodPut, path, `{"target_lang":"ja"}`)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, translationdelivery.ViewerRoleVisitor, svc.setViewer)
+	})
+
+	t.Run("cross session visitor cannot upsert", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-other"})
+		w := dxcDo(router, http.MethodPut, path, `{"target_lang":"ja"}`)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Empty(t, svc.setSessionID)
+	})
+
 	t.Run("invalid json rejected", func(t *testing.T) {
 		svc := &cvhTranslationPreferenceService{}
 		w := dxcDo(cvhTranslationPreferenceRouter(svc), http.MethodPut, path, `{`)
@@ -139,6 +210,7 @@ func TestCvhTranslationPreferencePut(t *testing.T) {
 		}{
 			{"lang invalid 400", translationdelivery.ErrTranslationLangInvalid, http.StatusBadRequest},
 			{"target required 400", translationdelivery.ErrTranslationTargetRequired, http.StatusBadRequest},
+			{"viewer invalid 400", translationdelivery.ErrTranslationViewerInvalid, http.StatusBadRequest},
 			{"conflict 409", translationdelivery.ErrTranslationPrefConflict, http.StatusConflict},
 			{"unavailable 503", translationdelivery.ErrTranslationUnavailable, http.StatusServiceUnavailable},
 		}
@@ -160,6 +232,22 @@ func TestCvhTranslationPreferenceDelete(t *testing.T) {
 		w := dxcDo(cvhTranslationPreferenceRouter(svc), http.MethodDelete, path, "")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "conv-2", svc.clearID)
+	})
+
+	t.Run("bound visitor deletes own visitor role", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-2"})
+		w := dxcDo(router, http.MethodDelete, path, "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, translationdelivery.ViewerRoleVisitor, svc.clearViewer)
+	})
+
+	t.Run("cross session visitor cannot delete", func(t *testing.T) {
+		svc := &cvhTranslationPreferenceService{}
+		router := cvhTranslationPreferenceRouter(svc, cvhPrincipal{kind: "end_user", sessionID: "conv-other"})
+		w := dxcDo(router, http.MethodDelete, path, "")
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Empty(t, svc.clearID)
 	})
 
 	t.Run("error mapped", func(t *testing.T) {

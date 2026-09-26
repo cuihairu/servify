@@ -16,7 +16,8 @@ import (
 	platformauth "servify/apps/server/internal/platform/auth"
 )
 
-// GormPreferenceRepository 会话翻译语言偏好仓储。
+// GormPreferenceRepository 会话翻译语言偏好仓储（(session, viewer_role)
+// 每组合至多一行）。
 type GormPreferenceRepository struct {
 	db *gorm.DB
 }
@@ -37,13 +38,13 @@ func applyScopeFilter(tx *gorm.DB, ctx context.Context) *gorm.DB {
 	return tx
 }
 
-// UpsertPreference 按会话 upsert 目标语言。先做 scoped 读命中即原行更新
-// （保 id/created_at、不动他租户行）；未命中走 OnConflict DoNothing 的
-// Create（pg/sqlite 双方言可移植，不依赖驱动的唯一冲突错误翻译），随后
-// scoped 复查：行仍不可见 = 归属他 scope（跨租户撞唯一索引），返回冲突
-// 错误；可见 = 本 scope 并发建行，补一次语言覆盖。
+// UpsertPreference 按 (会话, viewer 角色) upsert 目标语言。先做 scoped 读
+// 命中即原行更新（保 id/created_at、不动他租户行）；未命中走 OnConflict
+// DoNothing 的 Create（pg/sqlite 双方言可移植，不依赖驱动的唯一冲突错误
+// 翻译），随后 scoped 复查：行仍不可见 = 归属他 scope（跨租户撞唯一索引），
+// 返回冲突错误；可见 = 本 scope 并发建行，补一次语言覆盖。
 func (r *GormPreferenceRepository) UpsertPreference(ctx context.Context, pref *translationdomain.TranslationLanguagePreference) error {
-	existing, err := r.GetPreference(ctx, pref.ConversationSessionID)
+	existing, err := r.GetPreference(ctx, pref.ConversationSessionID, pref.ViewerRole)
 	if err != nil {
 		return err
 	}
@@ -52,12 +53,15 @@ func (r *GormPreferenceRepository) UpsertPreference(ctx context.Context, pref *t
 			Updates(map[string]interface{}{"target_lang": pref.TargetLang}).Error
 	}
 	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "conversation_session_id"}},
+		Columns: []clause.Column{
+			{Name: "conversation_session_id"},
+			{Name: "viewer_role"},
+		},
 		DoNothing: true,
 	}).Create(pref).Error; err != nil {
 		return err
 	}
-	raced, err := r.GetPreference(ctx, pref.ConversationSessionID)
+	raced, err := r.GetPreference(ctx, pref.ConversationSessionID, pref.ViewerRole)
 	if err != nil {
 		return err
 	}
@@ -71,11 +75,11 @@ func (r *GormPreferenceRepository) UpsertPreference(ctx context.Context, pref *t
 	return nil
 }
 
-// GetPreference 返回会话偏好；无偏好返回 (nil, nil)（不是错误）。
-func (r *GormPreferenceRepository) GetPreference(ctx context.Context, sessionID string) (*translationdomain.TranslationLanguagePreference, error) {
+// GetPreference 返回会话指定读向的偏好；无偏好返回 (nil, nil)（不是错误）。
+func (r *GormPreferenceRepository) GetPreference(ctx context.Context, sessionID, viewerRole string) (*translationdomain.TranslationLanguagePreference, error) {
 	var pref translationdomain.TranslationLanguagePreference
 	err := applyScopeFilter(r.db.WithContext(ctx), ctx).
-		Where("conversation_session_id = ?", sessionID).
+		Where("conversation_session_id = ? AND viewer_role = ?", sessionID, viewerRole).
 		First(&pref).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -86,9 +90,9 @@ func (r *GormPreferenceRepository) GetPreference(ctx context.Context, sessionID 
 	return &pref, nil
 }
 
-// DeletePreference 删除会话偏好（幂等：无行也成功，不回显存在性）。
-func (r *GormPreferenceRepository) DeletePreference(ctx context.Context, sessionID string) error {
+// DeletePreference 删除会话指定读向的偏好（幂等：无行也成功，不回显存在性）。
+func (r *GormPreferenceRepository) DeletePreference(ctx context.Context, sessionID, viewerRole string) error {
 	return applyScopeFilter(r.db.WithContext(ctx), ctx).
-		Where("conversation_session_id = ?", sessionID).
+		Where("conversation_session_id = ? AND viewer_role = ?", sessionID, viewerRole).
 		Delete(&translationdomain.TranslationLanguagePreference{}).Error
 }

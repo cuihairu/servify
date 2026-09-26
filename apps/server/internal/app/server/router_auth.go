@@ -166,6 +166,19 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 			handlers.NewTranslationHandler(deps.TranslationHandlerService).Translate)
 	}
 
+	// 会话翻译语言偏好（Phase 1 刀三，docs/realtime-translation-design.md
+	// §1.3）：与 translate 端点同款单一双面注册点（AuthMiddleware 认证即
+	// 可）；读向按认证主体推导——end_user → visitor 读向（强制会话绑定：
+	// token 的 session_id 必须与路径一致），其余主体 → agent 读向。未装配
+	// 时不注册（无 DB 部署形态）。
+	if deps.TranslationPreferenceHandlerService != nil {
+		prefHandler := handlers.NewTranslationPreferenceHandler(deps.TranslationPreferenceHandlerService)
+		prefAuth := middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...)
+		r.GET("/api/v1/translation/preferences/:session_id", prefAuth, prefHandler.GetPreference)
+		r.PUT("/api/v1/translation/preferences/:session_id", prefAuth, prefHandler.PutPreference)
+		r.DELETE("/api/v1/translation/preferences/:session_id", prefAuth, prefHandler.DeletePreference)
+	}
+
 	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")
 	if isS3 {
 		// S3 模式：/uploads/<key> 302 到现签 presigned URL（或 public_base_url），

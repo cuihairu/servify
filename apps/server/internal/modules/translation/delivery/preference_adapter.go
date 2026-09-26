@@ -18,23 +18,23 @@ func NewPreferenceHandlerService(inner *translationapp.PreferenceService) Prefer
 	return &preferenceHandlerServiceAdapter{inner: inner}
 }
 
-func (a *preferenceHandlerServiceAdapter) SetSessionLanguage(ctx context.Context, sessionID, targetLang string) (string, error) {
+func (a *preferenceHandlerServiceAdapter) SetSessionLanguage(ctx context.Context, sessionID, viewer, targetLang string) (string, error) {
 	if a == nil || a.inner == nil {
 		return "", translationapp.ErrTranslationUnavailable
 	}
-	return a.inner.SetSessionLanguage(ctx, sessionID, targetLang)
+	return a.inner.SetSessionLanguage(ctx, sessionID, viewer, targetLang)
 }
 
-func (a *preferenceHandlerServiceAdapter) GetSessionLanguage(ctx context.Context, sessionID string) (string, error) {
+func (a *preferenceHandlerServiceAdapter) GetSessionLanguage(ctx context.Context, sessionID, viewer string) (string, error) {
 	if a == nil || a.inner == nil {
 		return "", translationapp.ErrTranslationUnavailable
 	}
-	return a.inner.GetSessionLanguage(ctx, sessionID)
+	return a.inner.GetSessionLanguage(ctx, sessionID, viewer)
 }
 
-func (a *preferenceHandlerServiceAdapter) ClearSessionLanguage(ctx context.Context, sessionID string) error {
+func (a *preferenceHandlerServiceAdapter) ClearSessionLanguage(ctx context.Context, sessionID, viewer string) error {
 	if a == nil || a.inner == nil {
 		return translationapp.ErrTranslationUnavailable
 	}
-	return a.inner.ClearSessionLanguage(ctx, sessionID)
+	return a.inner.ClearSessionLanguage(ctx, sessionID, viewer)
 }
