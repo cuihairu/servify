@@ -1030,8 +1030,15 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-26，**Phase 2 刀二b-1 管线半边已落地**——分句器 + 每说话方语音管线）：
+  - 状态：`[-]`（刀二 provider 面 + 刀二b-1 管线半边已落地；下一步刀二b-2 = WS 面：音频上行 + 字幕/音频下行帧族过 PROTOCOL §5 流程 + 装配接线）
+  - 最近进展：`modules/translation/domain.SentenceAssembler`（设计文档 §2.2 双触发先到先切：句界标点 。？！.?!? 与 60 字上限沿字符位单趟扫描、先到者定切点；VAD 尾点 `Flush` 把残余切一整句；同 seq 二次 final 覆盖不叠加；换轮防御性收残；切点后修剪前导空白；多字节按字符边界切）+ `application.VoicePipeline`（每说话方一条，双向 = 两条互不污染：消费 `asr.Event` 流 → 分句 → 逐句翻译携带上一句原文+译文尾窗 ≤ 200 字（`TranslateCommand.Context` 提示词扩展，服务端截尾）→ TTS 逐句合成；`VoiceSink` 产出接口（speech_start/partial/caption/audio/error）交付层适配；partial 只透传"正在说"不进翻译；翻译失败句降级原文且不为对方合成原声、TTS 失败句仅字幕——§3.2 逐句预算熔断降级，管线不中断；句序号管线侧单调递增从 1 起）。
+  - 已知边界：管线尚无消费方接线（WS 面是刀二b-2）——装配层不构造，纯模块面测试覆盖；`VoiceSink` 契约要求实现方非阻塞（管线串行调用）；音频下行载荷形态（base64 内联 vs 短时 URL）留刀二b-2 定（数据最小化：§4 默认不落库）。
+  - 下一步：刀二b-2——WS 面：访客/坐席语音上行（WS 二进制帧形态取舍）+ `translation-delta`/`translation-final` 族字幕帧与音频帧（新帧类型过 PROTOCOL §5 流程：server 广播点 + PROTOCOL.md + fixtures + 三端回放测试）+ 装配接线（`ai.asr.*`/`ai.tts.*` 已配置才会话激活管线）。
+  - 阻塞项：无
+  - 完成证据：translation 四包（domain/application/delivery/infra）逐函数 100% 覆盖、`-race` 绿、vet/gofmt 绿；run-tests/build/golden/smoke/hygiene/encoding/boundaries 全绿。
 - 附注（2026-09-26，**Phase 2 刀二 provider 面已落地**——OpenAI 兼容口进 factory switch，按设计文档 §3.1"OpenAI 兼容口优先起步"）：
-  - 状态：`[-]`（刀二 provider 面已落地；下一步刀二b = 语音管线：分句翻译 + 字幕 WS 帧 + TTS 消费）
+  - 状态：`[-]`（刀二 provider 面 + 刀二b-1 管线半边已落地；下一步刀二b-2 = WS 面）
   - 最近进展：`platform/asr/openai`（OpenAI 实时转写 WS 协议 `/v1/realtime?intent=transcription`：握手 `transcription_session.update` 下发 pcm16/模型/语言/服务端 VAD（尾点静音 500ms 对齐 §2.2）；入站事件映射 speech_started/speech_stopped → VAD 事件、transcription delta → partial、completed → final、error → `EventError` 会话破损；音频 base64 `input_audio_buffer.append`；写侧单写者锁、读侧独占循环，事件通道发送与 done 竞争保证消费方放弃即退出）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 保留状态码与 error.message 供 §3.2 预算熔断识别）。两者零值字段按默认兜底（base_url 默认官方端点，测试全部封闭传本地端点），`base_url` 可指向兼容网关（ws URL 由 https→wss / http→ws 推导）；factory switch 收编 `"openai"` 选型；契约面补 `EventError`/`ErrUnsupportedFormat`（asr openai 只收 pcm16 24kHz 单声道，格式不符在拨号前拒绝）。
   - 已知边界：provider 面无消费方（语音管线是刀二b）——装配层尚未接线，`ai.asr.provider=openai` 构造可用但无人调 `NewSession`/`Synthesize`；真实官方端点连通性需 API key（测试全部 mock/httptest 封闭，无外呼）；gorilla/websocket 用既有依赖树版本，无新增依赖。
   - 下一步：刀二b——分句翻译管线（final → 翻译队列 → 逐句 `Translate`）+ 字幕 WS 帧（新帧类型过 PROTOCOL §5 流程：服务端广播点 + 文档 + fixtures + 三端回放测试）+ TTS 消费（合成音频经既有下行通道到端上播放）。

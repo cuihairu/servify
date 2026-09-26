@@ -67,6 +67,57 @@ func TestTranslateWithSourceLang(t *testing.T) {
 	}
 }
 
+func TestTranslateContextCarriedInPrompt(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "Hello"}}
+	svc := translationapp.NewService(provider, testParams)
+
+	if _, err := svc.Translate(context.Background(), translationapp.TranslateCommand{
+		Text: "你好", TargetLang: "en", Context: "上一句原文\n上一句译文",
+	}); err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	userMsg := provider.RecordedRequests()[0].Messages[1].Content
+	if !strings.Contains(userMsg, "对话上文") || !strings.Contains(userMsg, "上一句原文\n上一句译文") {
+		t.Fatalf("context missing from prompt: %s", userMsg)
+	}
+	if !strings.Contains(userMsg, "仅帮助理解衔接") {
+		t.Fatalf("context must be marked as non-output reference: %s", userMsg)
+	}
+}
+
+func TestTranslateContextClampedToTailWindow(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "Hello"}}
+	svc := translationapp.NewService(provider, testParams)
+
+	long := strings.Repeat("a", translationapp.MaxContextRunes+100) + "TAIL"
+	if _, err := svc.Translate(context.Background(), translationapp.TranslateCommand{
+		Text: "你好", TargetLang: "en", Context: long,
+	}); err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	userMsg := provider.RecordedRequests()[0].Messages[1].Content
+	if !strings.Contains(userMsg, "TAIL") {
+		t.Fatalf("tail window must keep the most recent text: %s", userMsg[len(userMsg)-200:])
+	}
+	if strings.Contains(userMsg, strings.Repeat("a", translationapp.MaxContextRunes+1)) {
+		t.Fatalf("context must be clamped to %d runes", translationapp.MaxContextRunes)
+	}
+}
+
+func TestTranslateBlankContextOmitted(t *testing.T) {
+	provider := &mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "Hello"}}
+	svc := translationapp.NewService(provider, testParams)
+
+	if _, err := svc.Translate(context.Background(), translationapp.TranslateCommand{
+		Text: "你好", TargetLang: "en", Context: "  ",
+	}); err != nil {
+		t.Fatalf("Translate() error = %v", err)
+	}
+	if strings.Contains(provider.RecordedRequests()[0].Messages[1].Content, "对话上文") {
+		t.Fatalf("blank context must be omitted from prompt")
+	}
+}
+
 func TestTranslateValidation(t *testing.T) {
 	svc := translationapp.NewService(&mockllm.Provider{}, testParams)
 	exactMax := strings.Repeat("字", translationapp.MaxTextRunes)

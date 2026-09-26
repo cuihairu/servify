@@ -63,7 +63,7 @@ func (s *Service) Translate(ctx context.Context, cmd TranslateCommand) (Translat
 
 	resp, err := s.llm.Chat(ctx, llm.ChatRequest{
 		Model:       s.params.Model,
-		Messages:    buildTranslationMessages(text, source, target),
+		Messages:    buildTranslationMessages(text, source, target, cmd.Context),
 		Temperature: s.params.Temperature,
 		MaxTokens:   s.params.MaxTokens,
 		Options:     llm.RequestOptions{TimeoutMs: s.params.TimeoutMs},
@@ -79,17 +79,28 @@ func (s *Service) Translate(ctx context.Context, cmd TranslateCommand) (Translat
 }
 
 // buildTranslationMessages 组装翻译提示词：system 定角色与纪律，
-// user 携带语言指令 + 待译文本（分隔符防注入混排）。
-func buildTranslationMessages(text, source, target string) []llm.ChatMessage {
+// user 携带语言指令 + 可选上文（语音逐句链路防割裂，超窗截尾）+
+// 待译文本（分隔符防注入混排）。
+func buildTranslationMessages(text, source, target, context string) []llm.ChatMessage {
 	var instruction string
 	if source == SourceLangAuto {
 		instruction = fmt.Sprintf("请把下面的内容翻译成 %s。", target)
 	} else {
 		instruction = fmt.Sprintf("请把下面的内容从 %s 翻译成 %s。", source, target)
 	}
+	user := instruction + "\n待译内容：\n" + text
+	if trimmed := strings.TrimSpace(context); trimmed != "" {
+		runes := []rune(trimmed)
+		if len(runes) > MaxContextRunes {
+			// 尾窗：只保留最近 200 字符（语义连续性在近处）。
+			trimmed = string(runes[len(runes)-MaxContextRunes:])
+		}
+		user = instruction + "\n对话上文（仅帮助理解衔接，不要翻译或输出它）：\n" +
+			trimmed + "\n待译内容：\n" + text
+	}
 	return []llm.ChatMessage{
 		{Role: "system", Content: translationSystemPrompt},
-		{Role: "user", Content: instruction + "\n待译内容：\n" + text},
+		{Role: "user", Content: user},
 	}
 }
 

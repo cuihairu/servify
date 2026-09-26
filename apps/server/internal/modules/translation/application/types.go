@@ -31,11 +31,18 @@ type RuntimeParams struct {
 	TimeoutMs   int
 }
 
-// TranslateCommand 单条文本翻译指令。SourceLang 缺省 auto（自动检测）。
+// MaxContextRunes 逐句翻译的上下文尾窗上限（设计文档 §2.2：携带上一句
+// 原文+译文尾窗 ≤ 200 字符，控制时延与费用；超窗服务端截尾）。
+const MaxContextRunes = 200
+
+// TranslateCommand 单条文本翻译指令。SourceLang 缺省 auto（自动检测）；
+// Context 为可选对话上文（语音逐句链路防割裂，Phase 2 刀二b），仅参与
+// 提示词、不参与输出。
 type TranslateCommand struct {
 	Text       string
 	SourceLang string
 	TargetLang string
+	Context    string
 }
 
 // TranslateResult 翻译产出；Text 为可直接展示的译文。
