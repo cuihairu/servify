@@ -269,6 +269,44 @@
       "title": "AI Fallback Ratio",
       "type": "timeseries",
       "description": "降级答复占比（不含转人工）；持续高于 50% 触发 AIFallbackRatioHigh"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "id": 203,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(voice_translation_sentences_total[10m])) by (outcome)",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Voice Translation Outcomes",
+      "type": "timeseries",
+      "description": "语音翻译管线逐句产出（translated = 字幕+音频；caption_only = 译文仅字幕；degraded = 降级原文）；degraded 占比持续超 20% 触发 VoiceTranslationDegradedHigh"
     }
   ],
   "schemaVersion": 39,

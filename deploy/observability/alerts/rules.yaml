@@ -104,6 +104,17 @@ groups:
           summary: "AI fallback ratio exceeds 50%"
           description: "Share of AI answers served by the degraded fallback path is {{ $value | humanizePercentage }}; transfers excluded."
 
+      - alert: VoiceTranslationDegradedHigh
+        expr: |
+          sum(rate(voice_translation_sentences_total{outcome="degraded"}[10m]))
+          / sum(rate(voice_translation_sentences_total[10m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Voice translation degraded ratio exceeds 20%"
+          description: "Share of voice sentences served as degraded original text is {{ $value | humanizePercentage }} (translate failure or per-sentence budget melt)."
+
   - name: servify.slo
     rules:
       - alert: SLOAvailabilityFastBurn

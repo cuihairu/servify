@@ -170,6 +170,21 @@ All metrics follow Prometheus conventions: `subsystem_name_units`. Key prefixes:
 - 编排层持续失败：按日志 error 修复（常见为 WeKnora/Dify 凭证或网络）
 - 熔断开启：等半开恢复或 `POST /api/v1/ai/circuit-breaker/reset`
 
+### VoiceTranslationDegradedHigh
+
+**Severity**: Warning | **Threshold**: degraded share > 20% for 10 minutes
+
+**Investigation**:
+1. Check "Voice Translation Outcomes" panel on the business dashboard（degraded 相对 translated 的占比）
+2. degraded 陡升通常是翻译 LLM 故障或单句预算熔断（5s/句）——句级错误只记
+   服务端日志（客户端零帧），看语音管线 OnError 的 warn 行
+3. caption_only 升高而 translated 下降：TTS provider 故障/超时（字幕链路不受影响，属非紧急）
+
+**Resolution**:
+- 翻译上游故障：与 AI 链路同源处理（凭证/网络，见 AIProviderDegraded）
+- 持续超预算：上游 P50 劣化超过 5s/句，评估换模型或上调预算常量
+  （`sentenceTranslateBudget`/`sentenceSynthBudget`，当前 5s）
+
 ### SLOAvailabilityFastBurn
 
 **Severity**: Critical | **Threshold**: 5xx 错误率 > 0.144%（14.4x 预算燃烧率），1h 与 5m 双窗同时成立
@@ -295,6 +310,7 @@ POST /api/v1/ai/circuit-breaker/reset
 | `tickets_created_total` | Counter | tenant_id, priority | New tickets |
 | `tickets_resolved_total` | Counter | tenant_id, outcome | Tickets moved to resolved |
 | `routing_decisions_total` | Counter | tenant_id, strategy, outcome | Routing decisions; strategy ∈ handoff / assign / transfer |
+| `voice_translation_sentences_total` | Counter | outcome | Voice translation sentence outcomes; outcome ∈ translated / caption_only / degraded |
 
 ### Async Metrics
 
