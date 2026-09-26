@@ -536,6 +536,24 @@ func TestEmitAbandonsWhenDoneClosedAndBufferFull(t *testing.T) {
 	_ = sess.Close()
 }
 
+func TestEmitAfterCloseIsSilentlyDropped(t *testing.T) {
+	// 收线（readLoop 退出 close 事件通道）后到达的 emit：走 eventsClosed 丢弃
+	// 分支——不 panic、不投递（emit/close 同锁不变量的关闭侧行为面）。
+	s := newStreamServer(t, nil, 0)
+	p := newTestProvider(t, s.srv.URL)
+	sess, _, err := p.NewSession(context.Background(), asr.SessionOptions{Format: pcmFormat})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	sk := sess.(*session)
+	sk.doneOnce()
+	if evs := drainClosed(t, sk.events); len(evs) != 0 {
+		t.Fatalf("events after quiet teardown = %+v, want none", evs)
+	}
+	sk.emit(asr.Event{Kind: asr.EventPartial, Text: "late"}) // 绝不 panic
+	_ = sess.Close()
+}
+
 func TestReadLoopExitsOnDoneAfterLiveRead(t *testing.T) {
 	// done 关闭但连接仍活：readLoop 成功再读一帧（未映射会务事件）后于
 	// 循环顶退出——验证顶部 done 检查分支。

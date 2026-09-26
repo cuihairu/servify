@@ -238,6 +238,14 @@ type session struct {
 	broken     bool
 	doneMu     sync.Mutex
 	doneClosed bool
+
+	// emitMu/eventsClosed：事件通道的发送与关闭同锁串行——emit 与 readLoop
+	// 退出时的 defer close 竞态会 send on closed channel（进程级 panic，CI
+	// TestEmitAbandonsWhenDoneClosedAndBufferFull 实锤）。done 分支保证消费方
+	// 放弃后 emit 不阻塞；持锁阻塞在满缓冲上的 emit 由 done 关闭解围，不会
+	// 死锁收线路径。
+	emitMu       sync.Mutex
+	eventsClosed bool
 }
 
 func (s *session) FeedAudio(chunk []byte) error {
@@ -299,7 +307,15 @@ func (s *session) markBroken() {
 // 消费方放弃会话（Close）后立即退出。退出时关闭事件通道（消费方 range 到
 // 关闭即会话终止）。
 func (s *session) readLoop() {
-	defer close(s.events)
+	// 收线：close 与 emit 同锁串行（emitMu 不变量）。先置 eventsClosed 再
+	// close——此后到达的 emit 走丢弃分支，绝不触碰已关闭通道；close 前最后
+	// 一批缓冲事件仍可被消费方 range 排干（契约不变）。
+	defer func() {
+		s.emitMu.Lock()
+		s.eventsClosed = true
+		close(s.events)
+		s.emitMu.Unlock()
+	}()
 	for {
 		select {
 		case <-s.done:
@@ -348,7 +364,14 @@ func (s *session) readLoop() {
 	}
 }
 
+// emit 事件投递：与收线 close 同锁串行（见 emitMu 注释），通道关闭后到达
+// 的 emit 静默丢弃而非 panic。
 func (s *session) emit(ev asr.Event) {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
+	if s.eventsClosed {
+		return
+	}
 	select {
 	case s.events <- ev:
 	case <-s.done:
