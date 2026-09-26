@@ -206,7 +206,40 @@ func (s *WebRTCService) CreatePeerConnection(sessionID string) (*WebRTCConnectio
 	return conn, nil
 }
 
+// terminalConnStates 视为可回收的旧连接终态（断线重连场景下的残留 PC）。
+var terminalConnStates = map[string]bool{
+	"disconnected": true,
+	"failed":       true,
+	"closed":       true,
+}
+
+// closeTerminalConnections 回收同 session 终态旧 PC（RA-8 服务端半边）：
+// 客户端断线重连会重发 offer，不回收则旧 PC 泄漏。存活 PC 不动——访客/
+// 坐席双端各持一条 PC 的现状拓扑（RA-5 歧义）不受影响，待信令协议加
+// 对端标识后再行收口。
+func (s *WebRTCService) closeTerminalConnections(sessionID string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for id, conn := range s.connections {
+		if conn.SessionID != sessionID || !terminalConnStates[conn.statusValue()] {
+			continue
+		}
+		if s.voice != nil {
+			s.voice.EndCall(context.Background(), conn.ID)
+		}
+		if err := hookPeerConnectionClose(conn.PeerConnection); err != nil {
+			logrus.Errorf("Failed to close stale peer connection %s: %v", id, err)
+		}
+		delete(s.connections, id)
+		logrus.Infof("Reclaimed stale WebRTC connection %s before re-offer (session %s)", id, sessionID)
+	}
+}
+
 func (s *WebRTCService) HandleOffer(sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+	// 重连保护（RA-8 服务端半边）：应答前先回收同 session 终态旧 PC。
+	s.closeTerminalConnections(sessionID)
+
 	conn, err := s.CreatePeerConnection(sessionID)
 	if err != nil {
 		return nil, err
