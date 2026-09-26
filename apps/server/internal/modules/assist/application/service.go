@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
+	platformauth "servify/apps/server/internal/platform/auth"
 	"strings"
 	"time"
 )
@@ -18,6 +19,9 @@ var (
 	ErrAssistPayloadInvalid     = errors.New("annotation payload must be a valid JSON object")
 	ErrAssistForbidden          = errors.New("remote assist session does not belong to this customer")
 	ErrAssistAlreadyEnded       = errors.New("remote assist session already ended")
+	ErrAssistSessionActive      = errors.New("remote assist session already active for this conversation")
+	ErrAssistConsentDeclined    = errors.New("remote assist consent declined by customer")
+	ErrAssistConsentDecided     = errors.New("remote assist consent already decided")
 )
 
 // 可选标注形状（Canvas 覆盖层）。
@@ -34,12 +38,18 @@ const (
 	StatusFailed = "failed"
 )
 
-// StartCommand 发起协助。
+// 对方同意状态（RemoteAssistSession.ConsentStatus）。
+const (
+	ConsentPending  = "pending"
+	ConsentGranted  = "granted"
+	ConsentDeclined = "declined"
+)
+
+// StartCommand 发起协助；租户/工作区从 ctx 取（主体 token scope），
+// 不再接受客户端自报值（RA-1 隔离收口）。
 type StartCommand struct {
 	ConversationSessionID string
 	AgentUserID           uint
-	TenantID              string
-	WorkspaceID           string
 }
 
 // EndCommand 结束协助；录制元数据可缺省（访客可能经访客面单独回传）。
@@ -77,7 +87,8 @@ func NewAssistService(repo Repository) *Service {
 	return &Service{repo: repo, now: time.Now}
 }
 
-// StartSession 发起一次远程协助（状态 active）。
+// StartSession 发起一次远程协助（状态 active、consent pending）。
+// 同一客服会话同时只允许一个 active 协助（RA-2 单活跃约束）。
 func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*assistdomain.RemoteAssistSession, error) {
 	if strings.TrimSpace(cmd.ConversationSessionID) == "" {
 		return nil, ErrAssistSessionRequired
@@ -85,12 +96,18 @@ func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*assistdo
 	if _, err := s.repo.GetConversationSessionOwner(ctx, cmd.ConversationSessionID); err != nil {
 		return nil, ErrAssistNotFound
 	}
+	if activeID, err := s.repo.FindActiveSessionIDByConversation(ctx, cmd.ConversationSessionID); err != nil {
+		return nil, err
+	} else if activeID != 0 {
+		return nil, ErrAssistSessionActive
+	}
 	session := &assistdomain.RemoteAssistSession{
-		TenantID:              cmd.TenantID,
-		WorkspaceID:           cmd.WorkspaceID,
+		TenantID:              platformauth.TenantIDFromContext(ctx),
+		WorkspaceID:           platformauth.WorkspaceIDFromContext(ctx),
 		ConversationSessionID: cmd.ConversationSessionID,
 		AgentUserID:           cmd.AgentUserID,
 		Status:                StatusActive,
+		ConsentStatus:         ConsentPending,
 		StartedAt:             s.now(),
 	}
 	if err := s.repo.CreateSession(ctx, session); err != nil {
@@ -144,6 +161,7 @@ func (s *Service) ListSessions(ctx context.Context, conversationSessionID string
 }
 
 // AttachRecording 访客面上传录制后回写元数据；校验协助会话归属该访客。
+// consent=declined 的协助拒绝回写（对方明确拒绝后不得再落录制证据）。
 func (s *Service) AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error) {
 	session, err := s.repo.GetSession(ctx, id)
 	if err != nil {
@@ -153,7 +171,47 @@ func (s *Service) AttachRecording(ctx context.Context, id uint, customerUserID u
 	if err != nil || ownerID != customerUserID {
 		return nil, ErrAssistForbidden
 	}
+	if session.ConsentStatus == ConsentDeclined {
+		return nil, ErrAssistConsentDeclined
+	}
 	applyRecording(session, meta)
+	if err := s.repo.SaveSession(ctx, session); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+// RespondConsent 访客对协助邀请表态（RA-4 同意状态机）。
+// accept=true → granted（协助继续）；accept=false → declined 并结束协助
+// （协助未发生，记录保留供审计）。重复不同表态返回冲突；同一表态幂等。
+func (s *Service) RespondConsent(ctx context.Context, id uint, customerUserID uint, accept bool) (*assistdomain.RemoteAssistSession, error) {
+	session, err := s.repo.GetSession(ctx, id)
+	if err != nil {
+		return nil, ErrAssistNotFound
+	}
+	ownerID, err := s.repo.GetConversationSessionOwner(ctx, session.ConversationSessionID)
+	if err != nil || ownerID != customerUserID {
+		return nil, ErrAssistForbidden
+	}
+	next := ConsentGranted
+	if !accept {
+		next = ConsentDeclined
+	}
+	if session.ConsentStatus == next {
+		return session, nil
+	}
+	if session.ConsentStatus == ConsentGranted || session.ConsentStatus == ConsentDeclined {
+		return nil, ErrAssistConsentDecided
+	}
+	now := s.now()
+	session.ConsentStatus = next
+	session.ConsentAt = &now
+	if next == ConsentDeclined {
+		// 拒绝即终止：协助不再进行，生命周期以 ended 收口（拒绝原因由
+		// consent_status 承载，不新造 status 枚举值）。
+		session.Status = StatusEnded
+		session.EndedAt = &now
+	}
 	if err := s.repo.SaveSession(ctx, session); err != nil {
 		return nil, err
 	}

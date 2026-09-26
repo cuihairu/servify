@@ -47,3 +47,7 @@ func (a *HandlerServiceAdapter) DeleteAnnotation(ctx context.Context, id uint) e
 func (a *HandlerServiceAdapter) AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error) {
 	return a.service.AttachRecording(ctx, id, customerUserID, meta)
 }
+
+func (a *HandlerServiceAdapter) RespondConsent(ctx context.Context, id uint, customerUserID uint, accept bool) (*assistdomain.RemoteAssistSession, error) {
+	return a.service.RespondConsent(ctx, id, customerUserID, accept)
+}

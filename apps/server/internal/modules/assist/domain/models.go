@@ -21,6 +21,10 @@ type RemoteAssistSession struct {
 	Status                string     `json:"status"` // active|ended|failed
 	StartedAt             time.Time  `json:"started_at"`
 	EndedAt               *time.Time `json:"ended_at,omitempty"`
+	// 对方同意状态：pending（发起后待访客表态）/ granted / declined。
+	// 存量行为空串 = 未走同意流程（兼容期与 pending 同权放行录制回写）。
+	ConsentStatus string     `json:"consent_status"`
+	ConsentAt     *time.Time `json:"consent_at,omitempty"`
 	// 录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息
 	RecordingKey        string    `json:"recording_key,omitempty"`
 	RecordingMime       string    `json:"recording_mime,omitempty"`

@@ -67,6 +67,15 @@ func (m *adapterRepo) GetConversationSessionOwner(_ context.Context, sessionID s
 	return owner, nil
 }
 
+func (m *adapterRepo) FindActiveSessionIDByConversation(_ context.Context, conversationSessionID string) (uint, error) {
+	for _, s := range m.sessions {
+		if s.ConversationSessionID == conversationSessionID && s.Status == assistapp.StatusActive {
+			return s.ID, nil
+		}
+	}
+	return 0, nil
+}
+
 func (m *adapterRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	var out []assistdomain.RemoteAssistAnnotation
 	for _, a := range m.annotations {
@@ -93,7 +102,7 @@ func (m *adapterRepo) DeleteAnnotation(_ context.Context, id uint) error {
 	return nil
 }
 
-// TestHandlerServiceAdapterDelegates 覆盖全部 9 个适配方法的成功与错误透传。
+// TestHandlerServiceAdapterDelegates 覆盖全部 10 个适配方法的成功与错误透传。
 func TestHandlerServiceAdapterDelegates(t *testing.T) {
 	ctx := context.Background()
 	repo := newAdapterRepo()
@@ -106,6 +115,18 @@ func TestHandlerServiceAdapterDelegates(t *testing.T) {
 	}
 	if _, err := adapter.StartSession(ctx, StartCommand{ConversationSessionID: ""}); !errors.Is(err, ErrAssistSessionRequired) {
 		t.Fatalf("StartSession() empty error = %v, want ErrAssistSessionRequired", err)
+	}
+
+	// RespondConsent
+	consented, err := adapter.RespondConsent(ctx, started.ID, 5, true)
+	if err != nil || consented.ConsentStatus != assistapp.ConsentGranted || consented.Status != assistapp.StatusActive {
+		t.Fatalf("RespondConsent() = %+v, %v", consented, err)
+	}
+	if _, err := adapter.RespondConsent(ctx, started.ID, 6, false); !errors.Is(err, ErrAssistForbidden) {
+		t.Fatalf("RespondConsent() wrong owner error = %v, want ErrAssistForbidden", err)
+	}
+	if _, err := adapter.RespondConsent(ctx, started.ID, 5, false); !errors.Is(err, ErrAssistConsentDecided) {
+		t.Fatalf("RespondConsent() opposite answer error = %v, want ErrAssistConsentDecided", err)
 	}
 
 	// EndSession

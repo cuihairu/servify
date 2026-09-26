@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
+	platformauth "servify/apps/server/internal/platform/auth"
 	"testing"
 )
 
@@ -23,6 +24,7 @@ type mockRepo struct {
 	listAnnotErr    error
 	createAnnotErr  error
 	deleteAnnotErr  error
+	findActiveErr   error
 
 	// 参数捕获
 	lastListLimit int
@@ -92,6 +94,18 @@ func (m *mockRepo) GetConversationSessionOwner(_ context.Context, sessionID stri
 		return 0, errors.New("conversation session not found")
 	}
 	return owner, nil
+}
+
+func (m *mockRepo) FindActiveSessionIDByConversation(_ context.Context, conversationSessionID string) (uint, error) {
+	if m.findActiveErr != nil {
+		return 0, m.findActiveErr
+	}
+	for _, s := range m.sessions {
+		if s.ConversationSessionID == conversationSessionID && s.Status == StatusActive {
+			return s.ID, nil
+		}
+	}
+	return 0, nil
 }
 
 func (m *mockRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
@@ -165,6 +179,37 @@ func TestAssistAppStartSession(t *testing.T) {
 		}
 	})
 
+	t.Run("active lookup error propagates", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		repo.findActiveErr = errors.New("active lookup boom")
+		svc := NewAssistService(repo)
+		_, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"})
+		if err == nil || err.Error() != "active lookup boom" {
+			t.Fatalf("want raw lookup error, got %v", err)
+		}
+	})
+
+	t.Run("existing active session conflicts", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		seedMockSession(t, repo, 77, StatusActive)
+		svc := NewAssistService(repo)
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"}); !errors.Is(err, ErrAssistSessionActive) {
+			t.Fatalf("want ErrAssistSessionActive, got %v", err)
+		}
+	})
+
+	t.Run("ended session does not block restart", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		seedMockSession(t, repo, 77, StatusEnded)
+		svc := NewAssistService(repo)
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"}); err != nil {
+			t.Fatalf("StartSession() after ended error = %v", err)
+		}
+	})
+
 	t.Run("create error propagates", func(t *testing.T) {
 		repo := newMockRepo()
 		repo.owners["sess-1"] = 5
@@ -176,19 +221,34 @@ func TestAssistAppStartSession(t *testing.T) {
 		}
 	})
 
-	t.Run("success creates active session", func(t *testing.T) {
+	t.Run("success creates active pending session with ctx scope", func(t *testing.T) {
 		repo := newMockRepo()
 		repo.owners["sess-1"] = 5
 		svc := NewAssistService(repo)
-		session, err := svc.StartSession(ctx, StartCommand{
-			ConversationSessionID: "sess-1", AgentUserID: 9, TenantID: "t1", WorkspaceID: "w1",
-		})
+		scoped := platformauth.ContextWithScope(ctx, "t1", "w1")
+		session, err := svc.StartSession(scoped, StartCommand{ConversationSessionID: "sess-1", AgentUserID: 9})
 		if err != nil {
 			t.Fatalf("StartSession() error = %v", err)
 		}
 		if session.ID == 0 || session.Status != StatusActive || session.AgentUserID != 9 ||
 			session.TenantID != "t1" || session.WorkspaceID != "w1" || session.StartedAt.IsZero() {
 			t.Fatalf("unexpected session: %+v", session)
+		}
+		if session.ConsentStatus != ConsentPending {
+			t.Fatalf("want consent %q, got %q", ConsentPending, session.ConsentStatus)
+		}
+	})
+
+	t.Run("scope stays empty without ctx scope", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		svc := NewAssistService(repo)
+		session, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"})
+		if err != nil {
+			t.Fatalf("StartSession() error = %v", err)
+		}
+		if session.TenantID != "" || session.WorkspaceID != "" {
+			t.Fatalf("want empty scope, got %+v", session)
 		}
 	})
 }
@@ -362,6 +422,133 @@ func TestAssistAppAttachRecording(t *testing.T) {
 		if got.RecordingKey != "uploads/rec.webm" || got.RecordingMime != "video/webm" ||
 			got.RecordingDurationMs != 1500 || got.RecordingSize != 4096 {
 			t.Fatalf("meta not applied: %+v", got)
+		}
+	})
+
+	t.Run("declined consent blocks attach", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentDeclined
+		svc := NewAssistService(repo)
+		if _, err := svc.AttachRecording(ctx, 1, 5, RecordingMeta{Key: "k"}); !errors.Is(err, ErrAssistConsentDeclined) {
+			t.Fatalf("want ErrAssistConsentDeclined, got %v", err)
+		}
+	})
+
+	t.Run("pending consent keeps legacy attach path", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentPending
+		svc := NewAssistService(repo)
+		if _, err := svc.AttachRecording(ctx, 1, 5, RecordingMeta{Key: "k"}); err != nil {
+			t.Fatalf("AttachRecording() under pending error = %v", err)
+		}
+	})
+}
+
+func TestAssistAppRespondConsent(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("unknown session maps to not found", func(t *testing.T) {
+		svc := NewAssistService(newMockRepo())
+		if _, err := svc.RespondConsent(ctx, 42, 5, true); !errors.Is(err, ErrAssistNotFound) {
+			t.Fatalf("want ErrAssistNotFound, got %v", err)
+		}
+	})
+
+	t.Run("wrong owner maps to forbidden", func(t *testing.T) {
+		repo := newMockRepo()
+		seedMockSession(t, repo, 1, StatusActive) // owner = 5
+		svc := NewAssistService(repo)
+		if _, err := svc.RespondConsent(ctx, 1, 6, true); !errors.Is(err, ErrAssistForbidden) {
+			t.Fatalf("want ErrAssistForbidden, got %v", err)
+		}
+	})
+
+	t.Run("owner lookup error maps to forbidden", func(t *testing.T) {
+		repo := newMockRepo()
+		seedMockSession(t, repo, 1, StatusActive)
+		repo.getOwnerErr = errors.New("db down")
+		svc := NewAssistService(repo)
+		if _, err := svc.RespondConsent(ctx, 1, 5, true); !errors.Is(err, ErrAssistForbidden) {
+			t.Fatalf("want ErrAssistForbidden, got %v", err)
+		}
+	})
+
+	t.Run("accept grants and keeps active", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentPending
+		svc := NewAssistService(repo)
+		got, err := svc.RespondConsent(ctx, 1, 5, true)
+		if err != nil {
+			t.Fatalf("RespondConsent() error = %v", err)
+		}
+		if got.ConsentStatus != ConsentGranted || got.Status != StatusActive || got.ConsentAt == nil {
+			t.Fatalf("unexpected session: %+v", got)
+		}
+	})
+
+	t.Run("decline ends the session", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentPending
+		svc := NewAssistService(repo)
+		got, err := svc.RespondConsent(ctx, 1, 5, false)
+		if err != nil {
+			t.Fatalf("RespondConsent() error = %v", err)
+		}
+		if got.ConsentStatus != ConsentDeclined || got.Status != StatusEnded || got.EndedAt == nil {
+			t.Fatalf("unexpected session: %+v", got)
+		}
+	})
+
+	t.Run("same answer is idempotent", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusEnded)
+		seeded.ConsentStatus = ConsentGranted
+		svc := NewAssistService(repo)
+		got, err := svc.RespondConsent(ctx, 1, 5, true)
+		if err != nil {
+			t.Fatalf("RespondConsent() error = %v", err)
+		}
+		if got.ConsentStatus != ConsentGranted {
+			t.Fatalf("want granted kept, got %q", got.ConsentStatus)
+		}
+	})
+
+	t.Run("opposite answer conflicts", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentGranted
+		svc := NewAssistService(repo)
+		if _, err := svc.RespondConsent(ctx, 1, 5, false); !errors.Is(err, ErrAssistConsentDecided) {
+			t.Fatalf("want ErrAssistConsentDecided, got %v", err)
+		}
+	})
+
+	t.Run("save error propagates", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.ConsentStatus = ConsentPending
+		repo.saveErr = errors.New("update boom")
+		svc := NewAssistService(repo)
+		_, err := svc.RespondConsent(ctx, 1, 5, true)
+		if err == nil || err.Error() != "update boom" {
+			t.Fatalf("want raw save error, got %v", err)
+		}
+	})
+
+	t.Run("legacy empty consent accepts either answer", func(t *testing.T) {
+		repo := newMockRepo()
+		seedMockSession(t, repo, 1, StatusActive) // ConsentStatus == ""
+		svc := NewAssistService(repo)
+		got, err := svc.RespondConsent(ctx, 1, 5, true)
+		if err != nil {
+			t.Fatalf("RespondConsent() error = %v", err)
+		}
+		if got.ConsentStatus != ConsentGranted {
+			t.Fatalf("want granted, got %q", got.ConsentStatus)
 		}
 	})
 }

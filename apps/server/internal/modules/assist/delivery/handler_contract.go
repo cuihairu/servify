@@ -26,6 +26,9 @@ var (
 	ErrAssistPayloadInvalid     = assistapp.ErrAssistPayloadInvalid
 	ErrAssistForbidden          = assistapp.ErrAssistForbidden
 	ErrAssistAlreadyEnded       = assistapp.ErrAssistAlreadyEnded
+	ErrAssistSessionActive      = assistapp.ErrAssistSessionActive
+	ErrAssistConsentDeclined    = assistapp.ErrAssistConsentDeclined
+	ErrAssistConsentDecided     = assistapp.ErrAssistConsentDecided
 )
 
 // HandlerService 远程协助管理/访客两面的服务契约。
@@ -38,4 +41,5 @@ type HandlerService interface {
 	ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error)
 	DeleteAnnotation(ctx context.Context, id uint) error
 	AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error)
+	RespondConsent(ctx context.Context, id uint, customerUserID uint, accept bool) (*assistdomain.RemoteAssistSession, error)
 }

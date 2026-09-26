@@ -20,17 +20,16 @@ func NewAssistHandler(service assistdelivery.HandlerService) *AssistHandler {
 	return &AssistHandler{service: service}
 }
 
-// StartAssistRequest 发起协助请求体。
+// StartAssistRequest 发起协助请求体。租户/工作区不再接受客户端自报，
+// 一律取鉴权主体的 token scope（RA-1）。
 type StartAssistRequest struct {
 	ConversationSessionID string `json:"conversation_session_id" binding:"required" example:"sess-123"`
 	AgentUserID           uint   `json:"agent_user_id" example:"7"`
-	TenantID              string `json:"tenant_id,omitempty"`
-	WorkspaceID           string `json:"workspace_id,omitempty"`
 }
 
 // StartSession 发起远程协助
 // @Summary 发起远程协助会话
-// @Description 在指定会话上创建 active 状态的协助记录；信令与媒体面走既有 WS/RTC 通道
+// @Description 在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃）；信令与媒体面走既有 WS/RTC 通道
 // @Tags 远程协助
 // @Accept json
 // @Produce json
@@ -38,6 +37,7 @@ type StartAssistRequest struct {
 // @Success 201 {object} models.RemoteAssistSession
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/remote-assist/sessions [post]
 func (h *AssistHandler) StartSession(c *gin.Context) {
@@ -49,8 +49,6 @@ func (h *AssistHandler) StartSession(c *gin.Context) {
 	session, err := h.service.StartSession(c.Request.Context(), assistdelivery.StartCommand{
 		ConversationSessionID: req.ConversationSessionID,
 		AgentUserID:           req.AgentUserID,
-		TenantID:              req.TenantID,
-		WorkspaceID:           req.WorkspaceID,
 	})
 	if err != nil {
 		c.JSON(assistErrorStatus(err), ErrorResponse{Error: "Failed to start remote assist", Message: err.Error()})
@@ -259,7 +257,10 @@ func assistErrorStatus(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, assistdelivery.ErrAssistForbidden):
 		return http.StatusForbidden
-	case errors.Is(err, assistdelivery.ErrAssistAlreadyEnded):
+	case errors.Is(err, assistdelivery.ErrAssistAlreadyEnded),
+		errors.Is(err, assistdelivery.ErrAssistSessionActive),
+		errors.Is(err, assistdelivery.ErrAssistConsentDeclined),
+		errors.Is(err, assistdelivery.ErrAssistConsentDecided):
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

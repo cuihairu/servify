@@ -139,12 +139,20 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 	})
 	r.POST("/api/v1/upload", middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...), uploadHandler.Upload)
 
-	// 访客面：远程协助录制元数据回写（文件本体走上方 /api/v1/upload；归属校验在服务内）
+	// 访客面：远程协助录制元数据回写与同意表态（文件本体走上方
+	// /api/v1/upload；归属校验在服务内）。写操作挂审计（RA-3）：拒绝
+	// 表态与录制回写均落审计留痕。
 	if deps.AssistHandlerService != nil {
 		recordingHandler := handlers.NewAssistRecordingHandler(deps.AssistHandlerService)
+		visitorAssistAuth := middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...)
 		r.POST("/api/v1/remote-assist/:id/recording",
-			middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...),
+			visitorAssistAuth,
+			middleware.AuditMiddleware(deps.DB),
 			recordingHandler.AttachRecording)
+		r.POST("/api/v1/remote-assist/:id/consent",
+			visitorAssistAuth,
+			middleware.AuditMiddleware(deps.DB),
+			recordingHandler.RespondConsent)
 	}
 
 	isS3 := strings.EqualFold(strings.TrimSpace(cfg.Provider), "s3")

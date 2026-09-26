@@ -32,19 +32,25 @@ type cvhAssistService struct {
 	deleteErr    error
 	attach       *models.RemoteAssistSession
 	attachErr    error
+	consent      *models.RemoteAssistSession
+	consentErr   error
 
-	startCmd   assistdelivery.StartCommand
-	endCmd     assistdelivery.EndCommand
-	annotCmd   assistdelivery.AnnotationCommand
-	annotID    uint
-	attachCmd  assistdelivery.RecordingMeta
-	attachID   uint
-	attachUID  uint
-	endID      uint
-	listConvID string
-	listLimit  int
-	deleteID   uint
-	getID      uint
+	startCmd      assistdelivery.StartCommand
+	endCmd        assistdelivery.EndCommand
+	annotCmd      assistdelivery.AnnotationCommand
+	annotID       uint
+	attachCmd     assistdelivery.RecordingMeta
+	attachID      uint
+	attachUID     uint
+	endID         uint
+	listConvID    string
+	listLimit     int
+	deleteID      uint
+	getID         uint
+	consentID     uint
+	consentUID    uint
+	consentAccept bool
+	consentCalled bool
 }
 
 func (s *cvhAssistService) StartSession(_ context.Context, cmd assistdelivery.StartCommand) (*models.RemoteAssistSession, error) {
@@ -104,6 +110,20 @@ func (s *cvhAssistService) AttachRecording(_ context.Context, id uint, customerU
 	return s.attach, s.attachErr
 }
 
+func (s *cvhAssistService) RespondConsent(_ context.Context, id uint, customerUserID uint, accept bool) (*models.RemoteAssistSession, error) {
+	s.consentCalled = true
+	s.consentID = id
+	s.consentUID = customerUserID
+	s.consentAccept = accept
+	if s.consentErr != nil {
+		return nil, s.consentErr
+	}
+	if s.consent == nil {
+		return &models.RemoteAssistSession{ID: id, ConsentStatus: "granted"}, nil
+	}
+	return s.consent, nil
+}
+
 func cvhAssistRouter(svc *cvhAssistService, middleware ...gin.HandlerFunc) *gin.Engine {
 	r := dxcRouter()
 	for _, mw := range middleware {
@@ -119,6 +139,7 @@ func cvhAssistRecordingRouter(svc *cvhAssistService, middleware ...gin.HandlerFu
 		r.Use(mw)
 	}
 	r.POST("/api/v1/remote-assist/:id/recording", NewAssistRecordingHandler(svc).AttachRecording)
+	r.POST("/api/v1/remote-assist/:id/consent", NewAssistRecordingHandler(svc).RespondConsent)
 	return r
 }
 
@@ -167,8 +188,7 @@ func TestCvhAssistStartSession(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, "sess-1", svc.startCmd.ConversationSessionID)
 		assert.Equal(t, uint(7), svc.startCmd.AgentUserID)
-		assert.Equal(t, "t1", svc.startCmd.TenantID)
-		assert.Equal(t, "w1", svc.startCmd.WorkspaceID)
+		// RA-1：租户/工作区不再取自请求体，多余字段被忽略，scope 一律来自认证中间件注入的 ctx
 		assert.Contains(t, w.Body.String(), `"status":"active"`)
 	})
 
@@ -194,6 +214,7 @@ func TestCvhAssistStartSession(t *testing.T) {
 		{"payload invalid", assistdelivery.ErrAssistPayloadInvalid, http.StatusBadRequest},
 		{"forbidden", assistdelivery.ErrAssistForbidden, http.StatusForbidden},
 		{"already ended", assistdelivery.ErrAssistAlreadyEnded, http.StatusConflict},
+		{"session active", assistdelivery.ErrAssistSessionActive, http.StatusConflict},
 		{"generic", errors.New("boom"), http.StatusInternalServerError},
 	}
 	for _, tc := range errorCases {
@@ -459,6 +480,69 @@ func TestCvhAssistRecordingAttach(t *testing.T) {
 			w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"recording_key":"k"}`)
 			assert.Equal(t, tc.want, w.Code)
 			assert.Contains(t, w.Body.String(), "Failed to attach recording")
+		})
+	}
+}
+
+func TestCvhAssistRecordingRespondConsent(t *testing.T) {
+	path := "/api/v1/remote-assist/9/consent"
+	asVisitor := func(c *gin.Context) { c.Set("user_id", float64(12)); c.Next() }
+
+	t.Run("accept grants and echoes session", func(t *testing.T) {
+		svc := &cvhAssistService{consent: &models.RemoteAssistSession{ID: 9, ConsentStatus: "granted", Status: "active"}}
+		w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"accept":true}`)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.True(t, svc.consentCalled)
+		assert.Equal(t, uint(9), svc.consentID)
+		assert.Equal(t, uint(12), svc.consentUID, "float64 型 user_id 应可解析")
+		assert.True(t, svc.consentAccept)
+		assert.Contains(t, w.Body.String(), `"consent_status":"granted"`)
+	})
+
+	t.Run("decline forwards accept=false", func(t *testing.T) {
+		svc := &cvhAssistService{consent: &models.RemoteAssistSession{ID: 9, ConsentStatus: "declined", Status: "ended"}}
+		w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"accept":false}`)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.False(t, svc.consentAccept)
+		assert.Contains(t, w.Body.String(), `"consent_status":"declined"`)
+	})
+
+	t.Run("missing user forbidden", func(t *testing.T) {
+		svc := &cvhAssistService{}
+		w := dxcDo(cvhAssistRecordingRouter(svc), http.MethodPost, path, `{"accept":true}`)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		assert.Contains(t, w.Body.String(), "missing authenticated user")
+		assert.False(t, svc.consentCalled)
+	})
+
+	t.Run("invalid id", func(t *testing.T) {
+		w := dxcDo(cvhAssistRecordingRouter(&cvhAssistService{}, asVisitor), http.MethodPost, "/api/v1/remote-assist/abc/consent", `{"accept":true}`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		w := dxcDo(cvhAssistRecordingRouter(&cvhAssistService{}, asVisitor), http.MethodPost, path, `{`)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid request")
+	})
+
+	errorCases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"not found", assistdelivery.ErrAssistNotFound, http.StatusNotFound},
+		{"forbidden", assistdelivery.ErrAssistForbidden, http.StatusForbidden},
+		{"consent declined", assistdelivery.ErrAssistConsentDeclined, http.StatusConflict},
+		{"consent decided", assistdelivery.ErrAssistConsentDecided, http.StatusConflict},
+		{"generic", errors.New("boom"), http.StatusInternalServerError},
+	}
+	for _, tc := range errorCases {
+		t.Run("error "+tc.name, func(t *testing.T) {
+			svc := &cvhAssistService{consentErr: tc.err}
+			w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"accept":true}`)
+			assert.Equal(t, tc.want, w.Code)
+			assert.Contains(t, w.Body.String(), "Failed to respond consent")
 		})
 	}
 }

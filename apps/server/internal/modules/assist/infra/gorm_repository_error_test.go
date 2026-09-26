@@ -2,16 +2,22 @@ package infra
 
 import (
 	"context"
+	"errors"
+	assistapp "servify/apps/server/internal/modules/assist/application"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"testing"
 )
 
 // TestGormRepositoryCreateAnnotationRoundTrip 覆盖标注落库并经 ListAnnotations 读回对账。
+// 标注查询带 sessions 子查询守卫，先落父会话再挂标注。
 func TestGormRepositoryCreateAnnotationRoundTrip(t *testing.T) {
 	db := newAssistUnitTestDB(t)
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 
+	if err := repo.CreateSession(ctx, &assistdomain.RemoteAssistSession{ID: 1, ConversationSessionID: "sess-1", Status: "active"}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
 	annotation := &assistdomain.RemoteAssistAnnotation{AssistSessionID: 1, Shape: "rect", Payload: "{}"}
 	if err := repo.CreateAnnotation(ctx, annotation); err != nil {
 		t.Fatalf("CreateAnnotation() error = %v", err)
@@ -36,6 +42,13 @@ func TestGormRepositoryQueryErrorBranches(t *testing.T) {
 	}
 	if _, err := repo.ListSessions(ctx, "", 10); err == nil {
 		t.Fatal("ListSessions() on dropped table should fail")
+	}
+	if _, err := repo.FindActiveSessionIDByConversation(ctx, "sess-1"); err == nil {
+		t.Fatal("FindActiveSessionIDByConversation() on dropped table should fail")
+	}
+	// GetSession 非 not-found 错误原样透传（not found 分支由 scope 隔离测试覆盖）
+	if _, err := repo.GetSession(ctx, 1); err == nil || errors.Is(err, assistapp.ErrAssistNotFound) {
+		t.Fatalf("GetSession() on dropped table = %v, want raw error", err)
 	}
 
 	if err := db.Migrator().DropTable(&assistdomain.RemoteAssistAnnotation{}); err != nil {
