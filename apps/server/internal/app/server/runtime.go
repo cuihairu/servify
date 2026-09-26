@@ -33,6 +33,7 @@ import (
 	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
@@ -56,48 +57,49 @@ type Runtime struct {
 	Redis  *redis.Client
 	Bus    eventbus.Bus
 
-	AIService                aidelivery.RuntimeService
-	AIHandlerService         aidelivery.HandlerService
-	AICopilot                *aidelivery.AgentCopilotService
-	wsRuntime                websocketRunner
-	RealtimeGateway          realtimeplatform.RealtimeGateway
-	RTCGateway               realtimeplatform.RTCGateway
-	RTCIceSource             realtimeplatform.ICEConfigSource
-	MessageRouter            realtimeplatform.MessageRouterRuntime
-	ConversationHandler      conversationdelivery.HandlerService
-	VoiceCoordinator         *voicedelivery.Coordinator
-	VoiceProtocolRegistry    *voiceprotocol.Registry
-	CustomerHandlerService   customerdelivery.HandlerService
-	AgentHandlerService      agentdelivery.HandlerService
-	AgentGroupService        agentdelivery.AgentGroupService
-	TicketHandlerService     ticketdelivery.HandlerService
-	VisitorTicketService     ticketdelivery.VisitorTicketService
-	PushRegistrationService  pushdelivery.PushRegistrationService
-	VisitorMessagesService   conversationdelivery.VisitorMessagesService
-	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
-	TransferHandlerService   routingdelivery.HandlerService
-	SatisfactionService      satisfactiondelivery.SatisfactionService
-	WorkspaceService         workspacedelivery.HandlerService
-	MacroService             macrodelivery.HandlerService
-	AppIntegrationService    appintegrationdelivery.HandlerService
-	CustomFieldService       customfielddelivery.HandlerService
-	StatisticsHandlerService analyticsdelivery.HandlerService
-	SLAService               sladelivery.SLAService
-	ShiftService             shiftdelivery.HandlerService
-	AutomationHandlerService automationdelivery.HandlerService
-	KnowledgeDocHandler      knowledgedelivery.HandlerService
-	SuggestionService        suggestiondelivery.HandlerService
-	GamificationService      gamificationdelivery.HandlerService
-	WebhookHandlerService    webhookdelivery.HandlerService
-	QualityHandlerService    qualitydelivery.HandlerService
-	AssistHandlerService     assistdelivery.HandlerService
-	APIKeyService            apikeydelivery.HandlerService
-	OpenConversationReader   conversationdelivery.OpenConversationReader
-	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
-	VisitorReadService       conversationdelivery.VisitorReadService
-	OIDCProvider             *oidcplatform.Provider
-	HTTPMetrics              *svcmetrics.HTTPMetrics
-	BusinessMetrics          *svcmetrics.BusinessMetrics
+	AIService                 aidelivery.RuntimeService
+	AIHandlerService          aidelivery.HandlerService
+	AICopilot                 *aidelivery.AgentCopilotService
+	TranslationHandlerService translationdelivery.HandlerService
+	wsRuntime                 websocketRunner
+	RealtimeGateway           realtimeplatform.RealtimeGateway
+	RTCGateway                realtimeplatform.RTCGateway
+	RTCIceSource              realtimeplatform.ICEConfigSource
+	MessageRouter             realtimeplatform.MessageRouterRuntime
+	ConversationHandler       conversationdelivery.HandlerService
+	VoiceCoordinator          *voicedelivery.Coordinator
+	VoiceProtocolRegistry     *voiceprotocol.Registry
+	CustomerHandlerService    customerdelivery.HandlerService
+	AgentHandlerService       agentdelivery.HandlerService
+	AgentGroupService         agentdelivery.AgentGroupService
+	TicketHandlerService      ticketdelivery.HandlerService
+	VisitorTicketService      ticketdelivery.VisitorTicketService
+	PushRegistrationService   pushdelivery.PushRegistrationService
+	VisitorMessagesService    conversationdelivery.VisitorMessagesService
+	TicketReaderService       *ticketdelivery.ReaderServiceAdapter
+	TransferHandlerService    routingdelivery.HandlerService
+	SatisfactionService       satisfactiondelivery.SatisfactionService
+	WorkspaceService          workspacedelivery.HandlerService
+	MacroService              macrodelivery.HandlerService
+	AppIntegrationService     appintegrationdelivery.HandlerService
+	CustomFieldService        customfielddelivery.HandlerService
+	StatisticsHandlerService  analyticsdelivery.HandlerService
+	SLAService                sladelivery.SLAService
+	ShiftService              shiftdelivery.HandlerService
+	AutomationHandlerService  automationdelivery.HandlerService
+	KnowledgeDocHandler       knowledgedelivery.HandlerService
+	SuggestionService         suggestiondelivery.HandlerService
+	GamificationService       gamificationdelivery.HandlerService
+	WebhookHandlerService     webhookdelivery.HandlerService
+	QualityHandlerService     qualitydelivery.HandlerService
+	AssistHandlerService      assistdelivery.HandlerService
+	APIKeyService             apikeydelivery.HandlerService
+	OpenConversationReader    conversationdelivery.OpenConversationReader
+	GuestTokenIssuer          conversationdelivery.GuestTokenIssuer
+	VisitorReadService        conversationdelivery.VisitorReadService
+	OIDCProvider              *oidcplatform.Provider
+	HTTPMetrics               *svcmetrics.HTTPMetrics
+	BusinessMetrics           *svcmetrics.BusinessMetrics
 
 	// Private fields for worker access only
 	dailyStatsRunner *analyticsdelivery.DailyStatsRunner
@@ -249,49 +251,50 @@ func (rt *Runtime) AutomationTimersForWorker() automationapp.TimerProcessor {
 
 func (rt *Runtime) RouterDependencies() Dependencies {
 	return Dependencies{
-		Config:                   rt.Config,
-		Logger:                   rt.Logger,
-		DB:                       rt.DB,
-		Redis:                    rt.Redis,
-		AIService:                rt.AIService,
-		AIHandlerService:         rt.AIHandlerService,
-		AICopilot:                rt.AICopilot,
-		RealtimeGateway:          rt.RealtimeGateway,
-		RTCGateway:               rt.RTCGateway,
-		RTCIceSource:             rt.RTCIceSource,
-		MessageRouter:            rt.MessageRouter,
-		ConversationHandler:      rt.ConversationHandler,
-		VoiceCoordinator:         rt.VoiceCoordinator,
-		VoiceProtocolRegistry:    rt.VoiceProtocolRegistry,
-		CustomerHandlerService:   rt.CustomerHandlerService,
-		AgentHandlerService:      rt.AgentHandlerService,
-		AgentGroupService:        rt.AgentGroupService,
-		TicketHandlerService:     rt.TicketHandlerService,
-		VisitorTicketService:     rt.VisitorTicketService,
-		PushRegistrationService:  rt.PushRegistrationService,
-		VisitorMessagesService:   rt.VisitorMessagesService,
-		TicketReaderService:      rt.TicketReaderService,
-		TransferHandlerService:   rt.TransferHandlerService,
-		SatisfactionService:      rt.SatisfactionService,
-		WorkspaceService:         rt.WorkspaceService,
-		MacroService:             rt.MacroService,
-		AppIntegrationService:    rt.AppIntegrationService,
-		CustomFieldService:       rt.CustomFieldService,
-		StatisticsHandlerService: rt.StatisticsHandlerService,
-		SLAService:               rt.SLAService,
-		ShiftService:             rt.ShiftService,
-		AutomationHandlerService: rt.AutomationHandlerService,
-		KnowledgeDocHandler:      rt.KnowledgeDocHandler,
-		SuggestionService:        rt.SuggestionService,
-		GamificationService:      rt.GamificationService,
-		WebhookHandlerService:    rt.WebhookHandlerService,
-		QualityHandlerService:    rt.QualityHandlerService,
-		AssistHandlerService:     rt.AssistHandlerService,
-		APIKeyService:            rt.APIKeyService,
-		OpenConversationReader:   rt.OpenConversationReader,
-		GuestTokenIssuer:         rt.GuestTokenIssuer,
-		VisitorReadService:       rt.VisitorReadService,
-		OIDCProvider:             rt.OIDCProvider,
-		HTTPMetrics:              rt.HTTPMetrics,
+		Config:                    rt.Config,
+		Logger:                    rt.Logger,
+		DB:                        rt.DB,
+		Redis:                     rt.Redis,
+		AIService:                 rt.AIService,
+		AIHandlerService:          rt.AIHandlerService,
+		AICopilot:                 rt.AICopilot,
+		TranslationHandlerService: rt.TranslationHandlerService,
+		RealtimeGateway:           rt.RealtimeGateway,
+		RTCGateway:                rt.RTCGateway,
+		RTCIceSource:              rt.RTCIceSource,
+		MessageRouter:             rt.MessageRouter,
+		ConversationHandler:       rt.ConversationHandler,
+		VoiceCoordinator:          rt.VoiceCoordinator,
+		VoiceProtocolRegistry:     rt.VoiceProtocolRegistry,
+		CustomerHandlerService:    rt.CustomerHandlerService,
+		AgentHandlerService:       rt.AgentHandlerService,
+		AgentGroupService:         rt.AgentGroupService,
+		TicketHandlerService:      rt.TicketHandlerService,
+		VisitorTicketService:      rt.VisitorTicketService,
+		PushRegistrationService:   rt.PushRegistrationService,
+		VisitorMessagesService:    rt.VisitorMessagesService,
+		TicketReaderService:       rt.TicketReaderService,
+		TransferHandlerService:    rt.TransferHandlerService,
+		SatisfactionService:       rt.SatisfactionService,
+		WorkspaceService:          rt.WorkspaceService,
+		MacroService:              rt.MacroService,
+		AppIntegrationService:     rt.AppIntegrationService,
+		CustomFieldService:        rt.CustomFieldService,
+		StatisticsHandlerService:  rt.StatisticsHandlerService,
+		SLAService:                rt.SLAService,
+		ShiftService:              rt.ShiftService,
+		AutomationHandlerService:  rt.AutomationHandlerService,
+		KnowledgeDocHandler:       rt.KnowledgeDocHandler,
+		SuggestionService:         rt.SuggestionService,
+		GamificationService:       rt.GamificationService,
+		WebhookHandlerService:     rt.WebhookHandlerService,
+		QualityHandlerService:     rt.QualityHandlerService,
+		AssistHandlerService:      rt.AssistHandlerService,
+		APIKeyService:             rt.APIKeyService,
+		OpenConversationReader:    rt.OpenConversationReader,
+		GuestTokenIssuer:          rt.GuestTokenIssuer,
+		VisitorReadService:        rt.VisitorReadService,
+		OIDCProvider:              rt.OIDCProvider,
+		HTTPMetrics:               rt.HTTPMetrics,
 	}
 }

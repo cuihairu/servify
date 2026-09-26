@@ -12,6 +12,7 @@ handler|Automation|apps/server/internal/handlers/automation_handler.go|service|a
 handler|Knowledge|apps/server/internal/handlers/knowledge_doc_handler.go|service|knowledgedelivery\.HandlerService|func NewKnowledgeDocHandler\(service knowledgedelivery\.HandlerService\)|\*services\.KnowledgeDocService
 handler|Session transfer|apps/server/internal/handlers/session_transfer_handler.go|transferService|routingdelivery\.HandlerService|func NewSessionTransferHandler\(transferService routingdelivery\.HandlerService, logger \*logrus\.Logger\)|\*services\.SessionTransferService
 handler|AI|apps/server/internal/handlers/ai_handler.go|aiService|aidelivery\.HandlerService|func NewAIHandler\(aiService aidelivery\.HandlerService\)|aiService services\.AIServiceInterface
+handler|Translation|apps/server/internal/handlers/translation_handler.go|service|translationdelivery\.HandlerService|func NewTranslationHandler\(service translationdelivery\.HandlerService\)|\*services\.TranslationService
 handler|App market|apps/server/internal/handlers/app_market_handler.go|service|appintegrationdelivery\.HandlerService|func NewAppMarketHandler\(service appintegrationdelivery.HandlerService\)|\*services\.AppIntegrationService
 handler|Custom field|apps/server/internal/handlers/custom_field_handler.go|service|customfielddelivery\.HandlerService|func NewCustomFieldHandler\(service customfielddelivery.HandlerService\)|\*services\.CustomFieldService
 handler|Macro|apps/server/internal/handlers/macro_handler.go|service|macrodelivery\.HandlerService|func NewMacroHandler\(service macrodelivery\.HandlerService\)|\*services\.MacroService
@@ -50,6 +51,7 @@ require|apps/server/internal/app/server/runtime_assembly.go|historyAdapter := co
 require|apps/server/internal/app/server/runtime_assembly.go|wsHub\.SetConversationMessageWriter\(historyAdapter\)|Runtime must wire the module delivery adapter into the websocket hub (conversation websocket persistence).
 require|apps/server/internal/app/server/ai_runtime.go|Service[[:space:]]+aidelivery\.HandlerService|AI assembly must expose the handler-facing AI contract.
 require|apps/server/internal/app/server/ai_runtime.go|RuntimeService[[:space:]]+aidelivery\.RuntimeService|AI assembly must keep a separate runtime AI contract for non-handler callers.
+runtime|Translation handlers|TranslationHandlerService|translationdelivery\.HandlerService
 forbid|apps/server/internal/app/server/ai_runtime.go|LegacyService[[:space:]]+\*services\.AIService|AI assembly must not expose the legacy concrete AI service.
 require|apps/server/internal/app/server/runtime.go|CustomerHandlerService[[:space:]]+customerdelivery\.HandlerService|Runtime must expose customer via customerdelivery.HandlerService.
 require|apps/server/internal/app/server/runtime_assembly.go|CustomerHandlerService[[:space:]]*=.*customerdelivery\.NewHandlerService\(rt\.DB\)|Runtime must assemble customer handlers directly from module delivery.

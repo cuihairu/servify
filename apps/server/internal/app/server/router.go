@@ -23,6 +23,7 @@ import (
 	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
@@ -39,50 +40,51 @@ import (
 
 // Dependencies contains the runtime services required to assemble the HTTP router.
 type Dependencies struct {
-	Config                   *config.Config
-	Logger                   *logrus.Logger
-	DB                       *gorm.DB
-	Redis                    *redis.Client
-	AIService                aidelivery.RuntimeService
-	AIHandlerService         aidelivery.HandlerService
-	AICopilot                *aidelivery.AgentCopilotService
-	RealtimeGateway          realtimeplatform.RealtimeGateway
-	RTCGateway               realtimeplatform.RTCGateway
-	RTCIceSource             realtimeplatform.ICEConfigSource
-	MessageRouter            realtimeplatform.MessageRouterRuntime
-	VoiceCoordinator         *voicedelivery.Coordinator
-	VoiceProtocolRegistry    *voiceprotocol.Registry
-	CustomerHandlerService   customerdelivery.HandlerService
-	ConversationHandler      conversationdelivery.HandlerService
-	AgentHandlerService      agentdelivery.HandlerService
-	AgentGroupService        agentdelivery.AgentGroupService
-	TicketHandlerService     ticketdelivery.HandlerService
-	VisitorTicketService     ticketdelivery.VisitorTicketService
-	PushRegistrationService  pushdelivery.PushRegistrationService
-	VisitorMessagesService   conversationdelivery.VisitorMessagesService
-	TicketReaderService      *ticketdelivery.ReaderServiceAdapter
-	TransferHandlerService   routingdelivery.HandlerService
-	SatisfactionService      satisfactiondelivery.SatisfactionService
-	WorkspaceService         workspacedelivery.HandlerService
-	MacroService             macrodelivery.HandlerService
-	AppIntegrationService    appintegrationdelivery.HandlerService
-	CustomFieldService       customfielddelivery.HandlerService
-	StatisticsHandlerService analyticsdelivery.HandlerService
-	SLAService               sladelivery.SLAService
-	ShiftService             shiftdelivery.HandlerService
-	AutomationHandlerService automationdelivery.HandlerService
-	KnowledgeDocHandler      knowledgedelivery.HandlerService
-	SuggestionService        suggestiondelivery.HandlerService
-	GamificationService      gamificationdelivery.HandlerService
-	WebhookHandlerService    webhookdelivery.HandlerService
-	QualityHandlerService    qualitydelivery.HandlerService
-	AssistHandlerService     assistdelivery.HandlerService
-	APIKeyService            apikeydelivery.HandlerService
-	OpenConversationReader   conversationdelivery.OpenConversationReader
-	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
-	VisitorReadService       conversationdelivery.VisitorReadService
-	OIDCProvider             *oidcplatform.Provider
-	HTTPMetrics              *svcmetrics.HTTPMetrics
+	Config                    *config.Config
+	Logger                    *logrus.Logger
+	DB                        *gorm.DB
+	Redis                     *redis.Client
+	AIService                 aidelivery.RuntimeService
+	AIHandlerService          aidelivery.HandlerService
+	AICopilot                 *aidelivery.AgentCopilotService
+	TranslationHandlerService translationdelivery.HandlerService
+	RealtimeGateway           realtimeplatform.RealtimeGateway
+	RTCGateway                realtimeplatform.RTCGateway
+	RTCIceSource              realtimeplatform.ICEConfigSource
+	MessageRouter             realtimeplatform.MessageRouterRuntime
+	VoiceCoordinator          *voicedelivery.Coordinator
+	VoiceProtocolRegistry     *voiceprotocol.Registry
+	CustomerHandlerService    customerdelivery.HandlerService
+	ConversationHandler       conversationdelivery.HandlerService
+	AgentHandlerService       agentdelivery.HandlerService
+	AgentGroupService         agentdelivery.AgentGroupService
+	TicketHandlerService      ticketdelivery.HandlerService
+	VisitorTicketService      ticketdelivery.VisitorTicketService
+	PushRegistrationService   pushdelivery.PushRegistrationService
+	VisitorMessagesService    conversationdelivery.VisitorMessagesService
+	TicketReaderService       *ticketdelivery.ReaderServiceAdapter
+	TransferHandlerService    routingdelivery.HandlerService
+	SatisfactionService       satisfactiondelivery.SatisfactionService
+	WorkspaceService          workspacedelivery.HandlerService
+	MacroService              macrodelivery.HandlerService
+	AppIntegrationService     appintegrationdelivery.HandlerService
+	CustomFieldService        customfielddelivery.HandlerService
+	StatisticsHandlerService  analyticsdelivery.HandlerService
+	SLAService                sladelivery.SLAService
+	ShiftService              shiftdelivery.HandlerService
+	AutomationHandlerService  automationdelivery.HandlerService
+	KnowledgeDocHandler       knowledgedelivery.HandlerService
+	SuggestionService         suggestiondelivery.HandlerService
+	GamificationService       gamificationdelivery.HandlerService
+	WebhookHandlerService     webhookdelivery.HandlerService
+	QualityHandlerService     qualitydelivery.HandlerService
+	AssistHandlerService      assistdelivery.HandlerService
+	APIKeyService             apikeydelivery.HandlerService
+	OpenConversationReader    conversationdelivery.OpenConversationReader
+	GuestTokenIssuer          conversationdelivery.GuestTokenIssuer
+	VisitorReadService        conversationdelivery.VisitorReadService
+	OIDCProvider              *oidcplatform.Provider
+	HTTPMetrics               *svcmetrics.HTTPMetrics
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
@@ -36,7 +37,10 @@ type AIAssembly struct {
 	RuntimeService aidelivery.RuntimeService
 	// Copilot 坐席 AI 辅助（建议回复/一键改写/会话摘要）：与首答共用
 	// LLM provider 与出站参数；会话历史口由 attachSessionHistory 回填。
-	Copilot                  *aidelivery.AgentCopilotService
+	Copilot *aidelivery.AgentCopilotService
+	// Translation 聊天文本实时翻译（Phase 0）：与首答共用 LLM provider
+	// 与出站参数，无状态单条文本粒度（docs/realtime-translation-design.md）。
+	Translation              translationdelivery.HandlerService
 	KnowledgeDriver          knowledgeprovider.KnowledgeProvider
 	KnowledgeProviderID      string
 	KnowledgeProviderHealthy bool
@@ -73,6 +77,12 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 		Service:        aidelivery.NewHandlerServiceAdapter(defaultService),
 		RuntimeService: defaultService,
 		Copilot:        aidelivery.NewAgentCopilotService(llmProvider, runtimeParams),
+		Translation: translationdelivery.NewTranslationHandlerService(llmProvider, translationdelivery.RuntimeParams{
+			Model:       runtimeParams.Model,
+			Temperature: runtimeParams.Temperature,
+			MaxTokens:   runtimeParams.MaxTokens,
+			TimeoutMs:   runtimeParams.TimeoutMs,
+		}),
 	}
 
 	// pgvector 自建知识库：knowledge.provider=pgvector 时优先于外部 provider，

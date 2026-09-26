@@ -107,6 +107,7 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics)
 	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics)
 	rt.AICopilot = aiAssembly.Copilot
+	rt.TranslationHandlerService = aiAssembly.Translation
 	return aiAssembly, nil
 }
 

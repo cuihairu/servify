@@ -1765,7 +1765,7 @@
                 }
             },
             "post": {
-                "description": "在指定会话上创建 active 状态的协助记录；信令与媒体面走既有 WS/RTC 通道",
+                "description": "在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃）；信令与媒体面走既有 WS/RTC 通道",
                 "consumes": [
                     "application/json"
                 ],
@@ -1802,6 +1802,12 @@
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }
@@ -5591,6 +5597,77 @@
                 }
             }
         },
+        "/api/v1/remote-assist/{id}/consent": {
+            "post": {
+                "description": "访客对协助邀请表示同意/拒绝：同意后协助继续；拒绝即结束协助且后续录制回写被拒绝（409）。同一表态幂等，相反表态 409",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "远程协助"
+                ],
+                "summary": "远程协助同意表态（访客面）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "协助会话 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "同意内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RespondConsentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.RemoteAssistSession"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/remote-assist/{id}/recording": {
             "post": {
                 "description": "访客经 /api/v1/upload 上传录制文件后，把 key/时长/大小挂到对应协助会话；校验该协助归属当前访客的会话",
@@ -5862,6 +5939,64 @@
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/translation/translate": {
+            "post": {
+                "description": "单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；AI 未装配 503；模型上游故障 502；超时 504",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "翻译"
+                ],
+                "summary": "聊天文本实时翻译（Phase 0）",
+                "parameters": [
+                    {
+                        "description": "翻译请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.TranslateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Gateway Timeout",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
                         }
                     }
                 }
@@ -7167,6 +7302,24 @@
                 }
             }
         },
+        "handlers.QueryResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "duration": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.ReplaceGroupMembersRequest": {
             "type": "object",
             "properties": {
@@ -7176,6 +7329,15 @@
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "handlers.RespondConsentRequest": {
+            "type": "object",
+            "properties": {
+                "accept": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -7192,12 +7354,6 @@
                 "conversation_session_id": {
                     "type": "string",
                     "example": "sess-123"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "type": "string"
                 }
             }
         },
@@ -7207,6 +7363,27 @@
                 "data": {},
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "handlers.TranslateRequest": {
+            "type": "object",
+            "required": [
+                "target_lang",
+                "text"
+            ],
+            "properties": {
+                "source_lang": {
+                    "type": "string",
+                    "example": "zh-CN"
+                },
+                "target_lang": {
+                    "type": "string",
+                    "example": "en"
+                },
+                "text": {
+                    "type": "string",
+                    "example": "请问订单什么时候发货？"
                 }
             }
         },
@@ -7802,6 +7979,13 @@
             "properties": {
                 "agent_user_id": {
                     "type": "integer"
+                },
+                "consent_at": {
+                    "type": "string"
+                },
+                "consent_status": {
+                    "description": "对方同意状态：pending（发起后待访客表态）/ granted / declined。\n存量行为空串 = 未走同意流程（兼容期与 pending 同权放行录制回写）。",
+                    "type": "string"
                 },
                 "conversation_session_id": {
                     "type": "string"
