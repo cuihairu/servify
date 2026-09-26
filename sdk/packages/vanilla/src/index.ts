@@ -1,5 +1,11 @@
 import {
   createWebServifySDK,
+  VoiceChannel,
+  MicCapture,
+  VOICE_SAMPLE_RATE,
+  floatToPcm16,
+  resampleLinear,
+  pcm16ToLeBytes,
   type WebServifyClient,
   type WebServifyConfig,
   type Message,
@@ -12,6 +18,30 @@ import {
   type InitialQuestionsResult,
   type NextQuestionsResult,
 } from '@servify/core';
+
+// 语音翻译工具集（PROTOCOL §9 通道消费）：named re-export 供 ESM/类型面，
+// 浏览器全局挂载见文件尾部（UMD exports 对象会被 window.Servify 类赋值覆盖，
+// named 导出在浏览器不可达，工具集须显式挂到类上）。
+export { VoiceChannel, MicCapture, VOICE_SAMPLE_RATE, floatToPcm16, resampleLinear, pcm16ToLeBytes };
+export type {
+  VoiceChannelOptions,
+  MicCaptureOptions,
+  MicCapturePorts,
+  VoiceDeltaUpdate,
+  VoiceFinalUpdate,
+  VoiceAudioUpdate,
+  VoiceErrorUpdate,
+} from '@servify/core';
+
+/** window.Servify 的运行时形状：SDK 类 + 挂载的语音工具集。 */
+export type ServifyGlobal = typeof VanillaServifySDK & {
+  VoiceChannel: typeof VoiceChannel;
+  MicCapture: typeof MicCapture;
+  VOICE_SAMPLE_RATE: number;
+  floatToPcm16: typeof floatToPcm16;
+  resampleLinear: typeof resampleLinear;
+  pcm16ToLeBytes: typeof pcm16ToLeBytes;
+};
 
 /**
  * 为原生 JavaScript 提供更简单的 API 接口
@@ -314,14 +344,22 @@ export class VanillaServifySDK {
 // 全局变量注册（用于浏览器环境）
 declare global {
   interface Window {
-    Servify: typeof VanillaServifySDK;
+    Servify: ServifyGlobal;
     createServify: (config: WebServifyConfig) => VanillaServifySDK;
   }
 }
 
-// 浏览器环境下的全局注册
+// 浏览器环境下的全局注册。window.Servify 赋值覆盖 UMD 包装器的 exports
+// 全局（named 导出在浏览器不可达的原因），语音工具集因此挂到类上。
 if (typeof window !== 'undefined') {
-  window.Servify = VanillaServifySDK;
+  window.Servify = Object.assign(VanillaServifySDK, {
+    VoiceChannel,
+    MicCapture,
+    VOICE_SAMPLE_RATE,
+    floatToPcm16,
+    resampleLinear,
+    pcm16ToLeBytes,
+  }) as ServifyGlobal;
   window.createServify = (config: WebServifyConfig) => new VanillaServifySDK(config);
 }
 
