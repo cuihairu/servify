@@ -4,6 +4,14 @@ export { ApiClient } from './api';
 export { WebSocketManager } from './websocket';
 export { VoiceChannel } from './voice';
 export type { VoiceChannelOptions } from './voice';
+export {
+  MicCapture,
+  VOICE_SAMPLE_RATE,
+  floatToPcm16,
+  resampleLinear,
+  pcm16ToLeBytes,
+} from './voice-capture';
+export type { MicCaptureOptions, MicCapturePorts } from './voice-capture';
 export { HttpTransport } from './transports/http';
 
 // 导出所有类型

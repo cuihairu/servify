@@ -5,6 +5,9 @@ export type ServifyErrorCode =
   | 'auth_failed'
   | 'auth_refresh_required'
   | 'capability_unsupported'
+  | 'capture_denied'
+  | 'capture_unavailable'
+  | 'capture_already_active'
   | 'api_error'
   | 'validation_error'
   | 'unknown_error';
