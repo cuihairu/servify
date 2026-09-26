@@ -62,11 +62,14 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 面无输入可触达）；572 = reconcileHTTP 的 Darwin 分支（同 resolveHTTP 口径，
 # 刀 10 新增）；691 = trackFingerprint 的容量淘汰分支（指纹仅由 WS 渲染积累、
 # 补拉渲染由游标保护不入表，测试面不可达，生产环形淘汰自然回收）；
-# 730-734/756-758 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
+# 730-739/756-758 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
 # 执行但线性段 counter 报 0——调用计数全记 guard-else 特化副本，诊断 dump 实锤，
-# 源码两处 coverage-exempt 注释锚定）
+# 源码两处 coverage-exempt 注释锚定）。735-739 为同脱节面的后续行：脱节区间
+# 会随构建的特化/映射边界漂移（538a849 CI 实测零计数区间扩到 739，嵌套子区
+# c=1 与父区 c=0 并存即物证），整段纳入豁免。
 LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 186, 191, 205,
-                                     572, 691, 730, 731, 732, 733, 734, 756, 757, 758}}
+                                     572, 691, 730, 731, 732, 733, 734, 735, 736,
+                                     737, 738, 739, 756, 757, 758}}
 ANCHOR_WINDOW = 14
 
 src_lines = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()

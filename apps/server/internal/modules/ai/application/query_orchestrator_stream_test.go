@@ -284,7 +284,13 @@ func (p *manualStreamProvider) ChatStream(ctx context.Context, req llm.ChatReque
 }
 
 // TestHandleStreamAbandonsOnContextCancel 调用方取消 ctx：事件发射侧
-// select 走 ctx.Done 分支放弃，channel 关闭且不产出任何事件。
+// select 走 ctx.Done 分支放弃——stream 必然关闭、发射 goroutine 必然退出。
+//
+// 「取消后零事件」不是契约：cancel 时悬在 emit select 上的在途事件与
+// ctx.Done 两支同时就绪时 select 抽签（Go 语义），读者晚到恰好踩中抽签
+// 面（CI 高负载下曾致假失败）。本用例断言真实契约：取消后 drain 终止
+// （channel 关闭、无死锁、发射 goroutine 收线），且至多漏过「取消前已在
+// 途的那一枚分片 + 终帧」各一枚——不重复、不挂起。
 func TestHandleStreamAbandonsOnContextCancel(t *testing.T) {
 	ch := make(chan llm.ChatChunk)
 	provider := &manualStreamProvider{ch: ch}
@@ -297,11 +303,22 @@ func TestHandleStreamAbandonsOnContextCancel(t *testing.T) {
 		t.Fatalf("HandleStream() error = %v", err)
 	}
 
-	// 放一个内容分片：goroutine 消费后阻塞在事件发射（无读者）。
+	// 阻塞供给一枚分片（发射侧在读口等待必收，随即悬在 emit select），
+	// 取消后把供给侧 close——「抽签投出分片」分支的下一步读也能返回，
+	// 所有交错下 drain 都终止。
 	ch <- llm.ChatChunk{ContentDelta: "x"}
-	// 取消 ctx：发射 select 应走 ctx.Done 分支并整体放弃。
 	cancel()
+	close(ch)
+
+	deltas, terminals := 0, 0
 	for evt := range stream {
-		t.Fatalf("no event should be delivered after cancel, got %+v", evt)
+		if evt.Done {
+			terminals++
+		} else {
+			deltas++
+		}
+	}
+	if deltas > 1 || terminals > 1 {
+		t.Fatalf("events after cancel = %d delta(s), %d terminal(s), want ≤1 each", deltas, terminals)
 	}
 }
