@@ -10,4 +10,7 @@ var (
 	// ErrInvalidRequest 请求不合法（空文本等）；provider 实现应在前置校验
 	// 时返回本哨兵的包装错误。
 	ErrInvalidRequest = errors.New("tts: invalid request")
+	// ErrUpstream provider 上游失败（HTTP 非 2xx / 网络失败）的包装面：
+	// 逐句预算熔断（设计文档 §3.2）按它识别"该句合成失败→降级"分支。
+	ErrUpstream = errors.New("tts: upstream error")
 )

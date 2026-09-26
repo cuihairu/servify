@@ -21,15 +21,20 @@ const (
 	EventFinal EventKind = "final"
 	// EventSpeechEnd VAD 尾点：说话结束（静音切句主触发）。
 	EventSpeechEnd EventKind = "speech_end"
+	// EventError 读侧致命失败（provider 连接断裂/上游错误事件）：会话就此
+	// 破损，消费方应 Close 后重建会话；Err 携带原因。写侧失败走
+	// FeedAudio 返回值，不经事件通道。
+	EventError EventKind = "error"
 )
 
 // Event 单条识别事件。Seq 是 provider 侧单调句序号，partial 与 final 共用
-// 同一句的序号（同一句的 partial 串与 final 同 Seq）。
+// 同一句的序号（同一句的 partial 串与 final 同 Seq）；EventError 不带 Seq。
 type Event struct {
 	Kind       EventKind
 	Seq        int64
 	Text       string
 	Confidence float64
+	Err        error
 }
 
 // AudioFormat 上行音频描述。编码取值 provider 自定（如 "opus"/"pcm_s16le"），

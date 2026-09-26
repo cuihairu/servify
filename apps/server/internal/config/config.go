@@ -188,24 +188,26 @@ type OpenAIConfig struct {
 	Timeout     time.Duration `yaml:"timeout" json:"timeout,omitempty"`
 }
 
-// ASRConfig 流式语音识别接入参数（Phase 2 语音实时翻译刀一契约面，
-// platform/asr + platform/asr/factory）。Provider 空 = 未启用；托管流式
-// provider（Deepgram/火山/阿里等，§3.1 选型）随语音管线刀进 factory switch。
+// ASRConfig 流式语音识别接入参数（Phase 2 语音实时翻译，platform/asr +
+// platform/asr/factory）。Provider 空 = 未启用；openai（OpenAI 兼容流式
+// 转写 WS）随刀二进 factory switch，Model 空由 provider 侧默认兜底。
 type ASRConfig struct {
 	Provider string        `yaml:"provider" json:"provider,omitempty"`
 	APIKey   string        `yaml:"api_key" json:"api_key,omitempty"`
 	BaseURL  string        `yaml:"base_url" json:"base_url,omitempty"`
+	Model    string        `yaml:"model" json:"model,omitempty"`
 	Language string        `yaml:"language" json:"language,omitempty"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`
 }
 
 // TTSConfig 语音合成接入参数（Phase 2 逐句整段合成口径，流式 chunked 并入
-// Phase 3；platform/tts + platform/tts/factory）。Voice/Format 空由 provider
-// 侧默认兜底。
+// Phase 3；platform/tts + platform/tts/factory）。Model/Voice/Format 空由
+// provider 侧默认兜底（openai: tts-1 档，§3.1 选型）。
 type TTSConfig struct {
 	Provider string        `yaml:"provider" json:"provider,omitempty"`
 	APIKey   string        `yaml:"api_key" json:"api_key,omitempty"`
 	BaseURL  string        `yaml:"base_url" json:"base_url,omitempty"`
+	Model    string        `yaml:"model" json:"model,omitempty"`
 	Voice    string        `yaml:"voice" json:"voice,omitempty"`
 	Format   string        `yaml:"format" json:"format,omitempty"`
 	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`

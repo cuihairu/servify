@@ -7,10 +7,15 @@ import (
 
 // TestSentinelErrorsDistinct 契约哨兵彼此独立且可 errors.Is 寻址。
 func TestSentinelErrorsDistinct(t *testing.T) {
-	if errors.Is(ErrNotConfigured, ErrInvalidRequest) {
-		t.Fatal("ErrNotConfigured and ErrInvalidRequest must be distinct")
+	sentinels := []error{ErrNotConfigured, ErrInvalidRequest, ErrUpstream}
+	for i, a := range sentinels {
+		for j, b := range sentinels {
+			if i != j && errors.Is(a, b) {
+				t.Fatalf("sentinels %v and %v must be distinct", a, b)
+			}
+		}
 	}
-	for _, sentinel := range []error{ErrNotConfigured, ErrInvalidRequest} {
+	for _, sentinel := range sentinels {
 		if !errors.Is(sentinel, sentinel) {
 			t.Fatalf("%v must match itself", sentinel)
 		}

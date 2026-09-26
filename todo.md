@@ -1030,11 +1030,18 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-26，**Phase 2 刀二 provider 面已落地**——OpenAI 兼容口进 factory switch，按设计文档 §3.1"OpenAI 兼容口优先起步"）：
+  - 状态：`[-]`（刀二 provider 面已落地；下一步刀二b = 语音管线：分句翻译 + 字幕 WS 帧 + TTS 消费）
+  - 最近进展：`platform/asr/openai`（OpenAI 实时转写 WS 协议 `/v1/realtime?intent=transcription`：握手 `transcription_session.update` 下发 pcm16/模型/语言/服务端 VAD（尾点静音 500ms 对齐 §2.2）；入站事件映射 speech_started/speech_stopped → VAD 事件、transcription delta → partial、completed → final、error → `EventError` 会话破损；音频 base64 `input_audio_buffer.append`；写侧单写者锁、读侧独占循环，事件通道发送与 done 竞争保证消费方放弃即退出）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 保留状态码与 error.message 供 §3.2 预算熔断识别）。两者零值字段按默认兜底（base_url 默认官方端点，测试全部封闭传本地端点），`base_url` 可指向兼容网关（ws URL 由 https→wss / http→ws 推导）；factory switch 收编 `"openai"` 选型；契约面补 `EventError`/`ErrUnsupportedFormat`（asr openai 只收 pcm16 24kHz 单声道，格式不符在拨号前拒绝）。
+  - 已知边界：provider 面无消费方（语音管线是刀二b）——装配层尚未接线，`ai.asr.provider=openai` 构造可用但无人调 `NewSession`/`Synthesize`；真实官方端点连通性需 API key（测试全部 mock/httptest 封闭，无外呼）；gorilla/websocket 用既有依赖树版本，无新增依赖。
+  - 下一步：刀二b——分句翻译管线（final → 翻译队列 → 逐句 `Translate`）+ 字幕 WS 帧（新帧类型过 PROTOCOL §5 流程：服务端广播点 + 文档 + fixtures + 三端回放测试）+ TTS 消费（合成音频经既有下行通道到端上播放）。
+  - 阻塞项：无（刀二b 亦无外部凭证依赖，mock/兼容网关可全链开发）
+  - 完成证据：触包 8 包（asr / asr-openai / asr-factory / asr-mock / tts / tts-openai / tts-factory / tts-mock）+ config 逐函数 100% 覆盖、`-race` 绿、vet/gofmt 绿、`run-tests.sh` 100.0% 合并覆盖全绿、`make build build-weknora` 绿、smoke/golden/hygiene/encoding/boundaries 全绿。
 - 附注（2026-09-26，**Phase 2 刀一已落地**——ASR/TTS provider 抽象与配置面，语音实时翻译开工）：
-  - 状态：`[-]`（刀一契约面已落地；下一步刀二 = 托管流式 provider 进 factory switch + 语音管线：分句 + 逐句翻译 + 字幕 WS 帧）
+  - 状态：`[-]`（刀一契约面 + 刀二 provider 面已落地；下一步刀二b = 语音管线：分句 + 逐句翻译 + 字幕 WS 帧 + TTS 消费）
   - 最近进展：`platform/asr`（流式契约：`Recognizer.NewSession` 返回 `RecognizeSession` + 事件通道；`EventKind` 词表 speech_start/partial/final/speech_end 类对齐设计文档 §2.2 分句策略——partial 只驱动"正在说"、final 才进翻译、VAD 尾点是静音切句主触发；`Seq` 句序号支撑同句二次 final 去重）+ `platform/tts`（逐句整段合成契约，流式 chunked 留 Phase 3 以新方法扩展）+ 各自 mock（asr mock 每会话独立脚本快照+游标、事件通道按脚本全量预分配，注入永不阻塞；tts mock 错误队列逐次消费回落全局）+ 各自 factory（llm 同款收口：唯一构造入口、空选型 → `ErrNotConfigured`、mock 不进 switch 测试直构）。配置面 `ai.asr.*`/`ai.tts.*`（provider 空 = 未启用，合法形态；放 ai.* 因翻译语音是 LLM 同源 AI 出站面，与 `voice.*` 通话录音/转写持久化线互不共用——既有 `voiceapp.TranscriptProvider` 是转写 sink 不是识别引擎，两者不冲突）。
-  - 已知边界：契约面无任何消费方（语音管线是刀二）——factory 目前对一切非空 provider 报"unknown"（托管流式 provider 接入时才进 switch）；`DeepgramConfig`（voice.* 下）属通话转写 sink 的 key，与 ai.asr 的 key 互不共享（如需共用走同一 env 占位符）。
-  - 下一步：刀二——托管流式 ASR provider（§3.1：Deepgram/火山/阿里按可用区二选一）+ 分句翻译管线（final → 翻译队列 → `message-translated` 族字幕帧设计需过 PROTOCOL §5 流程）+ TTS OpenAI 兼容口。
+  - 已知边界：`DeepgramConfig`（voice.* 下）属通话转写 sink 的 key，与 ai.asr 的 key 互不共享（如需共用走同一 env 占位符）。
+  - 下一步：见上方刀二恢复点。
   - 阻塞项：无
   - 完成证据：新包 asr/asr-mock/asr-factory/tts/tts-mock/tts-factory/config 七包测试全绿（触包 100% 覆盖）、`-race` 绿、vet/gofmt 绿。
 - 附注（2026-09-26，**实时翻译消费半边已落地**——core 事件面 + 管理端工作台渲染，Phase 1 全链路收口）：

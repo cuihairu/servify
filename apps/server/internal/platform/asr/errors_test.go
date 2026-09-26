@@ -8,10 +8,15 @@ import (
 // TestSentinelErrorsDistinct 契约哨兵彼此独立且可 errors.Is 寻址：调用方
 // 与 provider 实现都靠它们分支（如装配层按 ErrNotConfigured 跳过接线）。
 func TestSentinelErrorsDistinct(t *testing.T) {
-	if errors.Is(ErrNotConfigured, ErrSessionClosed) {
-		t.Fatal("ErrNotConfigured and ErrSessionClosed must be distinct")
+	sentinels := []error{ErrNotConfigured, ErrSessionClosed, ErrUnsupportedFormat}
+	for i, a := range sentinels {
+		for j, b := range sentinels {
+			if i != j && errors.Is(a, b) {
+				t.Fatalf("sentinels %v and %v must be distinct", a, b)
+			}
+		}
 	}
-	for _, sentinel := range []error{ErrNotConfigured, ErrSessionClosed} {
+	for _, sentinel := range sentinels {
 		if !errors.Is(sentinel, sentinel) {
 			t.Fatalf("%v must match itself", sentinel)
 		}
@@ -29,6 +34,7 @@ func TestEventKindValues(t *testing.T) {
 		EventPartial:     "partial",
 		EventFinal:       "final",
 		EventSpeechEnd:   "speech_end",
+		EventError:       "error",
 	}
 	for kind, value := range want {
 		if string(kind) != value {

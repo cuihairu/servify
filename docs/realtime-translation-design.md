@@ -4,8 +4,10 @@
 > （刀一偏好存储与 REST 面、刀二 hub message-translated 帧、刀三 viewer
 > 角色双面 + 坐席 → 访客方向翻译、收尾历史消息批量标注、消费半边 core
 > 事件面 + 管理端工作台渲染）+ Phase 2 刀一已落地（ASR/TTS provider
-> 抽象与配置面，`platform/asr`/`platform/tts`）。移动端消费与 Phase 2
-> 语音管线后续刀。
+> 抽象与配置面，`platform/asr`/`platform/tts`）+ 刀二 provider 面已落地
+> （OpenAI 兼容口进 factory switch：`platform/asr/openai` 实时转写 WS +
+> `platform/tts/openai` 逐句合成）。移动端消费与 Phase 2 刀二b 语音管线
+> （分句翻译 + 字幕帧 + TTS 消费）后续刀。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -304,7 +306,8 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 1 收尾（已落地）** | 历史消息批量子段翻译：工作台历史分页按 agent 读向批量翻译访客消息，译文以 §4.4 metadata 保留键附在响应 DTO（不落库）；见 §1.5 | 刀三 |
 | **Phase 1 消费半边（已落地）** | core SDK 消费 `message-translated` 帧（`WSMessage` 联合成员 + 同名事件 + `MessageTranslation` 载荷，见 §4.5）；管理端工作台消费历史 metadata 译文并提供坐席读向语言下拉（读写偏好端点）——见 §1.6 | 刀二/刀三/收尾的服务端面（均已就绪） |
 | **Phase 2 刀一（已落地）** | ASR/TTS provider 抽象与配置面：`platform/asr`（流式会话 + 事件通道契约，VAD/partial/final 事件种种类对齐 §2.2 分句策略）+ `platform/tts`（逐句整段合成契约）+ 各自 mock 与 factory（llm 同款收口：唯一构造入口、mock 不进 switch）+ `ai.asr.*`/`ai.tts.*` 配置面（provider 空 = 未启用，装配层跳过接线） | 无新增依赖（契约 + mock 零网络） |
-| Phase 2 | 语音链路 MVP：ASR 流式接入 + 分句 + 逐句翻译 + 字幕 WS 帧 + TTS 客户端播放 | 刀一的 provider 抽象（已就绪）；托管流式 provider 进 factory switch |
+| **Phase 2 刀二 provider 面（已落地）** | OpenAI 兼容口优先（§3.1）：`platform/asr/openai`（实时转写 WS 协议 `/v1/realtime?intent=transcription`：服务端 VAD 尾点静音 500ms 对齐 §2.2、pcm16 24kHz 单声道、协议事件 → 契约事件映射、server error/读断 → `EventError` 会话破损）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 供 §3.2 预算熔断识别）；两者 `base_url` 可指向兼容网关（ws URL 由 https→wss 推导），进入 factory switch（`ai.asr.provider=openai`）。语音管线（final → 分句翻译 → 字幕帧 → TTS 消费）是刀二b | 无新增依赖（gorilla/websocket 已在依赖树） |
+| Phase 2 刀二b | 语音链路 MVP：分句翻译管线（final → 翻译队列 → 逐句）+ 字幕 WS 帧（新帧类型过 PROTOCOL §5 流程）+ TTS 消费 | 刀二 provider 面（已就绪） |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 
 各阶段验收：单测（mock provider 零网络）+ golden 回归（提示词劣化检测）+
