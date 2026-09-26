@@ -153,6 +153,12 @@ type AIConfig struct {
 	OpenAI    OpenAIConfig    `yaml:"openai" json:"openai,omitempty"`
 	Anthropic AnthropicConfig `yaml:"anthropic" json:"anthropic,omitempty"`
 	Handoff   HandoffConfig   `yaml:"handoff" json:"handoff,omitempty"`
+	// 语音链路（Phase 2 实时翻译，docs/realtime-translation-design.md §2/§3.1）：
+	// provider 空 = 未启用（合法形态，装配层跳过接线）。放 ai.* 是因为
+	// 翻译语音是 LLM 同源的 AI 出站面（§4.2），与 voice.*（通话录音/转写
+	// 持久化，另一条特性线）互不共用。
+	ASR ASRConfig `yaml:"asr" json:"asr,omitempty"`
+	TTS TTSConfig `yaml:"tts" json:"tts,omitempty"`
 }
 
 // HandoffConfig 首答置信门："答不上来时平滑转人工"的建议开关。只产出
@@ -180,6 +186,29 @@ type OpenAIConfig struct {
 	Temperature float64       `yaml:"temperature" json:"temperature,omitempty"`
 	MaxTokens   int           `yaml:"max_tokens" json:"max_tokens,omitempty"`
 	Timeout     time.Duration `yaml:"timeout" json:"timeout,omitempty"`
+}
+
+// ASRConfig 流式语音识别接入参数（Phase 2 语音实时翻译刀一契约面，
+// platform/asr + platform/asr/factory）。Provider 空 = 未启用；托管流式
+// provider（Deepgram/火山/阿里等，§3.1 选型）随语音管线刀进 factory switch。
+type ASRConfig struct {
+	Provider string        `yaml:"provider" json:"provider,omitempty"`
+	APIKey   string        `yaml:"api_key" json:"api_key,omitempty"`
+	BaseURL  string        `yaml:"base_url" json:"base_url,omitempty"`
+	Language string        `yaml:"language" json:"language,omitempty"`
+	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`
+}
+
+// TTSConfig 语音合成接入参数（Phase 2 逐句整段合成口径，流式 chunked 并入
+// Phase 3；platform/tts + platform/tts/factory）。Voice/Format 空由 provider
+// 侧默认兜底。
+type TTSConfig struct {
+	Provider string        `yaml:"provider" json:"provider,omitempty"`
+	APIKey   string        `yaml:"api_key" json:"api_key,omitempty"`
+	BaseURL  string        `yaml:"base_url" json:"base_url,omitempty"`
+	Voice    string        `yaml:"voice" json:"voice,omitempty"`
+	Format   string        `yaml:"format" json:"format,omitempty"`
+	Timeout  time.Duration `yaml:"timeout" json:"timeout,omitempty"`
 }
 
 type DifyConfig struct {

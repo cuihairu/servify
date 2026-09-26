@@ -1030,6 +1030,13 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-26，**Phase 2 刀一已落地**——ASR/TTS provider 抽象与配置面，语音实时翻译开工）：
+  - 状态：`[-]`（刀一契约面已落地；下一步刀二 = 托管流式 provider 进 factory switch + 语音管线：分句 + 逐句翻译 + 字幕 WS 帧）
+  - 最近进展：`platform/asr`（流式契约：`Recognizer.NewSession` 返回 `RecognizeSession` + 事件通道；`EventKind` 词表 speech_start/partial/final/speech_end 类对齐设计文档 §2.2 分句策略——partial 只驱动"正在说"、final 才进翻译、VAD 尾点是静音切句主触发；`Seq` 句序号支撑同句二次 final 去重）+ `platform/tts`（逐句整段合成契约，流式 chunked 留 Phase 3 以新方法扩展）+ 各自 mock（asr mock 每会话独立脚本快照+游标、事件通道按脚本全量预分配，注入永不阻塞；tts mock 错误队列逐次消费回落全局）+ 各自 factory（llm 同款收口：唯一构造入口、空选型 → `ErrNotConfigured`、mock 不进 switch 测试直构）。配置面 `ai.asr.*`/`ai.tts.*`（provider 空 = 未启用，合法形态；放 ai.* 因翻译语音是 LLM 同源 AI 出站面，与 `voice.*` 通话录音/转写持久化线互不共用——既有 `voiceapp.TranscriptProvider` 是转写 sink 不是识别引擎，两者不冲突）。
+  - 已知边界：契约面无任何消费方（语音管线是刀二）——factory 目前对一切非空 provider 报"unknown"（托管流式 provider 接入时才进 switch）；`DeepgramConfig`（voice.* 下）属通话转写 sink 的 key，与 ai.asr 的 key 互不共享（如需共用走同一 env 占位符）。
+  - 下一步：刀二——托管流式 ASR provider（§3.1：Deepgram/火山/阿里按可用区二选一）+ 分句翻译管线（final → 翻译队列 → `message-translated` 族字幕帧设计需过 PROTOCOL §5 流程）+ TTS OpenAI 兼容口。
+  - 阻塞项：无
+  - 完成证据：新包 asr/asr-mock/asr-factory/tts/tts-mock/tts-factory/config 七包测试全绿（触包 100% 覆盖）、`-race` 绿、vet/gofmt 绿。
 - 附注（2026-09-26，**实时翻译消费半边已落地**——core 事件面 + 管理端工作台渲染，Phase 1 全链路收口）：
   - 状态：`[-]`（Phase 0/1 服务端 + core SDK + 管理端全部落地；剩移动端消费与 Phase 2 语音，视产品节奏）
   - 最近进展：**core SDK 消费半边**——`WSMessage` 联合加入 `message-translated` + 同名事件（载荷 `MessageTranslation`），`handleMessage` 新增 case 发射独立事件（不并入 messages、不产 message/error，载荷异常原样透传由消费方判定）；fixtures 回放升级为断言事件携带完整载荷，移动端维持 `UnknownIgnored` 显式偏差。**管理端工作台消费半边**——新增 `services/translation.ts`（偏好 GET/PUT/DELETE，读向由服务端按认证主体推导，请求方不带角色）+ `typings.d.ts` 的 `TranslationPreference`；会话页顶部加坐席读向语言下拉（切语言写偏好后重拉历史，因为译文只写响应不落库，必须重拉才生效；写失败回滚选择器），访客消息按 §4.4 metadata 保留键并排渲染译文 + `translation_lang` 标签，无译文键只显示原文；气泡底色随 agent/访客自适应译文配色。文档：设计文档新增 §1.6 + 阶段表新增"消费半边"行 + 头部状态；PROTOCOL.md §4.4 补管理端消费状态行。
