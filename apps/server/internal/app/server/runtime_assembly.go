@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	pushinfra "servify/apps/server/internal/modules/push/infra"
 	"strings"
@@ -68,11 +69,15 @@ import (
 	workspaceinfra "servify/apps/server/internal/modules/workspace/infra"
 	svcerrors "servify/apps/server/internal/observability/errors"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
+	"servify/apps/server/internal/platform/asr"
+	asrfactory "servify/apps/server/internal/platform/asr/factory"
 	iceturn "servify/apps/server/internal/platform/iceturn"
 	"servify/apps/server/internal/platform/pstnprovider"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/sip"
 	"servify/apps/server/internal/platform/sipws"
+	"servify/apps/server/internal/platform/tts"
+	ttsfactory "servify/apps/server/internal/platform/tts/factory"
 	twiliovoice "servify/apps/server/internal/platform/twiliovoice"
 	"servify/apps/server/internal/platform/voiceprotocol"
 
@@ -127,18 +132,42 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 		// Phase 1 收尾：工作台历史面批量标注复用同一偏好服务与门面，
 		// 消费 agent 读向（坐席读访客消息的译文）。
 		rt.HistoryTranslateService = translationdelivery.NewHistoryTranslateService(aiAssembly.Translation, prefService, translationdelivery.ViewerRoleAgent)
+		// Phase 2 刀二b-2：语音翻译通道（设计文档 §1.2 分发半边）。
+		// ai.asr 非空才装配（路由随之注册）；ai.tts 未配置降级仅字幕
+		// 形态（§3.2 合法降级面），其余 factory 错误记 Error 后停用
+		// （语音链路可选，不阻断核心启动）。
+		recognizer, asrErr := asrfactory.New(rt.Config.AI.ASR)
+		switch {
+		case asrErr == nil:
+			var synth tts.Synthesizer
+			s, ttsErr := ttsfactory.New(rt.Config.AI.TTS)
+			switch {
+			case ttsErr == nil:
+				synth = s
+			case !errors.Is(ttsErr, tts.ErrNotConfigured):
+				rt.Logger.Errorf("voice translation tts disabled (tts factory): %v", ttsErr)
+			}
+			rt.VoiceTranslationRuntime = translationdelivery.NewVoiceChannelService(aiAssembly.Translation, prefService, recognizer, synth)
+		case !errors.Is(asrErr, asr.ErrNotConfigured):
+			rt.Logger.Errorf("voice translation disabled (asr factory): %v", asrErr)
+		}
 	}
 	return aiAssembly, nil
 }
 
-func wireRealtimeRuntime(rt *Runtime) *realtimeplatform.WebSocketHub {
+func wireRealtimeRuntime(rt *Runtime) (*realtimeplatform.WebSocketHub, *realtimeplatform.VoiceHub) {
 	wsHub := realtimeplatform.NewWebSocketHub()
 	rt.wsRuntime = wsHub
 	rt.RealtimeGateway = realtimeplatform.NewWebSocketAdapter(wsHub)
-	return wsHub
+	// 语音翻译通道 hub（Phase 2 刀二b-2）：runtime 由 wireAIRuntime 装配
+	// （ai.asr 未配置为 nil = 通道禁用，握手 503 兜底）。
+	voiceHub := realtimeplatform.NewVoiceHub()
+	voiceHub.SetVoiceTranslationRuntime(rt.VoiceTranslationRuntime)
+	rt.voiceHub = voiceHub
+	return wsHub, voiceHub
 }
 
-func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*conversationdelivery.WebSocketMessageAdapter, error) {
+func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, voiceHub *realtimeplatform.VoiceHub) (*conversationdelivery.WebSocketMessageAdapter, error) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
@@ -163,6 +192,10 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) 
 	rt.VisitorReadService = conversationdelivery.NewVisitorReadAdapter(conversationService, rt.DB)
 	if rt.Config.Security.GuestToken.Required {
 		wsHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
+		// 语音通道同源校验：同一访客 token 信任域、同一会话绑定语义。
+		if voiceHub != nil {
+			voiceHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
+		}
 	}
 	wireEmailRuntime(rt, conversationService)
 	return historyAdapter, nil

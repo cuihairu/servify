@@ -21,7 +21,7 @@ func TestWireConversationRuntime_GuestTokenIssuerWired(t *testing.T) {
 	if rt.Config.Security.GuestToken.Required {
 		t.Fatal("guest_token must default to disabled")
 	}
-	if _, err := wireConversationRuntime(rt, hub); err != nil {
+	if _, err := wireConversationRuntime(rt, hub, realtimeplatform.NewVoiceHub()); err != nil {
 		t.Fatalf("default config must wire cleanly: %v", err)
 	}
 	if rt.GuestTokenIssuer == nil {
@@ -33,7 +33,7 @@ func TestWireConversationRuntime_GuestTokenIssuerWired(t *testing.T) {
 
 	rt2 := &Runtime{Config: testRouterConfig()}
 	rt2.Config.JWT.Secret = "   "
-	if _, err := wireConversationRuntime(rt2, realtimeplatform.NewWebSocketHub()); err == nil || !strings.Contains(err.Error(), "guest token issuer") {
+	if _, err := wireConversationRuntime(rt2, realtimeplatform.NewWebSocketHub(), realtimeplatform.NewVoiceHub()); err == nil || !strings.Contains(err.Error(), "guest token issuer") {
 		t.Fatalf("expected blank-secret rejection, got %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestWireConversationRuntime_GuestTokenRequiredSetsValidator(t *testing.T) {
 	rt := &Runtime{Config: testRouterConfig()}
 	rt.Config.Security.GuestToken.Required = true
 	hub := realtimeplatform.NewWebSocketHub()
-	if _, err := wireConversationRuntime(rt, hub); err != nil {
+	if _, err := wireConversationRuntime(rt, hub, realtimeplatform.NewVoiceHub()); err != nil {
 		t.Fatalf("wire: %v", err)
 	}
 	validator := hub.CurrentTokenValidator()

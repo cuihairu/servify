@@ -71,8 +71,12 @@ type Runtime struct {
 	RealtimeVisitorTranslateService translationdelivery.RealtimeTranslateService
 	// HistoryTranslateService 历史消息批量标注（Phase 1 收尾，工作台历史
 	// 面消费，agent 读向）。
-	HistoryTranslateService  translationdelivery.HistoryTranslateService
+	HistoryTranslateService translationdelivery.HistoryTranslateService
+	// VoiceTranslationRuntime 语音翻译通道（Phase 2 刀二b-2；ai.asr 未配置
+	// 为 nil = 通道与路由都不装配）。
+	VoiceTranslationRuntime  translationdelivery.VoiceStreamStarter
 	wsRuntime                websocketRunner
+	voiceHub                 *realtimeplatform.VoiceHub
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
 	RTCIceSource             realtimeplatform.ICEConfigSource
@@ -148,9 +152,9 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 	}
 	state.aiAssembly = aiAssembly
 
-	wsHub := wireRealtimeRuntime(rt)
+	wsHub, voiceHub := wireRealtimeRuntime(rt)
 	state.wsHub = wsHub
-	historyAdapter, err := wireConversationRuntime(rt, wsHub)
+	historyAdapter, err := wireConversationRuntime(rt, wsHub, voiceHub)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +190,9 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 func (rt *Runtime) Start() error {
 	if rt.wsRuntime != nil {
 		go rt.wsRuntime.Run()
+	}
+	if rt.voiceHub != nil {
+		go rt.voiceHub.Run()
 	}
 	return rt.MessageRouter.Start()
 }
@@ -276,6 +283,8 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		RealtimeVisitorTranslateService:     rt.RealtimeVisitorTranslateService,
 		HistoryTranslateService:             rt.HistoryTranslateService,
 		RealtimeGateway:                     rt.RealtimeGateway,
+		VoiceTranslationRuntime:             rt.VoiceTranslationRuntime,
+		VoiceHub:                            rt.voiceHub,
 		RTCGateway:                          rt.RTCGateway,
 		RTCIceSource:                        rt.RTCIceSource,
 		MessageRouter:                       rt.MessageRouter,

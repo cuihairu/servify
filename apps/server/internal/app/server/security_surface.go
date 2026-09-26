@@ -90,6 +90,17 @@ func SecuritySurfaceCatalog(cfg *config.Config) []SecuritySurface {
 			Reason:                     "anonymous realtime connection surface",
 		},
 		{
+			// 语音翻译通道（Phase 2 刀二b-2）：与 /api/v1/ws 同款免认证
+			// 建连面（guest_token.required 开启时同源 token 校验），另受
+			// 装配层 ai.asr 配置门控（未配置不注册路由）。
+			Name:                       "public-realtime-voice",
+			Path:                       "/api/v1/ws/voice",
+			MatchMode:                  securitySurfaceExact,
+			Exposure:                   "public",
+			RequiresDedicatedRateLimit: true,
+			Reason:                     "anonymous voice translation channel surface (audio uplink; same trust domain as /api/v1/ws)",
+		},
+		{
 			Name:                       "auth-public",
 			Path:                       "/api/v1/auth/",
 			MatchMode:                  securitySurfacePrefix,
@@ -160,7 +171,7 @@ func routeRequiresSecurityCatalog(path string, cfg *config.Config) bool {
 	if path == "" {
 		return false
 	}
-	if path == "/health" || path == "/ready" || path == "/api/v1/ws" {
+	if path == "/health" || path == "/ready" || path == "/api/v1/ws" || path == "/api/v1/ws/voice" {
 		return true
 	}
 	if strings.HasPrefix(path, "/public/") || strings.HasPrefix(path, "/uploads/") || strings.HasPrefix(path, "/api/v1/auth/") {

@@ -15,6 +15,14 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	wsHandler := handlers.NewWebSocketHandler(deps.RealtimeGateway)
 	publicV1 := r.Group("/api/v1")
 	publicV1.GET("/ws", wsHandler.HandleWebSocket)
+	// 语音翻译通道（Phase 2 刀二b-2，docs/realtime-translation-design.md
+	// §1.2）：独立于会话 WS 的音频上行/字幕下行通道（音频帧不挤会话 WS
+	// 下行缓冲）。装配层门控：ai.asr 未配置 = 无 VoiceTranslationRuntime
+	// = 路由不注册（hub 握手 503 为直构 hub 时的兜底）；协议三件套
+	//（PROTOCOL §9 + fixtures + 三端回放）随客户端消费刀落地。
+	if deps.VoiceHub != nil && deps.VoiceTranslationRuntime != nil {
+		publicV1.GET("/ws/voice", deps.VoiceHub.HandleVoiceWebSocket)
+	}
 	// 访客工单创建（M3 移动 SDK 配套 §10 #4）：访客配套 REST 与 WS 同前缀，
 	// 按 session 归属租户 scope，坐席侧管理面 tickets 列表自然可见。
 	publicV1.POST("/tickets", handlers.NewVisitorTicketHandler(deps.VisitorTicketService, deps.Logger).CreateVisitorTicket)

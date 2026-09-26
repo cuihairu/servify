@@ -37,13 +37,19 @@ type VoiceSink interface {
 	OnError(err error)
 }
 
+// SentenceTranslator 逐句翻译出站面（*Service 结构化满足；delivery 适配器
+// 传 HandlerService 门面，测试可注入替身）。
+type SentenceTranslator interface {
+	Translate(ctx context.Context, cmd TranslateCommand) (TranslateResult, error)
+}
+
 // VoicePipeline 每说话方一条的语音翻译管线（设计文档 §1.2：识别与翻译在
 // 服务端串联）：消费 ASR 事件流 → 分句（§2.2 双触发）→ 逐句翻译（携带
 // 上一句原文+译文尾窗防割裂）→ TTS 逐句合成。双向翻译 = 每说话方各一条，
 // 语言状态互不污染。
 type VoicePipeline struct {
-	translate  *Service        // nil = 翻译不可用：全部句子降级原文
-	synth      tts.Synthesizer // nil = 仅字幕形态
+	translate  SentenceTranslator // nil = 翻译不可用：全部句子降级原文
+	synth      tts.Synthesizer    // nil = 仅字幕形态
 	sink       VoiceSink
 	asm        *domain.SentenceAssembler
 	sourceLang string // 说话方语言；空 = auto
@@ -55,7 +61,7 @@ type VoicePipeline struct {
 
 // NewVoicePipeline 构造管线。translate/synth 均可为 nil（对应部署形态的
 // 降级面：仅原文字幕 / 仅字幕），sink 必填。
-func NewVoicePipeline(translate *Service, synth tts.Synthesizer, sink VoiceSink, sourceLang, targetLang string) *VoicePipeline {
+func NewVoicePipeline(translate SentenceTranslator, synth tts.Synthesizer, sink VoiceSink, sourceLang, targetLang string) *VoicePipeline {
 	return &VoicePipeline{
 		translate:  translate,
 		synth:      synth,

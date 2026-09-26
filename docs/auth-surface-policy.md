@@ -25,6 +25,7 @@
 - `/public/kb/*`
 - `/public/csat/*`
 - `/api/v1/ws`
+- `/api/v1/ws/voice`（语音翻译通道，装配层 `ai.asr` 未配置不注册）
 - `/uploads/*`
 
 ### 2. Auth Surface

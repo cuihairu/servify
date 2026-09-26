@@ -58,7 +58,12 @@ type Dependencies struct {
 	RealtimeVisitorTranslateService translationdelivery.RealtimeTranslateService
 	// HistoryTranslateService 历史消息批量标注（Phase 1 收尾，工作台历史
 	// 面消费，agent 读向）。
-	HistoryTranslateService  translationdelivery.HistoryTranslateService
+	HistoryTranslateService translationdelivery.HistoryTranslateService
+	// VoiceTranslationRuntime 语音翻译通道（Phase 2 刀二b-2；ai.asr 未配置
+	// 为 nil = 路由不注册）。
+	VoiceTranslationRuntime translationdelivery.VoiceStreamStarter
+	// VoiceHub 语音通道 hub（与 VoiceTranslationRuntime 同装配期实例）。
+	VoiceHub                 *realtimeplatform.VoiceHub
 	RealtimeGateway          realtimeplatform.RealtimeGateway
 	RTCGateway               realtimeplatform.RTCGateway
 	RTCIceSource             realtimeplatform.ICEConfigSource

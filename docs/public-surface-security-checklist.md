@@ -96,6 +96,21 @@
   建连一律 403；空列表保持放行（原生 WebView 等匿名访客来源不可枚举），
   无 Origin 头的非浏览器客户端放行（由后续 token/租户校验兜底）
 
+### `/api/v1/ws/voice`
+
+- 语音翻译通道（Phase 2 刀二b-2）：与 `/api/v1/ws` 同款匿名建连面，
+  同一访客 token 信任域（`guest_token.required` 开启时同源校验）
+- 装配层门控：`ai.asr` 未配置不注册路由（hub 握手 503 为直构兜底），
+  部署未启用语音能力时该面不存在
+- 握手只回 `session_id` 缺失（400）/ speaker 非法（400）/ token 失败
+  （401）/ 通道未装配（503），不回内部状态或 provider 细节；流级错误
+  经 `voice-error` 的 code 词表（`disabled` / `asr_unavailable` /
+  `stream_broken`）下发后收线
+- 与 `/api/v1/ws` 共用同一 upgrader，`security.websocket_allowed_origins`
+  白名单（及无 Origin 头放行）口径完全一致
+- 路径级限流沿用 `/api/v1/ws` 前缀条目（该前缀按前缀匹配覆盖
+  `/api/v1/ws/voice`，不另设独立条目以免同一次建连被重复计限）
+
 ### `/uploads/*`
 
 - 只暴露确有公开需求的上传资产
