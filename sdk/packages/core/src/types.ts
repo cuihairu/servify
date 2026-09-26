@@ -332,6 +332,54 @@ export interface MessageTranslation {
   target_lang: string;
 }
 
+// --- 语音翻译通道（Phase 2，PROTOCOL.md §9）：独立 WS 通道的下行帧载荷 ---
+// 字段保持线序 snake_case（与 MessageTranslation 同族）；core VoiceChannel
+// 校验必需字段后经 voice:* 事件透出，畸形载荷静默忽略。
+
+/** translation-delta（PROTOCOL.md §9.1）：ASR 中间转写——turn_seq 同轮递增覆盖渲染。 */
+export interface VoiceDeltaUpdate {
+  speaker: string;
+  turn_seq: number;
+  text: string;
+}
+
+/** translation-final（PROTOCOL.md §9.1）：分句终帧——seq 跨轮单调；degraded=true 表示翻译失败降级原文（无对应 voice:audio）。 */
+export interface VoiceFinalUpdate {
+  speaker: string;
+  seq: number;
+  original: string;
+  content: string;
+  source_lang: string;
+  target_lang: string;
+  degraded: boolean;
+}
+
+/** translation-audio（PROTOCOL.md §9.1）：该句译文 TTS 音频——base64 内联，seq 关联同句 voice:final。 */
+export interface VoiceAudioUpdate {
+  speaker: string;
+  seq: number;
+  format: string;
+  audio: string;
+}
+
+/** voice-error（PROTOCOL.md §9.1）：连接级错误——帧后必随服务端 close，close 是流终止单一信号。 */
+export interface VoiceErrorUpdate {
+  code: string;
+  message: string;
+}
+
+// VoiceChannel 事件面（与 ServifyEventMap 分离：两通道零共享，语音通道无
+// message/transfer 等会话事件；connected/disconnected/error 与会话通道同名）。
+export type ServifyVoiceEventMap = {
+  'connected': [];
+  'disconnected': [reason: string];
+  'error': [error: Error];
+  'voice:delta': [update: VoiceDeltaUpdate];
+  'voice:final': [update: VoiceFinalUpdate];
+  'voice:audio': [update: VoiceAudioUpdate];
+  'voice:error': [update: VoiceErrorUpdate];
+};
+
 // 客户侧推荐问题（P2-0）：首屏热门 / 会话内上下文联想。
 // question 即可直接作为 query 发起提问的可点击文案。
 export interface RecommendedQuestion {

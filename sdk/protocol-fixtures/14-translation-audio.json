@@ -1,0 +1,27 @@
+{
+  "name": "translation-audio",
+  "direction": "server-to-client",
+  "channel": "voice",
+  "frame": {
+    "type": "translation-audio",
+    "data": {
+      "speaker": "visitor",
+      "seq": 1,
+      "format": "mp3",
+      "audio": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA"
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-26T12:00:02Z"
+  },
+  "expectations": {
+    "kind": "voice-audio",
+    "assert": {
+      "speaker": "visitor",
+      "seq": 1,
+      "format": "mp3",
+      "audio": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA",
+      "core": "consumed via VoiceChannel voice:audio event with the full payload (base64 inline, seq links back to translation-final)",
+      "mobile": "never arrives on the conversation channel; the conversation core ignores it silently if it appears (UnknownIgnored); voice channel client is a later knife"
+    }
+  }
+}

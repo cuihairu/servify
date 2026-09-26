@@ -1,0 +1,24 @@
+{
+  "name": "voice-error",
+  "direction": "server-to-client",
+  "channel": "voice",
+  "frame": {
+    "type": "voice-error",
+    "data": {
+      "code": "asr_unavailable",
+      "message": "speech recognition unavailable"
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-26T12:00:03Z"
+  },
+  "expectations": {
+    "kind": "voice-error",
+    "assert": {
+      "code": "asr_unavailable",
+      "message": "speech recognition unavailable",
+      "codes": "disabled / asr_unavailable / stream_broken",
+      "core": "consumed via VoiceChannel voice:error event; the frame is always followed by a server close — the close is the single stream-termination signal",
+      "mobile": "never arrives on the conversation channel; the conversation core ignores it silently if it appears (UnknownIgnored); voice channel client is a later knife"
+    }
+  }
+}

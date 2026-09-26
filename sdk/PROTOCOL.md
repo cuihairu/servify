@@ -16,6 +16,8 @@
 
 **移动端口径**：V1 逐字段沿用该握手形态；访客 token 落地后 `access_token` 开始被消费，客户端无需改握手代码、只需带上参数（向后兼容）。
 
+**第二条通道**：语音翻译走独立端点 `GET /api/v1/ws/voice`（§9）。本文 §1-§7 描述会话通道 `/api/v1/ws`（§8 fixtures 约定为两通道共用）；两条通道零共享（端点、下行缓冲、帧族、帧型命名空间都不同），仅共用传输门槛（Origin 白名单）与帧信封形。
+
 ## 2. 心跳与保活（双向机制不同，勿混淆）
 
 | 方向 | 机制 | 服务端行为 |
@@ -124,7 +126,47 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 ## 8. fixtures 互验约定（M0 落地物）
 
 - 位置：`sdk/protocol-fixtures/`，与 core、Android、iOS 测试共用同一套 JSON 样例；
-- 每个样例 = `{name, direction, frame | frames, expectations}`：单帧场景用 `frame`（原始 WS JSON），多帧场景（流式三段契约）用 `frames` 数组按序排列；`expectations` 是两端共用的断言词汇表——`kind`（协议语义分类：`visitor-echo`/`agent-message`/`ai-final`/`ai-stream-complete`/`ai-stream-interrupted`/`transfer`/`waiting`/`unknown-ignored`/`webrtc-ignored-by-mobile`）、`assert`（关键字段与拼接/缺省断言）、`state`（转人工状态机合法转移对，见 §4.2）；
+- 每个样例 = `{name, direction, frame | frames, expectations}`：单帧场景用 `frame`（原始 WS JSON），多帧场景（流式三段契约）用 `frames` 数组按序排列；语音帧族样例附 `channel: "voice"` 标注所属通道（缺省 = 会话通道，§9）；`expectations` 是两端共用的断言词汇表——`kind`（协议语义分类：`visitor-echo`/`agent-message`/`ai-final`/`ai-stream-complete`/`ai-stream-interrupted`/`transfer`/`waiting`/`unknown-ignored`/`webrtc-ignored-by-mobile`）、`assert`（关键字段与拼接/缺省断言）、`state`（转人工状态机合法转移对，见 §4.2）；
 - 两端断言的"一致"指：同一 `kind` 与 `assert` 语义在各自已实现的契约范围内必须得出相同结论；已知的端级偏差在样例内显式声明（如 `webrtc-ignored-by-mobile` 对 core 是消费事件、对移动端是忽略）；
-- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、message-translated（注解帧，三端不并入 messages 的显式契约，§4.5）、慢客户端边界（文档级用例）；
+- 必备样例集：ai-response 全字段/最小字段两态、ai-response-delta 三段完整流 + 流中断样例、transfer/waiting_notification、agent-message、text-message 回显去重、未知类型帧（断言忽略而非报错）、webrtc-offer（移动端不消费的显式分叉样例）、message-translated（注解帧，三端不并入 messages 的显式契约，§4.5）、语音帧族四样例（translation-delta/final/audio + voice-error，`channel: "voice"` 标注——core 经 VoiceChannel 消费、移动端会话核心按忽略断言，§9.2）、慢客户端边界（文档级用例）；
 - 服务端 WS 广播点变更 → 同一 PR 更新本文 + fixtures → 三端回放测试同时验证。
+
+## 9. 语音翻译通道 `/api/v1/ws/voice`（Phase 2 刀二b-2/b-3，独立 WS 通道）
+
+语音实时翻译的专用通道（docs/realtime-translation-design.md §1.2）：持续二进制音频上行不挤会话 WS 的 256 帧下行缓冲，会话 WS 契约（§1-§7）零变更。服务端实现 `platform/realtime/voice_hub.go`；`ai.asr` 未配置的部署在装配层不注册该路由（路由不存在 = 404，无半装配形态）。
+
+| 项 | 契约 |
+|---|---|
+| 端点 | `GET /api/v1/ws/voice`（`router_realtime.go`，publicV1 组，Origin 白名单与 §1 同源） |
+| 握手参数 | `session_id`（必填，空则 HTTP 400）；`speaker` ∈ `visitor`/`agent`（缺省 `visitor`，大小写不敏感，非法值 HTTP 400）；`access_token`（`guest_token.required` 开启时校验，非法 HTTP 401，与会话 WS 同源实例） |
+| 未装配形态 | hub 侧语音运行时未注入时 HTTP 503（装配层不注册路由时根本到不了 hub，这是纵深兜底） |
+| 上行 | **二进制帧** = pcm16 24kHz 单声道原始音频分片（20–100ms 级），单帧上限 64KB；**文本帧忽略**；空二进制分片忽略。一条连接 = 一个说话方的一条上行流 |
+| 帧编码 | 下行 JSON 文本帧，信封与会话通道同形 `{type, data, session_id, timestamp}` |
+| 保活 | 服务端协议层 Ping 每 54s（与会话 WS 同款）；pong 刷新读超时（60s 无上行且无 pong 即断） |
+| 慢客户端 | 下行缓冲 256 帧，写满即踢线（§6.1 同口径）——客户端必须及时消费字幕/音频帧 |
+| 无历史重发 | 断连期间字幕/音频不缓存不重放（§6.2 同口径）；重连即重新开始一条上行流（服务端无续传语义） |
+
+### 9.1 下行帧族（客户端按本表分发）
+
+| type | 载荷 `data` | 语义 |
+|---|---|---|
+| `translation-delta` | `{speaker: string, turn_seq: number, text: string}` | ASR 中间转写（"正在说"）。`speaker` = 说话方（`visitor`/`agent`）；`turn_seq` = ASR 轮次号（同轮多次 delta 递增覆盖渲染） |
+| `translation-final` | `{speaker: string, seq: number, original: string, content: string, source_lang: string, target_lang: string, degraded: boolean}` | 分句终帧：`seq` = 字幕句号（服务端管线单调递增从 1 起，跨轮不重置）；`original`/`content` = 原文/译文；`degraded=true` 表示该句翻译失败降级原文（`content` = 原文，且**没有**对应 `translation-audio`——不为对方合成原声） |
+| `translation-audio` | `{speaker: string, seq: number, format: string, audio: string}` | 该句译文 TTS 音频，`audio` = base64 内联（每句 mp3 单帧，<100KB 级；§4 数据最小化默认不落库），`format` = 容器格式（如 `mp3`）；`seq` 关联同句 `translation-final` |
+| `voice-error` | `{code: string, message: string}` | 连接级错误，**只回发起连接**（不广播同会话其他连接），帧后必随 close——客户端以"连接关闭"为流终止单一信号。`code` 词表：`disabled`（AI 面未配置或会话无偏好）/ `asr_unavailable`（ASR 建联失败）/ `stream_broken`（上行流破损）。`message` 为固定文案（不透传 provider 原始错误） |
+
+```json
+{ "type": "translation-final",
+  "data": { "speaker": "visitor", "seq": 1, "original": "…原文…", "content": "…译文…",
+            "source_lang": "zh", "target_lang": "en", "degraded": false },
+  "session_id": "…", "timestamp": "…" }
+```
+
+- **失败零帧**：管线逐句失败只记服务端日志（译文降级/仅字幕由 `degraded` 与帧缺失表达），不存在独立"翻译失败"帧；连接级失败走 `voice-error` 收线；
+- **方向自辨**：服务端按会话广播（同会话所有语音连接都收到全部帧），客户端按 `speaker` 自行过滤渲染方向（我说话的字幕给对方看，对方说话的字幕给我看）；
+- **命名族**：kebab-case（§7 约定，新帧优先族）。
+
+### 9.2 三端消费状态
+
+- **core 已消费**：`VoiceChannel`（`sdk/packages/core/src/voice.ts`）承载本通道下行——`voice:delta`/`voice:final`/`voice:audio`/`voice:error` 四个独立事件（载荷保持线序 snake_case，与 `MessageTranslation` 同族）；`sendAudio()` 提供二进制上行传输（麦克风采集是宿主/demo 层职责）；无自动重连（语音流是活体采集会话，服务端无续传，重启说话是用户显式动作）。fixtures 回放断言四帧全载荷事件 + 会话通道管理器对误入语音帧静默忽略；
+- **Android / iOS**：会话通道核心按未知类型静默忽略语音帧（`UnknownIgnored`——两通道零共享，会话通道不该见到这些帧）；语音通道客户端与上行/字幕渲染消费是后续刀，届时更新本节与 fixtures 端级偏差声明。

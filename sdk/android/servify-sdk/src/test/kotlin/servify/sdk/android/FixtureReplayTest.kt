@@ -70,6 +70,10 @@ class FixtureReplayTest {
                 "unknown-ignored",
                 "webrtc-ignored-by-mobile",
                 "message-translated",
+                "voice-delta",
+                "voice-final",
+                "voice-audio",
+                "voice-error",
             ),
             kinds,
         )
@@ -185,6 +189,18 @@ class FixtureReplayTest {
         val fixture = fixtureByKind("message-translated")
         val events = replay(fixture)
         assertEquals(listOf(ProtocolEvent.UnknownIgnored("message-translated")), events)
+    }
+
+    @Test
+    fun voiceFrameFamilyIsIgnoredByConversationCore() {
+        // 语音帧族（PROTOCOL.md §9）：独立通道 /api/v1/ws/voice 的下行帧，会话
+        // 通道核心不该见到——误入也只按未知类型静默忽略（两通道零共享）；
+        // 语音通道客户端与上行/字幕渲染消费是后续刀（端级偏差已在样例内声明）。
+        for (kind in listOf("voice-delta", "voice-final", "voice-audio", "voice-error")) {
+            val fixture = fixtureByKind(kind)
+            val type = framesOf(fixture).single()["type"]!!.jsonPrimitive.content
+            assertEquals(listOf(ProtocolEvent.UnknownIgnored(type)), replay(fixture), kind)
+        }
     }
 
     @Test

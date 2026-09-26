@@ -2,6 +2,8 @@
 export { ServifySDK } from './sdk';
 export { ApiClient } from './api';
 export { WebSocketManager } from './websocket';
+export { VoiceChannel } from './voice';
+export type { VoiceChannelOptions } from './voice';
 export { HttpTransport } from './transports/http';
 
 // 导出所有类型

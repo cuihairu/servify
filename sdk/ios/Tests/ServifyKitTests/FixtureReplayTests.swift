@@ -85,6 +85,10 @@ final class FixtureReplayTests: XCTestCase {
                 "unknown-ignored",
                 "webrtc-ignored-by-mobile",
                 "message-translated",
+                "voice-delta",
+                "voice-final",
+                "voice-audio",
+                "voice-error",
             ]
         )
     }
@@ -204,6 +208,21 @@ final class FixtureReplayTests: XCTestCase {
         let fixtures = try loadFixtures()
         let events = try replay(fixtureByKind("message-translated", fixtures))
         XCTAssertEqual(events, [.unknownIgnored(type: "message-translated")])
+    }
+
+    func testVoiceFrameFamilyIsIgnoredByConversationCore() throws {
+        // 语音帧族（PROTOCOL.md §9）：独立通道 /api/v1/ws/voice 的下行帧，会话
+        // 通道核心不该见到——误入也只按未知类型静默忽略（两通道零共享）；
+        // 语音通道客户端与上行/字幕渲染消费是后续刀（端级偏差已在样例内声明）。
+        // Kotlin 镜像：FixtureReplayTest.kt voiceFrameFamilyIsIgnoredByConversationCore。
+        let fixtures = try loadFixtures()
+        for kind in ["voice-delta", "voice-final", "voice-audio", "voice-error"] {
+            let fixture = fixtureByKind(kind, fixtures)
+            let frame = try XCTUnwrap(framesOf(fixture).single)
+            let type = try XCTUnwrap(frame["type"] as? String)
+            let events = try replay(fixture)
+            XCTAssertEqual(events, [.unknownIgnored(type: type)], kind)
+        }
     }
 
     func testWebrtcSignalIsExplicitlyIgnoredByMobileContract() throws {

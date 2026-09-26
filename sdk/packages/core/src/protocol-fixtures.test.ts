@@ -3,7 +3,17 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WebSocketManager } from './websocket';
-import type { Message, MessageTranslation, TransferAssignmentUpdate, TransferWaitingUpdate } from './types';
+import { VoiceChannel } from './voice';
+import type {
+  Message,
+  MessageTranslation,
+  TransferAssignmentUpdate,
+  TransferWaitingUpdate,
+  VoiceAudioUpdate,
+  VoiceDeltaUpdate,
+  VoiceErrorUpdate,
+  VoiceFinalUpdate,
+} from './types';
 
 /**
  * 契约回放测试：用 sdk/protocol-fixtures/ 同一套样例喂 core 的 WS 分发，
@@ -42,6 +52,10 @@ const KNOWN_KINDS = [
   'unknown-ignored',
   'webrtc-ignored-by-mobile',
   'message-translated',
+  'voice-delta',
+  'voice-final',
+  'voice-audio',
+  'voice-error',
 ];
 
 function loadFixtures(): Fixture[] {
@@ -308,6 +322,62 @@ describe('protocol fixtures replay (core)', () => {
       source_lang: fixture.expectations.assert.source_lang,
       target_lang: fixture.expectations.assert.target_lang,
     });
+  });
+
+  it('replays the voice frame family: VoiceChannel consumes on its own channel, the conversation channel ignores them', async () => {
+    // 语音帧族（PROTOCOL.md §9）：独立通道 /api/v1/ws/voice 的下行帧。core 消费
+    // 半边 = VoiceChannel 四事件（载荷保持线序 snake_case，与 MessageTranslation
+    // 同族）；会话通道管理器对误入语音帧静默忽略（两通道零共享——纵深断言，
+    // 非消费语义）。
+    const eventByKind = {
+      'voice-delta': 'voice:delta',
+      'voice-final': 'voice:final',
+      'voice-audio': 'voice:audio',
+      'voice-error': 'voice:error',
+    } as const;
+    type VoiceUpdate = VoiceDeltaUpdate | VoiceFinalUpdate | VoiceAudioUpdate | VoiceErrorUpdate;
+
+    for (const kind of ['voice-delta', 'voice-final', 'voice-audio', 'voice-error'] as const) {
+      const fixture = fixtures.find((f) => f.expectations.kind === kind)!;
+      FakeWebSocket.instances = []; // 每轮从零计数（connectManager 的 waitFor 断言长度为 1）
+
+      // 会话通道：默认分支忽略——无 message、无 error。
+      const conv = await connectManager();
+      const messages: Message[] = [];
+      const errors: unknown[] = [];
+      conv.manager.on('message', (m) => messages.push(m));
+      conv.manager.on('error', (e) => errors.push(e));
+      conv.socket.feed(fixture.frame!);
+      expect(messages).toHaveLength(0);
+      expect(errors).toHaveLength(0);
+      await conv.manager.disconnect();
+      vi.unstubAllGlobals();
+
+      // 语音通道：VoiceChannel 校验必需字段后透传完整载荷。
+      vi.stubGlobal('WebSocket', FakeWebSocket);
+      let channelSocket: FakeWebSocket | undefined;
+      const channel = new VoiceChannel({
+        url: 'ws://localhost:8080/api/v1/ws/voice',
+        sessionId: 'fixture-session',
+        speaker: 'visitor',
+        webSocketFactory: (url) => {
+          channelSocket = new FakeWebSocket(url);
+          return channelSocket as unknown as WebSocket;
+        },
+      });
+      const connectPromise = channel.connect();
+      await vi.waitFor(() => expect(channelSocket).toBeDefined());
+      channelSocket!.open();
+      await connectPromise;
+
+      const events: VoiceUpdate[] = [];
+      channel.on(eventByKind[kind], (u) => events.push(u));
+      channelSocket!.feed(fixture.frame!);
+
+      expect(events).toEqual([fixture.frame!.data]);
+      channel.disconnect();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('replays the webrtc frame: the explicit dual-end fork — core consumes, mobile contract does not', async () => {

@@ -1,0 +1,33 @@
+{
+  "name": "translation-final",
+  "direction": "server-to-client",
+  "channel": "voice",
+  "frame": {
+    "type": "translation-final",
+    "data": {
+      "speaker": "visitor",
+      "seq": 1,
+      "original": "你好，我想咨询退货政策",
+      "content": "Hello, I would like to ask about the return policy",
+      "source_lang": "zh",
+      "target_lang": "en",
+      "degraded": false
+    },
+    "session_id": "fixture-session",
+    "timestamp": "2026-09-26T12:00:01Z"
+  },
+  "expectations": {
+    "kind": "voice-final",
+    "assert": {
+      "speaker": "visitor",
+      "seq": 1,
+      "original": "你好，我想咨询退货政策",
+      "content": "Hello, I would like to ask about the return policy",
+      "source_lang": "zh",
+      "target_lang": "en",
+      "degraded": false,
+      "core": "consumed via VoiceChannel voice:final event with the full payload (seq links the sentence across final/audio)",
+      "mobile": "never arrives on the conversation channel; the conversation core ignores it silently if it appears (UnknownIgnored); voice channel client is a later knife"
+    }
+  }
+}
