@@ -1030,6 +1030,14 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-26，**Phase 2 刀二b-2 服务端语音通道已落地**——独立 WS 通道 + 装配接线）：
+  - 状态：`[-]`（刀二 provider 面 + 刀二b-1 管线半边 + 刀二b-2 服务端通道已落地；下一步刀二b-3 = 协议三件套 + 三端回放）
+  - 最近进展：新增独立语音通道 `/api/v1/ws/voice`（设计文档 §1.2：持续二进制音频上行不挤会话 WS 的 256 帧下行缓冲，会话 WS 契约零变更）：`modules/translation/delivery/voice_contract.go`（`VoiceStreamStarter`/`VoiceAudioStream` 契约 + `VoiceStreamSink`/`VoiceCaption` app 类型别名桥接，平台层只依赖 delivery）+ `voice_adapter.go`（每条上行流组装"ASR 会话 + 语音管线"：说话方→读向对偶解析（visitor 说话查 agent 读向、agent 说话查 visitor 读向）、无偏好 = `ErrVoiceChannelInactive` 不激活、`Close` 先 cancel 管线再收 ASR 会话、源语言留空走模型自动检测、固定 pcm16/24kHz/单声道上行）+ `platform/realtime/voice_hub.go`（握手校验 session_id/speaker/token 同款 + 未配置 503、按会话广播、慢客户端踢线与会话 WS 同口径、voice-error 收线且错误帧先于 close 帧到达、失败零帧只记日志）+ 装配接线（`ai.asr` 未配置 = 路由不注册 + hub 握手 503 兜底；guest token 校验器与会话 WS 同源实例；`Runtime.Start` 随 `Run()` 起 hub 事件循环）。
+  - 下行帧族定稿（刀二b-3 落 PROTOCOL §9 + fixtures + 三端回放，同 PR）：`translation-delta`（speaker/turn_seq/text）、`translation-final`（speaker/seq/original/content/source_lang/target_lang/degraded）、`translation-audio`（speaker/seq/format/audio=base64 内联，§4 数据最小化默认不落库）、`voice-error`（code ∈ disabled/asr_unavailable/stream_broken，连接级语义只回发起连接）。
+  - 已知边界：客户端尚无消费（协议三件套是刀二b-3，按 PROTOCOL §5 流程服务端广播点已就位、禁止客户端单侧预留）；音频载荷形态已定 base64 内联（每句 mp3 单帧，<100KB 级），若后续双工大音频再议短时 URL。
+  - 下一步：刀二b-3——PROTOCOL.md §9 语音通道帧条目 + `sdk/protocol-fixtures/` 样例 + core/Android/iOS 三端回放断言（core 的 KNOWN_KINDS 词表是精确匹配断言，帧族必须同 PR 落齐）+ 三端语音上行/字幕渲染消费。
+  - 阻塞项：无
+  - 完成证据：`platform/realtime` + translation 四包逐函数 100% 覆盖、语音用例 `-race -count=3` 绿、vet/gofmt 绿；run-tests/build/golden/smoke/hygiene/encoding/boundaries 全绿。
 - 附注（2026-09-26，**Phase 2 刀二b-1 管线半边已落地**——分句器 + 每说话方语音管线）：
   - 状态：`[-]`（刀二 provider 面 + 刀二b-1 管线半边已落地；下一步刀二b-2 = WS 面：音频上行 + 字幕/音频下行帧族过 PROTOCOL §5 流程 + 装配接线）
   - 最近进展：`modules/translation/domain.SentenceAssembler`（设计文档 §2.2 双触发先到先切：句界标点 。？！.?!? 与 60 字上限沿字符位单趟扫描、先到者定切点；VAD 尾点 `Flush` 把残余切一整句；同 seq 二次 final 覆盖不叠加；换轮防御性收残；切点后修剪前导空白；多字节按字符边界切）+ `application.VoicePipeline`（每说话方一条，双向 = 两条互不污染：消费 `asr.Event` 流 → 分句 → 逐句翻译携带上一句原文+译文尾窗 ≤ 200 字（`TranslateCommand.Context` 提示词扩展，服务端截尾）→ TTS 逐句合成；`VoiceSink` 产出接口（speech_start/partial/caption/audio/error）交付层适配；partial 只透传"正在说"不进翻译；翻译失败句降级原文且不为对方合成原声、TTS 失败句仅字幕——§3.2 逐句预算熔断降级，管线不中断；句序号管线侧单调递增从 1 起）。

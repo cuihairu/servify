@@ -7,8 +7,10 @@
 > 抽象与配置面，`platform/asr`/`platform/tts`）+ 刀二 provider 面已落地
 > （OpenAI 兼容口进 factory switch：`platform/asr/openai` 实时转写 WS +
 > `platform/tts/openai` 逐句合成）+ 刀二b-1 管线半边已落地（分句器 +
-> 每说话方语音管线 + 逐句翻译上下文尾窗）。WS 面（音频上行 + 字幕帧族
-> 过 PROTOCOL §5 流程）是刀二b-2；移动端消费后续刀。
+> 每说话方语音管线 + 逐句翻译上下文尾窗）+ 刀二b-2 服务端语音通道已落地
+> （独立 WS 通道 `/api/v1/ws/voice`：音频上行 + 字幕/音频下行帧族，
+> 装配层 `ai.asr` 配置门控；协议三件套过 PROTOCOL §5 流程）是刀二b-3；
+> 移动端消费后续刀。
 > 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
 > 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
 >
@@ -79,6 +81,18 @@
   媒体桥接（RA-7）共用 SFU-lite 基建。
 - **每说话方一条 pipeline**，双向翻译 = 两条 pipeline 独立运行，避免
   单 pipeline 语言状态互相污染。
+- **语音走独立 WS 通道 `/api/v1/ws/voice`（刀二b-2 已落地）**：上行二进制
+  帧 = pcm16 24kHz 单声道分片，下行 `translation-delta` / `translation-final` /
+  `translation-audio` / `voice-error`（JSON，WebSocketMessage 同形信封）。
+  不复用会话 WS（`/api/v1/ws`）：持续音频帧会挤穿其 256 帧下行缓冲的慢
+  客户端踢线语义（PROTOCOL §6.1），独立通道让会话 WS 契约零变更。通道在
+  装配层配置门控（`ai.asr` 未配置不注册路由，hub 握手 503 兜底）；下行
+  帧载荷带 `speaker`，同会话双方连接都收（客户端按方向过滤渲染）。
+  `voice-error` 帧的 code 词表：`disabled`（AI 面未配置/会话无偏好）、
+  `asr_unavailable`（ASR 建联失败）、`stream_broken`（上行流破损）——错误
+  帧后服务端收线，客户端以"连接关闭"为流终止单一信号。协议三件套
+  （PROTOCOL §9 条目 + fixtures + 三端回放）按 §5 流程随客户端消费刀
+  （b-3）同 PR 落地。
 
 ### 1.3 会话语言偏好（Phase 1 刀一落地存储，刀三落地 viewer 角色双面）
 
@@ -309,7 +323,7 @@ business metrics（既有 `rt.BusinessMetrics` 口）。
 | **Phase 2 刀一（已落地）** | ASR/TTS provider 抽象与配置面：`platform/asr`（流式会话 + 事件通道契约，VAD/partial/final 事件种种类对齐 §2.2 分句策略）+ `platform/tts`（逐句整段合成契约）+ 各自 mock 与 factory（llm 同款收口：唯一构造入口、mock 不进 switch）+ `ai.asr.*`/`ai.tts.*` 配置面（provider 空 = 未启用，装配层跳过接线） | 无新增依赖（契约 + mock 零网络） |
 | **Phase 2 刀二 provider 面（已落地）** | OpenAI 兼容口优先（§3.1）：`platform/asr/openai`（实时转写 WS 协议 `/v1/realtime?intent=transcription`：服务端 VAD 尾点静音 500ms 对齐 §2.2、pcm16 24kHz 单声道、协议事件 → 契约事件映射、server error/读断 → `EventError` 会话破损）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 供 §3.2 预算熔断识别）；两者 `base_url` 可指向兼容网关（ws URL 由 https→wss 推导），进入 factory switch（`ai.asr.provider=openai`）。语音管线（final → 分句翻译 → 字幕帧 → TTS 消费）是刀二b | 无新增依赖（gorilla/websocket 已在依赖树） |
 | **Phase 2 刀二b-1 管线半边（已落地）** | 分句器 `modules/translation/domain.SentenceAssembler`（§2.2 双触发先到先切：标点/60 字上限沿字符位单趟扫描、VAD 尾点 Flush、同 seq 二次 final 覆盖、轮切换防御性收残）+ 语音管线 `application.VoicePipeline`（每说话方一条：ASR 事件流 → 分句 → 逐句翻译带上一句原文+译文尾窗 ≤ 200 字 → TTS 逐句合成；`VoiceSink` 产出接口交付层适配，partial 只透传"正在说"；翻译失败句降级原文不合成、TTS 失败句仅字幕，管线不断）+ `TranslateCommand.Context` 上下文尾窗提示词扩展。WS 面（音频上行 + 字幕帧族，过 PROTOCOL §5 流程）是刀二b-2 | 无新增依赖 |
-| Phase 2 刀二b-2 | 语音链路 WS 面：音频上行通道 + 字幕/音频下行帧族（新帧类型过 PROTOCOL §5 流程：fixtures + 三端回放测试）+ 装配接线 | 刀二b-1（已就绪） |
+| **Phase 2 刀二b-2 服务端语音通道（已落地）** | 独立 WS 通道 `/api/v1/ws/voice`（§1.2：音频帧不挤会话 WS 下行缓冲）：`delivery/voice_contract.go`（`VoiceStreamStarter`/`VoiceAudioStream` 契约 + app 类型别名桥接）+ `delivery/voice_adapter.go`（每流组装"ASR 会话 + 语音管线"，说话方→读向对偶：visitor 说话查 agent 读向）+ `platform/realtime/voice_hub.go`（握手校验 session_id/speaker/token、按会话广播、慢客户端踢线与会话 WS 同口径、voice-error 收线、失败零帧）+ 装配接线（`ai.asr` 配置门控：未配置不注册路由；guest token 校验与会话 WS 同源）。下行帧族协议三件套（PROTOCOL §9 + fixtures + 三端回放）是刀二b-3 | 无新增依赖 |
 | Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
 
 各阶段验收：单测（mock provider 零网络）+ golden 回归（提示词劣化检测）+
