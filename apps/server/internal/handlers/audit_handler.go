@@ -201,10 +201,10 @@ func (h *AuditHandler) GetDiff(c *gin.Context) {
 
 // Verify 校验审计链完整性
 // @Summary 校验审计哈希链完整性
-// @Description 按 id 升序重算链式哈希，任何改动/中间删除都会报告断点；存量 legacy 行（未哈希）单独计数并锚定续链
+// @Description 按 id 升序重算链式哈希，任何改动/中间删除都会报告断点；存量 legacy 行（未哈希）单独计数并锚定续链。返回 ChainReport：ok/total/hashed/legacy_rows/anchored/first_id/last_id/broken_at_id/reason
 // @Tags 审计
 // @Produce json
-// @Success 200 {object} auditplatform.ChainReport
+// @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/audit/verify [get]

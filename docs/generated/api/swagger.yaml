@@ -902,9 +902,6 @@ definitions:
     type: object
   handlers.StartAssistRequest:
     properties:
-      agent_user_id:
-        example: 7
-        type: integer
       conversation_session_id:
         example: sess-123
         type: string
@@ -2954,8 +2951,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: 在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃）；信令与媒体面走既有 WS/RTC
-        通道
+      description: 在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃、坐席取认证主体）；信令与媒体面走既有
+        WS/RTC 通道
       parameters:
       - description: 协助内容
         in: body
@@ -5044,6 +5041,28 @@ paths:
   /api/v1/api-keys/{id}/revoke:
     post:
       responses: {}
+  /api/v1/audit/verify:
+    get:
+      description: 按 id 升序重算链式哈希，任何改动/中间删除都会报告断点；存量 legacy 行（未哈希）单独计数并锚定续链。返回 ChainReport：ok/total/hashed/legacy_rows/anchored/first_id/last_id/broken_at_id/reason
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 校验审计哈希链完整性
+      tags:
+      - 审计
   /api/v1/auth/2fa/disable:
     post:
       consumes:
