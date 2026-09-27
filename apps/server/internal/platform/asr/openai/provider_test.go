@@ -547,6 +547,13 @@ func TestEmitAfterCloseIsSilentlyDropped(t *testing.T) {
 	}
 	sk := sess.(*session)
 	sk.doneOnce()
+	// doneOnce 只关 done 通道不碰连接：安静服务端（空脚本、无 close 帧）再
+	// 无帧可读，已停在 ReadJSON 的 readLoop 没有唤醒源——循环顶 done 检查要
+	// 等下一次读返回才到达。本地常绿全靠 readLoop 尚未被调度进 ReadJSON 的
+	// 时序运气，CI 多核并行负载下会 3s 超时（run 36274152665 实锤）。按生产
+	// Close() 的同款唤醒源收连接：ReadJSON 返回断连错误 → done 已关 → 静默
+	// 退出 → 关事件通道（与循环顶退出殊途同归，断言语义不变）。
+	_ = sk.conn.Close()
 	if evs := drainClosed(t, sk.events); len(evs) != 0 {
 		t.Fatalf("events after quiet teardown = %+v, want none", evs)
 	}
