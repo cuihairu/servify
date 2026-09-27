@@ -1038,7 +1038,7 @@
   - 完成证据：
     - 文件：`infra/compose/docker-compose.yml` / `docker-compose.weknora.yml` / `docker-compose.dify.yml` / `docker-compose.observability.yml`、`infra/compose/weknora-mock/main.go` + `Dockerfile`、`scripts/docker_compose_publish_ports_test.go`、`scripts/weknora_mock_protocol_test.go`、`.dockerignore`、`.github/workflows/ci.yml`（script-checks 登记新测试名）、`.gitignore`、`scripts/test-results/weknora-acceptance/`、`docs/acceptance-checklist.md`、`todo.md`
     - 命令：`go test ./scripts -run 'TestWeKnoraMockProtocolSurface|TestCompose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts)'`、`go test ./scripts/... ./apps/server/...`、`docker compose -f docker-compose.yml -f docker-compose.weknora.yml config`（默认与 `*_PUBLISH_PORT` 覆盖两口径）+ up、`WEKNORA_ACCEPTANCE_MODE=mock SERVIFY_URL=http://localhost:18080 WEKNORA_URL=http://localhost:9000 scripts/test-weknora-integration.sh`、`validate-acceptance-manifest.sh`、`check-acceptance-evidence.sh`
-    - 结果：验收脚本 EXIT=0 全链绿（manifest `knowledge_provider=weknora`、enabled/healthy=true、upload/sync=true、fallback strategy=fallback）；三项新合同测试绿；批量证据扫描全绿；三容器 healthy 运行中（redis 映射 `0.0.0.0:16380->6379` 实证覆盖入口生效）
+    - 结果：验收脚本 EXIT=0 全链绿（manifest `knowledge_provider=weknora`、enabled/healthy=true、upload/sync=true、fallback strategy=fallback）；三项新合同测试绿；批量证据扫描全绿；三容器 healthy 运行中（redis 映射 `0.0.0.0:16380->6379` 实证覆盖入口生效）；CI 于 b7c96dd 全绿（run 36307357546，AI Golden Set (real LLM) 为条件触发既有 skip；Docs Pages run 36307357569 同绿）
   - 下一步：见 P1-1 条目——real 模式三 provider 环境证据；可选补全容器化栈运行
   - 阻塞项：真实 provider 凭证（外部依赖）；本机网络下全容器 servify 镜像构建未完成（已按混合栈如实降级）
 - 附注（2026-09-27，**P1-1 本机可完成部分收官：ragflow mock 验收真实跑通并覆盖 knowledge-docs CRUD**）：
