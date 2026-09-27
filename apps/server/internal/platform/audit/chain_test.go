@@ -42,6 +42,12 @@ func TestChainNeedsRowLock(t *testing.T) {
 			t.Fatalf("%s should not use row lock", dialect)
 		}
 	}
+	if clauses := chainLockClauses(true); len(clauses) != 1 {
+		t.Fatalf("lock clauses = %d, want 1", len(clauses))
+	}
+	if clauses := chainLockClauses(false); len(clauses) != 0 {
+		t.Fatalf("no-lock clauses = %d, want 0", len(clauses))
+	}
 }
 
 func TestVerifyChainNilDB(t *testing.T) {

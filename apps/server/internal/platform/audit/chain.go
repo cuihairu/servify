@@ -149,14 +149,20 @@ func chainNeedsRowLock(dialect string) bool {
 	return dialect == "postgres" || dialect == "mysql"
 }
 
+// chainLockClauses postgres/mysql 读链尾加行锁串行化；sqlite 空子句集。
+func chainLockClauses(lock bool) []clause.Expression {
+	if lock {
+		return []clause.Expression{clause.Locking{Strength: "UPDATE"}}
+	}
+	return nil
+}
+
 // chainTail 事务内读当前链尾哈希（最后一个已哈希行；legacy 行不接力）。
 func chainTail(tx *gorm.DB) (string, error) {
 	q := tx.Model(&models.AuditLog{}).
 		Where("entry_hash <> ''").
-		Order("id DESC").Limit(1)
-	if chainNeedsRowLock(tx.Dialector.Name()) {
-		q = q.Clauses(clause.Locking{Strength: "UPDATE"})
-	}
+		Order("id DESC").Limit(1).
+		Clauses(chainLockClauses(chainNeedsRowLock(tx.Dialector.Name()))...)
 	var hashes []string
 	if err := q.Pluck("entry_hash", &hashes).Error; err != nil {
 		return "", err

@@ -59,6 +59,7 @@ func TestSecurityWarnings_NoExternalKnowledgeProviderEnabled(t *testing.T) {
 		{Enabled: true, Prefix: "/api/v1/ws", RequestsPerMinute: 30, Burst: 10},
 		{Enabled: true, Prefix: "/uploads/", RequestsPerMinute: 90, Burst: 20},
 		{Enabled: true, Prefix: "/api/v1/metrics/ingest", RequestsPerMinute: 120, Burst: 30},
+		{Enabled: true, Prefix: "/api/v1/remote-assist/", RequestsPerMinute: 20, Burst: 10},
 		{Enabled: true, Prefix: "/api/", RequestsPerMinute: 90, Burst: 20},
 	}
 	cfg.AI.OpenAI.APIKey = "openai-key"
@@ -100,6 +101,7 @@ func TestSecurityWarnings_PublicSurfaceRateLimitCoverage(t *testing.T) {
 		"security.rate_limiting.paths has no dedicated limit for /api/v1/ws (anonymous realtime connection surface)",
 		"security.rate_limiting.paths has no dedicated limit for /uploads/ (public uploaded asset surface)",
 		"security.rate_limiting.paths has no dedicated limit for /api/v1/metrics/ingest (service ingestion surface)",
+		"security.rate_limiting.paths has no dedicated limit for /api/v1/remote-assist/ (visitor assist consent and recording write surface)",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing warning %q in %q", want, joined)
@@ -158,6 +160,12 @@ func TestSecurityWarnings_PublicSurfaceRateLimitCoverageSatisfied(t *testing.T) 
 		},
 		{
 			Enabled:           true,
+			Prefix:            "/api/v1/remote-assist/",
+			RequestsPerMinute: 20,
+			Burst:             10,
+		},
+		{
+			Enabled:           true,
 			Prefix:            "/api/",
 			RequestsPerMinute: 90,
 			Burst:             20,
@@ -166,7 +174,7 @@ func TestSecurityWarnings_PublicSurfaceRateLimitCoverageSatisfied(t *testing.T) 
 	cfg.AI.OpenAI.APIKey = "openai-key"
 
 	warnings := strings.Join(SecurityWarnings(cfg), "\n")
-	for _, denied := range []string{"/public/", "/public/kb/", "/public/csat/", "/api/v1/auth/", "/api/v1/ws", "/uploads/", "/api/v1/metrics/ingest", "/api/"} {
+	for _, denied := range []string{"/public/", "/public/kb/", "/public/csat/", "/api/v1/auth/", "/api/v1/ws", "/uploads/", "/api/v1/metrics/ingest", "/api/v1/remote-assist/", "/api/"} {
 		if strings.Contains(warnings, denied) {
 			t.Fatalf("unexpected public/service/management surface warning for %s in %q", denied, warnings)
 		}

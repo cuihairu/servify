@@ -24,6 +24,7 @@ var requiredSecurityRateLimitPaths = []requiredRateLimitPath{
 	{prefix: "/api/v1/ws", reason: "anonymous realtime connection surface"},
 	{prefix: "/uploads/", reason: "public uploaded asset surface"},
 	{prefix: "/api/v1/metrics/ingest", reason: "service ingestion surface"},
+	{prefix: "/api/v1/remote-assist/", reason: "visitor assist consent and recording write surface"},
 	{prefix: "/api/", reason: "management surface"},
 }
 
