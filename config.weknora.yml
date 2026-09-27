@@ -155,6 +155,7 @@ security:
         - "agents.read"
         - "knowledge.read"
         - "assist.read"
+        - "assist.write"
         - "gamification.read"
         - "voice.read"
         - "voice.write"

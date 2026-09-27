@@ -415,3 +415,38 @@ func TestBuildRouter_AuthSessionsUsesConfiguredSessionIPIntelligence(t *testing.
 		t.Fatalf("expected configured IP intelligence output, body=%s", w.Body.String())
 	}
 }
+
+// TestBuildRouter_RemoteAssistWriteRequiresAssistWritePermission R3 回归：
+// agent 角色只有 assist.read 时管理面写操作必须 403（stock 部署曾因角色
+// 缺 assist.write 全部写操作被拒，此测试钉住读写分级语义本身）。
+func TestBuildRouter_RemoteAssistWriteRequiresAssistWritePermission(t *testing.T) {
+	router := BuildRouter(Dependencies{Config: testRouterConfig()})
+
+	post := func(permissions []string) int {
+		token := createTestHS256JWT(t, map[string]interface{}{
+			"user_id":        7,
+			"principal_kind": "agent",
+			"permissions":    permissions,
+		}, "test-secret")
+		req := httptest.NewRequest(http.MethodPost, "/api/remote-assist/sessions", strings.NewReader(`{"conversation_session_id":"sess-1"}`))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	t.Run("assist.read alone cannot write", func(t *testing.T) {
+		if code := post([]string{"assist.read"}); code != http.StatusForbidden {
+			t.Fatalf("assist.read write = %d, want 403", code)
+		}
+	})
+
+	t.Run("assist.write passes authorization", func(t *testing.T) {
+		// 过权限门后命中未装配的 nil service（Recovery 兜 500）：
+		// 断言点在"不再是 403"，授权已放行。
+		if code := post([]string{"assist.write"}); code != http.StatusInternalServerError {
+			t.Fatalf("assist.write write = %d, want 500 (past authz, nil service)", code)
+		}
+	})
+}
