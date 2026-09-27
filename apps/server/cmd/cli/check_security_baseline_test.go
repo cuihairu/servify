@@ -79,6 +79,10 @@ security:
         requests_per_minute: 120
         burst: 30
       - enabled: true
+        prefix: "/api/v1/remote-assist/"
+        requests_per_minute: 20
+        burst: 10
+      - enabled: true
         prefix: "/api/"
         requests_per_minute: 90
         burst: 20
@@ -153,6 +157,10 @@ security:
         prefix: "/api/v1/metrics/ingest"
         requests_per_minute: 120
         burst: 30
+      - enabled: true
+        prefix: "/api/v1/remote-assist/"
+        requests_per_minute: 20
+        burst: 10
       - enabled: true
         prefix: "/api/"
         requests_per_minute: 90
