@@ -15,6 +15,7 @@ type (
 	EndCommand        = assistapp.EndCommand
 	AnnotationCommand = assistapp.AnnotationCommand
 	RecordingMeta     = assistapp.RecordingMeta
+	Actor             = assistapp.Actor
 )
 
 // 错误转发（handler 侧映射 HTTP 状态用）。
@@ -29,17 +30,18 @@ var (
 	ErrAssistSessionActive      = assistapp.ErrAssistSessionActive
 	ErrAssistConsentDeclined    = assistapp.ErrAssistConsentDeclined
 	ErrAssistConsentDecided     = assistapp.ErrAssistConsentDecided
+	ErrAssistAgentSessionLimit  = assistapp.ErrAssistAgentSessionLimit
 )
 
 // HandlerService 远程协助管理/访客两面的服务契约。
 type HandlerService interface {
 	StartSession(ctx context.Context, cmd StartCommand) (*assistdomain.RemoteAssistSession, error)
-	EndSession(ctx context.Context, id uint, cmd EndCommand) (*assistdomain.RemoteAssistSession, error)
+	EndSession(ctx context.Context, id uint, actor Actor, cmd EndCommand) (*assistdomain.RemoteAssistSession, error)
 	GetSession(ctx context.Context, id uint) (*assistdomain.RemoteAssistSession, error)
 	ListSessions(ctx context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error)
 	AddAnnotation(ctx context.Context, assistSessionID uint, cmd AnnotationCommand) (*assistdomain.RemoteAssistAnnotation, error)
 	ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error)
-	DeleteAnnotation(ctx context.Context, id uint) error
+	DeleteAnnotation(ctx context.Context, id uint, actor Actor) error
 	AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error)
 	RespondConsent(ctx context.Context, id uint, customerUserID uint, accept bool) (*assistdomain.RemoteAssistSession, error)
 }

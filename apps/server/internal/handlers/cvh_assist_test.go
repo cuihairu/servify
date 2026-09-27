@@ -37,6 +37,8 @@ type cvhAssistService struct {
 
 	startCmd      assistdelivery.StartCommand
 	endCmd        assistdelivery.EndCommand
+	endActor      assistdelivery.Actor
+	deleteActor   assistdelivery.Actor
 	annotCmd      assistdelivery.AnnotationCommand
 	annotID       uint
 	attachCmd     assistdelivery.RecordingMeta
@@ -64,8 +66,9 @@ func (s *cvhAssistService) StartSession(_ context.Context, cmd assistdelivery.St
 	return s.startSession, nil
 }
 
-func (s *cvhAssistService) EndSession(_ context.Context, id uint, cmd assistdelivery.EndCommand) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) EndSession(_ context.Context, id uint, actor assistdelivery.Actor, cmd assistdelivery.EndCommand) (*models.RemoteAssistSession, error) {
 	s.endID = id
+	s.endActor = actor
 	s.endCmd = cmd
 	if s.endErr != nil {
 		return nil, s.endErr
@@ -98,8 +101,9 @@ func (s *cvhAssistService) ListAnnotations(_ context.Context, assistSessionID ui
 	return s.annotations, s.listAnnotErr
 }
 
-func (s *cvhAssistService) DeleteAnnotation(_ context.Context, id uint) error {
+func (s *cvhAssistService) DeleteAnnotation(_ context.Context, id uint, actor assistdelivery.Actor) error {
 	s.deleteID = id
+	s.deleteActor = actor
 	return s.deleteErr
 }
 
@@ -143,6 +147,11 @@ func cvhAssistRecordingRouter(svc *cvhAssistService, middleware ...gin.HandlerFu
 	return r
 }
 
+// asAgentMW 模拟认证中间件注入 uint 型 user_id（principalUserID 可解析的形态之一）。
+func asAgentMW(id uint) gin.HandlerFunc {
+	return func(c *gin.Context) { c.Set("user_id", id); c.Next() }
+}
+
 func TestCvhNewAssistHandlers(t *testing.T) {
 	svc := &cvhAssistService{}
 	h := NewAssistHandler(svc)
@@ -183,12 +192,13 @@ func TestCvhAssistStartSession(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		svc := &cvhAssistService{}
-		body := `{"conversation_session_id":"sess-1","agent_user_id":7,"tenant_id":"t1","workspace_id":"w1"}`
-		w := dxcDo(cvhAssistRouter(svc), http.MethodPost, path, body)
+		// 坐席取认证主体：请求体里的 agent_user_id/tenant_id/workspace_id 均为
+		// 自报字段，handler 一律忽略（scope 来自中间件注入的 ctx，见 RA-1）。
+		body := `{"conversation_session_id":"sess-1","agent_user_id":99,"tenant_id":"t1","workspace_id":"w1"}`
+		w := dxcDo(cvhAssistRouter(svc, asAgentMW(7)), http.MethodPost, path, body)
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, "sess-1", svc.startCmd.ConversationSessionID)
-		assert.Equal(t, uint(7), svc.startCmd.AgentUserID)
-		// RA-1：租户/工作区不再取自请求体，多余字段被忽略，scope 一律来自认证中间件注入的 ctx
+		assert.Equal(t, uint(7), svc.startCmd.AgentUserID, "坐席应取认证主体而非请求体自报")
 		assert.Contains(t, w.Body.String(), `"status":"active"`)
 	})
 
@@ -233,9 +243,10 @@ func TestCvhAssistEndSession(t *testing.T) {
 	t.Run("success with recording meta", func(t *testing.T) {
 		svc := &cvhAssistService{}
 		body := `{"outcome":"ended","recording_key":"rec.webm","recording_mime":"video/webm","recording_duration_ms":95,"recording_size":1024}`
-		w := dxcDo(cvhAssistRouter(svc), http.MethodPost, path, body)
+		w := dxcDo(cvhAssistRouter(svc, asAgentMW(7)), http.MethodPost, path, body)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, uint(9), svc.endID)
+		assert.Equal(t, assistdelivery.Actor{UserID: 7}, svc.endActor, "操作主体应来自认证 claims（归属校验用）")
 		assert.Equal(t, "ended", svc.endCmd.Outcome)
 		assert.Equal(t, "rec.webm", svc.endCmd.RecordingKey)
 		assert.Equal(t, "video/webm", svc.endCmd.RecordingMime)
@@ -423,6 +434,28 @@ func TestCvhAssistDeleteAnnotation(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("actor from principal", func(t *testing.T) {
+		svc := &cvhAssistService{}
+		w := dxcDo(cvhAssistRouter(svc, asAgentMW(7)), http.MethodDelete, "/api/remote-assist/annotations/5", "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, assistdelivery.Actor{UserID: 7}, svc.deleteActor, "删除主体应来自认证 claims（归属校验用）")
+	})
+
+	// assistActor 的 IsAdmin 取 principal_kind=admin（admin 在 scope 内不受归属限制）。
+	t.Run("actor admin flag from principal_kind", func(t *testing.T) {
+		adminKind := func(c *gin.Context) { c.Set("user_id", uint(2)); c.Set("principal_kind", "admin"); c.Next() }
+		svc := &cvhAssistService{}
+		w := dxcDo(cvhAssistRouter(svc, adminKind), http.MethodDelete, "/api/remote-assist/annotations/5", "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, assistdelivery.Actor{UserID: 2, IsAdmin: true}, svc.deleteActor)
+
+		customerKind := func(c *gin.Context) { c.Set("user_id", uint(3)); c.Set("principal_kind", "customer"); c.Next() }
+		svc2 := &cvhAssistService{}
+		w = dxcDo(cvhAssistRouter(svc2, customerKind), http.MethodDelete, "/api/remote-assist/annotations/5", "")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, assistdelivery.Actor{UserID: 3, IsAdmin: false}, svc2.deleteActor)
+	})
 }
 
 func TestCvhAssistRecordingAttach(t *testing.T) {

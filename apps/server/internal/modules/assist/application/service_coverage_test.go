@@ -6,6 +6,7 @@ import (
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	platformauth "servify/apps/server/internal/platform/auth"
 	"testing"
+	"time"
 )
 
 // mockRepo 应用层内联仓储桩：内存实现 + 按方法注入错误。
@@ -25,16 +26,27 @@ type mockRepo struct {
 	createAnnotErr  error
 	deleteAnnotErr  error
 	findActiveErr   error
+	countActiveErr  error
+	expireErr       error
 
 	// 参数捕获
-	lastListLimit int
+	lastListLimit  int
+	lastAgentCount uint
+	lastExpireCut  time.Time
+	lastDelete     struct {
+		id         uint
+		ownerID    uint
+		restricted bool
+	}
+	activeByAgent map[uint]int64
 }
 
 func newMockRepo() *mockRepo {
 	return &mockRepo{
-		sessions:    map[uint]*assistdomain.RemoteAssistSession{},
-		annotations: map[uint]*assistdomain.RemoteAssistAnnotation{},
-		owners:      map[string]uint{},
+		sessions:      map[uint]*assistdomain.RemoteAssistSession{},
+		annotations:   map[uint]*assistdomain.RemoteAssistAnnotation{},
+		owners:        map[string]uint{},
+		activeByAgent: map[uint]int64{},
 	}
 }
 
@@ -108,6 +120,29 @@ func (m *mockRepo) FindActiveSessionIDByConversation(_ context.Context, conversa
 	return 0, nil
 }
 
+func (m *mockRepo) CountActiveSessionsByAgent(_ context.Context, agentUserID uint) (int64, error) {
+	if m.countActiveErr != nil {
+		return 0, m.countActiveErr
+	}
+	m.lastAgentCount = agentUserID
+	return m.activeByAgent[agentUserID], nil
+}
+
+func (m *mockRepo) ExpireStaleActiveSessions(_ context.Context, cutoff time.Time) (int64, error) {
+	if m.expireErr != nil {
+		return 0, m.expireErr
+	}
+	m.lastExpireCut = cutoff
+	var expired int64
+	for _, s := range m.sessions {
+		if s.Status == StatusActive && s.StartedAt.Before(cutoff) {
+			s.Status = StatusFailed
+			expired++
+		}
+	}
+	return expired, nil
+}
+
 func (m *mockRepo) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	if m.listAnnotErr != nil {
 		return nil, m.listAnnotErr
@@ -132,11 +167,15 @@ func (m *mockRepo) CreateAnnotation(_ context.Context, annotation *assistdomain.
 	return nil
 }
 
-func (m *mockRepo) DeleteAnnotation(_ context.Context, id uint) error {
+func (m *mockRepo) DeleteAnnotation(_ context.Context, id uint, ownerID uint, restricted bool) error {
 	if m.deleteAnnotErr != nil {
 		return m.deleteAnnotErr
 	}
-	if _, ok := m.annotations[id]; !ok {
+	m.lastDelete.id = id
+	m.lastDelete.ownerID = ownerID
+	m.lastDelete.restricted = restricted
+	annotation, ok := m.annotations[id]
+	if !ok || (restricted && annotation.CreatedBy != ownerID) {
 		return errors.New("record not found")
 	}
 	delete(m.annotations, id)
@@ -258,7 +297,7 @@ func TestAssistAppEndSession(t *testing.T) {
 
 	t.Run("unknown session maps to not found", func(t *testing.T) {
 		svc := NewAssistService(newMockRepo())
-		if _, err := svc.EndSession(ctx, 42, EndCommand{}); !errors.Is(err, ErrAssistNotFound) {
+		if _, err := svc.EndSession(ctx, 42, Actor{UserID: 9}, EndCommand{}); !errors.Is(err, ErrAssistNotFound) {
 			t.Fatalf("want ErrAssistNotFound, got %v", err)
 		}
 	})
@@ -267,7 +306,7 @@ func TestAssistAppEndSession(t *testing.T) {
 		repo := newMockRepo()
 		seedMockSession(t, repo, 1, StatusEnded)
 		svc := NewAssistService(repo)
-		if _, err := svc.EndSession(ctx, 1, EndCommand{}); !errors.Is(err, ErrAssistAlreadyEnded) {
+		if _, err := svc.EndSession(ctx, 1, Actor{UserID: 9}, EndCommand{}); !errors.Is(err, ErrAssistAlreadyEnded) {
 			t.Fatalf("want ErrAssistAlreadyEnded, got %v", err)
 		}
 	})
@@ -277,7 +316,7 @@ func TestAssistAppEndSession(t *testing.T) {
 		seedMockSession(t, repo, 1, StatusActive)
 		repo.saveErr = errors.New("update boom")
 		svc := NewAssistService(repo)
-		_, err := svc.EndSession(ctx, 1, EndCommand{})
+		_, err := svc.EndSession(ctx, 1, Actor{UserID: 9}, EndCommand{})
 		if err == nil || err.Error() != "update boom" {
 			t.Fatalf("want raw save error, got %v", err)
 		}
@@ -289,7 +328,7 @@ func TestAssistAppEndSession(t *testing.T) {
 		seeded.RecordingKey = "old/key.webm"
 		seeded.RecordingDurationMs = 111
 		svc := NewAssistService(repo)
-		got, err := svc.EndSession(ctx, 1, EndCommand{Outcome: StatusFailed, RecordingKey: "new/key.webm"})
+		got, err := svc.EndSession(ctx, 1, Actor{UserID: 9}, EndCommand{Outcome: StatusFailed, RecordingKey: "new/key.webm"})
 		if err != nil {
 			t.Fatalf("EndSession() error = %v", err)
 		}
@@ -308,7 +347,7 @@ func TestAssistAppEndSession(t *testing.T) {
 		repo := newMockRepo()
 		seedMockSession(t, repo, 1, StatusActive)
 		svc := NewAssistService(repo)
-		got, err := svc.EndSession(ctx, 1, EndCommand{})
+		got, err := svc.EndSession(ctx, 1, Actor{UserID: 9}, EndCommand{})
 		if err != nil {
 			t.Fatalf("EndSession() error = %v", err)
 		}
@@ -616,7 +655,7 @@ func TestAssistAppListAndDeleteAnnotation(t *testing.T) {
 	ctx := context.Background()
 	repo := newMockRepo()
 	seedMockSession(t, repo, 1, StatusActive)
-	repo.annotations[7] = &assistdomain.RemoteAssistAnnotation{ID: 7, AssistSessionID: 1, Shape: ShapeRect, Payload: "{}"}
+	repo.annotations[7] = &assistdomain.RemoteAssistAnnotation{ID: 7, AssistSessionID: 1, Shape: ShapeRect, Payload: "{}", CreatedBy: 3}
 	svc := NewAssistService(repo)
 
 	items, err := svc.ListAnnotations(ctx, 1)
@@ -628,15 +667,147 @@ func TestAssistAppListAndDeleteAnnotation(t *testing.T) {
 		t.Fatalf("want raw list error, got %v", err)
 	}
 
-	if err := svc.DeleteAnnotation(ctx, 0); !errors.Is(err, ErrAssistNotFound) {
+	if err := svc.DeleteAnnotation(ctx, 0, Actor{UserID: 3}); !errors.Is(err, ErrAssistNotFound) {
 		t.Fatalf("id=0 want ErrAssistNotFound, got %v", err)
 	}
 	repo.deleteAnnotErr = errors.New("delete boom")
-	if err := svc.DeleteAnnotation(ctx, 7); err == nil || err.Error() != "delete boom" {
+	if err := svc.DeleteAnnotation(ctx, 7, Actor{UserID: 3}); err == nil || err.Error() != "delete boom" {
 		t.Fatalf("want raw delete error, got %v", err)
 	}
 	repo.deleteAnnotErr = nil
-	if err := svc.DeleteAnnotation(ctx, 7); err != nil {
+	if err := svc.DeleteAnnotation(ctx, 7, Actor{UserID: 3}); err != nil {
 		t.Fatalf("DeleteAnnotation() error = %v", err)
 	}
+}
+
+// TestAssistAppSessionGovernance R1 会话治理：TTL 懒清扫、坐席并发上限、
+// 归属校验（EndSession/DeleteAnnotation）。零值 Options 保持既有行为。
+func TestAssistAppSessionGovernance(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ttl sweep runs before single-active check", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		stale := seedMockSession(t, repo, 77, StatusActive)
+		stale.StartedAt = time.Now().Add(-2 * time.Hour)
+		svc := NewAssistService(repo, Options{SessionTTL: time.Hour})
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"}); err != nil {
+			t.Fatalf("stale active must be swept before start, got %v", err)
+		}
+		if stale.Status != StatusFailed {
+			t.Fatalf("stale session status = %s, want failed", stale.Status)
+		}
+	})
+
+	t.Run("agent concurrency cap enforced", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		repo.activeByAgent[9] = 2
+		svc := NewAssistService(repo, Options{MaxActivePerAgent: 2})
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1", AgentUserID: 9}); !errors.Is(err, ErrAssistAgentSessionLimit) {
+			t.Fatalf("want ErrAssistAgentSessionLimit, got %v", err)
+		}
+		// 上限未到时正常放行。
+		repo.activeByAgent[9] = 1
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1", AgentUserID: 9}); err != nil {
+			t.Fatalf("under-cap start error = %v", err)
+		}
+	})
+
+	t.Run("cap disabled by zero option", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		repo.activeByAgent[9] = 100
+		svc := NewAssistService(repo)
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1", AgentUserID: 9}); err != nil {
+			t.Fatalf("zero cap must not block, got %v", err)
+		}
+	})
+
+	t.Run("get session lazily expires timed-out active", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.StartedAt = time.Now().Add(-2 * time.Hour)
+		svc := NewAssistService(repo, Options{SessionTTL: time.Hour})
+		got, err := svc.GetSession(ctx, 1)
+		if err != nil {
+			t.Fatalf("GetSession() error = %v", err)
+		}
+		if got.Status != StatusFailed || got.EndedAt == nil {
+			t.Fatalf("expired active must read back as failed: %+v", got)
+		}
+	})
+
+	t.Run("end session ownership", func(t *testing.T) {
+		repo := newMockRepo()
+		seedMockSession(t, repo, 1, StatusActive) // AgentUserID = 9
+		svc := NewAssistService(repo)
+		if _, err := svc.EndSession(ctx, 1, Actor{UserID: 8}, EndCommand{}); !errors.Is(err, ErrAssistForbidden) {
+			t.Fatalf("other agent want ErrAssistForbidden, got %v", err)
+		}
+		if _, err := svc.EndSession(ctx, 1, Actor{UserID: 8, IsAdmin: true}, EndCommand{}); err != nil {
+			t.Fatalf("admin may end any in-scope session, got %v", err)
+		}
+		seedMockSession(t, repo, 2, StatusActive)
+		if _, err := svc.EndSession(ctx, 2, Actor{UserID: 9}, EndCommand{}); err != nil {
+			t.Fatalf("owning agent may end own session, got %v", err)
+		}
+	})
+
+	t.Run("delete annotation ownership", func(t *testing.T) {
+		repo := newMockRepo()
+		seedMockSession(t, repo, 1, StatusActive)
+		repo.annotations[7] = &assistdomain.RemoteAssistAnnotation{ID: 7, AssistSessionID: 1, CreatedBy: 3}
+		svc := NewAssistService(repo)
+		if err := svc.DeleteAnnotation(ctx, 7, Actor{UserID: 3}); err != nil {
+			t.Fatalf("author delete error = %v", err)
+		}
+		if repo.lastDelete.ownerID != 3 || !repo.lastDelete.restricted {
+			t.Fatalf("non-admin delete must be restricted to own annotations: %+v", repo.lastDelete)
+		}
+		repo.annotations[8] = &assistdomain.RemoteAssistAnnotation{ID: 8, AssistSessionID: 1, CreatedBy: 3}
+		if err := svc.DeleteAnnotation(ctx, 8, Actor{UserID: 4, IsAdmin: true}); err != nil {
+			t.Fatalf("admin delete error = %v", err)
+		}
+		if repo.lastDelete.restricted {
+			t.Fatalf("admin delete must be unrestricted: %+v", repo.lastDelete)
+		}
+	})
+}
+
+// TestAssistAppGovernanceErrorPaths R1 治理查询失败原样透传（不吞错）。
+func TestAssistAppGovernanceErrorPaths(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("governance boom")
+
+	t.Run("ttl sweep error propagates from start", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		repo.expireErr = boom
+		svc := NewAssistService(repo, Options{SessionTTL: time.Hour})
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1"}); err == nil || err.Error() != "governance boom" {
+			t.Fatalf("want raw sweep error, got %v", err)
+		}
+	})
+
+	t.Run("agent count error propagates from start", func(t *testing.T) {
+		repo := newMockRepo()
+		repo.owners["sess-1"] = 5
+		repo.countActiveErr = boom
+		svc := NewAssistService(repo, Options{MaxActivePerAgent: 1})
+		if _, err := svc.StartSession(ctx, StartCommand{ConversationSessionID: "sess-1", AgentUserID: 9}); err == nil || err.Error() != "governance boom" {
+			t.Fatalf("want raw count error, got %v", err)
+		}
+	})
+
+	t.Run("lazy expire persist error propagates from get", func(t *testing.T) {
+		repo := newMockRepo()
+		seeded := seedMockSession(t, repo, 1, StatusActive)
+		seeded.StartedAt = time.Now().Add(-2 * time.Hour)
+		repo.saveErr = boom
+		svc := NewAssistService(repo, Options{SessionTTL: time.Hour})
+		if _, err := svc.GetSession(ctx, 1); err == nil || err.Error() != "governance boom" {
+			t.Fatalf("want raw save error, got %v", err)
+		}
+	})
 }

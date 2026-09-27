@@ -5,6 +5,7 @@ import (
 	"errors"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	"testing"
+	"time"
 
 	assistapp "servify/apps/server/internal/modules/assist/application"
 )
@@ -94,8 +95,30 @@ func (m *adapterRepo) CreateAnnotation(_ context.Context, annotation *assistdoma
 	return nil
 }
 
-func (m *adapterRepo) DeleteAnnotation(_ context.Context, id uint) error {
-	if _, ok := m.annotations[id]; !ok {
+func (m *adapterRepo) CountActiveSessionsByAgent(_ context.Context, agentUserID uint) (int64, error) {
+	var n int64
+	for _, s := range m.sessions {
+		if s.AgentUserID == agentUserID && s.Status == assistapp.StatusActive {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *adapterRepo) ExpireStaleActiveSessions(_ context.Context, cutoff time.Time) (int64, error) {
+	var expired int64
+	for _, s := range m.sessions {
+		if s.Status == assistapp.StatusActive && s.StartedAt.Before(cutoff) {
+			s.Status = assistapp.StatusFailed
+			expired++
+		}
+	}
+	return expired, nil
+}
+
+func (m *adapterRepo) DeleteAnnotation(_ context.Context, id uint, ownerID uint, restricted bool) error {
+	annotation, ok := m.annotations[id]
+	if !ok || (restricted && annotation.CreatedBy != ownerID) {
 		return errors.New("record not found")
 	}
 	delete(m.annotations, id)
@@ -129,12 +152,12 @@ func TestHandlerServiceAdapterDelegates(t *testing.T) {
 		t.Fatalf("RespondConsent() opposite answer error = %v, want ErrAssistConsentDecided", err)
 	}
 
-	// EndSession
-	ended, err := adapter.EndSession(ctx, started.ID, EndCommand{RecordingKey: "uploads/rec.webm"})
+	// EndSession（归属：发起坐席 agent=9）
+	ended, err := adapter.EndSession(ctx, started.ID, Actor{UserID: 9}, EndCommand{RecordingKey: "uploads/rec.webm"})
 	if err != nil || ended.Status != assistapp.StatusEnded {
 		t.Fatalf("EndSession() = %+v, %v", ended, err)
 	}
-	if _, err := adapter.EndSession(ctx, started.ID, EndCommand{}); !errors.Is(err, ErrAssistAlreadyEnded) {
+	if _, err := adapter.EndSession(ctx, started.ID, Actor{UserID: 9}, EndCommand{}); !errors.Is(err, ErrAssistAlreadyEnded) {
 		t.Fatalf("EndSession() again error = %v, want ErrAssistAlreadyEnded", err)
 	}
 
@@ -179,11 +202,14 @@ func TestHandlerServiceAdapterDelegates(t *testing.T) {
 		t.Fatalf("ListAnnotations() = %+v, %v", annotations, err)
 	}
 
-	// DeleteAnnotation
-	if err := adapter.DeleteAnnotation(ctx, annotation.ID); err != nil {
+	// DeleteAnnotation（归属：CreatedBy=9 的作者本人）
+	if err := adapter.DeleteAnnotation(ctx, annotation.ID, Actor{UserID: 9}); err != nil {
 		t.Fatalf("DeleteAnnotation() error = %v", err)
 	}
-	if err := adapter.DeleteAnnotation(ctx, 0); !errors.Is(err, ErrAssistNotFound) {
+	if after, err := adapter.ListAnnotations(ctx, started.ID); err != nil || len(after) != 0 {
+		t.Fatalf("annotations after delete = %+v, %v", after, err)
+	}
+	if err := adapter.DeleteAnnotation(ctx, 0, Actor{UserID: 9}); !errors.Is(err, ErrAssistNotFound) {
 		t.Fatalf("DeleteAnnotation(0) error = %v, want ErrAssistNotFound", err)
 	}
 }

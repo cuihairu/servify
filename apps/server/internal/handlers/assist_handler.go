@@ -21,15 +21,15 @@ func NewAssistHandler(service assistdelivery.HandlerService) *AssistHandler {
 }
 
 // StartAssistRequest 发起协助请求体。租户/工作区不再接受客户端自报，
-// 一律取鉴权主体的 token scope（RA-1）。
+// 一律取鉴权主体的 token scope（RA-1）；发起坐席同样取认证 claims 的
+// user_id（请求体自报坐席是冒名 vectors，已移除）。
 type StartAssistRequest struct {
 	ConversationSessionID string `json:"conversation_session_id" binding:"required" example:"sess-123"`
-	AgentUserID           uint   `json:"agent_user_id" example:"7"`
 }
 
 // StartSession 发起远程协助
 // @Summary 发起远程协助会话
-// @Description 在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃）；信令与媒体面走既有 WS/RTC 通道
+// @Description 在指定会话上创建 active 状态的协助记录（consent pending、同会话单活跃、坐席取认证主体）；信令与媒体面走既有 WS/RTC 通道
 // @Tags 远程协助
 // @Accept json
 // @Produce json
@@ -48,7 +48,7 @@ func (h *AssistHandler) StartSession(c *gin.Context) {
 	}
 	session, err := h.service.StartSession(c.Request.Context(), assistdelivery.StartCommand{
 		ConversationSessionID: req.ConversationSessionID,
-		AgentUserID:           req.AgentUserID,
+		AgentUserID:           principalUserID(c),
 	})
 	if err != nil {
 		c.JSON(assistErrorStatus(err), ErrorResponse{Error: "Failed to start remote assist", Message: err.Error()})
@@ -91,7 +91,7 @@ func (h *AssistHandler) EndSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
 		return
 	}
-	session, err := h.service.EndSession(c.Request.Context(), uint(id64), assistdelivery.EndCommand{
+	session, err := h.service.EndSession(c.Request.Context(), uint(id64), assistActor(c), assistdelivery.EndCommand{
 		Outcome:             req.Outcome,
 		RecordingKey:        req.RecordingKey,
 		RecordingMime:       req.RecordingMime,
@@ -238,11 +238,24 @@ func (h *AssistHandler) DeleteAnnotation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid annotation id", Message: err.Error()})
 		return
 	}
-	if err := h.service.DeleteAnnotation(c.Request.Context(), uint(id64)); err != nil {
+	if err := h.service.DeleteAnnotation(c.Request.Context(), uint(id64), assistActor(c)); err != nil {
 		c.JSON(assistErrorStatus(err), ErrorResponse{Error: "Failed to delete annotation", Message: err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, SuccessResponse{Message: "deleted"})
+}
+
+// assistActor 从认证中间件注入的 claims 构造操作主体：UserID 用于归属
+// 校验（结束会话/删标注），IsAdmin 取 principal_kind=admin（admin 在
+// scope 内不受归属限制）。
+func assistActor(c *gin.Context) assistdelivery.Actor {
+	isAdmin := false
+	if kind, ok := c.Get("principal_kind"); ok {
+		if s, isStr := kind.(string); isStr {
+			isAdmin = s == "admin"
+		}
+	}
+	return assistdelivery.Actor{UserID: principalUserID(c), IsAdmin: isAdmin}
 }
 
 // assistErrorStatus 把 assist 服务错误映射到 HTTP 状态码。
@@ -259,6 +272,7 @@ func assistErrorStatus(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, assistdelivery.ErrAssistAlreadyEnded),
 		errors.Is(err, assistdelivery.ErrAssistSessionActive),
+		errors.Is(err, assistdelivery.ErrAssistAgentSessionLimit),
 		errors.Is(err, assistdelivery.ErrAssistConsentDeclined),
 		errors.Is(err, assistdelivery.ErrAssistConsentDecided):
 		return http.StatusConflict

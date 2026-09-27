@@ -22,6 +22,7 @@ var (
 	ErrAssistSessionActive      = errors.New("remote assist session already active for this conversation")
 	ErrAssistConsentDeclined    = errors.New("remote assist consent declined by customer")
 	ErrAssistConsentDecided     = errors.New("remote assist consent already decided")
+	ErrAssistAgentSessionLimit  = errors.New("remote assist active session limit reached for this agent")
 )
 
 // 可选标注形状（Canvas 覆盖层）。
@@ -77,24 +78,63 @@ type RecordingMeta struct {
 	Size       int64
 }
 
+// Actor 操作主体（管理面写操作的归属校验依据）：UserID 来自认证
+// claims（不由请求体自报），IsAdmin 取 principal_kind=admin。
+type Actor struct {
+	UserID  uint
+	IsAdmin bool
+}
+
+// Options 会话治理参数（企业级 R1）：零值 = 保持既有行为（不限时、
+// 不限并发）。装配层从 config.remote_assist 接线。
+type Options struct {
+	// SessionTTL 是 active 会话的最长存活时长；超时视为异常终止
+	// （status=failed）而非继续占用单活跃名额。0 = 不限。
+	SessionTTL time.Duration
+	// MaxActivePerAgent 是单坐席同时持有的 active 协助上限；0 = 不限。
+	MaxActivePerAgent int
+}
+
 // Service 远程协助会话/录制/标注的应用层入口。
 type Service struct {
 	repo Repository
 	now  func() time.Time
+	opts Options
 }
 
-func NewAssistService(repo Repository) *Service {
-	return &Service{repo: repo, now: time.Now}
+// NewAssistService 构造应用服务；Options 可省略（零值 = 治理参数关闭）。
+func NewAssistService(repo Repository, opts ...Options) *Service {
+	o := Options{}
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	return &Service{repo: repo, now: time.Now, opts: o}
 }
 
 // StartSession 发起一次远程协助（状态 active、consent pending）。
-// 同一客服会话同时只允许一个 active 协助（RA-2 单活跃约束）。
+// 同一客服会话同时只允许一个 active 协助（RA-2 单活跃约束）；配置了
+// SessionTTL 时先懒清扫过期会话再判定，配置了 MaxActivePerAgent 时
+// 校验坐席并发上限。
 func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*assistdomain.RemoteAssistSession, error) {
 	if strings.TrimSpace(cmd.ConversationSessionID) == "" {
 		return nil, ErrAssistSessionRequired
 	}
 	if _, err := s.repo.GetConversationSessionOwner(ctx, cmd.ConversationSessionID); err != nil {
 		return nil, ErrAssistNotFound
+	}
+	if s.opts.SessionTTL > 0 {
+		if _, err := s.repo.ExpireStaleActiveSessions(ctx, s.now().Add(-s.opts.SessionTTL)); err != nil {
+			return nil, err
+		}
+	}
+	if s.opts.MaxActivePerAgent > 0 {
+		active, err := s.repo.CountActiveSessionsByAgent(ctx, cmd.AgentUserID)
+		if err != nil {
+			return nil, err
+		}
+		if active >= int64(s.opts.MaxActivePerAgent) {
+			return nil, ErrAssistAgentSessionLimit
+		}
 	}
 	if activeID, err := s.repo.FindActiveSessionIDByConversation(ctx, cmd.ConversationSessionID); err != nil {
 		return nil, err
@@ -116,11 +156,16 @@ func (s *Service) StartSession(ctx context.Context, cmd StartCommand) (*assistdo
 	return session, nil
 }
 
-// EndSession 结束协助并（可选）落录制元数据。
-func (s *Service) EndSession(ctx context.Context, id uint, cmd EndCommand) (*assistdomain.RemoteAssistSession, error) {
+// EndSession 结束协助并（可选）落录制元数据。归属校验：非 admin 只能
+// 结束自己发起的协助（admin 在 scope 内可结束任意协助；跨 scope 命中
+// 与不存在同返 not found，见仓储层）。
+func (s *Service) EndSession(ctx context.Context, id uint, actor Actor, cmd EndCommand) (*assistdomain.RemoteAssistSession, error) {
 	session, err := s.repo.GetSession(ctx, id)
 	if err != nil {
 		return nil, ErrAssistNotFound
+	}
+	if !actor.IsAdmin && session.AgentUserID != actor.UserID {
+		return nil, ErrAssistForbidden
 	}
 	if session.Status != StatusActive {
 		return nil, ErrAssistAlreadyEnded
@@ -144,12 +189,25 @@ func (s *Service) EndSession(ctx context.Context, id uint, cmd EndCommand) (*ass
 	return session, nil
 }
 
-// GetSession 查询单次协助。
+// GetSession 查询单次协助。配置了 SessionTTL 时对查到的 active 会话做
+// 单行懒过期（超时视为异常终止，如实反映生命周期）。
 func (s *Service) GetSession(ctx context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
 	if id == 0 {
 		return nil, ErrAssistNotFound
 	}
-	return s.repo.GetSession(ctx, id)
+	session, err := s.repo.GetSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if s.opts.SessionTTL > 0 && session.Status == StatusActive && s.expired(session) {
+		now := s.now()
+		session.Status = StatusFailed
+		session.EndedAt = &now
+		if err := s.repo.SaveSession(ctx, session); err != nil {
+			return nil, err
+		}
+	}
+	return session, nil
 }
 
 // ListSessions 按会话（可选）列出协助记录，默认上限 100。
@@ -251,12 +309,19 @@ func (s *Service) ListAnnotations(ctx context.Context, assistSessionID uint) ([]
 	return s.repo.ListAnnotations(ctx, assistSessionID)
 }
 
-// DeleteAnnotation 删除单条标注。
-func (s *Service) DeleteAnnotation(ctx context.Context, id uint) error {
+// DeleteAnnotation 删除单条标注。归属校验：非 admin 只能删除自己
+// 创建的标注（仓储层按 created_by 过滤，命中为零与不存在同返 not
+// found，不回显存在性）。
+func (s *Service) DeleteAnnotation(ctx context.Context, id uint, actor Actor) error {
 	if id == 0 {
 		return ErrAssistNotFound
 	}
-	return s.repo.DeleteAnnotation(ctx, id)
+	return s.repo.DeleteAnnotation(ctx, id, actor.UserID, !actor.IsAdmin)
+}
+
+// expired 判断 active 会话是否已超 TTL。
+func (s *Service) expired(session *assistdomain.RemoteAssistSession) bool {
+	return s.opts.SessionTTL > 0 && session.StartedAt.Before(s.now().Add(-s.opts.SessionTTL))
 }
 
 func applyRecording(session *assistdomain.RemoteAssistSession, meta RecordingMeta) {

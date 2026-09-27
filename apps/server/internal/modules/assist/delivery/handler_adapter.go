@@ -20,8 +20,8 @@ func (a *HandlerServiceAdapter) StartSession(ctx context.Context, cmd StartComma
 	return a.service.StartSession(ctx, cmd)
 }
 
-func (a *HandlerServiceAdapter) EndSession(ctx context.Context, id uint, cmd EndCommand) (*assistdomain.RemoteAssistSession, error) {
-	return a.service.EndSession(ctx, id, cmd)
+func (a *HandlerServiceAdapter) EndSession(ctx context.Context, id uint, actor Actor, cmd EndCommand) (*assistdomain.RemoteAssistSession, error) {
+	return a.service.EndSession(ctx, id, actor, cmd)
 }
 
 func (a *HandlerServiceAdapter) GetSession(ctx context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
@@ -40,8 +40,8 @@ func (a *HandlerServiceAdapter) ListAnnotations(ctx context.Context, assistSessi
 	return a.service.ListAnnotations(ctx, assistSessionID)
 }
 
-func (a *HandlerServiceAdapter) DeleteAnnotation(ctx context.Context, id uint) error {
-	return a.service.DeleteAnnotation(ctx, id)
+func (a *HandlerServiceAdapter) DeleteAnnotation(ctx context.Context, id uint, actor Actor) error {
+	return a.service.DeleteAnnotation(ctx, id, actor)
 }
 
 func (a *HandlerServiceAdapter) AttachRecording(ctx context.Context, id uint, customerUserID uint, meta RecordingMeta) (*assistdomain.RemoteAssistSession, error) {

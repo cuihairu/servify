@@ -351,6 +351,19 @@ type SecurityConfig struct {
 	// 默认关闭以保持既有部署行为不变；开启后 /api/v1/ws 必须携带
 	// /api/v1/guest/session 签发的短期 token。
 	GuestToken GuestTokenConfig `yaml:"guest_token"`
+	// RemoteAssist 控制远程协助会话治理（R1 企业级会话治理）。
+	// 默认零值 = 治理关闭（保持既有部署行为）；生产环境模板显式收紧。
+	RemoteAssist RemoteAssistConfig `yaml:"remote_assist"`
+}
+
+// RemoteAssistConfig 是远程协助会话治理参数（会话 TTL 与坐席并发上限）。
+type RemoteAssistConfig struct {
+	// SessionTTL 是 active 协助会话的最长存活时长；超时的 active 会话在
+	// 读取/再发起时被懒清扫为 failed（不再占用同会话单活跃名额）。0 = 不限。
+	SessionTTL time.Duration `yaml:"session_ttl"`
+	// MaxActivePerAgent 是单坐席同时持有的 active 协助上限，超出再发起
+	// 返回 409。0 = 不限。
+	MaxActivePerAgent int `yaml:"max_active_per_agent"`
 }
 
 // GuestTokenConfig 是访客 token 校验开关与签发参数。

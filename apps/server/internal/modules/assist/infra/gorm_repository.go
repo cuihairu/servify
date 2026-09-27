@@ -3,6 +3,8 @@ package infra
 import (
 	"context"
 	"errors"
+	"time"
+
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 
 	"servify/apps/server/internal/models"
@@ -97,6 +99,24 @@ func (r *GormRepository) FindActiveSessionIDByConversation(ctx context.Context, 
 	return id, nil
 }
 
+// CountActiveSessionsByAgent 返回某坐席当前 active 协助数（并发上限守卫）。
+func (r *GormRepository) CountActiveSessionsByAgent(ctx context.Context, agentUserID uint) (int64, error) {
+	var count int64
+	err := applyScopeFilter(r.db.WithContext(ctx).Model(&assistdomain.RemoteAssistSession{}), ctx).
+		Where("agent_user_id = ? AND status = ?", agentUserID, assistapp.StatusActive).
+		Count(&count).Error
+	return count, err
+}
+
+// ExpireStaleActiveSessions 把 started_at 早于 cutoff 的 active 会话批量
+// 置为 failed 并落 ended_at（会话 TTL 懒清扫）；按 ctx scope 过滤。
+func (r *GormRepository) ExpireStaleActiveSessions(ctx context.Context, cutoff time.Time) (int64, error) {
+	result := applyScopeFilter(r.db.WithContext(ctx).Model(&assistdomain.RemoteAssistSession{}), ctx).
+		Where("status = ? AND started_at < ?", assistapp.StatusActive, cutoff).
+		Updates(map[string]interface{}{"status": assistapp.StatusFailed, "ended_at": cutoff})
+	return result.RowsAffected, result.Error
+}
+
 func (r *GormRepository) ListAnnotations(ctx context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	var annotations []assistdomain.RemoteAssistAnnotation
 	err := r.db.WithContext(ctx).
@@ -114,12 +134,16 @@ func (r *GormRepository) CreateAnnotation(ctx context.Context, annotation *assis
 	return r.db.WithContext(ctx).Create(annotation).Error
 }
 
-func (r *GormRepository) DeleteAnnotation(ctx context.Context, id uint) error {
-	// scope 守卫经 sessions 子查询：跨 scope 的标注与不存在同返 not found。
-	result := r.db.WithContext(ctx).
+func (r *GormRepository) DeleteAnnotation(ctx context.Context, id uint, ownerID uint, restricted bool) error {
+	// scope 守卫经 sessions 子查询：跨 scope 的标注与不存在同返 not found；
+	// restricted（非 admin）再按 created_by 过滤，只允许删自己的标注。
+	query := r.db.WithContext(ctx).
 		Where("id = ?", id).
-		Where("assist_session_id IN (?)", r.scopedSessions(ctx)).
-		Delete(&assistdomain.RemoteAssistAnnotation{})
+		Where("assist_session_id IN (?)", r.scopedSessions(ctx))
+	if restricted {
+		query = query.Where("created_by = ?", ownerID)
+	}
+	result := query.Delete(&assistdomain.RemoteAssistAnnotation{})
 	if result.Error != nil {
 		return result.Error
 	}

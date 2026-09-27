@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"servify/apps/server/internal/models"
 	assistapp "servify/apps/server/internal/modules/assist/application"
@@ -79,7 +80,7 @@ func TestAssistService_StartEndLifecycle(t *testing.T) {
 	}
 
 	// 录制元数据随 end 落库
-	ended, err := svc.EndSession(context.Background(), session.ID, assistapp.EndCommand{
+	ended, err := svc.EndSession(context.Background(), session.ID, assistapp.Actor{UserID: 9}, assistapp.EndCommand{
 		RecordingKey: "uploads/rec.webm", RecordingMime: "video/webm", RecordingDurationMs: 95000, RecordingSize: 4096,
 	})
 	if err != nil {
@@ -92,8 +93,8 @@ func TestAssistService_StartEndLifecycle(t *testing.T) {
 		t.Fatalf("recording meta not persisted: %+v", ended)
 	}
 
-	// 二次 end 冲突
-	if _, err := svc.EndSession(context.Background(), session.ID, assistapp.EndCommand{}); !errors.Is(err, assistapp.ErrAssistAlreadyEnded) {
+	// 二次 end 冲突（归属校验先于状态机，须带原坐席主体）
+	if _, err := svc.EndSession(context.Background(), session.ID, assistapp.Actor{UserID: 9}, assistapp.EndCommand{}); !errors.Is(err, assistapp.ErrAssistAlreadyEnded) {
 		t.Fatalf("EndSession() again error = %v, want assistapp.ErrAssistAlreadyEnded", err)
 	}
 }
@@ -172,10 +173,10 @@ func TestAssistService_Annotations(t *testing.T) {
 	}
 
 	// 删除后剩一条
-	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID); err != nil {
+	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID, assistapp.Actor{}); err != nil {
 		t.Fatalf("DeleteAnnotation() error = %v", err)
 	}
-	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
+	if err := svc.DeleteAnnotation(context.Background(), annotations[0].ID, assistapp.Actor{}); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
 		t.Fatalf("deleting missing annotation error = %v, want assistapp.ErrAssistAnnotationNotFound", err)
 	}
 	remaining, _ := svc.ListAnnotations(context.Background(), session.ID)
@@ -195,7 +196,7 @@ func TestAssistService_ListSessions(t *testing.T) {
 			t.Fatalf("StartSession() #%d error = %v", i, err)
 		}
 		if i < 2 {
-			if _, err := svc.EndSession(context.Background(), session.ID, assistapp.EndCommand{}); err != nil {
+			if _, err := svc.EndSession(context.Background(), session.ID, assistapp.Actor{}, assistapp.EndCommand{}); err != nil {
 				t.Fatalf("EndSession() #%d error = %v", i, err)
 			}
 		}
@@ -248,7 +249,7 @@ func TestAssistRepositoryScopeIsolation(t *testing.T) {
 	}
 
 	// EndSession：跨 scope 结束被拒
-	if _, err := svc.EndSession(tenantA, sessionB.ID, assistapp.EndCommand{}); !errors.Is(err, assistapp.ErrAssistNotFound) {
+	if _, err := svc.EndSession(tenantA, sessionB.ID, assistapp.Actor{}, assistapp.EndCommand{}); !errors.Is(err, assistapp.ErrAssistNotFound) {
 		t.Fatalf("cross-tenant EndSession error = %v, want assistapp.ErrAssistNotFound", err)
 	}
 
@@ -302,14 +303,14 @@ func TestAssistAnnotationScopeGuard(t *testing.T) {
 		t.Fatalf("cross-tenant ListAnnotations = %v (err %v), want empty", list, err)
 	}
 	// 跨租户删不掉（not found 语义）
-	if err := svc.DeleteAnnotation(tenantB, annotation.ID); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
+	if err := svc.DeleteAnnotation(tenantB, annotation.ID, assistapp.Actor{}); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
 		t.Fatalf("cross-tenant DeleteAnnotation error = %v, want assistapp.ErrAssistAnnotationNotFound", err)
 	}
 	// 本租户可见可删
 	if list, err := svc.ListAnnotations(tenantA, sessionA.ID); err != nil || len(list) != 1 {
 		t.Fatalf("same-tenant ListAnnotations = %v (err %v), want 1", list, err)
 	}
-	if err := svc.DeleteAnnotation(tenantA, annotation.ID); err != nil {
+	if err := svc.DeleteAnnotation(tenantA, annotation.ID, assistapp.Actor{}); err != nil {
 		t.Fatalf("same-tenant DeleteAnnotation() error = %v", err)
 	}
 }
@@ -359,5 +360,67 @@ func TestAssistService_ConsentLifecycle(t *testing.T) {
 	}
 	if _, err := svc.RespondConsent(ctx, declinedSession.ID, 6, false); err != nil {
 		t.Fatalf("idempotent decline error = %v", err)
+	}
+}
+
+// TestGormRepositorySessionGovernance R1 会话治理仓储面：坐席并发计数、
+// TTL 批量过期（ended_at 落 cutoff）、标注删除的 created_by 归属过滤
+// （restricted 下命中为零与不存在同返 not found）。
+func TestGormRepositorySessionGovernance(t *testing.T) {
+	db := newAssistUnitTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	seedAssistConversationSession(t, db, "sess-1", 5)
+	seedAssistConversationSession(t, db, "sess-2", 6)
+
+	stale := &assistdomain.RemoteAssistSession{ConversationSessionID: "sess-1", AgentUserID: 9, Status: assistapp.StatusActive}
+	if err := repo.CreateSession(ctx, stale); err != nil {
+		t.Fatalf("seed stale session: %v", err)
+	}
+	if err := db.Model(&assistdomain.RemoteAssistSession{}).Where("id = ?", stale.ID).
+		Update("started_at", time.Now().Add(-2*time.Hour)).Error; err != nil {
+		t.Fatalf("backdate stale session: %v", err)
+	}
+	// 仓储层不代填 StartedAt（服务层职责），裸建须显式给值防被 TTL 误扫。
+	fresh := &assistdomain.RemoteAssistSession{ConversationSessionID: "sess-2", AgentUserID: 9, Status: assistapp.StatusActive, StartedAt: time.Now()}
+	if err := repo.CreateSession(ctx, fresh); err != nil {
+		t.Fatalf("seed fresh session: %v", err)
+	}
+
+	if n, err := repo.CountActiveSessionsByAgent(ctx, 9); err != nil || n != 2 {
+		t.Fatalf("CountActiveSessionsByAgent(9) = %d, %v; want 2", n, err)
+	}
+	if n, err := repo.CountActiveSessionsByAgent(ctx, 8); err != nil || n != 0 {
+		t.Fatalf("CountActiveSessionsByAgent(8) = %d, %v; want 0", n, err)
+	}
+
+	cutoff := time.Now().Add(-time.Hour)
+	expired, err := repo.ExpireStaleActiveSessions(ctx, cutoff)
+	if err != nil || expired != 1 {
+		t.Fatalf("ExpireStaleActiveSessions() = %d, %v; want 1", expired, err)
+	}
+	var reloaded assistdomain.RemoteAssistSession
+	if err := db.First(&reloaded, stale.ID).Error; err != nil {
+		t.Fatalf("reload stale session: %v", err)
+	}
+	if reloaded.Status != assistapp.StatusFailed || reloaded.EndedAt == nil {
+		t.Fatalf("stale session not expired: %+v", reloaded)
+	}
+	if n, err := repo.CountActiveSessionsByAgent(ctx, 9); err != nil || n != 1 {
+		t.Fatalf("active count after sweep = %d, %v; want 1", n, err)
+	}
+
+	annotation := &assistdomain.RemoteAssistAnnotation{AssistSessionID: fresh.ID, Shape: "rect", Payload: "{}", CreatedBy: 3}
+	if err := repo.CreateAnnotation(ctx, annotation); err != nil {
+		t.Fatalf("CreateAnnotation() error = %v", err)
+	}
+	if err := repo.DeleteAnnotation(ctx, annotation.ID, 4, true); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
+		t.Fatalf("restricted delete by non-author = %v, want ErrAssistAnnotationNotFound", err)
+	}
+	if err := repo.DeleteAnnotation(ctx, annotation.ID, 3, true); err != nil {
+		t.Fatalf("restricted delete by author error = %v", err)
+	}
+	if err := repo.DeleteAnnotation(ctx, annotation.ID, 3, true); !errors.Is(err, assistapp.ErrAssistAnnotationNotFound) {
+		t.Fatalf("repeated delete = %v, want ErrAssistAnnotationNotFound", err)
 	}
 }

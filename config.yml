@@ -286,6 +286,12 @@ security:
     issuer: "Servify"
     # 登录挑战 JWT 有效期（首轮密码验证后到完成第二因子的窗口）
     challenge_ttl: 5m
+  # 远程协助会话治理（R1）。默认关闭保持既有行为；生产模板建议显式收紧。
+  # remote_assist:
+  #   # active 协助会话最长存活（超时懒清扫为 failed，释放同会话单活跃名额）
+  #   session_ttl: 4h
+  #   # 单坐席同时持有的 active 协助上限（超出再发起 409）
+  #   max_active_per_agent: 3
 
 upload:
   enabled: true

@@ -393,9 +393,13 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 
 	rt.CustomerHandlerService = customerdelivery.NewHandlerService(rt.DB)
 
-	// 远程协助：会话/录制/标注（媒体面走既有 WS+RTC，不在此装配）
+	// 远程协助：会话/录制/标注（媒体面走既有 WS+RTC，不在此装配）；
+	// 会话治理参数（TTL/坐席并发上限）从 config.security.remote_assist 接线。
 	rt.AssistHandlerService = assistdelivery.NewHandlerService(
-		assistapp.NewAssistService(assistinfra.NewGormRepository(rt.DB)))
+		assistapp.NewAssistService(assistinfra.NewGormRepository(rt.DB), assistapp.Options{
+			SessionTTL:        rt.Config.Security.RemoteAssist.SessionTTL,
+			MaxActivePerAgent: rt.Config.Security.RemoteAssist.MaxActivePerAgent,
+		}))
 
 	// agent：单一 module 实例贯穿 HTTP/组管理/routing 转接/workspace。
 	agentRepo := agentinfra.NewGormRepository(rt.DB)

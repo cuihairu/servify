@@ -57,7 +57,7 @@ func TestGormRepositoryQueryErrorBranches(t *testing.T) {
 	if _, err := repo.ListAnnotations(ctx, 1); err == nil {
 		t.Fatal("ListAnnotations() on dropped table should fail")
 	}
-	if err := repo.DeleteAnnotation(ctx, 1); err == nil {
+	if err := repo.DeleteAnnotation(ctx, 1, 0, false); err == nil {
 		t.Fatal("DeleteAnnotation() on dropped table should fail")
 	}
 }
