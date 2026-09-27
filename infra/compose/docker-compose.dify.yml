@@ -2,6 +2,8 @@
 # 注意：当前 compose 文件构建的是 ./dify-mock，用于本地协议回归与验收证据留档，
 # 不是"真实 Dify staging/production"部署模板。
 # 使用方法: docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.dify.yml up -d
+# 主机侧发布端口覆盖：本文件用 DIFY_PUBLISH_PORT；postgres/redis 由基础栈声明，
+# 用 POSTGRES_PUBLISH_PORT / REDIS_PUBLISH_PORT 一并覆盖（默认值不变）。
 
 services:
   # Dify mock 服务
@@ -10,7 +12,7 @@ services:
       context: ./dify-mock
     container_name: servify_dify
     ports:
-      - "5001:8001"  # Dify API 端口 (外部 5001 -> 内部 8001)
+      - "${DIFY_PUBLISH_PORT:-5001}:8001"  # Dify API 端口 (默认外部 5001 -> 内部 8001)
     environment:
       # Mock 配置
       - MOCK_MODE=true

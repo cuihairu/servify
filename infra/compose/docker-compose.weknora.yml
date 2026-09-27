@@ -10,8 +10,8 @@ services:
       context: ./weknora-mock
     container_name: servify_weknora
     ports:
-      - "9000:9000"  # WeKnora API 端口
-      - "9001:9001"  # WeKnora Web UI 端口
+      - "${WEKNORA_API_PUBLISH_PORT:-9000}:9000"  # WeKnora API 端口
+      - "${WEKNORA_WEB_PUBLISH_PORT:-9001}:9001"  # WeKnora Web UI 端口
     environment:
       # 数据库配置
       - DB_TYPE=postgresql
@@ -72,8 +72,9 @@ services:
         CREATE EXTENSION IF NOT EXISTS hstore;
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # 主机发布端口不在此重复声明：compose 合并会让 overlay 的 ports 追加到
+    # 基础栈的 5432 之后（同端口重复绑定），由 docker-compose.yml 统一用
+    # POSTGRES_PUBLISH_PORT 提供覆盖入口。
     networks:
       - servify-network
 
@@ -96,7 +97,7 @@ services:
     image: sentence-transformers/all-MiniLM-L6-v2
     container_name: servify_embedding
     ports:
-      - "8001:8001"
+      - "${EMBEDDING_PUBLISH_PORT:-8001}:8001"
     environment:
       - MODEL_NAME=BAAI/bge-large-zh-v1.5  # 中文优化模型
       - MAX_BATCH_SIZE=32
@@ -117,7 +118,7 @@ services:
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "${ELASTICSEARCH_PUBLISH_PORT:-9200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:

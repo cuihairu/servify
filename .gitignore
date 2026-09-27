@@ -73,6 +73,27 @@ scripts/test-results/**/*.txt
 !scripts/test-results/ragflow-acceptance/ragflow-dataset.json
 !scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl
 !scripts/test-results/ragflow-acceptance/server-log.txt
+# weknora 全栈 mock 验收证据入库：manifest 走全局白名单；此处收
+# summary + 健康/AI 状态与查询（含 disable 降级路径）+ provider 控制面
+# （disable/enable/熔断复位）+ 知识上传/同步 + ws/webrtc 状态。均为
+# 127.0.0.1 mock 栈响应体，脚本的服务 JWT 只在内存中，不落盘。
+!scripts/test-results/weknora-acceptance/summary.txt
+!scripts/test-results/weknora-acceptance/servify-health.json
+!scripts/test-results/weknora-acceptance/weknora-health.json
+!scripts/test-results/weknora-acceptance/ai-status.json
+!scripts/test-results/weknora-acceptance/ai-status-after-disable.json
+!scripts/test-results/weknora-acceptance/ai-status-after-enable.json
+!scripts/test-results/weknora-acceptance/ai-query.json
+!scripts/test-results/weknora-acceptance/ai-query-after-disable.json
+!scripts/test-results/weknora-acceptance/ai-metrics.json
+!scripts/test-results/weknora-acceptance/ai-metrics-after-fallback.json
+!scripts/test-results/weknora-acceptance/knowledge-provider-disable.json
+!scripts/test-results/weknora-acceptance/knowledge-provider-enable.json
+!scripts/test-results/weknora-acceptance/circuit-breaker-reset.json
+!scripts/test-results/weknora-acceptance/knowledge-upload.json
+!scripts/test-results/weknora-acceptance/knowledge-sync.json
+!scripts/test-results/weknora-acceptance/ws-stats.json
+!scripts/test-results/weknora-acceptance/webrtc-connections.json
 # perf 基线入库三件：manifest（check-acceptance-evidence 校验入口）、
 # results.json（P2-8 容量基线数据，docs/perf-baseline.md 引用）、summary.txt
 # （人读摘要）。其余原始证据（含 Authorization 头的 .headers 等）不入库。

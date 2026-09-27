@@ -8,8 +8,9 @@ services:
     volumes:
       - ./infra/observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
-      - "4317:4317"  # OTLP gRPC
-      - "4318:4318"  # OTLP HTTP
+      # 主机侧发布端口可覆盖（默认值不变，与历史行为一致）
+      - "${OTEL_OTLP_GRPC_PUBLISH_PORT:-4317}:4317"  # OTLP gRPC
+      - "${OTEL_OTLP_HTTP_PUBLISH_PORT:-4318}:4318"  # OTLP HTTP
     networks:
       - servify_network
 
@@ -19,7 +20,7 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "16686:16686"  # Jaeger UI
+      - "${JAEGER_UI_PUBLISH_PORT:-16686}:16686"  # Jaeger UI
     networks:
       - servify_network
 

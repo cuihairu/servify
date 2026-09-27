@@ -1,0 +1,18 @@
+# 构建上下文瘦身：以下内容不参与镜像构建（Dockerfile 只用源码 + go.mod/go.sum + go.work）。
+# 尤其 .cache（Go build cache）与 node_modules 体积达 GB 级，缺此文件时
+# `docker build` / `docker compose build` 会把它们整体打进上下文，本机几乎跑不动。
+.git
+.gitignore
+.cache
+.claude
+.github
+.dockerignore
+**/node_modules
+**/.venv
+apps/admin/dist
+bin
+coverage
+*.out
+*.test
+*.log
+scripts/test-results

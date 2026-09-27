@@ -1,10 +1,21 @@
+# 主机侧发布端口统一走 *_PUBLISH_PORT 环境变量覆盖，默认值与历史硬编码一致
+# （不改默认行为）：
+#   SERVIFY_PUBLISH_PORT=8080 / POSTGRES_PUBLISH_PORT=5432 / REDIS_PUBLISH_PORT=6379
+#   WEKNORA_API_PUBLISH_PORT=9000 / WEKNORA_WEB_PUBLISH_PORT=9001（weknora overlay）
+#   DIFY_PUBLISH_PORT=5001（dify overlay）
+# 用法示例（本机 :6379 已被其它服务占用时）：
+#   REDIS_PUBLISH_PORT=16379 docker-compose \
+#     -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml up -d
+# 容器间通信仍走服务名 + 容器内端口（如 redis:6379），不受这些变量影响。
 services:
   servify:
     build:
       context: ../..
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      # 主机侧发布端口可覆盖（默认值即历史行为，不改死）：本机 :8080 被占用时
+      # 用 SERVIFY_PUBLISH_PORT 换端口起栈，容器内端口不受影响。
+      - "${SERVIFY_PUBLISH_PORT:-8080}:8080"
     environment:
       # 数据库配置
       - DB_HOST=postgres
@@ -69,7 +80,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
     networks:
       - servify-network
     restart: unless-stopped
@@ -82,7 +93,9 @@ services:
   redis:
     image: redis:6-alpine
     ports:
-      - "6379:6379"
+      # 本机常见 redis（发行版 systemd 服务或他人容器）已占 :6379，
+      # 用 REDIS_PUBLISH_PORT 覆盖即可与他人服务并存。
+      - "${REDIS_PUBLISH_PORT:-6379}:6379"
     networks:
       - servify-network
     restart: unless-stopped
