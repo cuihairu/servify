@@ -1,0 +1,33 @@
+运营高价值链路人工运行验证第一轮 复跑留证（2026-09-27）
+=============================================================
+环境：redis=系统实例 PONG；postgres 本机仅余 postgresql-client-18（无服务端
+二进制），按口径回退 sqlite（DB_DRIVER=sqlite，服务启动 AutoMigrate）。
+服务：SERVIFY_JWT_SECRET=dev-secret go -C apps/server run ./cmd/server
+      --host 127.0.0.1 --port 18080（新空库 + scripts/seed-data.sh）。
+限流：全局 60rpm/burst10，全部请求以 sleep 3 步进（种子后 sleep 12 回填），
+不使用 X-API-Key 白名单键（该键令 AuthMiddleware 走 service-principal 分支
+短路 Bearer JWT 致 401——上一轮 429 后改用白名单的做法按当前代码已不可行）。
+端点演进：旧记录的 POST /api/security/users/:id/revoke-tokens 单用户口已演进
+为批量 POST /api/security/users/revoke-tokens {"user_ids":[..]}，本轮按现口复跑。
+
+逐项命令与断言（全部 PASS 才有本行；与 checklist 行记录的 18 端点一一对应）：
+ 01 POST /api/v1/auth/login (admin/admin123)                    -> 200 token 非空（证据掩码）
+ 02 POST /api/customers                                          -> 201（含 id）
+ 03 GET  /api/customers/:id                                      -> 200
+ 04 PUT  /api/customers/:id                                      -> 200（name 改写，触发 customers.update 审计）
+ 05 POST /api/customers/:id/notes {"note":..}                    -> 2xx
+ 06 PUT  /api/customers/:id/tags {"tags":[..]}                   -> 200
+ 07 GET  /api/customers/stats                                    -> 200
+ 08 GET  /api/agents                                             -> 200 且 >=3 条
+ 09 POST /api/agents/3/online                                    -> 200
+ 10 PUT  /api/agents/3/status {"status":"busy"}                  -> 200
+ 11 GET  /api/agents/online                                      -> 200 且 >=1 条
+ 12 GET  /api/agents/stats                                       -> 200
+ 13 GET  /api/security/users/3                                   -> 200
+ 14 POST /api/security/users/revoke-tokens {"user_ids":[3]}      -> 200
+ 15 GET  /api/security/users/3/sessions                          -> 200
+ 16 GET  /api/audit/logs?action=customers.create                 -> 200 且 >=1 条
+ 17 GET  /api/audit/logs/<customers.update 首条>                 -> 200
+ 18 GET  /api/audit/logs/<同条>/diff                             -> 200
+ 19 GET  /api/audit/logs/export?action=customers.create&limit=5  -> 200 CSV
+敏感信息：登录 token 仅保留前 12 位 + 掩码标记。

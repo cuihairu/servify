@@ -1,0 +1,52 @@
+{
+  "provider": "operations-round1",
+  "mode": "real",
+  "generated_at": "2026-09-27T15:08:50Z",
+  "environment": "127.0.0.1:18080 sqlite 回退（本机无 postgres 服务端二进制）；redis=系统实例；限流以 sleep 步进规避（不用 X-API-Key 白名单键）",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "customer_created": "true",
+    "customer_detail_ok": "true",
+    "customer_updated": "true",
+    "customer_note_added": "true",
+    "customer_tags_updated": "true",
+    "customer_stats_ok": "true",
+    "agents_list_ok": "true",
+    "agent_online_ok": "true",
+    "agent_status_updated": "true",
+    "agents_online_list_ok": "true",
+    "agents_stats_ok": "true",
+    "security_user_ok": "true",
+    "tokens_revoked": "true",
+    "user_sessions_ok": "true",
+    "audit_list_ok": "true",
+    "audit_detail_ok": "true",
+    "audit_diff_ok": "true",
+    "audit_export_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "customer-create.json",
+    "customer-detail.json",
+    "customer-update.json",
+    "customer-note.json",
+    "customer-tags.json",
+    "customer-stats.json",
+    "agents-list.json",
+    "agent-online.json",
+    "agent-status.json",
+    "agents-online.json",
+    "agents-stats.json",
+    "security-user.json",
+    "security-revoke-tokens.json",
+    "security-user-sessions.json",
+    "audit-list.json",
+    "audit-detail.json",
+    "audit-diff.json",
+    "audit-export.csv"
+  ]
+}

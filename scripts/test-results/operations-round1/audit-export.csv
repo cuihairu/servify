@@ -1,0 +1,3 @@
+id,created_at,action,resource_type,resource_id,principal_kind,actor_user_id,success,status_code,route,method,request_id,tenant_id,workspace_id,client_ip,user_agent,request_json,before_json,after_json
+32,2026-09-27T15:09:39Z,customers.create,customers,,admin,1,true,201,/api/customers,POST,,,,127.0.0.1,curl/8.18.0,"{""username"":""ops-round1"",""email"":""ops-round1@example.com"",""name"":""运营验收客户"",""phone"":""13800000001"",""company"":""Acme"",""industry"":""互联网"",""source"":""web"",""tags"":""ops"",""notes"":""复跑留证"",""priority"":""high""}",,
+
