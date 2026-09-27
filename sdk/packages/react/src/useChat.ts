@@ -122,9 +122,14 @@ export function useChat(): UseChatReturn {
     try {
       setError(null);
       await sdk.endSession();
+      // 与 vue composables 同语义全量复位（含 unreadCount/转人工状态），
+      // 避免旧会话未读数漂到新会话 UI 上。
       setSession(null);
       setMessages([]);
       setAgent(null);
+      setAgentAssigned(null);
+      setWaitingInQueue(null);
+      setUnreadCount(0);
     } catch (err) {
       setError(err as Error);
     }
@@ -187,6 +192,7 @@ export function useChat(): UseChatReturn {
       setAgent(null);
       setAgentAssigned(null);
       setWaitingInQueue(null);
+      setUnreadCount(0);
     };
 
     // 转人工通知：纯状态更新（对齐移动端 agentAssigned/waitingInQueue），不渲染消息行

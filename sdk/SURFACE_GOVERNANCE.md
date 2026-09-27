@@ -52,6 +52,13 @@ metrics fields (per-provider sub-counters alongside
 - every implemented surface package must have a `README.md`
 - every example must reference the same package name shown in the matching README
 - CI should run `npm -C sdk run test:governance` together with surface smoke tests
+- `npm -C sdk run test` is the single unit-test gate and chains every package
+  that ships tests: core / api-client / app-core / react / vue / vanilla /
+  react-native. Framework packages (`@servify/react`, `@servify/vue`) must keep
+  their surface covered by their own `src/__tests__` suites (mock SDK, zero
+  network), and each must also pass standalone via
+  `npm --workspace @servify/<pkg> run test` — the aggregated script must not
+  hide a package whose own `test` script regresses.
 
 ## Example Build Strategy
 
