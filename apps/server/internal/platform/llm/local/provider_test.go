@@ -355,6 +355,31 @@ func TestLongSentenceTruncated(t *testing.T) {
 	}
 }
 
+// TestStableRankKnowledgeTieBreak 直接核对 stableRank 同分比较器：知识区
+// 句（前缀位）与对话区句同分时知识句恒排前、分高者恒胜、空输入返回 nil。
+// Chat 层同分用例（TestChatKnowledgeConversationTie）会被对话区回声抑制
+// 削成单候选，走不到比较器分支，必须在此直测。
+func TestStableRankKnowledgeTieBreak(t *testing.T) {
+	querySet := tokenSet("退货流程")
+	know := "退货流程需要审核。" // 命中 退货/货流/流程 = 3
+	conv := "退货流程已提交。"  // 同样命中 3，同分
+	got := stableRank([]string{know, conv}, querySet, 1)
+	if len(got) != 2 || got[0] != know || got[1] != conv {
+		t.Fatalf("stableRank tie = %v, want knowledge sentence first", got)
+	}
+
+	// 分高者恒胜：低分知识句不越过高分对话句。
+	high := "退货流程已提交，请查看退货进度。" // 追加 退货 命中 = 4
+	got = stableRank([]string{know, high}, querySet, 1)
+	if len(got) != 2 || got[0] != high || got[1] != know {
+		t.Fatalf("stableRank scores = %v, want higher score first", got)
+	}
+
+	if stableRank(nil, querySet, 0) != nil {
+		t.Fatal("stableRank(nil) = non-nil, want nil")
+	}
+}
+
 // TestZeroProviderDefaults nil 接收者按 DefaultTopK 兜底。
 func TestZeroProviderDefaults(t *testing.T) {
 	var p *Provider
