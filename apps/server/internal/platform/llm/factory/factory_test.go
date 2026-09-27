@@ -8,11 +8,12 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/llm/anthropic"
+	localllm "servify/apps/server/internal/platform/llm/local"
 	"servify/apps/server/internal/platform/llm/openai"
 )
 
 // TestNewProviderSelection 全选型矩阵：空值/大小写归一到 openai，
-// anthropic 返回对应实现，未知选型报错（装配层据此启动失败）。
+// anthropic/local 返回对应实现，未知选型报错（装配层据此启动失败）。
 func TestNewProviderSelection(t *testing.T) {
 	cases := []struct {
 		provider string
@@ -24,6 +25,8 @@ func TestNewProviderSelection(t *testing.T) {
 		{provider: " OpenAI ", want: &openai.Provider{}},
 		{provider: "anthropic", want: &anthropic.Provider{}},
 		{provider: "Anthropic", want: &anthropic.Provider{}},
+		{provider: "local", want: &localllm.Provider{}},
+		{provider: " Local ", want: &localllm.Provider{}},
 		{provider: "vertex", wantErr: `unknown provider "vertex"`},
 	}
 	for _, tc := range cases {
@@ -46,6 +49,10 @@ func TestNewProviderSelection(t *testing.T) {
 		case *anthropic.Provider:
 			if _, ok := got.(*anthropic.Provider); !ok {
 				t.Fatalf("New(%q) = %T, want *anthropic.Provider", tc.provider, got)
+			}
+		case *localllm.Provider:
+			if _, ok := got.(*localllm.Provider); !ok {
+				t.Fatalf("New(%q) = %T, want *local.Provider", tc.provider, got)
 			}
 		}
 	}
@@ -79,6 +86,17 @@ func TestRuntimeParamsBranches(t *testing.T) {
 				},
 			},
 			wantModel: "m-anthropic", wantTemperature: 0.9, wantMaxTokens: 800, wantTimeoutMs: 12000,
+		},
+		{
+			name: "local family",
+			cfg: Config{
+				Provider: "local",
+				OpenAI: config.OpenAIConfig{
+					Model: "m-openai", Temperature: 0.2, MaxTokens: 500, Timeout: 5 * time.Second,
+				},
+			},
+			// local 不消费出站参数：模型名为抽取基线标识，其余零值。
+			wantModel: localllm.DefaultModel, wantTemperature: 0, wantMaxTokens: 0, wantTimeoutMs: 0,
 		},
 		{
 			name: "zero values pass through",

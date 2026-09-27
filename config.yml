@@ -66,9 +66,12 @@ voice:
     api_key: "${DEEPGRAM_API_KEY}"
 
 ai:
-  # provider: LLM 供应商选型（全局唯一决定）：openai（默认）| anthropic。
-  # model/temperature/max_tokens/timeout 按所选供应商的配置段生效；
-  # 租户/工作区作用域覆盖当前仅支持 openai 族，anthropic 仅全局配置。
+  # provider: LLM 供应商选型（全局唯一决定）：openai（默认）| anthropic | local。
+  # local 为零依赖抽取式问答基线（无出站请求、无 key 要求，回答逐字来自
+  # 检索上下文），建议 dev / 离线验收形态使用；生产语义问答仍用 openai/anthropic。
+  # model/temperature/max_tokens/timeout 按所选供应商的配置段生效
+  # （local 不消费这些字段）；租户/工作区作用域覆盖当前仅支持 openai 族，
+  # anthropic 仅全局配置。
   provider: "openai"
   openai:
     api_key: "${OPENAI_API_KEY}"

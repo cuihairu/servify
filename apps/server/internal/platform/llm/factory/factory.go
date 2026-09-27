@@ -13,6 +13,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/llm/anthropic"
+	localllm "servify/apps/server/internal/platform/llm/local"
 	"servify/apps/server/internal/platform/llm/openai"
 )
 
@@ -33,19 +34,29 @@ func New(cfg Config) (llm.LLMProvider, error) {
 		return openai.NewProvider(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL), nil
 	case "anthropic":
 		return anthropic.NewProvider(cfg.Anthropic.APIKey, cfg.Anthropic.BaseURL), nil
+	case "local":
+		// 零依赖抽取式问答器：无网络请求、无 key 要求，与 embedding/local、
+		// knowledge.provider=local 组成完全本地的离线链路。
+		return localllm.NewProvider(), nil
 	default:
-		return nil, fmt.Errorf("llm factory: unknown provider %q (want openai or anthropic)", kind)
+		return nil, fmt.Errorf("llm factory: unknown provider %q (want openai, anthropic or local)", kind)
 	}
 }
 
 // RuntimeParams 从同一份配置导出编排层模型参数：openai 取作用域解析
-// 结果，anthropic 取全局段。零值字段由 provider 侧默认兜底（空模型 →
-// provider 默认模型，0 温度/0 max_tokens/0 超时 → 不下发对应字段）。
+// 结果，anthropic 取全局段，local 无外部参数（模型名固定为抽取基线标识，
+// 温度/上限/超时零值——provider 侧不消费）。零值字段由 provider 侧默认
+// 兜底（空模型 → provider 默认模型，0 温度/0 max_tokens/0 超时 → 不下发
+// 对应字段）。
 func RuntimeParams(cfg Config) (Model string, Temperature float64, MaxTokens int, TimeoutMs int) {
-	if strings.EqualFold(strings.TrimSpace(cfg.Provider), "anthropic") {
+	switch strings.ToLower(strings.TrimSpace(cfg.Provider)) {
+	case "anthropic":
 		return cfg.Anthropic.Model, cfg.Anthropic.Temperature, cfg.Anthropic.MaxTokens,
 			int(cfg.Anthropic.Timeout / time.Millisecond)
+	case "local":
+		return localllm.DefaultModel, 0, 0, 0
+	default:
+		return cfg.OpenAI.Model, cfg.OpenAI.Temperature, cfg.OpenAI.MaxTokens,
+			int(cfg.OpenAI.Timeout / time.Millisecond)
 	}
-	return cfg.OpenAI.Model, cfg.OpenAI.Temperature, cfg.OpenAI.MaxTokens,
-		int(cfg.OpenAI.Timeout / time.Millisecond)
 }

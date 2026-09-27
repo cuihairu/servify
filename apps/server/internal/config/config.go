@@ -768,11 +768,13 @@ func InsecureDefaults(cfg *Config) []string {
 
 	// ai.provider 是全局 LLM 出站选型，非法值在装配层（llm factory）必然启动
 	// 失败；这里前置到配置层再拦一次，让 production/staging 在加载期就拿到
-	// 明确的报错而不是等到装配期。
+	// 明确的报错而不是等到装配期。local 为零依赖抽取基线（无出站请求），
+	// 仅建议 dev/离线验收形态使用，production/staging 走 InsecureDefaults
+	// 的同类前置告警。
 	switch aiProvider := strings.ToLower(strings.TrimSpace(cfg.AI.Provider)); aiProvider {
-	case "", "openai", "anthropic":
+	case "", "openai", "anthropic", "local":
 	default:
-		warnings = append(warnings, fmt.Sprintf("ai.provider must be 'openai' or 'anthropic' (got %q)", aiProvider))
+		warnings = append(warnings, fmt.Sprintf("ai.provider must be 'openai', 'anthropic' or 'local' (got %q)", aiProvider))
 	}
 
 	// 置信门开着就必须给 (0,1] 的阈值：0 或负值会让所有首答都建议转人工，

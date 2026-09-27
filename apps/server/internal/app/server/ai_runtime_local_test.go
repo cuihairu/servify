@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/config"
+	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	localllm "servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/llm/openai"
@@ -143,5 +145,74 @@ func TestIsGlobalKnowledgeProvider(t *testing.T) {
 		if isGlobalKnowledgeProvider(p) {
 			t.Fatalf("isGlobalKnowledgeProvider(%q) = true, want false", p)
 		}
+	}
+}
+
+// TestLocalKnowledgeQAEndToEnd 全本地真实链路：knowledge.provider=local +
+// embedding.provider=local + ai.provider=local——真实摄入（分块+嵌入落库）、
+// 真实检索（进程内余弦+校准门）、真实抽取式回答（逐字来自上下文）、
+// sources 回填与 strategy 标识，全程零外部依赖零网络。
+func TestLocalKnowledgeQAEndToEnd(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&models.KnowledgeDoc{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	cfg := config.GetDefaultConfig()
+	cfg.Knowledge.Provider = "local"
+	cfg.Embedding.Provider = "local"
+	cfg.AI.Provider = "local"
+
+	asm, err := BuildAIAssembly(cfg, logrus.New(), AIAssemblyOptions{DB: db})
+	if err != nil {
+		t.Fatalf("BuildAIAssembly() error = %v", err)
+	}
+	enhanced, ok := asm.RuntimeService.(aidelivery.EnhancedRuntimeService)
+	if !ok {
+		t.Fatalf("RuntimeService %T does not implement EnhancedRuntimeService", asm.RuntimeService)
+	}
+
+	ctx := context.Background()
+	// 状态面：provider 标识与健康。
+	status := enhanced.GetStatus(ctx)
+	if status["knowledge_provider"] != "local" || status["knowledge_provider_enabled"] != true {
+		t.Fatalf("status = %v, want local provider enabled", status)
+	}
+	if status["knowledge_provider_healthy"] != true {
+		t.Fatalf("status healthy = %v, want true", status["knowledge_provider_healthy"])
+	}
+
+	// 摄入：管理面上传（真实分块+嵌入写入 knowledge_docs）。
+	if err := enhanced.UploadKnowledgeDocument(ctx, "退货政策",
+		"本平台支持七天无理由退货，退款将在三到五个工作日内原路退回。", nil); err != nil {
+		t.Fatalf("UploadKnowledgeDocument: %v", err)
+	}
+
+	// 检索+问答：查询与文档强词面重叠，越过校准门；回答抽取自知识原文。
+	// sessionID 置空（单轮约定）：retriever 把 ConversationID 透传为
+	// SearchRequest.KnowledgeID，自建驱动（pgvector/local 同构）按
+	// workspace_id 过滤——非空会话 id 会把全局摄入的文档滤没，这是与
+	// pgvector 一致的既有语义（见 todo 会话语义缺口附注）。
+	resp, err := enhanced.ProcessQueryEnhanced(ctx, "退款将在几个工作日内原路退回", "")
+	if err != nil {
+		t.Fatalf("ProcessQueryEnhanced: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("response nil")
+	}
+	if !strings.Contains(resp.Content, "五个工作日内原路退回") {
+		t.Fatalf("content = %q, want extractive answer from knowledge", resp.Content)
+	}
+	if resp.Strategy != "local" {
+		t.Fatalf("strategy = %q, want local (knowledge-backed)", resp.Strategy)
+	}
+	if len(resp.Sources) == 0 {
+		t.Fatal("sources empty, want knowledge hits")
+	}
+	if resp.Confidence <= 0 {
+		t.Fatalf("confidence = %v, want > 0 with sources", resp.Confidence)
 	}
 }

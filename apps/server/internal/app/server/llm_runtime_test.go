@@ -7,6 +7,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/llm/anthropic"
+	localllm "servify/apps/server/internal/platform/llm/local"
 	"servify/apps/server/internal/platform/llm/openai"
 )
 
@@ -43,6 +44,22 @@ func TestResolveLLMRuntimeProviderSelection(t *testing.T) {
 		if params.Model != config.DefaultAnthropicModel || params.Temperature != 0.7 ||
 			params.MaxTokens != 1000 || params.TimeoutMs != 30000 {
 			t.Fatalf("params = %+v, want anthropic defaults", params)
+		}
+	})
+
+	t.Run("local uses zero-dependency extractive baseline", func(t *testing.T) {
+		cfg := config.GetDefaultConfig()
+		cfg.AI.Provider = "local"
+		provider, params, err := resolveLLMRuntime(cfg, nil)
+		if err != nil {
+			t.Fatalf("resolveLLMRuntime() error = %v", err)
+		}
+		if _, ok := provider.(*localllm.Provider); !ok {
+			t.Fatalf("provider = %T, want *local.Provider", provider)
+		}
+		if params.Model != localllm.DefaultModel || params.Temperature != 0 ||
+			params.MaxTokens != 0 || params.TimeoutMs != 0 {
+			t.Fatalf("params = %+v, want local zero-cost defaults", params)
 		}
 	})
 
