@@ -101,7 +101,7 @@ func main() {
 		results[i].Scale = *scale
 	}
 
-	encoded, err := json.MarshalIndent(results, "", "  ")
+	encoded, err := marshalResults(results)
 	if err != nil {
 		fatal("marshal results: %v", err)
 	}
@@ -138,6 +138,37 @@ func runAll(base, token string, profile loadProfile, scenario string) []Result {
 	}
 	return results
 }
+
+// marshalResults 是 main 的输出编码 seam：默认 json.MarshalIndent，测试可换
+// 错误实现以驱动 fatal 分支（MarshalIndent 对纯数据 Result 永不失败，属防御面）。
+var marshalResults = func(results []Result) ([]byte, error) {
+	return json.MarshalIndent(results, "", "  ")
+}
+
+// cryptoRead 是 WS 握手 key 的随机源 seam：默认 math/rand.Read（不返回
+// 错误），测试换失败实现以覆盖防御分支。
+var cryptoRead = rand.Read
+
+// buildUploadBody 是 multipart 上传体构造 seam：换失败实现以覆盖 uploadFile
+// 的防御分支（bytes.Buffer 实际不会写失败）。
+var buildUploadBody = func(w io.Writer, name, payload string) (string, error) {
+	mw := multipart.NewWriter(w)
+	part, err := mw.CreateFormFile("file", name)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write([]byte(payload)); err != nil {
+		return "", err
+	}
+	if err := mw.Close(); err != nil {
+		return "", err
+	}
+	return mw.FormDataContentType(), nil
+}
+
+// tcpDial 是 WS 握手的拨号 seam：换已关闭的连接以确定性驱动 request 写失败
+// 分支（真实网络下"拨通即写失败"只在 RST 微秒窗口内出现，不可稳定复现）。
+var tcpDial = net.DialTimeout
 
 // ---- HTTP 负载器 ----
 
@@ -399,23 +430,16 @@ func runUploadKnowledge(base, token string, profile loadProfile) Result {
 func uploadFile(client *http.Client, url, token string) error {
 	// KB 级小文件直接内存构造 multipart，避免流式 body 的半途关闭语义。
 	buf := &bytes.Buffer{}
-	mw := multipart.NewWriter(buf)
 	name := fmt.Sprintf("perf-upload-%d.txt", time.Now().UnixNano())
-	part, err := mw.CreateFormFile("file", name)
+	contentType, err := buildUploadBody(buf, name, strings.Repeat("servify perf upload payload.\n", 200))
 	if err != nil {
-		return err
-	}
-	if _, err := part.Write([]byte(strings.Repeat("servify perf upload payload.\n", 200))); err != nil {
-		return err
-	}
-	if err := mw.Close(); err != nil {
 		return err
 	}
 	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -455,7 +479,7 @@ func runWSConnections(base, token string, profile loadProfile) Result {
 				defer wg.Done()
 				sessionID := fmt.Sprintf("perf-ws-%d-%d", time.Now().UnixNano(), n)
 				t0 := time.Now()
-				conn, err := dialWS(wsURL + "?session_id=" + sessionID)
+				conn, err := dialWSFn(wsURL + "?session_id=" + sessionID)
 				if err != nil {
 					batchMu.Lock()
 					if firstDialErr == "" {
@@ -576,6 +600,10 @@ type wsConn struct {
 	rand *rand.Rand
 }
 
+// dialWSFn 是阶梯建连用的拨号 seam（默认 dialWS）：测试注入预置的连接以
+// 确定性驱动写/读失败 continue 分支。
+var dialWSFn = dialWS
+
 func dialWS(rawURL string) (*wsConn, error) {
 	// ws://host:port/path
 	rest := strings.TrimPrefix(rawURL, "ws://")
@@ -585,13 +613,13 @@ func dialWS(rawURL string) (*wsConn, error) {
 	} else {
 		hostPort, path = rest, "/"
 	}
-	conn, err := net.DialTimeout("tcp", hostPort, 15*time.Second)
+	conn, err := tcpDial("tcp", hostPort, 15*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	// RFC 6455/gorilla 要求 Sec-WebSocket-Key 解码后恰好 16 字节。
 	var keyBytes [16]byte
-	if _, err := rand.Read(keyBytes[:]); err != nil {
+	if _, err := cryptoRead(keyBytes[:]); err != nil {
 		conn.Close()
 		return nil, err
 	}
@@ -748,11 +776,18 @@ func genLoadTestConfig(srcPath, dstPath, mockURL string) error {
 	knowledge := mapGetOrCreate(doc, "knowledge")
 	mapSet(knowledge, "provider", "", "!!str")
 
-	encoded, err := yaml.Marshal(&root)
+	encoded, err := marshalYAML(&root)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
 	return os.WriteFile(dstPath, encoded, 0o644)
+}
+
+// marshalYAML 是配置序列化 seam：解析所得 Node 树经 mapSet/mapSetNode 改写后
+// 实际不可构造 Marshal 失败（文本可达的循环锚点在解码时即被解环），测试换
+// 失败实现以覆盖防御分支。
+var marshalYAML = func(root *yaml.Node) ([]byte, error) {
+	return yaml.Marshal(root)
 }
 
 func mapGet(parent *yaml.Node, key string) *yaml.Node {
