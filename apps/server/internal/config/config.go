@@ -526,6 +526,13 @@ type EmbeddingConfig struct {
 	OpenAI     OpenAIEmbedConfig     `yaml:"openai" json:"openai,omitempty"`
 	TEI        TEIEmbedConfig        `yaml:"tei" json:"tei,omitempty"`
 	Xinference XinferenceEmbedConfig `yaml:"xinference" json:"xinference,omitempty"`
+	Local      LocalEmbedConfig      `yaml:"local" json:"local,omitempty"`
+}
+
+// LocalEmbedConfig 是零依赖本地嵌入器配置（embedding.provider=local）。
+// 无网络请求；Dimension 非正时取嵌入器默认 256。
+type LocalEmbedConfig struct {
+	Dimension int `yaml:"dimension" json:"dimension,omitempty"`
 }
 
 // OpenAIEmbedConfig 是 OpenAI Embedding 配置
@@ -549,8 +556,17 @@ type XinferenceEmbedConfig struct {
 
 // KnowledgeConfig 是知识库配置
 type KnowledgeConfig struct {
-	Provider string         `yaml:"provider" json:"provider,omitempty"`
-	Pgvector PgvectorConfig `yaml:"pgvector" json:"pgvector,omitempty"`
+	Provider string               `yaml:"provider" json:"provider,omitempty"`
+	Pgvector PgvectorConfig       `yaml:"pgvector" json:"pgvector,omitempty"`
+	Local    LocalKnowledgeConfig `yaml:"local" json:"local,omitempty"`
+}
+
+// LocalKnowledgeConfig 是本地自含知识引擎配置（knowledge.provider=local）：
+// 真实分块 → 本地嵌入 → knowledge_docs 表 → 进程内余弦检索，不依赖
+// pgvector 扩展，sqlite/postgres 双轨可用。结构与 pgvector 同形便于迁移。
+type LocalKnowledgeConfig struct {
+	Search   SearchConfig   `yaml:"search" json:"search,omitempty"`
+	Indexing IndexingConfig `yaml:"indexing" json:"indexing,omitempty"`
 }
 
 // PgvectorConfig 是 pgvector 知识库配置
@@ -1235,10 +1251,15 @@ func GetDefaultConfig() *Config {
 				BaseURL: "https://api.openai.com/v1",
 				Model:   "text-embedding-3-small",
 			},
+			Local: LocalEmbedConfig{
+				Dimension: 256,
+			},
 		},
 		Knowledge: KnowledgeConfig{
 			// 默认不启用任何自建知识源；pgvector 需在配置文件显式声明
 			// provider: "pgvector"（需要 pg+pgvector 扩展与 embedding 服务）。
+			// provider: "local" 为零外部依赖形态（本地嵌入器 + 进程内余弦），
+			// sqlite 部署形态也可用。
 			Provider: "",
 			Pgvector: PgvectorConfig{
 				Search: SearchConfig{
@@ -1249,6 +1270,17 @@ func GetDefaultConfig() *Config {
 				Indexing: IndexingConfig{
 					ChunkSize:    1000,
 					ChunkOverlap: 200,
+				},
+			},
+			Local: LocalKnowledgeConfig{
+				Search: SearchConfig{
+					TopK:      5,
+					Threshold: 0.7,
+					Strategy:  "semantic",
+				},
+				Indexing: IndexingConfig{
+					ChunkSize:    500,
+					ChunkOverlap: 50,
 				},
 			},
 		},

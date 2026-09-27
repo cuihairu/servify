@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
@@ -100,9 +99,9 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	if s == nil {
 		return nil
 	}
-	// knowledge.provider=pgvector 是全局配置，请求级重建不认识它；与
-	// BuildAIAssembly 的优先级一致——pgvector 声明时用启动装配的全局实例。
-	if s.cfg != nil && strings.TrimSpace(s.cfg.Knowledge.Provider) == "pgvector" && s.fallback != nil {
+	// knowledge.provider=pgvector/local 是全局配置，请求级重建不认识它；与
+	// BuildAIAssembly 的优先级一致——声明时用启动装配的全局实例。
+	if s.cfg != nil && isGlobalKnowledgeProvider(s.cfg.Knowledge.Provider) && s.fallback != nil {
 		return s.fallback
 	}
 	if s.resolver == nil {

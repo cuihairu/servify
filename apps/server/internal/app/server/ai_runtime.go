@@ -12,6 +12,7 @@ import (
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
+	localkp "servify/apps/server/internal/platform/knowledgeprovider/local"
 	pgvectorkp "servify/apps/server/internal/platform/knowledgeprovider/pgvector"
 	"servify/apps/server/internal/platform/llm"
 
@@ -89,6 +90,11 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	// 复用主库连接与迁移已建的 knowledge_docs(vector(1536)) 表。
 	if strings.TrimSpace(cfg.Knowledge.Provider) == "pgvector" {
 		return buildPgvectorAssembly(baseAI, llmProvider, runtimeParams, cfg, logger, opts, assembly)
+	}
+	// local 自含知识引擎：knowledge.provider=local 时同样优先于外部 provider，
+	// 零外部依赖（本地嵌入器 + 进程内余弦），sqlite 部署形态也可用。
+	if strings.TrimSpace(cfg.Knowledge.Provider) == "local" {
+		return buildLocalAssembly(baseAI, llmProvider, runtimeParams, cfg, logger, opts, assembly)
 	}
 
 	source, err := selectKnowledgeSource(ragFlowConfig, difyConfig, weKnoraConfig, knowledgeSourceOptions{
@@ -173,9 +179,66 @@ func buildPgvectorAssembly(
 	return fallback, nil
 }
 
+// buildLocalAssembly 装配本地自含知识引擎驱动；语义与 pgvector 分支一致：
+// 健康检查失败时按 requireKnowledgeProviderHealthy 决定启动失败或降级为
+// 无知识源运行。嵌入器建议配 embedding.provider=local（零依赖形态），
+// 也可指向 tei/xinference 等真实向量服务（维度需与历史分块一致）。
+func buildLocalAssembly(
+	baseAI *aidelivery.AIService,
+	llmProvider llm.LLMProvider,
+	runtimeParams aidelivery.AIRuntimeParams,
+	cfg *config.Config,
+	logger *logrus.Logger,
+	opts AIAssemblyOptions,
+	fallback *AIAssembly,
+) (*AIAssembly, error) {
+	if opts.DB == nil {
+		if opts.requireKnowledgeProviderHealthy() {
+			return nil, fmt.Errorf("knowledge.provider=local requires a database connection")
+		}
+		logger.Warnf("knowledge.provider=local set but no database handle available; continuing without it")
+		return fallback, nil
+	}
+	emb, err := BuildEmbeddingProviderFromConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("build embedding provider for local: %w", err)
+	}
+	if emb == nil {
+		if opts.requireKnowledgeProviderHealthy() {
+			return nil, fmt.Errorf("knowledge.provider=local requires embedding.provider to be configured")
+		}
+		logger.Warnf("knowledge.provider=local set but embedding.provider is not configured; continuing without it")
+		return fallback, nil
+	}
+	driver := localkp.NewProvider(opts.DB, emb, localkp.Config{
+		Search: localkp.SearchConfig{
+			TopK:      cfg.Knowledge.Local.Search.TopK,
+			Threshold: cfg.Knowledge.Local.Search.Threshold,
+			Strategy:  cfg.Knowledge.Local.Search.Strategy,
+		},
+		Indexing: localkp.IndexingConfig{
+			ChunkSize:    cfg.Knowledge.Local.Indexing.ChunkSize,
+			ChunkOverlap: cfg.Knowledge.Local.Indexing.ChunkOverlap,
+		},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutForHealthCheck(opts))
+	defer cancel()
+	if err := driver.HealthCheck(ctx); err != nil {
+		if opts.requireKnowledgeProviderHealthy() {
+			return nil, fmt.Errorf("local knowledge engine health check failed: %w", err)
+		}
+		logger.Warnf("local knowledge engine health check failed: %v", err)
+		return fallback, nil
+	}
+	source := knowledgeSource{driver: driver, id: localkp.ProviderID}
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
+	fallback.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
+	return fallback, nil
+}
+
 // BuildEmbeddingProviderFromConfig 按配置构造 embedding provider。bootstrap 的
 // BuildEmbeddingProvider 薄委托到这里：app/server 不能反向 import bootstrap，
-// 而 pgvector 分支（同包）需要同一份 cfg→factory 的转换逻辑。
+// 而 pgvector/local 分支（同包）需要同一份 cfg→factory 的转换逻辑。
 func BuildEmbeddingProviderFromConfig(cfg *config.Config) (embedding.Provider, error) {
 	if cfg == nil {
 		return nil, nil
@@ -199,11 +262,26 @@ func BuildEmbeddingProviderFromConfig(cfg *config.Config) (embedding.Provider, e
 			BaseURL:  cfg.Embedding.Xinference.BaseURL,
 			ModelUID: cfg.Embedding.Xinference.ModelUID,
 		},
+		Local: embedding.LocalProviderConfig{
+			Dimension: cfg.Embedding.Local.Dimension,
+		},
 	})
 	if err != nil && provider == "openai" && strings.TrimSpace(cfg.Embedding.OpenAI.APIKey) == "" {
 		return nil, nil
 	}
 	return embeddingProvider, err
+}
+
+// isGlobalKnowledgeProvider 判断 knowledge.provider 是否为「启动期装配的
+// 全局自建知识源」（pgvector / local）：二者都复用主库连接与启动实例，
+// 请求级重建不认识它们，scoped 服务必须直接复用全局装配结果。
+func isGlobalKnowledgeProvider(provider string) bool {
+	switch strings.TrimSpace(provider) {
+	case "pgvector", "local":
+		return true
+	default:
+		return false
+	}
 }
 
 func timeoutForHealthCheck(opts AIAssemblyOptions) time.Duration {

@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"servify/apps/server/internal/config"
@@ -108,10 +107,10 @@ func (s *scopedAIHandlerService) buildService(ctx context.Context) aidelivery.Ru
 	if s == nil {
 		return nil
 	}
-	// knowledge.provider=pgvector 是全局配置（自建知识库，复用主库连接），
-	// 请求级重建不认识它；与 BuildAIAssembly 的优先级一致——pgvector 声明时
+	// knowledge.provider=pgvector/local 是全局配置（自建知识库，复用主库
+	// 连接），请求级重建不认识它；与 BuildAIAssembly 的优先级一致——声明时
 	// 直接使用启动装配好的全局实例。
-	if s.cfg != nil && strings.TrimSpace(s.cfg.Knowledge.Provider) == "pgvector" && s.startup != nil {
+	if s.cfg != nil && isGlobalKnowledgeProvider(s.cfg.Knowledge.Provider) && s.startup != nil {
 		return s.applyRuntimeOverrides(s.startup)
 	}
 	if s.resolver == nil {

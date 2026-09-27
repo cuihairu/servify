@@ -3,6 +3,7 @@ package embedding
 import (
 	"fmt"
 
+	"servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/embedding/openai"
 	"servify/apps/server/internal/platform/embedding/tei"
 	"servify/apps/server/internal/platform/embedding/xinference"
@@ -14,6 +15,12 @@ type FactoryConfig struct {
 	OpenAI     OpenAIProviderConfig     `yaml:"openai" json:"openai"`
 	TEI        TEIProviderConfig        `yaml:"tei" json:"tei"`
 	Xinference XinferenceProviderConfig `yaml:"xinference" json:"xinference"`
+	Local      LocalProviderConfig      `yaml:"local" json:"local"`
+}
+
+// LocalProviderConfig holds configuration for the zero-dependency local provider
+type LocalProviderConfig struct {
+	Dimension int `yaml:"dimension" json:"dimension,omitempty"`
 }
 
 // OpenAIProviderConfig holds configuration for OpenAI embedding provider
@@ -66,6 +73,9 @@ func NewProvider(cfg FactoryConfig) (Provider, error) {
 			BaseURL:  cfg.Xinference.BaseURL,
 			ModelUID: cfg.Xinference.ModelUID,
 		}), nil
+	case "local":
+		// 零依赖确定性嵌入器：无网络请求，dimension<=0 时取包默认 256。
+		return local.NewProvider(local.Config{Dim: cfg.Local.Dimension}), nil
 	default:
 		return nil, fmt.Errorf("unknown embedding provider: %s", cfg.Provider)
 	}
