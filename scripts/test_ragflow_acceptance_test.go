@@ -60,6 +60,11 @@ func TestRagflowScriptWritesEvidence(t *testing.T) {
 		"knowledge-upload.json",
 		"knowledge-upload-repeat.json",
 		"knowledge-sync.json",
+		"knowledge-docs-create.json",
+		"knowledge-docs-get.json",
+		"knowledge-docs-update.json",
+		"knowledge-docs-delete.json",
+		"knowledge-docs-get-after-delete.json",
 		"ragflow-mock-requests.jsonl",
 		"server-log.txt",
 	} {
@@ -84,6 +89,15 @@ func TestRagflowScriptWritesEvidence(t *testing.T) {
 		"knowledge_upload_ok=true",
 		"upload_dedup_ok=true",
 		"knowledge_sync_ok=true",
+		"knowledge_docs_create_ok=true",
+		"knowledge_docs_get_ok=true",
+		"knowledge_docs_update_ok=true",
+		"knowledge_docs_delete_ok=true",
+		"knowledge_docs_external_upsert_trace_ok=true",
+		"knowledge_docs_reindex_trace_ok=true",
+		"knowledge_docs_external_delete_trace_ok=true",
+		"knowledge_docs_crud_ok=true",
+		"knowledge_docs_get_after_delete_http=404",
 		"overall_status=passed",
 	} {
 		if !strings.Contains(summaryText, want) {
@@ -101,6 +115,8 @@ func TestRagflowScriptWritesEvidence(t *testing.T) {
 		`"mode": "mock"`,
 		`"retrieval_hit": "true"`,
 		`"knowledge_upload_dedup_ok": "true"`,
+		`"knowledge_docs_crud_ok": "true"`,
+		`"knowledge_docs_external_upsert_trace_ok": "true"`,
 	} {
 		if !strings.Contains(manifestText, want) {
 			t.Fatalf("expected %q in manifest, got %s", want, manifestText)

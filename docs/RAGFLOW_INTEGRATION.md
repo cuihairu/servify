@@ -96,7 +96,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/v1/ai/status
 make ragflow-acceptance
 ```
 
-脚本全自含：构建真实 servify 二进制 → 内嵌 python3 RAGFlow mock（有状态、请求留痕）→ sqlite 自起服务（ragflow 指向 mock）→ 未认证 401 负例 → `/api/v1/ai/status` 断言 `provider=ragflow` → 检索命中 → 上传×2（第二跳验证删旧建新）→ sync → mock 留痕断言。证据落 `scripts/test-results/ragflow-acceptance/`（manifest 入库）。
+脚本全自含：构建真实 servify 二进制 → 内嵌 python3 RAGFlow mock（有状态、请求留痕）→ sqlite 自起服务（ragflow 指向 mock）→ 未认证 401 负例 → `/api/v1/ai/status` 断言 `provider=ragflow` → 检索命中 → 上传×2（第二跳验证删旧建新）→ sync → `/api/knowledge-docs` 管理面 CRUD 闭环（创建带 `external_id`、更新删旧建新、删除按外部 id 清理且回读 404，均以 mock 留痕断言）→ mock 留痕断言。证据落 `scripts/test-results/ragflow-acceptance/`（manifest 与关键响应/留痕入库；含验收 JWT 的 admin-auth.json 不入库）。
 
 ### real 模式（需真实 RAGFlow 环境）
 

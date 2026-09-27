@@ -118,14 +118,18 @@ func knowledgeDocFromDomain(doc *knowledgedomain.Document) (*knowledgedomain.Kno
 		return nil, fmt.Errorf("invalid document id: %w", err)
 	}
 	return &knowledgedomain.KnowledgeDoc{
-		ID:        uint(id),
-		Title:     doc.Title,
-		Content:   doc.Content,
-		Category:  doc.Category,
-		Tags:      joinTagsCSV(doc.Tags),
-		IsPublic:  doc.IsPublic,
-		CreatedAt: doc.CreatedAt,
-		UpdatedAt: doc.UpdatedAt,
+		ID:       uint(id),
+		Title:    doc.Title,
+		Content:  doc.Content,
+		Category: doc.Category,
+		Tags:     joinTagsCSV(doc.Tags),
+		IsPublic: doc.IsPublic,
+		// 外部映射透传：KnowledgeProviderID/ExternalID 决定「创建/更新已同步
+		// 外部索引、删除按外部 id 清理」能否被调用方直接观测（验收证据依赖）。
+		ProviderID: doc.ProviderID,
+		ExternalID: doc.ExternalID,
+		CreatedAt:  doc.CreatedAt,
+		UpdatedAt:  doc.UpdatedAt,
 	}, nil
 }
 

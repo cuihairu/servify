@@ -3,8 +3,10 @@
 # RAGFlow knowledge provider 验收脚本
 # mock 模式（默认）全自含：构建 bin/servify → 内嵌 python3 RAGFlow mock →
 # 以 sqlite + 临时 config 起真实服务 → 断言选择链选中 ragflow 且检索/上传/
-# 查重删除/解析触发链路全部在 mock 留下证据。real 模式对齐 dify 惯例：拒绝
-# 私网 RAGFlow 地址，要求外部 SERVIFY_URL / RAGFLOW_URL。
+# 查重删除/解析触发链路全部在 mock 留下证据；并覆盖 /api/knowledge-docs
+# 管理面 CRUD（创建/更新自动外部 upsert、删旧建新、删除以外部 id 清理）。
+# real 模式对齐 dify 惯例：拒绝私网 RAGFlow 地址，要求外部
+# SERVIFY_URL / RAGFLOW_URL。
 #
 # 环境变量：
 #   RAGFLOW_ACCEPTANCE_MODE=mock|real（默认 mock）
@@ -42,12 +44,21 @@ RETRIEVAL_HIT=false
 UPLOAD_OK=false
 UPLOAD_DEDUP_OK=false
 SYNC_OK=false
+KNOWLEDGE_DOCS_CREATE_OK=false
+KNOWLEDGE_DOCS_GET_OK=false
+KNOWLEDGE_DOCS_UPDATE_OK=false
+KNOWLEDGE_DOCS_DELETE_OK=false
+KNOWLEDGE_DOCS_UPSERT_TRACE_OK=false
+KNOWLEDGE_DOCS_REINDEX_TRACE_OK=false
+KNOWLEDGE_DOCS_DELETE_TRACE_OK=false
+KNOWLEDGE_DOCS_CRUD_OK=false
 OVERALL_STATUS=failed
 
 SERVER_PID=""
 MOCK_PID=""
 WORK_DIR=""
 DB_DSN=""
+RAGFLOW_MOCK_LOG=""
 
 cleanup() {
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -160,6 +171,14 @@ write_manifest() {
   MANIFEST_UPLOAD_OK="${UPLOAD_OK:-false}" \
   MANIFEST_UPLOAD_DEDUP_OK="${UPLOAD_DEDUP_OK:-false}" \
   MANIFEST_SYNC_OK="${SYNC_OK:-false}" \
+  MANIFEST_KDOC_CREATE_OK="${KNOWLEDGE_DOCS_CREATE_OK:-false}" \
+  MANIFEST_KDOC_GET_OK="${KNOWLEDGE_DOCS_GET_OK:-false}" \
+  MANIFEST_KDOC_UPDATE_OK="${KNOWLEDGE_DOCS_UPDATE_OK:-false}" \
+  MANIFEST_KDOC_DELETE_OK="${KNOWLEDGE_DOCS_DELETE_OK:-false}" \
+  MANIFEST_KDOC_UPSERT_TRACE_OK="${KNOWLEDGE_DOCS_UPSERT_TRACE_OK:-false}" \
+  MANIFEST_KDOC_REINDEX_TRACE_OK="${KNOWLEDGE_DOCS_REINDEX_TRACE_OK:-false}" \
+  MANIFEST_KDOC_DELETE_TRACE_OK="${KNOWLEDGE_DOCS_DELETE_TRACE_OK:-false}" \
+  MANIFEST_KDOC_CRUD_OK="${KNOWLEDGE_DOCS_CRUD_OK:-false}" \
   python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
 import json
 import os
@@ -186,6 +205,14 @@ payload = {
         "knowledge_upload_ok": os.environ.get("MANIFEST_UPLOAD_OK", "false"),
         "knowledge_upload_dedup_ok": os.environ.get("MANIFEST_UPLOAD_DEDUP_OK", "false"),
         "knowledge_sync_ok": os.environ.get("MANIFEST_SYNC_OK", "false"),
+        "knowledge_docs_create_ok": os.environ.get("MANIFEST_KDOC_CREATE_OK", "false"),
+        "knowledge_docs_get_ok": os.environ.get("MANIFEST_KDOC_GET_OK", "false"),
+        "knowledge_docs_update_ok": os.environ.get("MANIFEST_KDOC_UPDATE_OK", "false"),
+        "knowledge_docs_delete_ok": os.environ.get("MANIFEST_KDOC_DELETE_OK", "false"),
+        "knowledge_docs_external_upsert_trace_ok": os.environ.get("MANIFEST_KDOC_UPSERT_TRACE_OK", "false"),
+        "knowledge_docs_reindex_trace_ok": os.environ.get("MANIFEST_KDOC_REINDEX_TRACE_OK", "false"),
+        "knowledge_docs_external_delete_trace_ok": os.environ.get("MANIFEST_KDOC_DELETE_TRACE_OK", "false"),
+        "knowledge_docs_crud_ok": os.environ.get("MANIFEST_KDOC_CRUD_OK", "false"),
     },
     "evidence_files": sorted(
         name for name in os.listdir(evidence_dir)
@@ -529,7 +556,109 @@ else
   append_summary "knowledge_sync_ok=false"
 fi
 
-# 11) mock 请求留痕断言：retrieval / upload / chunks / 删旧建新
+# 11) /api/knowledge-docs 管理面 CRUD：创建/更新自动外部 upsert（删旧建新）、
+#     删除按外部 id 清理并本地移除（回读 404）。HTTP 面断言 real 模式同样执行，
+#     mock 请求留痕断言仅 mock 模式可得。
+append_summary "step=knowledge_docs_crud"
+KDOC_TITLE="KB Docs CRUD Document"
+KDOC_CREATE_BODY=$(printf '{"title":"%s","content":"Initial content for knowledge-docs CRUD acceptance.","category":"acceptance","tags":["kbdocs","acceptance"],"is_public":true}' "$KDOC_TITLE")
+request_json "POST" "$SERVIFY_URL/api/knowledge-docs" "$KDOC_CREATE_BODY" "$ADMIN_TOKEN"
+save_response "knowledge-docs-create" "$RESPONSE_BODY"
+append_summary "knowledge_docs_create_http=$RESPONSE_STATUS"
+KDOC_ID=""
+KDOC_EXTERNAL_ID=""
+if [ "$RESPONSE_STATUS" = "201" ]; then
+  KDOC_ID=$(json_field "$RESPONSE_BODY" "str(d.get('id',''))")
+  KDOC_EXTERNAL_ID=$(json_field "$RESPONSE_BODY" "d.get('external_id','')")
+  if [ -n "$KDOC_ID" ] && [ -n "$KDOC_EXTERNAL_ID" ]; then
+    KNOWLEDGE_DOCS_CREATE_OK=true
+  fi
+fi
+append_summary "knowledge_docs_id=${KDOC_ID:-none}"
+append_summary "knowledge_docs_external_id=${KDOC_EXTERNAL_ID:-none}"
+
+if [ "$KNOWLEDGE_DOCS_CREATE_OK" = "true" ]; then
+  request_json "GET" "$SERVIFY_URL/api/knowledge-docs/$KDOC_ID" "" "$ADMIN_TOKEN"
+  save_response "knowledge-docs-get" "$RESPONSE_BODY"
+  append_summary "knowledge_docs_get_http=$RESPONSE_STATUS"
+  KDOC_GET_TITLE=$(json_field "$RESPONSE_BODY" "d.get('title','')")
+  if [ "$RESPONSE_STATUS" = "200" ] && [ "$KDOC_GET_TITLE" = "$KDOC_TITLE" ]; then
+    KNOWLEDGE_DOCS_GET_OK=true
+  fi
+fi
+
+KDOC_EXTERNAL_ID_OLD="$KDOC_EXTERNAL_ID"
+if [ "$KNOWLEDGE_DOCS_CREATE_OK" = "true" ]; then
+  request_json "PUT" "$SERVIFY_URL/api/knowledge-docs/$KDOC_ID" '{"content":"Updated content v2 for knowledge-docs CRUD acceptance."}' "$ADMIN_TOKEN"
+  save_response "knowledge-docs-update" "$RESPONSE_BODY"
+  append_summary "knowledge_docs_update_http=$RESPONSE_STATUS"
+  KDOC_UPDATED_CONTENT=$(json_field "$RESPONSE_BODY" "d.get('content','')")
+  KDOC_EXTERNAL_ID=$(json_field "$RESPONSE_BODY" "d.get('external_id','')")
+  if [ "$RESPONSE_STATUS" = "200" ] && printf '%s' "$KDOC_UPDATED_CONTENT" | grep -q "Updated content v2"; then
+    KNOWLEDGE_DOCS_UPDATE_OK=true
+  fi
+fi
+append_summary "knowledge_docs_external_id_after_update=${KDOC_EXTERNAL_ID:-none}"
+
+if [ "$KNOWLEDGE_DOCS_UPDATE_OK" = "true" ]; then
+  request_json "DELETE" "$SERVIFY_URL/api/knowledge-docs/$KDOC_ID" "" "$ADMIN_TOKEN"
+  save_response "knowledge-docs-delete" "$RESPONSE_BODY"
+  append_summary "knowledge_docs_delete_http=$RESPONSE_STATUS"
+  if [ "$RESPONSE_STATUS" = "200" ]; then
+    KNOWLEDGE_DOCS_DELETE_OK=true
+  fi
+  request_json "GET" "$SERVIFY_URL/api/knowledge-docs/$KDOC_ID" "" "$ADMIN_TOKEN"
+  save_response "knowledge-docs-get-after-delete" "$RESPONSE_BODY"
+  append_summary "knowledge_docs_get_after_delete_http=$RESPONSE_STATUS"
+  if [ "$RESPONSE_STATUS" != "404" ]; then
+    KNOWLEDGE_DOCS_DELETE_OK=false
+    append_summary "knowledge_docs_local_residual_after_delete=true"
+  fi
+fi
+
+if [ "$RAGFLOW_ACCEPTANCE_MODE" = "mock" ] && [ -n "$RAGFLOW_MOCK_LOG" ] && [ -f "$RAGFLOW_MOCK_LOG" ]; then
+  # 创建的外部 upsert 留痕：documents POST 携带 <标题>.txt 文件名
+  if grep '"method": "POST"' "$RAGFLOW_MOCK_LOG" \
+    | grep -F "/api/v1/datasets/$RAGFLOW_DATASET_ID/documents" | grep -qF "${KDOC_TITLE}.txt"; then
+    KNOWLEDGE_DOCS_UPSERT_TRACE_OK=true
+  fi
+  # 更新的删旧建新留痕：旧外部 id 出现在 DELETE 留痕
+  if [ -n "$KDOC_EXTERNAL_ID_OLD" ] \
+    && grep '"method": "DELETE"' "$RAGFLOW_MOCK_LOG" | grep -qF "\"$KDOC_EXTERNAL_ID_OLD\""; then
+    KNOWLEDGE_DOCS_REINDEX_TRACE_OK=true
+  fi
+  # 删除的外部清理留痕：末次外部 id 出现在 DELETE 留痕
+  if [ -n "$KDOC_EXTERNAL_ID" ] \
+    && grep '"method": "DELETE"' "$RAGFLOW_MOCK_LOG" | grep -qF "\"$KDOC_EXTERNAL_ID\""; then
+    KNOWLEDGE_DOCS_DELETE_TRACE_OK=true
+  fi
+fi
+
+append_summary "knowledge_docs_create_ok=$KNOWLEDGE_DOCS_CREATE_OK"
+append_summary "knowledge_docs_get_ok=$KNOWLEDGE_DOCS_GET_OK"
+append_summary "knowledge_docs_update_ok=$KNOWLEDGE_DOCS_UPDATE_OK"
+append_summary "knowledge_docs_delete_ok=$KNOWLEDGE_DOCS_DELETE_OK"
+append_summary "knowledge_docs_external_upsert_trace_ok=$KNOWLEDGE_DOCS_UPSERT_TRACE_OK"
+append_summary "knowledge_docs_reindex_trace_ok=$KNOWLEDGE_DOCS_REINDEX_TRACE_OK"
+append_summary "knowledge_docs_external_delete_trace_ok=$KNOWLEDGE_DOCS_DELETE_TRACE_OK"
+
+KNOWLEDGE_DOCS_HTTP_OK=false
+if [ "$KNOWLEDGE_DOCS_CREATE_OK" = "true" ] && [ "$KNOWLEDGE_DOCS_GET_OK" = "true" ] \
+  && [ "$KNOWLEDGE_DOCS_UPDATE_OK" = "true" ] && [ "$KNOWLEDGE_DOCS_DELETE_OK" = "true" ]; then
+  KNOWLEDGE_DOCS_HTTP_OK=true
+fi
+if [ "$KNOWLEDGE_DOCS_HTTP_OK" = "true" ] && {
+    [ "$RAGFLOW_ACCEPTANCE_MODE" != "mock" ] \
+    || { [ "$KNOWLEDGE_DOCS_UPSERT_TRACE_OK" = "true" ] \
+      && [ "$KNOWLEDGE_DOCS_REINDEX_TRACE_OK" = "true" ] \
+      && [ "$KNOWLEDGE_DOCS_DELETE_TRACE_OK" = "true" ]; }
+  }; then
+  KNOWLEDGE_DOCS_CRUD_OK=true
+fi
+append_summary "knowledge_docs_http_ok=$KNOWLEDGE_DOCS_HTTP_OK"
+append_summary "knowledge_docs_crud_ok=$KNOWLEDGE_DOCS_CRUD_OK"
+
+# 12) mock 请求留痕断言：retrieval / upload / chunks / 删旧建新
 append_summary "step=mock_evidence"
 if [ -f "$RAGFLOW_MOCK_LOG" ]; then
   cp "$RAGFLOW_MOCK_LOG" "$EVIDENCE_DIR/ragflow-mock-requests.jsonl"
@@ -556,6 +685,10 @@ if [ "$RAGFLOW_ACCEPTANCE_MODE" = "mock" ]; then
   fi
   if [ "$UPLOAD_OK" != "true" ] || [ "$SYNC_OK" != "true" ] || [ "$MOCK_CALLS_OK" != "true" ]; then
     echo "❌ mock 留痕不完整（upload/sync/chunks 未全部命中）" >&2
+    exit 1
+  fi
+  if [ "$KNOWLEDGE_DOCS_CRUD_OK" != "true" ]; then
+    echo "❌ /api/knowledge-docs CRUD 未闭环（http 或外部 upsert/删旧建新/清理留痕缺失）" >&2
     exit 1
   fi
 fi

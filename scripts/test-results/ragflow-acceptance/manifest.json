@@ -16,7 +16,15 @@
     "retrieval_hit": "true",
     "knowledge_upload_ok": "true",
     "knowledge_upload_dedup_ok": "true",
-    "knowledge_sync_ok": "true"
+    "knowledge_sync_ok": "true",
+    "knowledge_docs_create_ok": "true",
+    "knowledge_docs_get_ok": "true",
+    "knowledge_docs_update_ok": "true",
+    "knowledge_docs_delete_ok": "true",
+    "knowledge_docs_external_upsert_trace_ok": "true",
+    "knowledge_docs_reindex_trace_ok": "true",
+    "knowledge_docs_external_delete_trace_ok": "true",
+    "knowledge_docs_crud_ok": "true"
   },
   "evidence_files": [
     "admin-auth.json",
@@ -24,6 +32,11 @@
     "ai-status-unauthorized.json",
     "ai-status.json",
     "build-output.txt",
+    "knowledge-docs-create.json",
+    "knowledge-docs-delete.json",
+    "knowledge-docs-get-after-delete.json",
+    "knowledge-docs-get.json",
+    "knowledge-docs-update.json",
     "knowledge-sync.json",
     "knowledge-upload-repeat.json",
     "knowledge-upload.json",

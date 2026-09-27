@@ -54,6 +54,25 @@ scripts/test-results/**/*.txt
 # JWT/webhook secret，均为 127.0.0.1 + dev 密钥产物，作验收存档公开）
 !scripts/test-results/auth-session-acceptance/**
 !scripts/test-results/voice-pstn-acceptance/**
+# ragflow 验收关键证据入库：manifest + summary + upload/sync/knowledge-docs
+# CRUD 响应 + ai 状态/检索响应 + provider 协议留痕（jsonl）+ 服务启动日志。
+# admin-auth.json 含验收 JWT，与 mock.log/mock-server.log（jsonl 已为副本）
+# 一并排除。
+!scripts/test-results/ragflow-acceptance/summary.txt
+!scripts/test-results/ragflow-acceptance/knowledge-upload.json
+!scripts/test-results/ragflow-acceptance/knowledge-upload-repeat.json
+!scripts/test-results/ragflow-acceptance/knowledge-sync.json
+!scripts/test-results/ragflow-acceptance/knowledge-docs-create.json
+!scripts/test-results/ragflow-acceptance/knowledge-docs-get.json
+!scripts/test-results/ragflow-acceptance/knowledge-docs-update.json
+!scripts/test-results/ragflow-acceptance/knowledge-docs-delete.json
+!scripts/test-results/ragflow-acceptance/knowledge-docs-get-after-delete.json
+!scripts/test-results/ragflow-acceptance/ai-status.json
+!scripts/test-results/ragflow-acceptance/ai-status-unauthorized.json
+!scripts/test-results/ragflow-acceptance/ai-query.json
+!scripts/test-results/ragflow-acceptance/ragflow-dataset.json
+!scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl
+!scripts/test-results/ragflow-acceptance/server-log.txt
 # perf 基线入库三件：manifest（check-acceptance-evidence 校验入口）、
 # results.json（P2-8 容量基线数据，docs/perf-baseline.md 引用）、summary.txt
 # （人读摘要）。其余原始证据（含 Authorization 头的 .headers 等）不入库。

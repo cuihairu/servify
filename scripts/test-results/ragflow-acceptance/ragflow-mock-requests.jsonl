@@ -1,0 +1,32 @@
+{"method": "GET", "path": "/api/v1/datasets?id=ds-acceptance&page=1&page_size=1", "auth_prefix_ok": true, "body": ""}
+{"method": "GET", "path": "/api/v1/datasets?id=ds-acceptance&page=1&page_size=1", "auth_prefix_ok": true, "body": ""}
+{"method": "GET", "path": "/api/v1/datasets?id=ds-acceptance&page=1&page_size=1", "auth_prefix_ok": true, "body": ""}
+{"method": "GET", "path": "/api/v1/datasets?id=ds-acceptance&page=1&page_size=1", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/retrieval", "auth_prefix_ok": true, "body": "{\"question\":\"退款政策是什么\",\"dataset_ids\":[\"ragflow-acceptance\"],\"page_size\":5,\"similarity_threshold\":0.7,\"knn_top_k\":5}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=RAGFlow+Acceptance+Document.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--d59d785c0296ae2e0c5381491aafe948b9cfc427469f5c23d212a0b3b42c\r\nContent-Disposition: form-data; name=\"file\"; filename=\"RAGFlow Acceptance Document.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nThis document validates the RAGFlow knowledge provider path.\r\n--d59d785c0296ae2e0c5381491aafe948b9cfc427469f5c23d212a0b3b42c--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-1\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=RAGFlow+Acceptance+Document.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "{\"ids\":[\"doc-1\"]}"}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "ids": ["doc-1"]}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--08c8900cad02875784e15b65b9f4402472b912c21e27b39b1ee577c208d7\r\nContent-Disposition: form-data; name=\"file\"; filename=\"RAGFlow Acceptance Document.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nThis document validates the RAGFlow knowledge provider path.\r\n--08c8900cad02875784e15b65b9f4402472b912c21e27b39b1ee577c208d7--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-2\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=%E4%BA%A7%E5%93%81%E4%BB%8B%E7%BB%8D.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--d6b0c6daee4f58cb1e2aa031b63e2e032eef92127455a88f1f249ed3f401\r\nContent-Disposition: form-data; name=\"file\"; filename=\"产品介绍.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nServify 是一个基于 WebRTC 的智能客服系统，支持文字聊天、语音通话和远程协助功能。\r\n--d6b0c6daee4f58cb1e2aa031b63e2e032eef92127455a88f1f249ed3f401--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-3\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=%E6%8A%80%E6%9C%AF%E6%94%AF%E6%8C%81.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--bea606d8da25e620125b3faa1b4b0ce94bc9b592485deffac09e006534d0\r\nContent-Disposition: form-data; name=\"file\"; filename=\"技术支持.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n如果您遇到技术问题，可以通过以下方式联系我们：1. 在线客服 2. 邮件支持 3. 电话支持\r\n--bea606d8da25e620125b3faa1b4b0ce94bc9b592485deffac09e006534d0--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-4\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=%E8%BF%9C%E7%A8%8B%E5%8D%8F%E5%8A%A9.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--9df6d05ec0dff543021e9e6b64bbfeabcf712c4fd7a945a04c5c280ad846\r\nContent-Disposition: form-data; name=\"file\"; filename=\"远程协助.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n远程协助功能允许客服人员远程查看和控制您的屏幕，以便更好地解决技术问题。使用前请确保您同意屏幕共享。\r\n--9df6d05ec0dff543021e9e6b64bbfeabcf712c4fd7a945a04c5c280ad846--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-5\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=KB+Docs+CRUD+Document.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--0bc496e9cafc9021a1c0f5499a168623745feaa333910047be186d0a73cb\r\nContent-Disposition: form-data; name=\"file\"; filename=\"KB Docs CRUD Document.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nInitial content for knowledge-docs CRUD acceptance.\r\n--0bc496e9cafc9021a1c0f5499a168623745feaa333910047be186d0a73cb--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-6\"]}"}
+{"method": "GET", "path": "/api/v1/datasets/ds-acceptance/documents?name=KB+Docs+CRUD+Document.txt&page=1&page_size=100", "auth_prefix_ok": true, "body": ""}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "{\"ids\":[\"doc-6\"]}"}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "ids": ["doc-6"]}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "--e1e473c8bcc134abeb4641174d7d1a978fa4ad5ad469224027d51d6c7c34\r\nContent-Disposition: form-data; name=\"file\"; filename=\"KB Docs CRUD Document.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nUpdated content v2 for knowledge-docs CRUD acceptance.\r\n--e1e473c8bcc134abeb4641174d7d1a978fa4ad5ad469224027d51d6c7c34--\r\n"}
+{"method": "POST", "path": "/api/v1/datasets/ds-acceptance/chunks", "auth_prefix_ok": true, "body": "{\"document_ids\":[\"doc-7\"]}"}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "auth_prefix_ok": true, "body": "{\"ids\":[\"doc-7\"]}"}
+{"method": "DELETE", "path": "/api/v1/datasets/ds-acceptance/documents", "ids": ["doc-7"]}

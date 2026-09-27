@@ -67,15 +67,20 @@ func TestValidateAcceptanceManifestScriptAcceptsValidRagflowManifest(t *testing.
 
 	dir := t.TempDir()
 	writeAcceptanceFixture(t, dir, map[string]string{
-		"summary.txt":                  "ok",
-		"ai-status.json":               "{}",
-		"ai-query.json":                "{}",
-		"knowledge-upload.json":        "{}",
-		"knowledge-upload-repeat.json": "{}",
-		"knowledge-sync.json":          "{}",
-		"ragflow-dataset.json":         "{}",
-		"server-log.txt":               "ok",
-		"ragflow-mock-requests.jsonl":  "{}",
+		"summary.txt":                          "ok",
+		"ai-status.json":                       "{}",
+		"ai-query.json":                        "{}",
+		"knowledge-upload.json":                "{}",
+		"knowledge-upload-repeat.json":         "{}",
+		"knowledge-sync.json":                  "{}",
+		"knowledge-docs-create.json":           "{}",
+		"knowledge-docs-get.json":              "{}",
+		"knowledge-docs-update.json":           "{}",
+		"knowledge-docs-delete.json":           "{}",
+		"knowledge-docs-get-after-delete.json": "{}",
+		"ragflow-dataset.json":                 "{}",
+		"server-log.txt":                       "ok",
+		"ragflow-mock-requests.jsonl":          "{}",
 		"manifest.json": `{
   "provider": "ragflow",
   "mode": "mock",
@@ -91,7 +96,15 @@ func TestValidateAcceptanceManifestScriptAcceptsValidRagflowManifest(t *testing.
     "retrieval_hit": "true",
     "knowledge_upload_ok": "true",
     "knowledge_upload_dedup_ok": "true",
-    "knowledge_sync_ok": "true"
+    "knowledge_sync_ok": "true",
+    "knowledge_docs_create_ok": "true",
+    "knowledge_docs_get_ok": "true",
+    "knowledge_docs_update_ok": "true",
+    "knowledge_docs_delete_ok": "true",
+    "knowledge_docs_crud_ok": "true",
+    "knowledge_docs_external_upsert_trace_ok": "true",
+    "knowledge_docs_reindex_trace_ok": "true",
+    "knowledge_docs_external_delete_trace_ok": "true"
   },
   "evidence_files": [
     "summary.txt",
@@ -100,6 +113,11 @@ func TestValidateAcceptanceManifestScriptAcceptsValidRagflowManifest(t *testing.
     "knowledge-upload.json",
     "knowledge-upload-repeat.json",
     "knowledge-sync.json",
+    "knowledge-docs-create.json",
+    "knowledge-docs-get.json",
+    "knowledge-docs-update.json",
+    "knowledge-docs-delete.json",
+    "knowledge-docs-get-after-delete.json",
     "ragflow-dataset.json",
     "server-log.txt",
     "ragflow-mock-requests.jsonl"
