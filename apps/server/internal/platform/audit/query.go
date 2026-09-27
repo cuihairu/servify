@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -127,4 +128,12 @@ func (s *GormQueryService) List(ctx context.Context, query ListQuery) ([]models.
 		return nil, 0, err
 	}
 	return logs, total, nil
+}
+
+// VerifyChain 链式完整性校验（R2 防篡改）：走全表哈希链，报告断点。
+func (s *GormQueryService) VerifyChain(ctx context.Context) (*ChainReport, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("audit chain verify: nil db")
+	}
+	return VerifyChain(ctx, s.db)
 }

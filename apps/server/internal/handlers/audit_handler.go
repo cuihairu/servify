@@ -16,11 +16,17 @@ import (
 )
 
 type AuditHandler struct {
-	service auditplatform.QueryService
+	service  auditplatform.QueryService
+	verifier auditplatform.ChainVerifier
 }
 
 func NewAuditHandler(service auditplatform.QueryService) *AuditHandler {
-	return &AuditHandler{service: service}
+	h := &AuditHandler{service: service}
+	// ChainVerifier 由 GormQueryService 实现；测试桩不实现时 verify 端点 404。
+	if v, ok := service.(auditplatform.ChainVerifier); ok {
+		h.verifier = v
+	}
+	return h
 }
 
 func (h *AuditHandler) List(c *gin.Context) {
@@ -193,6 +199,28 @@ func (h *AuditHandler) GetDiff(c *gin.Context) {
 	})
 }
 
+// Verify 校验审计链完整性
+// @Summary 校验审计哈希链完整性
+// @Description 按 id 升序重算链式哈希，任何改动/中间删除都会报告断点；存量 legacy 行（未哈希）单独计数并锚定续链
+// @Tags 审计
+// @Produce json
+// @Success 200 {object} auditplatform.ChainReport
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/audit/verify [get]
+func (h *AuditHandler) Verify(c *gin.Context) {
+	if h == nil || h.verifier == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Audit service unavailable", Message: "audit chain verifier not configured"})
+		return
+	}
+	report, err := h.verifier.VerifyChain(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to verify audit chain", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, report)
+}
+
 func RegisterAuditRoutes(r *gin.RouterGroup, handler *AuditHandler) {
 	if r == nil || handler == nil {
 		return
@@ -203,6 +231,7 @@ func RegisterAuditRoutes(r *gin.RouterGroup, handler *AuditHandler) {
 		audit.GET("/logs/export", handler.ExportCSV)
 		audit.GET("/logs/:id", handler.Get)
 		audit.GET("/logs/:id/diff", handler.GetDiff)
+		audit.GET("/verify", handler.Verify)
 	}
 }
 

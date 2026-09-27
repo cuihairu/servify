@@ -509,25 +509,29 @@ type WorkspaceConfig struct {
 
 // AuditLog records management-surface write operations for traceability.
 type AuditLog struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	ActorUserID   *uint     `gorm:"index" json:"actor_user_id"`
-	PrincipalKind string    `gorm:"index;not null" json:"principal_kind"`
-	Action        string    `gorm:"index;not null" json:"action"`
-	ResourceType  string    `gorm:"index;not null" json:"resource_type"`
-	ResourceID    string    `gorm:"index" json:"resource_id"`
-	Route         string    `gorm:"not null" json:"route"`
-	Method        string    `gorm:"not null" json:"method"`
-	StatusCode    int       `json:"status_code"`
-	Success       bool      `gorm:"index" json:"success"`
-	RequestID     string    `gorm:"index" json:"request_id"`
-	ClientIP      string    `json:"client_ip"`
-	UserAgent     string    `gorm:"type:text" json:"user_agent"`
-	TenantID      string    `gorm:"index" json:"tenant_id"`
-	WorkspaceID   string    `gorm:"index" json:"workspace_id"`
-	RequestJSON   string    `gorm:"type:text" json:"request_json"`
-	BeforeJSON    string    `gorm:"type:text" json:"before_json"`
-	AfterJSON     string    `gorm:"type:text" json:"after_json"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
+	ActorUserID   *uint  `gorm:"index" json:"actor_user_id"`
+	PrincipalKind string `gorm:"index;not null" json:"principal_kind"`
+	Action        string `gorm:"index;not null" json:"action"`
+	ResourceType  string `gorm:"index;not null" json:"resource_type"`
+	ResourceID    string `gorm:"index" json:"resource_id"`
+	Route         string `gorm:"not null" json:"route"`
+	Method        string `gorm:"not null" json:"method"`
+	StatusCode    int    `json:"status_code"`
+	Success       bool   `gorm:"index" json:"success"`
+	RequestID     string `gorm:"index" json:"request_id"`
+	ClientIP      string `json:"client_ip"`
+	UserAgent     string `gorm:"type:text" json:"user_agent"`
+	TenantID      string `gorm:"index" json:"tenant_id"`
+	WorkspaceID   string `gorm:"index" json:"workspace_id"`
+	RequestJSON   string `gorm:"type:text" json:"request_json"`
+	BeforeJSON    string `gorm:"type:text" json:"before_json"`
+	AfterJSON     string `gorm:"type:text" json:"after_json"`
+	// 链式防篡改（R2）：entry_hash = sha256(prev_hash ‖ 规范化字段)，
+	// prev_hash 接力上一条记录；本特性上线前的存量行两哈希均为空（legacy）。
+	PrevHash  string    `gorm:"size:64;index" json:"prev_hash"`
+	EntryHash string    `gorm:"size:64;index" json:"entry_hash"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // QualityReview 是单个已结束会话的质检记录。定义已迁至 modules/quality/domain，

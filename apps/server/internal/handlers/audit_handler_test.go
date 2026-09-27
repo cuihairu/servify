@@ -3,9 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +17,17 @@ import (
 	platformauth "servify/apps/server/internal/platform/auth"
 
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
+
+var auditVerifyDBSeq atomic.Uint32
+
+// uniqueAuditVerifyDSN 命名内存库 DSN 追加全局唯一序号，避免重复执行命中同一库。
+func uniqueAuditVerifyDSN(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("file:audit_verify_%d?mode=memory&cache=shared", auditVerifyDBSeq.Add(1))
+}
 
 type stubAuditQueryService struct {
 	items []models.AuditLog
@@ -280,5 +293,100 @@ func TestAuditHandlerExportCSVClampsLimit(t *testing.T) {
 	}
 	if svc.query.Page != 1 || svc.query.PageSize != 5000 {
 		t.Fatalf("unexpected paging query: %+v", svc.query)
+	}
+}
+
+// stubChainVerifier 实现 ChainVerifier（Verify 端点专用桩）。
+type stubChainVerifier struct {
+	report *auditplatform.ChainReport
+	err    error
+	called bool
+}
+
+func (s *stubChainVerifier) VerifyChain(_ context.Context) (*auditplatform.ChainReport, error) {
+	s.called = true
+	return s.report, s.err
+}
+
+func TestAuditHandlerVerify(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("reports chain status", func(t *testing.T) {
+		svc := &stubAuditQueryService{}
+		verifier := &stubChainVerifier{report: &auditplatform.ChainReport{OK: true, Total: 3, Hashed: 3}}
+		h := NewAuditHandler(svc)
+		h.verifier = verifier
+		r := gin.New()
+		RegisterAuditRoutes(&r.RouterGroup, h)
+
+		req := httptest.NewRequest(http.MethodGet, "/audit/verify", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK || !verifier.called {
+			t.Fatalf("expected 200 + call, got %d called=%v", w.Code, verifier.called)
+		}
+		if !strings.Contains(w.Body.String(), `"ok":true`) || !strings.Contains(w.Body.String(), `"hashed":3`) {
+			t.Fatalf("unexpected report body: %s", w.Body.String())
+		}
+	})
+
+	t.Run("verifier error maps to 500", func(t *testing.T) {
+		h := NewAuditHandler(&stubAuditQueryService{})
+		h.verifier = &stubChainVerifier{err: errors.New("chain boom")}
+		r := gin.New()
+		RegisterAuditRoutes(&r.RouterGroup, h)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/audit/verify", nil))
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 got %d body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("no verifier configured maps to 404", func(t *testing.T) {
+		r := gin.New()
+		RegisterAuditRoutes(&r.RouterGroup, NewAuditHandler(&stubAuditQueryService{}))
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/audit/verify", nil))
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 got %d body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
+// TestAuditHandlerVerifyAgainstRealChain 端到端小回路：sqlite 真库写两条
+// 带链哈希的记录，经 /audit/verify 校验通过并报告全链强度。
+func TestAuditHandlerVerifyAgainstRealChain(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open(uniqueAuditVerifyDSN(t)), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := db.AutoMigrate(&models.AuditLog{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	recorder := auditplatform.NewGormRecorder(db)
+	for _, action := range []string{"s.one", "s.two"} {
+		if err := recorder.Record(context.Background(), auditplatform.Entry{PrincipalKind: "agent", Action: action, Route: "/api/x", Method: "POST", Success: true}); err != nil {
+			t.Fatalf("Record(%s) error = %v", action, err)
+		}
+	}
+
+	r := gin.New()
+	RegisterAuditRoutes(&r.RouterGroup, NewAuditHandler(auditplatform.NewGormQueryService(db)))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/audit/verify", nil))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d body=%s", w.Code, w.Body.String())
+	}
+	var report auditplatform.ChainReport
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if !report.OK || report.Hashed != 2 || report.Anchored || report.LegacyRows != 0 {
+		t.Fatalf("unexpected report: %+v", report)
 	}
 }

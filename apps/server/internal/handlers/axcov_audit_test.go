@@ -291,8 +291,8 @@ func TestAxcAuditRegisterRoutes(t *testing.T) {
 
 	r2 := gin.New()
 	RegisterAuditRoutes(&r2.RouterGroup, NewAuditHandler(&stubAuditQueryService{}))
-	if len(r2.Routes()) != 4 {
-		t.Fatalf("expected 4 routes, got %d", len(r2.Routes()))
+	if len(r2.Routes()) != 5 {
+		t.Fatalf("expected 5 routes, got %d", len(r2.Routes()))
 	}
 }
 
