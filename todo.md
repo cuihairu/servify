@@ -1032,6 +1032,15 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-27，**运营高价值链路人工运行验证第一轮复跑留证收官——人工验证行「部分通过」清零**）：
+  - 状态：`[x]`（本行收官；P1-1 real 凭证仍外部阻塞）
+  - 最近进展：把 docs/acceptance-checklist.md「运营高价值链路人工运行验证第一轮」（部分通过，唯一瑕疵=审计查询默认限流下 429 后借 X-API-Key 白名单通过）用 sqlite 本地起服复跑 19 步全序列推进为通过：客户 CRUD/备注/标签/统计、客服列表/上线/状态/在线列表/统计、安全用户详情/token 批量吊销/会话列表、审计 create 列表/update 详情/diff/CSV 导出，全部真实 2xx + 断言（客户 201 含 id、客服 ≥3、审计 ≥1 条）。三个口径修正如实入行——① 限流 60rpm/burst10 改 sleep 3 步进（种子后 sleep 12 回填），**不再用 X-API-Key 白名单键**：该键令 AuthMiddleware 走 service-principal 分支（platform/auth/gin_middleware.go:41）短路 Bearer JWT 致 401，旧白名单做法按当前代码已不可行；② 旧记录单用户 `POST /api/security/users/:id/revoke-tokens` 已演进为批量 `POST /api/security/users/revoke-tokens {"user_ids":[..]}`，按现口复跑；③ postgres 仅余 client-18 → sqlite 回退（服务启动 AutoMigrate）。证据按 manifest 口径入库 `scripts/test-results/operations-round1/`（19 响应体 + summary + manifest.json，token 掩码），`validate-acceptance-manifest.sh` 新增 `operations-round1` 分支 + accept/reject Go 测试对，`check-acceptance-evidence.sh` 全量绿。
+  - 完成证据：
+    - 文件：`scripts/validate-acceptance-manifest.sh`（operations-round1 分支）、`scripts/validate_acceptance_manifest_test.go`（accept/reject 对）、`scripts/test-results/operations-round1/`（21 件）、`docs/acceptance-checklist.md`（行状态翻转）、`.gitignore`（证据白名单）、`todo.md`
+    - 命令：`bash scripts/validate-acceptance-manifest.sh scripts/test-results/operations-round1/manifest.json`、`go test ./scripts -run 'TestValidateAcceptanceManifest|TestCheckAcceptanceEvidence' -count=1`（113s 绿）、text-encoding/repo-hygiene/acceptance-evidence/bash -n 全绿（Go 业务代码零改动）
+    - 结果：19 步全 PASS；manifest 校验通过 provider=operations-round1 mode=real；行状态 部分通过→通过
+  - 下一步：无（同清单「主链路人工运行验证第二轮」已于同日先行收官——commit 88e9e5d，仅翻转 checklist 行未单独立附注；至此「当前已确认的最小事实」人工验证行全部通过，全清单仅剩 ragflow/weknora 两行 real 模式部分通过，均属 P1-1 外部凭证阻塞）
+  - 阻塞项：无
 - 附注（2026-09-27，**全仓覆盖率收口刀：单包扫描口径从 `./internal/...` 扩到全仓 `go list ./...`（非 internal 包）**）：
   - 状态：`[x]`
   - 最近进展：按用户指令把覆盖率扫描扩到两模块全仓逐包 `-cover`，找出 0% 缺口补到与 internal 同等口径。账目——**两处真实 0% 缺口全部补至 100.0% 语句**：① `infra/compose/weknora-mock`（P1-1 第二笔新写的协议 mock，main 薄化出 `portFromEnv`/`newMock`/`routes` 后包内单测补齐，main 全链走子进程 re-exec）；② `scripts/perfbench`（P2-8 负载引擎 main.go 848 行 0% → 100.0% + `-race` 绿：纯函数/percentile/HTTP 场景/WS RFC6455 编解码/配置生成器/结果落盘全链；新增 `buildUploadBody`（func→var 同签名）/`tcpDial`/`dialWSFn`/`marshalYAML` 四个**行为保持** seam 覆盖防御分支，手写对端 fakeWSServer 覆盖 126/127 扩展帧长与掩码解码，main()/os.Exit 路径子进程 re-exec）。其余逐包核对无可补：apps/server 非 internal 包本在 100% 合并门禁内；`servify/scripts` 为 test-only 包（`[no statements]`）——CI `-run` 白名单经 74 测试名逐一 comm 对账为**全覆盖**（0 漏网），首轮全仓扫描该包 panic 仅为默认 10m `-timeout` 预算不足（本机历史 819s/本轮热缓存 438.2s），`-timeout 25m` 全量重跑 ok EXIT=0，**非回归非门禁缺口**；`servify/docs` + `servify/docs/generated/api` 为 swaggo 生成包、`sdk/node_modules/flatted/golang` 为 vendored 第三方，按口径登记豁免。门禁接线：ci.yml script-checks 新增「Test perfbench and weknora-mock packages」步（5m）+ run-tests.sh 新增非 internal 直跑行。

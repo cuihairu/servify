@@ -684,6 +684,155 @@ func TestValidateAcceptanceManifestScriptRejectsBackupRestoreWithoutDamageCheck(
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsValidOperationsRound1Manifest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":       "ok",
+		"admin-auth.json":   "{}",
+		"audit-export.csv":  "id,action\n",
+		"audit-diff.json":   "{}",
+		"audit-detail.json": "{}",
+		"audit-list.json":   "{}",
+		"manifest.json": `{
+  "provider": "operations-round1",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "customer_created": "true",
+    "customer_detail_ok": "true",
+    "customer_updated": "true",
+    "customer_note_added": "true",
+    "customer_tags_updated": "true",
+    "customer_stats_ok": "true",
+    "agents_list_ok": "true",
+    "agent_online_ok": "true",
+    "agent_status_updated": "true",
+    "agents_online_list_ok": "true",
+    "agents_stats_ok": "true",
+    "security_user_ok": "true",
+    "tokens_revoked": "true",
+    "user_sessions_ok": "true",
+    "audit_list_ok": "true",
+    "audit_detail_ok": "true",
+    "audit_diff_ok": "true",
+    "audit_export_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "customer-create.json",
+    "customer-detail.json",
+    "customer-update.json",
+    "customer-note.json",
+    "customer-tags.json",
+    "customer-stats.json",
+    "agents-list.json",
+    "agent-online.json",
+    "agent-status.json",
+    "agents-online.json",
+    "agents-stats.json",
+    "security-user.json",
+    "security-revoke-tokens.json",
+    "security-user-sessions.json",
+    "audit-list.json",
+    "audit-detail.json",
+    "audit-diff.json",
+    "audit-export.csv"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected validator success, err=%v output=%s", err, string(output))
+	}
+	if !strings.Contains(string(output), "manifest 校验通过") {
+		t.Fatalf("expected success output, got %s", string(output))
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsOperationsRound1WithoutAuditExport(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":      "ok",
+		"admin-auth.json":  "{}",
+		"audit-export.csv": "id,action\n",
+		// 缺 audit_export_ok：审计导出 CSV 是该轮运营验收的收官证据，缺它不算数。
+		"manifest.json": `{
+  "provider": "operations-round1",
+  "mode": "real",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "admin_auth_ok": "true",
+    "customer_created": "true",
+    "customer_detail_ok": "true",
+    "customer_updated": "true",
+    "customer_note_added": "true",
+    "customer_tags_updated": "true",
+    "customer_stats_ok": "true",
+    "agents_list_ok": "true",
+    "agent_online_ok": "true",
+    "agent_status_updated": "true",
+    "agents_online_list_ok": "true",
+    "agents_stats_ok": "true",
+    "security_user_ok": "true",
+    "tokens_revoked": "true",
+    "user_sessions_ok": "true",
+    "audit_list_ok": "true",
+    "audit_detail_ok": "true",
+    "audit_diff_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "admin-auth.json",
+    "customer-create.json",
+    "customer-detail.json",
+    "customer-update.json",
+    "customer-note.json",
+    "customer-tags.json",
+    "customer-stats.json",
+    "agents-list.json",
+    "agent-online.json",
+    "agent-status.json",
+    "agents-online.json",
+    "agents-stats.json",
+    "security-user.json",
+    "security-revoke-tokens.json",
+    "security-user-sessions.json",
+    "audit-list.json",
+    "audit-detail.json",
+    "audit-diff.json",
+    "audit-export.csv"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, got success: %s", string(output))
+	}
+	if !strings.Contains(string(output), "audit_export_ok") {
+		t.Fatalf("expected missing check named in output, got %s", string(output))
+	}
+}
+
 func writeAcceptanceFixture(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for name, body := range files {

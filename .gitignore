@@ -106,6 +106,10 @@ scripts/test-results/perf-baseline/*.log
 # 种子、登录（token 掩码）、dashboard/workspace、工单详情/改派前后、WS 收发
 # 帧与 omni 消息读回。均为 127.0.0.1 + sqlite 回退 + dev JWT secret 产物。
 !scripts/test-results/main-link-round2/**
+# 运营高价值链路第一轮复跑证据全量入库（2026-09-27）：manifest 走全局白名单；
+# 此处收 19 步响应体（客户/客服/安全/审计）+ summary。均为 127.0.0.1 +
+# sqlite 回退 + dev JWT secret 产物，token 已掩码，CSV 内为合成测试客户。
+!scripts/test-results/operations-round1/**
 
 # 缓存文件
 .cache/
