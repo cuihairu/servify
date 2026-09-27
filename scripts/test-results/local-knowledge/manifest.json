@@ -1,0 +1,53 @@
+{
+  "provider": "local-knowledge",
+  "mode": "runtime-local-chain",
+  "generated_at": "2026-09-27T20:36:13.244190",
+  "env": {
+    "database": "sqlite (file, fresh temp db)",
+    "knowledge": "local (knowledge_docs + in-process cosine)",
+    "embedding": "local deterministic hashing (dimension 256)",
+    "ai": "local extractive QA baseline (zero network egress)"
+  },
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_ai_status_rejected_401": "true",
+    "admin_registered": "true",
+    "ai_status_reports_local": "true",
+    "knowledge_provider_enabled_healthy": "true",
+    "documents_uploaded_and_indexed": "true",
+    "knowledge_sync_attempted": "true",
+    "sqlite_docs_indexed_with_embeddings": "true",
+    "sqlite_chunking_evidence": "true",
+    "sqlite_embedding_dims_256": "true",
+    "semantic_query_hits_expected_doc": "true",
+    "query_answer_extractive_from_doc": "true",
+    "unrelated_query_filtered_out": "true"
+  },
+  "evidence_files": [
+    "ai-status-enabled.parsed",
+    "ai-status-enabled.txt",
+    "ai-status.txt",
+    "build-output.txt",
+    "knowledge-provider-enable.txt",
+    "knowledge-sync.txt",
+    "login-admin.txt",
+    "query-printer.parsed",
+    "query-printer.txt",
+    "query-unrelated.parsed",
+    "query-unrelated.txt",
+    "ready.txt",
+    "register-admin.txt",
+    "server-log.txt",
+    "sqlite-dims.txt",
+    "sqlite-docs.txt",
+    "summary.txt",
+    "unauthenticated-ai-status.txt",
+    "upload-account.txt",
+    "upload-printer.txt",
+    "upload-refund.txt"
+  ]
+}
