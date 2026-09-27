@@ -1,0 +1,11 @@
+handshake: HTTP/1.1 101 Switching Protocols
+sent: {"type": "text-message", "data": {"content": "round2-evidence-visitor-1790517203"}}
+recv-frame: {"type":"text-message","data":{"content":"round2-evidence-visitor-1790517203"},"session_id":"g1-session-1","timestamp":"2026-09-27T13:53:23.961397456Z"}
+
+recv-frame: {"type":"ai-response-delta","data":{"content_delta":"stream error: openai provider error (auth_failed:401): {\n    \"error\": {\n        \"message\": \"You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY), or as the password field (with blank username) if you're accessing the API from your browser and are prompted for a username and password. You can obtain an API key from https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": null\n    }\n}\n","done":false},"session_id":"g1-session-1","timestamp":"2026-09-27T13:53:25.100384131Z"}
+
+recv-frame: {"type":"ai-response-delta","data":{"content_delta":"","done":true},"session_id":"g1-session-1","timestamp":"2026-09-27T13:53:25.100388756Z"}
+
+recv-frame: {"type":"ai-response","data":{"confidence":0.6,"content":"stream error: openai provider error (auth_failed:401): {\n    \"error\": {\n        \"message\": \"You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY), or as the password field (with blank username) if you're accessing the API from your browser and are prompted for a username and password. You can obtain an API key from https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": null\n    }\n}\n","handoff_reason":"low_confidence","next_action":"handoff","source":"ai","strategy":"llm"},"session_id":"g1-session-1","timestamp":"2026-09-27T13:53:25.100400259Z"}
+
+echo-contains-visitor-content: True

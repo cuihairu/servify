@@ -1,0 +1,31 @@
+主链路人工运行验证第二轮 复跑留证（2026-09-27）
+=============================================================
+环境：redis=系统实例 PONG；postgres=本机仅 postgresql-client-18（无服务端
+二进制 initdb/postgres，无 sudo 装包），按任务口径回退 sqlite
+（DB_DRIVER=sqlite DB_DSN=.cache/main-link-r2/servify.db，服务启动 AutoMigrate）。
+服务：SERVIFY_JWT_SECRET=dev-secret go -C apps/server run ./cmd/server
+      --host 127.0.0.1 --port 18080（全新空库后种子数据，证据内 ID 为确定性小值）。
+限流：全局 60rpm/burst10（config.yml）；种子脚本突发后以 sleep 回填令牌桶，
+不用 X-API-Key 白名单键——该键会令 AuthMiddleware 走 service-principal 分支
+（platform/auth gin_middleware.go:41）短路 Bearer JWT 致 401，两中间件语义冲突。
+自动派单观察（真实行为）：种子置 agent1-3 online 后，10 张工单创建即被自动
+路由派给客服1（id=2），dashboard assigned_tickets=10/open_tickets=0；
+故第 12 步对账口径为「改派客服2(id=3) 前后 agent_id 2→3」。
+
+逐项命令与断言（全部 PASS 才有本行）：
+ 01 redis-cli -h localhost -p 6379 ping                       -> PONG
+ 02 pg_isready + 服务端二进制探测                              -> 5432 拒绝/无 server binary -> sqlite 回退
+ 03 GET  /health                                              -> 200 healthy
+ 04 server log 迁移行                                          -> sqlite AutoMigrate 生效
+ 05 scripts/seed-data.sh http://127.0.0.1:18080               -> Seed data complete!
+ 06 POST /api/v1/auth/login (admin/admin123)                  -> 200 token 非空（证据内掩码）
+ 07 GET  /api/statistics/dashboard                            -> 200 total_tickets=10（断言通过）
+ 08 GET  /api/omni/workspace                                  -> 200 online_agents=3（断言通过）
+ 09 GET  /api/tickets?page=1&page_size=20                     -> 200 total=10
+ 10 GET  /api/tickets/1                                       -> 200（记录改派前 agent_id，见 11 步观察）
+ 11 POST /api/tickets/1/assign {"agent_id":3}                 -> 200（改派客服2，用户 3）
+ 12 GET  /api/tickets/1（复读）                                -> 200 agent_id=3（断言通过）
+ 13 WS   /api/v1/ws?session_id=g1-session-1 发 text-message   -> 101 握手 + 服务端回帧含原文
+ 14 GET  /api/omni/sessions/g1-session-1/messages             -> 200 且含访客原文（断言通过）
+
+敏感信息处理：登录响应 token 仅保留前 12 位 + 掩码标记。

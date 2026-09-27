@@ -102,6 +102,10 @@ scripts/test-results/**/*.txt
 scripts/test-results/perf-baseline/*.body
 scripts/test-results/perf-baseline/*.headers
 scripts/test-results/perf-baseline/*.log
+# 主链路人工运行验证第二轮复跑证据全量入库（2026-09-27）：依赖状态、健康、
+# 种子、登录（token 掩码）、dashboard/workspace、工单详情/改派前后、WS 收发
+# 帧与 omni 消息读回。均为 127.0.0.1 + sqlite 回退 + dev JWT secret 产物。
+!scripts/test-results/main-link-round2/**
 
 # 缓存文件
 .cache/

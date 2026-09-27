@@ -1,0 +1,5 @@
+2026/09/27 13:52:45 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.148ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="users"
+2026/09/27 13:52:45 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:71
+2026/09/27 13:52:45 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+2026/09/27 13:52:45 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32

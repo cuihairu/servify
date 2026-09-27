@@ -1,0 +1,10 @@
+# postgres 本机状态（任务允许 sqlite 回退）
+localhost:5432 - no response
+server binaries:
+ls: cannot access '/usr/lib/postgresql/*/bin/postgres': No such file or directory
+ls: cannot access '/usr/lib/postgresql/*/bin/initdb': No such file or directory
+installed packages:
+ii  libpq5:amd64                            18.6-0ubuntu0.26.04.1                       amd64        PostgreSQL C client library
+ii  postgresql-client                       18+290ubuntu1                               all          front-end programs for PostgreSQL (supported version)
+ii  postgresql-client-18                    18.6-0ubuntu0.26.04.1                       amd64        front-end programs for PostgreSQL 18
+ii  postgresql-client-common                290ubuntu1                                  all          manager for multiple PostgreSQL client versions
