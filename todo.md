@@ -1036,7 +1036,7 @@
   - 完成证据：
     - 文件：`sdk/packages/react/src/__tests__/react.test.tsx`（新增）、`sdk/packages/vue/src/__tests__/vue.test.ts`（新增）、`sdk/packages/react/src/useChat.ts`（清零对齐）、`sdk/package.json`（门禁串链）、`sdk/SURFACE_GOVERNANCE.md`（测试口径）
     - 命令：`npm --workspace @servify/react run test`、`npm --workspace @servify/vue run test`（独立可跑，要求 3）、`npm -C sdk run lint`、`npm -C sdk run build`、`npm -C sdk run typecheck`、`npm -C sdk run test`、`npm -C sdk run test:governance`、`test:surfaces`、`test:examples`、`version:check`；Go 侧零改动（本轮仅 sdk JS/TS + 文档），未触发 scripts/run-tests.sh
-    - 结果：react 12/12、vue 12/12；聚合链 core 125 + api-client 16 + app-core 15 + react 12 + vue 12 + vanilla 2 + react-native 4 = **186 用例全绿**；lint 0 errors（4 条既有 warning 在未触碰的 core/sdk.test.ts）；typecheck 0 错误；build 绿；governance/surfaces/examples/version 绿；文本编码/仓库卫生/生成资产三脚本绿
+    - 结果：react 12/12、vue 12/12；聚合链 core 125 + api-client 16 + app-core 15 + react 12 + vue 12 + vanilla 2 + react-native 4 = **186 用例全绿**；lint 0 errors（4 条既有 warning 在未触碰的 core/sdk.test.ts）；typecheck 0 错误；build 绿；governance/surfaces/examples/version 绿；文本编码/仓库卫生/生成资产三脚本绿；CI 于 ded84b5 全绿（run 36293838825，AI Golden Set (real LLM) 为条件触发既有 skip）
   - 下一步：无
   - 阻塞项：无
 - 附注（2026-09-26，**Phase 2 刀二d 成本控制收口已落地**——逐句预算熔断 + 业务计量，§3.2 控制手段收口）：
