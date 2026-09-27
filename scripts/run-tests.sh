@@ -31,6 +31,11 @@ go tool cover -html="$OUT_DIR/coverage.out" -o "$OUT_DIR/coverage.html"
 echo "📋 Coverage Summary:"
 go tool cover -func="$OUT_DIR/coverage.out" | tail -1
 
+# 全仓覆盖率收口刀：非 internal 的可测包（perfbench 负载引擎 / weknora-mock
+# 协议 mock）与 internal 同等口径直跑（各包单测自证 100% 语句覆盖）。
+echo "🧩 Running non-internal package tests (perfbench / weknora-mock)..."
+go test -cover ./scripts/perfbench ./infra/compose/weknora-mock
+
 # 运行基准测试
 echo ""
 echo "⚡ Running benchmark tests..."

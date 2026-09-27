@@ -352,6 +352,13 @@ jobs:
         run: |
           go test ./scripts -run "Test(WeKnoraMockProtocolSurface|Compose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts)|WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|RagflowScript(WritesEvidence|RealModeRejectsLocalHost)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|ModulesDoNotImportLegacyServices)$"
 
+      - name: Test perfbench and weknora-mock packages
+        # 全仓覆盖率收口刀：非 internal 的可测包（perfbench 负载引擎 +
+        # weknora-mock 协议 mock）随 CI 直跑，与 internal 同等覆盖口径。
+        timeout-minutes: 5
+        run: |
+          go test -cover ./scripts/perfbench ./infra/compose/weknora-mock
+
       - name: Validate checked-in acceptance evidence
         timeout-minutes: 2
         run: |
