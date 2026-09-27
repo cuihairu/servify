@@ -255,13 +255,28 @@ func firstLine(s string) string {
 }
 
 func main() {
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "9000"
+	port := portFromEnv()
+	m := newMock()
+	log.Printf("Mock WeKnora service listening on :%s (health / search / documents)", port)
+	log.Fatal(http.ListenAndServe(":"+port, m.routes()))
+}
+
+// portFromEnv 读 API_PORT，缺省 9000（与 compose 的 WEKNORA_API_PUBLISH_PORT
+// 默认目标一致）。
+func portFromEnv() string {
+	if port := os.Getenv("API_PORT"); port != "" {
+		return port
 	}
+	return "9000"
+}
 
-	m := &mock{docs: map[string]*document{}}
+func newMock() *mock {
+	return &mock{docs: map[string]*document{}}
+}
 
+// routes 装配全部协议端点；抽出来让包内单测可以直接用 httptest 驱动，
+// 不必起进程（scripts/weknora_mock_protocol_test.go 已另有二进制级黑盒回归）。
+func (m *mock) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", m.health)
 	mux.HandleFunc("POST /api/v1/knowledge/search", m.search)
@@ -269,9 +284,5 @@ func main() {
 	mux.HandleFunc("POST /api/v1/knowledge/{kb}/documents", m.upload)
 	mux.HandleFunc("DELETE /api/v1/knowledge/{kb}/documents/{doc}", m.remove)
 	mux.HandleFunc("/", unknown)
-
-	log.Printf("Mock WeKnora service listening on :%s (health / search / documents)", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
-	}
+	return mux
 }
