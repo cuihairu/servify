@@ -297,8 +297,8 @@
   - 当前会话与其它会话退出都能看到状态变化
 - 状态：`[x]`
 - 最近进展：**2026-04-25** 已在本机用 SQLite 运行口径启动 Servify，并实际执行 `AUTH_ACCEPTANCE_MODE=real SERVIFY_URL=http://127.0.0.1:18081 ./scripts/test-auth-session-acceptance.sh`；生成了 `scripts/test-results/auth-session-acceptance/real/manifest.json` 与对应接口响应留档，且 `validate-acceptance-manifest.sh` 校验通过。`docs/acceptance-checklist.md` 的 3A 条目现已按真实留档更新为 `通过`
-- 下一步：把 `scripts/test-results/auth-session-acceptance/real/manifest.json` 纳入 git，并继续推进 AI / Knowledge real 证据留档，避免验收闭环只停在 auth-session
-- 阻塞项：无代码阻塞；剩余是证据入库和 AI / Knowledge 外部依赖环境
+- 下一步：无代码动作——manifest 纳入 git 已完成（2026-09-25 随 baeea93 入库，2026-09-28 复核 `git ls-files --error-unmatch` 确认 tracked、工作树与库内一致、`git check-ignore` 未拦截，原「纳入 git」表述为过时描述）；AI / Knowledge real 证据留档随 P1-1 等外部环境（见 P1-1 下一步）
+- 阻塞项：无代码阻塞；剩余是 AI / Knowledge 外部依赖环境（P1-1）
 
 ### [x] P1-3 会话工作台主操作补齐到“通过”
 
@@ -1033,6 +1033,15 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-28，**收尾轮：全量回归复核 + 证据入库核实 + 仓库指向/codecov 归位**）：
+  - 状态：`[x]`
+  - 最近进展：todo 除 P1-1（纯外部凭证阻塞）外全部闭环后的回归复核轮，四件事：1) **低负载窗口全量回归**——等并发负载回落（load 88→19/14 核，高负载跑会出假失败）后 `run-tests.sh TEST_COVERAGE_TARGET=100` 全绿（聚合 100.0%）+ 全量 `go test ./... -race -count=1` 绿（无 FAIL）；2) **P1-2「下一步」核实为过时描述**——`scripts/test-results/auth-session-acceptance/real/manifest.json` 早在 2026-09-25 随 baeea93 入库（`git ls-files --error-unmatch` 确认 tracked，工作树与库内一致，`git check-ignore` 未拦截），无需调整 .gitignore，P1-2 的下一步/阻塞项两行已同步修正；3) **P1-1 纯外部阻塞复核成立**——docs/acceptance-checklist.md 仅剩 RAGFlow / WeKnora 两行 real 部分通过（real 入口拒私网 + 需外部凭证），代码面 provider 索引一致性收口已于 42eb87e 完成（dify/weknora 删旧建新 + RunIndexJob external id 回存 + provider_id 落库与实际驱动一致），本机无可推进项；可选的全容器化增强属本机网络受限（镜像构建 >70min 超时），同列外部；4) 同日追补**仓库指向归位 + codecov 接入**（255ca4a，CI run 36373736165 全 12 job 绿）：timebeau→cuihairu 全库替换 9 文件残留 0（README CI/stars 徽章与页脚、docs 四处 blob/tree 链接、apps 四页），README 补 codecov 徽章，ci.yml Go Checks 补 `codecov/codecov-action@v4` 上传 `scripts/test-results/coverage.out`；**首传被拒如实登记**——HTTP 400 `Token required because branch is protected`，根因 cuihairu/servify 仓库未配置 CODECOV_TOKEN secret（`gh secret list` 为空；`fail_ci_if_error=false` 使步骤显示 ✓ 属假象），修复为用户侧一步（见下一步），工作流无需再改
+  - 完成证据：
+    - 文件：todo.md（本注记 + P1-2 下一步修正）；255ca4a（README.md、.github/workflows/ci.yml、docs/×4、apps/×4 共 10 文件）；42eb87e（knowledgeprovider 七 provider + knowledge 应用层 19 文件）
+    - 命令：`TEST_COVERAGE_TARGET=100 ./scripts/run-tests.sh`（GATE_EXIT=0，Actual Coverage 100.0%）、`go -C apps/server test ./... -race -count=1`（exit 0）、`gh run view 36373736165`（12 job success，CI 徽章实测渲染 passing）、`gh secret list`（空）、codecov 步骤日志 `Upload queued for processing failed: {"message":"Token required because branch is protected"}`
+    - 结果：全量门绿；timebeau 残留 grep=0；codecov 徽章渲染 unknown（无上传数据的正常态，待首传）
+  - 下一步：1) 用户侧 `gh secret set CODECOV_TOKEN -R cuihairu/servify`（值取 codecov.io → servify → Settings → Coverage token）后对 255ca4a 手动 re-run Go Checks——secret 可见后首传即成功、徽章转绿，无需新提交；2) P1-1 real 模式验收等外部环境（`DIFY/WEKNORA/RAGFLOW_ACCEPTANCE_MODE=real` + 真实凭证）
+  - 阻塞项：codecov 首传需用户在 GitHub 配置 CODECOV_TOKEN secret（token 值不在仓库与本机，非交互无法代办）；P1-1 real 凭证外部阻塞
 - 附注（2026-09-27，**运营高价值链路人工运行验证第一轮复跑留证收官——人工验证行「部分通过」清零**）：
   - 状态：`[x]`（本行收官；P1-1 real 凭证仍外部阻塞）
   - 最近进展：把 docs/acceptance-checklist.md「运营高价值链路人工运行验证第一轮」（部分通过，唯一瑕疵=审计查询默认限流下 429 后借 X-API-Key 白名单通过）用 sqlite 本地起服复跑 19 步全序列推进为通过：客户 CRUD/备注/标签/统计、客服列表/上线/状态/在线列表/统计、安全用户详情/token 批量吊销/会话列表、审计 create 列表/update 详情/diff/CSV 导出，全部真实 2xx + 断言（客户 201 含 id、客服 ≥3、审计 ≥1 条）。三个口径修正如实入行——① 限流 60rpm/burst10 改 sleep 3 步进（种子后 sleep 12 回填），**不再用 X-API-Key 白名单键**：该键令 AuthMiddleware 走 service-principal 分支（platform/auth/gin_middleware.go:41）短路 Bearer JWT 致 401，旧白名单做法按当前代码已不可行；② 旧记录单用户 `POST /api/security/users/:id/revoke-tokens` 已演进为批量 `POST /api/security/users/revoke-tokens {"user_ids":[..]}`，按现口复跑；③ postgres 仅余 client-18 → sqlite 回退（服务启动 AutoMigrate）。证据按 manifest 口径入库 `scripts/test-results/operations-round1/`（19 响应体 + summary + manifest.json，token 掩码），`validate-acceptance-manifest.sh` 新增 `operations-round1` 分支 + accept/reject Go 测试对，`check-acceptance-evidence.sh` 全量绿。
