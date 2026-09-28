@@ -60,6 +60,51 @@ func TestProviderChatStream(t *testing.T) {
 	}
 }
 
+// 流式预设队列：错误队列优先（nil 元素表示该次放行成功），分片队列按次
+// 消费，全部耗尽后回落默认预设（StreamChunks）。
+func TestProviderChatStreamQueues(t *testing.T) {
+	req := llm.ChatRequest{Model: "m"}
+
+	wantErr := errors.New("queued stream failure")
+	p := &Provider{
+		StreamErrorQueue: []error{wantErr, nil},
+		StreamQueue:      [][]llm.ChatChunk{{{ContentDelta: "x"}}},
+		StreamChunks:     []llm.ChatChunk{{ContentDelta: "fallback"}},
+	}
+	if _, err := p.ChatStream(context.Background(), req); !errors.Is(err, wantErr) {
+		t.Fatalf("ChatStream() error = %v, want %v", err, wantErr)
+	}
+
+	// nil 元素放行成功：继续消费分片队列。
+	ch, err := p.ChatStream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	var got []llm.ChatChunk
+	for chunk := range ch {
+		got = append(got, chunk)
+	}
+	if len(got) != 1 || got[0].ContentDelta != "x" {
+		t.Fatalf("streamed chunks = %+v, want queued preset", got)
+	}
+
+	// 两条队列耗尽后回落默认预设。
+	ch2, err := p.ChatStream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	var fallback []llm.ChatChunk
+	for chunk := range ch2 {
+		fallback = append(fallback, chunk)
+	}
+	if len(fallback) != 1 || fallback[0].ContentDelta != "fallback" {
+		t.Fatalf("streamed chunks = %+v, want default preset", fallback)
+	}
+	if len(p.RecordedRequests()) != 3 {
+		t.Fatalf("recorded requests = %d, want 3", len(p.RecordedRequests()))
+	}
+}
+
 func TestProviderEmbedAndHealthCheck(t *testing.T) {
 	want := [][]float32{{0.1, 0.2}}
 	p := &Provider{EmbeddingResponse: want}
