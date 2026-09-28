@@ -325,3 +325,106 @@ func (p *trackingDeleteProvider) DeleteDocument(ctx context.Context, id string) 
 	p.deletedID = id
 	return p.Provider.DeleteDocument(ctx, id)
 }
+
+// namedStubProvider 自报 provider 名（NamedProvider，模拟 dify/weknora 驱动）。
+type namedStubProvider struct {
+	mockkp.Provider
+	name string
+}
+
+func (p *namedStubProvider) ProviderName() string { return p.name }
+
+// reindexingProvider 记录每次 Upsert 收到的映射并返回全新 external id
+// （模拟 ragflow/dify/weknora 删旧建新后外部侧的新文档 id）。
+type reindexingProvider struct {
+	mockkp.Provider
+	calls []knowledgeprovider.KnowledgeDocument
+}
+
+func (p *reindexingProvider) UpsertDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) (string, error) {
+	p.calls = append(p.calls, doc)
+	return fmt.Sprintf("ext-%d", len(p.calls)), nil
+}
+
+// TestServiceSyncDocumentLabelsProviderID P1-1 外部映射一致性：provider_id
+// 落库值为实际驱动自报名（不再硬编码 "pgvector"），更新路径保持既有标签。
+func TestServiceSyncDocumentLabelsProviderID(t *testing.T) {
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, &namedStubProvider{name: "dify"})
+	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
+		ID:      "doc-1",
+		Title:   "Billing",
+		Content: "Billing details",
+	})
+	if err != nil {
+		t.Fatalf("create doc: %v", err)
+	}
+	if doc.ProviderID != "dify" {
+		t.Fatalf("provider id = %q, want dify", doc.ProviderID)
+	}
+
+	updated, err := svc.UpdateDocument(context.Background(), doc.ID, UpdateDocumentRequest{})
+	if err != nil {
+		t.Fatalf("update doc: %v", err)
+	}
+	if updated.ProviderID != "dify" {
+		t.Fatalf("provider id after update = %q, want dify (label sticky)", updated.ProviderID)
+	}
+}
+
+// TestProviderNameFallback 未实现 NamedProvider 或自报名为空白时回落历史
+// 默认 "pgvector"（存量测试桩与落库值语义不变）。
+func TestProviderNameFallback(t *testing.T) {
+	if got := providerName(nil); got != "pgvector" {
+		t.Fatalf("providerName(nil) = %q, want pgvector", got)
+	}
+	if got := providerName(&namedStubProvider{name: "   "}); got != "pgvector" {
+		t.Fatalf("providerName(blank name) = %q, want pgvector", got)
+	}
+}
+
+// TestServiceRunIndexJobPersistsExternalMapping P1-1 一致性收口：重建索引
+// 必须把上次落库的 external id 透传给 provider（删旧建新的删除输入），并把
+// 新 external id 回存——否则下次重建无从删旧，外部残留逐次累积。
+func TestServiceRunIndexJobPersistsExternalMapping(t *testing.T) {
+	docRepo := &memDocRepo{}
+	jobRepo := &memJobRepo{}
+	provider := &reindexingProvider{}
+	svc := NewService(docRepo, jobRepo, provider)
+
+	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
+		ID:      "doc-1",
+		Title:   "Billing",
+		Content: "Billing details",
+	})
+	if err != nil {
+		t.Fatalf("create doc: %v", err)
+	}
+	if doc.ExternalID != "ext-1" {
+		t.Fatalf("initial external id = %q, want ext-1", doc.ExternalID)
+	}
+
+	job, err := svc.QueueIndexJob(context.Background(), QueueIndexJobRequest{
+		JobID:      "job-1",
+		DocumentID: doc.ID,
+	})
+	if err != nil {
+		t.Fatalf("queue job: %v", err)
+	}
+	if _, err := svc.RunIndexJob(context.Background(), RunIndexJobRequest{JobID: job.ID}); err != nil {
+		t.Fatalf("run job: %v", err)
+	}
+
+	if len(provider.calls) != 2 {
+		t.Fatalf("provider upsert calls = %d, want 2", len(provider.calls))
+	}
+	if last := provider.calls[1]; last.ExternalID != "ext-1" {
+		t.Fatalf("reindex upsert external id = %q, want persisted ext-1", last.ExternalID)
+	}
+	stored, err := svc.GetDocument(context.Background(), doc.ID)
+	if err != nil {
+		t.Fatalf("get doc: %v", err)
+	}
+	if stored.ExternalID != "ext-2" {
+		t.Fatalf("persisted external id = %q, want ext-2 (re-upsert result must be stored)", stored.ExternalID)
+	}
+}

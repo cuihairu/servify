@@ -175,3 +175,88 @@ func TestProviderHealthCheckNilClient(t *testing.T) {
 		t.Fatal("nil client health check should fail")
 	}
 }
+
+// recordingClient 记录 UpsertDocument 的删旧/上传调用顺序与参数。
+type recordingClient struct {
+	mockClient
+	calls []string
+}
+
+func (m *recordingClient) UploadDocument(ctx context.Context, kbID string, doc *base.Document) (*base.DocumentInfo, error) {
+	m.calls = append(m.calls, "upload:"+kbID)
+	return &base.DocumentInfo{ID: "doc-new", Title: doc.Title, ProcessedAt: time.Now()}, m.uploadErr
+}
+
+func (m *recordingClient) DeleteDocument(ctx context.Context, kbID, docID string) error {
+	m.calls = append(m.calls, "delete:"+kbID+"/"+docID)
+	return m.deleteErr
+}
+
+// TestProviderUpsertDocumentDeletesStaleExternalFirst P1-1 一致性收口：更新
+// 场景（ExternalID 非空）必须先按本地映射删旧外部文档再上传，防止 WeKnora
+// 纯 Upload 语义残留旧版本被检索命中；删除目标 kb 与上传一致、id 去空格。
+func TestProviderUpsertDocumentDeletesStaleExternalFirst(t *testing.T) {
+	client := &recordingClient{}
+	provider := NewProvider(client, "kb-default")
+
+	id, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		TenantID:    "tenant-a",
+		KnowledgeID: "kb-doc",
+		ExternalID:  " old-1 ",
+		Title:       "Billing",
+		Content:     "Billing content",
+	})
+	if err != nil {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if id != "doc-new" {
+		t.Fatalf("external id = %q", id)
+	}
+	want := []string{"delete:kb-doc/old-1", "upload:kb-doc"}
+	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
+		t.Fatalf("calls = %v, want %v (delete before upload)", client.calls, want)
+	}
+}
+
+// TestProviderUpsertDocumentAbortsWhenStaleDeleteFails 删旧失败即中断且不上传
+// （与 ragflow/dify 同语义：管理端可重试收敛，不留下新旧并存）。
+func TestProviderUpsertDocumentAbortsWhenStaleDeleteFails(t *testing.T) {
+	client := &recordingClient{mockClient: mockClient{deleteErr: errors.New("delete boom")}}
+	provider := NewProvider(client, "kb-1")
+
+	_, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		ExternalID: "old-1",
+		Title:      "Billing",
+		Content:    "Billing content",
+	})
+	if err == nil || err.Error() != "delete stale weknora document old-1: delete boom" {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if len(client.calls) != 1 || client.calls[0] != "delete:kb-1/old-1" {
+		t.Fatalf("calls = %v, want delete only (no upload after failure)", client.calls)
+	}
+}
+
+// TestProviderUpsertDocumentSkipsDeleteWithoutExternalID 首次建档（无旧映射）
+// 不触发删旧，直接上传。
+func TestProviderUpsertDocumentSkipsDeleteWithoutExternalID(t *testing.T) {
+	client := &recordingClient{}
+	provider := NewProvider(client, "kb-1")
+
+	if _, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		Title:   "Billing",
+		Content: "Billing content",
+	}); err != nil {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if len(client.calls) != 1 || client.calls[0] != "upload:kb-1" {
+		t.Fatalf("calls = %v, want upload only", client.calls)
+	}
+}
+
+func TestProviderName(t *testing.T) {
+	var named knowledgeprovider.NamedProvider = NewProvider(nil, "kb-1")
+	if named.ProviderName() != "weknora" {
+		t.Fatalf("ProviderName() = %q", named.ProviderName())
+	}
+}

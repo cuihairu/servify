@@ -157,3 +157,87 @@ func TestProviderHealthCheckPropagatesError(t *testing.T) {
 		t.Fatalf("HealthCheck() error = %v", err)
 	}
 }
+
+// recordingUpsertClient 记录 UpsertDocument 的删旧/建新调用顺序与参数。
+type recordingUpsertClient struct {
+	mockClient
+	calls []string
+}
+
+func (m *recordingUpsertClient) CreateDocumentFromText(ctx context.Context, datasetID string, req *base.CreateDocumentRequest) (*base.Document, error) {
+	m.calls = append(m.calls, "create:"+datasetID)
+	return &base.Document{ID: "doc-new", Name: req.Name}, m.createErr
+}
+
+func (m *recordingUpsertClient) DeleteDocument(ctx context.Context, datasetID, documentID string) error {
+	m.calls = append(m.calls, "delete:"+datasetID+"/"+documentID)
+	return m.deleteErr
+}
+
+// TestProviderUpsertDocumentDeletesStaleExternalFirst P1-1 一致性收口：更新
+// 场景（ExternalID 非空）必须先按本地映射删旧外部文档再建新，防止 Dify 纯
+// Create 语义残留旧版本被检索命中；删除目标 dataset 与建新一致、id 去空格。
+func TestProviderUpsertDocumentDeletesStaleExternalFirst(t *testing.T) {
+	client := &recordingUpsertClient{}
+	provider := NewProvider(client, "dataset-default", SearchConfig{})
+
+	id, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		KnowledgeID: "dataset-doc",
+		ExternalID:  " old-1 ",
+		Title:       "t",
+		Content:     "c",
+	})
+	if err != nil {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if id != "doc-new" {
+		t.Fatalf("external id = %q", id)
+	}
+	want := []string{"delete:dataset-doc/old-1", "create:dataset-doc"}
+	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
+		t.Fatalf("calls = %v, want %v (delete before create)", client.calls, want)
+	}
+}
+
+// TestProviderUpsertDocumentAbortsWhenStaleDeleteFails 删旧失败即中断且不建新
+// （与 ragflow 同语义：管理端可重试收敛，不留下新旧并存）。
+func TestProviderUpsertDocumentAbortsWhenStaleDeleteFails(t *testing.T) {
+	client := &recordingUpsertClient{mockClient: mockClient{deleteErr: errors.New("delete boom")}}
+	provider := NewProvider(client, "dataset-1", SearchConfig{})
+
+	_, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		ExternalID: "old-1",
+		Title:      "t",
+		Content:    "c",
+	})
+	if err == nil || err.Error() != "delete stale dify document old-1: delete boom" {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if len(client.calls) != 1 || client.calls[0] != "delete:dataset-1/old-1" {
+		t.Fatalf("calls = %v, want delete only (no create after failure)", client.calls)
+	}
+}
+
+// TestProviderUpsertDocumentSkipsDeleteWithoutExternalID 首次建档（无旧映射）
+// 不触发删旧，直接建新。
+func TestProviderUpsertDocumentSkipsDeleteWithoutExternalID(t *testing.T) {
+	client := &recordingUpsertClient{}
+	provider := NewProvider(client, "dataset-1", SearchConfig{})
+
+	if _, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		Title:   "t",
+		Content: "c",
+	}); err != nil {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	if len(client.calls) != 1 || client.calls[0] != "create:dataset-1" {
+		t.Fatalf("calls = %v, want create only", client.calls)
+	}
+}
+
+func TestProviderName(t *testing.T) {
+	var named knowledgeprovider.NamedProvider = NewProvider(nil, "", SearchConfig{})
+	if named.ProviderName() != "dify" {
+		t.Fatalf("ProviderName() = %q", named.ProviderName())
+	}
+}

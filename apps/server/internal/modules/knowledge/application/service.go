@@ -168,6 +168,9 @@ func (s *Service) RunIndexJob(ctx context.Context, req RunIndexJobRequest) (*Ind
 	}
 
 	if s.provider != nil {
+		if doc.ProviderID == "" {
+			doc.ProviderID = providerName(s.provider)
+		}
 		externalID, err := s.provider.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{
 			ID:         doc.ID,
 			ProviderID: doc.ProviderID,
@@ -189,8 +192,13 @@ func (s *Service) RunIndexJob(ctx context.Context, req RunIndexJobRequest) (*Ind
 				Error:      job.Error,
 			}, err
 		}
+		// 外部映射回存：新 external id 不落库的话，下次重建索引就无从删旧
+		// 外部文档（dify/weknora 删旧建新语义失效，外部残留逐次累积）。
 		if strings.TrimSpace(externalID) != "" {
 			doc.ExternalID = strings.TrimSpace(externalID)
+		}
+		if err := s.documents.Update(ctx, doc); err != nil {
+			return nil, err
 		}
 	}
 
@@ -222,14 +230,26 @@ func compact(tags []string) []string {
 	return out
 }
 
+// providerName 返回 knowledge_docs.provider_id 的落库值：优先 provider 自报
+// （NamedProvider），未实现时回落 "pgvector"（历史默认，保持存量语义）。
+func providerName(p knowledgeprovider.KnowledgeProvider) string {
+	if named, ok := p.(knowledgeprovider.NamedProvider); ok {
+		if name := strings.TrimSpace(named.ProviderName()); name != "" {
+			return name
+		}
+	}
+	return "pgvector"
+}
+
 func (s *Service) syncDocument(ctx context.Context, doc *domain.Document) error {
 	if s.provider == nil || doc == nil {
 		return nil
 	}
 
-	// 设置 provider ID
+	// 设置 provider ID（外部映射落库字段：与实际驱动一致，未实现 NamedProvider
+	// 的 provider 回落历史默认 "pgvector"，存量测试桩与落库值保持不变）
 	if doc.ProviderID == "" {
-		doc.ProviderID = "pgvector"
+		doc.ProviderID = providerName(s.provider)
 	}
 
 	externalID, err := s.provider.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{

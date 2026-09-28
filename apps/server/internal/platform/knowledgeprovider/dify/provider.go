@@ -81,6 +81,9 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 	return hits, nil
 }
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return "dify" }
+
 func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) (string, error) {
 	if p.client == nil {
 		return "", fmt.Errorf("dify client is not configured")
@@ -91,6 +94,15 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	}
 	if datasetID == "" {
 		return "", fmt.Errorf("dify dataset id is not configured")
+	}
+
+	// 删旧建新：Dify 无幂等 upsert，纯 CreateDocumentFromText 会在更新场景
+	// 残留旧外部文档（检索可命中过期内容）。与 ragflow 同语义——本地映射的
+	// ExternalID 非空时先删旧再建新，删旧失败即中断（管理端可重试收敛）。
+	if oldID := docID(doc.ExternalID); oldID != "" {
+		if err := p.client.DeleteDocument(ctx, datasetID, oldID); err != nil {
+			return "", fmt.Errorf("delete stale dify document %s: %w", oldID, err)
+		}
 	}
 
 	created, err := p.client.CreateDocumentFromText(ctx, datasetID, &base.CreateDocumentRequest{

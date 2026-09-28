@@ -40,6 +40,9 @@ type Provider struct {
 	chunker   *Chunker
 }
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return "pgvector" }
+
 // NewProvider 创建新的 PgvectorProvider
 func NewProvider(db *gorm.DB, emb embedding.Provider, cfg Config) *Provider {
 	if cfg.Search.TopK <= 0 {

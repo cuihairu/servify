@@ -128,15 +128,16 @@ func TestHandlerServiceAdapterWithProvider(t *testing.T) {
 		t.Fatalf("expected provider upsert, got %+v", provider.Documents)
 	}
 	// 外部映射必须上浮到响应 DTO（验收脚本据此断言「已同步外部索引」），
-	// 且经 Get 从库回读保持同一映射。
-	if created.ExternalID != key || created.ProviderID != "pgvector" {
+	// 且经 Get 从库回读保持同一映射。provider_id 落库为实际驱动自报名
+	// （NamedProvider；本测试桩自报 "mock"）。
+	if created.ExternalID != key || created.ProviderID != "mock" {
 		t.Fatalf("expected external mapping on create response, got %+v", created)
 	}
 	fetched, err := adapter.Get(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("get doc: %v", err)
 	}
-	if fetched.ExternalID != key || fetched.ProviderID != "pgvector" {
+	if fetched.ExternalID != key || fetched.ProviderID != "mock" {
 		t.Fatalf("expected persisted external mapping on get, got %+v", fetched)
 	}
 }

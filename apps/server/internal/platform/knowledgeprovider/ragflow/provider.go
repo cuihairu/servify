@@ -24,6 +24,9 @@ func NewProvider(client base.ClientInterface, datasetID string, search SearchCon
 	return &Provider{client: client, datasetID: datasetID, search: search}
 }
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return "ragflow" }
+
 func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchRequest) ([]knowledgeprovider.KnowledgeHit, error) {
 	if p.client == nil {
 		return nil, fmt.Errorf("ragflow client is not configured")

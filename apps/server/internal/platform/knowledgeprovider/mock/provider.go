@@ -16,6 +16,9 @@ type Provider struct {
 	Documents   map[string]knowledgeprovider.KnowledgeDocument
 }
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return "mock" }
+
 func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchRequest) ([]knowledgeprovider.KnowledgeHit, error) {
 	if p.SearchError != nil {
 		return nil, p.SearchError

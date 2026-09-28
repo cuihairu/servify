@@ -27,6 +27,9 @@ import (
 // ProviderID 是本驱动在 knowledge_docs.provider_id 里的落库标识。
 const ProviderID = "local"
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return ProviderID }
+
 // candidateScanLimit 是单次检索的最大候选分块数（进程内余弦是 O(n·d)，
 // 上限防全表扫描；命中面按租户/知识库过滤后仍超限时取最近写入的分块）。
 const candidateScanLimit = 5000

@@ -24,6 +24,9 @@ func NewProvider(defaultTenantID, defaultKnowledgeID string) *Provider {
 	}
 }
 
+// ProviderName 实现 NamedProvider：knowledge_docs.provider_id 落库标识。
+func (p *Provider) ProviderName() string { return "memory" }
+
 func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchRequest) ([]knowledgeprovider.KnowledgeHit, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
