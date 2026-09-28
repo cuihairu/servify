@@ -69,10 +69,16 @@ jobs:
           TEST_COVERAGE_TARGET: "100"
         run: ./scripts/run-tests.sh
 
-      # 覆盖率首传 codecov（README 徽章数据源）；run-tests.sh 已产出合并
+      # 覆盖率上传 codecov（README 徽章数据源）；run-tests.sh 已产出合并
       # profile（scripts/test-results/coverage.out，./apps/server/... 口径）。
-      # fail_ci_if_error=false：codecov 侧抖动不应红仓库 CI。
+      # 条件化：仓库未配 CODECOV_TOKEN secret 时整步跳过且不红（受保护分
+      # 支缺 token 会被 codecov 拒 HTTP 400），secret 就位后对后续运行自动
+      # 生效。secrets 上下文不可直接用于 step 级 if（actionlint 实锤），走
+      # env 代理判定；fail_ci_if_error=false：codecov 侧抖动不应红仓库 CI。
       - name: Upload coverage to Codecov
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         timeout-minutes: 5
         uses: codecov/codecov-action@v4
         with:
