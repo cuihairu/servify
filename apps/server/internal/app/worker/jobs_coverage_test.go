@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -252,6 +254,49 @@ func TestRegisterDefaultWorkersWithRetentionWorkers(t *testing.T) {
 	RegisterDefaultWorkers(app, cfg, db, &fakeRuntimeWorkerDependencies{})
 	if len(app.Workers) != 4 {
 		t.Fatalf("expected 4 workers, got %d", len(app.Workers))
+	}
+}
+
+// 冷热分层（T3）装配：配置归档目录时 worker 挂上归档器（目录随之创建）；
+// 目录不可建时降级为纯清理并告警，worker 照常注册。
+func TestRegisterDefaultWorkersAuditArchiveWiring(t *testing.T) {
+	root := t.TempDir()
+
+	app, err := bootstrap.BuildApp(config.GetDefaultConfig())
+	if err != nil {
+		t.Fatalf("BuildApp() error = %v", err)
+	}
+	cfg := config.GetDefaultConfig()
+	cfg.Security.Audit.Enabled = true
+	cfg.Security.TokenRevocation.Enabled = true
+	cfg.Security.Audit.ArchiveDir = filepath.Join(root, "archive")
+
+	RegisterDefaultWorkers(app, cfg, openSQLiteMemDB(t), &fakeRuntimeWorkerDependencies{})
+	if len(app.Workers) != 4 {
+		t.Fatalf("expected 4 workers, got %d", len(app.Workers))
+	}
+	if fi, err := os.Stat(cfg.Security.Audit.ArchiveDir); err != nil || !fi.IsDir() {
+		t.Fatalf("archive dir not created by wiring: %v", err)
+	}
+
+	// 归档目录挂在文件路障之下：NewFileArchiveWriter 失败 → 告警降级，
+	// 清理 worker 仍注册（既有行为不回退）。
+	blocker := filepath.Join(root, "blocker")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed blocker: %v", err)
+	}
+	app2, err := bootstrap.BuildApp(config.GetDefaultConfig())
+	if err != nil {
+		t.Fatalf("BuildApp() error = %v", err)
+	}
+	cfg2 := config.GetDefaultConfig()
+	cfg2.Security.Audit.Enabled = true
+	cfg2.Security.TokenRevocation.Enabled = true
+	cfg2.Security.Audit.ArchiveDir = filepath.Join(blocker, "archive")
+
+	RegisterDefaultWorkers(app2, cfg2, openSQLiteMemDB(t), &fakeRuntimeWorkerDependencies{})
+	if len(app2.Workers) != 4 {
+		t.Fatalf("expected 4 workers with degraded archive, got %d", len(app2.Workers))
 	}
 }
 

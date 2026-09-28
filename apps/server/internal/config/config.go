@@ -413,6 +413,10 @@ type AuditConfig struct {
 	Retention        time.Duration `yaml:"retention"`
 	CleanupInterval  time.Duration `yaml:"cleanup_interval"`
 	CleanupBatchSize int           `yaml:"cleanup_batch_size"`
+	// ArchiveDir 冷热分层归档目录（T3）：非空时清理 worker 删除过期审计
+	// 记录前先整批落 gzip JSON 快照冷层（保留哈希链可对账），归档失败即
+	// 中断本轮清理不删除；空（默认）= 不归档，保持既有纯删除行为。
+	ArchiveDir string `yaml:"archive_dir"`
 }
 
 type TokenRevocationConfig struct {

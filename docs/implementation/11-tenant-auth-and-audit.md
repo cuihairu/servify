@@ -70,11 +70,11 @@
 
 ## T3 audit-log-foundation
 
-- [-] 定义审计事件模型
-- [-] 覆盖关键写操作，例如工单变更、路由分配、配置变更、权限变更
-- [-] 记录 actor、tenant、resource、before/after、request metadata
-- [-] 设计查询接口与保留策略
-- [-] 为敏感操作提供最小可追溯能力
+- [x] 定义审计事件模型
+- [x] 覆盖关键写操作，例如工单变更、路由分配、配置变更、权限变更
+- [x] 记录 actor、tenant、resource、before/after、request metadata
+- [x] 设计查询接口与保留策略
+- [x] 为敏感操作提供最小可追溯能力
 
 验收：
 
@@ -91,7 +91,7 @@
 - 管理面现已补 `GET /api/audit/logs/export` CSV 导出接口，复用列表过滤参数并支持带作用域约束的轻量导出
 - 审计查询与保留基线已文档化，见 `docs/audit-log-policy.md`
 - 已接入后台审计清理 worker，默认按 180 天保留窗口批量删除过期记录
-- 当前仍未接入冷热分层归档存储，长期保留策略仍以文档约束为主
+- 冷热分层归档已落地（2026-09-28）：`security.audit.archive_dir` 配置归档目录后，清理 worker 删除过期记录前先整批落 gzip JSON 快照冷层，行内保留 `prev_hash`/`entry_hash`（冷层同链可对账），归档失败即中断清理不删除；默认空关闭保持既有行为，策略见 `docs/audit-log-policy.md`
 
 ## T4 configuration-scopes
 

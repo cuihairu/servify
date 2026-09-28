@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -101,8 +102,18 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 	}
 
 	if cfg.Security.Audit.Enabled && db != nil {
+		retention := auditplatform.NewGormRetentionService(db, cfg.Security.Audit.Retention, cfg.Security.Audit.CleanupBatchSize)
+		// 冷热分层（T3）：配置归档目录时删除前先落 gzip JSON 快照冷层，
+		// 归档失败即中断本轮清理（不产生未归档删除）。
+		if dir := strings.TrimSpace(cfg.Security.Audit.ArchiveDir); dir != "" {
+			if writer, err := auditplatform.NewFileArchiveWriter(dir); err != nil {
+				app.Logger.Warnf("audit archive disabled: %v", err)
+			} else {
+				retention = retention.WithArchive(writer)
+			}
+		}
 		app.RegisterWorker(NewAuditCleanupWorker(
-			auditplatform.NewGormRetentionService(db, cfg.Security.Audit.Retention, cfg.Security.Audit.CleanupBatchSize),
+			retention,
 			cfg.Security.Audit.CleanupInterval,
 			app.Logger,
 		))

@@ -263,6 +263,9 @@ security:
     retention: 4320h
     cleanup_interval: 24h
     cleanup_batch_size: 500
+    # Cold-tier archive dir (T3): empty = disabled; set a dir to snapshot
+    # expired audit rows to gzip JSON before deletion (hash chain kept).
+    archive_dir: ""
   session_risk:
     # Local/dev baseline. Production should usually tighten these windows.
     hot_refresh_window_minutes: 15
