@@ -339,6 +339,28 @@ func TestServiceRunIndexJobErrorPaths(t *testing.T) {
 	}
 }
 
+// TestServiceRunIndexJobExternalIDPersistError provider upsert 成功后
+// external id 回存（documents.Update）失败：错误必须冒泡（否则下次重建
+// 索引无从删旧外部文档，外部残留逐次累积）。
+func TestServiceRunIndexJobExternalIDPersistError(t *testing.T) {
+	ctx := context.Background()
+	docRepo := &flakyDocRepo{updateErr: errors.New("persist boom")}
+	docRepo.docs = map[string]*domain.Document{
+		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
+	}
+	jobRepo := &flakyJobRepo{}
+	if err := jobRepo.Create(ctx, &domain.IndexJob{ID: "job-1", DocumentID: "doc-1", Status: domain.IndexJobQueued}); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+
+	provider := &mockkp.Provider{}
+	svc := NewService(docRepo, jobRepo, provider)
+	_, err := svc.RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"})
+	if err == nil || err.Error() != "persist boom" {
+		t.Fatalf("RunIndexJob() error = %v, want persist boom", err)
+	}
+}
+
 func TestServiceSyncDocumentDirect(t *testing.T) {
 	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil)
 	if err := svc.syncDocument(context.Background(), nil); err != nil {

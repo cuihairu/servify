@@ -117,6 +117,9 @@ func TestBuildRuntimeWiresVoiceChannelByASRConfig(t *testing.T) {
 		{name: "asr only caption form", asr: "openai", tts: "", wantVoice: true},
 		{name: "asr and tts", asr: "openai", tts: "openai", wantVoice: true},
 		{name: "unknown asr provider", asr: "not-a-provider", tts: "openai", wantVoice: false},
+		// tts factory 非 NotConfigured 错误：记 Error 后停用 TTS，字幕形态
+		// 照常装配（语音链路可选，不阻断核心启动）。
+		{name: "unknown tts provider", asr: "openai", tts: "not-a-provider", wantVoice: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := newRuntimeTestConfig(t)

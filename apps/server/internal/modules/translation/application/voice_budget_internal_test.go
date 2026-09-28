@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	translationdomain "servify/apps/server/internal/modules/translation/domain"
 	"servify/apps/server/internal/platform/asr"
 	"servify/apps/server/internal/platform/tts"
 )
@@ -160,4 +161,36 @@ func (tr *teardownTranslator) Translate(ctx context.Context, cmd TranslateComman
 	close(tr.entered)
 	<-ctx.Done()
 	return TranslateResult{}, ctx.Err()
+}
+
+// errSynth 立即失败且无视 ctx 的合成替身（收线静默用例：错误来自合成
+// 本身，而非预算/取消）。
+type errSynth struct{}
+
+func (s *errSynth) Synthesize(context.Context, tts.SynthesizeRequest) (tts.SynthesizeResponse, error) {
+	return tts.SynthesizeResponse{}, errors.New("synth broken")
+}
+
+func (s *errSynth) HealthCheck(context.Context) error { return nil }
+
+// TestVoicePipelineSynthErrorDuringTeardownIsSilent 合成失败遇上会话收线
+// （外层 ctx 已取消）：静默返回——字幕已在合成前产出，但既不计错误也不
+// 计降级（那是收线，不是熔断，§3.2 语义）。
+func TestVoicePipelineSynthErrorDuringTeardownIsSilent(t *testing.T) {
+	sink := &budgetSink{}
+	p := shortBudgetPipeline(&budgetTranslator{text: "fast"}, &errSynth{}, sink)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	p.processSentence(ctx, translationdomain.Sentence{Seq: 1, Text: "你好。"})
+
+	if len(sink.captions) != 1 || sink.captions[0].Degraded {
+		t.Fatalf("captions = %+v, want single translated caption", sink.captions)
+	}
+	if sink.audios != 0 {
+		t.Fatal("failed synth must not emit audio")
+	}
+	if len(sink.errors) != 0 {
+		t.Fatalf("teardown-time synth error must be silent, got %v", sink.errors)
+	}
 }

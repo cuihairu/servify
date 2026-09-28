@@ -3,6 +3,7 @@ package embedding
 import (
 	"testing"
 
+	"servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/embedding/openai"
 	"servify/apps/server/internal/platform/embedding/tei"
 	"servify/apps/server/internal/platform/embedding/xinference"
@@ -164,5 +165,32 @@ func TestNewProvider_UnknownProvider(t *testing.T) {
 	}
 	if provider != nil {
 		t.Error("expected provider to be nil when error occurs")
+	}
+}
+
+func TestNewProvider_Local(t *testing.T) {
+	// 显式维度透传。
+	provider, err := NewProvider(FactoryConfig{
+		Provider: "local",
+		Local:    LocalProviderConfig{Dimension: 128},
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	lp, ok := provider.(*local.Provider)
+	if !ok {
+		t.Fatalf("expected *local.Provider, got %T", provider)
+	}
+	if lp.Dimension() != 128 {
+		t.Fatalf("Dimension() = %d, want 128", lp.Dimension())
+	}
+
+	// 维度缺省回落包默认（零依赖形态零配置可用）。
+	fallback, err := NewProvider(FactoryConfig{Provider: "local"})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	if fallback.(*local.Provider).Dimension() != local.DefaultDim {
+		t.Fatalf("Dimension() = %d, want default %d", fallback.(*local.Provider).Dimension(), local.DefaultDim)
 	}
 }
