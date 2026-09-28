@@ -105,10 +105,10 @@
 
 ## 实现落点
 
-- 路由装配：[router.go](https://github.com/timebeau/servify/blob/main/apps/server/internal/app/server/router.go)
-- 路由安全表面目录：[security_surface.go](https://github.com/timebeau/servify/blob/main/apps/server/internal/app/server/security_surface.go)
-- JWT 与 claims 归一化：[platform/auth](https://github.com/timebeau/servify/tree/main/apps/server/internal/platform/auth)
-- Gin 兼容入口：[internal/middleware](https://github.com/timebeau/servify/tree/main/apps/server/internal/middleware)
+- 路由装配：[router.go](https://github.com/cuihairu/servify/blob/main/apps/server/internal/app/server/router.go)
+- 路由安全表面目录：[security_surface.go](https://github.com/cuihairu/servify/blob/main/apps/server/internal/app/server/security_surface.go)
+- JWT 与 claims 归一化：[platform/auth](https://github.com/cuihairu/servify/tree/main/apps/server/internal/platform/auth)
+- Gin 兼容入口：[internal/middleware](https://github.com/cuihairu/servify/tree/main/apps/server/internal/middleware)
 
 ## X-API-Key（service principal，开放平台）
 

@@ -10,8 +10,9 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/timebeau/servify/ci.yml?branch=main&label=CI)](https://github.com/timebeau/servify/actions)
-[![GitHub Stars](https://img.shields.io/github/stars/timebeau/servify?style=social)](https://github.com/timebeau/servify)
+[![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
+[![codecov](https://codecov.io/gh/cuihairu/servify/graph/badge.svg)](https://codecov.io/gh/cuihairu/servify)
+[![GitHub Stars](https://img.shields.io/github/stars/cuihairu/servify?style=social)](https://github.com/cuihairu/servify)
 [![Website](https://img.shields.io/badge/website-servify.cuihairu.site-6366f1?logo=cloudflare)](https://servify.cuihairu.site/)
 
 </div>
@@ -483,7 +484,7 @@ Jaeger 默认地址：`http://localhost:16686`
 1. **创建 Cloudflare Pages 项目**
    - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
    - 进入 **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
-   - 选择 GitHub 仓库 `timebeau/servify`
+   - 选择 GitHub 仓库 `cuihairu/servify`
    - 项目名称设为：`servify-website`
    - 构建设置（静态站点无需构建）：
      - 生产分支：`main`
@@ -523,9 +524,9 @@ Jaeger 默认地址：`http://localhost:16686`
 
 **[⬆ 返回顶部](#-servify)**
 
-Made with ❤️ by [timebeau](https://github.com/timebeau)
+Made with ❤️ by [cuihairu](https://github.com/cuihairu)
 
 [![Apache License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![GitHub](https://img.shields.io/badge/GitHub-timebeau%2Fservify-181717?logo=github)](https://github.com/timebeau/servify)
+[![GitHub](https://img.shields.io/badge/GitHub-cuihairu%2Fservify-181717?logo=github)](https://github.com/cuihairu/servify)
 
 </div>

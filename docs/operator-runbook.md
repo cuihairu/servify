@@ -6,7 +6,7 @@
 >
 > - [部署指南](deployment.md) — 构建、配置与部署流程
 > - [安全基线](security-baseline-operations.md) — 安全检查与生产配置清单
-> - [可观测性运维手册](https://github.com/timebeau/servify/blob/main/deploy/observability/runbook/operational-runbook.md) — 告警排查与指标参考
+> - [可观测性运维手册](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md) — 告警排查与指标参考
 > - [统计口径](metrics-glossary.md) — Dashboard 指标定义
 
 ---
@@ -492,7 +492,7 @@ Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 
 ### 8.4 告警排查详细手册
 
-详见 [`deploy/observability/runbook/operational-runbook.md`](https://github.com/timebeau/servify/blob/main/deploy/observability/runbook/operational-runbook.md)。
+详见 [`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md)。
 
 ### 8.5 指标参考
 

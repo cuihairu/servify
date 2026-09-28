@@ -69,6 +69,18 @@ jobs:
           TEST_COVERAGE_TARGET: "100"
         run: ./scripts/run-tests.sh
 
+      # 覆盖率首传 codecov（README 徽章数据源）；run-tests.sh 已产出合并
+      # profile（scripts/test-results/coverage.out，./apps/server/... 口径）。
+      # fail_ci_if_error=false：codecov 侧抖动不应红仓库 CI。
+      - name: Upload coverage to Codecov
+        timeout-minutes: 5
+        uses: codecov/codecov-action@v4
+        with:
+          files: scripts/test-results/coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          verbose: true
+
       - name: Run Go race tests
         timeout-minutes: 10
         env:

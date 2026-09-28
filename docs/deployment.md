@@ -88,7 +88,7 @@
 ### 3.1 克隆仓库
 
 ```bash
-git clone https://github.com/timebeau/servify.git
+git clone https://github.com/cuihairu/servify.git
 cd servify
 ```
 
@@ -700,7 +700,7 @@ docker compose -f infra/compose/docker-compose.observability.yml logs otel-colle
 
 ### 运维手册
 
-详细的告警排查步骤见：[`deploy/observability/runbook/operational-runbook.md`](https://github.com/timebeau/servify/blob/main/deploy/observability/runbook/operational-runbook.md)
+详细的告警排查步骤见：[`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md)
 
 ---
 
