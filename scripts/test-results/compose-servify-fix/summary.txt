@@ -1,0 +1,7 @@
+compose 模板 servify 服务两缺陷修正端到端复证（2026-09-29）
+命令: SERVIFY_PUBLISH_PORT=18081 REDIS_PUBLISH_PORT=16381 POSTGRES_PUBLISH_PORT=15433 docker compose -p servify-compose-fix -f infra/compose/docker-compose.yml up -d --no-build servify
+镜像: docker tag servify:latest servify-compose-fix-servify（模板仅声明 build: 无 image: 名，up 会按项目前缀触发重建，故预打标签跳过——该行为已记入 todo 已知边界）
+结果: 三容器 Up；servify State.Health.Status=healthy，wget 探针 ExitCode=0（修正前 curl 探针 exec 必败）
+挂载: 容器内 readlink /proc/1/cwd = /root；/root/config.yml 可读（挂载的仓库 config.yml）
+canary: 容器内 echo > logs/canary.txt（相对路径=CWD /root 下）→ 宿主 logs/canary.txt 出现同内容 → 容器内 rm 后宿主同步消失（双向 bind 映射实锤）
+宿主面: curl 127.0.0.1:18081/health → HTTP 200 status=healthy

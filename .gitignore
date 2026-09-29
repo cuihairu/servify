@@ -97,6 +97,9 @@ scripts/test-results/**/*.txt
 # 全容器化 weknora 验收（2026-09-29）：servify 也进容器的整栈证据
 # （响应 + manifest + 容器清单/日志留痕 + 配置快照；服务 JWT 只在内存不落盘）。
 !scripts/test-results/weknora-acceptance-container/**
+# compose 模板 servify 服务两缺陷修正（2026-09-29）端到端复证：
+# 三容器 healthy + wget 探针日志 + 宿主 health 响应 + 摘要（无 secret）。
+!scripts/test-results/compose-servify-fix/**
 # perf 基线入库三件：manifest（check-acceptance-evidence 校验入口）、
 # results.json（P2-8 容量基线数据，docs/perf-baseline.md 引用）、summary.txt
 # （人读摘要）。其余原始证据（含 Authorization 头的 .headers 等）不入库。

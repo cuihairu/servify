@@ -56,7 +56,10 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      # 运行时镜像（Dockerfile 第三阶段 alpine:latest）只装了 ca-certificates，
+      # 没有 curl——用 curl 的健康检查必然 exec 失败、把容器判成 unhealthy。
+      # 改用 alpine 自带的 busybox wget（非 2xx 同样非零退出，语义与 curl -f 一致）。
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -64,9 +67,13 @@ services:
     networks:
       - servify-network
     volumes:
-      - ../../logs:/app/logs
-      - ../../uploads:/app/uploads
-      - ../../config.yml:/app/config.yml:ro
+      # 容器内路径必须落在运行时镜像 WORKDIR（/root/）下：服务把日志写到
+      # ./logs/servify.log、附件写到 ./uploads，均相对进程 CWD 解析。挂到
+      # /app 下时宿主目录永远收不到数据（容器重建即丢），且配置搜索路径
+      # 虽含 /app，但镜像约定的挂载点同样是 WORKDIR 下的 ./config.yml。
+      - ../../logs:/root/logs
+      - ../../uploads:/root/uploads
+      - ../../config.yml:/root/config.yml:ro
     restart: unless-stopped
 
   postgres:
