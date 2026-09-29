@@ -1,0 +1,13 @@
+# 全容器化 weknora 验收最小配置：仅声明 weknora provider（指向 compose
+# 网络内 weknora-mock），其余全走默认；不写 knowledge: 段（避免
+# provider=pgvector/local 抢先分支），sqlite 经 DB_DRIVER env 注入。
+weknora:
+  enabled: true
+  base_url: http://weknora:9000
+  api_key: default-api-key
+  tenant_id: default-tenant
+  knowledge_base_id: default-kb
+  timeout: 5s
+  search:
+    default_limit: 10
+    score_threshold: 0.2

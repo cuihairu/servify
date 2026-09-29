@@ -1,0 +1,1 @@
+{"mq_backend":"memory","service":"weknora-mock","status":"ok","timestamp":"2026-09-29T05:34:57Z","vector_db":"pgvector","version":"1.1.0"}

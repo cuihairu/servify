@@ -1,0 +1,4 @@
+servify-weknora-container-acc	servify:latest	Up About a minute
+servify_weknora	compose-weknora	Up About a minute (healthy)
+compose-redis-1	redis:6-alpine	Up About a minute (healthy)
+compose-postgres-1	pgvector/pgvector:pg15	Up About a minute (healthy)

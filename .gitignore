@@ -94,6 +94,9 @@ scripts/test-results/**/*.txt
 !scripts/test-results/weknora-acceptance/knowledge-sync.json
 !scripts/test-results/weknora-acceptance/ws-stats.json
 !scripts/test-results/weknora-acceptance/webrtc-connections.json
+# 全容器化 weknora 验收（2026-09-29）：servify 也进容器的整栈证据
+# （响应 + manifest + 容器清单/日志留痕 + 配置快照；服务 JWT 只在内存不落盘）。
+!scripts/test-results/weknora-acceptance-container/**
 # perf 基线入库三件：manifest（check-acceptance-evidence 校验入口）、
 # results.json（P2-8 容量基线数据，docs/perf-baseline.md 引用）、summary.txt
 # （人读摘要）。其余原始证据（含 Authorization 头的 .headers 等）不入库。

@@ -1,0 +1,44 @@
+{
+  "checks": {
+    "circuit_breaker_reset_ok": "true",
+    "fallback_query_ok": "true",
+    "fallback_query_strategy": "fallback",
+    "fallback_usage_count_after_disable": "0",
+    "knowledge_provider_disable_ok": "true",
+    "knowledge_provider_enable_ok": "true",
+    "knowledge_sync_ok": "true",
+    "knowledge_upload_ok": "true",
+    "provider_available": "true"
+  },
+  "evidence_files": [
+    "ai-metrics-after-fallback.json",
+    "ai-metrics.json",
+    "ai-query-after-disable.json",
+    "ai-query.json",
+    "ai-status-after-disable.json",
+    "ai-status-after-enable.json",
+    "ai-status.json",
+    "circuit-breaker-reset.json",
+    "knowledge-provider-disable.json",
+    "knowledge-provider-enable.json",
+    "knowledge-sync.json",
+    "knowledge-upload.json",
+    "servify-health.json",
+    "summary.txt",
+    "webrtc-connections.json",
+    "weknora-health.json",
+    "ws-stats.json"
+  ],
+  "mode": "mock",
+  "provider": "weknora",
+  "provider_url": "http://127.0.0.1:9000",
+  "servify_url": "http://127.0.0.1:18080",
+  "status": {
+    "knowledge_provider": "weknora",
+    "knowledge_provider_enabled": "true",
+    "knowledge_provider_healthy": "true",
+    "overall": "healthy",
+    "service_provider_capable": "true",
+    "service_type": "orchestrated_enhanced"
+  }
+}

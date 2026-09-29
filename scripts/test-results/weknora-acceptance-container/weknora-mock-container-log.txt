@@ -1,0 +1,5 @@
+2026/09/29 05:34:17 Mock WeKnora service listening on :9000 (health / search / documents)
+2026/09/29 05:34:58 weknora-mock upload kb=default-kb id=weknora-mock-doc-1 title="测试文档" chunks=1
+2026/09/29 05:34:58 weknora-mock upload kb=default-kb id=weknora-mock-doc-2 title="产品介绍" chunks=1
+2026/09/29 05:34:58 weknora-mock upload kb=default-kb id=weknora-mock-doc-3 title="技术支持" chunks=1
+2026/09/29 05:34:58 weknora-mock upload kb=default-kb id=weknora-mock-doc-4 title="远程协助" chunks=1

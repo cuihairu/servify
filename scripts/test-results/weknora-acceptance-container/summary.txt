@@ -1,0 +1,24 @@
+WeKnora compatibility acceptance summary
+mode=mock
+servify_url=http://127.0.0.1:18080
+weknora_url=http://127.0.0.1:9000
+weknora_enabled=true
+weknora_host=127.0.0.1
+weknora_health_service=weknora-mock
+overall_status=healthy
+service_type=orchestrated_enhanced
+service_provider_capable=true
+knowledge_provider=weknora
+knowledge_provider_enabled=true
+knowledge_provider_healthy=true
+weknora_available=true
+knowledge_provider_disable_ok=true
+knowledge_provider_enable_ok=true
+status_after_disable_enabled=false
+status_after_enable_enabled=true
+circuit_breaker_reset_ok=true
+fallback_query_ok=true
+fallback_query_strategy=fallback
+fallback_usage_count_after_disable=0
+knowledge_upload_ok=true
+knowledge_sync_ok=true
