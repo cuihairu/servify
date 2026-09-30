@@ -49,13 +49,14 @@ if (snapshot) {
 }
 ```
 
-push registrar(服务端 push 端点尚未落地,端点与 fetch 注入,不预设路径):
+push registrar(端点与 fetch 注入,不预设路径——服务端访客端点已落地为 `POST /api/v1/push/register`,契约是 `session_id`/`platform`/`token` 且无注销面(移动 SDK 直连),与本 registrar 的 `device_id`/`environment` + DELETE 注销形态不同):
 
 ```ts
 import { RestPushTokenRegistrar } from '@servify/app-core';
 
 const push = new RestPushTokenRegistrar({
-  endpoint: 'https://api.example.com/api/v1/push/tokens',
+  // 示例占位端点:实际值由宿主应用注入,不要当成服务端路径
+  endpoint: 'https://api.example.com/push/tokens',
   headers: { authorization: `Bearer ${token}` },
 });
 

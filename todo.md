@@ -1274,6 +1274,14 @@
   - 验证命令：`npm -C sdk run typecheck`
   - 验证命令：`npm -C sdk run test:core`
   - 验证命令：`npm -C sdk run test:examples`
+- 复扫（2026-09-30，全库审查建议第 1 项回访）：本项 09-15 按「以服务端当前路由为准」收口过一轮，但**只做了点修正，没建防复发机制**——SDK 侧测试 mock fetch 不校验路由、后端测试无人反查 SDK 面，两侧各自全绿，漂移可再次潜伏。本轮以运行时 `r.Routes()`（全装配 234 条）为权威基准复扫，结论与产出：
+  - **漂移面收敛到 1 处**：`ApiClient.getCustomerSessions` 调 `GET /api/customers/:id/sessions`，而 `RegisterCustomerRoutes` 只有 CRUD + `activity/notes/tags/revoke-tokens`，该调用**恒 404**。按「以后端为准」改 `unsupported` 桩（同 `createSession`/`getCallStatus`/queue 三处先例），注释写明「按客户列会话暂无 REST 面，实时会话走 WebSocket 流」。
+  - **生成资产同步**：`apps/demo-sdk` 两个预构建 bundle 内嵌 core，漂移调用此前已被烤进产物。`scripts/sync-sdk-to-demo.sh` 重跑后 esm/umd 各改 1 行，陈旧字面量归零；CI 既有 `check-generated-drift.sh` 门（over `apps/demo-sdk`）因此保持绿。
+  - **新增漂移守卫** `apps/server/internal/app/server/sdk_route_drift_test.go`（三测试）：①`TestSDKRESTEndpointsResolveAgainstServerRoutes` 自写最小 TS 扫描器解析 `api.ts` 的 `this.request` 调用点（不用正则：路径是模板字面量且可嵌套反引号——`/public/suggestions/initial` 后接一个内含 `?` 的条件插值，正则会截断成半个路径），归一化后逐条比对运行时路由面；带**调用点数量下限**（20）自检，解析器失效即硬失败而非静默空转。②`TestSDKBackendPathLiteralsStayAccountedFor` 守住守卫自身覆盖面——SDK 内持有后端路径字面量的文件集合必须与守卫实际解析的文件一致，新增未纳管文件即红（先剥注释，`voice.ts` 一类只在文档注释举例端点者不算硬依赖；voice 通道本身已由 `voice_route_wiring_test.go` 钉住装配门控两形态）。③`TestSDKWebSocketEndpointRegistered` 覆盖不经 `this.request` 的 `sdk.ts` 硬编码建连路径 `/api/v1/ws`（同时断言字面量仍在源码，防路径改由配置注入后守卫空转）。
+  - **变异验证（证明守卫真能拦住）**：把 `getCustomerSessions` 改回 404 路径 → 守卫红并指到 `api.ts:117 GET /api/customers/:p/sessions`；在 `transport-http` 放未纳管硬编码路径探针 → 覆盖面守卫红并列出该文件。两次均还原复绿。
+  - **附带修复**：新增 `api.test.ts` 的 mock 回调形参未使用触发 `TS6133`（`unplugin-dts` 走 tsc 全量，连 `npm run build` 都打 error 行），改 `_url`/`_init` 前缀修复。
+  - 验证命令：`go test ./apps/server/internal/app/server -run TestSDK -count=1` / `npm -C sdk run typecheck` / `npm -C sdk run lint` / `npm -C sdk run test` / `npm -C sdk run test:surfaces` / `npm -C sdk run test:governance` / `npm -C sdk run version:check` / `bash scripts/sync-sdk-to-demo.sh` / `bash scripts/verify-generated-assets.sh` / `bash scripts/check-text-encoding.sh`
+  - 已知边界：守卫只覆盖「SDK 声明的路径服务端未注册」这一类漂移，不校验请求/响应字段级契约（那属 `sdk/packages/*/src/contracts` 与 protocol-fixtures 的职责）；`stripTSComments` 不特判正则字面量（本仓库无含 `/api` 的正则字面量）。
 
 ### [x] P0-7 SDK 工程门禁失效修复
 

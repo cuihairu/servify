@@ -109,8 +109,15 @@ export class ApiClient {
     return this.request<void>('POST', `/api/omni/sessions/${encodeURIComponent(String(sessionId))}/close`);
   }
 
+  // P0-6 漂移收口（2026-09-30）：服务端从未注册 `GET /api/customers/:id/sessions`
+  // （RegisterCustomerRoutes 只有 CRUD + activity/notes/tags/revoke-tokens），这个
+  // 调用恒 404。以后端当前路由为准，改为 unsupported 桩（同 createSession /
+  // getCallStatus 先例）：按客户列会话暂无 REST 面，实时会话走 WebSocket 流。
   async getCustomerSessions(customerId: number): Promise<ApiResponse<ChatSession[]>> {
-    return this.request<ChatSession[]>('GET', `/api/customers/${customerId}/sessions`);
+    return this.unsupported<ChatSession[]>(
+      'Customer session listing is not exposed by the current server contract.',
+      customerId,
+    );
   }
 
   // 消息相关 API

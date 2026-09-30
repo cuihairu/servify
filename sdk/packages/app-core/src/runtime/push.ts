@@ -37,8 +37,10 @@ function createDefaultFetch(): PushFetch {
 
 /**
  * REST 形态的 PushTokenRegistrar:线格式与服务端 API 风格一致
- * (snake_case:token/platform/device_id/environment)。服务端 push
- * 端点尚未落地,端点与 fetch 全部注入,不预设具体 API 路径。
+ * (snake_case:token/platform/device_id/environment)。服务端访客端点已
+ * 落地为 `POST /api/v1/push/register`(契约 session_id/platform/token、无
+ * 注销面,移动 SDK 直连),与本类的 device_id/environment + DELETE 注销形态
+ * 不同;端点与 fetch 因此全部由宿主注入,不预设具体 API 路径。
  */
 export class RestPushTokenRegistrar implements PushTokenRegistrar {
   private readonly options: RestPushTokenRegistrarOptions;
