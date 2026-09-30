@@ -1343,11 +1343,14 @@
   - README、Makefile、部署配置使用同一套路径
   - 新环境按文档执行可直接跑通
 - 状态：`[x]`
-- 最近进展：已把 `website-dev`、`website-deploy` 改到真实目录 `apps/website`，并将 deploy 配置切换到现有 `apps/website/wrangler.jsonc`。2026-09-21 复核补漏：release.yml Setup Node 的 cache-dependency-path 与 docs/CI_SELF_HOSTED.md 各残留一处 `apps/website-worker` 引用（目录已删，release 触发时 setup-node 必失败；push CI 不跑 release workflow 故长期未暴露），两处已清，全仓 `rg website-worker` 归零
+- 最近进展：已把 `website-dev`、`website-deploy` 改到真实目录 `apps/website`，并将 deploy 配置切换到现有 `apps/website/wrangler.jsonc`。2026-09-21 复核补漏：release.yml Setup Node 的 cache-dependency-path 与 docs/CI_SELF_HOSTED.md 各残留一处 `apps/website-worker` 引用（目录已删，release 触发时 setup-node 必失败；push CI 不跑 release workflow 故长期未暴露），两处已清，全仓 `rg website-worker` 归零。2026-09-30 收尾审计（与上一条同族的「引用路径失配」面）又清两处：① `make docs` 是最后一处自成分派——裸 `swag init -o docs/` 落进 .gitignore 显式登记的散落 byproduct 死路径（注释原文「正主在 docs/generated/api/，勿提交」）且未钉 swag 版本，与 `regenerate-generated-assets.sh` / ci.yml / docs-pages.yml 三处引用的正规链不同源不同目录，已对齐为 `swag@v1.16.6 … -o docs/generated/api`；② README 官网部署口径「通过 GitHub Actions 自动部署」与事实失配（.github/workflows 无网站部署 workflow，部署由 Cloudflare 侧 Connect to Git 触发）。两项均已补进 `scripts/makefile_generated_assets_test.go` 守卫（输出目录+版本四处同源、manifest 登记三件产物、website 三目标路径 token 级判定+wrangler assets.directory+README 输出目录在位）。审计同族第三处：CI script-checks 的 `-run` 白名单是手工 alternation，**漏登记不红、守卫静默不跑**——2026-09-29 新增的两个 compose 运行时守卫进了仓库却从未在 CI 执行（81 个测试函数里恰好漏这 2 个），已补登记并加元守卫 `scripts/ci_script_checks_coverage_test.go`（① 每个 `Test*` 必须被白名单命中；② 白名单无陈旧登记，治「测试改名后 alternation 静默失准」；③ 自指要求——元测试自身不登记即红）。元守卫自指第③条由①自然蕴含，无另立测试。
 - 完成证据：
   - `Makefile`
   - `apps/website/README.md`
+  - `scripts/makefile_generated_assets_test.go`
+  - `scripts/ci_script_checks_coverage_test.go`
   - 验证命令：`rg -n "website-dev:|website-deploy:|website-pages-deploy:|apps/website/wrangler.jsonc" Makefile`
+  - 验证命令：`go test ./scripts -run 'TestMakefileDocsTarget|TestMakefileWebsite|TestCIScriptChecks' -count=1`
 
 ### [x] P1-6 Bootstrap 落地与入口 wiring 收口（2026-09-19，刀 21 收官）
 
