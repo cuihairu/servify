@@ -220,11 +220,12 @@ update-deps:
 	go -C apps/server mod tidy
 	go -C apps/server mod download
 
-# Generate API documentation (if using swag)
+# Generate API documentation (canonical: pinned swag + docs/generated/api;
+# must stay in lockstep with scripts/regenerate-generated-assets.sh / ci.yml /
+# docs-pages.yml — guarded by scripts/makefile_generated_assets_test.go)
 docs:
 	@echo "Generating API documentation..."
-	@command -v swag >/dev/null 2>&1 || { echo "swag is not installed. Install with: go install github.com/swaggo/swag/cmd/swag@latest"; exit 1; }
-	swag init -g apps/server/cmd/server/main.go -o docs/
+	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g apps/server/cmd/server/main.go -o docs/generated/api
 
 changelog:
 	@echo "Generating changelog draft..."

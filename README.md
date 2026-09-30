@@ -477,7 +477,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ## 🌐 官网部署
 
-**[servify.cuihairu.site](https://servify.cuihairu.site/)** — 托管在 Cloudflare Pages，通过 GitHub Actions 自动部署。（原 servify.cloud 域名未续费已过期）
+**[servify.cuihairu.site](https://servify.cuihairu.site/)** — 托管在 Cloudflare Pages，由 Cloudflare 侧 Connect to Git 集成在推送后自动部署（不经过本仓库的 GitHub Actions）。（原 servify.cloud 域名未续费已过期）
 
 ### 首次设置
 
@@ -497,7 +497,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ### 🚀 自动部署
 
-当 `apps/website/` 目录下的文件有变更时，CI 会自动触发部署到 Cloudflare Pages。
+当 `apps/website/` 目录下的文件有变更并推送到 `main` 时，Cloudflare Pages 的 Connect to Git 集成会自动重新部署（部署由 Cloudflare 侧触发，本仓库 `.github/workflows/` 不含网站部署 workflow；手动部署可用 `make website-deploy` / `make website-pages-deploy`）。
 
 ---
 
