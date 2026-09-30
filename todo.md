@@ -1515,3 +1515,39 @@
   - `P0-6 SDK 与后端协议漂移收口`
   - `P0-7 SDK 工程门禁失效修复`
   - `P0-8 网站与部署脚本路径失配`
+
+---
+
+## 巡检派发执行记录（2026-09-30）
+
+**派发指令**：读 todo.md/台账取最靠前未完成项执行并补测试；Android/iOS 消费半边与 Phase 3 若属产品节奏未排期则显式跳过顺延注明；管理端命令用 `npx -y pnpm@10.22.0 --dir apps/admin run ...`；单用途提交，测试全绿后 push。
+
+**巡检结论**：**全库无本地可执行的未完成项**。唯一 `[-]` 项 P1-1 为纯外部凭证阻塞；所有其他台账项均已 `[x]`。显式跳过注明如下：
+
+| 项目 | 状态 | 跳过/顺延理由 | 备注 |
+|------|------|--------------|------|
+| **P1-1 real 模式验收** | `[-]` 仅剩此项 | **外部凭证阻塞**：需真实 WeKnora/Dify/RAGFlow 服务（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪，real 入口拒私网地址） | Mock/容器化口径全闭环；compose 模板缺陷已修正；本机无可推进动作 |
+| **Android/iOS 消费半边** | 设计文档登记「部分通过」 | **产品节奏未排期**：design doc §1.6「移动端待接」；PROTOCOL §4.5/9.2 明确 `UnknownIgnored` 兜底 | Core 已消费 message-translated（WSMessage 成员+同名事件+fixtures 回放）；管理端历史 metadata 译文+语言下拉已落地；SDK 半边已落地（translateText、readMessageTranslation） |
+| **Phase 3 (WebRTC 音轨/端到端评估/租户配额)** | 设计文档登记 | **产品节奏未排期/依赖 RA-7**：需 RA-7 SFU-lite 媒体桥接完成后盘 | 当前 RA-5/7/9/10 设计登记态（`docs/remote-assistance-status.md`），RA-8 SDK 半边剩余 |
+| **CODECOV_TOKEN 配置** | CI 步骤配置就绪 | **用户侧动作**：需 `gh secret set CODECOV_TOKEN -R cuihairu/servify`（token 值不在仓库/本机） | CI `codecov/codecov-action@v4` 已接入、`fail_ci_if_error=false` 避免红流水线；首传被拒 HTTP 400 证据在 run 36373736165 日志 |
+
+**本地可执行候选核实**：
+- **P1-7 剩余方向**（L1424 登记）：`docs/modules-dependency-map.md` §3.1 已定稿「引用面收口已达成（2026-09-30）」——modules 内已迁出类型别名引用清零（18 文件机械替换为 owner 包直连），新增 parser 级门禁 `TestModulesDoNotUseMigratedTypeAliases`（动态解析 models 包已迁出集合、含测试文件、解析为空即守卫失配失败防假绿），已纳入 CI script-checks 白名单（元守卫强制括号平衡校验通过）。**门禁全绿**：`go test ./scripts -run "TestModulesDoNotUseMigratedTypeAliases|TestModulesDoNotImportLegacyServices"` PASS；`go build ./apps/server/...` 绿；gofmt/vet 干净。第 1 节别名随 P3-2 services 层整体删除已消亡（服务端无残留）。**无代码动作需求**。
+- 共享领域核心（User/Ticket/Session/Agent/Message/Customer 等）仍维持在 `internal/models` 作为 shared kernel（§3.1 定稿），modules 直接引用约 60 非测试文件——属架构演进方向，非单轮可闭环任务。
+
+**验证命令执行记录**：
+```bash
+# Go guard tests
+go test ./scripts -run "TestModulesDoNot(ImportLegacyServices|UseMigratedTypeAliases)|TestAdminVoiceEntry" -v
+# → 4 tests PASS
+
+# Admin frontend
+npx -y pnpm@10.22.0 --dir apps/admin run typecheck   # tsc 0 错
+npx -y pnpm@10.22.0 --dir apps/admin run build      # max build 编译成功
+
+# CI script-checks 白名单正则括号平衡校验
+python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split('-run ')[1].split('\n')[0].strip())"
+# → compiles OK
+```
+
+**提交纪律**：本轮零代码变更（巡检只读），仅补记 `todo.md` 巡检结论。工作树现有 `sdk/android/.../ServifyChat.kt` 与 `sdk/ios/.../ServifyChat.swift` 变更属并发会话产出（D7 读游标同步），非本轮内容，**不纳入本次 git add**。
