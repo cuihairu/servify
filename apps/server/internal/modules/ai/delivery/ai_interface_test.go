@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 func TestAIService_GetStatus(t *testing.T) {
 	service := &AIService{
 		openAIAPIKey: "test-key",
 		knowledgeBase: &KnowledgeBase{
-			documents: []models.KnowledgeDoc{
+			documents: []knowledgedomain.KnowledgeDoc{
 				{Title: "doc1", Content: "content1"},
 				{Title: "doc2", Content: "content2"},
 			},
@@ -49,7 +50,7 @@ func TestAIService_GetStatus_NoAPIKey(t *testing.T) {
 	service := &AIService{
 		openAIAPIKey: "",
 		knowledgeBase: &KnowledgeBase{
-			documents: []models.KnowledgeDoc{},
+			documents: []knowledgedomain.KnowledgeDoc{},
 		},
 	}
 

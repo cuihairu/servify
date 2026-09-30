@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	platformauth "servify/apps/server/internal/platform/auth"
@@ -26,7 +27,7 @@ func newSuggestionDeliveryTestDB(t *testing.T) *gorm.DB {
 	}
 	if err := db.AutoMigrate(
 		&models.Ticket{},
-		&models.KnowledgeDoc{},
+		&knowledgedomain.KnowledgeDoc{},
 	); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestHandlerServiceSuggest_WithKnowledgeDocs(t *testing.T) {
 	db := newSuggestionDeliveryTestDB(t)
 	svc := suggestiondelivery.NewHandlerService(db)
 
-	doc := &models.KnowledgeDoc{
+	doc := &knowledgedomain.KnowledgeDoc{
 		Title:    "API Guide",
 		Content:  "How to use the API",
 		Category: "Technical",
@@ -150,7 +151,7 @@ func TestHandlerServiceSuggest_ScopedByWorkspace(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create ticket B: %v", err)
 	}
-	if err := db.Create(&models.KnowledgeDoc{
+	if err := db.Create(&knowledgedomain.KnowledgeDoc{
 		Title:       "Workspace A login guide",
 		Content:     "Reset password in workspace A",
 		Category:    "Technical",
@@ -160,7 +161,7 @@ func TestHandlerServiceSuggest_ScopedByWorkspace(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("create doc A: %v", err)
 	}
-	if err := db.Create(&models.KnowledgeDoc{
+	if err := db.Create(&knowledgedomain.KnowledgeDoc{
 		Title:       "Workspace B login guide",
 		Content:     "Reset password in workspace B",
 		Category:    "Technical",

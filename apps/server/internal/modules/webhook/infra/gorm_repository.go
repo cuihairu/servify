@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"servify/apps/server/internal/modules/webhook/application"
 
 	"gorm.io/gorm"
@@ -179,8 +180,8 @@ func (r *GormRepository) GetSessionSnapshot(ctx context.Context, sessionID strin
 	return &session, nil
 }
 
-func (r *GormRepository) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
-	var call models.VoiceCall
+func (r *GormRepository) GetCallSnapshot(ctx context.Context, callID string) (*voiceinfra.VoiceCall, error) {
+	var call voiceinfra.VoiceCall
 	if err := r.db.WithContext(ctx).First(&call, "id = ?", callID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, application.ErrNotFound

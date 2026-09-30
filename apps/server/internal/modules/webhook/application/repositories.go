@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 )
 
 // DeliveryListQuery 投递日志分页查询。
@@ -36,5 +37,5 @@ type Repository interface {
 	// 载荷回查：bus 事件载荷不可跨 Redis 透传，订阅者按 AggregateID 前缀回查快照
 	GetTicketSnapshot(ctx context.Context, ticketID uint) (*models.Ticket, error)
 	GetSessionSnapshot(ctx context.Context, sessionID string) (*models.Session, error)
-	GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error)
+	GetCallSnapshot(ctx context.Context, callID string) (*voiceinfra.VoiceCall, error)
 }

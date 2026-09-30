@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	platformauth "servify/apps/server/internal/platform/auth"
 
@@ -39,7 +40,7 @@ func (r *GormRepository) FindTicketCandidates(ctx context.Context, tokens []stri
 }
 
 func (r *GormRepository) FindKnowledgeDocCandidates(ctx context.Context, tokens []string) ([]suggestionapp.KnowledgeDocCandidate, error) {
-	q := applyScopeFilter(r.db.WithContext(ctx).Model(&models.KnowledgeDoc{}), ctx).
+	q := applyScopeFilter(r.db.WithContext(ctx).Model(&knowledgedomain.KnowledgeDoc{}), ctx).
 		Select("id, title, content, category, tags").
 		Order("created_at DESC")
 
@@ -59,7 +60,7 @@ func (r *GormRepository) FindKnowledgeDocCandidates(ctx context.Context, tokens 
 // 文档，updated_at 新近优先。
 func (r *GormRepository) FindPublicKnowledgeDocs(ctx context.Context, limit int) ([]suggestionapp.KnowledgeDocCandidate, error) {
 	var rows []suggestionapp.KnowledgeDocCandidate
-	err := applyScopeFilter(r.db.WithContext(ctx).Model(&models.KnowledgeDoc{}), ctx).
+	err := applyScopeFilter(r.db.WithContext(ctx).Model(&knowledgedomain.KnowledgeDoc{}), ctx).
 		Select("id, title, category").
 		Where("is_public = ?", true).
 		Order("updated_at DESC").
@@ -78,7 +79,7 @@ func (r *GormRepository) FindPublicKnowledgeDocCandidates(ctx context.Context, t
 	if len(tokens) == 0 {
 		return nil, nil
 	}
-	q := applyScopeFilter(r.db.WithContext(ctx).Model(&models.KnowledgeDoc{}), ctx).
+	q := applyScopeFilter(r.db.WithContext(ctx).Model(&knowledgedomain.KnowledgeDoc{}), ctx).
 		Select("id, title, content, category, tags").
 		Where("is_public = ?", true).
 		Order("created_at DESC")

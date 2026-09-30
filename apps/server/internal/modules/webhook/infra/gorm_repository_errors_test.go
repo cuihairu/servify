@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"servify/apps/server/internal/modules/webhook/application"
 )
 
@@ -112,7 +113,7 @@ func TestRepoSnapshotLookupsSurfacesDBErrors(t *testing.T) {
 	}
 
 	// 表被删：真实 DB 错误分支
-	for _, drop := range []interface{}{&models.Ticket{}, &models.Session{}, &models.VoiceCall{}} {
+	for _, drop := range []interface{}{&models.Ticket{}, &models.Session{}, &voiceinfra.VoiceCall{}} {
 		if err := db.Migrator().DropTable(drop); err != nil {
 			t.Fatalf("drop %T: %v", drop, err)
 		}

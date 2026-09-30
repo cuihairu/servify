@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"servify/apps/server/internal/modules/webhook/application"
 
 	"github.com/glebarez/sqlite"
@@ -35,11 +36,11 @@ func newWebhookUnitTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&webhookdomain.WebhookEndpoint{}, &webhookdomain.WebhookDelivery{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{}); err != nil {
+	if err := db.AutoMigrate(&webhookdomain.WebhookEndpoint{}, &webhookdomain.WebhookDelivery{}, &models.Ticket{}, &models.Session{}, &voiceinfra.VoiceCall{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Migrator().DropTable(&webhookdomain.WebhookDelivery{}, &webhookdomain.WebhookEndpoint{}, &models.Ticket{}, &models.Session{}, &models.VoiceCall{})
+		_ = db.Migrator().DropTable(&webhookdomain.WebhookDelivery{}, &webhookdomain.WebhookEndpoint{}, &models.Ticket{}, &models.Session{}, &voiceinfra.VoiceCall{})
 	})
 	return db
 }
@@ -182,7 +183,7 @@ func TestSnapshotLookups(t *testing.T) {
 	if err := db.Create(&models.Session{ID: "sess-42"}).Error; err != nil {
 		t.Fatalf("seed session: %v", err)
 	}
-	if err := db.Create(&models.VoiceCall{ID: "call-42", SessionID: "sess-42", Status: "started", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {
+	if err := db.Create(&voiceinfra.VoiceCall{ID: "call-42", SessionID: "sess-42", Status: "started", StartedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now()}).Error; err != nil {
 		t.Fatalf("seed call: %v", err)
 	}
 

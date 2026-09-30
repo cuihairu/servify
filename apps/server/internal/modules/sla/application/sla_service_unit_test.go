@@ -7,6 +7,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	automationinfra "servify/apps/server/internal/modules/automation/infra"
 
 	"github.com/sirupsen/logrus"
@@ -649,7 +650,7 @@ func TestSLAUnit_Helpers(t *testing.T) {
 func TestSLAUnit_SetAutomationModule(t *testing.T) {
 	svc := newSLAUnitTestService(t)
 	automationDB := newSLATestDB(t,
-		&models.AutomationTrigger{}, &models.AutomationRun{},
+		&automationdomain.AutomationTrigger{}, &automationdomain.AutomationRun{},
 		&models.Ticket{}, &models.TicketComment{},
 	)
 	svc.SetAutomationModule(automationapp.NewService(automationinfra.NewGormRepository(automationDB)))

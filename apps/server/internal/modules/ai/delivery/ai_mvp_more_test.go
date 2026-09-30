@@ -3,14 +3,14 @@ package delivery
 import (
 	"testing"
 
-	"servify/apps/server/internal/models"
 	aimodule "servify/apps/server/internal/modules/ai/application"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 func TestKnowledgeBase_Search_Basic(t *testing.T) {
 	kb := &KnowledgeBase{}
-	kb.AddDocument(models.KnowledgeDoc{Title: "A", Content: "hello world"})
-	kb.AddDocument(models.KnowledgeDoc{Title: "B", Content: "foo bar"})
+	kb.AddDocument(knowledgedomain.KnowledgeDoc{Title: "A", Content: "hello world"})
+	kb.AddDocument(knowledgedomain.KnowledgeDoc{Title: "B", Content: "foo bar"})
 	got := kb.Search("hello", 5)
 	if len(got) == 0 {
 		t.Fatalf("expected >=1 result")

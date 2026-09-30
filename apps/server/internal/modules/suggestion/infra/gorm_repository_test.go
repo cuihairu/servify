@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	platformauth "servify/apps/server/internal/platform/auth"
 
@@ -30,7 +31,7 @@ func newSuggestionInfraTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.KnowledgeDoc{}, &models.SuggestionExposureLog{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &knowledgedomain.KnowledgeDoc{}, &models.SuggestionExposureLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {
@@ -98,7 +99,7 @@ func TestGormSuggestionFindKnowledgeDocCandidates(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 	base := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
-	docs := []models.KnowledgeDoc{
+	docs := []knowledgedomain.KnowledgeDoc{
 		{ID: 1, Title: "refund policy", Content: "how to refund within 30 days", Category: "billing", Tags: "refund,money", TenantID: "t1", CreatedAt: base, UpdatedAt: base},
 		{ID: 2, Title: "vpn setup", Content: "install vpn client", Category: "it", Tags: "network", TenantID: "t1", CreatedAt: base.Add(time.Hour), UpdatedAt: base.Add(time.Hour)},
 	}
@@ -134,7 +135,7 @@ func TestGormSuggestionFindKnowledgeDocCandidates(t *testing.T) {
 		t.Fatalf("expected no cross-workspace candidates, got %+v", rows)
 	}
 
-	if err := db.Migrator().DropTable(&models.KnowledgeDoc{}); err != nil {
+	if err := db.Migrator().DropTable(&knowledgedomain.KnowledgeDoc{}); err != nil {
 		t.Fatalf("drop docs: %v", err)
 	}
 	if _, err := repo.FindKnowledgeDocCandidates(ctx, []string{"refund"}); err == nil {
@@ -147,7 +148,7 @@ func TestGormSuggestionFindPublicKnowledgeDocs(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 	base := time.Date(2026, 6, 2, 9, 0, 0, 0, time.UTC)
-	docs := []models.KnowledgeDoc{
+	docs := []knowledgedomain.KnowledgeDoc{
 		{ID: 1, Title: "private refund policy", ProviderID: "p", ExternalID: "e1", TenantID: "t1", IsPublic: false, CreatedAt: base, UpdatedAt: base.Add(time.Hour)},
 		{ID: 2, Title: "public billing faq", ProviderID: "p", ExternalID: "e2", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base},
 		{ID: 3, Title: "public account faq", ProviderID: "p", ExternalID: "e3", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base.Add(2 * time.Hour)},
@@ -190,7 +191,7 @@ func TestGormSuggestionFindPublicKnowledgeDocCandidates(t *testing.T) {
 	repo := NewGormRepository(db)
 	ctx := context.Background()
 	base := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
-	docs := []models.KnowledgeDoc{
+	docs := []knowledgedomain.KnowledgeDoc{
 		{ID: 1, Title: "refund guide", Content: "how to refund", ProviderID: "p", ExternalID: "e1", TenantID: "t1", IsPublic: true, CreatedAt: base, UpdatedAt: base},
 		{ID: 2, Title: "secret refund policy", Content: "internal only", ProviderID: "p", ExternalID: "e2", TenantID: "t1", IsPublic: false, CreatedAt: base, UpdatedAt: base},
 	}

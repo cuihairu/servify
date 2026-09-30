@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
@@ -30,7 +31,7 @@ func newSuggestionUnitDB(t *testing.T) *gorm.DB {
 		t.Fatalf("db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.KnowledgeDoc{}, &models.SuggestionExposureLog{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &knowledgedomain.KnowledgeDoc{}, &models.SuggestionExposureLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	t.Cleanup(func() {

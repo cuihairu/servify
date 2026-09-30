@@ -1,13 +1,13 @@
 package delivery
 
 import (
-	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"testing"
 )
 
 func TestAIService_BuildPrompt_IncludesDocsAndQuery(t *testing.T) {
 	s := NewAIService("", "")
-	docs := []models.KnowledgeDoc{{Title: "Intro", Content: "Servify"}}
+	docs := []knowledgedomain.KnowledgeDoc{{Title: "Intro", Content: "Servify"}}
 	p := s.buildPrompt("什么是Servify?", docs)
 	if !contains(p, "Intro") || !contains(p, "Servify") || !contains(p, "什么是Servify?") {
 		t.Fatalf("prompt missing expected content: %s", p)

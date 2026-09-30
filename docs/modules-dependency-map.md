@@ -5,7 +5,7 @@
 
 ## 1. modules → internal/services（legacy 服务层）
 
-**当前状态：0 直连（已收口）。**
+**当前状态：0 直连（已收口）；最终态达成——legacy `internal/services` 已随 P3-2（2026-09-19 收官，18 刀）整体移除，本节别名随之消亡，下表转历史存档。**
 
 本轮切法：契约类型下沉到各模块，legacy `internal/services` 通过**类型别名**反向引用同一份定义——两侧是同一个 Go 类型，不是两份平行 DTO，wire contract 与既有测试零漂移。
 
@@ -21,6 +21,7 @@
 - ai 的契约放在 delivery 而非 application，是因为 `modules/ai/application/types.go` 已有一个同名但 shape 不同的 `AIResponse`（orchestrator 内部用），避免重名冲突。
 - customer 的契约放在 `modules/customer/api`（package `customerapi`）而非 application，是因为 swag（API 文档生成）按**包声明名**索引注解里的类型限定符，`application` 在多个模块下重名会歧义；`customer_handler.go` 的注解直接写 `customerapi.CustomerX`，是唯一能让 swag 无 flag 解析成功的挂法。该约束已推广：凡被 swag 注解引用（直接或经 `models.`/`services.` 别名链）的类型，其所在包声明名必须全仓唯一（quality 的 `qualitydomain` 即此例，实证注解可保持 `models.QualityReview` 不动、产物零漂移）；knowledge/ai 的 handler 无 swag 注解，不受此约束。
 - 防回归门禁：`go test ./scripts -run TestModulesDoNotImportLegacyServices`（parser 级检查 import，含测试文件），已纳入 CI script-checks。
+- **2026-09-30 引用面收口**：§2 的 models 侧过渡入口（类型别名、投递状态常量别名、`NewEmbedding` 转发函数）在 modules 内的引用全部清零、改经 owner 包直连（suggestion/ai → `knowledgedomain`，webhook → `voiceinfra`，sla 测试 → `automationdomain`；同类型别名直连，编译期等价、零行为变化），由新守卫 `TestModulesDoNotUseMigratedTypeAliases` 钉住——parser 级、从 models 包源码动态解析过渡入口集合（新迁移自动纳入，解析为空即守卫自身失败防假绿），含测试文件，已纳入 CI script-checks。别名本身仍服务 bootstrap/migrate、handlers swag 注解、platform provider 等 legacy 引用方，待其各自迁移后删除。
 
 ## 2. modules → internal/models（共享模型层）
 
@@ -57,11 +58,11 @@
 
 ## 3. 拆分策略（已定稿，解除 P1-7 阻塞项）
 
-1. **共享领域核心保留为 shared kernel**：`User` / `Ticket` / `Session` / `Agent` / `Message` / `Customer` 等跨模块高频类型不拆散到单一模块，维持在共享模型层（当前 `internal/models`），但对 modules 的引用收口为"只读领域形状"，持久化细节（GORM scope、hook）由各模块 infra 层负责。
+1. **共享领域核心保留为 shared kernel**：`User` / `Ticket` / `Session` / `Agent` / `Message` / `Customer` 等跨模块高频类型不拆散到单一模块，维持在共享模型层（当前 `internal/models`），但对 modules 的引用收口为"只读领域形状"，持久化细节（GORM scope、hook）由各模块 infra 层负责。**引用面收口已达成（2026-09-30）**：modules 内已迁出类型别名引用清零（18 文件机械替换为 owner 包直连），新增 parser 级门禁 `TestModulesDoNotUseMigratedTypeAliases`（动态解析 models 包已迁出集合，含测试文件，纳入 CI 白名单）强制 modules 不得再借道 `internal/models` 的过渡别名——别名最终态清理的前置条件已满足。
 2. **模块自有类型逐步迁入所属模块**：webhook / automation / quality / assist / voice / knowledge 的自有模型，按"先 delivery/application 引用改为模块内类型 + legacy 别名过渡"的同一套切法迁移，优先级按"引用面小、无跨模块消费"排序：voice → gamification → suggestion → webhook → automation → quality → assist。
    - **迁移日志**：①2026-09-15 voice 完成——`VoiceCall` / `VoiceRecording` / `VoiceTranscript` 三个 GORM 模型迁入 `modules/voice/infra/models.go`（infra 是 voice 模块内唯一消费方，直接定义在 infra 消掉映射层），`internal/models` 保留类型别名，`bootstrap/migrate.go` 的 AutoMigrate 注册与 webhook 的快照只读经别名零改动；voice/infra 六个文件（含测试）全部去掉 `internal/models` import。②2026-09-15 webhook 完成——`models/webhook.go` 整文件迁入 `modules/webhook/domain/models.go`（`WebhookEndpoint` / `WebhookDelivery` + 四个投递状态常量；模块三层全消费故落 domain 而非 infra），`internal/models` 保留类型与常量别名，migrate 注册与 handlers 测试经别名零改动。③2026-09-15 automation 完成——`models/automation.go` 整文件迁入 `modules/automation/domain/models.go`（`AutomationTrigger` / `AutomationRun` / `AutomationTimer`，`AutomationRun.Trigger` 关联同文件类型随迁自洽），`internal/models` 保留类型别名，migrate 注册、legacy `services/automation_*` 与 handlers 测试经别名零改动。④2026-09-16 quality 完成——`QualityReview` 迁入 `modules/quality/domain/models.go`，包声明用唯一的 `qualitydomain`（首个被 swag 注解引用的迁移对象：`quality_handler.go` 的 `@Success 200 {object} models.QualityReview` 经 models 别名链解析，实证 swag 产物零漂移、29 字段完整），`internal/models` 保留类型别名，migrate 注册与 handlers 测试零改动。⑤2026-09-16 assist 完成——`RemoteAssistSession` / `RemoteAssistAnnotation` 迁入 `modules/assist/domain/models.go`，包声明用唯一的 `assistdomain`（assist_handler.go / assist_recording_handler.go 共 5 处 swag 注解引用 `models.RemoteAssistX`，经别名链解析，实证产物零漂移），migrate 注册与 handlers 零改动。⑥2026-09-16 knowledge 完成（**最后一刀，模块自有类型迁移全部收口**）——`KnowledgeDoc` / `KnowledgeIndexJob` 迁入 `modules/knowledge/domain/models.go`，向量列值对象 `Embedding` / `NewEmbedding` 从 `models/embedding.go` 整文件随迁 `domain/embedding.go`（它是 KnowledgeDoc 的列类型，不随迁则 domain 反向依赖 models 成环）；`internal/models` 保留类型别名与 `NewEmbedding` 转发函数，migrate 注册、pgvector provider、legacy `services/ai*` / `knowledge_doc_service` 与 handlers 经别名零改动；knowledge 的 handler 无 swag 注解，domain 包声明保持通用 `domain` 无需唯一命名；knowledge 模块 6 个文件（infra×1 / delivery×2 + 测试×3）全部去掉 `internal/models` import，`Embedding` 的 Scan/Value 测试随文件迁入 domain 包保住覆盖率。
    - **顺序纠偏（2026-09-15）**：gamification 与 suggestion 经逐类型核对**没有模块自有 models 类型**——gamification 只消费共享核心（`Ticket` / `CustomerSatisfaction` / `Agent` / `User`），suggestion 只消费 `Ticket` 与 knowledge 自有的 `KnowledgeDoc`（属 knowledge 迁移范围）。二者无需迁移，剩余顺序修正为：~~voice → gamification → suggestion →~~ webhook ✅ → automation ✅ → quality ✅ → assist ✅ → knowledge ✅（全部完成）。
-3. **契约类型已完成的迁移不再回退**：第 1 节的别名是过渡态，最终态是 legacy `internal/services` 里对应兼容层删除时别名一并删除（跟随 P3-2 services/modules 最终边界收口）。
+3. **契约类型已完成的迁移不再回退**：第 1 节的别名是过渡态，最终态是 legacy `internal/services` 里对应兼容层删除时别名一并删除（跟随 P3-2 services/modules 最终边界收口）。P3-2 已于 2026-09-19 收官、services 层整体移除，第 1 节别名随之消亡——该最终态达成（2026-09-30 审定补记）。
 4. **禁止新增**：modules 新代码不得 import `internal/services`（CI 门禁强制）；新增模块默认不引用 `internal/models` 中"模块自有"分类的类型。
 
 ## 4. 复现扫描命令
@@ -80,4 +81,7 @@ done
 # models 类型引用频次
 grep -rhoE 'models\.[A-Z][A-Za-z]+' apps/server/internal/modules --include='*.go' \
   | sort | uniq -c | sort -rn | head -25
+
+# modules 内已迁出类型的过渡别名引用（应为空；TestModulesDoNotUseMigratedTypeAliases 同口径）
+grep -rnE 'models\.(KnowledgeDoc|KnowledgeIndexJob|Embedding|NewEmbedding|AutomationTrigger|AutomationRun|AutomationTimer|WebhookEndpoint|WebhookDelivery|WebhookDeliveryStatus[A-Za-z]*|VoiceCall|VoiceRecording|VoiceTranscript|RemoteAssistSession|RemoteAssistAnnotation|TranslationLanguagePreference|QualityReview)\b' apps/server/internal/modules --include='*.go'
 ```

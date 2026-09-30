@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 )
 
 type fakeRepo struct {
@@ -16,7 +17,7 @@ type fakeRepo struct {
 	deliveries []webhookdomain.WebhookDelivery
 	ticket     *models.Ticket
 	session    *models.Session
-	call       *models.VoiceCall
+	call       *voiceinfra.VoiceCall
 
 	listErr      error
 	ticketErr    error
@@ -153,7 +154,7 @@ func (f *fakeRepo) GetSessionSnapshot(ctx context.Context, sessionID string) (*m
 	return f.session, nil
 }
 
-func (f *fakeRepo) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
+func (f *fakeRepo) GetCallSnapshot(ctx context.Context, callID string) (*voiceinfra.VoiceCall, error) {
 	if f.callErr != nil {
 		return nil, f.callErr
 	}
@@ -435,7 +436,7 @@ func TestGenerateSecretUniqueness(t *testing.T) {
 }
 
 func TestEnqueueEventVoicePrefix(t *testing.T) {
-	repo := &fakeRepo{call: &models.VoiceCall{ID: "call-9", SessionID: "sess-1", Status: "held"}}
+	repo := &fakeRepo{call: &voiceinfra.VoiceCall{ID: "call-9", SessionID: "sess-1", Status: "held"}}
 	repo.endpoints = []webhookdomain.WebhookEndpoint{{ID: 1, Active: true}}
 	svc := newTestService(repo, &fakeDeliverer{})
 

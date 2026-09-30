@@ -18,6 +18,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/ai/application"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 type AIService struct {
@@ -28,7 +29,7 @@ type AIService struct {
 }
 
 type KnowledgeBase struct {
-	documents []models.KnowledgeDoc
+	documents []knowledgedomain.KnowledgeDoc
 	// 在实际项目中，这里会连接向量数据库
 }
 
@@ -63,7 +64,7 @@ func NewAIService(apiKey, baseURL string) *AIService {
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		knowledgeBase: &KnowledgeBase{
-			documents: []models.KnowledgeDoc{},
+			documents: []knowledgedomain.KnowledgeDoc{},
 		},
 	}
 }
@@ -91,7 +92,7 @@ func (s *AIService) ProcessQuery(ctx context.Context, query string, sessionID st
 	return aiResponse, nil
 }
 
-func (s *AIService) buildPrompt(query string, docs []models.KnowledgeDoc) string {
+func (s *AIService) buildPrompt(query string, docs []knowledgedomain.KnowledgeDoc) string {
 	context := ""
 	if len(docs) > 0 {
 		context = "基于以下知识库内容回答问题：\n"
@@ -218,8 +219,8 @@ func (s *AIService) GetStatus(ctx context.Context) map[string]interface{} {
 }
 
 // 知识库搜索功能
-func (kb *KnowledgeBase) Search(query string, limit int) []models.KnowledgeDoc {
-	var results []models.KnowledgeDoc
+func (kb *KnowledgeBase) Search(query string, limit int) []knowledgedomain.KnowledgeDoc {
+	var results []knowledgedomain.KnowledgeDoc
 	query = strings.ToLower(query)
 
 	for _, doc := range kb.documents {
@@ -236,13 +237,13 @@ func (kb *KnowledgeBase) Search(query string, limit int) []models.KnowledgeDoc {
 }
 
 // 添加知识库文档
-func (kb *KnowledgeBase) AddDocument(doc models.KnowledgeDoc) {
+func (kb *KnowledgeBase) AddDocument(doc knowledgedomain.KnowledgeDoc) {
 	kb.documents = append(kb.documents, doc)
 }
 
 // 初始化默认知识库
 func (s *AIService) InitializeKnowledgeBase() {
-	defaultDocs := []models.KnowledgeDoc{
+	defaultDocs := []knowledgedomain.KnowledgeDoc{
 		{
 			Title:    "产品介绍",
 			Content:  "Servify 是一个基于 WebRTC 的智能客服系统，支持文字聊天、语音通话和远程协助功能。",

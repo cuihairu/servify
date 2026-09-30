@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 func TestAIService_CallOpenAI_HTTP(t *testing.T) {
@@ -89,7 +90,7 @@ func TestAIService_ProcessQuery_WithServer(t *testing.T) {
 	defer server.Close()
 
 	svc := NewAIService("key", server.URL)
-	svc.knowledgeBase.AddDocument(models.KnowledgeDoc{Title: "Doc", Content: "body"})
+	svc.knowledgeBase.AddDocument(knowledgedomain.KnowledgeDoc{Title: "Doc", Content: "body"})
 
 	resp, err := svc.ProcessQuery(context.Background(), "doc question", "sess")
 	if err != nil {
@@ -131,9 +132,9 @@ func TestAIService_GetSessionSummary_WithServer(t *testing.T) {
 
 func TestKnowledgeBase_Search_LimitAndNoMatch(t *testing.T) {
 	kb := &KnowledgeBase{}
-	kb.AddDocument(models.KnowledgeDoc{Title: "alpha", Content: "needle one"})
-	kb.AddDocument(models.KnowledgeDoc{Title: "needle two", Content: "body"})
-	kb.AddDocument(models.KnowledgeDoc{Title: "beta", Content: "other"})
+	kb.AddDocument(knowledgedomain.KnowledgeDoc{Title: "alpha", Content: "needle one"})
+	kb.AddDocument(knowledgedomain.KnowledgeDoc{Title: "needle two", Content: "body"})
+	kb.AddDocument(knowledgedomain.KnowledgeDoc{Title: "beta", Content: "other"})
 
 	if got := kb.Search("needle", 1); len(got) != 1 {
 		t.Fatalf("limit not respected: %+v", got)

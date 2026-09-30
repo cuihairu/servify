@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"servify/apps/server/internal/modules/webhook/application"
 )
 
@@ -106,8 +107,8 @@ func (r *adapterRepo) GetSessionSnapshot(ctx context.Context, sessionID string) 
 	return &models.Session{ID: sessionID}, nil
 }
 
-func (r *adapterRepo) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
-	return &models.VoiceCall{ID: callID}, nil
+func (r *adapterRepo) GetCallSnapshot(ctx context.Context, callID string) (*voiceinfra.VoiceCall, error) {
+	return &voiceinfra.VoiceCall{ID: callID}, nil
 }
 
 // pingDeliverer 恒定返回成功投递。

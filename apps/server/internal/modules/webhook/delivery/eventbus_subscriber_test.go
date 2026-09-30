@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/platform/eventbus"
 )
@@ -57,8 +58,8 @@ func (s *stubWebhookRepo) GetTicketSnapshot(ctx context.Context, ticketID uint) 
 func (s *stubWebhookRepo) GetSessionSnapshot(ctx context.Context, sessionID string) (*models.Session, error) {
 	return &models.Session{ID: sessionID}, nil
 }
-func (s *stubWebhookRepo) GetCallSnapshot(ctx context.Context, callID string) (*models.VoiceCall, error) {
-	return &models.VoiceCall{ID: callID}, nil
+func (s *stubWebhookRepo) GetCallSnapshot(ctx context.Context, callID string) (*voiceinfra.VoiceCall, error) {
+	return &voiceinfra.VoiceCall{ID: callID}, nil
 }
 
 type recordingBus struct {

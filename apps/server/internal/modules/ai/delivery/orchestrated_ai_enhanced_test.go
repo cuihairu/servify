@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	mockkp "servify/apps/server/internal/platform/knowledgeprovider/mock"
 	"servify/apps/server/internal/platform/llm"
@@ -97,8 +97,8 @@ func TestOrchestratedEnhancedAIServiceProcessQueryEnhancedWithDifyProvider(t *te
 func TestOrchestratedEnhancedAIServiceUploadAndSyncWithDifyProvider(t *testing.T) {
 	base := NewAIService("", "")
 	base.InitializeKnowledgeBase()
-	base.knowledgeBase.AddDocument(models.KnowledgeDoc{Title: "Billing FAQ", Content: "Billing answer", Category: "billing", Tags: "faq"})
-	base.knowledgeBase.AddDocument(models.KnowledgeDoc{Title: "Refund FAQ", Content: "Refund answer", Category: "refund", Tags: "faq"})
+	base.knowledgeBase.AddDocument(knowledgedomain.KnowledgeDoc{Title: "Billing FAQ", Content: "Billing answer", Category: "billing", Tags: "faq"})
+	base.knowledgeBase.AddDocument(knowledgedomain.KnowledgeDoc{Title: "Refund FAQ", Content: "Refund answer", Category: "refund", Tags: "faq"})
 
 	provider := &mockkp.Provider{}
 	svc := NewOrchestratedEnhancedAIService(
@@ -154,7 +154,7 @@ func TestOrchestratedEnhancedAIServiceUploadKnowledgeDocumentDisabled(t *testing
 func TestOrchestratedEnhancedAIServiceSyncKnowledgeBaseDisabled(t *testing.T) {
 	base := NewAIService("", "")
 	base.InitializeKnowledgeBase()
-	base.knowledgeBase.AddDocument(models.KnowledgeDoc{
+	base.knowledgeBase.AddDocument(knowledgedomain.KnowledgeDoc{
 		Title:   "Billing FAQ",
 		Content: "Billing answer",
 	})
@@ -179,7 +179,7 @@ func TestOrchestratedEnhancedAIServiceSyncKnowledgeBaseDisabled(t *testing.T) {
 func TestOrchestratedEnhancedAIServiceUploadAndSyncRespectEnableToggle(t *testing.T) {
 	base := NewAIService("", "")
 	base.InitializeKnowledgeBase()
-	base.knowledgeBase.AddDocument(models.KnowledgeDoc{
+	base.knowledgeBase.AddDocument(knowledgedomain.KnowledgeDoc{
 		Title:   "Billing FAQ",
 		Content: "Billing answer",
 		Tags:    "faq",
