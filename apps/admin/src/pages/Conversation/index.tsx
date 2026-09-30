@@ -16,8 +16,11 @@ import {
   Tooltip,
 } from 'antd';
 import {
+  AudioOutlined,
+  AudioMutedOutlined,
   DisconnectOutlined,
   LinkOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
@@ -37,6 +40,10 @@ import {
 } from '@/services/translation';
 import { endAssistSession, getIceServers, startAssistSession } from '@/services/remoteAssist';
 import type { RTCIceServerEntry } from '@/services/remoteAssist';
+// 语音实时翻译通道（PROTOCOL §9，坐席侧）：采集/通道/帧类型全部自带，
+// 契约与 sdk core 同口径，漂移由 scripts/admin_voice_protocol_surface_test.go 钉住。
+import { MicCapture, VoiceChannel, VoiceEntryError } from '@/lib/voice';
+import type { VoiceAudioUpdate, VoiceFinalUpdate } from '@/lib/voice';
 import AssistReviewPanel from './components/AssistReviewPanel';
 import { navigateTo, useQueryParam } from '@/lib/navigation';
 
@@ -121,6 +128,18 @@ const REMOTE_ASSIST_WS_STATUS_MAP: Record<string, { color: string; label: string
   failed: { color: 'red', label: '信令异常' },
 };
 
+// 语音翻译面板状态（PROTOCOL §9 坐席侧入口；无自动重连，停止/断开即收线）。
+type VoiceEntryState = 'off' | 'connecting' | 'live';
+
+const VOICE_STATE_MAP: Record<VoiceEntryState, { color: string; label: string }> = {
+  off: { color: 'default', label: '未启用' },
+  connecting: { color: 'processing', label: '接入中' },
+  live: { color: 'green', label: '翻译中' },
+};
+
+// 说话方展示名（PROTOCOL §9 speaker ∈ visitor|agent）。
+const VOICE_SPEAKER_MAP: Record<string, string> = { visitor: '访客', agent: '坐席' };
+
 const ASSIST_RESULT_PRESETS = [
   {
     key: 'resolved',
@@ -194,6 +213,18 @@ const ConversationPage: React.FC = () => {
   const remoteAssistIceServersRef = useRef<RTCIceServerEntry[] | null>(null);
   const remoteAssistVideoRef = useRef<HTMLVideoElement | null>(null);
   const assistSessionIdRef = useRef<number | null>(null);
+  // ── 语音实时翻译（PROTOCOL §9）──
+  const [voiceState, setVoiceState] = useState<VoiceEntryState>('off');
+  // 每说话方在途字幕行（translation-delta 按 speaker 覆盖式更新，final 后移除）。
+  const [voiceLive, setVoiceLive] = useState<Record<string, { turnSeq: number; text: string }>>({});
+  // 已定句字幕（translation-final），封顶防长会话无界增长。
+  const [voiceFinals, setVoiceFinals] = useState<VoiceFinalUpdate[]>([]);
+  // 面板内提示（握手拒绝/voice-error/通道断开等降级文案）。
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  // 自动播放被浏览器策略拦截的访客音频（seq → 帧），渲染 ▶ 手动兜底。
+  const [voiceBlockedAudio, setVoiceBlockedAudio] = useState<Record<number, VoiceAudioUpdate>>({});
+  const voiceChannelRef = useRef<VoiceChannel | null>(null);
+  const voiceCaptureRef = useRef<MicCapture | null>(null);
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -461,6 +492,132 @@ const ConversationPage: React.FC = () => {
     setRemoteAssistHasStream(false);
     setRemoteAssistState(nextState);
   }, []);
+
+  // 语音翻译收线：停采集 → 断通道 → 清字幕态。幂等；无自动重连，重新说话
+  // 是用户显式动作（PROTOCOL §9）。失败提示（voiceNotice）不在此清除——
+  // 收线原因文案要留在面板上直到下次开启。
+  const teardownVoice = useCallback(() => {
+    void voiceCaptureRef.current?.stop();
+    voiceCaptureRef.current = null;
+    voiceChannelRef.current?.disconnect();
+    voiceChannelRef.current = null;
+    setVoiceState('off');
+    setVoiceLive({});
+    setVoiceFinals([]);
+    setVoiceBlockedAudio({});
+  }, []);
+
+  // 播放被自动播放策略拦截的访客语音（▶ 兜底；成功后从待播集合移除）。
+  const handlePlayVoiceAudio = useCallback((seq: number) => {
+    const update = voiceBlockedAudio[seq];
+    if (!update) {
+      return;
+    }
+    const player = new Audio(`data:audio/${update.format === 'wav' ? 'wav' : 'mpeg'};base64,${update.audio}`);
+    player
+      .play()
+      .then(() => {
+        setVoiceBlockedAudio((prev) => {
+          if (!(seq in prev)) {
+            return prev;
+          }
+          const next = { ...prev };
+          delete next[seq];
+          return next;
+        });
+      })
+      .catch(() => {
+        message.error('语音播放失败');
+      });
+  }, [voiceBlockedAudio]);
+
+  const handleToggleVoice = useCallback(async () => {
+    if (voiceState !== 'off' || !selectedId) {
+      // 停止 = 用户显式收线（连接中重复点击也走这里）。
+      teardownVoice();
+      setVoiceNotice(null);
+      return;
+    }
+    setVoiceNotice(null);
+    setVoiceState('connecting');
+    const channel = new VoiceChannel({ sessionId: selectedId });
+    voiceChannelRef.current = channel;
+
+    channel.on('voice:delta', (u) => {
+      setVoiceLive((prev) => ({ ...prev, [u.speaker]: { turnSeq: u.turn_seq, text: u.text } }));
+    });
+    channel.on('voice:final', (u) => {
+      setVoiceLive((prev) => {
+        if (!(u.speaker in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[u.speaker];
+        return next;
+      });
+      setVoiceFinals((prev) => [...prev.slice(-49), u]);
+    });
+    channel.on('voice:audio', (u) => {
+      // 只自动播放访客侧 TTS（坐席听客户语音译文）；自己说过的话不回放，
+      // 避免现场回声。播放被浏览器策略拦截时收进待播集合渲染 ▶ 兜底。
+      if (u.speaker !== 'visitor') {
+        return;
+      }
+      const player = new Audio(`data:audio/${u.format === 'wav' ? 'wav' : 'mpeg'};base64,${u.audio}`);
+      player.play().catch(() => {
+        setVoiceBlockedAudio((prev) => ({ ...prev, [u.seq]: u }));
+      });
+    });
+    channel.on('voice:error', (u) => {
+      const REASONS: Record<string, string> = {
+        disabled: '语音翻译未启用',
+        asr_unavailable: '语音识别服务不可用',
+        stream_broken: '语音流中断',
+      };
+      setVoiceNotice(REASONS[u.code] || u.message || '语音翻译已终止');
+      // 服务端 voice-error 帧后必随 close，disconnected 里统一收线。
+    });
+    channel.on('disconnected', () => {
+      teardownVoice();
+    });
+
+    try {
+      // 握手被 401/503 拒绝时浏览器只给 onerror（无状态码）——文案按
+      // 「未装配或会话不可用」口径提示（ai.asr.*/ai.tts.* 未配置即 503）。
+      await channel.connect();
+    } catch {
+      voiceChannelRef.current = null;
+      setVoiceState('off');
+      setVoiceNotice('语音通道连接失败：服务端可能未装配语音翻译（ai.asr.*/ai.tts.* 未配置）。');
+      return;
+    }
+
+    const capture = new MicCapture();
+    voiceCaptureRef.current = capture;
+    try {
+      await capture.start((pcmLe) => {
+        try {
+          channel.sendAudio(pcmLe);
+        } catch {
+          // 上行通道断开：收线并提示，用户重新发起（无自动重连）。
+          teardownVoice();
+          setVoiceNotice('语音通道已断开，翻译停止。');
+        }
+      });
+    } catch (error) {
+      voiceCaptureRef.current = null;
+      channel.disconnect();
+      voiceChannelRef.current = null;
+      setVoiceState('off');
+      setVoiceNotice(
+        error instanceof VoiceEntryError && error.code === 'capture_denied'
+          ? '麦克风权限被拒绝，无法启用语音翻译。'
+          : '麦克风不可用，请检查设备后重试。',
+      );
+      return;
+    }
+    setVoiceState('live');
+  }, [voiceState, selectedId, teardownVoice]);
 
   // 坐席端 ICE 解析（RA-6）：服务端下发优先（WS webrtc-ice-config 推送缓存，
   // 回退 REST /api/v1/rtc/ice-servers，与访客 SDK 同口径），两者皆空才退回
@@ -798,6 +955,24 @@ const ConversationPage: React.FC = () => {
     setAssistReviewSession(null);
   }, [selectedId, teardownRemoteAssist]);
 
+  // 语音翻译是会话级活体采集：组件卸载、切换会话、会话关闭一律收线
+  // （字幕与提示同 panel 态一起清空，不跨会话残留）。
+  useEffect(() => () => {
+    teardownVoice();
+  }, [teardownVoice]);
+
+  useEffect(() => {
+    teardownVoice();
+    setVoiceNotice(null);
+  }, [selectedId, teardownVoice]);
+
+  useEffect(() => {
+    if (isClosed && voiceState !== 'off') {
+      teardownVoice();
+      setVoiceNotice('会话已结束，语音翻译停止。');
+    }
+  }, [isClosed, voiceState, teardownVoice]);
+
   const columns: ProColumns<ConversationRecord>[] = [
     { title: 'ID', dataIndex: 'id', width: 80, render: (_, r) => <Tooltip title={r.id}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.id.length > 8 ? `${r.id.slice(0, 8)}...` : r.id}</span></Tooltip> },
     { title: '客户', dataIndex: 'customer_name', width: 120, search: true },
@@ -1003,6 +1178,67 @@ const ConversationPage: React.FC = () => {
                   )}
                 </div>
                 {assistReviewSession && <AssistReviewPanel session={assistReviewSession} />}
+              </div>
+            )}
+            {selectedId && !isClosed && (
+              <div
+                data-testid="voice-panel"
+                style={{ marginBottom: 8, border: '1px solid #f0f0f0', borderRadius: 8, padding: '8px 12px', background: '#fff' }}
+              >
+                <Space size="middle" wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+                  <Space size="middle" wrap>
+                    <span style={{ fontWeight: 500 }}>语音实时翻译</span>
+                    <Tag color={VOICE_STATE_MAP[voiceState].color}>{VOICE_STATE_MAP[voiceState].label}</Tag>
+                    {voiceNotice && <span style={{ color: '#faad14' }}>{voiceNotice}</span>}
+                  </Space>
+                  <Button
+                    size="small"
+                    type={voiceState === 'off' ? 'primary' : 'default'}
+                    danger={voiceState !== 'off'}
+                    icon={voiceState === 'off' ? <AudioOutlined /> : <AudioMutedOutlined />}
+                    loading={voiceState === 'connecting'}
+                    onClick={handleToggleVoice}
+                  >
+                    {voiceState === 'off' ? '开启语音翻译' : '停止语音'}
+                  </Button>
+                </Space>
+                {(voiceFinals.length > 0 || Object.keys(voiceLive).length > 0 || Object.keys(voiceBlockedAudio).length > 0) && (
+                  <div style={{ marginTop: 8, maxHeight: 180, overflowY: 'auto', display: 'grid', gap: 6 }}>
+                    {voiceFinals.map((f) => (
+                      <div key={`voice-final-${f.seq}`} style={{ fontSize: 13, lineHeight: 1.5 }}>
+                        <Tag color={f.speaker === 'visitor' ? 'green' : 'blue'} style={{ marginRight: 6 }}>
+                          {VOICE_SPEAKER_MAP[f.speaker] || f.speaker}
+                        </Tag>
+                        <span>{f.content}</span>
+                        {f.original !== f.content && (
+                          <span style={{ color: '#999', marginLeft: 8, fontSize: 12 }}>{f.original}</span>
+                        )}
+                        {f.degraded && <Tag color="orange" style={{ marginLeft: 6, fontSize: 11 }}>未翻译</Tag>}
+                      </div>
+                    ))}
+                    {Object.entries(voiceLive).map(([speaker, live]) => (
+                      <div key={`voice-live-${speaker}`} style={{ fontSize: 13, lineHeight: 1.5, color: '#888' }}>
+                        <Tag color={speaker === 'visitor' ? 'green' : 'blue'} style={{ marginRight: 6 }}>
+                          {VOICE_SPEAKER_MAP[speaker] || speaker}
+                        </Tag>
+                        <span>{live.text}</span>
+                        <span>▌</span>
+                      </div>
+                    ))}
+                    {Object.entries(voiceBlockedAudio).map(([seq, u]) => (
+                      <div key={`voice-audio-${seq}`}>
+                        <Button
+                          size="small"
+                          type="link"
+                          icon={<PlayCircleOutlined />}
+                          onClick={() => handlePlayVoiceAudio(Number(seq))}
+                        >
+                          播放访客语音 #{u.seq}（自动播放被浏览器拦截）
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: '#fafafa', borderRadius: 8 }}>
