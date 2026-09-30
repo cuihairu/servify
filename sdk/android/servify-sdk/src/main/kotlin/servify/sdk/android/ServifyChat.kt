@@ -78,6 +78,8 @@ class ServifyChat internal constructor(
     private val pushUrlOverride: String? = null,
     /** 测试注入：增量补拉端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/messages）。 */
     private val messagesUrlOverride: String? = null,
+    /** 测试注入：已读游标提交端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/read）。 */
+    private val readUrlOverride: String? = null,
 ) {
     private val core = SessionCore()
 
@@ -333,6 +335,44 @@ class ServifyChat internal constructor(
             response.use { resp ->
                 if (!resp.isSuccessful) {
                     _errors.emit(ServifyError.Network("push register http ${resp.code}"))
+                    return@withContext false
+                }
+                true
+            }
+        }
+    }
+
+    /**
+     * 服务端已读游标提交（D7 流程 3 服务端增强面；§10 #3 POST /read；Swift 镜像）：
+     * 把本地已确认的最新服务端消息 ID（补拉链自持的 [lastServerMessageId]）提交为
+     * 服务端已读游标。V1 未读仍以客户端推导为基线——响应体不消费，本地推导语义
+     * 不被服务端回显改写；服务端游标只前进不后退，重复/回退提交幂等。服务需要
+     * 跨设备/跨入口一致未读的宿主在回前台/点开推送等时机调用。
+     *
+     * 无已确认消息（尚未对账过）静默返回 false；IO/HTTP 失败 → Network 错误 +
+     * false（[registerPushToken] 同口径，可重报）。
+     */
+    suspend fun syncReadState(): Boolean {
+        val cursor = lastServerMessageId ?: return false
+        return withContext(Dispatchers.IO) {
+            val url = (readUrlOverride ?: config.apiUrl.trimEnd('/') + "/api/v1/sessions/" +
+                java.net.URLEncoder.encode(sessionId, "UTF-8") + "/read")
+            val body = buildJsonObject {
+                put("last_read_message_id", cursor.toString())
+            }.toString()
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val response = try {
+                client.newCall(request).execute()
+            } catch (e: IOException) {
+                _errors.emit(ServifyError.Network("read cursor sync failed: ${e.message}"))
+                return@withContext false
+            }
+            response.use { resp ->
+                if (!resp.isSuccessful) {
+                    _errors.emit(ServifyError.Network("read cursor sync http ${resp.code}"))
                     return@withContext false
                 }
                 true

@@ -105,6 +105,7 @@ val config = ServifyConfig(
 
 val receipt: TicketReceipt? = chat.createTicket(title = "无法登录", description = "选填补充")
 chat.registerPushToken() // 挂起，返回 Boolean
+chat.syncReadState() // 增强面：提交服务端已读游标，挂起，返回 Boolean
 ```
 
 ```swift
@@ -117,6 +118,7 @@ let config = try ServifyConfig(
 
 let receipt: TicketReceipt? = await chat.createTicket(title: "无法登录", description: "选填补充")
 _ = await chat.registerPushToken()
+_ = await chat.syncReadState() // 增强面：提交服务端已读游标
 ```
 
 语义：
@@ -130,6 +132,12 @@ _ = await chat.registerPushToken()
   `POST {apiUrl}/api/v1/push/register`（2xx→`true`；IO/HTTP 失败→`false`，可重报）。
   服务端下发编排与 FCM/APNs 传输已就位（离线访客收推送），端到端真实凭证联调进行中。
 - **offlineText**：断线（重连耗尽/握手失败）后自动追加系统提示行；用户主动关闭面板不提示。
+- **syncReadState**（可选增强）：把 SDK 内部对账（断线补拉）确认的最新服务端消息 ID 提交为
+  服务端已读游标 `POST {apiUrl}/api/v1/sessions/{id}/read`。SDK 的未读角标 V1 仍由客户端
+  推导（本方法不改变其行为）；只有当宿主需要**跨设备/跨入口一致未读**（如自有服务端按
+  游标展示未读）时才需要调用——典型时机：会话页回前台、用户点开推送。无已对账消息→静默
+  false（正常态）；IO/HTTP 失败→`error` 流 `network` + false，可在下次时机重试；游标只前进
+  不后退，重复提交幂等。
 
 ## 6. 事件流（`chat.events`）
 

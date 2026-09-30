@@ -34,7 +34,7 @@ report_path, module_dir = sys.argv[1], sys.argv[2]
 FILE_EXEMPT = {"ChatPanel.kt", "TicketForm.kt", "ChatText.kt", "ChatTheme.kt",
                "LazyDsl.kt", "EntryOrchestrator.kt", "FloatingButtonView.kt"}
 # ServifyChat.kt 豁免行（1-based，与 jacoco report 行号同源）
-LINE_EXEMPT = {"ServifyChat.kt": {171, 172, 173, 178, 179, 199, 200, 201, 666, 669, 670, 671}}
+LINE_EXEMPT = {"ServifyChat.kt": {173, 174, 175, 180, 181, 201, 202, 203, 706, 709, 710, 711}}
 ANCHOR_WINDOW = 12  # 豁免行 ±N 行内必须出现 coverage-exempt 注释（防清单漂移）
 
 tree = ET.parse(report_path)

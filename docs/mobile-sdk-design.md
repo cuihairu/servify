@@ -242,6 +242,8 @@ try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
 
 **落地状态（2026-09-24，M3 刀 9）**：流程 3 的未读对齐服务端增强面已就位——`POST /api/v1/sessions/:session_id/read` + `GET /api/v1/sessions/:session_id/unread`（§10 清单 #3，免认证与 #1 同前缀同安全模型）：响应 `{unread_count, last_read_message_id}`，未读口径 = sender ∈ {agent, system} 且消息 ID 大于服务端游标（与上面客户端推导口径逐字对齐，customer 上行与 ai 首答不计）；游标只前进不后退（点开推送/回前台一次性提交本地已读位，重复/回退提交幂等），SDK V1 仍以客户端推导为基线、服务端游标作为宿主需要跨设备/跨入口一致未读时的增强。
 
+**落地状态（2026-09-30，提交半边）**：SDK 双端 `syncReadState()` 已就位（registerPushToken 同构的增强口，V1 冻结面「只增不改」）——把补拉链自持的最新服务端消息 ID 提交为服务端已读游标（`POST /read`）；无已确认消息静默 false，IO/HTTP 失败 `network` + false，响应体不消费（本地推导语义不被回显改写）。**读取半边（GET /unread 合并进未读计数）仍登记留白**——它会把未读基线从客户端推导切到服务端游标（改语义，非只增），按 V1 冻结面纪律待宿主实际提出跨设备一致未读需求后再动。
+
 **为什么不用"离线队列反向同步"（客户端消息也可离线发）**：客服对话的发送方是用户，用户在客服页时必然在线；离线发送的典型场景（弱网抖动）用"发送超时 + 本地标记失败 + 手动重发"覆盖即可，与 Web 端行为一致。完整的离线优先同步协议（cursor、冲突消解、幂等去重）是给"服务端→客户端数据面"用的，即上面的增量补拉；客户端→服务端方向 V1 不做队列重放，避免引入"用户以为发了、实际三天后才发出去"的客服场景事故。app-core 的 offline queue contract 保留为 P2 演进位。
 
 ---

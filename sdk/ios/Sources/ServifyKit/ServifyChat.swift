@@ -45,6 +45,8 @@ public final class ServifyChat: @unchecked Sendable {
     private let pushUrlOverride: String?
     /// 测试注入：断线补拉端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/messages）。
     private let messagesUrlOverride: String?
+    /// 测试注入：已读游标提交端点（生产路径恒为 apiUrl + /api/v1/sessions/{id}/read）。
+    private let readUrlOverride: String?
     /// REST 出站 HTTP 通道（工单创建/推送注册共用；nil 时 Darwin 用 URLSession
     /// 生产实现，Linux 测试面须注入 mock）。
     private let ticketHTTP: TicketHTTPPosting?
@@ -111,6 +113,7 @@ public final class ServifyChat: @unchecked Sendable {
         ticketUrlOverride: String? = nil,
         pushUrlOverride: String? = nil,
         messagesUrlOverride: String? = nil,
+        readUrlOverride: String? = nil,
         ticketHTTP: TicketHTTPPosting? = nil,
         transportFactory: @escaping () -> WebSocketTransport
     ) {
@@ -122,6 +125,7 @@ public final class ServifyChat: @unchecked Sendable {
         self.ticketUrlOverride = ticketUrlOverride
         self.pushUrlOverride = pushUrlOverride
         self.messagesUrlOverride = messagesUrlOverride
+        self.readUrlOverride = readUrlOverride
         self.ticketHTTP = ticketHTTP
         self.transportFactory = transportFactory
         events = ServifyEvents(
@@ -357,6 +361,41 @@ public final class ServifyChat: @unchecked Sendable {
         case let .success((status, data)):
             if !(200..<300).contains(status) {
                 _errors.emit(.network(message: "push register http \(status): \(String(data: data.prefix(200), encoding: .utf8) ?? "")"))
+                return false
+            }
+            return true
+        }
+    }
+
+    /// 服务端已读游标提交（D7 流程 3 服务端增强面；§10 #3 POST /read；Kotlin 镜像）：
+    /// 把本地已确认的最新服务端消息 ID（补拉链自持的 lastServerMessageId，经
+    /// currentCursor() 持锁读取）提交为服务端已读游标。V1 未读仍以客户端推导为
+    /// 基线——响应体不消费，本地推导语义不被服务端回显改写；服务端游标只前进
+    /// 不后退，重复/回退提交幂等。服务需要跨设备/跨入口一致未读的宿主在回前台/
+    /// 点开推送等时机调用。
+    /// 无已确认消息（尚未对账过）静默返回 false；IO/HTTP 失败 → network 错误 +
+    /// false（registerPushToken 同口径，可重报）。
+    public func syncReadState() async -> Bool {
+        guard let cursor = currentCursor() else { return false }
+        let http = resolveHTTP()
+        let url = readUrlOverride ?? (trimTrailingSlash(config.apiUrl) + "/api/v1/sessions/"
+            + Self.formEncode(sessionId) + "/read")
+        let body = Self.encodeRestBody(["last_read_message_id": String(cursor)])
+
+        let result: Result<(status: Int, data: Data), Error>
+        do {
+            result = .success(try await http.post(url: url, body: body))
+        } catch {
+            result = .failure(error)
+        }
+
+        switch result {
+        case let .failure(error):
+            _errors.emit(.network(message: "read cursor sync failed: \(error.localizedDescription)"))
+            return false
+        case let .success((status, data)):
+            if !(200..<300).contains(status) {
+                _errors.emit(.network(message: "read cursor sync http \(status): \(String(data: data.prefix(200), encoding: .utf8) ?? "")"))
                 return false
             }
             return true
