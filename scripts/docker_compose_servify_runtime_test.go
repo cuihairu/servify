@@ -22,6 +22,12 @@ import (
 // 同时交叉校验 compose 挂载前缀与 Dockerfile 末阶段 WORKDIR 一致：改镜像
 // WORKDIR 而不同步改 compose 挂载（或反之）会在这里失败。
 //
+// 2026-10-01 覆盖面从基础模板扩到 infra/compose 全部 compose 文件（对齐
+// docker_compose_publish_ports_test.go 的 glob 全文件惯例）：overlay 的
+// healthcheck 按合并语义整体替换基础栈探针、volumes 按容器路径追加/覆盖——
+// 只扫基础文件的守卫挡不住 overlay 重新引入 curl 探针或错位挂载，两处缺陷
+// 会在 overlay 路径上原样复发。
+//
 // 只做静态文本解析，不依赖 docker / docker-compose 是否存在，CI 可跑。
 
 // composeServifyBindMounts servify 服务三条宿主挂载逐条钉住（容器内路径均须
@@ -33,8 +39,19 @@ var composeServifyBindMounts = []string{
 }
 
 // composeServiceBlock 返回 compose 文件里指定服务（两空格缩进的键）的文本块，
-// 含键行、止于下一个同级键或文件尾。
+// 含键行、止于下一个同级键或文件尾；文件不含该服务即失败。
 func composeServiceBlock(t *testing.T, path, service string) string {
+	t.Helper()
+	block, ok := composeServiceBlockOptional(t, path, service)
+	if !ok {
+		t.Fatalf("%s: 未找到服务定义 %q", path, service)
+	}
+	return block
+}
+
+// composeServiceBlockOptional 同 composeServiceBlock，但文件不含该服务时返回
+// ("", false)——overlay 可以不声明 servify（observability 只挂监控面）。
+func composeServiceBlockOptional(t *testing.T, path, service string) (string, bool) {
 	t.Helper()
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -50,7 +67,7 @@ func composeServiceBlock(t *testing.T, path, service string) string {
 		}
 	}
 	if start < 0 {
-		t.Fatalf("%s: 未找到服务定义 %q", path, service)
+		return "", false
 	}
 	for end := start + 1; end < len(lines); end++ {
 		line := lines[end]
@@ -59,10 +76,10 @@ func composeServiceBlock(t *testing.T, path, service string) string {
 			continue
 		}
 		if indent := len(line) - len(strings.TrimLeft(line, " ")); indent <= 2 {
-			return strings.Join(lines[start:end], "\n")
+			return strings.Join(lines[start:end], "\n"), true
 		}
 	}
-	return strings.Join(lines[start:], "\n")
+	return strings.Join(lines[start:], "\n"), true
 }
 
 // composeBlockEntryLines 取块内某键（如 volumes:/healthcheck:）下属的缩进
@@ -190,5 +207,70 @@ func TestComposeServifyMountsLiveUnderImageWorkdir(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(actual, "|") != strings.Join(want, "|") {
 		t.Errorf("servify 挂载与预期不一致（改动须同步更新 composeServifyBindMounts 并保持容器内路径落在镜像 WORKDIR 下）\n got: %v\nwant: %v", actual, want)
+	}
+}
+
+// TestComposeServifyRuntimeContractHoldsInEveryComposeFile 把 healthcheck 探针
+// 与宿主挂载落位两条契约钉到 infra/compose 的每一个 compose 文件上（glob 全
+// 文件，与 publish_ports 守卫同惯例）：overlay 一旦声明 servify 的
+// healthcheck（test 键按合并语义整体替换基础栈探针）或 volumes（按容器路径
+// 追加/覆盖），只扫基础文件的两条既有守卫拦不住，curl 探针与 WORKDIR 外挂载
+// 会在 overlay 起栈路径上原样复发。声明处即校验处，未声明则由基础模板守卫兜底。
+func TestComposeServifyRuntimeContractHoldsInEveryComposeFile(t *testing.T) {
+	workdir := dockerfileFinalStageWorkdir(t, "../Dockerfile")
+	declaredHealthcheck := 0
+	for _, path := range composeFiles(t) {
+		name := filepath.Base(path)
+		block, ok := composeServiceBlockOptional(t, path, "servify")
+		if !ok {
+			continue // overlay 可以不声明 servify 服务
+		}
+		// 1. healthcheck：声明处的探针必须满足运行时镜像口径（alpine 只装
+		//    ca-certificates，探针只能用自带 busybox wget，且须指到 8080/health）。
+		if probes := composeBlockEntryLines(t, block, "healthcheck"); len(probes) > 0 {
+			declaredHealthcheck++
+			var probe string
+			for _, line := range probes {
+				if strings.HasPrefix(line, "test:") {
+					probe = strings.TrimSpace(strings.TrimPrefix(line, "test:"))
+					break
+				}
+			}
+			if probe == "" {
+				t.Errorf("%s: servify healthcheck 声明了但缺 test 探针（overlay 合并只覆盖写的键，缺 test 即沿用基础栈探针——要么不声明）", name)
+			} else {
+				if strings.Contains(probe, "curl") {
+					t.Errorf("%s: servify healthcheck 探针 %s 引用了运行时镜像不存在的 curl（alpine:latest 只装 ca-certificates，探针必然 exec 失败、容器被判 unhealthy）", name, probe)
+				}
+				if !strings.Contains(probe, "wget") {
+					t.Errorf("%s: servify healthcheck 探针 %s 必须用 alpine 自带的 busybox wget（非 2xx 同样非零退出，语义与 curl -f 一致）", name, probe)
+				}
+				if !strings.Contains(probe, "8080/health") {
+					t.Errorf("%s: servify healthcheck 探针 %s 未指向容器内 8080/health", name, probe)
+				}
+			}
+		}
+		// 2. 宿主 bind 挂载：声明处每条的容器内路径必须落在镜像末阶段 WORKDIR
+		//    下（服务按进程 CWD 相对路径写日志/附件/读配置）；命名卷非宿主路径，
+		//    不属本缺陷类，跳过。
+		for _, entry := range composeBlockEntryLines(t, block, "volumes") {
+			if !strings.HasPrefix(entry, ".") && !strings.HasPrefix(entry, "/") {
+				continue
+			}
+			container := containerSide(entry)
+			if container == "" {
+				t.Errorf("%s: servify 挂载 %q 无法解析容器内路径（长格式需同步更新本测试）", name, entry)
+				continue
+			}
+			if !strings.HasPrefix(container, workdir+"/") && container != workdir {
+				t.Errorf("%s: servify 挂载 %q 容器内路径 %q 不在镜像末阶段 WORKDIR %q 下：服务按进程 CWD 相对路径写日志/附件/读配置，挂别处宿主收不到数据（容器重建即丢）", name, entry, container, workdir)
+			}
+		}
+	}
+	// 基础模板另有「必须声明探针」的专项守卫；这里守住扫描面不空转——一个声明处
+	// 都没有说明 glob 或服务块解析失灵，本守卫会假绿。overlay 额外声明探针即在
+	// 替换基础探针，其契约由上面的逐处校验兜住。
+	if declaredHealthcheck == 0 {
+		t.Error("没有任何 compose 文件声明 servify healthcheck：探针契约本守卫无一校验（基础模板声明丢失或扫描失灵），专项守卫与本守卫须同步排查")
 	}
 }
