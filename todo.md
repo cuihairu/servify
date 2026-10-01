@@ -1035,6 +1035,12 @@
 
 ## 当前恢复点
 
+- 附注（2026-10-01，**覆盖率缺口收口刀：新鲜 `-count=1` 全量 profile 唯一语句缺口已补**；派发项为「跑 go test ./... 覆盖率 profile，定位业务模块行覆盖缺口最大者并补单测」）：
+  - 口径：`go test -count=1 -coverprofile ./apps/server/...`（禁缓存、全量重跑，慢于 10-01 审计的 cached 口径——cached 口径与新鲜口径各抓到一次对方没抓到的零命中块，详后）。
+  - 缺口定位：新鲜 profile 全树唯一未覆盖语句——`internal/platform/llm/openai/provider.go:432`（`streamOnce` 内容增量发送 select 的 `return ctx.Err()`，函数级 98.9%→本刀后 100%）。根因：既有 `TestProviderChatStreamContextCanceledDuringSend` 把取消点放在首个接收之后，生产者调度稍快即先跑完再取消，取消落在 `scanner.Scan()` 阻塞期而非发送 select 期——时序型漏检（测试本身不断言、恒绿，只丢覆盖）。
+  - 切片内容：`provider_coverage_test.go` 新增 `TestProviderChatStreamContextCanceledWhileDeltaBlocked`——服务端首包 flush 后保持连接不断（`r.Context().Done()/release/10s` 三出口，无 EOF、无 [DONE]、无 finish_reason，生产者取消前唯一可停位即内容发送 select）；取消点前移到首个接收之前 + 两次 200ms 让行（第二次让行期间零消费方，单核双就绪竞态亦避开）；行为断言即存活契约（取消后通道必关闭，否则 5s 超时变红——覆盖既有“取消时放弃、不死锁”语义，删掉 ctx 分支即红）。旧用例不动（恒绿，仅覆盖不稳，已被新用例确定性替代）。
+  - 如实登记（不硬造）：① `cmd/gen-baseline` 的 `captureLogger.Info/Warn/Error` 仍为零语句空实现（10-01 已登记伪影，本轮复核原处未动）；② `asr/openai/provider.go:377` 的 `case <-s.done:` 空分支（0 语句、零覆盖面）：既有 `TestEmitAbandonsWhenDoneClosedAndBufferFull` 意图即覆盖它，包级 `-count=1` 复跑稳定命中（100.0%），但全仓合并 profile 在 cached 口径（10-01 审计）与本轮新鲜口径各出现一次 0 命中——按选择语义满缓冲+done 已关时该分支是唯一就绪分支，套件级偶发漏记属画像级抖动而非可复现缺口，0 语句故不影响任何覆盖率数字，不另造用例（若后续审计复现，先查画像/调度再动测试）。
+  - 门禁：`go vet ./apps/server/...` 绿；新鲜全量 profile（`-count=1`）EXIT=0、无 FAIL、total 字面 100.0%、未覆盖语句 0（`awk '$3==0{s+=$2}'`=0）、`streamOnce` 100%（新用例在 `-run Stream -count=3` 子集与全量两次口径均命中 432）；`TEST_COVERAGE_TARGET=100 ./scripts/run-tests.sh` 全绿（含 perfbench/weknora-mock 各 100.0% 与 benchmark 段）；`go test ./scripts -count=1 -timeout 25m` 全量 ok（640s，含新用例在 `-v` 汁的 RUN+PASS 两处留痕）；gofmt 干净。
 - 附注（2026-10-01，**全仓 Go 行覆盖缺口审计：无缺口，任务前提落空——如实登记不硬造**；派发项为「跑 go test ./... 覆盖率 profile，定位业务模块行覆盖缺口最大者并补单测」）：
   - 口径：双 profile 交叉验证——plain（run-tests.sh 门禁同款 `go test -coverprofile ./apps/server/...`，本包归属）+ merged（`-coverpkg=./apps/server/...`，跨包归属、按块合并去重）；行级缺口 = 零命中块的物理行展开。
   - 结论一：`apps/server` **38176 条语句行 0 未覆盖，两口径一致**；`go tool cover -func` total **字面 100.0%**（非四舍五入）——2026-09-27 台账「聚合悬在 ≈99.95%」的旧常态已被其后各刀收口完毕。非 100% 函数仅 3 个：`cmd/gen-baseline/main.go` 的 `captureLogger.Info/Warn/Error`——GORM `logger.Interface` 满足用的**零语句空实现**（profile 块 `0 1`：0 语句、hits=1 已被执行），`-func` 的 0.0% 是 0/0 展示伪影，属「已登记不可达」同类（接口要求存在、无可覆盖语句），非缺口。

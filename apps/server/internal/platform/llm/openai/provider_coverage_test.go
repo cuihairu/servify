@@ -535,6 +535,62 @@ func TestProviderChatStreamContextCanceledDuringSend(t *testing.T) {
 	}
 }
 
+func TestProviderChatStreamContextCanceledWhileDeltaBlocked(t *testing.T) {
+	// 内容增量发送 select 的 ctx 分支（streamOnce）：生产者已解析出 content
+	// delta、因无缓冲通道尚无消费方而停在发送 select 上时取消 ctx，必须走
+	// <-ctx.Done() 返回——不阻塞、不 panic、不向已无人消费的通道再投递。
+	// 既有 TestProviderChatStreamContextCanceledDuringSend 把取消点放在首个
+	// 接收之后，调度稍快生产者即先跑完（新鲜 -count=1 全量 profile 实锤漏检
+	// streamOnce:432 一语句）；本用例把取消点前移到首个接收之前，并给生产者
+	// 停稳留出让行——除 ctx 分支外无路可走，确定性命中。行为断言即存活契约：
+	// 取消后通道必须关闭（发送侧放弃），否则 5s 超时变红。
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"index":0,"delta":{"content":"chunk"}}]}` + "\n\n"))
+		flusher.Flush()
+		// 保持连接不断：生产者既走不到 EOF，也走不到 [DONE]/finish_reason，
+		// 取消前唯一可停的位置就是内容增量发送 select。
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		case <-time.After(10 * time.Second):
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	provider := NewProvider("key", srv.URL)
+	ch, err := provider.ChatStream(ctx, llm.ChatRequest{
+		Messages: []llm.ChatMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	// 让行：生产者解析首包并停在发送 select 上（纯让行、非正确性依赖——即便
+	// 生产者尚未到达，取消后它到达 select 时 ctx 已 done 且仍无消费方，同样
+	// 只能走 ctx 分支）。
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	// 先不接收再等一轮：此期间通道上不可能出现消费方，生产者从发送 select
+	// 醒来时只有 ctx 分支就绪（单核调度下排空式接收会与 ctx 形成双就绪竞态，
+	// 本用例刻意避开），随后错误上报 select 同样只走 ctx 分支并关闭通道。
+	time.Sleep(200 * time.Millisecond)
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				return
+			}
+		case <-timeout:
+			t.Fatal("stream channel must close after context cancel (producer must abandon blocked send)")
+		}
+	}
+}
+
 func TestProviderChatStreamContextCanceledAtStreamEnd(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
