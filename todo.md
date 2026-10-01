@@ -1035,6 +1035,12 @@
 
 ## 当前恢复点
 
+- 附注（2026-10-01，**全仓 Go 行覆盖缺口审计：无缺口，任务前提落空——如实登记不硬造**；派发项为「跑 go test ./... 覆盖率 profile，定位业务模块行覆盖缺口最大者并补单测」）：
+  - 口径：双 profile 交叉验证——plain（run-tests.sh 门禁同款 `go test -coverprofile ./apps/server/...`，本包归属）+ merged（`-coverpkg=./apps/server/...`，跨包归属、按块合并去重）；行级缺口 = 零命中块的物理行展开。
+  - 结论一：`apps/server` **38176 条语句行 0 未覆盖，两口径一致**；`go tool cover -func` total **字面 100.0%**（非四舍五入）——2026-09-27 台账「聚合悬在 ≈99.95%」的旧常态已被其后各刀收口完毕。非 100% 函数仅 3 个：`cmd/gen-baseline/main.go` 的 `captureLogger.Info/Warn/Error`——GORM `logger.Interface` 满足用的**零语句空实现**（profile 块 `0 1`：0 语句、hits=1 已被执行），`-func` 的 0.0% 是 0/0 展示伪影，属「已登记不可达」同类（接口要求存在、无可覆盖语句），非缺口。
+  - 结论二：**28 个无本包测试文件的包**（plain profile 静默漏账面，按「缺席≠已覆盖」专项排查）逐一核对全部为纯类型/接口/常量定义、0 函数体 0 可执行语句（各 `*/domain`、`*/contract`、`customer/api`、`auth/delivery`、`platform/{channel,asr,tts}`、`version` 等），无可覆盖面——即 merged 口径下它们零语句块的根因，非「无测试的真缺口」。
+  - 结论三：根模块核对齐平——`scripts/perfbench` 与 `infra/compose/weknora-mock` 各 100.0%（2026-09-30 台账维持）；`servify/scripts` test-only；`docs`/`flatted` 生成物/vendored 既有豁免。
+  - 决定：**无缺口即无刀**——零语句包补测试无覆盖意义、已覆盖面无未覆盖行可收口，不硬造用例；本注记即审计登记，防止同口径任务重复派发（后续若要继续抬覆盖口径，方向只剩「把 28 个纯定义包的语句面从 0 变非 0 再谈覆盖」或跨语言面）。
 - 附注（2026-10-01，**compose `servify` 两缺陷收口核验 + 运行时契约守卫扩到全 compose 文件**——派发项为「修复 infra/compose 模板 config 挂载路径与 healthcheck 用 curl 两处缺陷并补测试钉住（对齐 publish_ports 惯例）」；实查两处缺陷已由 2026-09-29 第五笔（ae6467e）闭环，本刀核验后补的是对齐 glob 全文件惯例的真实守卫缺口）：
   - 状态：`[x]`（两缺陷修复已在库无需重修；守卫覆盖面缺口已闭环）
   - 实查结论：`infra/compose/docker-compose.yml` servify 块为修复态——healthcheck 用 alpine busybox wget 指 `8080/health`（禁 curl 注释在案）、volumes 三条挂镜像末阶段 WORKDIR `/root` 下（config 搜索路径含 `.` = `/root`，配置读取有效）；四个 overlay（weknora/dify/coturn/observability）的 servify 块只覆盖 environment/depends_on、不声明 healthcheck/volumes，全仓无其他 servify compose 定义（weknora overlay L57 的 curl 探针属 weknora 服务自身 9000 端口，非 servify 范围）；既有双守卫（`TestComposeServifyHealthcheckProbeExistsInRuntimeImage` / `TestComposeServifyMountsLiveUnderImageWorkdir`）与端到端证据（`scripts/test-results/compose-servify-fix/`，todo 第五笔登记）均在库。缺口：双守卫只扫基础文件，而 overlay 的 healthcheck `test` 键按 compose 合并语义整体替换基础探针、volumes 按容器路径追加/覆盖——overlay 重新引入 curl 探针或 `/app` 挂载会绕过守卫原样复发。
