@@ -7,6 +7,7 @@ import (
 	"time"
 
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
+	_ "servify/apps/server/internal/modules/quality/domain"
 
 	"github.com/gin-gonic/gin"
 )
@@ -104,7 +105,7 @@ func (h *QualityHandler) ListReviews(c *gin.Context) {
 // @Tags 质检
 // @Produce json
 // @Param sessionId path string true "会话 ID"
-// @Success 200 {object} models.QualityReview
+// @Success 200 {object} qualitydomain.QualityReview
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/quality/reviews/{sessionId} [get]

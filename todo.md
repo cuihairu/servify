@@ -1035,6 +1035,11 @@
 
 ## 当前恢复点
 
+- 附注（2026-10-01，**P1-7 ②切片：handlers swag 注解组迁移——assist/quality 直挂 owner 包**——剩余方向登记的 legacy 引用方之二（三组实查最小：handlers 非测试 7 处 < bootstrap/migrate 18 处 < platform provider 31 处）；platform provider 半边由并发会话 a5fb39b 完成）：
+  - 状态：`[x]`（本切片闭环；未删任何别名——assist/quality 三别名仍有 handlers 测试 36 处 + bootstrap/migrate 3 处引用，未清零不删）
+  - 切片内容：7 处 swag `@Success` 注解 `models.RemoteAssistSession`（5）/`models.RemoteAssistAnnotation`（1）/`models.QualityReview`（1）→ `assistdomain.`/`qualitydomain.` 直挂（assist_handler.go 4、assist_recording_handler.go 2、quality_handler.go 1），三文件加 blank import（`_ ".../modules/assist/domain"`、`_ ".../modules/quality/domain"`——注解是注释编译器不消费，blank import 供 swag 解析，customerapi 先例同款挂法）。产物配套：swag init 重生成 docs/generated/api 三件——definition 键 `models.RemoteAssistSession/RemoteAssistAnnotation/QualityReview` → `assistdomain./qualitydomain.` 共 3 键 + 7 处 `$ref` 同步，definitions 总数 88 不变，其余 `models.*`（shared kernel 常驻）零漂移；幂等复跑 swag init 产物零再漂移。
+  - 门禁：gofmt 干净、`go build ./...`、`go vet ./internal/handlers/`、`go test ./internal/handlers/ -count=1`（13.4s ok）全绿。
+  - 剩余引用方（显式登记）：bootstrap/migrate 组 18 处（cmd/migrate + internal/app/bootstrap/migrate.go，AutoMigrate 注册面，几乎全族）+ handlers 测试（assist/quality 36 处、webhook 21 处、automation/voice 10 处、knowledge 16 处）+ cmd/migrate 4 处。守卫不变（`TestModulesDoNotUseMigratedTypeAliases` 只扫 modules/ 树，handlers 不在扫面）。
 - 附注（2026-09-30，**P1-7 ②切片：platform provider `NewEmbedding` 转发引用收口**——剩余方向登记的 legacy 引用方之一；handlers swag 切片同期由并发会话实施中，本刀取文件不交集的 provider 半边）：
   - 状态：`[x]`（本切片闭环；`models.Embedding` 别名 + `NewEmbedding` 转发的最终删除待 bootstrap/migrate、handlers（含测试）等其余引用方各自迁移后执行）
   - 切片内容：`platform/knowledgeprovider` 双 provider 的 `models.NewEmbedding` 调用清零（local/provider.go 1 处、pgvector/provider.go 1 处、pgvector/provider_test.go 5 处），改经 `knowledgedomain.NewEmbedding` 直连（owner 包声明为通用 `domain` 故显式别名，沿 18 文件先例）。`models.Embedding` 系真别名（`=`）、转发函数同体，编译期等价、零行为变化；`models` import 保留（`KnowledgeDoc` 系 shared kernel 常驻引用，不属过渡入口）。无需新测试（机械替换，既有 local/pgvector 包测试覆盖调用点）与守卫变更（边界守卫只扫 modules/ 树）。

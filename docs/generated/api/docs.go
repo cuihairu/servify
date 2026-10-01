@@ -1550,7 +1550,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.QualityReview"
+                            "$ref": "#/definitions/qualitydomain.QualityReview"
                         }
                     },
                     "404": {
@@ -1802,7 +1802,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistSession"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistSession"
                         }
                     },
                     "400": {
@@ -1855,7 +1855,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistSession"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistSession"
                         }
                     },
                     "404": {
@@ -1948,7 +1948,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistAnnotation"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistAnnotation"
                         }
                     },
                     "400": {
@@ -2007,7 +2007,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistSession"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistSession"
                         }
                     },
                     "400": {
@@ -5676,7 +5676,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistSession"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistSession"
                         }
                     },
                     "400": {
@@ -5747,7 +5747,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.RemoteAssistSession"
+                            "$ref": "#/definitions/assistdomain.RemoteAssistSession"
                         }
                     },
                     "400": {
@@ -6481,6 +6481,89 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "secret": {
+                    "type": "string"
+                }
+            }
+        },
+        "assistdomain.RemoteAssistAnnotation": {
+            "type": "object",
+            "properties": {
+                "assist_session_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "payload": {
+                    "type": "string"
+                },
+                "shape": {
+                    "description": "rect|freehand|arrow",
+                    "type": "string"
+                },
+                "timestamp_ms": {
+                    "type": "integer"
+                }
+            }
+        },
+        "assistdomain.RemoteAssistSession": {
+            "type": "object",
+            "properties": {
+                "agent_user_id": {
+                    "type": "integer"
+                },
+                "consent_at": {
+                    "type": "string"
+                },
+                "consent_status": {
+                    "description": "对方同意状态：pending（发起后待访客表态）/ granted / declined。\n存量行为空串 = 未走同意流程（兼容期与 pending 同权放行录制回写）。",
+                    "type": "string"
+                },
+                "conversation_session_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "recording_duration_ms": {
+                    "type": "integer"
+                },
+                "recording_key": {
+                    "description": "录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息",
+                    "type": "string"
+                },
+                "recording_mime": {
+                    "type": "string"
+                },
+                "recording_size": {
+                    "type": "integer"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "active|ended|failed",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "workspace_id": {
                     "type": "string"
                 }
             }
@@ -8051,186 +8134,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.QualityReview": {
-            "type": "object",
-            "properties": {
-                "agent_id": {
-                    "description": "users.id，与 Session.AgentID 同语义",
-                    "type": "integer"
-                },
-                "attempt_count": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "customer_id": {
-                    "type": "integer"
-                },
-                "dimensions_json": {
-                    "type": "string"
-                },
-                "duration_seconds": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "last_error": {
-                    "type": "string"
-                },
-                "llm_model": {
-                    "type": "string"
-                },
-                "llm_provider": {
-                    "type": "string"
-                },
-                "llm_summary": {
-                    "type": "string"
-                },
-                "llm_total_score": {
-                    "type": "number"
-                },
-                "manual_result": {
-                    "description": "''|pass|violation",
-                    "type": "string"
-                },
-                "manual_score": {
-                    "type": "number"
-                },
-                "max_severity": {
-                    "description": "''|low|medium|high",
-                    "type": "string"
-                },
-                "message_count": {
-                    "type": "integer"
-                },
-                "next_retry_at": {
-                    "type": "string"
-                },
-                "review_note": {
-                    "type": "string"
-                },
-                "reviewed_at": {
-                    "type": "string"
-                },
-                "reviewed_by": {
-                    "type": "integer"
-                },
-                "scored_at": {
-                    "type": "string"
-                },
-                "session_id": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "pending|skipped|scored|failed|confirmed",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "trigger": {
-                    "description": "worker|manual|rescore",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "violation_count": {
-                    "type": "integer"
-                },
-                "violations_json": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.RemoteAssistAnnotation": {
-            "type": "object",
-            "properties": {
-                "assist_session_id": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "payload": {
-                    "type": "string"
-                },
-                "shape": {
-                    "description": "rect|freehand|arrow",
-                    "type": "string"
-                },
-                "timestamp_ms": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.RemoteAssistSession": {
-            "type": "object",
-            "properties": {
-                "agent_user_id": {
-                    "type": "integer"
-                },
-                "consent_at": {
-                    "type": "string"
-                },
-                "consent_status": {
-                    "description": "对方同意状态：pending（发起后待访客表态）/ granted / declined。\n存量行为空串 = 未走同意流程（兼容期与 pending 同权放行录制回写）。",
-                    "type": "string"
-                },
-                "conversation_session_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "ended_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "recording_duration_ms": {
-                    "type": "integer"
-                },
-                "recording_key": {
-                    "description": "录制元数据：文件经既有 /api/v1/upload 上传，这里只落 key 与展示信息",
-                    "type": "string"
-                },
-                "recording_mime": {
-                    "type": "string"
-                },
-                "recording_size": {
-                    "type": "integer"
-                },
-                "started_at": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "active|ended|failed",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "workspace_id": {
-                    "type": "string"
-                }
-            }
-        },
         "models.SLAConfig": {
             "type": "object",
             "properties": {
@@ -8829,6 +8732,103 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "qualitydomain.QualityReview": {
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "description": "users.id，与 Session.AgentID 同语义",
+                    "type": "integer"
+                },
+                "attempt_count": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "dimensions_json": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "llm_model": {
+                    "type": "string"
+                },
+                "llm_provider": {
+                    "type": "string"
+                },
+                "llm_summary": {
+                    "type": "string"
+                },
+                "llm_total_score": {
+                    "type": "number"
+                },
+                "manual_result": {
+                    "description": "''|pass|violation",
+                    "type": "string"
+                },
+                "manual_score": {
+                    "type": "number"
+                },
+                "max_severity": {
+                    "description": "''|low|medium|high",
+                    "type": "string"
+                },
+                "message_count": {
+                    "type": "integer"
+                },
+                "next_retry_at": {
+                    "type": "string"
+                },
+                "review_note": {
+                    "type": "string"
+                },
+                "reviewed_at": {
+                    "type": "string"
+                },
+                "reviewed_by": {
+                    "type": "integer"
+                },
+                "scored_at": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "pending|skipped|scored|failed|confirmed",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "trigger": {
+                    "description": "worker|manual|rescore",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "violation_count": {
+                    "type": "integer"
+                },
+                "violations_json": {
+                    "type": "string"
+                },
+                "workspace_id": {
+                    "type": "string"
                 }
             }
         }

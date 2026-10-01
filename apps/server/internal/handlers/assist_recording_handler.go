@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
+	_ "servify/apps/server/internal/modules/assist/domain"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +35,7 @@ type AttachRecordingRequest struct {
 // @Produce json
 // @Param id path int true "协助会话 ID"
 // @Param body body AttachRecordingRequest true "录制元数据"
-// @Success 200 {object} models.RemoteAssistSession
+// @Success 200 {object} assistdomain.RemoteAssistSession
 // @Failure 400 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -82,7 +83,7 @@ type RespondConsentRequest struct {
 // @Produce json
 // @Param id path int true "协助会话 ID"
 // @Param body body RespondConsentRequest true "同意内容"
-// @Success 200 {object} models.RemoteAssistSession
+// @Success 200 {object} assistdomain.RemoteAssistSession
 // @Failure 400 {object} ErrorResponse
 // @Failure 403 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse

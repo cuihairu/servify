@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
+	_ "servify/apps/server/internal/modules/assist/domain"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,7 +35,7 @@ type StartAssistRequest struct {
 // @Accept json
 // @Produce json
 // @Param body body StartAssistRequest true "协助内容"
-// @Success 201 {object} models.RemoteAssistSession
+// @Success 201 {object} assistdomain.RemoteAssistSession
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 409 {object} ErrorResponse
@@ -74,7 +75,7 @@ type EndAssistRequest struct {
 // @Produce json
 // @Param id path int true "协助会话 ID"
 // @Param body body EndAssistRequest true "结束内容"
-// @Success 200 {object} models.RemoteAssistSession
+// @Success 200 {object} assistdomain.RemoteAssistSession
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 409 {object} ErrorResponse
@@ -131,7 +132,7 @@ func (h *AssistHandler) ListSessions(c *gin.Context) {
 // @Tags 远程协助
 // @Produce json
 // @Param id path int true "协助会话 ID"
-// @Success 200 {object} models.RemoteAssistSession
+// @Success 200 {object} assistdomain.RemoteAssistSession
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/remote-assist/sessions/{id} [get]
@@ -164,7 +165,7 @@ type AddAnnotationRequest struct {
 // @Produce json
 // @Param id path int true "协助会话 ID"
 // @Param body body AddAnnotationRequest true "标注内容"
-// @Success 201 {object} models.RemoteAssistAnnotation
+// @Success 201 {object} assistdomain.RemoteAssistAnnotation
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
