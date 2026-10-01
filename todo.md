@@ -1035,6 +1035,12 @@
 
 ## 当前恢复点
 
+- 附注（2026-09-30，**P1-7 ②切片：platform provider `NewEmbedding` 转发引用收口**——剩余方向登记的 legacy 引用方之一；handlers swag 切片同期由并发会话实施中，本刀取文件不交集的 provider 半边）：
+  - 状态：`[x]`（本切片闭环；`models.Embedding` 别名 + `NewEmbedding` 转发的最终删除待 bootstrap/migrate、handlers（含测试）等其余引用方各自迁移后执行）
+  - 切片内容：`platform/knowledgeprovider` 双 provider 的 `models.NewEmbedding` 调用清零（local/provider.go 1 处、pgvector/provider.go 1 处、pgvector/provider_test.go 5 处），改经 `knowledgedomain.NewEmbedding` 直连（owner 包声明为通用 `domain` 故显式别名，沿 18 文件先例）。`models.Embedding` 系真别名（`=`）、转发函数同体，编译期等价、零行为变化；`models` import 保留（`KnowledgeDoc` 系 shared kernel 常驻引用，不属过渡入口）。无需新测试（机械替换，既有 local/pgvector 包测试覆盖调用点）与守卫变更（边界守卫只扫 modules/ 树）。
+  - 门禁：`go build/vet/test -count=1 ./internal/platform/knowledgeprovider/...` 全绿；`gofmt` 干净；`models.NewEmbedding` 全仓零残留（`models/` 自身定义除外）。提交 a5fb39b（单用途，仅 3 文件；handlers 6 文件改动属并发会话在途作业未纳入）。
+  - CI：run 36809311792 于 a5fb39b 首轮 11/12——唯一红 `Android SDK:testDebugUnitTest/ConnectionLifecycleTest.reconnectExhaustionMarksDisconnectedAndConnectRecovers`（`TimeoutCancellationException`，timing flake；本刀 Go-only，Android job 不编译 Go，无因果）→ `rerun --failed` 后 **12/12 全绿**（AI Golden Set 条件触发既有 skip）。
+
 - 附注（2026-09-30，**移动端 SDK 服务端已读游标提交面：双端 `syncReadState()`**——「L1 headless 会话核心开工」语境下的真实增量；调查确认 M0-M4 均已落地后的唯一本地可做项）：
   - 状态：`[x]`（提交半边闭环；读取半边 GET /unread 合并显式留白——它会把未读基线从客户端推导切到服务端游标、属改语义非只增，按 V1 冻结面纪律待宿主真实需求后动）
   - 最近进展：§10 #3 服务端增强面的 SDK 半边（design doc M3 刀 9 登记「SDK V1 以客户端推导为基线」的有意留白）——双端 `syncReadState()`（registerPushToken 同构，V1 冻结面「只增不改」）：把补拉链自持的最新服务端消息 ID 提交为服务端已读游标（`POST /api/v1/sessions/{id}/read`，体 `{"last_read_message_id":"<id>"}`，服务端 string 类型）；无已确认消息（未对账）静默 false 且零请求（正常态非错误）；IO/HTTP 失败 `network` 错误 + false（可重报）；响应体不消费（本地未读推导语义不被服务端回显改写）；游标只前进不后退、重复/回退提交幂等，宿主在回前台/点开推送等时机调用。测试双端六用例逐一镜像（OK 提交路径与体/静默零请求/HTTP 500/HTTP 404/IO 失败/apiUrl 派生——Android 派生口径 = `https://127.0.0.1:1` 保留端口瞬时拒连（ServifyConfig 强制 https，MockWebServer 的 http 不可入），iOS 走 MockTicketHTTP 断言 postedURL 与尾斜杠修剪）。
