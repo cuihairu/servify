@@ -67,9 +67,9 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 源码两处 coverage-exempt 注释锚定）。735-739 为同脱节面的后续行：脱节区间
 # 会随构建的特化/映射边界漂移（538a849 CI 实测零计数区间扩到 739，嵌套子区
 # c=1 与父区 c=0 并存即物证），整段纳入豁免。
-LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 186, 191, 205,
-                                     572, 691, 730, 731, 732, 733, 734, 735, 736,
-                                     737, 738, 739, 756, 757, 758}}
+LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 190, 195, 209,
+                                     611, 730, 769, 770, 771, 772, 773, 774, 775,
+                                     776, 777, 778, 795, 796, 797}}
 ANCHOR_WINDOW = 14
 
 src_lines = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()
