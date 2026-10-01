@@ -16,6 +16,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import servify.sdk.android.connect.ConnectionState
 import servify.sdk.android.connect.ReconnectPolicy
 import servify.sdk.android.model.SenderType
 import kotlin.test.assertEquals
@@ -71,10 +72,36 @@ class ReconcileMessagesTest {
     private fun msg(id: String, sender: String, content: String): String =
         """{"id":"$id","conversation_id":"test-session","sender":"$sender","kind":"text","content":"$content","created_at":"2026-09-24T12:00:00Z"}"""
 
-    private suspend fun awaitUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+    /**
+     * 轮询等待条件达成。2026-10-01 抖动收口（CI run 36832389106 Android job 偶发
+     * 超时红，复跑可绿）：
+     *  - 预算 5s→10s：release 变体 + Kotlin daemon 争抢下 CI 高负载会吃满 5s
+     *    窗口——判据不变，只放宽耐心；
+     *  - 终态 fail-fast：连接 Disconnected（握手失败/重连耗尽，everConnected 后
+     *    唯一终态）时条件已不可能达成，立即失败不空转到超时；
+     *  - 超时诊断带 connectionState + history 快照：CI 无测试报告 artifact，
+     *    断在两段 awaitUntil 哪一段、卡在什么状态，从错误消息直接可读。
+     */
+    private suspend fun awaitUntil(
+        what: String,
+        timeoutMs: Long = 10_000,
+        condition: () -> Boolean,
+    ) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (!condition()) {
-            if (System.currentTimeMillis() > deadline) throw AssertionError("条件在 ${timeoutMs}ms 内未达成")
+            val state = chat.events.connectionState.value
+            if (state == ConnectionState.Disconnected) {
+                throw AssertionError(
+                    "$what：连接已进入 Disconnected 终态，条件不可能达成" +
+                        "（state=$state history=${chat.historySnapshot().map { it.content }}）",
+                )
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw AssertionError(
+                    "$what：条件在 ${timeoutMs}ms 内未达成" +
+                        "（state=$state history=${chat.historySnapshot().map { it.content }}）",
+                )
+            }
             delay(20)
         }
     }
@@ -255,12 +282,23 @@ class ReconcileMessagesTest {
 
         chat.connect()
         // 服务端 onOpen 即发坐席帧；等渲染落 history 再断线
-        awaitUntil { chat.historySnapshot().any { it.content == "断线期间的消息" } }
+        awaitUntil("WS 首帧渲染") { chat.historySnapshot().any { it.content == "断线期间的消息" } }
         assertEquals(1, chat.events.unreadCount.value)
+
+        // 串行化门控：MockWebServer 响应队列按请求到达序配对。首连 REST#1（onOpen
+        // 经 Default 调度异步发起）若迟到越过 100ms 重连窗口，断线后到达序会重排成
+        // R1,R2,G1,G2——WS#2 吃到 page 响应握手失败、REST#1 吃到 101 静默 return，
+        // 渲染链路变成非确定（CI run 36832389106 抖动根因）。断线前先消费 R1+G1
+        // 把队列钉死在 [WS#2, REST#2]，此后到达序由协议序（握手先于补拉）保证。
+        val ws1 = server.takeRequest(5, TimeUnit.SECONDS) ?: throw AssertionError("首连 WS 握手未到达")
+        assertTrue(ws1.path!!.startsWith("/api/v1/ws"), "首连请求应为 WS 握手：${ws1.path}")
+        val rest1 = server.takeRequest(5, TimeUnit.SECONDS) ?: throw AssertionError("首连补拉请求未到达")
+        assertEquals("GET", rest1.method)
+        assertTrue(rest1.path!!.startsWith("/api/v1/sessions/test-session/messages"), rest1.path)
         chat.disconnectForTesting()
 
         // 重连 onOpen 触发补拉；等 REST#2 渲染完成（新消息入列）
-        awaitUntil { chat.historySnapshot().any { it.content == "重连后的新消息" } }
+        awaitUntil("重连补拉渲染新消息") { chat.historySnapshot().any { it.content == "重连后的新消息" } }
         assertEquals(
             1,
             chat.historySnapshot().count { it.content == "断线期间的消息" },
@@ -268,10 +306,10 @@ class ReconcileMessagesTest {
         )
         assertEquals(2, chat.events.unreadCount.value, "只有新消息计入未读（+1）")
 
-        // 请求顺序：WS#1 → REST#1 → WS#2 → REST#2；重连补拉不带游标（未确立，全量）
-        server.takeRequest(5, TimeUnit.SECONDS)
-        server.takeRequest(5, TimeUnit.SECONDS)
-        server.takeRequest(5, TimeUnit.SECONDS)
+        // 门控后队列仅剩 [WS#2 升级, REST#2 页面]；重连握手先于补拉（协议序）。
+        // 重连补拉不带游标（未确立，全量）
+        val ws2 = server.takeRequest(5, TimeUnit.SECONDS) ?: throw AssertionError("重连 WS 握手未到达")
+        assertTrue(ws2.path!!.startsWith("/api/v1/ws"), "重连请求应为 WS 握手：${ws2.path}")
         val rest2 = server.takeRequest(5, TimeUnit.SECONDS) ?: throw AssertionError("重连补拉请求未到达")
         assertEquals("GET", rest2.method)
         assertTrue(rest2.path!!.startsWith("/api/v1/sessions/test-session/messages"), rest2.path)

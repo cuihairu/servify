@@ -1587,3 +1587,21 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 ```
 
 **提交纪律**：本轮零代码变更（巡检只读），仅补记 `todo.md` 巡检结论。工作树现有 `sdk/android/.../ServifyChat.kt` 与 `sdk/ios/.../ServifyChat.swift` 变更属并发会话产出（D7 读游标同步），非本轮内容，**不纳入本次 git add**。
+
+---
+
+### [x] Android SDK 抖动根治：`ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile` 确定性化
+
+- **背景**：CI run 36832389106 Android job 偶发 `awaitUntil` 5s 超时红（WS 首帧渲染/重连补拉渲染两段均复现），复跑可绿但不解决根因。release 变体 + Kotlin daemon 争抢下 CI 高负载会吃满 5s 窗口。
+- **根因三重**：① 预算 5s 偏紧，release 变体 + daemon 争抢下 CI 高负载偶发吃满；② 无终态 fail-fast：连接进入 `Disconnected`（握手失败/重连耗尽）时条件已不可能达成，却仍空转到超时；③ **MockWebServer 队列竞态**：首连 `onOpen` 异步发起 REST#1，若迟到越过 100ms 重连窗口，断线后到达序重排成 `R1,R2,G1,G2`——WS#2 吃到 page 响应握手失败、REST#1 吃到 101 静默 return，渲染链路变非确定（CI run 36832389106 抖动核心根因）。
+- **修法**：
+  1. `awaitUntil` 增强：`what: String` 标签 + 预算 5s→10s + 终态 fail-fast（`ConnectionState.Disconnected` 即抛）+ 超时诊断带 `connectionState` + `history` 快照（CI 无 artifact 时从错误消息直接可读两段卡在哪、卡在什么状态）。
+  2. **串行化门控**：断线前先 `takeRequest` 消费首连 WS 握手 + REST#1，把队列钉死在 `[WS#2, REST#2]`；此后到达序由协议序（握手先于补拉）保证，消除到达序竞态。
+  3. 重连补拉段同理消费 WS#2 升级 + REST#2，断言路径前缀、方法、无 `after_id`。
+- **验证**：本地 10 轮连跑 `:servify-sdk:testDebugUnitTest --tests ReconcileMessagesTest#fingerprintSkipsRenderedMessagesOnReconcile` 全绿；`testDebugUnitTest` / `testReleaseUnitTest` 全量全绿；Go 侧 `go test ./scripts -run TestCompose` 绿；`go vet ./scripts` + `gofmt` 干净。
+- **文件**：`sdk/android/servify-sdk/src/test/kotlin/servify/sdk/android/ReconcileMessagesTest.kt`
+- **状态**：`[x]`
+- **完成证据**：本地 10 轮稳定 + debug/release 全量单测绿 + Go 门禁绿
+- **最近进展**：根因定位（MockWebServer 队列到达序竞态）+ 三重修法落地 + 本地 10 轮验证
+- **下一步**：CI 验证（push 后 `android-probe` job 持续执行）
+- **阻塞项**：无
