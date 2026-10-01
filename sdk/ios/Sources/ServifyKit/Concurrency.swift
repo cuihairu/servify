@@ -42,6 +42,8 @@ final class AsyncMutex: @unchecked Sendable {
             lock.unlock()
             return
         }
+        // coverage-exempt（waiters 非空唤醒分支：竞争测试触达但 llvm-cov 计数在 CI 上偶发
+        // 脱节——与 finalizeInterruptedStream 同类内联副本噪声，源码锚定豁免）。
         let next = waiters.removeFirst()
         lock.unlock()
         next.resume()

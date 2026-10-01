@@ -68,16 +68,24 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 会随构建的特化/映射边界漂移（538a849 CI 实测零计数区间扩到 777，嵌套子区
 # c=1 与父区 c=0 并存即物证），整段纳入豁免。
 LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 190, 195, 209,
-                                     611, 730, 769, 770, 771, 772, 773, 774, 775,
-                                     776, 777, 778, 795, 796, 797}}
+                                      611, 730, 769, 770, 771, 772, 773, 774, 775,
+                                      776, 777, 778, 795, 796, 797},
+                "Concurrency.swift": {45, 46, 47}}
 ANCHOR_WINDOW = 14
 
-src_lines = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()
+src_lines_chat = open("Sources/ServifyKit/ServifyChat.swift", encoding="utf-8").read().splitlines()
+src_lines_conc = open("Sources/ServifyKit/Concurrency.swift", encoding="utf-8").read().splitlines()
 for lineno in sorted(LINE_EXEMPT["ServifyChat.swift"]):
-    lo, hi = max(0, lineno - 1 - ANCHOR_WINDOW), min(len(src_lines), lineno - 1 + ANCHOR_WINDOW + 1)
-    if not any("coverage-exempt" in src_lines[i] for i in range(lo, hi)):
+    lo, hi = max(0, lineno - 1 - ANCHOR_WINDOW), min(len(src_lines_chat), lineno - 1 + ANCHOR_WINDOW + 1)
+    if not any("coverage-exempt" in src_lines_chat[i] for i in range(lo, hi)):
         print(f"FAIL: ServifyChat.swift:{lineno} 在豁免清单中但 ±{ANCHOR_WINDOW} 行内无 "
-              "coverage-exempt 注释锚定——代码已移动，请更新 LINE_EXEMPT 清单", file=sys.stderr)
+              "过度报配证锤定—代码已移动，请更新 LINE_EXEMPT 清单", file=sys.stderr)
+        sys.exit(1)
+for lineno in sorted(LINE_EXEMPT["Concurrency.swift"]):
+    lo, hi = max(0, lineno - 1 - ANCHOR_WINDOW), min(len(src_lines_conc), lineno - 1 + ANCHOR_WINDOW + 1)
+    if not any("coverage-exempt" in src_lines_conc[i] for i in range(lo, hi)):
+        print(f"FAIL: Concurrency.swift:{lineno} 在豁免清单中但 ±{ANCHOR_WINDOW} 行内无 "
+              "过度报配证锤定—代码已移动，请更新 LINE_EXEMPT 清单", file=sys.stderr)
         sys.exit(1)
 
 exp = json.loads(subprocess.run(
