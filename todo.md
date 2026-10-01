@@ -1035,6 +1035,16 @@
 
 ## 当前恢复点
 
+- 附注（2026-10-01，**ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile 抖动确定性化**（两会话并行同一任务，改动合入 `5d6457e`）；派发项为「改等待条件/隔离/超时策略使其稳定，不放宽断言语义，本地 ≥10 轮复跑证明，根因与修法入 todo.md」）：
+  - 现场：CI run 36832389106 Android job（`./gradlew --no-daemon build`）该用例红，`AssertionError at ReconcileMessagesTest.kt:77` = awaitUntil 超时抛出行；两段 awaitUntil 共用该行、CI 无 Android 测试报告 artifact，无法判定挂在哪段——按两段同修。本地不复现：改前基线 release 单测 10× 连跑全绿（与「release 变体 + Kotlin daemon 争抢高负载才触发」的 CI 面吻合）。
+  - 根因（三重）：① 时钟预算 5s 偏紧——CI 高负载（release 变体 + Kotlin daemon 争抢）偶发吃满；② 终态悬挂——连接进 `Disconnected`（握手失败/重连耗尽，everConnected 后唯一终态）后 awaitUntil 仍空转到超时才报错；③ **MockWebServer 队列竞态（结构面核心）**：响应队列按请求**到达序**配对，首连 REST#1 由 `WsListener.onOpen` 经 `Dispatchers.Default` 异步发起，调度延迟若越过 100ms 重连窗口（`disconnectForTesting()` 后），到达序重排为 R1,R2,G1,G2——WS#2 握手吃到 `page()` 响应→握手失败→退避重连链吃乱后续队列；REST#1 吃到 101 升级响应→非 2xx 静默 return：渲染链路时长与成败变成非确定。
+  - 修法（仅动测试文件，断言只紧不松，净增 3 条）：
+    1. `awaitUntil` 增强：`what` 段标（WS 首帧渲染/重连补拉渲染）+ 预算 5s→10s（同条件同判据，纯耐心）+ 终态 fail-fast（`ConnectionState.Disconnected` 即抛）+ 超时/终态消息带 connectionState + history 快照——CI 无报告产物时，错误消息即可定位卡在哪段、什么状态、渲染到哪。
+    2. **串行化门控**：断线前先消费 R1(WS 握手)+G1(首连补拉) 并断言形态（`/api/v1/ws` 路径 / GET + messages 路径），把响应队列钉死在 [WS#2, REST#2]，此后到达序由协议序（握手必先于补拉）保证——重排类整体消除；尾部由 3 次盲 `takeRequest` 改为断言 WS#2 为 `/api/v1/ws` 升级。
+    3. 重连段同理消费 WS#2+REST#2，断言路径前缀、方法、无 `after_id`。
+  - 验证：改前基线 release 单测 10× 全绿（本地不复现，佐证 CI 负载触发面）；修复版 release 单测 10× 连跑全绿（fix-run1..10 EXIT=0，零 FAILED/超时/终态消息）；CI 同款 `./gradlew --no-daemon build` 全量绿（4m21s，含 lint 与两变体单测）；coverage gate 绿（可覆盖面 1218 行漏 0，100.0%）；另一会话 debug 变体 10× + debug/release 单测全量绿；Go 侧 `go test ./scripts -run TestCompose` 绿、`go vet ./scripts` + `gofmt` 干净。
+  - CI 证据：push 为 `5d6457e`，run **36848776775** 全绿（15m57s，含此前抖动的 Android job）——任务闭环。
+  - 文件：`sdk/android/servify-sdk/src/test/kotlin/servify/sdk/android/ReconcileMessagesTest.kt`
 - 附注（2026-10-01，**覆盖率缺口收口刀：新鲜 `-count=1` 全量 profile 唯一语句缺口已补**；派发项为「跑 go test ./... 覆盖率 profile，定位业务模块行覆盖缺口最大者并补单测」）：
   - 口径：`go test -count=1 -coverprofile ./apps/server/...`（禁缓存、全量重跑，慢于 10-01 审计的 cached 口径——cached 口径与新鲜口径各抓到一次对方没抓到的零命中块，详后）。
   - 缺口定位：新鲜 profile 全树唯一未覆盖语句——`internal/platform/llm/openai/provider.go:432`（`streamOnce` 内容增量发送 select 的 `return ctx.Err()`，函数级 98.9%→本刀后 100%）。根因：既有 `TestProviderChatStreamContextCanceledDuringSend` 把取消点放在首个接收之后，生产者调度稍快即先跑完再取消，取消落在 `scanner.Scan()` 阻塞期而非发送 select 期——时序型漏检（测试本身不断言、恒绿，只丢覆盖）。
@@ -1587,21 +1597,3 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 ```
 
 **提交纪律**：本轮零代码变更（巡检只读），仅补记 `todo.md` 巡检结论。工作树现有 `sdk/android/.../ServifyChat.kt` 与 `sdk/ios/.../ServifyChat.swift` 变更属并发会话产出（D7 读游标同步），非本轮内容，**不纳入本次 git add**。
-
----
-
-### [x] Android SDK 抖动根治：`ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile` 确定性化
-
-- **背景**：CI run 36832389106 Android job 偶发 `awaitUntil` 5s 超时红（WS 首帧渲染/重连补拉渲染两段均复现），复跑可绿但不解决根因。release 变体 + Kotlin daemon 争抢下 CI 高负载会吃满 5s 窗口。
-- **根因三重**：① 预算 5s 偏紧，release 变体 + daemon 争抢下 CI 高负载偶发吃满；② 无终态 fail-fast：连接进入 `Disconnected`（握手失败/重连耗尽）时条件已不可能达成，却仍空转到超时；③ **MockWebServer 队列竞态**：首连 `onOpen` 异步发起 REST#1，若迟到越过 100ms 重连窗口，断线后到达序重排成 `R1,R2,G1,G2`——WS#2 吃到 page 响应握手失败、REST#1 吃到 101 静默 return，渲染链路变非确定（CI run 36832389106 抖动核心根因）。
-- **修法**：
-  1. `awaitUntil` 增强：`what: String` 标签 + 预算 5s→10s + 终态 fail-fast（`ConnectionState.Disconnected` 即抛）+ 超时诊断带 `connectionState` + `history` 快照（CI 无 artifact 时从错误消息直接可读两段卡在哪、卡在什么状态）。
-  2. **串行化门控**：断线前先 `takeRequest` 消费首连 WS 握手 + REST#1，把队列钉死在 `[WS#2, REST#2]`；此后到达序由协议序（握手先于补拉）保证，消除到达序竞态。
-  3. 重连补拉段同理消费 WS#2 升级 + REST#2，断言路径前缀、方法、无 `after_id`。
-- **验证**：本地 10 轮连跑 `:servify-sdk:testDebugUnitTest --tests ReconcileMessagesTest#fingerprintSkipsRenderedMessagesOnReconcile` 全绿；`testDebugUnitTest` / `testReleaseUnitTest` 全量全绿；Go 侧 `go test ./scripts -run TestCompose` 绿；`go vet ./scripts` + `gofmt` 干净。
-- **文件**：`sdk/android/servify-sdk/src/test/kotlin/servify/sdk/android/ReconcileMessagesTest.kt`
-- **状态**：`[x]`
-- **完成证据**：本地 10 轮稳定 + debug/release 全量单测绿 + Go 门禁绿
-- **最近进展**：根因定位（MockWebServer 队列到达序竞态）+ 三重修法落地 + 本地 10 轮验证
-- **下一步**：CI 验证（push 后 `android-probe` job 持续执行）
-- **阻塞项**：无
