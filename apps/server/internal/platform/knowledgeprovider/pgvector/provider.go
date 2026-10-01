@@ -9,6 +9,7 @@ import (
 
 	"github.com/pgvector/pgvector-go"
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
@@ -252,7 +253,7 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 		}
 
 		// 设置向量
-		docModel.Embedding = models.NewEmbedding(vectors[i])
+		docModel.Embedding = knowledgedomain.NewEmbedding(vectors[i])
 
 		// 保存到数据库
 		if err := p.db.WithContext(ctx).Create(docModel).Error; err != nil {

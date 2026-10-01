@@ -19,6 +19,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	pgvectorkp "servify/apps/server/internal/platform/knowledgeprovider/pgvector"
@@ -213,7 +214,7 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 		} else {
 			docModel.DocChunkID = fmt.Sprintf("chunk-%d", i)
 		}
-		docModel.Embedding = models.NewEmbedding(vectors[i])
+		docModel.Embedding = knowledgedomain.NewEmbedding(vectors[i])
 		if err := p.db.WithContext(ctx).Create(docModel).Error; err != nil {
 			return "", fmt.Errorf("failed to create chunk %d: %w", i, err)
 		}

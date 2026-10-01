@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
 
@@ -606,7 +607,7 @@ func BenchmarkProvider_Search(b *testing.B) {
 			ProviderID:  "pgvector",
 			Title:       fmt.Sprintf("Document %d", i),
 			Content:     fmt.Sprintf("Content for document %d", i),
-			Embedding:   models.NewEmbedding([]float32{0.1, 0.2, 0.3}),
+			Embedding:   knowledgedomain.NewEmbedding([]float32{0.1, 0.2, 0.3}),
 		}
 		db.Create(&doc)
 	}
@@ -680,10 +681,10 @@ func TestProvider_SearchScoresAndFilters(t *testing.T) {
 	ctx := context.Background()
 
 	docs := []models.KnowledgeDoc{
-		{ID: 1, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e1", Title: "Same Direction", Content: "c1", ChunkIndex: 0, DocChunkID: "e1-chunk-0", Embedding: models.NewEmbedding([]float32{0.1, 0.2, 0.3})},
-		{ID: 2, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e2", Title: "Orthogonal", Content: "c2", ChunkIndex: 0, DocChunkID: "e2-chunk-0", Embedding: models.NewEmbedding([]float32{0.3, -0.3, 0.0})},
-		{ID: 3, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e3", Title: "Dim Mismatch", Content: "c3", ChunkIndex: 0, DocChunkID: "e3-chunk-0", Embedding: models.NewEmbedding([]float32{0.1, 0.2})},
-		{ID: 4, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e4", Title: "Opposite", Content: "c4", ChunkIndex: 0, DocChunkID: "e4-chunk-0", Embedding: models.NewEmbedding([]float32{-0.1, -0.2, -0.3})},
+		{ID: 1, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e1", Title: "Same Direction", Content: "c1", ChunkIndex: 0, DocChunkID: "e1-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.1, 0.2, 0.3})},
+		{ID: 2, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e2", Title: "Orthogonal", Content: "c2", ChunkIndex: 0, DocChunkID: "e2-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.3, -0.3, 0.0})},
+		{ID: 3, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e3", Title: "Dim Mismatch", Content: "c3", ChunkIndex: 0, DocChunkID: "e3-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.1, 0.2})},
+		{ID: 4, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e4", Title: "Opposite", Content: "c4", ChunkIndex: 0, DocChunkID: "e4-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{-0.1, -0.2, -0.3})},
 	}
 	interceptQuery(db, docs)
 
