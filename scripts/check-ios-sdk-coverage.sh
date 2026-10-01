@@ -56,16 +56,16 @@ BIN, PROFDATA = sys.argv[1], sys.argv[2]
 # 22 = create 函数签名（Linux 面无人调用）；24-28 = create 的 Darwin return 块
 # （Linux 编译为空隙 region 计 0）——生产路径由 ios-macos job 的 CreateFactoryTests
 # 覆盖；31/33 = create 的 Linux fatalError 守卫与函数闭合（Linux 不可达）；
-# 186/191 = resolveHTTP 的 Darwin 分支（return URLSessionTicketHTTP，工单/推送共用
-# 通道）与 Linux fatalError 守卫（刀 10 后行号）；205 = encodeRestBody 的
-# catch 防御行（payload 为 property-list 类型，JSONSerialization 不可失败，catch
-# 面无输入可触达）；572 = reconcileHTTP 的 Darwin 分支（同 resolveHTTP 口径，
-# 刀 10 新增）；691 = trackFingerprint 的容量淘汰分支（指纹仅由 WS 渲染积累、
-# 补拉渲染由游标保护不入表，测试面不可达，生产环形淘汰自然回收）；
-# 730-739/756-758 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
+# 190/195 = resolveHTTP 的 Darwin 分支（return URLSessionTicketHTTP，工单/推送共用
+# 通道）与 Linux fatalError 守卫（syncReadState 刀后行号）；209 = encodeRestBody
+# 的 catch 防御行（payload 为 property-list 类型，JSONSerialization 不可失败，
+# catch 面无输入可触达）；611 = reconcileHTTP 的 Darwin 分支（同 resolveHTTP
+# 口径，刀 10 新增）；730 = trackFingerprint 的容量淘汰分支（指纹仅由 WS 渲染
+# 积累、补拉渲染由游标保护不入表，测试面不可达，生产环形淘汰自然回收）；
+# 769-778/795-797 = finalizeInterruptedStream 主路径（llvm 计数脱节面：CI 上物理
 # 执行但线性段 counter 报 0——调用计数全记 guard-else 特化副本，诊断 dump 实锤，
-# 源码两处 coverage-exempt 注释锚定）。735-739 为同脱节面的后续行：脱节区间
-# 会随构建的特化/映射边界漂移（538a849 CI 实测零计数区间扩到 739，嵌套子区
+# 源码两处 coverage-exempt 注释锚定）。773-777 为同脱节面的后续行：脱节区间
+# 会随构建的特化/映射边界漂移（538a849 CI 实测零计数区间扩到 777，嵌套子区
 # c=1 与父区 c=0 并存即物证），整段纳入豁免。
 LINE_EXEMPT = {"ServifyChat.swift": {22, 24, 25, 26, 27, 28, 31, 33, 190, 195, 209,
                                      611, 730, 769, 770, 771, 772, 773, 774, 775,
