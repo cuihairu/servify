@@ -28,6 +28,8 @@ func MigrationModels() []interface{} {
 		&models.KnowledgeDoc{},
 		&models.KnowledgeIndexJob{},
 		&models.KnowledgeSource{}, // V1.0 收敛 B3-1a：知识来源登记（表名 knowledge_sources）
+		&models.AIAnswer{},        // V1.0 收敛 B3-1b：AI 首答持久化（表名 ai_answers）
+		&models.AnswerFeedback{},  // V1.0 收敛 B3-1b：AI 答案反馈（表名 answer_feedback）
 		&models.WebRTCConnection{},
 		&models.DailyStats{},
 		&models.SLAConfig{},

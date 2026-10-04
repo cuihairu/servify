@@ -40,13 +40,15 @@ import (
 
 // Dependencies contains the runtime services required to assemble the HTTP router.
 type Dependencies struct {
-	Config                    *config.Config
-	Logger                    *logrus.Logger
-	DB                        *gorm.DB
-	Redis                     *redis.Client
-	AIService                 aidelivery.RuntimeService
-	AIHandlerService          aidelivery.HandlerService
-	AICopilot                 *aidelivery.AgentCopilotService
+	Config           *config.Config
+	Logger           *logrus.Logger
+	DB               *gorm.DB
+	Redis            *redis.Client
+	AIService        aidelivery.RuntimeService
+	AIHandlerService aidelivery.HandlerService
+	AICopilot        *aidelivery.AgentCopilotService
+	// AnswerFeedbackHandler AI 首答反馈与检索分析（B3-1b §5.3/§8.3）。
+	AnswerFeedbackHandler     *aidelivery.AnswerFeedbackHandler
 	TranslationHandlerService translationdelivery.HandlerService
 	// TranslationPreferenceHandlerService 会话翻译语言偏好（Phase 1 刀一）。
 	TranslationPreferenceHandlerService translationdelivery.PreferenceHandlerService
@@ -100,9 +102,9 @@ type Dependencies struct {
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	VisitorReadService       conversationdelivery.VisitorReadService
 	// ConversationTimeline 会话服务过程时间线只读面（V1.0 收敛 B1-2）。
-	ConversationTimeline    *conversationdelivery.TimelineAdapter
-	OIDCProvider            *oidcplatform.Provider
-	HTTPMetrics             *svcmetrics.HTTPMetrics
+	ConversationTimeline *conversationdelivery.TimelineAdapter
+	OIDCProvider         *oidcplatform.Provider
+	HTTPMetrics          *svcmetrics.HTTPMetrics
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

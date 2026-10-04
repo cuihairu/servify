@@ -57,9 +57,11 @@ type Runtime struct {
 	Redis  *redis.Client
 	Bus    eventbus.Bus
 
-	AIService                 aidelivery.RuntimeService
-	AIHandlerService          aidelivery.HandlerService
-	AICopilot                 *aidelivery.AgentCopilotService
+	AIService        aidelivery.RuntimeService
+	AIHandlerService aidelivery.HandlerService
+	AICopilot        *aidelivery.AgentCopilotService
+	// AnswerFeedbackHandler AI 首答反馈与检索分析（B3-1b §5.3/§8.3）。
+	AnswerFeedbackHandler     *aidelivery.AnswerFeedbackHandler
 	TranslationHandlerService translationdelivery.HandlerService
 	// TranslationPreferenceHandlerService 会话翻译语言偏好（Phase 1 刀一）。
 	TranslationPreferenceHandlerService translationdelivery.PreferenceHandlerService
@@ -113,10 +115,10 @@ type Runtime struct {
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	VisitorReadService       conversationdelivery.VisitorReadService
 	// ConversationTimeline 会话服务过程时间线只读面（V1.0 收敛 B1-2）。
-	ConversationTimeline    *conversationdelivery.TimelineAdapter
-	OIDCProvider            *oidcplatform.Provider
-	HTTPMetrics             *svcmetrics.HTTPMetrics
-	BusinessMetrics         *svcmetrics.BusinessMetrics
+	ConversationTimeline *conversationdelivery.TimelineAdapter
+	OIDCProvider         *oidcplatform.Provider
+	HTTPMetrics          *svcmetrics.HTTPMetrics
+	BusinessMetrics      *svcmetrics.BusinessMetrics
 
 	// Private fields for worker access only
 	dailyStatsRunner *analyticsdelivery.DailyStatsRunner
@@ -278,6 +280,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		AIService:                 rt.AIService,
 		AIHandlerService:          rt.AIHandlerService,
 		AICopilot:                 rt.AICopilot,
+		AnswerFeedbackHandler:     rt.AnswerFeedbackHandler,
 		TranslationHandlerService: rt.TranslationHandlerService,
 
 		TranslationPreferenceHandlerService: rt.TranslationPreferenceHandlerService,

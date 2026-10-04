@@ -2,6 +2,7 @@ package models
 
 import (
 	"gorm.io/gorm"
+	aidomain "servify/apps/server/internal/modules/ai/domain"
 	assistdomain "servify/apps/server/internal/modules/assist/domain"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	qualitydomain "servify/apps/server/internal/modules/quality/domain"
@@ -499,6 +500,13 @@ type KnowledgeIndexJob = knowledgedomain.KnowledgeIndexJob
 // KnowledgeSource 知识来源登记。定义在 modules/knowledge/domain（B3-1a §8.1），
 // 别名供 migrate 注册引用。
 type KnowledgeSource = knowledgedomain.KnowledgeSource
+
+// AIAnswer AI 首答持久化（B3-1b §5.3 反馈闭环锚表）。定义在 modules/ai/domain，
+// 别名供 migrate 注册引用。
+type AIAnswer = aidomain.AIAnswer
+
+// AnswerFeedback AI 答案反馈（B3-1b §5.3）。定义在 modules/ai/domain。
+type AnswerFeedback = aidomain.AnswerFeedback
 
 // TenantConfig stores tenant-scoped configuration overrides.
 type TenantConfig struct {

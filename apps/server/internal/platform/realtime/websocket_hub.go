@@ -852,5 +852,9 @@ func aiResponsePayload(resp *aidelivery.AIResponse) map[string]interface{} {
 	if resp.HandoffReason != "" {
 		payload["handoff_reason"] = resp.HandoffReason
 	}
+	// 首答持久化 ID（B3-1b §5.3）：访客 widget 凭它调 POST /api/v1/ai/feedback。
+	if resp.AnswerID != 0 {
+		payload["answer_id"] = resp.AnswerID
+	}
 	return payload
 }

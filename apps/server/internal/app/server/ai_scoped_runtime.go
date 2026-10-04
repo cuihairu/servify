@@ -21,6 +21,9 @@ type scopedAIRuntimeService struct {
 	fallback      aidelivery.RuntimeService
 	businessMeter *svcmetrics.BusinessMetrics
 	historyLoader aidelivery.SessionHistoryLoader
+	// answerStore 首答持久化（B3-1b §5.3）：WS 作答（单发与流式终帧）
+	// 成功后旁路落 ai_answers 并回填 answer_id。
+	answerStore aidelivery.AnswerStore
 }
 
 func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
@@ -38,7 +41,7 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantRagFlowProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter}
+	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter, answerStore: aidelivery.NewGormAnswerStore(db)}
 }
 
 // WithSessionHistory 注入会话历史读取口（多轮上下文）。启动装配在
@@ -56,11 +59,17 @@ func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string,
 	if service == nil {
 		return nil, nil
 	}
-	return service.ProcessQuery(ctx, query, sessionID)
+	resp, err := service.ProcessQuery(ctx, query, sessionID)
+	if err == nil {
+		// 首答持久化（B3-1b）：旁路落 ai_answers 并回填 answer_id。
+		aidelivery.RecordResponse(ctx, s.answerStore, query, sessionID, resp)
+	}
+	return resp, err
 }
 
 // ProcessQueryStream 流式首答透传：请求级重建的实例具备流式能力时委托；
 // 否则显式报错，由调用方（WS hub）回退非流式路径。nil 安全与其他方法同规。
+// 终末 Done 事件的完整首答经包装通道旁路落库（B3-1b）。
 func (s *scopedAIRuntimeService) ProcessQueryStream(ctx context.Context, query string, sessionID string) (<-chan aidelivery.AIStreamEvent, error) {
 	if s == nil {
 		return nil, fmt.Errorf("ai streaming unavailable")
@@ -70,7 +79,11 @@ func (s *scopedAIRuntimeService) ProcessQueryStream(ctx context.Context, query s
 	if !ok {
 		return nil, fmt.Errorf("ai streaming unavailable for this request scope")
 	}
-	return streamer.ProcessQueryStream(ctx, query, sessionID)
+	stream, err := streamer.ProcessQueryStream(ctx, query, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return aidelivery.RecordingStreamChan(ctx, s.answerStore, query, sessionID, stream), nil
 }
 
 func (s *scopedAIRuntimeService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {

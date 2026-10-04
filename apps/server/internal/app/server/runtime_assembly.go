@@ -11,7 +11,9 @@ import (
 	agentapp "servify/apps/server/internal/modules/agent/application"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	agentinfra "servify/apps/server/internal/modules/agent/infra"
+	aiapp "servify/apps/server/internal/modules/ai/application"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	aiinfra "servify/apps/server/internal/modules/ai/infra"
 	analyticsapp "servify/apps/server/internal/modules/analytics/application"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
@@ -453,6 +455,14 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	customFieldModule := customfieldapp.NewService(customfieldinfra.NewGormRepository(rt.DB))
 	rt.CustomFieldService = customfielddelivery.NewHandlerServiceAdapter(customFieldModule)
 	rt.KnowledgeDocHandler = knowledgedelivery.NewHandlerServiceWithProvider(rt.DB, state.aiAssembly.KnowledgeProvider(rt.Config))
+	// AI 首答反馈与检索分析（B3-1b §5.3/§8.3）：与 scoped 记录路径共用
+	// ai_answers 表（写侧在 ai/delivery AnswerStore）。
+	rt.AnswerFeedbackHandler = aidelivery.NewAnswerFeedbackHandler(
+		aiapp.NewAnswerFeedbackService(
+			aiinfra.NewGormAnswerRepository(rt.DB),
+			aiinfra.NewGormAnswerFeedbackRepository(rt.DB),
+		),
+	)
 	// 客户侧推荐（P2-0 RQ-5）：module 单实例贯穿 REST 管理面与 WS 转化归因，
 	// 曝光落库与转化匹配读同一仓储；未注入 hub 时归因自动跳过。
 	suggestionModule := suggestionapp.NewService(suggestioninfra.NewGormRepository(rt.DB))

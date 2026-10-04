@@ -22,6 +22,8 @@ type scopedAIHandlerService struct {
 	fallback      aidelivery.HandlerService
 	startup       aidelivery.RuntimeService
 	businessMeter *svcmetrics.BusinessMetrics
+	// answerStore 首答持久化（B3-1b §5.3）：REST 作答成功后落 ai_answers。
+	answerStore aidelivery.AnswerStore
 
 	mu                       sync.RWMutex
 	knowledgeProviderEnabled *bool
@@ -43,12 +45,19 @@ func NewScopedAIHandlerService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantRagFlowProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, startup: startup, businessMeter: businessMeter}
+	return &scopedAIHandlerService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, startup: startup, businessMeter: businessMeter, answerStore: aidelivery.NewGormAnswerStore(db)}
 }
 
 func (s *scopedAIHandlerService) ProcessQuery(ctx context.Context, query string, sessionID string) (interface{}, error) {
 	service := s.buildService(ctx)
-	return aidelivery.NewHandlerServiceAdapter(service).ProcessQuery(ctx, query, sessionID)
+	result, err := aidelivery.NewHandlerServiceAdapter(service).ProcessQuery(ctx, query, sessionID)
+	if err == nil {
+		// 首答持久化（B3-1b）：旁路落 ai_answers 并回填 answer_id，失败不阻塞。
+		if resp, ok := result.(*aidelivery.AIResponse); ok {
+			aidelivery.RecordResponse(ctx, s.answerStore, query, sessionID, resp)
+		}
+	}
+	return result, err
 }
 
 func (s *scopedAIHandlerService) GetStatus(ctx context.Context) map[string]interface{} {

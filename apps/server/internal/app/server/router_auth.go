@@ -166,6 +166,17 @@ func registerUploadRoutes(r *gin.Engine, deps Dependencies) {
 			handlers.NewTranslationHandler(deps.TranslationHandlerService).Translate)
 	}
 
+	// AI 首答反馈（V1.0 收敛 B3-1b，docs/v1-convergence-plan.md §5.3）：
+	// 坐席会话页与访客 widget 共用的"是否有帮助"评价端点。与 translate
+	// 端点同款单一注册点（AuthMiddleware 认证即可，无主体种类限制）；
+	// end_user 主体在服务内强制会话绑定（token 的 session_id 必须与答案
+	// 一致），未装配时不注册（无 DB 部署形态）。
+	if deps.AnswerFeedbackHandler != nil {
+		r.POST("/api/v1/ai/feedback",
+			middleware.AuthMiddleware(deps.Config, deps.DB, authPolicies(deps.DB)...),
+			deps.AnswerFeedbackHandler.SubmitFeedback)
+	}
+
 	// 会话翻译语言偏好（Phase 1 刀三，docs/realtime-translation-design.md
 	// §1.3）：与 translate 端点同款单一双面注册点（AuthMiddleware 认证即
 	// 可）；读向按认证主体推导——end_user → visitor 读向（强制会话绑定：

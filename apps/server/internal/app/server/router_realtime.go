@@ -3,6 +3,7 @@ package server
 import (
 	"servify/apps/server/internal/handlers"
 	"servify/apps/server/internal/middleware"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 
@@ -64,6 +65,11 @@ func registerRealtimeRoutes(r *gin.Engine, deps Dependencies) {
 	aiAPI.PUT("/knowledge-provider/enable", aiHandler.EnableKnowledgeProvider)
 	aiAPI.PUT("/knowledge-provider/disable", aiHandler.DisableKnowledgeProvider)
 	aiAPI.POST("/circuit-breaker/reset", aiHandler.ResetCircuitBreaker)
+	// 检索分析读口（B3-1b §8.3）：Knowledge 管理页消费（top 问答/无命中率/
+	// 低置信率/反馈计数），管理面主体限定。
+	if deps.AnswerFeedbackHandler != nil {
+		aidelivery.RegisterAIRetrievalAnalyticsRoutes(aiAPI, deps.AnswerFeedbackHandler)
+	}
 
 	// 会话翻译语言偏好（Phase 1 刀一起管理面注册；刀三起与 translate 端点
 	// 同款单一双面注册点，迁至 router_auth.go：agent/visitor 主体两面共用，
