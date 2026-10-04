@@ -411,6 +411,22 @@ P2-8：从"能跑"提升到"知道能承受多少负载"。基线口径与结论
 | 压测链路守护 | `TestPerfBaselineScriptWritesEvidence`（CI script-checks） | smoke 档真跑全链路 | manifest 全 true、overall=passed | [test_perf_baseline_test.go](../scripts/test_perf_baseline_test.go) | 通过 |
 | 基线 manifest 校验 | `validate-acceptance-manifest.sh`（provider=perf case） | 对入库 manifest 复验 | 校验通过 | [validate_acceptance_manifest_test.go](../scripts/validate_acceptance_manifest_test.go) 正反例 | 通过 |
 
+### 14. V1.0 收敛能力（B1~B3 批次，docs/v1-convergence-plan.md）
+
+V1.0 收敛改造（2026-10-04 前过闸）新增/收口的能力面。切片登记与提交号见
+[todo.md](../todo.md)；本节逐项补齐验收矩阵行。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 知识来源登记 | `GET/POST /api/knowledge-docs/sources`、`DELETE /sources/:id` | 登记来源（枚举类型校验）、文档挂源、删除被引用来源 | 类型枚举外 400；删除仍被文档引用的来源被拒绝（引用守卫）；tenant/workspace scope 隔离 | [service_sources_version_test.go](../apps/server/internal/modules/knowledge/application/service_sources_version_test.go)、[source_repository_integration_test.go](../apps/server/internal/modules/knowledge/infra/source_repository_integration_test.go)、[knowledge_sources_index_jobs_test.go](../apps/server/internal/handlers/knowledge_sources_index_jobs_test.go)（B3-1a，a66da78） | 通过 |
+| 文档版本与索引任务 | `POST /:id/index-jobs`、`GET /:id/index-jobs`、`POST /index-jobs/:job_id/retry` | 内容变更触发版本自增；重建索引；失败重试 | 标题/内容变更版本 +1、纯元数据不动；任务落执行时文档版本（`document_version`）；状态/错误可见、失败可重试 | 同上（B3-1a，a66da78）；迁移 000018 双路径（versioned SQL + AutoMigrate） | 通过 |
+| AI 首答持久化与反馈闭环 | `POST /api/v1/ai/feedback`；ai_answers / answer_feedback | REST/WS 首答落库（旁路，失败静默）；提交反馈；访客跨会话反馈 | REST 响应与 WS ai-response 帧透出 `answer_id`；来源快照只落 document_id/title/score 不落 content 全文；end_user（含 guest token）强制会话绑定——token `sid` 与答案会话不一致 400 | [feedback_test.go](../apps/server/internal/modules/ai/application/feedback_test.go)、[answer_recording_test.go](../apps/server/internal/modules/ai/delivery/answer_recording_test.go)、[answer_repository_integration_test.go](../apps/server/internal/modules/ai/infra/answer_repository_integration_test.go)、[feedback_handler_test.go](../apps/server/internal/modules/ai/delivery/feedback_handler_test.go)（B3-1b，0a7a152） | 通过 |
+| guest token REST 主体推导 | `Authorization: Bearer <guest token>`（任意 AuthMiddleware 面） | guest token 调 REST 端点 | `principal_kind=end_user`、`session_id=sid` 上下文注入；WS 握手仍走独立 validator 不受影响 | [guest_token_test.go TestGuestTokenViaAuthMiddleware](../apps/server/internal/platform/auth/guest_token_test.go)、[principal_test.go](../apps/server/internal/platform/auth/principal_test.go)（B3-2，f7b99e5） | 通过 |
+| 检索分析读口 | `GET /api/v1/ai/retrieval-analytics?days=&limit=` | 窗口聚合查询 | top 问答（带引用命中）/ 零命中问题 / 低置信问题（< 0.65）/ 反馈计数；窗口默认 7 天上限 90 天、榜单默认 10 上限 50 | [feedback_test.go TestRetrievalAnalyticsAggregation](../apps/server/internal/modules/ai/application/feedback_test.go)、[feedback_handler_test.go TestRetrievalAnalyticsEndpoint](../apps/server/internal/modules/ai/delivery/feedback_handler_test.go)（B3-1b，0a7a152） | 通过 |
+| citation 可视化与访客反馈入口 | widget ai-response 终帧；admin Knowledge 页 | 终帧带 sources/answer_id 渲染引用行与"Was this helpful?"；admin 来源/版本/任务抽屉/检索分析页 | 引用行 `📄 标题 · relevance 0.91`；反馈条仅在带 answer_id 且注入 accessToken 时出现（匿名 demo 不显示）；admin typecheck+build 绿 | [widget.js](../apps/demo-sdk/widget.js)（B3-2，f7b99e5）；admin Knowledge 页（78361f1，`npm run typecheck`+`build`） | 通过（前端自动化=typecheck/build/单测，浏览器端到端人工复核） |
+| Routing 统一分配事件路径 | conversation.Service.AssignAgent / Transfer | 直派接管、改派后查事件流 | 分别发布 `routing.agent_assigned` / `routing.transfer_completed`（aggregate `routing:<id>`，与 EventBusSubscriber 投影口径一致）；等待队列进队不加事件（进队非分配） | [service_test.go TestServiceAssignAgent / TestServiceTransfer](../apps/server/internal/modules/conversation/application/service_test.go)（B2 gate，21fc7de） | 通过 |
+| PII 数据边界与保留策略 | customer 导出/擦除；retention | 导出全覆盖、擦除全 PII（文本 “[已擦除]”）、过期擦除/窗内保留/幂等 | 导出/擦除幂等、404 精确；保留策略过期擦除、窗内保留 | [data_boundary_repository_test.go](../apps/server/internal/modules/customer/infra/data_boundary_repository_test.go)、retention 四用例（B2 gate ①②，todo.md B2 登记） | 通过 |
+
 ## 权限与异常路径必须额外验
 
 即使主流程通过，也不能直接判定完成，还必须补下面这些：

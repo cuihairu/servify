@@ -444,7 +444,8 @@ Jaeger 默认地址：`http://localhost:16686`
 - [docs/generated-assets.md](./docs/generated-assets.md) - 受控生成物、重建入口与校验规则
 - [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux 本地开发约定
 - [docs/contributing.md](./docs/contributing.md) - 提交前自检与协作约定
-- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 发布说明、已知限制与非目标
+- [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 产品与架构收敛改造计划书（当前口径）**
+- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 历史发布说明（V1.0 已收敛，仅存档）
 
 ### 📋 实施 backlog
 
@@ -467,27 +468,34 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ---
 
-## 📈 当前实施进度
+## 📈 当前实施进度（V1.0 收敛口径）
 
-- `docs/implementation/01-08`：已清零（平台、AI、业务模块、SDK、工程化、语音、多端、AI 扩展）
-- `docs/implementation/09-runtime-and-repo-hygiene.md`：**基本完成**
-  - 运行时产物清理、ignore 策略、跨平台开发环境收敛
-- `docs/implementation/10-service-to-module-migration.md`：**进行中**
-  - `ticket`、`agent`、`analytics` 已收口到模块化链路
-  - 详见 `10-migration-scorecard.md` 当前状态
-- `docs/implementation/11-tenant-auth-and-audit.md`：**进行中**
-  - 核心模型已补 `tenant_id`/`workspace_id` 字段与索引
-  - 请求 scope 守卫已接入管理面
-- `docs/implementation/12-operator-observability.md`：待开始
+V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md) 实施，
+批次状态、提交号与过闸证据见 [todo.md](./todo.md)：
+
+- **B1（Domain 边界/迁移双路径）✅**：核心 7 模块边界与依赖方向治理、
+  模块依赖只允许 `delivery → application → domain`、迁移双路径
+  （postgres versioned SQL + sqlite AutoMigrate）
+- **B2（Agent Workspace/Routing 事件统一/PII 保留）✅**：直派与改派事件
+  统一路径（`routing.agent_assigned` / `routing.transfer_completed`）、
+  凭证导出/擦除 PII 边界、保留策略过期擦除
+- **B3（Knowledge 产品化/AI 反馈闭环）✅**：知识来源登记与文档版本、
+  索引任务 HTTP 面、AI 首答持久化（REST+WS 旁路记录）、反馈闭环
+  （`POST /api/v1/ai/feedback`，访客会话绑定）、检索分析读口、访客侧
+  citation 引用行与反馈条、admin Knowledge 管理页（来源/版本/任务/分析）
+- **B4（收口与发布）⏳**：TASKS.md/验收矩阵/文档站口径统一（进行中），
+  `v1.0.0` 发布在即
 
 当前代码状态说明：
 
-- 服务端已从”大 service 直连 handler”收敛到模块化单体结构
-- `ticket`、`agent`、`analytics` 模块已收口到 `delivery -> application -> domain -> infra` 链路
-- AI 已统一到 `QueryOrchestrator + LLMProvider + KnowledgeProvider`
-- Dify 已作为默认优先知识源接入，WeKnora 已降级为 `KnowledgeProvider` 兼容适配器
-- 管理面安全基线已接入首轮能力：scope、RBAC、audit、token policy
-- 数据库层支持 PostgreSQL 与 SQLite（开发/测试回退）
+- 服务端已收敛到模块化单体：`delivery -> application -> domain -> infra`
+  分层；跨模块经 module 内 contract 或事件，无 `models.go` 穿透
+- AI 统一到 `QueryOrchestrator + LLMProvider + KnowledgeProvider`；
+  `ai` 模块承载首答记录、反馈闭环与检索分析（失败静默的旁路观测路径）
+- 知识检索服务选择链：ragflow → dify → weknora → pgvector → local
+  （外部 provider real 模式证据依赖环境凭证，mock/兼容模式全链留痕）
+- 管理面安全基线：scope、RBAC、audit、token policy 已接入管理面
+- 数据库层支持 PostgreSQL 与 SQLite（开发/测试回退），迁移走双路径
 
 ---
 
