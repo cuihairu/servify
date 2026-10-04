@@ -147,6 +147,7 @@ Servify 当前更适合这样理解：
 
 推荐先读：
 
+- [V1.0 收敛改造计划](./docs/v1-convergence-plan.md)（当前主计划）
 - [V1 产品收敛](./docs/v1-product-scope.md)
 - [远程协助产品说明](./docs/remote-assistance.md)
 - [文档站首页](./docs/index.md)
@@ -182,32 +183,47 @@ flowchart LR
 
 ## 📦 业务模块边界
 
-### ✅ 已落地模块
+V1.0 产品中心是 **7 个核心模块**（conversation 为唯一中心聚合，详见
+[ARCHITECTURE.md §6](./ARCHITECTURE.md) 与
+[V1.0 收敛计划](./docs/v1-convergence-plan.md)）。其余业务代码一律按
+「核心模块的子能力」定位，不再单列产品叙事。
 
-| 模块 | 状态 | 说明 |
+### ✅ 核心 7 模块（V1.0 产品中心）
+
+| 模块 | 产品定位 |
+| --- | --- |
+| `conversation` | **系统中心聚合**：会话、消息、参与者、服务过程时间线（`conversation_events` 投影） |
+| `routing` | 人工接管、排队、分配、转接（打分路由引擎为 V1.0 增强） |
+| `ticket` | 工单闭环：从会话一键建单、状态机、SLA/评价挂靠 |
+| `ai` | AI 首答、坐席辅助（建议回复/改写/摘要）、知识检索答案 |
+| `knowledge` | 知识库文档、检索与引用（citation） |
+| `agent` | 坐席档案、在线状态/负载、三栏接待工作台数据源 |
+| `customer` | 客户档案、标签、历史与工单汇（客户 360） |
+
+### 🧩 子能力模块（薄壳，挂靠核心，不再是一级产品概念）
+
+| 模块 | 归宿 | 说明 |
 | --- | --- | --- |
-| `ticket` | 主路径收口（legacy 已删除） | 核心读写、命令、查询、事务边界、handler adapter 已完成 |
-| `conversation` | 主路径收口 | 会话、消息、参与者、消息落库、最近历史读取已归拢 |
-| `routing` | 主路径收口（legacy 已删除） | 人工接管、排队、分配、转接记录边界已独立 |
-| `ai` | 主路径收口 | Query orchestrator、guardrails、tools、provider 抽象已到位 |
-| `knowledge` | 主路径收口（facade 保留兼容） | 文档管理、索引任务、provider 抽象已到位 |
-| `agent` | 主路径收口（facade 保留兼容） | handler DTO 与 transfer runtime contract 已回到 module delivery |
-| `customer` | 主路径收口（facade 保留兼容） | handler/router/runtime 已直接走 module delivery |
-| `automation` | 主路径收口（facade 保留兼容） | 触发器与执行查询已下沉到 module application，event bus subscriber 已由 module delivery 装配（`runtime_assembly.go:389`） |
-| `analytics` | 主路径收口（facade 保留兼容） | 核心统计已走 module application，event bus subscriber 已由 module delivery 装配（`runtime_assembly.go:417`） |
-| `suggestion` | 主路径收口（legacy 已删除） | 推荐、token/意图辅助逻辑已下沉到 module application |
-| `gamification` | 主路径收口（legacy 已删除） | 评分、徽章逻辑已下沉到 module application |
-| `voice` | 模块化（mixed） | 呼叫、媒体、录音、转写通过 `voice` 模块与 SIP adapter 接入；非典型 services→modules 迁移形态 |
+| `sla` | → `ticket` | SLA 评估/违背事件，本属工单生命周期 |
+| `satisfaction` | → `ticket` | 关单后评价 |
+| `custom_field` | → `ticket` | 自定义字段作用于工单 |
+| `shift` | → `agent` | 排班是坐席 availability 数据源 |
+| `macro` | → `agent` | 快捷回复是坐席工具 |
+| `gamification` | → `analytics` | 表现评分是 read model 派生 |
+| `suggestion` | → `conversation` | 推荐/意图辅助 |
+| `quality` | → `conversation` | 会话分析与质检视角 |
 
-各模块的迁移成熟度与 legacy service 角色，以 [迁移记分卡](./docs/implementation/10-migration-scorecard.md) 为准。
+冻结（不新增能力面、不进入产品文案）：`api_key`、`email`、`push`、
+`webhook`、`translation`、`app_integration`、`auth`（薄壳）；`voice`
+及其扩展（SIP/PSTN/转写）冻结为扩展边界。**架构门禁：不新增一级模块**，
+新能力先找既有模块的子能力归属。
 
-### 🔧 持续硬化方向
+### 🔧 工程视角：模块迁移成熟度
 
-主链路模块均已落地并接入 router/runtime；当前的重点不是“再找一个模块收口”，而是：
-
-- 继续压缩仍保留 facade 的模块（agent / customer / automation / analytics / knowledge）的 legacy 兼容层
-- 收口仍以 legacy service 为主承载的业务（statistics、SLA、satisfaction、shift、workspace、macro、custom_field、app_integration）
-- 扩大边界守护与验收证据覆盖
+各模块的迁移成熟度与 legacy service 角色（含 `automation`/`analytics`
+facade 收敛、`statistics` 旧 handler 收口计划），以
+[迁移记分卡](./docs/implementation/10-migration-scorecard.md) 与
+[当前架构快照](./docs/current-architecture.md) 为准。
 
 ### 🔐 安全与管理面现状
 
