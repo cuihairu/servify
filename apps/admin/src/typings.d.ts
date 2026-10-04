@@ -498,6 +498,15 @@ declare namespace API {
     knowledge_docs?: unknown[];
   }
 
+  /** 知识检索命中引用（/api/v1/ai/query data.sources，W4 展示用）。 */
+  interface AIKnowledgeSource {
+    document_id?: string;
+    title?: string;
+    content?: string;
+    score?: number;
+    source?: string;
+  }
+
   interface AIMetrics {
     total_queries?: number;
     avg_latency_ms?: number;

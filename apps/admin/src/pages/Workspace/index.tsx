@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ProCard } from '@ant-design/pro-components';
 import {
+  Alert,
   Badge,
   Button,
   Collapse,
@@ -26,6 +27,8 @@ import { getWorkspaceOverview } from '@/services/workspace';
 import { getCustomer } from '@/services/customer';
 import { listTickets, createTicket } from '@/services/ticket';
 import { listAgents } from '@/services/agent';
+// 坐席 AI 辅助与知识检索（V1.0 收敛 B1-3b，W3/W4）。
+import { aiCopilot, aiKnowledgeQuery } from '@/services/ai';
 // 服务过程时间线（V1.0 收敛 B1-2，W6）：conversation_events 投影只读展示。
 import ServiceTimeline from '@/pages/Conversation/components/ServiceTimeline';
 
@@ -65,6 +68,12 @@ export default function Workspace() {
   const [agents, setAgents] = useState<Array<{ id: number; name?: string }>>([]);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [ticketForm, setTicketForm] = useState({ title: '', description: '', priority: 'normal' });
+
+  // ---- AI 辅助（W3）与知识建议（W4） ----
+  const [copilotBusy, setCopilotBusy] = useState<string | null>(null);
+  const [summaryText, setSummaryText] = useState('');
+  const [knowledge, setKnowledge] = useState<API.AIKnowledgeSource[] | null>(null);
+  const [knowledgeBusy, setKnowledgeBusy] = useState(false);
 
   // ---- 右栏：Customer 面板（W5） ----
   const [customer, setCustomer] = useState<API.Customer | null>(null);
@@ -117,6 +126,71 @@ export default function Workspace() {
       void loadConversation(selectedId);
     }
   }, [selectedId, loadConversation]);
+
+  // 切换会话即清空 AI 面产物（摘要与知识建议都是会话级视图）。
+  useEffect(() => {
+    setSummaryText('');
+    setKnowledge(null);
+  }, [selectedId]);
+
+  const runCopilot = async (
+    action: 'suggest_reply' | 'rewrite' | 'session_summary',
+  ) => {
+    if (!selectedId) return;
+    if (action === 'rewrite' && !draft.trim()) {
+      message.warning('先在输入框写草稿再改写');
+      return;
+    }
+    setCopilotBusy(action);
+    try {
+      const resp = await aiCopilot({
+        action,
+        session_id: selectedId,
+        draft: action === 'rewrite' ? draft.trim() : undefined,
+      });
+      if (!resp.success || !resp.data?.text) {
+        message.warning(resp.error || 'AI 未返回结果');
+        return;
+      }
+      if (action === 'session_summary') {
+        setSummaryText(resp.data.text);
+      } else {
+        // 建议回复与改写都落到输入框：坐席可编辑后再发送（AI 起草，人发）。
+        setDraft(resp.data.text);
+      }
+    } catch (e) {
+      message.warning(e instanceof Error ? e.message : 'AI 辅助暂不可用');
+    } finally {
+      setCopilotBusy(null);
+    }
+  };
+
+  const runKnowledgeSearch = async () => {
+    if (!selectedSession) return;
+    // 检索词：优先坐席草稿，否则取最后一条客户消息（会话上下文即查询）。
+    const lastCustomer = [...messages].reverse().find((item) => item.sender === 'customer');
+    const query = draft.trim() || lastCustomer?.content?.trim();
+    if (!query) {
+      message.warning('没有可检索的内容：先写草稿或等客户消息');
+      return;
+    }
+    setKnowledgeBusy(true);
+    try {
+      const resp = await aiKnowledgeQuery({ query, session_id: selectedId || undefined });
+      if (!resp.success || !resp.data) {
+        message.warning(resp.error || '知识检索暂不可用');
+        return;
+      }
+      setKnowledge(resp.data.sources || []);
+      if ((resp.data.sources || []).length === 0) {
+        message.info('知识库没有命中相关内容');
+      }
+    } catch (e) {
+      message.warning(e instanceof Error ? e.message : '知识检索暂不可用');
+    } finally {
+      setKnowledgeBusy(false);
+    }
+  };
 
   const sessions = (overview?.recent_sessions || []).filter(
     (item) => !statusFilter || item.status === statusFilter,
@@ -364,6 +438,16 @@ export default function Workspace() {
             </div>
             {selectedId && selectedSession?.status !== 'closed' && (
               <>
+                {summaryText && (
+                  <Alert
+                    type="info"
+                    closable
+                    onClose={() => setSummaryText('')}
+                    style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}
+                    message="AI 会话摘要"
+                    description={summaryText}
+                  />
+                )}
                 <Input.TextArea
                   rows={3}
                   placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
@@ -373,9 +457,54 @@ export default function Workspace() {
                   disabled={sending}
                   onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); void handleSend(); } }}
                 />
-                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                {/* AI 辅助工具条（W3）：AI 起草/改写，坐席编辑后发送。 */}
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                  <Space size={4} wrap>
+                    <Button size="small" onClick={() => void runCopilot('suggest_reply')} loading={copilotBusy === 'suggest_reply'}>
+                      AI 建议回复
+                    </Button>
+                    <Button size="small" onClick={() => void runCopilot('rewrite')} loading={copilotBusy === 'rewrite'} disabled={!draft.trim()}>
+                      AI 改写草稿
+                    </Button>
+                    <Button size="small" onClick={() => void runCopilot('session_summary')} loading={copilotBusy === 'session_summary'}>
+                      AI 摘要
+                    </Button>
+                    <Button size="small" onClick={() => void runKnowledgeSearch()} loading={knowledgeBusy}>
+                      知识检索
+                    </Button>
+                  </Space>
                   <Button type="primary" onClick={handleSend} loading={sending} disabled={!draft.trim()}>发送消息</Button>
                 </div>
+                {/* 知识建议（W4）：引用来源附 relevance（score 0-1 → 百分比）。 */}
+                {knowledge && knowledge.length > 0 && (
+                  <Collapse
+                    size="small"
+                    style={{ marginTop: 8 }}
+                    items={[{
+                      key: 'knowledge',
+                      label: `知识库建议（${knowledge.length} 条引用）`,
+                      children: (
+                        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                          {knowledge.map((item, index) => (
+                            <div key={`${item.document_id || index}-${index}`} style={{ padding: 8, background: '#fafafa', borderRadius: 8 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                                <Typography.Text strong style={{ fontSize: 13 }}>
+                                  {item.title || item.document_id || '未命名文档'}
+                                </Typography.Text>
+                                {typeof item.score === 'number' && (
+                                  <Tag color="blue">相关度 {(item.score * 100).toFixed(0)}%</Tag>
+                                )}
+                              </div>
+                              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }} ellipsis={{ rows: 3 }}>
+                                {item.content}
+                              </Typography.Paragraph>
+                            </div>
+                          ))}
+                        </Space>
+                      ),
+                    }]}
+                  />
+                )}
               </>
             )}
           </div>
