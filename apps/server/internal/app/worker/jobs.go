@@ -12,6 +12,8 @@ import (
 	"servify/apps/server/internal/config"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
+	customerapp "servify/apps/server/internal/modules/customer/application"
+	customerinfra "servify/apps/server/internal/modules/customer/infra"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -124,6 +126,15 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 			cfg.Security.TokenRevocation.CleanupInterval,
 			app.Logger,
 		))
+	}
+	// 客户数据保留清理（B2-2b）：privacy.retention_days > 0 时按周期擦除
+	// 已结束会话的消息内容与已关闭工单的内容（默认关闭保持既有行为）。
+	if cfg.Privacy.RetentionDays > 0 && db != nil {
+		retention := customerapp.NewRetentionService(
+			customerinfra.NewGormDataBoundaryRepository(db),
+			cfg.Privacy.RetentionDays,
+		)
+		app.RegisterWorker(NewRetentionCleanupWorker(retention, cfg.Privacy.CleanupInterval, app.Logger))
 	}
 	// 后台 worker 观测接线：全部注册完成后统一注入 job 级 metrics 并包装，
 	// worker_active_jobs{worker_name}（包装层）与 worker_jobs_total /
@@ -434,6 +445,90 @@ func (w *RevokedTokenCleanupWorker) Start() error {
 }
 
 func (w *RevokedTokenCleanupWorker) Stop(ctx context.Context) error {
+	w.mu.Lock()
+	cancel := w.cancel
+	done := w.done
+	w.cancel = nil
+	w.done = nil
+	w.mu.Unlock()
+
+	if cancel == nil {
+		return nil
+	}
+	cancel()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type customerRetentionService interface {
+	// ScrubExpiredContent 执行一轮过期客户内容清理（单轮，循环由 worker 驱动）。
+	ScrubExpiredContent(ctx context.Context) (*customerapp.RetentionResult, error)
+}
+
+// RetentionCleanupWorker 周期执行过期客户内容擦除
+// （privacy.retention_days，V1.0 B2-2b）。
+type RetentionCleanupWorker struct {
+	service  customerRetentionService
+	interval time.Duration
+	logger   *logrus.Logger
+	metrics  *async.WorkerMetrics
+
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func NewRetentionCleanupWorker(service customerRetentionService, interval time.Duration, logger *logrus.Logger) bootstrap.Worker {
+	if interval <= 0 {
+		interval = 24 * time.Hour
+	}
+	if logger == nil {
+		logger = logrus.StandardLogger()
+	}
+	return &RetentionCleanupWorker{
+		service:  service,
+		interval: interval,
+		logger:   logger,
+	}
+}
+
+func (w *RetentionCleanupWorker) Name() string { return "customer-retention-cleanup" }
+
+func (w *RetentionCleanupWorker) setJobMetrics(m *async.WorkerMetrics) { w.metrics = m }
+
+func (w *RetentionCleanupWorker) Start() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.cancel != nil || w.service == nil {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	w.cancel = cancel
+	w.done = done
+	go func() {
+		defer close(done)
+		newPeriodicJob(w.Name(), w.interval, w.logger, w.metrics, func(ctx context.Context) error {
+			result, err := w.service.ScrubExpiredContent(ctx)
+			if err != nil {
+				return err
+			}
+			if result != nil && w.logger != nil &&
+				(result.MessagesScrubbed > 0 || result.TicketsScrubbed > 0 || result.CommentsScrubbed > 0 || result.FilesDeleted > 0) {
+				w.logger.Infof("customer retention worker: scrubbed %d messages / %d tickets / %d comments, deleted %d files (retention=%dd)",
+					result.MessagesScrubbed, result.TicketsScrubbed, result.CommentsScrubbed, result.FilesDeleted, result.RetentionDays)
+			}
+			return nil
+		}).loop(ctx)
+	}()
+	return nil
+}
+
+func (w *RetentionCleanupWorker) Stop(ctx context.Context) error {
 	w.mu.Lock()
 	cancel := w.cancel
 	done := w.done

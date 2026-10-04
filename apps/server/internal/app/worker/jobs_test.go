@@ -9,6 +9,7 @@ import (
 	"servify/apps/server/internal/config"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	automationapp "servify/apps/server/internal/modules/automation/application"
+	customerapp "servify/apps/server/internal/modules/customer/application"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
@@ -75,6 +76,19 @@ func (f *fakeRevokedTokenRetentionService) Cleanup(ctx context.Context, now time
 	}
 	<-ctx.Done()
 	return 0, ctx.Err()
+}
+
+type fakeCustomerRetentionService struct {
+	calls chan struct{}
+}
+
+func (f *fakeCustomerRetentionService) ScrubExpiredContent(ctx context.Context) (*customerapp.RetentionResult, error) {
+	select {
+	case f.calls <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 type fakeRuntimeWorkerDependencies struct {
@@ -173,6 +187,24 @@ func TestRevokedTokenCleanupWorkerLifecycle(t *testing.T) {
 	calls := make(chan struct{}, 1)
 	w := NewRevokedTokenCleanupWorker(&fakeRevokedTokenRetentionService{calls: calls}, 100*time.Millisecond, nil)
 	w.(*RevokedTokenCleanupWorker).now = time.Now
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	select {
+	case <-calls:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not execute cleanup")
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := w.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+}
+
+func TestRetentionCleanupWorkerLifecycle(t *testing.T) {
+	calls := make(chan struct{}, 1)
+	w := NewRetentionCleanupWorker(&fakeCustomerRetentionService{calls: calls}, 100*time.Millisecond, nil)
 	if err := w.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}

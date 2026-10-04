@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"servify/apps/server/internal/models"
 	customerapp "servify/apps/server/internal/modules/customer/application"
@@ -159,5 +160,57 @@ func (r *GormDataBoundaryRepository) ScrubCommentsByTickets(ctx context.Context,
 
 func (r *GormDataBoundaryRepository) DeleteFilesByTickets(ctx context.Context, ticketIDs []uint) (int64, error) {
 	result := r.db.WithContext(ctx).Unscoped().Where("ticket_id IN ?", ticketIDs).Delete(&models.TicketFile{})
+	return result.RowsAffected, result.Error
+}
+
+// —— 数据保留清理（B2-2b）：按时间窗口批量擦除，口径与数据主体删除一致 ——
+
+// endedSessionIDsSub 已结束（ended_at 早于 before）会话 ID 子查询。
+func (r *GormDataBoundaryRepository) endedSessionIDsSub(before time.Time) *gorm.DB {
+	return r.db.Model(&models.Session{}).Select("id").
+		Where("ended_at IS NOT NULL AND ended_at < ?", before)
+}
+
+// closedTicketIDsSub 已关闭（closed_at 早于 before）工单 ID 子查询；
+// Unscoped 让保留清理覆盖软删工单（挂其下的评论/附件同样要擦）。
+func (r *GormDataBoundaryRepository) closedTicketIDsSub(before time.Time) *gorm.DB {
+	return r.db.Unscoped().Model(&models.Ticket{}).Select("id").
+		Where("closed_at IS NOT NULL AND closed_at < ?", before)
+}
+
+func (r *GormDataBoundaryRepository) ScrubMessagesInSessionsEndedBefore(ctx context.Context, before time.Time, replacement string) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&models.Message{}).
+		Where("session_id IN (?)", r.endedSessionIDsSub(before)).
+		// 只擦有内容的行：空串与已擦除标记不重复改写（幂等计数诚实）。
+		Where("content <> ? AND content <> ?", replacement, "").
+		Update("content", replacement)
+	return result.RowsAffected, result.Error
+}
+
+func (r *GormDataBoundaryRepository) ScrubTicketsClosedBefore(ctx context.Context, before time.Time, replacement string) (int64, error) {
+	result := r.db.WithContext(ctx).Unscoped().Model(&models.Ticket{}).
+		Where("id IN (?)", r.closedTicketIDsSub(before)).
+		Where("title <> ? OR description <> ?", replacement, replacement).
+		Updates(map[string]interface{}{
+			"title":       replacement,
+			"description": replacement,
+			"ai_summary":  "",
+			"tags":        "",
+		})
+	return result.RowsAffected, result.Error
+}
+
+func (r *GormDataBoundaryRepository) ScrubCommentsOnTicketsClosedBefore(ctx context.Context, before time.Time, replacement string) (int64, error) {
+	result := r.db.WithContext(ctx).Unscoped().Model(&models.TicketComment{}).
+		Where("ticket_id IN (?)", r.closedTicketIDsSub(before)).
+		Where("content <> ? AND content <> ?", replacement, "").
+		Update("content", replacement)
+	return result.RowsAffected, result.Error
+}
+
+func (r *GormDataBoundaryRepository) DeleteFilesOnTicketsClosedBefore(ctx context.Context, before time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).Unscoped().
+		Where("ticket_id IN (?)", r.closedTicketIDsSub(before)).
+		Delete(&models.TicketFile{})
 	return result.RowsAffected, result.Error
 }

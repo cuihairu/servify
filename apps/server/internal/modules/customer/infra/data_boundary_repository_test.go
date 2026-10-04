@@ -145,3 +145,98 @@ func TestDataBoundaryNotFound(t *testing.T) {
 		require.ErrorIs(t, fn(), customerapp.ErrCustomerNotFound)
 	}
 }
+
+// seedRetentionData 铺过期/未过期两条数据链：过期链（会话已结束、工单已
+// 关闭，时间戳早于保留窗）+ 新鲜链（进行中，必须原样保留）。
+func seedRetentionData(t *testing.T, db *gorm.DB, now time.Time) {
+	t.Helper()
+	old := now.AddDate(0, 0, -40)
+	user := &models.User{Username: "bob", Email: "bob@example.com", Role: "customer"}
+	require.NoError(t, db.Create(user).Error)
+
+	expiredSession := &models.Session{ID: "sess-expired", UserID: user.ID, Status: "ended", Platform: "web", StartedAt: old, EndedAt: &old}
+	require.NoError(t, db.Create(expiredSession).Error)
+	require.NoError(t, db.Create(&models.Message{SessionID: expiredSession.ID, Content: "过期会话里的手机号 13911112222", Sender: "customer", Type: "text", CreatedAt: old}).Error)
+	require.NoError(t, db.Create(&models.Message{SessionID: expiredSession.ID, Content: customerapp.ErasureErasedText, Sender: "customer", Type: "text", CreatedAt: old}).Error)
+
+	closedAt := old
+	ticket := &models.Ticket{Title: "过期工单", Description: "过期工单描述", CustomerID: user.ID, Status: "closed", Source: "web", ClosedAt: &closedAt}
+	require.NoError(t, db.Create(ticket).Error)
+	require.NoError(t, db.Create(&models.TicketComment{TicketID: ticket.ID, UserID: user.ID, Content: "过期评论内容", Type: "comment", CreatedAt: old}).Error)
+	require.NoError(t, db.Create(&models.TicketFile{TicketID: ticket.ID, UserID: user.ID, FileName: "old.pdf", FilePath: "/uploads/old.pdf", FileSize: 1, MimeType: "application/pdf"}).Error)
+
+	activeSession := &models.Session{ID: "sess-active", UserID: user.ID, Status: "active", Platform: "web", StartedAt: now}
+	require.NoError(t, db.Create(activeSession).Error)
+	require.NoError(t, db.Create(&models.Message{SessionID: activeSession.ID, Content: "进行中会话内容", Sender: "customer", Type: "text", CreatedAt: now}).Error)
+
+	openTicket := &models.Ticket{Title: "开启中工单", Description: "开启中描述", CustomerID: user.ID, Status: "open", Source: "web"}
+	require.NoError(t, db.Create(openTicket).Error)
+	require.NoError(t, db.Create(&models.TicketComment{TicketID: openTicket.ID, UserID: user.ID, Content: "开启中评论", Type: "comment", CreatedAt: now}).Error)
+	require.NoError(t, db.Create(&models.TicketFile{TicketID: openTicket.ID, UserID: user.ID, FileName: "new.pdf", FilePath: "/uploads/new.pdf", FileSize: 1, MimeType: "application/pdf"}).Error)
+}
+
+// B2-2b 验收（PII 用例-retention）：保留窗外已结束会话的消息与已关闭
+// 工单的内容被擦除、附件元数据删除；窗内数据原样；二次执行幂等。
+func TestDataRetentionScrubbsExpiredContent(t *testing.T) {
+	db := newBoundaryDB(t)
+	repo := NewGormDataBoundaryRepository(db)
+	now := time.Now()
+	svc := customerapp.NewRetentionService(repo, 30).WithClock(func() time.Time { return now })
+	seedRetentionData(t, db, now)
+
+	result, err := svc.ScrubExpiredContent(boundaryScopeCtx())
+	require.NoError(t, err)
+	assert.Equal(t, 30, result.RetentionDays)
+	assert.Equal(t, int64(1), result.MessagesScrubbed) // 已是标记的那条不重复计数
+	assert.Equal(t, int64(1), result.TicketsScrubbed)
+	assert.Equal(t, int64(1), result.CommentsScrubbed)
+	assert.Equal(t, int64(1), result.FilesDeleted)
+
+	var msg models.Message
+	require.NoError(t, db.Where("session_id = ?", "sess-expired").Where("sender = ?", "customer").First(&msg).Error)
+	assert.NotContains(t, msg.Content, "139")
+
+	var ticket models.Ticket
+	require.NoError(t, db.Where("status = ?", "closed").First(&ticket).Error)
+	assert.Equal(t, customerapp.ErasureErasedText, ticket.Title)
+	assert.Equal(t, customerapp.ErasureErasedText, ticket.Description)
+	assert.Empty(t, ticket.AISummary)
+
+	var activeMsg models.Message
+	require.NoError(t, db.Where("session_id = ?", "sess-active").First(&activeMsg).Error)
+	assert.Equal(t, "进行中会话内容", activeMsg.Content)
+
+	var openTicket models.Ticket
+	require.NoError(t, db.Where("status = ?", "open").First(&openTicket).Error)
+	assert.Equal(t, "开启中工单", openTicket.Title)
+
+	var openFileCount int64
+	require.NoError(t, db.Model(&models.TicketFile{}).Where("ticket_id = ?", openTicket.ID).Count(&openFileCount).Error)
+	assert.Equal(t, int64(1), openFileCount)
+
+	// 幂等：二次执行全部 0（不重复改写/删除）。
+	second, err := svc.ScrubExpiredContent(boundaryScopeCtx())
+	require.NoError(t, err)
+	assert.Zero(t, second.MessagesScrubbed)
+	assert.Zero(t, second.TicketsScrubbed)
+	assert.Zero(t, second.CommentsScrubbed)
+	assert.Zero(t, second.FilesDeleted)
+}
+
+// 未启用（RetentionDays=0）时不触碰库。
+func TestDataRetentionDisabled(t *testing.T) {
+	db := newBoundaryDB(t)
+	repo := NewGormDataBoundaryRepository(db)
+	now := time.Now()
+	svc := customerapp.NewRetentionService(repo, 0).WithClock(func() time.Time { return now })
+	seedRetentionData(t, db, now)
+
+	result, err := svc.ScrubExpiredContent(boundaryScopeCtx())
+	require.NoError(t, err)
+	assert.False(t, svc.Enabled())
+	assert.Zero(t, result.MessagesScrubbed)
+
+	var msg models.Message
+	require.NoError(t, db.Where("session_id = ?", "sess-expired").Where("content LIKE ?", "%139%").First(&msg).Error)
+	assert.Contains(t, msg.Content, "13911112222")
+}

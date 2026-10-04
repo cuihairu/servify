@@ -492,3 +492,12 @@ knowledge:
   #     chunk_size: 500
   #     chunk_overlap: 50
 
+
+# Customer data retention (V1.0 B2-2b): message content of ended sessions
+# and title/description/comments/attachments of closed tickets are replaced
+# with an erasure marker once older than retention_days (business rows are
+# kept; same semantics as the per-customer data erasure admin endpoint).
+# 0 = disabled (default, keeps existing deployment behavior).
+privacy:
+  retention_days: 0
+  cleanup_interval: 24h

@@ -64,6 +64,7 @@ type Config struct {
 	Routing    RoutingConfig    `yaml:"routing"`
 	Automation AutomationConfig `yaml:"automation"`
 	Push       PushConfig       `yaml:"push"`
+	Privacy    PrivacyConfig    `yaml:"privacy"`
 }
 
 type ServerConfig struct {
@@ -423,6 +424,15 @@ type TokenRevocationConfig struct {
 	Enabled          bool          `yaml:"enabled"`
 	CleanupInterval  time.Duration `yaml:"cleanup_interval"`
 	CleanupBatchSize int           `yaml:"cleanup_batch_size"`
+}
+
+// PrivacyConfig 客户数据保留策略（V1.0 B2-2b，计划书 §9.3-2）：会话消息
+// 与工单内容在结束后（session.ended_at / ticket.closed_at）保留
+// RetentionDays 天，过期由清理 worker 替换为擦除标记（不硬删业务行，
+// 与数据主体删除面同一口径）。0（默认）= 关闭，保持既有部署行为不变。
+type PrivacyConfig struct {
+	RetentionDays   int           `yaml:"retention_days"`
+	CleanupInterval time.Duration `yaml:"cleanup_interval"`
 }
 
 type SessionRiskPolicyConfig struct {
@@ -1352,6 +1362,11 @@ func GetDefaultConfig() *Config {
 		Automation: AutomationConfig{
 			TimerScanIntervalSeconds: 30,
 			TimerBatchSize:           50,
+		},
+		Privacy: PrivacyConfig{
+			// 数据保留默认关闭（合规按需开启）；清理轮询默认每日一次
+			RetentionDays:   0,
+			CleanupInterval: 24 * time.Hour,
 		},
 	}
 }
