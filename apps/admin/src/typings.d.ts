@@ -188,8 +188,63 @@ declare namespace API {
     category?: string;
     tags?: string | string[];
     is_public?: boolean;
+    /** 来源登记 id（0/缺省=未归属来源，V1.0 B3-1a） */
+    source_id?: number;
+    /** 文档版本号（内容变更自增，索引任务关联，V1.0 B3-1a） */
+    version?: number;
     created_at: string;
     updated_at: string;
+  }
+
+  interface KnowledgeSource {
+    id: number;
+    name: string;
+    type: string;
+    description?: string;
+    created_at: string;
+    updated_at: string;
+  }
+
+  /** 索引任务行（后端 IndexJobDTO 无 json tag，按 Go 字段名透出） */
+  interface KnowledgeIndexJob {
+    ID: string;
+    DocumentID: string;
+    Status: string;
+    Error?: string;
+    DocumentVersion: number;
+    CreatedAt: string;
+    UpdatedAt: string;
+    CompletedAt?: string;
+  }
+
+  interface KnowledgeIndexJobResult {
+    JobID: string;
+    DocumentID: string;
+    Status: string;
+    Error?: string;
+    DocumentVersion: number;
+    CompletedAt?: string;
+  }
+
+  interface KnowledgeQuestionStat {
+    query: string;
+    count: number;
+    avg_confidence: number;
+  }
+
+  /** 检索分析读口（GET /api/v1/ai/retrieval-analytics，V1.0 B3-1b） */
+  interface KnowledgeRetrievalAnalytics {
+    window_days: number;
+    total_answers: number;
+    hit_answers: number;
+    no_hit_answers: number;
+    low_confidence_answers: number;
+    avg_confidence: number;
+    helpful_count: number;
+    not_helpful_count: number;
+    top_questions: KnowledgeQuestionStat[];
+    no_hit_questions: KnowledgeQuestionStat[];
+    low_confidence_questions: KnowledgeQuestionStat[];
   }
 
   // ---- 自动化规则 ----

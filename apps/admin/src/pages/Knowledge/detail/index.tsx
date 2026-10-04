@@ -3,7 +3,7 @@ import { ProDescriptions } from '@ant-design/pro-components';
 import { ProCard } from '@ant-design/pro-components';
 import { Button, Space, Spin, Tag, Modal, Form, Input, Select, Switch, message } from 'antd';
 import { goBack, useDetailParams } from '@/lib/navigation';
-import { getDoc, updateDoc } from '@/services/knowledge';
+import { getDoc, updateDoc, listSources } from '@/services/knowledge';
 import { getErrorMessage, isFormValidationError } from '@/utils/error';
 
 const CATEGORIES = ['产品文档', '常见问题', '操作指南', 'API文档', '其他'];
@@ -28,6 +28,7 @@ const KnowledgeDetailPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [sources, setSources] = useState<API.KnowledgeSource[]>([]);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -46,6 +47,9 @@ const KnowledgeDetailPage: React.FC = () => {
       }
     };
     fetchDoc();
+    listSources()
+      .then((rows) => setSources(rows || []))
+      .catch(() => setSources([]));
   }, [id]);
 
   const openEditModal = () => {
@@ -56,6 +60,7 @@ const KnowledgeDetailPage: React.FC = () => {
       content: doc.content,
       tags: normalizeTags(doc.tags).join(', '),
       is_public: doc.is_public ?? false,
+      source_id: doc.source_id || undefined,
     });
     setModalOpen(true);
   };
@@ -73,6 +78,7 @@ const KnowledgeDetailPage: React.FC = () => {
           ? values.tags.split(',').map((tag: string) => tag.trim()).filter(Boolean)
           : [],
         is_public: values.is_public ?? false,
+        source_id: values.source_id ?? 0,
       });
       setDoc(updated);
       setModalOpen(false);
@@ -157,6 +163,20 @@ const KnowledgeDetailPage: React.FC = () => {
                 return tags.length > 0 ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-';
               },
             },
+            {
+              title: '知识来源',
+              dataIndex: 'source_id',
+              render: (_, record) => {
+                if (!record.source_id) return <Tag>未挂源</Tag>;
+                const source = sources.find((s) => s.id === record.source_id);
+                return <Tag color="geekblue">{source?.name || `来源 #${record.source_id}`}</Tag>;
+              },
+            },
+            {
+              title: '版本',
+              dataIndex: 'version',
+              render: (_, record) => <Tag>v{record.version ?? 1}</Tag>,
+            },
             { title: '创建时间', dataIndex: 'created_at' },
             { title: '更新时间', dataIndex: 'updated_at' },
           ]}
@@ -193,6 +213,13 @@ const KnowledgeDetailPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="category" label="分类">
             <Select allowClear options={CATEGORIES.map((item) => ({ label: item, value: item }))} />
+          </Form.Item>
+          <Form.Item name="source_id" label="知识来源">
+            <Select
+              placeholder="选择来源登记（可选）"
+              allowClear
+              options={sources.map((s) => ({ label: `${s.name}（${s.type}）`, value: s.id }))}
+            />
           </Form.Item>
           <Form.Item name="tags" label="标签（逗号分隔）">
             <Input placeholder="例如：入门, API, 常见问题" />

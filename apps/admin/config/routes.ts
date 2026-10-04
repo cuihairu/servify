@@ -112,6 +112,16 @@ export default [
         component: './Knowledge/list',
       },
       {
+        path: '/knowledge/sources',
+        name: '来源与索引',
+        component: './Knowledge/sources',
+      },
+      {
+        path: '/knowledge/analytics',
+        name: '检索分析',
+        component: './Knowledge/analytics',
+      },
+      {
         path: '/knowledge/detail/:id',
         name: '文档详情',
         component: './Knowledge/detail',
