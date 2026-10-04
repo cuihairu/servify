@@ -1,5 +1,7 @@
 # 架构重设计计划
 
+> ⚠️ **快照注记（2026-10-04 文档对账）**：本文是 services→modules 迁移期的执行框架，其核心目标（services/modules 边界收口、runtime assembly/router/provider 结构稳定）已在后续批次中落地：`internal/services` 已整体移除，业务能力全部收口 `internal/modules/*`（27 模块封顶）。当前权威架构快照见 [current-architecture.md](./current-architecture.md)，V1.0 口径见 [v1-convergence-plan.md](./v1-convergence-plan.md)，本文仅作迁移史存档。
+
 本文不是新的功能 backlog，而是下一轮架构重设计的执行框架。目标是先把文档口径、当前架构、迁移顺序和验收规则对齐，再决定具体代码改动。
 
 ## 目标

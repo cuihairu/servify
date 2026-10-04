@@ -33,14 +33,21 @@ Servify 是一个面向企业独立部署的开源智能客服系统。
 
 ## 📊 当前状态
 
-- ✅ 已形成智能客服产品骨架：`conversation`、`routing`、`ticket`
-- ✅ 已具备 AI 与知识库基础能力：`ai`、`knowledge`
-- ✅ 已具备远程协助所需的实时能力基础：WebSocket / WebRTC 相关链路、会话承接与统计入口已纳入产品演化
-- ✅ 已把远程协助收敛为增强方向，而不是 V1 交付前提
-- ✅ 已完成客服后台关键模块迁移：`agent`、`customer`
-- ✅ 已补齐管理面安全基线首轮能力：认证、审计、token state revoke、session security surface
-- ✅ 已明确 Web 优先、多端预留的演化方向
-- 🔄 当前继续完善产品体验：工作台密度、接待流程收敛、运营与扩展能力
+`v1.0.0` 已于 2026-10-04 发布（见
+[发布说明](./docs/release-notes-v1.0.0.md)），V1.0 收敛改造 B0–B4 批次
+全部过闸：
+
+- ✅ 客服主链路闭环：`conversation`（中心聚合）、`routing`、`ticket`
+- ✅ AI 与知识库产品化：`ai`（首答记录/反馈闭环/检索分析）、`knowledge`
+  （来源登记/文档版本/索引任务/citation）
+- ✅ 管理面安全基线：认证、审计、token state revoke、session security
+  surface、PII 导出/擦除与保留策略
+- ✅ 27 个一级模块不增（架构门禁），薄壳模块按「核心 7 模块的子能力」
+  叙事收口
+- ✅ Web 优先、多端预留：Web SDK 已实现，Android/iOS 原生 SDK 已随
+  M1–M3 落地，语音与多渠道冻结为扩展边界
+- 🔄 后续演进：Routing 打分引擎、Ticket 关闭前拦截等（见发布说明
+  「演进方向」）
 
 ---
 
@@ -147,11 +154,11 @@ Servify 当前更适合这样理解：
 
 推荐先读：
 
+- [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md)（当前版本）
 - [V1.0 收敛改造计划](./docs/v1-convergence-plan.md)（当前主计划）
 - [V1 产品收敛](./docs/v1-product-scope.md)
 - [远程协助产品说明](./docs/remote-assistance.md)
 - [文档站首页](./docs/index.md)
-- [v0.1.0 Release Notes](./docs/release-notes-v0.1.0.md)
 
 当前不会把“平台化租户能力”作为产品中心持续扩张，而是先把独立部署客服产品做扎实。
 
@@ -436,7 +443,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [docs/current-architecture.md](./docs/current-architecture.md) - 当前真实架构快照
-- [docs/architecture-redesign-plan.md](./docs/architecture-redesign-plan.md) - 下一轮架构重设计计划
+- [docs/architecture-redesign-plan.md](./docs/architecture-redesign-plan.md) - 架构重设计计划（services→modules 迁移期产物，仅存档）
 - [docs/index.md](./docs/index.md)
 - [docs/WEKNORA_INTEGRATION.md](./docs/WEKNORA_INTEGRATION.md)
 - [docs/CI_SELF_HOSTED.md](./docs/CI_SELF_HOSTED.md) - GitHub Hosted CI 说明
@@ -537,12 +544,15 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 
 ## 🎯 现阶段结论
 
-第一阶段与第二阶段主 backlog 已全部清零，当前进入第三阶段：
+V1.0 收敛改造（B0 文档与架构声明 → B1 Domain 边界/迁移双路径 → B2
+Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈闭环 → B4 收口
+发布）已全部过闸，`v1.0.0` 已发布。此前的运行时收口、services→modules
+迁移、租户/审计/安全基线、可观测性各阶段 backlog 均已清零（历史记录见
+[todo.md](./todo.md)）。
 
-1. `09-runtime-and-repo-hygiene`：清理运行时脏产物、统一 ignore 策略、收口跨平台开发环境
-2. `10-service-to-module-migration`：把旧 `services` / `handlers` 链路逐步收口到 `modules/*`
-3. `11-tenant-auth-and-audit`：补齐租户、权限、审计、配置边界
-4. `12-operator-observability`：补齐 tracing、metrics、日志、告警、回放与运营诊断能力
+后续演进按 [v1.0.0 发布说明](./docs/release-notes-v1.0.0.md)「演进方向」：
+Routing 打分引擎（多因子）、Ticket 关闭前拦截规则、薄壳模块文档面收口
+剩余项。
 
 ---
 

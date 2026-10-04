@@ -2,7 +2,7 @@
 
 本文记录当前仓库的真实架构状态，用于衔接根目录 `ARCHITECTURE.md` 中的目标设计和 `docs/implementation/` 下的实施 backlog。
 
-> 快照核验：2026-10-04（V1.0 收敛改造 B0 批次）。上一版本称「services 目录仍存在」已过时：旧 `internal/services` 已于 P3-2 整体移除并清零引用，业务逻辑或随迁移下沉到 `modules/*/application`、或以薄壳模块（无 `domain` 层）形式存在。
+> 快照核验：2026-10-04（V1.0 收敛改造 B0 批次建档；`v1.0.0` 发布后复核更新，statistics 收口状态、依赖图、customer 模块分层与当日代码对齐）。上一版本称「services 目录仍存在」已过时：旧 `internal/services` 已于 P3-2 整体移除并清零引用，业务逻辑或随迁移下沉到 `modules/*/application`、或以薄壳模块（无 `domain` 层）形式存在。
 
 ## 结论
 
@@ -12,9 +12,9 @@
 - 主入口已经从 `cmd/server` 下沉到 `internal/app/bootstrap` 与 `internal/app/server`。
 - 业务能力已全部收口到 `modules/*`，其中 14 个模块具备完整 `domain/application/infra/delivery`（agent、ai、analytics、assist、automation、conversation、customer、knowledge、quality、routing、ticket、translation、voice、webhook），另有 13 个薄壳模块（无 `domain` 层：api_key、app_integration、auth、custom_field、email、gamification、macro、push、satisfaction、shift、sla、suggestion、workspace），其业务逻辑仍以 legacy handler/service 承载。
 - `handlers` 大多已经依赖 module delivery contract 或 handler-local contract，而不是直接依赖 concrete legacy service。
-- 仍有少量业务面散在旧 handler：`statistics`（`internal/handlers/statistics_*.go`）尚未收口进 `analytics` 模块。
+- `statistics` 已收口进 `analytics` 模块（V1.0 B2-3，`modules/analytics/delivery/statistics_*.go`），顶层 `internal/handlers` 不再保留 statistics 业务面（仅剩迁移来源的单元测试文件）。
 
-换句话说，当前系统不是纯目标态，也不是旧架构；它是有边界守护的迁移后架构。2026-10-04 起沿 `docs/v1-convergence-plan.md` 进入 V1.0 收拢：27 个模块不再增加，核心 7 模块（conversation/ticket/routing/ai/knowledge/customer/agent）围绕 Conversation 中心模型打磨，13 个薄壳模块叙事降级为子能力。
+换句话说，当前系统不是纯目标态，也不是旧架构；它是有边界守护的迁移后架构。V1.0 收敛改造（B0–B4）已于 2026-10-04 完成并发布 `v1.0.0`：27 个模块不再增加，核心 7 模块（conversation/ticket/routing/ai/knowledge/customer/agent）围绕 Conversation 中心模型打磨，13 个薄壳模块叙事降级为子能力。
 
 ## 仓库形态
 
@@ -67,7 +67,7 @@
 | `assist` | `domain` / `application` / `infra` / `delivery` |
 | `automation` | `domain` / `application` / `infra` / `delivery` |
 | `conversation` | `domain` / `application` / `infra` / `delivery` |
-| `customer` | `domain` / `application` / `infra` / `delivery` |
+| `customer` | `domain` / `application` / `infra` / `delivery` / `api` |
 | `knowledge` | `domain` / `application` / `infra` / `delivery` |
 | `quality` | `domain` / `application` / `infra` / `delivery` |
 | `routing` | `domain` / `application` / `infra` / `delivery` / `contract` |
@@ -94,13 +94,11 @@
 | `suggestion` | `application` / `delivery` / `infra` / `contract` |
 | `workspace` | `application` / `delivery` / `infra` |
 
-目标依赖方向：
+目标依赖方向（`internal/services` 已于 P3-2 整体移除，图中不再有 services 层）：
 
 ```text
 handlers -> modules/*/delivery
 app/server -> modules/*/delivery
-app/server -> services/* only for runtime glue
-services/* -> modules/*/application or modules/*/delivery
 modules/*/delivery -> modules/*/application
 modules/*/application -> modules/*/domain|infra
 ```
@@ -131,7 +129,7 @@ modules/*/application -> modules/*/domain|infra
 
 | 区域 | 现状 | 风险 |
 | --- | --- | --- |
-| `statistics` 旧 handler | `statistics_handler.go` / `statistics_export_handler.go` 仍散在 `internal/handlers` | 无模块归属；V1.0 B2 批收口进 `analytics` 模块 |
+| `statistics` 旧 handler | 已收口：`modules/analytics/delivery/statistics_handler.go` / `statistics_export_handler.go`（V1.0 B2-3） | 无遗留风险；顶层 handlers 仅剩迁移来源测试 |
 | `voice` | 模块化程度较高（完整分层），但不是典型 `services -> modules` 迁移形态 | provider、media、protocol、业务状态容易混在一起；V1.0 冻结为扩展边界 |
 | `realtime` | WebSocket hub 仍是运行态核心对象 | connection runtime 与业务持久化边界必须继续守住 |
 | `AI / Knowledge` | provider 抽象与 mock/容器化验收已闭环（P1-1）；仅 real 模式验收受外部凭证阻塞 | 接口成功不等于真实 provider 主路径命中 |
@@ -147,7 +145,7 @@ modules/*/application -> modules/*/domain|infra
 2. `ARCHITECTURE.md`
    - 目标架构和长期设计原则。
 3. `docs/architecture-redesign-plan.md`
-   - 下一轮重设计计划。
+   - 架构重设计计划（services→modules 迁移期产物，仅存档）。
 4. `docs/implementation/10-service-to-module-migration.md`
    - services 到 modules 的迁移计划。
 5. `docs/implementation/10-migration-scorecard.md`

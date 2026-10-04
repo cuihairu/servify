@@ -1,5 +1,12 @@
 # 🎉 WeKnora 集成功能实现完成！
 
+> ⚠️ **快照注记（2026-10-04 文档对账）**：本文是 WeKnora 集成落地时的完成宣告存档，集成本体当前以
+> [docs/WEKNORA_INTEGRATION.md](./docs/WEKNORA_INTEGRATION.md) 与
+> `internal/platform/knowledgeprovider/weknora` 为准；V1.0 起知识检索服务
+> 选择链为 ragflow → dify → weknora → pgvector → local。文中「配置热更新」
+> 声明与实现不符已删除；docker-compose 命令路径已按 `infra/compose/` 实际
+> 布局修正。
+
 ## ✅ 已实现的功能
 
 ### 1. 🔧 核心集成功能
@@ -28,7 +35,6 @@
 - **Docker 集成**: 完整的容器化部署
 - **健康检查**: 深度健康状态监控
 - **日志系统**: 结构化日志记录
-- **配置热更新**: 运行时配置调整
 - **性能监控**: 延迟和成功率统计
 
 ## 🚀 快速启动指南
@@ -55,10 +61,10 @@ nano .env
 ### 3. 启动服务
 ```bash
 # 方案 A: 仅启动 Servify（标准模式）
-docker-compose up -d
+docker-compose -f infra/compose/docker-compose.yml up -d
 
 # 方案 B: 启动 Servify + WeKnora（增强模式）
-docker-compose -f docker-compose.yml -f docker-compose.weknora.yml up -d
+docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml up -d
 
 # 方案 C: 使用一键启动脚本（推荐）
 ./scripts/start-weknora.sh dev
@@ -192,7 +198,7 @@ curl http://localhost:8080/api/v1/ai/metrics
 #### 1. WeKnora 连接失败
 ```bash
 # 检查 WeKnora 服务状态
-docker-compose logs weknora
+docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml logs weknora
 
 # 检查网络连接
 curl http://localhost:9000/api/v1/health
@@ -280,4 +286,4 @@ WeKnora 集成已全面完成！现在您拥有：
 **📞 需要帮助？**
 - 查看 `docs/WEKNORA_INTEGRATION.md` 完整文档
 - 运行 `./scripts/test-weknora-integration.sh` 验证功能
-- 查看日志: `docker-compose logs -f servify`
+- 查看日志: `docker-compose -f infra/compose/docker-compose.yml logs -f servify`

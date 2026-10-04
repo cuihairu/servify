@@ -510,12 +510,14 @@ Current phase:
 - `web vanilla`
 - `web react`
 - `web vue`
+- Android / iOS native SDKs (`sdk/android`, `sdk/ios`, milestone M1–M3
+  accepted; SwiftPM / XCFramework distribution, protocol contracts aligned
+  with the web SDK)
 
 Reserved but not implemented yet:
 
 - `api-client`
 - `app-core`
-- mobile framework bindings
 
 ### 8.6 SDK Contracts
 
@@ -787,12 +789,23 @@ Current landing status:
 - introduce worker process for async jobs
 - refactor current sdk packages to depend on shared sdk core contracts
 
+Landing status: complete — all business capabilities now live under
+`internal/modules/*` (27 modules, capped by the V1.0 architecture gate);
+the legacy `internal/services` directory has been removed entirely.
+
 ### Phase 3
 
 - introduce voice module and SIP adapter
 - add transcript, recording, and call analytics support
 - normalize all channels under unified event model
 - add reserved api-client sdk and app-core sdk skeleton packages
+
+Landing status: partially landed — `voice` module, SIP/PSTN/WebRTC
+adapters, recording/transcript provider seams and call analytics already
+exist; transcript/recording providers default to `disabled`; channel
+normalization and the reserved `api-client`/`app-core` SDKs remain
+extension-boundary work (frozen for V1.0, see
+`docs/release-notes-v1.0.0.md`).
 
 ## 16. Design Decisions
 

@@ -58,12 +58,13 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 
 ## 推荐阅读
 
-1. [V1 产品收敛](/v1-product-scope)
-2. [总体架构设计](/ARCHITECTURE)
-3. [当前架构分析](/current-architecture)
-4. [部署指南](/deployment)
-5. [当前交付优先级](/delivery-priorities)
-6. [实施计划索引](/implementation/)
+1. [v1.0.0 Release Notes](/release-notes-v1.0.0)
+2. [V1 产品收敛](/v1-product-scope)
+3. [总体架构设计](/ARCHITECTURE)
+4. [当前架构分析](/current-architecture)
+5. [部署指南](/deployment)
+6. [当前交付优先级](/delivery-priorities)
+7. [实施计划索引](/implementation/)
 
 ## 你可以从这里继续
 
@@ -92,7 +93,7 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 - [模块迁移计划](/implementation/10-service-to-module-migration)
 - [模块迁移完成度](/implementation/10-migration-scorecard)
 - [外部知识库集成：知识库 provider 路径（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）](/WEKNORA_INTEGRATION)
-- [v0.1.0 Release Notes](/release-notes-v0.1.0)
+- [v0.1.0 Release Notes](/release-notes-v0.1.0)（历史存档，当前版本见顶部推荐）
 - [版本发布策略](/release-versioning)
 - [测试金字塔](/testing-pyramid)
 - [CI / GitHub Hosted Runner](/CI_SELF_HOSTED)
