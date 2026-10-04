@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/modules/conversation/domain"
+	routingapp "servify/apps/server/internal/modules/routing/application"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
@@ -281,6 +282,17 @@ func TestServiceAssignAgent(t *testing.T) {
 	if !found {
 		t.Fatalf("expected agent participant, got %+v", got.Participants)
 	}
+	// 统一分配事件路径（V1.0 B2 gate）：直派接管发 routing.agent_assigned，
+	// aggregate 为 "routing:<id>" 供 Timeline 投影提取会话。
+	if len(publisher.events) != 1 {
+		t.Fatalf("expected 1 routing event, got %+v", publisher.events)
+	}
+	if publisher.events[0].Name() != routingapp.RoutingAgentAssignedEventName {
+		t.Fatalf("expected %s, got %s", routingapp.RoutingAgentAssignedEventName, publisher.events[0].Name())
+	}
+	if publisher.events[0].AggregateID() != "routing:conv-1" {
+		t.Fatalf("expected aggregate routing:conv-1, got %s", publisher.events[0].AggregateID())
+	}
 }
 
 func TestServiceTransfer(t *testing.T) {
@@ -305,6 +317,18 @@ func TestServiceTransfer(t *testing.T) {
 	// 应有系统消息记录转派
 	if len(repo.messages["conv-1"]) == 0 {
 		t.Fatalf("expected system message for transfer")
+	}
+	// 统一分配事件路径（V1.0 B2 gate）：改派发 routing.transfer_completed
+	// （转派系统消息的 conversation.message_received 在前，routing 事件为末位）。
+	if len(publisher.events) < 2 {
+		t.Fatalf("expected routing event among published, got %+v", publisher.events)
+	}
+	last := publisher.events[len(publisher.events)-1]
+	if last.Name() != routingapp.RoutingTransferCompletedEventName {
+		t.Fatalf("expected %s, got %s", routingapp.RoutingTransferCompletedEventName, last.Name())
+	}
+	if last.AggregateID() != "routing:conv-1" {
+		t.Fatalf("expected aggregate routing:conv-1, got %s", last.AggregateID())
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/modules/conversation/domain"
+	routingapp "servify/apps/server/internal/modules/routing/application"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 )
 
@@ -193,6 +194,13 @@ func (s *Service) AssignAgent(ctx context.Context, conversationID string, agentI
 	if err := s.repo.UpdateConversation(ctx, conv); err != nil {
 		return nil, err
 	}
+	// 统一分配事件发布路径（V1.0 B2 gate）：直派接管同样发 routing.agent_assigned
+	// （aggregate "routing:<sessionID>"），Timeline 投影按事件名消费。
+	s.publishRouting(ctx, routingapp.RoutingAgentAssignedEventName, conversationID, map[string]interface{}{
+		"conversation_id": conversationID,
+		"agent_id":        agentID,
+		"assigned_via":    "conversation.assign_agent",
+	})
 	dto := MapConversation(*conv)
 	return &dto, nil
 }
@@ -229,6 +237,13 @@ func (s *Service) Transfer(ctx context.Context, conversationID string, toAgentID
 	// Emit system event for transfer
 	_, _ = s.ingestMessage(ctx, conversationID, "", domain.ParticipantRoleSystem, domain.MessageKindSystem,
 		fmt.Sprintf("会话已转派给客服 #%d", toAgentID), nil)
+	// 统一分配事件发布路径（V1.0 B2 gate）：改派发 routing.transfer_completed，
+	// 与 routing.Service.AssignAgent 的发布口径一致。
+	s.publishRouting(ctx, routingapp.RoutingTransferCompletedEventName, conversationID, map[string]interface{}{
+		"conversation_id": conversationID,
+		"to_agent_id":     toAgentID,
+		"transferred_via": "conversation.transfer",
+	})
 	dto := MapConversation(*conv)
 	return &dto, nil
 }
@@ -311,6 +326,17 @@ func (s *Service) publish(ctx context.Context, name string, conversationID strin
 		return
 	}
 	_ = s.publisher.Publish(ctx, NewConversationEvent(name, conversationID, payload))
+}
+
+// publishRouting 以 routing 模块的事件形态发布分配类事件：aggregate 用
+// "routing:<sessionID>"，与 routing.Service.AssignAgent 的发布及 EventBusSubscriber
+// 的 conversationIDFromRoutingEvent 提取口径一致（V1.0 B2 gate 统一分配事件路径）。
+// publisher 未注入或发布失败均不阻塞主流程（与 s.publish 同口径）。
+func (s *Service) publishRouting(ctx context.Context, name string, sessionID string, payload interface{}) {
+	if s.publisher == nil {
+		return
+	}
+	_ = s.publisher.Publish(ctx, routingapp.NewRoutingEvent(name, sessionID, payload))
 }
 
 func cloneMetadata(in map[string]string) map[string]string {

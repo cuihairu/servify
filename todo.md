@@ -82,12 +82,12 @@
   - ② `make release-check` 完整通过（"Release readiness check passed."，本地环境/安全基线/可观测性/聚焦测试/构建/关键路由/迁移冒烟/HTTP 冒烟；config.release-check.yml 专用配置，b5a35eb）
   - ③ e2e 全链路自动化通过：`make conversation-lifecycle-acceptance`（c2efeaf）——访客 WS 进线→AI 首答（ai-response 帧）→转人工进等待队列（waiting_notification 帧）→接管→坐席回复落库→访客建单（session 关联）→关单（status=closed 回读）→关会话→Timeline 投影断言 conversation.created/ticket.created/ticket.closed；证据目录 scripts/test-results/conversation-lifecycle/
   - ④ W1-W7 随 B1-3 提交落地；W8 性能基线为 dev 级检查（perf-baseline smoke），非发布阻塞
-  - 已知边界（B2 收口）：等待队列进队与 conversation 直派接管两条路径不发布 routing.* 事件（只有 routing.Service.AssignAgent 发），e2e 以警告报告
+  - 已知边界（B2 收口）：~~等待队列进队与 conversation 直派接管两条路径不发布 routing.* 事件~~ → 已在 B2 gate 收口（直派接管/改派已发布，进队按"进队非分配"口径不加事件，见 B2 批次 gate ③）
 - 状态：`[x]`（2026-10-04 过闸，B1-1~B1-4 四切片闭环）
 - 下一步：B2 Routing 打分引擎与安全数据边界
 - 阻塞项：无
 
-### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
+### [x] B2 Routing 打分引擎与安全数据边界（P2 批次）
 
 - 任务清单：
   - [x] B2-1 `routing/application` Scorer 接口与多因子评分（skill/language/availability/workload/priority/tier/channel/SLA）+ `routing_assignments` 落库——fff2116（scorer.go 八因子加权聚合：权重可配、同分按 AgentID 升序可复现；models.RoutingAssignment 新表 + 迁移注册；executeTransfer 为最终分配打分，AssignAgentCommand.Scoring 落库；推荐入口 RecommendAgents 只推荐不执行 §6.2-3）＋ 97f947a（集成验收：`make routing-scoring-acceptance` 全绿——分配评分/八因子/策略/理由经 GET /api/session-transfer/scoring/:session_id 可见，transfer_records 事实双记录）；全量 go test 0 失败
@@ -96,9 +96,12 @@
   - [x] B2-3 statistics 旧 handler 收口进 analytics 模块（含导出）——7e7357e（statistics_handler.go/statistics_export_handler.go 含 CSV/XLSX 导出与 SatisfactionStatsReader 窄接口自顶层 handlers 迁入 modules/analytics/delivery；路由/参数/响应 JSON 形状不变，router_management.go 改由模块直接装配；导出渲染 seam 改模块包私有；四路测试同步迁移〔单元/导出长尾/seam 错误分支/sqlite 集成〕，全量 go test + integration tag 全绿）
   - [x] B2-4 核心业务表 `tenant_id`/`workspace_id` 回填迁移——a2fa76d（versioned SQL 000017_scope_backfill〔postgres 路径〕+ bootstrap.BackfillDefaultScope〔sqlite/AutoMigrate 路径，standalone 启动与 cmd/migrate 接线〕；九表空 scope 行回填 default/default，ticket_comments/ticket_files 无 scope 列经所属 ticket 传递不入清单；幂等两态：空库 no-op/既有库回填/重复零改动/部分 scope 保留；SQL↔Go 表清单同步把关测试；全量 go test 绿）
 - 验收闸：计划书 §6.3 三例（技能/语种权重可复现✅ 单测、空闲坐席优先✅ 单测+集成、分配理由可见✅ 集成验收）；PII 用例全过；迁移两态可逆
-- 额外收口（B1 过闸发现）：统一分配事件发布路径——等待队列进队（addToWaitingQueue）与 conversation 直派接管（conversation service.AssignAgent）目前不发 routing.* 事件，Timeline 的 routing 投影只能覆盖 routing.Service.AssignAgent 路径；连同自动化分派评分（deregister 分派仍用 agent 模块三级分配，评分随 executeTransfer 审计）归入 B2 gate
-- 状态：`[ ]`（B2-1/B2-2/B2-3 已闭环；剩 B2-4）
-- 下一步：B2-4 核心业务表 tenant_id/workspace_id 回填迁移
+- 额外收口（B1 过闸发现）：统一分配事件发布路径——已闭环（见下）；自动化分派评分（deregister 分派仍用 agent 模块三级分配，评分随 executeTransfer 审计）随 B2-1 落地
+- 状态：`[x]`（2026-10-04 过闸：B2-1~B2-4 四切片 + gate 三项全绿）
+  - gate ① PII 用例全过：data_boundary_repository_test.go 五用例（导出全覆盖/擦除全 PII/幂等/404）+ retention 四用例（过期擦/窗内保留/幂等/未启用）全绿
+  - gate ② 迁移两态可逆：000017 + BackfillDefaultScope 空库 no-op/既有库回填/幂等重跑零改动/部分 scope 保留全绿；SQL↔Go 表清单同步把关
+  - gate ③ 统一分配事件发布路径：conversation.Service.AssignAgent 直派接管发 `routing.agent_assigned`、Transfer 改派发 `routing.transfer_completed`（publishRouting 以 routingapp.NewRoutingEvent 发布，aggregate `routing:<id>` 与 EventBusSubscriber 的 conversationIDFromRoutingEvent 提取口径一致；publisher 未注入或失败不阻塞，与既有 s.publish 同口径）；等待队列进队（addToWaitingQueue）按"进队非分配、最终分配经 ProcessWaitingQueue → routing.Service.AssignAgent 已发布"口径不加事件（handler_adapter.go 注释固化）；单测断言事件名+aggregate 全绿
+- 下一步：B3 Knowledge 产品化与 AI 反馈闭环
 - 阻塞项：无
 
 ### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
@@ -108,8 +111,8 @@
   - [ ] B3-2 citation 可视化（坐席+访客侧 Sources+relevance）+ `POST /api/v1/ai/feedback` + `answer_feedback` 落库
 - 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链；`README_KNOWLEDGE.md` 更新
 - 状态：`[ ]`
-- 下一步：等 B2 过闸
-- 阻塞项：B2
+- 下一步：B3-1 knowledge sources / 版本 / 索引状态 / retrieval analytics
+- 阻塞项：无
 
 ### [ ] B4 收口与 V1.0 发布（P4 批次）
 

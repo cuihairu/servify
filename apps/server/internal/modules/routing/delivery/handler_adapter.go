@@ -306,6 +306,10 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 	}, nil
 }
 
+// addToWaitingQueue 把会话加入人工客服等待队列。进队本身不是分配，不发
+// routing.* 事件（V1.0 B2 gate 统一分配事件路径的口径）：等待队列的最终
+// 分配经 ProcessWaitingQueue → routing.Service.AssignAgent 发布
+// routing.agent_assigned，Timeline 在该时点落"分配坐席"流水。
 func (s *HandlerServiceAdapter) addToWaitingQueue(ctx context.Context, session *conversationdelivery.TransferSession, req *routingcontract.TransferRequest) (*routingcontract.TransferResult, error) {
 	if existing, err := s.getActiveWaitingRecord(ctx, session.ID); err == nil {
 		return &routingcontract.TransferResult{
