@@ -32,13 +32,84 @@
 
 ---
 
-## 当前结论
+## 当前结论（2026-10-04 更新）
 
-基于当前仓库代码审查，现阶段最优先的问题不是“功能完全没写”，而是以下几类真实交付风险：
+上一轮「交付风险收口」批次（P0-1…P0-8 / P1-1…P1-9 / P2-0…P2-8 / P3-1…P3-4）已全部 `[x]`，仅 P1-1 real 模式验收因外部凭证阻塞；三类旧风险均已收口：
 
-1. 运行时仍保留生产路径中的 `InMemory` / `mock` / `legacy` 兼容实现，导致“本地可演示”与“生产可交付”之间仍有断层。
-2. 验收清单里仍存在一批主链路 `部分通过 / 未验 / 阻塞` 条目，说明代码存在不等于已可交付。
-3. 启动、配置、事件、语音、客服运行态等关键基础设施还有明确的企业级硬伤，应先收口再继续扩展功能面。
+1. 生产路径 `InMemory`/`mock`/`legacy` 断层已收口（P0-1…P0-5、P3-3），services 层已随 P3-2 整体移除。
+2. 验收矩阵主链路已通过（P1-1…P1-5、P2-6 管理端八刀）。
+3. 企业级基座已补齐（P2 全批：可观测性五刀、安全治理、SDK 契约、性能基线）。
+
+2026-10-04 ChatGPT 审核复查后拍板，进入 **V1.0 收敛改造阶段**：
+
+- 复查结论：产品定位收敛判断属实；架构「过度平台化」判断属实（27 个一级模块、13 个无 domain 薄壳，而客服核心产品模型与 Agent Workspace 单薄）。
+- 计划书：`docs/v1-convergence-plan.md`（保留/降级/删除清单、Domain 边界、数据模型、Workspace/AI/Routing/Ticket、P0-P4 批次、验收标准）。
+- 复查报告：`docs/review/chatgpt-review-2026-10-04-verification.md`。
+- 本文件新增「V1.0 收敛批次」一节为当前唯一活跃 backlog；旧批次全部归档为历史记录，下方旧「当前结论」「执行顺序」表述仅作历史参考。
+
+---
+
+## V1.0 收敛批次（2026-10-04 拍板，当前唯一活跃 backlog）
+
+> 来源：`docs/v1-convergence-plan.md`（§10 阶段闸门）。
+> 纪律：**不新增一级模块**；每批过闸再进下一批；小步提交推送；中断从最近一个 `[-]` 批次继续；恢复指针以本节为准。
+
+### [-] B0 文档与架构声明（P0 批次，先行开工）
+
+- 任务清单：
+  - [ ] B0-1 README 漂移修正：`README.md:220` 安全表 refresh/sessions/2FA 已实现口径；`automation`/`analytics` 行 event bus subscriber 已在模块内的表述
+  - [ ] B0-2 `docs/current-architecture.md` 快照更新：`services` 目录已删除、模块表补全至 27 个（核心 7 + 薄壳 13）、subscriber 已入模块、过渡区域表对齐现状
+  - [ ] B0-3 `ARCHITECTURE.md` §6.4-6.6 写死 Conversation 唯一核心聚合与 Ticket 从属关系（§3.2 注记 27→7 核心模块现状）
+  - [ ] B0-4 核心模块 `domain/doc.go` 补 Owns 声明注释（conversation/ticket/routing/ai/knowledge/customer/agent）
+- 验收闸：`make local-check` 绿；文档站无旧口径残留
+- 状态：`[-]`（B0-1 开工）
+- 最近进展：2026-10-04 计划书任务落单进 todo.md，批次重排完成
+- 下一步：B0-1 → B0-4 依次小步提交推送，过闸后转 B1
+- 阻塞项：暂无
+
+### [ ] B1 客服核心产品闭环（P1 批次，计划书最高 ROI）
+
+- 任务清单：
+  - [ ] B1-1 `conversation_events` 落库与投影接线（新表/仓储/事件订阅，Timeline 数据源）
+  - [ ] B1-2 Timeline API 与会话页 Timeline 组件（admin）
+  - [ ] B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）——计划书 §4 W1-W8 验收
+  - [ ] B1-4 薄壳模块叙事降级（README/文档站：sla/satisfaction/shift/macro/custom_field/gamification/suggestion 归位子能力）
+- 验收闸：W1-W8 全过；e2e 访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化通过；`make release-check` 绿
+- 状态：`[ ]`
+- 下一步：等 B0 过闸
+- 阻塞项：B0
+
+### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
+
+- 任务清单：
+  - [ ] B2-1 `routing/application` Scorer 接口与多因子评分（skill/language/availability/workload/priority/tier/channel/SLA）+ `routing_assignments` 落库
+  - [ ] B2-2 Customer Data Boundary：PII 清单 / retention 配置 / 数据导出 / 删除（含关联擦除）管理面
+  - [ ] B2-3 statistics 旧 handler 收口进 analytics 模块（含导出）
+  - [ ] B2-4 核心业务表 `tenant_id`/`workspace_id` 回填迁移（conversation/customer/routing/ticket 评论，空库+既有库两态可逆）
+- 验收闸：计划书 §6.3 三例（技能/语种权重可复现、空闲坐席优先、分配理由可见）；PII 用例全过；迁移两态可逆
+- 状态：`[ ]`
+- 下一步：等 B1 过闸
+- 阻塞项：B1
+
+### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
+
+- 任务清单：
+  - [ ] B3-1 knowledge sources / 版本 / 索引状态收口 / retrieval analytics（管理页展示 top 问答与低置信率）
+  - [ ] B3-2 citation 可视化（坐席+访客侧 Sources+relevance）+ `POST /api/v1/ai/feedback` + `answer_feedback` 落库
+- 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链；`README_KNOWLEDGE.md` 更新
+- 状态：`[ ]`
+- 下一步：等 B2 过闸
+- 阻塞项：B2
+
+### [ ] B4 收口与 V1.0 发布（P4 批次）
+
+- 任务清单：
+  - [ ] B4-1 `TASKS.md`/验收矩阵/文档站与 V1.0 口径统一（README 残余修正、薄壳模块文档面收口完成）
+  - [ ] B4-2 `v1.0.0` 发布：release notes 按 V1 收敛口径书写，四门禁全绿
+- 验收闸：累计验收矩阵全绿；`make release-check` + `security-check` + `observability-check` + `local-check` 全绿；27 模块不增（架构门禁）
+- 状态：`[ ]`
+- 下一步：等 B3 过闸
+- 阻塞项：B3
 
 ---
 
@@ -998,19 +1069,17 @@
 
 ## 执行顺序
 
-建议严格按这个顺序推进：
+当前活跃序列（2026-10-04 起，取代旧序列）：
 
-1. `P0-1` 事件总线边界收口
-2. `P0-2` Voice mock provider 剥离
-3. `P0-3` Agent runtime 内存态收口
-4. `P0-4` 配置 panic 与默认值治理
-5. `P0-5` legacy 配置命名清理
-6. `P1-1` AI / Knowledge 验收闭环
-7. `P1-2` Auth session 验收闭环
-8. `P1-3` 会话工作台收口
-9. `P1-4` 基线事实补齐
-10. `P1-5` Ticket 高频操作验收
-11. 再进入 `P2/P3`
+1. `B0` 文档与架构声明（P0）
+2. `B1` 客服核心产品闭环 / Agent Workspace（P1）
+3. `B2` Routing 打分引擎 + Security/PII（P2）
+4. `B3` Knowledge 产品化 + AI 反馈闭环（P3）
+5. `B4` 收口与 V1.0 发布（P4）
+
+历史序列（P0-1…P1-5 → P2/P3，已全部 `[x]`，P1-1 real 凭证外部阻塞；仅作历史参考不再执行）：
+
+1. `P0-1` 事件总线边界收口 2. `P0-2` Voice mock provider 剥离 3. `P0-3` Agent runtime 内存态收口 4. `P0-4` 配置 panic 与默认值治理 5. `P0-5` legacy 配置命名清理 6. `P1-1`~`P1-5`（AI/Knowledge、Auth session、工作台、基线、Ticket 验收）7. `P2/P3` 企业级增强与技术债
 
 ---
 
@@ -1034,6 +1103,8 @@
 ---
 
 ## 当前恢复点
+
+> **活跃恢复点（2026-10-04 起）：`[-] B0`（V1.0 收敛批次），子任务 B0-1 → B0-4。** 本小节下方的历史附注（2026-04 ~ 2026-10-01 执行记录）仅作证据存档，不再作为恢复入口。
 
 - 附注（2026-10-01，**ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile 抖动确定性化**（两会话并行同一任务，改动合入 `5d6457e`）；派发项为「改等待条件/隔离/超时策略使其稳定，不放宽断言语义，本地 ≥10 轮复跑证明，根因与修法入 todo.md」）：
   - 现场：CI run 36832389106 Android job（`./gradlew --no-daemon build`）该用例红，`AssertionError at ReconcileMessagesTest.kt:77` = awaitUntil 超时抛出行；两段 awaitUntil 共用该行、CI 无 Android 测试报告 artifact，无法判定挂在哪段——按两段同修。本地不复现：改前基线 release 单测 10× 连跑全绿（与「release 变体 + Kotlin daemon 争抢高负载才触发」的 CI 面吻合）。
@@ -1555,6 +1626,8 @@
 
 ## 本轮全库审查结论
 
+> ⚠️ 历史结论（2026-04-16 语境）；其指向的 P0-6/P0-7/P0-8 均已 `[x]` 闭环，本节仅存查阅价值，不构成当前优先级。当前优先级见顶部「V1.0 收敛批次」。
+
 - 当前最优先恢复项已经不是单点功能缺失，而是 contract、工程门禁和装配边界三类基础问题
 - 如果只继续补功能而不先收口 `P0-6`、`P0-7`、`P0-8`，后续新增能力会继续建立在漂移的 SDK、失效的脚本和不稳定的门禁之上
 - 下一轮执行建议优先级：
@@ -1565,6 +1638,8 @@
 ---
 
 ## 巡检派发执行记录（2026-09-30）
+
+> ⚠️ 历史巡检记录；其「全库无本地可执行的未完成项」结论已被 2026-10-04 V1.0 拍板作废（新 backlog 见顶部「V1.0 收敛批次」）。
 
 **派发指令**：读 todo.md/台账取最靠前未完成项执行并补测试；Android/iOS 消费半边与 Phase 3 若属产品节奏未排期则显式跳过顺延注明；管理端命令用 `npx -y pnpm@10.22.0 --dir apps/admin run ...`；单用途提交，测试全绿后 push。
 
