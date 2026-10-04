@@ -1,0 +1,501 @@
+# Release-readiness 校验专用配置（V1.0 B1 过闸）。
+# 用法：
+#   DB_DRIVER=sqlite DB_DSN=$PWD/.runtime/release-check.sqlite \
+#   SERVIFY_JWT_SECRET=<strong-secret> OPENAI_API_KEY=<dev-key> \
+#   make release-check CONFIG=config.release-check.yml
+# 与 config.yml（开发默认）仅差安全基线敏感项：非默认 db 口令、redis
+# 事件总线；CORS/限流/公共面基线同开发配置（本就在 strict 基线内）。
+server:
+  host: 0.0.0.0
+  port: 8080
+  # 对外可访问的基地址（用于拼装 CSAT 评分页等对外链接）；空则生成相对路径
+  # public_base_url: https://support.example.com
+
+event_bus:
+  # WARNING: "inmemory" provider does NOT persist events. Events are lost on restart.
+  # This is acceptable for development/demo but NOT for production use —
+  # production/staging startup validation rejects "inmemory" (P3-3); use "redis".
+  provider: "redis"
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  # IMPORTANT: Set DATABASE_PASSWORD environment variable in production!
+  # The default value below is for development only
+  password: "release-check-db-password"
+  name: servify
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: 3600s
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conns: 5
+
+webrtc:
+  stun_server: "stun:stun.l.google.com:19302"
+  # 多 STUN 冗余（可选；配置后 stun_server 被忽略）。中国大陆部署勿留 Google 默认值。
+  # stun_servers:
+  #   - "stun:stun.qq.com:3478"
+  #   - "stun:stun.miwifi.com:3478"
+  # TURN 时间限凭据（docs/TURN_DEPLOYMENT.md；url 为空即禁用）。
+  # 启用需自建 coturn（use-auth-secret 模式），secret 生产经 env 注入：
+  # turn:
+  #   url: "turn:turn.example.com:3478"
+  #   realm: "servify.example.com"
+  #   static_auth_secret: "${TURN_STATIC_AUTH_SECRET}"
+  #   ttl: 5m
+
+voice:
+  # Available providers: disabled, mock, twilio
+  recording_provider: "disabled"
+  # Available providers: disabled, mock, deepgram
+  transcript_provider: "disabled"
+  # Hosted PSTN webhook ingress (Twilio Call/Recording Status Callbacks).
+  # Available providers: disabled, twilio. Auth token is shared with voice.twilio.
+  # The public webhook route only exists when provider is not disabled.
+  pstn:
+    provider: "disabled"
+    # Reject webhooks whose X-Twilio-Signature does not verify.
+    # Only disable for local debugging.
+    validate_signature: true
+  # Twilio configuration (for recording_provider: twilio)
+  twilio:
+    account_sid: "${TWILIO_ACCOUNT_SID}"
+    auth_token: "${TWILIO_AUTH_TOKEN}"
+  # Deepgram configuration (for transcript_provider: deepgram)
+  deepgram:
+    api_key: "${DEEPGRAM_API_KEY}"
+
+ai:
+  # provider: LLM 供应商选型（全局唯一决定）：openai（默认）| anthropic | local。
+  # local 为零依赖抽取式问答基线（无出站请求、无 key 要求，回答逐字来自
+  # 检索上下文），建议 dev / 离线验收形态使用；生产语义问答仍用 openai/anthropic。
+  # model/temperature/max_tokens/timeout 按所选供应商的配置段生效
+  # （local 不消费这些字段）；租户/工作区作用域覆盖当前仅支持 openai 族，
+  # anthropic 仅全局配置。
+  provider: "openai"
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4.1-mini"
+    temperature: 0.7
+    max_tokens: 1000
+    timeout: 30s
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com/v1"
+    model: "claude-sonnet-5"
+    temperature: 0.7
+    max_tokens: 1000
+    timeout: 30s
+  # handoff: 首答置信门——答不上来时平滑转人工的建议开关。低于阈值只产出
+  # next_action=handoff 元数据（不改写答案、不执行转接）。默认阈值 0.65
+  # 恰落在"零命中 confidence=0.6"与"有命中 confidence>=0.7"之间。
+  handoff:
+    enabled: true
+    confidence_threshold: 0.65
+
+dify:
+  enabled: ${DIFY_ENABLED}
+  base_url: "${DIFY_BASE_URL}"
+  api_key: "${DIFY_API_KEY}"
+  dataset_id: "${DIFY_DATASET_ID}"
+  timeout: 30s
+  search:
+    top_k: 5
+    score_threshold: 0.7
+    search_method: "semantic_search"
+    reranking_enable: false
+
+weknora:
+  enabled: ${WEKNORA_ENABLED}
+  base_url: "${WEKNORA_BASE_URL}"
+  api_key: "${WEKNORA_API_KEY}"
+  tenant_id: "${WEKNORA_TENANT_ID}"
+  knowledge_base_id: "${WEKNORA_KB_ID}"
+  timeout: 30s
+  max_retries: 3
+  search:
+    default_limit: 10
+    score_threshold: 0.7
+    strategy: "semantic"
+
+ragflow:
+  enabled: ${RAGFLOW_ENABLED}
+  base_url: "${RAGFLOW_BASE_URL}"
+  api_key: "${RAGFLOW_API_KEY}"
+  dataset_id: "${RAGFLOW_DATASET_ID}"
+  timeout: 30s
+  search:
+    top_k: 10
+    score_threshold: 0.2
+
+jwt:
+  secret: "${SERVIFY_JWT_SECRET}"
+  expires_in: "24h"
+
+portal:
+  brand_name: "Servify"
+  logo_url: ""
+  primary_color: "#4299e1"
+  secondary_color: "#764ba2"
+  default_locale: "zh-CN"
+  locales: ["zh-CN","en-US"]
+  support_email: ""
+
+log:
+  level: "info"
+  format: "json"
+  output: "stdout" # stdout, file, both
+  file_path: "./logs/servify.log"
+  max_size: 100
+  max_age: 7
+  max_backups: 3
+  compress: true
+
+security:
+  cors:
+    enabled: true
+    # IMPORTANT: Restrict origins in production
+    allowed_origins: ["http://localhost:3000", "http://localhost:8000"]
+    allowed_methods: ["GET","POST","PUT","DELETE","OPTIONS"]
+    # Be specific with headers instead of wildcard
+    allowed_headers: ["Content-Type","Authorization","X-Session-ID","X-Request-ID"]
+  # P2-5 first slice: public-surface runtime baseline. All three knobs default
+  # to off/empty so existing deployments keep their behavior; the secure
+  # environment templates turn them on explicitly.
+  headers:
+    enabled: false
+    hsts_enabled: false # only when TLS terminates on the app itself
+    hsts_max_age_seconds: 31536000
+    frame_options: "DENY"
+    referrer_policy: "strict-origin-when-cross-origin"
+    content_security_policy: ""
+  max_body_bytes: 0 # 0 disables the global request-body cap
+  websocket_allowed_origins: [] # empty admits all origins (WebView guests)
+  # Guest WS handshake token (mobile SDK §10 #2 / design D6). Defaults keep
+  # legacy behavior (handshake without token); when required is true the
+  # host backend exchanges a service-scoped POST /api/v1/guest/session call
+  # for a short-lived token and the SDK sends it as access_token on /ws.
+  # Required + a default jwt.secret is rejected at startup (forgeable).
+  guest_token:
+    required: false
+    ttl: 24h # issuance lifetime; non-positive falls back to 24h
+  rbac:
+    enabled: true
+    roles:
+      admin: ["*"]
+      agent:
+        - "tickets.read"
+        - "tickets.write"
+        - "customers.read"
+        - "agents.read"
+        - "knowledge.read"
+        - "assist.read"
+        - "assist.write"
+        - "gamification.read"
+        - "voice.read"
+        - "voice.write"
+        - "custom_fields.read"
+        - "session_transfer.read"
+        - "session_transfer.write"
+        - "satisfaction.read"
+        - "satisfaction.write"
+        - "workspace.read"
+        - "workspace.write"
+        - "macros.read"
+        - "integrations.read"
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
+    key_header: "X-API-Key" # Header name for whitelist key bypass
+    whitelist_ips: []
+    whitelist_keys:
+      - "internal-test-key" # Integration test key
+    paths:
+      # 专用前缀必须排在 /public/ 之前：中间件按首个匹配前缀取限流
+      - enabled: true
+        prefix: "/public/suggestions/"
+        requests_per_minute: 30
+        burst: 10
+      - enabled: true
+        prefix: "/public/kb/"
+        requests_per_minute: 60
+        burst: 15
+      - enabled: true
+        prefix: "/public/csat/"
+        requests_per_minute: 30
+        burst: 10
+      - enabled: true
+        prefix: "/public/"
+        requests_per_minute: 120
+        burst: 30
+      - enabled: true
+        prefix: "/api/v1/auth/"
+        requests_per_minute: 25
+        burst: 10
+      - enabled: true
+        prefix: "/api/v1/ws"
+        requests_per_minute: 40
+        burst: 20
+      - enabled: true
+        prefix: "/uploads/"
+        requests_per_minute: 90
+        burst: 20
+      - enabled: true
+        prefix: "/api/v1/ai/query"
+        requests_per_minute: 30
+        burst: 10
+      - enabled: true
+        prefix: "/api/v1/metrics/ingest"
+        requests_per_minute: 120
+        burst: 30
+      - enabled: true
+        prefix: "/api/v1/remote-assist/"
+        requests_per_minute: 20
+        burst: 10
+      - enabled: true
+        prefix: "/api/"
+        requests_per_minute: 60
+        burst: 15
+  audit:
+    enabled: true
+    retention: 4320h
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+    # Cold-tier archive dir (T3): empty = disabled; set a dir to snapshot
+    # expired audit rows to gzip JSON before deletion (hash chain kept).
+    archive_dir: ""
+  session_risk:
+    # Local/dev baseline. Production should usually tighten these windows.
+    hot_refresh_window_minutes: 15
+    recent_refresh_window_minutes: 60
+    today_refresh_window_hours: 24
+    rapid_change_window_hours: 24
+    stale_activity_window_days: 30
+    # Shared egress or NAT-heavy environments may need slightly higher thresholds.
+    multi_public_ip_threshold: 2
+    many_sessions_threshold: 3
+    hot_refresh_family_threshold: 2
+    # Risk score cutoffs for low / medium / high classification.
+    medium_risk_score: 2
+    high_risk_score: 4
+    # 登录风险执行档位（P2-5 第二刀）：off / step_up / block。风险判定依赖
+    # session_ip_intelligence 情报标签（内建启发式分类不算高风险）。默认 off。
+    login_enforcement: "off"
+    # refresh token 重放处置档位（P2-5 第三刀）：off / revoke_family。检测到
+    # 已轮换旧 token 重放时吊销整个会话（家族），迫使重新登录。默认 off。
+    refresh_reuse_policy: "off"
+  # TOTP 两步验证：登录密码通过后进入挑战步（认证器验证码或恢复码）
+  two_factor:
+    # 总开关（kill-switch）：关闭时已启用用户降级为单因子直登，setup/enable 拒绝
+    enabled: false
+    # 认证器 App 里显示的发行方标识
+    issuer: "Servify"
+    # 登录挑战 JWT 有效期（首轮密码验证后到完成第二因子的窗口）
+    challenge_ttl: 5m
+  # 远程协助会话治理（R1）。默认关闭保持既有行为；生产模板建议显式收紧。
+  # remote_assist:
+  #   # active 协助会话最长存活（超时懒清扫为 failed，释放同会话单活跃名额）
+  #   session_ttl: 4h
+  #   # 单坐席同时持有的 active 协助上限（超出再发起 409）
+  #   max_active_per_agent: 3
+
+upload:
+  enabled: true
+  # 存储后端：local（默认，单机）或 s3（AWS S3 / MinIO 等兼容对象存储，多副本部署必需）
+  provider: "local"
+  max_file_size: "32MB"
+  allowed_types: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv", ".md", ".zip", ".mp3", ".mp4"]
+  storage_path: "./uploads"
+  auto_process: true
+  auto_index: true
+  # provider 为 s3 时生效；region/bucket 必填（生产环境缺失将拒绝启动）
+  s3:
+    region: ""
+    bucket: ""
+    endpoint: ""            # MinIO 等 S3 兼容端点；留空使用 AWS 默认
+    access_key_id: ""       # 与 secret_access_key 同时留空时走默认凭据链（env / IAM role）
+    secret_access_key: ""
+    force_path_style: false # MinIO 通常需要 true
+    presign_expiry_seconds: 3600
+    public_base_url: ""     # 公共读 bucket/CDN 地址；留空则 /uploads/ 302 到 presigned URL
+
+# Embedding configuration for text vectorization
+embedding:
+  # Available providers: openai, tei, xinference, local
+  # local 为零外部依赖确定性嵌入器（无网络请求），配套 knowledge.provider=local
+  provider: "openai"
+  # OpenAI embedding configuration
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    model: "text-embedding-3-small"
+  # TEI (Text Embeddings Inference) configuration
+  tei:
+    base_url: "http://localhost:8080"
+    model: "bge-m3"
+  # Xinference embedding configuration
+  xinference:
+    base_url: "http://localhost:9997"
+    model_uid: "embedding-model"
+  # Local hashing embedder configuration (provider: "local")
+  # local:
+  #   dimension: 256
+
+
+# 管理端 OIDC 单点登录（Keycloak / Okta / Entra ID 等标准 IdP）
+# 默认关闭；开启后登录页出现「使用 SSO 登录」按钮（授权码 + PKCE 流程）
+# oidc:
+#   enabled: false
+#   # IdP 的 OIDC discovery 地址（服务启动时会请求 {issuer}/.well-known/openid-configuration）
+#   issuer: "https://sso.example.com/realms/servify"
+#   client_id: "servify-admin"
+#   client_secret: ""
+#   # 回调地址 = 本服务对外可达地址 + /api/v1/auth/oidc/callback（须在 IdP 侧登记）
+#   redirect_url: "https://admin.example.com/api/v1/auth/oidc/callback"
+#   # 管理端前端地址：SSO 成功/失败后重定向落点
+#   frontend_base_url: "https://admin.example.com"
+#   scopes: ["openid", "profile", "email"]
+#   # 从 ID token 的这些 claim 读取角色提示（仅用于新建账号时的初始角色）
+#   role_claims: ["roles", "groups"]
+#   # IdP 角色 → 本地角色映射（白名单：admin / agent）
+#   role_mapping:
+#     admin: "idp-admins"
+#   # 无匹配角色时的默认角色
+#   default_role: "agent"
+#   # 是否为 IdP 上存在而本地不存在的邮箱自动建号（默认 false，拒绝未登记用户）
+#   auto_provision: false
+#   # auto_provision 开启时建议限定邮箱域；留空则放行 IdP 验证过的任意邮箱
+#   allowed_domains: []
+
+# 单邮箱 Email 渠道：IMAP 轮询收件 + SMTP 出站
+# 默认关闭；开启后客户来信自动归并为会话（按发件人地址），管理端会话工作台直接回复可见
+# email:
+#   enabled: false
+#   # IMAP 服务器地址与端口（use_tls=true 时通常为 993）
+#   host: "imap.example.com"
+#   port: 993
+#   # 登录凭据（建议使用专用客服邮箱与应用专用密码）
+#   username: "support@example.com"
+#   password: ""
+#   # 轮询的 IMAP 文件夹
+#   mailbox: "INBOX"
+#   # IMAPS 加密；生产环境必须开启
+#   use_tls: true
+#   # 跳过 TLS 证书校验（仅自签名调试用，生产禁用）
+#   skip_verify: false
+#   # 轮询间隔（秒）；过小可能触发服务商限流
+#   poll_interval_seconds: 60
+#   smtp:
+#     # 出站 SMTP 服务器（坐席回复经此发出；留空则出站不可用）
+#     host: "smtp.example.com"
+#     port: 587
+#     username: "support@example.com"
+#     password: ""
+#     # 发件人地址；留空回退 email.username
+#     from: "support@example.com"
+#     use_starttls: true
+#     skip_verify: false
+
+# 移动端推送下发（FCM Android / APNs iOS）：坐席回复推给离线访客
+# 默认关闭；消费 push_tokens 注册行，访客 WS 在线时不推（前台抑制）
+# push:
+#   enabled: false
+#   fcm:
+#     # Firebase 服务账号 JSON 全文（建议 ${FCM_CREDENTIALS_JSON} 环境变量注入）
+#     credentials_json: ""
+#   apns:
+#     key_id: ""
+#     team_id: ""
+#     bundle_id: "com.example.app"
+#     # .p8 私钥全文（建议 ${APNS_PRIVATE_KEY} 环境变量注入）
+#     private_key: ""
+#     # 沙箱网关（TestFlight/开发证书用 true）
+#     sandbox: false
+
+# 质检全链路：定时扫描已结束会话 → 规则质检（违禁词/响应超时/首次响应）→ LLM 打分（可选）
+# 默认关闭；LLM 打分独立开关，无 key 时降级为 rules-only
+# quality:
+#   enabled: false
+#   # 扫描间隔（秒）
+#   scan_interval_seconds: 300
+#   # 单轮扫描处理的会话上限
+#   batch_size: 20
+#   # 抽样百分比 0-100；100 = 全量质检
+#   sample_rate: 100
+#   # 只扫描最近 N 天内结束的会话
+#   lookback_days: 7
+#   # 参与质检的最少消息数，低于此值记 skipped
+#   min_messages: 3
+#   # LLM 打分失败重试上限与退避（秒）
+#   max_attempts: 3
+#   retry_backoff_seconds: 600
+#   rules:
+#     # 违禁词列表（只检查坐席/AI 发出的消息）；改动需重启生效
+#     banned_words: []
+#     # 客户消息到坐席/AI 回复的超时阈值（秒）
+#     response_timeout_seconds: 120
+#     # 会话开始到首次回复的超时阈值（秒）
+#     first_response_timeout_seconds: 60
+#   llm:
+#     enabled: false
+#     # 打分模型；留空回退 ai.openai.model
+#     model: ""
+#     temperature: 0.1
+#     # 输入预算：总字符与单轮字符上限（防 token 超支）
+#     max_input_chars: 12000
+#     max_turn_chars: 500
+#     timeout_seconds: 30
+
+# 坐席分派：等待队列自动分派 worker（默认关闭——关闭时仍可手动触发分派端点）
+# routing:
+#   enabled: false
+#   # 等待队列轮询间隔（秒）
+#   dispatch_interval_seconds: 30
+#   # claim-then-process 认领租约（秒）；过期未完成的认领自动复活
+#   claim_lease_seconds: 120
+#   # 单轮分派的最大认领条数
+#   dispatch_batch_size: 10
+
+# 自动化 delay 动作：入队到期执行单，timer worker 周期扫描执行（多实例下乐观抢占）
+# automation:
+#   # 到期执行单扫描间隔（秒）
+#   timer_scan_interval_seconds: 30
+#   # 单轮扫描处理的执行单上限
+#   timer_batch_size: 50
+
+# Knowledge base configuration
+knowledge:
+  # Available providers: pgvector, local
+  # local 为零外部依赖自含引擎：本地嵌入 + knowledge_docs 表 + 进程内余弦，
+  # sqlite 部署形态也可用（pgvector 需要 pg + pgvector 扩展）
+  provider: "pgvector"
+  pgvector:
+    # Vector search configuration
+    search:
+      top_k: 5
+      threshold: 0.7
+      # Available strategies: semantic, hybrid, keyword
+      strategy: "hybrid"
+    # Document indexing configuration
+    indexing:
+      chunk_size: 1000
+      chunk_overlap: 200
+  # Local self-contained engine (provider: "local")
+  # local:
+  #   search:
+  #     top_k: 5
+  #     threshold: 0.7
+  #     strategy: "semantic"
+  #   indexing:
+  #     chunk_size: 500
+  #     chunk_overlap: 50
+

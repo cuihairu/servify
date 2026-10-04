@@ -150,6 +150,11 @@ func TestApplyConfigEnvOverrides(t *testing.T) {
 }
 
 func TestResolveRuntimeOverridesMatrix(t *testing.T) {
+	// 环境隔离：DB_DRIVER/DB_DSN 环境变量存在时（release-check 即以此
+	// 方式运行），postgres 用例的 -dsn flag 默认值会被 env 注入，断言
+	// 失效。这里显式清空，sqlite 用例再自行覆盖。
+	t.Setenv("DB_DRIVER", "")
+	t.Setenv("DB_DSN", "")
 	cfg := config.GetDefaultConfig()
 	cfg.Database.Host = "db-host"
 	cfg.Database.Port = 6543

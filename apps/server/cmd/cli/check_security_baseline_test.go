@@ -8,7 +8,19 @@ import (
 	"testing"
 )
 
+// isolateBaselineEnv 隔离 applyConfigEnvOverrides 消费的环境变量：
+// release-check 以 OPENAI_API_KEY/DB_* 等 env 运行，不隔离会让依赖
+// 默认告警的断言失效（hermeticity）。
+func isolateBaselineEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("DIFY_ENABLED", "")
+}
+
 func TestRunCheckSecurityBaseline_StrictFailure(t *testing.T) {
+	isolateBaselineEnv(t)
 	configPath := writeTempConfig(t, `
 security:
   rate_limiting:
@@ -35,6 +47,7 @@ security:
 }
 
 func TestRunCheckSecurityBaseline_Pass(t *testing.T) {
+	isolateBaselineEnv(t)
 	configPath := writeTempConfig(t, `
 jwt:
   secret: "prod-secret"
@@ -114,6 +127,7 @@ ragflow:
 
 // ragflow 启用但凭证缺失必须在 strict 基线被拒（与 dify gate 同语义）。
 func TestRunCheckSecurityBaseline_StrictFailureRagFlowEnabledWithoutCredentials(t *testing.T) {
+	isolateBaselineEnv(t)
 	configPath := writeTempConfig(t, `
 jwt:
   secret: "prod-secret"
