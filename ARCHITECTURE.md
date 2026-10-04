@@ -55,6 +55,12 @@ Code should be organized by business capability:
 - suggestion
 - gamification
 
+V1.0 收敛（2026-10-04，见 `docs/v1-convergence-plan.md`）对模块边界的硬约束：
+
+- 当前一级模块共 27 个（现状盘点见 `docs/current-architecture.md`），**不再新增一级模块**；新能力先找既有模块的子能力归属。
+- 产品与架构叙事的**核心 7 模块**：`conversation`、`customer`、`agent`、`routing`、`ticket`、`ai`、`knowledge`。
+- 其余模块一律按子能力 / 横向能力 / 扩展边界定位（sla/satisfaction/shift/macro/custom_field 归 ticket/agent 组合，gamification/suggestion 归 conversation+analytics，voice/多渠道/SDK 多端为扩展边界），代码位置保留但不进入产品主叙事。
+
 ### 3.3 Ports and Adapters
 
 External protocols and vendors must sit behind interfaces:
@@ -276,6 +282,22 @@ Owns:
 
 This module is the center of multi-channel interaction.
 
+**中心地位声明（V1.0 收敛起写死，领域文档与代码注释同步执行）：**
+
+```text
+Customer（客户中心）
+   └── Conversation（服务过程唯一核心聚合）
+         ├── Message / Participant / ChannelBinding / ConversationEvent
+         ├── AI interaction         （ai 模块，经 QueryOrchestrator）
+         ├── Agent interaction      （agent 模块：接管/协作/转接）
+         ├── Routing                （routing 模块：排队/评分/分配/转接）
+         └── Ticket                 （ticket 模块：后续工作项，持有 conversation_id）
+```
+
+- Conversation 是「服务过程」的中心，Customer 是「客户」的中心；两者都是上游概念，**ticket 不得取代 conversation 的核心地位**。
+- 真实客服流转 `用户进线 → Conversation → AI 尝试 → Human Handoff → Agent 接管 → 建 Ticket → Ticket 完成 → Conversation 继续/关闭` 全部以 Conversation 为主轴。
+- 跨模块访问 Conversation 只允许经 `conversation` 模块 application 出口或事件；AI/Routing/Ticket 对会话只读引用。
+
 ### 6.5 Routing
 
 Owns:
@@ -286,6 +308,8 @@ Owns:
 - skill-based routing
 - escalation routing
 
+V1.0 收敛定位：Routing 是「Conversation 服务过程中的分配机制」，不拥有独立的客户或服务关系；SLA 违背/风险升级作为路由打分与 automation 触发因子（现有 `sla.violated` 事件与 `escalate_priority` 规则保持），评分结果写给 `routing_assignments` 供审计与 Analytics 投影（见 `docs/v1-convergence-plan.md` §6）。
+
 ### 6.6 Ticket
 
 Owns:
@@ -295,6 +319,12 @@ Owns:
 - attachments
 - custom fields
 - status history
+
+**从属关系声明（V1.0 收敛起写死）：** Ticket 是 Conversation 派生的**后续工作项**，不是与 Conversation 平级的中心对象：
+
+- 新建工单必须携带 `conversation_id`（历史数据迁移回填，新数据必填）。
+- Conversation 关闭时未完结的工作必须先建单或显式降级（关闭前拦截规则）。
+- `sla`、`satisfaction`、`custom_field` 的语义归属 Ticket 子能力；`ticket.*` 域事件同时投影进 `conversation_events`，保证客户视角 Timeline 完整。
 
 ### 6.7 Knowledge
 
