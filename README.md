@@ -193,8 +193,8 @@ flowchart LR
 | `knowledge` | 主路径收口（facade 保留兼容） | 文档管理、索引任务、provider 抽象已到位 |
 | `agent` | 主路径收口（facade 保留兼容） | handler DTO 与 transfer runtime contract 已回到 module delivery |
 | `customer` | 主路径收口（facade 保留兼容） | handler/router/runtime 已直接走 module delivery |
-| `automation` | 主路径收口（facade 保留兼容） | 触发器与执行查询已下沉到 module application |
-| `analytics` | 主路径收口（facade 保留兼容） | 核心统计已走 module application，event bus subscriber 仍在 legacy |
+| `automation` | 主路径收口（facade 保留兼容） | 触发器与执行查询已下沉到 module application，event bus subscriber 已由 module delivery 装配（`runtime_assembly.go:389`） |
+| `analytics` | 主路径收口（facade 保留兼容） | 核心统计已走 module application，event bus subscriber 已由 module delivery 装配（`runtime_assembly.go:417`） |
 | `suggestion` | 主路径收口（legacy 已删除） | 推荐、token/意图辅助逻辑已下沉到 module application |
 | `gamification` | 主路径收口（legacy 已删除） | 评分、徽章逻辑已下沉到 module application |
 | `voice` | 模块化（mixed） | 呼叫、媒体、录音、转写通过 `voice` 模块与 SIP adapter 接入；非典型 services→modules 迁移形态 |
@@ -217,7 +217,7 @@ flowchart LR
 | 审计日志 | 已接入管理面 | 关键管理操作统一经过 `AuditMiddleware`，敏感字段做脱敏 |
 | 用户 token 状态失效 | 已完成首轮能力 | 支持 `token_valid_after` + `token_version`，并在 router auth middleware 中强制校验 |
 | 通用 user security surface | 已完成首轮能力 | 提供 `/api/security/users/:id` 与 `/api/security/users/:id/revoke-tokens` |
-| 更细粒度 session / refresh token 管理 | 待补充 | 仍缺 refresh token、revoke list、批量失效、审批回滚等能力 |
+| 会话 / refresh token 管理 | 已完成首轮能力 | `POST /api/v1/auth/refresh`、`GET /auth/sessions`、`logout-current` / `logout-others`、TOTP 2FA、OIDC 与 session risk 档位（refresh 重放处置/登录风险）均已落地；revoke list 由平台 `RevokedTokenPolicy` 承载；剩余为审批回滚等管理面增强（V1.0 收口外） |
 
 ---
 
