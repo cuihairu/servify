@@ -15,6 +15,7 @@ import (
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerapi "servify/apps/server/internal/modules/customer/api"
+	customerapplication "servify/apps/server/internal/modules/customer/application"
 	gamificationcontract "servify/apps/server/internal/modules/gamification/contract"
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
@@ -183,6 +184,14 @@ func (s *unitCustomerService) GetCustomerStats(ctx context.Context) (*customerap
 
 func (s *unitCustomerService) RevokeCustomerTokens(ctx context.Context, customerID uint) (int, error) {
 	return s.revokeVer, s.revokeErr
+}
+
+func (s *unitCustomerService) ExportCustomerData(ctx context.Context, customerID uint) (*customerapplication.CustomerDataExport, error) {
+	return nil, nil
+}
+
+func (s *unitCustomerService) EraseCustomerData(ctx context.Context, customerID uint) (*customerapplication.CustomerDataEraseResult, error) {
+	return nil, nil
 }
 
 // ---- ticket ----

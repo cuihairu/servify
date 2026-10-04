@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	customerapi "servify/apps/server/internal/modules/customer/api"
+	customerapplication "servify/apps/server/internal/modules/customer/application"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
 
@@ -497,6 +500,81 @@ func (h *CustomerHandler) GetCustomerStats(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
+// ExportCustomerData 数据主体 PII 导出（V1.0 B2-2，§9.3-2）。
+// @Summary 导出客户数据
+// @Description 聚合导出客户档案/身份/会话/消息/工单全量 PII（凭证除外）
+// @Tags 客户管理
+// @Produce json
+// @Param id path int true "客户ID"
+// @Success 200 {object} customerapplication.CustomerDataExport
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/customers/{id}/export [get]
+func (h *CustomerHandler) ExportCustomerData(c *gin.Context) {
+	id, ok := parseCustomerIDParam(c)
+	if !ok {
+		return
+	}
+	export, err := h.customerService.ExportCustomerData(c.Request.Context(), uint(id))
+	if err != nil {
+		h.respondCustomerDataBoundaryError(c, "export customer data", err)
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=customer-%d-data-export.json", id))
+	c.JSON(http.StatusOK, export)
+}
+
+// EraseCustomerData 数据主体 PII 删除（V1.0 B2-2，含关联擦除）。
+// @Summary 删除客户数据
+// @Description 匿名化身份/档案，scrub 消息与工单内容，删除附件元数据
+// @Tags 客户管理
+// @Produce json
+// @Param id path int true "客户ID"
+// @Success 200 {object} customerapplication.CustomerDataEraseResult
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/customers/{id}/erase-data [post]
+func (h *CustomerHandler) EraseCustomerData(c *gin.Context) {
+	id, ok := parseCustomerIDParam(c)
+	if !ok {
+		return
+	}
+	result, err := h.customerService.EraseCustomerData(c.Request.Context(), uint(id))
+	if err != nil {
+		h.respondCustomerDataBoundaryError(c, "erase customer data", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Customer data erased successfully", "data": result})
+}
+
+func parseCustomerIDParam(c *gin.Context) (uint64, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid customer ID",
+			Message: "ID must be a valid positive number",
+		})
+		return 0, false
+	}
+	return id, true
+}
+
+func (h *CustomerHandler) respondCustomerDataBoundaryError(c *gin.Context, action string, err error) {
+	if h.logger != nil {
+		h.logger.Errorf("Failed to %s: %v", action, err)
+	}
+	if errors.Is(err, customerapplication.ErrCustomerNotFound) {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, ErrorResponse{
+		Error:   "Failed to " + action,
+		Message: err.Error(),
+	})
+}
+
 // RegisterCustomerRoutes 注册客户管理相关路由
 func RegisterCustomerRoutes(r *gin.RouterGroup, handler *CustomerHandler) {
 	customers := r.Group("/customers")
@@ -510,5 +588,9 @@ func RegisterCustomerRoutes(r *gin.RouterGroup, handler *CustomerHandler) {
 		customers.GET("/:id/activity", handler.GetCustomerActivity)
 		customers.POST("/:id/notes", handler.AddCustomerNote)
 		customers.PUT("/:id/tags", handler.UpdateCustomerTags)
+		// V1.0 收敛 B2-2（docs/v1-convergence-plan.md §9.3-2）：数据主体
+		// PII 导出与删除（含关联擦除）管理面。
+		customers.GET("/:id/export", handler.ExportCustomerData)
+		customers.POST("/:id/erase-data", handler.EraseCustomerData)
 	}
 }

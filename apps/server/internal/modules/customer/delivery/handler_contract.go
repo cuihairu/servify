@@ -5,6 +5,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	customerapi "servify/apps/server/internal/modules/customer/api"
+	customerapp "servify/apps/server/internal/modules/customer/application"
 )
 
 // HandlerService is the only customer contract that HTTP handlers should depend on.
@@ -18,4 +19,8 @@ type HandlerService interface {
 	UpdateCustomerTags(ctx context.Context, customerID uint, tags []string) error
 	GetCustomerStats(ctx context.Context) (*customerapi.CustomerStats, error)
 	RevokeCustomerTokens(ctx context.Context, customerID uint) (int, error)
+	// ExportCustomerData 数据主体 PII 导出（B2-2，管理面合规口）。
+	ExportCustomerData(ctx context.Context, customerID uint) (*customerapp.CustomerDataExport, error)
+	// EraseCustomerData 数据主体 PII 删除（含关联擦除，B2-2）。
+	EraseCustomerData(ctx context.Context, customerID uint) (*customerapp.CustomerDataEraseResult, error)
 }

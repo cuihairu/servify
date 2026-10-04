@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,15 +16,44 @@ import (
 
 // HandlerServiceAdapter exposes module-backed customer operations to HTTP handlers.
 type HandlerServiceAdapter struct {
-	service *customerapp.Service
+	service  *customerapp.Service
+	boundary *customerapp.DataBoundaryService // B2-2：nil 时导出/擦除返回不可用
 }
 
 func NewHandlerService(db *gorm.DB) *HandlerServiceAdapter {
-	return NewHandlerServiceAdapter(customerapp.NewService(customerinfra.NewGormRepository(db)))
+	return &HandlerServiceAdapter{
+		service:  customerapp.NewService(customerinfra.NewGormRepository(db)),
+		boundary: customerapp.NewDataBoundaryService(customerinfra.NewGormDataBoundaryRepository(db)),
+	}
 }
 
 func NewHandlerServiceAdapter(service *customerapp.Service) *HandlerServiceAdapter {
 	return &HandlerServiceAdapter{service: service}
+}
+
+// WithBoundary 注入数据边界服务（B2-2）；可链式。
+func (a *HandlerServiceAdapter) WithBoundary(boundary *customerapp.DataBoundaryService) *HandlerServiceAdapter {
+	if a == nil {
+		return a
+	}
+	a.boundary = boundary
+	return a
+}
+
+// ExportCustomerData 数据主体 PII 导出（B2-2，管理面合规口）。
+func (a *HandlerServiceAdapter) ExportCustomerData(ctx context.Context, customerID uint) (*customerapp.CustomerDataExport, error) {
+	if a.boundary == nil {
+		return nil, fmt.Errorf("customer data boundary is not configured")
+	}
+	return a.boundary.ExportCustomerData(ctx, customerID)
+}
+
+// EraseCustomerData 数据主体 PII 删除（含关联擦除，B2-2）。
+func (a *HandlerServiceAdapter) EraseCustomerData(ctx context.Context, customerID uint) (*customerapp.CustomerDataEraseResult, error) {
+	if a.boundary == nil {
+		return nil, fmt.Errorf("customer data boundary is not configured")
+	}
+	return a.boundary.EraseCustomerData(ctx, customerID)
 }
 
 func (a *HandlerServiceAdapter) CreateCustomer(ctx context.Context, req *customerapi.CustomerCreateRequest) (*models.User, error) {
