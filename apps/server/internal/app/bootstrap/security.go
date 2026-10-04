@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"servify/apps/server/internal/config"
@@ -41,7 +42,10 @@ func SecurityWarnings(cfg *config.Config) []string {
 		warnings = append(warnings, "jwt.secret is empty or using the default value")
 	}
 	// Check for insecure database password (using shared list from config)
-	if config.InsecureDatabasePasswords[cfg.Database.Password] {
+	// sqlite 驱动无密码语义（DSN 是文件路径），豁免空密码警告——
+	// 否则 release-check 的 SQLite 回退形态（开发/CI 无 postgres）永远红灯。
+	usingSQLite := strings.EqualFold(strings.TrimSpace(os.Getenv("DB_DRIVER")), "sqlite")
+	if !usingSQLite && config.InsecureDatabasePasswords[cfg.Database.Password] {
 		warnings = append(warnings, "database.password is empty or using a default value")
 	}
 	if cfg.Security.CORS.Enabled && len(cfg.Security.CORS.AllowedOrigins) == 1 && strings.TrimSpace(cfg.Security.CORS.AllowedOrigins[0]) == "*" {

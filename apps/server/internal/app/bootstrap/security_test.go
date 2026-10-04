@@ -45,6 +45,39 @@ func TestSecurityWarnings(t *testing.T) {
 	}
 }
 
+// TestSecurityWarnings_SQLiteExemptsDatabasePassword 锚定 sqlite 豁免
+// （V1.0 B4-2）：sqlite 无密码语义（DSN 是文件路径），空密码不算警告——
+// release-check 的 SQLite 回退形态（开发/CI 无 postgres）依赖这条豁免。
+func TestSecurityWarnings_SQLiteExemptsDatabasePassword(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	cfg := config.GetDefaultConfig()
+	cfg.JWT.Secret = "prod-secret"
+	cfg.Database.Password = ""
+	cfg.Security.RateLimiting.Enabled = true
+	cfg.Security.CORS.AllowedOrigins = []string{"https://app.example.com"}
+	cfg.Security.RateLimiting.Paths = fullRequiredRateLimitPaths()
+	cfg.AI.OpenAI.APIKey = "openai-key"
+
+	warnings := strings.Join(SecurityWarnings(cfg), "\n")
+	if strings.Contains(warnings, "database.password") {
+		t.Fatalf("sqlite driver must exempt database password warning, got %q", warnings)
+	}
+}
+
+func fullRequiredRateLimitPaths() []config.PathRateLimitConfig {
+	return []config.PathRateLimitConfig{
+		{Enabled: true, Prefix: "/public/", RequestsPerMinute: 120, Burst: 30},
+		{Enabled: true, Prefix: "/public/kb/", RequestsPerMinute: 60, Burst: 15},
+		{Enabled: true, Prefix: "/public/csat/", RequestsPerMinute: 30, Burst: 10},
+		{Enabled: true, Prefix: "/api/v1/auth/", RequestsPerMinute: 25, Burst: 10},
+		{Enabled: true, Prefix: "/api/v1/ws", RequestsPerMinute: 30, Burst: 10},
+		{Enabled: true, Prefix: "/uploads/", RequestsPerMinute: 90, Burst: 20},
+		{Enabled: true, Prefix: "/api/v1/metrics/ingest", RequestsPerMinute: 120, Burst: 30},
+		{Enabled: true, Prefix: "/api/v1/remote-assist/", RequestsPerMinute: 20, Burst: 10},
+		{Enabled: true, Prefix: "/api/", RequestsPerMinute: 90, Burst: 20},
+	}
+}
+
 func TestSecurityWarnings_NoExternalKnowledgeProviderEnabled(t *testing.T) {
 	cfg := config.GetDefaultConfig()
 	cfg.JWT.Secret = "prod-secret"

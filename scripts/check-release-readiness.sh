@@ -37,7 +37,9 @@ bash "$ROOT_DIR/scripts/check-local-environment.sh"
 
 echo
 echo "==> Security baseline"
-SERVIFY_JWT_SECRET="$RELEASE_CHECK_JWT_SECRET" OPENAI_API_KEY="$RELEASE_CHECK_OPENAI_API_KEY" \
+# DB_DRIVER 同步透传：sqlite 驱动无密码语义（SecurityWarnings 豁免空密码），
+# 与后续迁移/启动段使用同一 driver 口径。
+DB_DRIVER="$RELEASE_CHECK_DB_DRIVER" SERVIFY_JWT_SECRET="$RELEASE_CHECK_JWT_SECRET" OPENAI_API_KEY="$RELEASE_CHECK_OPENAI_API_KEY" \
   bash "$ROOT_DIR/scripts/check-security-baseline.sh" "$CONFIG_PATH"
 
 echo
