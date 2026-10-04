@@ -54,17 +54,19 @@
 > 来源：`docs/v1-convergence-plan.md`（§10 阶段闸门）。
 > 纪律：**不新增一级模块**；每批过闸再进下一批；小步提交推送；中断从最近一个 `[-]` 批次继续；恢复指针以本节为准。
 
-### [-] B0 文档与架构声明（P0 批次，先行开工）
+### [x] B0 文档与架构声明（P0 批次，已闭环）
 
 - 任务清单：
-  - [ ] B0-1 README 漂移修正：`README.md:220` 安全表 refresh/sessions/2FA 已实现口径；`automation`/`analytics` 行 event bus subscriber 已在模块内的表述
-  - [ ] B0-2 `docs/current-architecture.md` 快照更新：`services` 目录已删除、模块表补全至 27 个（核心 7 + 薄壳 13）、subscriber 已入模块、过渡区域表对齐现状
-  - [ ] B0-3 `ARCHITECTURE.md` §6.4-6.6 写死 Conversation 唯一核心聚合与 Ticket 从属关系（§3.2 注记 27→7 核心模块现状）
-  - [ ] B0-4 核心模块 `domain/doc.go` 补 Owns 声明注释（conversation/ticket/routing/ai/knowledge/customer/agent）
-- 验收闸：`make local-check` 绿；文档站无旧口径残留
-- 状态：`[-]`（B0-1 开工）
-- 最近进展：2026-10-04 计划书任务落单进 todo.md，批次重排完成
-- 下一步：B0-1 → B0-4 依次小步提交推送，过闸后转 B1
+  - [x] B0-1 README 漂移修正：`README.md:220` 安全表 refresh/sessions/2FA 已实现口径；`automation`/`analytics` 行 event bus subscriber 已在模块内的表述
+  - [x] B0-2 `docs/current-architecture.md` 快照更新：`services` 目录已删除、模块表补全至 27 个（核心 7 + 薄壳 13）、subscriber 已入模块、过渡区域表对齐现状
+  - [x] B0-3 `ARCHITECTURE.md` §6.4-6.6 写死 Conversation 唯一核心聚合与 Ticket 从属关系（§3.2 注记 27→7 核心模块现状）
+  - [x] B0-4 核心模块 `domain/doc.go` 补 Owns 声明注释（conversation/ticket/routing/ai/knowledge/customer/agent）
+- 验收闸：`make local-check` 绿 ✅；文档站无旧口径残留 ✅（含 10-migration-scorecard 快照注记与 agent/automation 两行修正）
+- 状态：`[x]`
+- 完成证据：
+  - 提交链：`b419cef`（B0-1 README）→ `081e819`（B0-2 current-architecture）→ `62b78a7`（B0-3 ARCHITECTURE）→ `baabeb5`（B0-4 domain/doc.go + scorecard），均推送 main
+  - 验证：`make local-check` 绿；`go build ./apps/server/...` 绿；`go vet` 7 个 domain 包绿；README/文档旧口径 grep 残留为零
+- 下一步：B1（客服核心产品闭环）开工
 - 阻塞项：暂无
 
 ### [ ] B1 客服核心产品闭环（P1 批次，计划书最高 ROI）
