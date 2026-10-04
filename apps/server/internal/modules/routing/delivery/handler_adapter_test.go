@@ -15,6 +15,7 @@ import (
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
+	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -227,7 +228,7 @@ type handlerRoutingStub struct {
 	addToWaiting    func(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, targetGroupID uint, priority string, notes string) (*models.WaitingRecord, error)
 	claimWaiting    func(ctx context.Context, now time.Time, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error)
 	releaseClaim    func(ctx context.Context, sessionID string) error
-	assign          func(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error)
+	assign          func(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, []eventbus.Event, error)
 	getHistory      func(ctx context.Context, sessionID string) ([]models.TransferRecord, error)
 	listRecent      func(ctx context.Context, limit int) ([]models.TransferRecord, error)
 	listWaiting     func(ctx context.Context, status string, limit int) ([]models.WaitingRecord, error)
@@ -261,9 +262,9 @@ func (s *handlerRoutingStub) ListRoutingAssignments(ctx context.Context, session
 	return nil, nil
 }
 
-func (s *handlerRoutingStub) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error) {
+func (s *handlerRoutingStub) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, []eventbus.Event, error) {
 	if s.assign == nil {
-		return &models.TransferRecord{SessionID: cmd.SessionID, ToAgentID: &cmd.AgentID, TransferredAt: cmd.AssignedAt}, nil
+		return &models.TransferRecord{SessionID: cmd.SessionID, ToAgentID: &cmd.AgentID, TransferredAt: cmd.AssignedAt}, nil, nil
 	}
 	return s.assign(ctx, tx, cmd)
 }
@@ -793,7 +794,7 @@ func TestHandlerHistoryAndWaitingQueries(t *testing.T) {
 	fx := newHandlerFixture(t, nil)
 	adapter := newRoutingDeliveryAdapter(fx.db)
 	now := time.Now().UTC().Truncate(time.Second)
-	_, err := adapter.AssignAgent(ctx, nil, AssignAgentCommand{SessionID: "sess-q", AgentID: 9, Reason: "r1", AssignedAt: now})
+	_, _, err := adapter.AssignAgent(ctx, nil, AssignAgentCommand{SessionID: "sess-q", AgentID: 9, Reason: "r1", AssignedAt: now})
 	require.NoError(t, err)
 	_, err = adapter.AddToWaitingQueue(ctx, nil, "sess-q2", "need_help", []string{"billing"}, 0, "high", "")
 	require.NoError(t, err)

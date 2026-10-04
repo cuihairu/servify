@@ -27,6 +27,7 @@ import (
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -219,8 +220,8 @@ func (s *stubRoutingRuntime) AddToWaitingQueue(ctx context.Context, tx *gorm.DB,
 	return nil, nil
 }
 
-func (s *stubRoutingRuntime) AssignAgent(ctx context.Context, tx *gorm.DB, cmd routingdelivery.AssignAgentCommand) (*models.TransferRecord, error) {
-	return nil, nil
+func (s *stubRoutingRuntime) AssignAgent(ctx context.Context, tx *gorm.DB, cmd routingdelivery.AssignAgentCommand) (*models.TransferRecord, []eventbus.Event, error) {
+	return nil, nil, nil
 }
 
 func (s *stubRoutingRuntime) GetTransferHistory(ctx context.Context, sessionID string) ([]models.TransferRecord, error) {

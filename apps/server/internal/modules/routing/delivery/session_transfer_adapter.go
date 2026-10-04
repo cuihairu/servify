@@ -7,6 +7,7 @@ import (
 	"servify/apps/server/internal/models"
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
+	"servify/apps/server/internal/platform/eventbus"
 
 	"gorm.io/gorm"
 )
@@ -20,10 +21,13 @@ func NewSessionTransferAdapter(service *routingapp.Service, publisher routingapp
 	return &SessionTransferAdapter{service: service, publisher: publisher}
 }
 
-func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error) {
+func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, []eventbus.Event, error) {
 	svc := a.service
+	var buffered *routingapp.BufferPublisher
 	if tx != nil {
-		svc = routingapp.NewService(routinginfra.NewGormRepository(tx), a.publisher)
+		// 事务内先攒后发（见 BufferPublisher 注释），提交后由调用方统一发。
+		buffered = routingapp.NewBufferPublisher(a.publisher)
+		svc = routingapp.NewService(routinginfra.NewGormRepository(tx), buffered)
 	}
 
 	item, err := svc.AssignAgent(ctx, routingapp.AssignAgentCommand{
@@ -37,9 +41,13 @@ func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, c
 		Scoring:        cmd.Scoring,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	var events []eventbus.Event
+	if buffered != nil {
+		events = buffered.Events()
+	}
 	return &models.TransferRecord{
 		SessionID:      item.SessionID,
 		FromAgentID:    item.FromAgentID,
@@ -49,7 +57,7 @@ func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, c
 		SessionSummary: item.SessionSummary,
 		TransferredAt:  item.AssignedAt,
 		CreatedAt:      item.AssignedAt,
-	}, nil
+	}, events, nil
 }
 
 // ListRoutingAssignments 评分审计读口（B2-1），直通 application 层。

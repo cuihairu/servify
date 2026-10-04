@@ -6,6 +6,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	routingapplication "servify/apps/server/internal/modules/routing/application"
+	"servify/apps/server/internal/platform/eventbus"
 
 	"gorm.io/gorm"
 )
@@ -25,7 +26,9 @@ type AssignAgentCommand struct {
 // RuntimeService is the routing contract used by session-transfer runtime glue.
 type RuntimeService interface {
 	AddToWaitingQueue(ctx context.Context, tx *gorm.DB, sessionID string, reason string, targetSkills []string, targetGroupID uint, priority string, notes string) (*models.WaitingRecord, error)
-	AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error)
+	// AssignAgent 返回待发 routing 事件：事务内先攒（见 application.BufferPublisher），
+	// 由事务拥有者在提交成功后发到总线；回滚时丢弃。
+	AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, []eventbus.Event, error)
 	GetTransferHistory(ctx context.Context, sessionID string) ([]models.TransferRecord, error)
 	ListRecentTransferHistory(ctx context.Context, limit int) ([]models.TransferRecord, error)
 	ListWaitingRecords(ctx context.Context, status string, limit int) ([]models.WaitingRecord, error)

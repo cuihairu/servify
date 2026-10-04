@@ -12,6 +12,7 @@ import (
 	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -50,6 +51,8 @@ type HandlerDependencies struct {
 	Tickets      ticketdelivery.RuntimeService
 	Conversation conversationdelivery.RuntimeService
 	AgentLoad    agentdelivery.RuntimeService
+	// Publisher 事务提交后的 routing 事件发口（nil 时提交后不发事件）。
+	Publisher routingapplication.EventPublisher
 	// 等待队列 worker 分派参数（0 取默认值）。
 	DispatchBatchSize int
 	ClaimLeaseSeconds int
@@ -67,6 +70,7 @@ type HandlerServiceAdapter struct {
 	conversation  conversationdelivery.RuntimeService
 	agents        agentdelivery.RuntimeService
 	scorer        routingapplication.Scorer // B2-1：nil 时转接不带评分审计（不阻塞）
+	publisher     routingapplication.EventPublisher
 	dispatchBatch int
 	claimLease    time.Duration
 }
@@ -94,6 +98,7 @@ func NewHandlerService(deps HandlerDependencies) *HandlerServiceAdapter {
 		tickets:       deps.Tickets,
 		conversation:  deps.Conversation,
 		agents:        deps.AgentLoad,
+		publisher:     deps.Publisher,
 		dispatchBatch: batch,
 		claimLease:    time.Duration(lease) * time.Second,
 	}
@@ -257,6 +262,7 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 		TransferredAt:  transferAt,
 	}
 
+	var pendingEvents []eventbus.Event
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.syncTransferSession(ctx, tx, session, targetAgentID); err != nil {
 			return fmt.Errorf("update session: %w", err)
@@ -270,7 +276,7 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 		if err := s.appendTransferSystemMessage(ctx, tx, session.ID, targetAgentID, transferMessageContent, transferAt); err != nil {
 			return fmt.Errorf("create transfer message: %w", err)
 		}
-		createdRecord, err := s.routing.AssignAgent(ctx, tx, AssignAgentCommand{
+		createdRecord, events, err := s.routing.AssignAgent(ctx, tx, AssignAgentCommand{
 			SessionID:      session.ID,
 			AgentID:        targetAgentID,
 			FromAgentID:    fromAgentID,
@@ -284,12 +290,24 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 			return fmt.Errorf("create transfer record: %w", err)
 		}
 		transferRecord = createdRecord
+		pendingEvents = events
 		if err := s.markWaitingTransferred(ctx, tx, session.ID, targetAgentID, transferAt); err != nil {
 			return fmt.Errorf("sync waiting record: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
+	}
+
+	// 事务提交后再发 routing 事件：事务内同步发布会让事件订阅者与外层
+	// 事务互相等锁（sqlite 单写者下 busy 超时，见 BufferPublisher 注释）；
+	// 回滚路径在上一分支直接返回，攒下的事件随事务丢弃。
+	if s.publisher != nil {
+		for _, event := range pendingEvents {
+			if err := s.publisher.Publish(ctx, event); err != nil {
+				s.logger.Warnf("Failed to publish routing event after commit: %v", err)
+			}
+		}
 	}
 
 	if s.agentService != nil {

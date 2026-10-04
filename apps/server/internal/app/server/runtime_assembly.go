@@ -515,6 +515,7 @@ func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 		Agents:            state.agentAdapter,
 		Notifier:          newRoutingTransferNotifier(rt.RealtimeGateway),
 		Routing:           routingdelivery.NewSessionTransferAdapter(state.routingService, rt.Bus),
+		Publisher:         rt.Bus,
 		Tickets:           ticketdelivery.NewRuntimeAdapter(rt.Bus),
 		Conversation:      conversationdelivery.NewRuntimeAdapter(rt.DB, rt.Bus),
 		AgentLoad:         agentdelivery.NewTransferRuntimeAdapter(),

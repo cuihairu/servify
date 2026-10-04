@@ -77,7 +77,7 @@ func TestSessionTransferAdapter_AssignAgent_And_History(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	fromAgentID := uint(3)
 
-	record, err := adapter.AssignAgent(context.Background(), nil, AssignAgentCommand{
+	record, _, err := adapter.AssignAgent(context.Background(), nil, AssignAgentCommand{
 		SessionID:      "sess-assign",
 		AgentID:        9,
 		FromAgentID:    &fromAgentID,
