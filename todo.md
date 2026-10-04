@@ -40,12 +40,13 @@
 2. 验收矩阵主链路已通过（P1-1…P1-5、P2-6 管理端八刀）。
 3. 企业级基座已补齐（P2 全批：可观测性五刀、安全治理、SDK 契约、性能基线）。
 
-2026-10-04 ChatGPT 审核复查后拍板，进入 **V1.0 收敛改造阶段**：
+2026-10-04 ChatGPT 审核复查后拍板，进入 **V1.0 收敛改造阶段**，同日 B0-B4 全部批次闭环，`v1.0.0` 已发布（tag 已推送，release notes：`docs/release-notes-v1.0.0.md`）：
 
 - 复查结论：产品定位收敛判断属实；架构「过度平台化」判断属实（27 个一级模块、13 个无 domain 薄壳，而客服核心产品模型与 Agent Workspace 单薄）。
 - 计划书：`docs/v1-convergence-plan.md`（保留/降级/删除清单、Domain 边界、数据模型、Workspace/AI/Routing/Ticket、P0-P4 批次、验收标准）。
 - 复查报告：`docs/review/chatgpt-review-2026-10-04-verification.md`。
-- 本文件新增「V1.0 收敛批次」一节为当前唯一活跃 backlog；旧批次全部归档为历史记录，下方旧「当前结论」「执行顺序」表述仅作历史参考。
+- V1.0 收敛批次 B0-B4 全部 `[x]`（见下节），四道发布门禁全绿；后续演进方向按 release notes「演进方向」（Routing 打分引擎 §6、Ticket 关闭前拦截 §7、薄壳模块叙事收口 §1.2 剩余项）。
+- 本文件「V1.0 收敛批次」一节为 V1 阶段台账；旧批次全部归档为历史记录，下方旧「当前结论」「执行顺序」表述仅作历史参考。
 
 ---
 
@@ -115,14 +116,14 @@
 - 下一步：B4 收口与 V1.0 发布
 - 阻塞项：无
 
-### [ ] B4 收口与 V1.0 发布（P4 批次）
+### [x] B4 收口与 V1.0 发布（P4 批次）
 
 - 任务清单：
   - [x] B4-1 `TASKS.md`/验收矩阵/文档站与 V1.0 口径统一——b9c66e0 + f0487ac（TASKS.md 重写为 V1.0 发布判断〔批次状态/收敛后产品面/已知限制如实声明〕；验收矩阵新增 §14 V1.0 收敛能力 8 行〔来源登记/版本索引/AI 反馈闭环/guest 推导/检索分析/citation/路由事件/PII 保留〕；README 实施进度段改批次口径、文档索引挂收敛计划书；文档站官网叙事复核一致无需改）
-  - [ ] B4-2 `v1.0.0` 发布：release notes 按 V1 收敛口径书写，四门禁全绿
-- 验收闸：累计验收矩阵全绿；`make release-check` + `security-check` + `observability-check` + `local-check` 全绿；27 模块不增（架构门禁）
-- 状态：`[~]`（2026-10-04 B4-1 已过；B4-2 发布进行中）
-- 下一步：B4-2 `v1.0.0` 发布
+  - [x] B4-2 `v1.0.0` 发布——58b7c4e + 16693c3 + tag v1.0.0（58b7c4e：security gate 修复〔sqlite 豁免空数据库密码警告 + release-check 透传 DB_DRIVER〕，解放 release-check SQLite 回退形态恒红灯；16693c3：release notes 按 V1 收敛口径〔版本定位/收敛面能力/核心基线/门禁证据/已知限制/演进方向〕+ README 文档索引挂当前版本；tag v1.0.0 推送）
+- 验收闸：累计验收矩阵全绿；`make release-check` + `security-check` + `observability-check` + `local-check` 全绿；27 模块不增（架构门禁）——2026-10-04 四门禁全绿（见 B4-2 登记），全量 unit+integration 测试绿，admin typecheck+build 绿，27 模块不增
+- 状态：`[x]`（2026-10-04 过闸：B4-1/B4-2 全收口，tag v1.0.0 已推送）
+- 下一步：V1 全部批次闭环；后续演进按 release notes「演进方向」（Routing 打分引擎等）
 - 阻塞项：无
 
 ---

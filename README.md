@@ -484,8 +484,9 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
   索引任务 HTTP 面、AI 首答持久化（REST+WS 旁路记录）、反馈闭环
   （`POST /api/v1/ai/feedback`，访客会话绑定）、检索分析读口、访客侧
   citation 引用行与反馈条、admin Knowledge 管理页（来源/版本/任务/分析）
-- **B4（收口与发布）⏳**：TASKS.md/验收矩阵/文档站口径统一（进行中），
-  `v1.0.0` 发布在即
+- **B4（收口与发布）✅**：TASKS.md/验收矩阵/文档站口径统一、四道发布门禁
+  全绿（2026-10-04），`v1.0.0` 已发布（见
+  [发布说明](./docs/release-notes-v1.0.0.md)）
 
 当前代码状态说明：
 
