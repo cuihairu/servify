@@ -1,5 +1,10 @@
 # 10 Module Boundaries
 
+> 状态（2026-10-04 文档对账）：迁移完成后 `services` 层已不存在，本文的三层
+> 职责表述按迁移期档案理解；当前依赖方向以
+> [current-architecture.md](../current-architecture.md) 为准，可执行规则仍是
+> `scripts/module-boundaries.rules`（持续生效）。
+
 本文件定义 `handlers`、`services`、`modules` 三层在迁移阶段的职责与依赖方向，用于支持 M5 的边界治理。
 
 可执行规则来源：

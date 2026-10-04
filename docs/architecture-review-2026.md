@@ -14,10 +14,10 @@
 4. **语言选型**：TS（Vercel AI SDK / Mastra / LangGraph.js）迭代最快、生态最广；但 Go 侧已有 **Eino**（字节，"Go 版 LangGraph"，生产验证）与 LangChainGo——**Go 内即可获得成熟 agent 能力，不必非剥 TS 服务**。这是本次评估相对初版的重要修正。
 5. **推荐渐进路线**（按架构冲击从小到大）：
    - **Step 0（可选）**：引入 **LiteLLM** 模型网关，统一多模型 / failover / 成本 / 限流，几乎不动现有 Go 架构。
-   - **P0 短期**：Go 内接通 agent loop（自研 minimal loop 或引入 Eino；脚手架已就位，2–3 周）。详见 [P0 实施计划](./implementation/13-ai-agent-loop.md)。
+   - **P0 短期**：Go 内接通 agent loop（自行开发 minimal loop 或引入 Eino；脚手架已就位，2–3 周）。详见 [P0 实施计划](./implementation/13-ai-agent-loop.md)。
    - **P1 中期**：仅当 Go 侧能力跟不上时，才把 AI 编排剥成 TS 服务（首选 Vercel AI SDK；Mastra 因供应链风险暂缓）。
    - **P2 边缘**：官网已上 Cloudflare，可顺带承载轻量边缘网关；**不建议**全栈迁 Workers。
-6. **不建议**：全盘重写、全栈迁 Cloudflare（WebRTC / 语音 / 多租户 PG 代价过大）、自研全套 agent 框架长期追新。
+6. **不建议**：全盘重写、全栈迁 Cloudflare（WebRTC / 语音 / 多租户 PG 代价过大）、自行开发全套 agent 框架长期追新。
 
 ---
 
@@ -83,7 +83,7 @@ policy hooks → guardrails.ValidateInput
 ## 4. 核心矛盾：Go 后端 vs TS agent 生态
 
 - 业务 / 并发 / 性能：**Go 强项**，modular monolith 没必要动。
-- Agent 框架迭代速度 / 生态广度：**TS 完胜**。Go 每跟一个新能力（流式协议、HITL、eval、新模型特性）都要自研，长期是负担。
+- Agent 框架迭代速度 / 生态广度：**TS 完胜**。Go 每跟一个新能力（流式协议、HITL、eval、新模型特性）都要自行开发，长期是负担。
 - 项目已有 TS SDK 团队栈；AI 编排层用 TS，能与 SDK / 前端**统一语言与类型契约**。
 
 矛盾点是真实的，但不是"二选一"——可以把 **AI 编排**单独剥出来用 TS，业务与数据留在 Go。
@@ -120,7 +120,7 @@ policy hooks → guardrails.ValidateInput
 
 ## 6. 造 vs 买（必须直面）
 
-如果目标只是"有一个能用的智能客服"，**Chatwoot + AI 扩展**（开源）或商业客服 SaaS 能省下极大人力。代价是**放弃产品差异化与数据控制权**。Servify 已经走到自研模块化单体 + 多 provider 抽象这一步，沉没成本和差异化诉求都指向"继续自研"，但这是要由决策者拍板的战略选择，不是技术选择。
+如果目标只是"有一个能用的智能客服"，**Chatwoot + AI 扩展**（开源）或商业客服 SaaS 能省下极大人力。代价是**放弃产品差异化与数据控制权**。Servify 已经走到自行开发模块化单体 + 多 provider 抽象这一步，沉没成本和差异化诉求都指向"继续自行开发"，但这是要由决策者拍板的战略选择，不是技术选择。
 
 ---
 
@@ -139,7 +139,7 @@ policy hooks → guardrails.ValidateInput
 
 - ❌ Go 后端整体重写 / 换语言
 - ❌ 全栈迁 Cloudflare Workers（语音 / WebRTC / 多租户 PG 代价过大）
-- ❌ 自研全套 agent 框架长期追新
+- ❌ 自行开发全套 agent 框架长期追新
 - ❌ 现在就上 LangGraph 这类重框架（过度工程）
 
 ---

@@ -266,7 +266,7 @@ flowchart LR
 **结论：**
 
 - 默认知识源是 pgvector 自建知识库（见下节）；Dify 是推荐的外部知识源，WeKnora 是 compatibility 适配器之一
-- 后续如果切 Milvus、Elasticsearch 或自研知识库，只需要新增 provider adapter（pgvector 已是内置 provider）
+- 后续如果切 Milvus、Elasticsearch 或自行开发知识库，只需要新增 provider adapter（pgvector 已是内置 provider）
 - AI 主流程不应该感知具体知识库实现，只依赖统一检索 contract
 
 ### 自建知识库 (pgvector)

@@ -1,6 +1,14 @@
 # 13. AI Agent Loop 接通（P0）
 
-> 状态：**计划（未实施）**
+> 状态：**主循环已接通（2026-10-04 文档对账核实）**——`query_orchestrator.go` 的
+> `Handle` 已走 `handleWithTools` agent 循环（`Chat → 执行工具 → 回灌 → 重复`，
+> `maxSteps` 上限），流式 `streamInteraction` 每步走 `ChatStream` 并经 WS 推送；
+> 生产装配（`modules/ai/delivery/enhanced_service.go`）已注册
+> `customer_lookup` / `ticket_lookup` / `handoff` 三工具并注入 `ToolExecutor`，
+> `AIRequest` 已带 `ToolPolicy{Enabled:true, MaxSteps:5}`。
+> **遗留**：工具注册时 Port 与 PermissionChecker 传 `nil`（工具调用会以
+> “port 未配置”降级），真实数据端口与权限校验接入仍是后续项；转人工关键词
+> 短路仍保留为兜底。
 > 关联：[架构评估 2026](../architecture-review-2026.md) · [02 AI 与知识](./02-ai-and-knowledge.md) · [10 模块边界](./10-module-boundaries.md)
 
 ## 背景与动机
@@ -15,19 +23,19 @@
 - 流式（`ChatStream`）接到 WebSocket（SDK 已是 ws-first）
 
 **非目标**
-- 不引入新 agent 框架（本阶段自研 minimal loop；Eino 迁移留 P1 评估）
+- 不引入新 agent 框架（本阶段自行开发 minimal loop；Eino 迁移留 P1 评估）
 - 不动业务 / 数据 / 路由 / 语音模块
 
-## 现状（接线点 · 已核对）
+## 现状（接线点 · 2026-10-04 对账核实，原「计划（未实施）」快照已过时）
 
 | 关注点 | 位置 | 现状 |
 |---|---|---|
-| 编排核心 | `internal/modules/ai/application/query_orchestrator.go::Handle` | 无 tool 循环，单次 `Chat` |
-| 工具脚手架 | 同目录 `tools.go`(`ToolRegistry`/`ToolExecutor`)、`tool_customer_lookup.go`、`tool_ticket_lookup.go`、`tool_handoff.go` | **已实现**，需 Port 注入 |
-| 装配 / 调用 | `internal/services/orchestrated_ai_enhanced.go:49`(装配) `:89`(调 `Handle`) | `AIRequest` **未带 `ToolPolicy` / Tools** |
-| 转人工 | `internal/modules/ai/application/handoff_policy.go::ShouldTransferToHuman` | 关键词启发式（"人工/客服/投诉"） |
-| 流式 | `internal/platform/llm` `ChatStream` | 已定义，但 `capabilities` `Enabled:false`，未使用 |
-| 触发入口 | `internal/services/websocket.go:531`(实时) · `internal/handlers/ai_handler.go:73`(REST `/api/v1/ai/query`) | 均走 `ProcessQuery` |
+| 编排核心 | `internal/modules/ai/application/query_orchestrator.go::Handle` | **已接循环**：`handleWithTools`（Chat → 执行工具 → 回灌 → 重复，`maxSteps` 上限） |
+| 工具脚手架 | 同目录 `tools.go`(`ToolRegistry`/`ToolExecutor`)、`tool_customer_lookup.go`、`tool_ticket_lookup.go`、`tool_handoff.go` | **已实现并注册进生产 registry**；Port/PermissionChecker 暂为 `nil`，调用降级报“port 未配置” |
+| 装配 / 调用 | `internal/modules/ai/delivery/enhanced_service.go`（装配） | `AIRequest` 已带 `ToolPolicy{Enabled:true, MaxSteps:5}`，`SetToolExecutor` 已注入 |
+| 转人工 | `internal/modules/ai/application/handoff_policy.go::ShouldTransferToHuman` | 关键词启发式（"人工/客服/投诉"），保留为兜底短路 |
+| 流式 | `internal/modules/ai/application/query_orchestrator.go::streamInteraction` | **已接**：每步 `ChatStream`，chunk 经 `modules/ai/delivery/streaming.go` → WS 推送 |
+| 触发入口 | `internal/platform/realtime/websocket_hub.go`(实时) · REST `/api/v1/ai/query` | 均走 `ProcessQuery` / `ProcessQueryStream` |
 
 ## 实施步骤
 
@@ -45,11 +53,11 @@
 7. orchestrator 单测：mock LLM 返回 `tool_call` → 验证执行 / 回灌 / 二轮收敛；`maxSteps` 上限；tool disabled 不走 loop。
 8. 集成：mock provider 跑一次多步对话 + 流式逐字呈现。
 
-## 选型说明（自研 vs Eino）
+## 选型说明（自行开发 vs Eino）
 
-- **P0 自研 minimal loop**：最轻、复用现有 `ToolExecutor` / `LLMProvider` 抽象、2–3 周。
+- **P0 自行开发 minimal loop**：最轻、复用现有 `ToolExecutor` / `LLMProvider` 抽象、2–3 周。
 - **P1 可评估迁 [Eino](https://github.com/cloudwego/eino)**（"Go 版 LangGraph"）：获得 workflow 可视化 / durable / ADK，代价是多一层框架依赖 + 学习成本。
-- **决策依据**：先自研验证闭环与产品价值，再决定是否值得换框架。
+- **决策依据**：先自行开发验证闭环与产品价值，再决定是否值得换框架。
 
 ## 风险与回退
 

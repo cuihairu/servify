@@ -1,5 +1,9 @@
 # 10 Service To Module Migration
 
+> 状态（2026-10-04 文档对账）：M1–M6 全部完成——`internal/services` 已整体
+> 移除（P3-2），业务能力收口 `internal/modules/*`（27 个一级模块封顶），
+> 本文转为迁移史档案。当前活跃状态源见 [todo.md](../../todo.md)。
+
 范围：
 
 - 旧 `services` / `handlers` 收口

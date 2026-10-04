@@ -1,6 +1,8 @@
 # 10 Migration Inventory
 
-本文件记录 `handlers -> services -> modules` 的当前迁移现状，用于支持 `10-service-to-module-migration` 的 M1 盘点阶段。
+> 状态（2026-10-04 文档对账）：迁移已完成——`internal/services` 目录已整体移除，业务能力全部收口 `internal/modules/*`（27 个一级模块封顶）。本文是 M1 盘点阶段的迁移史档案，各能力「已完成收口」的结论已兑现。
+
+本文件记录 `handlers -> services -> modules` 的迁移现状（M1 盘点快照），用于支持 `10-service-to-module-migration` 的 M1 盘点阶段。
 
 ## 当前观察结论
 

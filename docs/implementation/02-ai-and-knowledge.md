@@ -1,5 +1,12 @@
 # 02 AI And Knowledge
 
+> 状态（2026-10-04 文档对账）：A1–A8 任务清单已全部完成（`[x]`）。V1.0 收敛
+> B3 新增的 AI 首答持久化（`ai_answers`）、反馈闭环（`POST /api/v1/ai/feedback`
+> 会话绑定）、检索分析（`GET /api/v1/ai/retrieval-analytics`）与 Knowledge
+> 来源登记/文档版本/索引任务 HTTP 面不在本任务包内，状态与证据以
+> [验收矩阵 §14](../acceptance-checklist.md) 为准。工具调用遗留项（Port/
+> PermissionChecker 生产装配为 `nil`）见 [13-ai-agent-loop.md](./13-ai-agent-loop.md)。
+
 范围：
 
 - llm provider

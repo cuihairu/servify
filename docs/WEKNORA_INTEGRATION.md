@@ -438,7 +438,7 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 
 后续增量工作不再单独挂在 WeKnora 文档里，而是归到下面几个长期方向：
 
-1. 新增更多 `KnowledgeProvider` 实现，例如 pgvector、Milvus、Elasticsearch 或自研检索服务
+1. 新增更多 `KnowledgeProvider` 实现，例如 pgvector、Milvus、Elasticsearch 或自行开发检索服务
 2. 补齐文档上传、批量索引、重建索引等管理能力的统一接口
 3. 把监控、缓存、故障恢复、安全策略沉到平台层，而不是绑定到某一个知识库实现
 4. 让 Web/API/App SDK 统一消费稳定的 AI/knowledge contract，而不是感知具体 provider
