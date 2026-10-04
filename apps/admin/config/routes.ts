@@ -39,6 +39,14 @@ export default [
     component: './Conversation',
   },
 
+  // 接待工作台（V1.0 收敛 B1-3，三栏 Agent Workspace：接待主流程入口）
+  {
+    path: '/workspace',
+    name: '接待工作台',
+    icon: 'AppstoreOutlined',
+    component: './Workspace',
+  },
+
   // 客户管理
   {
     path: '/customer',
