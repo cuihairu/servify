@@ -193,9 +193,10 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 	// V1.0 收敛 B1（docs/v1-convergence-plan.md §3.1）：会话服务过程事件
 	// 流水投影——事件总线上的 conversation.* / routing.* 事件落
 	// conversation_events（Service Timeline 数据源），只读投影不进业务写路径。
-	conversationdelivery.NewEventBusSubscriber(
-		conversationinfra.NewConversationEventRepository(rt.DB),
-	).Register(rt.Bus)
+	conversationEventRepo := conversationinfra.NewConversationEventRepository(rt.DB)
+	conversationdelivery.NewEventBusSubscriber(conversationEventRepo).Register(rt.Bus)
+	// Timeline 只读面（B1-2）：与投影同一仓储，GET /omni/sessions/:id/timeline。
+	rt.ConversationTimeline = conversationdelivery.NewTimelineAdapter(conversationEventRepo)
 	if rt.Config.Security.GuestToken.Required {
 		wsHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
 		// 语音通道同源校验：同一访客 token 信任域、同一会话绑定语义。

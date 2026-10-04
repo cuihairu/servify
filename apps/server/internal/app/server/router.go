@@ -99,8 +99,10 @@ type Dependencies struct {
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	VisitorReadService       conversationdelivery.VisitorReadService
-	OIDCProvider             *oidcplatform.Provider
-	HTTPMetrics              *svcmetrics.HTTPMetrics
+	// ConversationTimeline 会话服务过程时间线只读面（V1.0 收敛 B1-2）。
+	ConversationTimeline    *conversationdelivery.TimelineAdapter
+	OIDCProvider            *oidcplatform.Provider
+	HTTPMetrics             *svcmetrics.HTTPMetrics
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

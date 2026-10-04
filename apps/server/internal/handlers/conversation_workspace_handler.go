@@ -16,11 +16,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ConversationTimelineReader 会话服务过程时间线只读面（V1.0 收敛 B1-2，
+// W6）：按会话读 conversation_events 投影流水，消费侧接口由本包定义。
+type ConversationTimelineReader interface {
+	HandleListTimeline(c *gin.Context)
+}
+
 type ConversationWorkspaceHandler struct {
 	service           conversationdelivery.HandlerService
 	realtime          realtimeplatform.RealtimeGateway
 	translator        translationdelivery.RealtimeTranslateService
 	historyTranslator translationdelivery.HistoryTranslateService
+	timeline          ConversationTimelineReader
 }
 
 // NewConversationWorkspaceHandler 创建会话工作台处理器；translator 为可选
@@ -36,6 +43,25 @@ func NewConversationWorkspaceHandler(service conversationdelivery.HandlerService
 func (h *ConversationWorkspaceHandler) WithHistoryTranslator(t translationdelivery.HistoryTranslateService) *ConversationWorkspaceHandler {
 	h.historyTranslator = t
 	return h
+}
+
+// WithTimeline 注入服务时间线只读面（V1.0 收敛 B1-2，W6：会话页可见
+// conversation_events 投影流水；未注入时端点 503 兜底）。
+func (h *ConversationWorkspaceHandler) WithTimeline(t ConversationTimelineReader) *ConversationWorkspaceHandler {
+	h.timeline = t
+	return h
+}
+
+// GetTimeline 处理 GET /omni/sessions/:id/timeline（B1-2，只读投影）。
+func (h *ConversationWorkspaceHandler) GetTimeline(c *gin.Context) {
+	if h.timeline == nil {
+		c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+			Error:   "Timeline service unavailable",
+			Message: "timeline projection is not configured",
+		})
+		return
+	}
+	h.timeline.HandleListTimeline(c)
 }
 
 func (h *ConversationWorkspaceHandler) GetSession(c *gin.Context) {
@@ -362,6 +388,7 @@ func RegisterConversationWorkspaceRoutes(r *gin.RouterGroup, handler *Conversati
 	{
 		omni.GET("/sessions/:id", handler.GetSession)
 		omni.GET("/sessions/:id/messages", handler.ListMessages)
+		omni.GET("/sessions/:id/timeline", handler.GetTimeline)
 		omni.POST("/sessions/:id/messages", handler.SendMessage)
 		omni.POST("/sessions/:id/assign", handler.AssignAgent)
 		omni.POST("/sessions/:id/transfer", handler.Transfer)

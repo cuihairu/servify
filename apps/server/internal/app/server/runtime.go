@@ -112,9 +112,11 @@ type Runtime struct {
 	OpenConversationReader   conversationdelivery.OpenConversationReader
 	GuestTokenIssuer         conversationdelivery.GuestTokenIssuer
 	VisitorReadService       conversationdelivery.VisitorReadService
-	OIDCProvider             *oidcplatform.Provider
-	HTTPMetrics              *svcmetrics.HTTPMetrics
-	BusinessMetrics          *svcmetrics.BusinessMetrics
+	// ConversationTimeline 会话服务过程时间线只读面（V1.0 收敛 B1-2）。
+	ConversationTimeline    *conversationdelivery.TimelineAdapter
+	OIDCProvider            *oidcplatform.Provider
+	HTTPMetrics             *svcmetrics.HTTPMetrics
+	BusinessMetrics         *svcmetrics.BusinessMetrics
 
 	// Private fields for worker access only
 	dailyStatsRunner *analyticsdelivery.DailyStatsRunner
@@ -319,6 +321,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		OpenConversationReader:              rt.OpenConversationReader,
 		GuestTokenIssuer:                    rt.GuestTokenIssuer,
 		VisitorReadService:                  rt.VisitorReadService,
+		ConversationTimeline:                rt.ConversationTimeline,
 		OIDCProvider:                        rt.OIDCProvider,
 		HTTPMetrics:                         rt.HTTPMetrics,
 	}
