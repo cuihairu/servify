@@ -596,3 +596,21 @@ type PushToken struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+// ConversationEvent 是会话服务过程的事件流水（Service Timeline），
+// V1.0 收敛（docs/v1-convergence-plan.md §3.1/§19）落库源：
+// 由事件总线上的 conversation.* / routing.* / ticket.* 事件投影写入，
+// 只读消费（Timeline 展示），不进入任何业务写路径。
+// ActorType 取值：system | customer | agent | ai | routing。
+type ConversationEvent struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	TenantID       string    `gorm:"index:idx_conv_events_scope" json:"tenant_id"`
+	WorkspaceID    string    `gorm:"index:idx_conv_events_scope" json:"workspace_id"`
+	ConversationID string    `gorm:"index:idx_conv_events_conversation;size:64;not null" json:"conversation_id"`
+	EventType      string    `gorm:"index:idx_conv_events_conversation;size:64;not null" json:"event_type"`
+	ActorType      string    `gorm:"size:32;default:''" json:"actor_type"`
+	ActorID        string    `gorm:"size:64;default:''" json:"actor_id"`
+	Summary        string    `gorm:"type:text" json:"summary"`
+	Payload        string    `gorm:"type:text" json:"payload"`
+	OccurredAt     time.Time `gorm:"not null" json:"occurred_at"`
+}

@@ -34,3 +34,11 @@ type OpenSessionListQuery struct {
 	Page     int
 	PageSize int
 }
+
+// ConversationEventRepository 会话服务过程事件流水的持久化口（Service
+// Timeline，V1.0 收敛 B1）：事件总线投影写入，Timeline 只读消费，
+// 不进入业务写路径。
+type ConversationEventRepository interface {
+	Append(ctx context.Context, event domain.ConversationEvent) error
+	ListByConversation(ctx context.Context, conversationID string, limit, offset int) ([]domain.ConversationEvent, error)
+}

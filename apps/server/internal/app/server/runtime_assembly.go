@@ -190,6 +190,12 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 	// 访客未读数/已读游标（M3 §10 #3）：同一 conversation service 与
 	// 会话存在性口径（首条消息持久化建行），免认证 REST 面与 §10 #1 同构。
 	rt.VisitorReadService = conversationdelivery.NewVisitorReadAdapter(conversationService, rt.DB)
+	// V1.0 收敛 B1（docs/v1-convergence-plan.md §3.1）：会话服务过程事件
+	// 流水投影——事件总线上的 conversation.* / routing.* 事件落
+	// conversation_events（Service Timeline 数据源），只读投影不进业务写路径。
+	conversationdelivery.NewEventBusSubscriber(
+		conversationinfra.NewConversationEventRepository(rt.DB),
+	).Register(rt.Bus)
 	if rt.Config.Security.GuestToken.Required {
 		wsHub.SetTokenValidator(conversationdelivery.NewGuestTokenValidator(rt.Config.JWT.Secret))
 		// 语音通道同源校验：同一访客 token 信任域、同一会话绑定语义。

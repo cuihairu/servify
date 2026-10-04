@@ -56,6 +56,8 @@ func MigrationModels() []interface{} {
 		&models.SuggestionExposureLog{},
 		&models.PushToken{},
 		&models.TranslationLanguagePreference{},
+		// V1.0 收敛 B1：会话服务过程事件流水（Service Timeline）
+		&models.ConversationEvent{},
 	}
 }
 
