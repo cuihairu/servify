@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	authapp "servify/apps/server/internal/modules/auth/application"
 	authdelivery "servify/apps/server/internal/modules/auth/delivery"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
@@ -364,83 +362,6 @@ func TestCvhOpenConversationMessagesGaps(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "Failed to list messages")
 	})
-}
-
-// ---------------------------------------------------------------------------
-// StatisticsExportHandler 长尾分支
-// ---------------------------------------------------------------------------
-
-func cvhExportRouter(analytics *unitAnalyticsService, reader SatisfactionStatsReader, logger *logrus.Logger) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	RegisterStatisticsRoutes(&r.RouterGroup, NewStatisticsHandler(analytics, nil), NewStatisticsExportHandler(analytics, reader, logger))
-	return r
-}
-
-func cvhExportGet(r *gin.Engine, query string) *httptest.ResponseRecorder {
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, query, nil)
-	r.ServeHTTP(w, req)
-	return w
-}
-
-func TestCvhStatisticsExportBuildRowsErrors(t *testing.T) {
-	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
-
-	cases := []struct {
-		name      string
-		analytics *unitAnalyticsService
-		want      int
-	}{
-		{"time_range", &unitAnalyticsService{timeRangeErr: errors.New("boom")}, http.StatusInternalServerError},
-		{"agent_performance", &unitAnalyticsService{agentPerfErr: errors.New("boom")}, http.StatusInternalServerError},
-		{"ticket_category", &unitAnalyticsService{categoryErr: errors.New("boom")}, http.StatusInternalServerError},
-		{"customer_source", &unitAnalyticsService{sourceErr: errors.New("boom")}, http.StatusInternalServerError},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := cvhExportRouter(tc.analytics, &stubSatisfactionStatsReader{}, logger)
-			w := cvhExportGet(r, "/statistics/export?type="+tc.name+"&from=2026-01-01&to=2026-01-02")
-			assert.Equal(t, tc.want, w.Code)
-			assert.Contains(t, w.Body.String(), "Failed to export statistics")
-			assert.Contains(t, w.Body.String(), "boom")
-		})
-	}
-}
-
-func TestCvhStatisticsExportTicketPriority(t *testing.T) {
-	analytics := &unitAnalyticsService{category: []analyticscontract.CategoryStats{{Category: "billing", Count: 7}}}
-	r := cvhExportRouter(analytics, &stubSatisfactionStatsReader{}, nil)
-	w := cvhExportGet(r, "/statistics/export?type=ticket_priority&from=2026-01-01&to=2026-01-02")
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "billing")
-}
-
-func TestCvhStatisticsExportSatisfactionGaps(t *testing.T) {
-	logger := logrus.New()
-	logger.SetLevel(logrus.ErrorLevel)
-
-	t.Run("satisfaction service unavailable", func(t *testing.T) {
-		r := cvhExportRouter(&unitAnalyticsService{}, nil, logger)
-		w := cvhExportGet(r, "/statistics/export?type=satisfaction&from=2026-01-01&to=2026-01-02")
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "satisfaction service unavailable")
-	})
-
-	t.Run("satisfaction reader error", func(t *testing.T) {
-		reader := &stubSatisfactionStatsReader{err: errors.New("boom")}
-		r := cvhExportRouter(&unitAnalyticsService{}, reader, logger)
-		w := cvhExportGet(r, "/statistics/export?type=satisfaction&from=2026-01-01&to=2026-01-02")
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to export statistics")
-	})
-}
-
-func TestCvhStatisticsBuildRowsUnsupportedType(t *testing.T) {
-	h := NewStatisticsExportHandler(nil, nil, nil)
-	_, _, err := h.buildRows(context.Background(), "bogus-type", time.Now(), time.Now())
-	assert.ErrorContains(t, err, `unsupported export type "bogus-type"`)
 }
 
 // ---------------------------------------------------------------------------

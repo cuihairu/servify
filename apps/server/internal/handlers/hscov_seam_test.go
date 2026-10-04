@@ -13,11 +13,9 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
-	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/xuri/excelize/v2"
 )
 
 func httptestGetHSCOV(r *gin.Engine, target string) *httptest.ResponseRecorder {
@@ -98,101 +96,6 @@ func TestHSCOVTicketsExportCSVWriteErrors(t *testing.T) {
 		r := dxcExportRouter(dxcExportSvc(nil, []models.Ticket{*dxcExportTicketFixture()}))
 		w := dxcDo(r, http.MethodGet, "/tickets/export", "")
 		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to write csv") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-}
-
-// --- statistics 导出：CSV 行写入 / Flush 错误、XLSX 各步骤错误 ---
-
-func TestHSCOVStatisticsExportCSVWriteErrors(t *testing.T) {
-	t.Run("csv row write error surfaces 500", func(t *testing.T) {
-		hscovFailingCSVSeam(t)
-		analytics := &unitAnalyticsService{timeRange: []analyticscontract.TimeRangeStats{
-			{Date: strings.Repeat("D", 6000), Tickets: 1},
-		}}
-		r := exportTestRouter(analytics, &stubSatisfactionStatsReader{})
-		w := doGet(r, "/statistics/export?type=time_range&from=2026-04-08&to=2026-04-09&format=csv")
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-
-	t.Run("csv flush error surfaces 500", func(t *testing.T) {
-		hscovFailingCSVSeam(t)
-		r := exportTestRouter(&unitAnalyticsService{}, &stubSatisfactionStatsReader{})
-		w := doGet(r, "/statistics/export?type=time_range&from=2026-04-08&to=2026-04-09&format=csv")
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-}
-
-// TestHSCOVStatisticsExportRenderErrorLogs：render 错误且配置了 logger 时
-// 记录错误日志（Errorf 分支）后仍返回 500。
-func TestHSCOVStatisticsExportRenderErrorLogs(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	hscovFailingCSVSeam(t)
-	logger := logrus.New()
-	logger.SetOutput(io.Discard)
-	r := gin.New()
-	RegisterStatisticsRoutes(&r.RouterGroup, NewStatisticsHandler(&unitAnalyticsService{}, nil),
-		NewStatisticsExportHandler(&unitAnalyticsService{}, &stubSatisfactionStatsReader{}, logger))
-	w := doGet(r, "/statistics/export?type=time_range&from=2026-04-08&to=2026-04-09&format=csv")
-	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-	}
-}
-
-func TestHSCOVStatisticsExportXLSXErrors(t *testing.T) {
-	analytics := &unitAnalyticsService{agentPerf: []analyticscontract.AgentPerformanceStats{{AgentName: "a"}}}
-	path := "/statistics/export?type=agent_performance&format=xlsx"
-
-	t.Run("header SetSheetRow error", func(t *testing.T) {
-		hscovSetSeam(t, &hookExcelizeSetSheetRow, func(*excelize.File, string, string, interface{}) error {
-			return errors.New("boom: set sheet row")
-		})
-		r := exportTestRouter(analytics, &stubSatisfactionStatsReader{})
-		w := doGet(r, path)
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-
-	t.Run("cell name error", func(t *testing.T) {
-		hscovSetSeam(t, &hookExcelizeCellName, func(int, int, ...bool) (string, error) {
-			return "", errors.New("boom: cell name")
-		})
-		r := exportTestRouter(analytics, &stubSatisfactionStatsReader{})
-		w := doGet(r, path)
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-
-	t.Run("row SetSheetRow error", func(t *testing.T) {
-		calls := 0
-		hscovSetSeam(t, &hookExcelizeSetSheetRow, func(f *excelize.File, sheet, cell string, v interface{}) error {
-			calls++ // 第一次是表头（放行），第二次是数据行（报错）
-			if calls > 1 {
-				return errors.New("boom: set row")
-			}
-			return f.SetSheetRow(sheet, cell, v)
-		})
-		r := exportTestRouter(analytics, &stubSatisfactionStatsReader{})
-		w := doGet(r, path)
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
-			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
-		}
-	})
-
-	t.Run("file write error", func(t *testing.T) {
-		hscovSetSeam(t, &hookExcelizeWrite, func(*excelize.File, io.Writer) error {
-			return errors.New("boom: write file")
-		})
-		r := exportTestRouter(analytics, &stubSatisfactionStatsReader{})
-		w := doGet(r, path)
-		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "Failed to render export") {
 			t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
 		}
 	})

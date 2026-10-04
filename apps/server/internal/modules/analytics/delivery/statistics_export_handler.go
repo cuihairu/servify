@@ -1,16 +1,21 @@
-package handlers
+package delivery
+
+// 统计数据导出（CSV / Excel）——V1.0 收敛 B2-3 自 internal/handlers
+// 迁移进 analytics 模块。CSV/XLSX 渲染注入点为本包私有 seam（与顶层
+// handlers/seams.go 的 audit/tickets seam 互不影响）。
 
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
-	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 
 	"github.com/gin-gonic/gin"
@@ -19,26 +24,38 @@ import (
 )
 
 // SatisfactionStatsReader 是导出端点消费满意度统计的窄接口
-// （由 satisfaction 模块 service 经 handlers.SatisfactionService 满足）。
+// （由 satisfaction 模块 service 满足）。
 type SatisfactionStatsReader interface {
 	GetSatisfactionStats(ctx context.Context, dateFrom, dateTo *time.Time) (*satisfactiondelivery.SatisfactionStatsResponse, error)
 }
 
 // StatisticsExportHandler 统计数据导出处理器（CSV / Excel）。
 type StatisticsExportHandler struct {
-	statsService analyticsdelivery.HandlerService
+	statsService HandlerService
 	satisfaction SatisfactionStatsReader
 	logger       *logrus.Logger
 }
 
 // NewStatisticsExportHandler 创建统计导出处理器。
-func NewStatisticsExportHandler(statsService analyticsdelivery.HandlerService, satisfaction SatisfactionStatsReader, logger *logrus.Logger) *StatisticsExportHandler {
+func NewStatisticsExportHandler(statsService HandlerService, satisfaction SatisfactionStatsReader, logger *logrus.Logger) *StatisticsExportHandler {
 	return &StatisticsExportHandler{
 		statsService: statsService,
 		satisfaction: satisfaction,
 		logger:       logger,
 	}
 }
+
+// 仅供测试注入的包级 seam：默认值即生产行为，生产代码不得运行时改写。
+var (
+	newExportCSVWriter            = csv.NewWriter
+	hookExportExcelizeSetSheetRow = func(f *excelize.File, sheet, cell string, slice interface{}) error {
+		return f.SetSheetRow(sheet, cell, slice)
+	}
+	hookExportExcelizeCellName = func(col, row int, abs ...bool) (string, error) {
+		return excelize.CoordinatesToCellName(col, row, abs...)
+	}
+	hookExportExcelizeWrite = func(f *excelize.File, w io.Writer) error { return f.Write(w) }
+)
 
 var statisticsExportTypes = map[string]bool{
 	"time_range":        true,
@@ -66,12 +83,12 @@ const (
 // @Param from query string false "开始日期 YYYY-MM-DD（默认近 30 天；time_range 上限 366 天）"
 // @Param to query string false "结束日期 YYYY-MM-DD"
 // @Success 200 {file} file
-// @Failure 400 {object} ErrorResponse
+// @Failure 400 {object} statisticsErrorResponse
 // @Router /api/statistics/export [get]
 func (h *StatisticsExportHandler) ExportStatistics(c *gin.Context) {
 	exportType := strings.TrimSpace(c.Query("type"))
 	if !statisticsExportTypes[exportType] {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid export type", Message: "type 必须是 time_range、agent_performance、ticket_category、ticket_priority、customer_source 或 satisfaction"})
+		c.JSON(http.StatusBadRequest, statisticsErrorResponse{Error: "Invalid export type", Message: "type 必须是 time_range、agent_performance、ticket_category、ticket_priority、customer_source 或 satisfaction"})
 		return
 	}
 	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
@@ -79,13 +96,13 @@ func (h *StatisticsExportHandler) ExportStatistics(c *gin.Context) {
 		format = "csv"
 	}
 	if format != "csv" && format != "xlsx" {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid format", Message: "format 必须是 csv 或 xlsx"})
+		c.JSON(http.StatusBadRequest, statisticsErrorResponse{Error: "Invalid format", Message: "format 必须是 csv 或 xlsx"})
 		return
 	}
 
 	from, to, err := parseExportRange(c, exportType)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid date range", Message: err.Error()})
+		c.JSON(http.StatusBadRequest, statisticsErrorResponse{Error: "Invalid date range", Message: err.Error()})
 		return
 	}
 
@@ -94,7 +111,7 @@ func (h *StatisticsExportHandler) ExportStatistics(c *gin.Context) {
 		if h.logger != nil {
 			h.logger.Errorf("Failed to export statistics %s: %v", exportType, err)
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to export statistics", Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, statisticsErrorResponse{Error: "Failed to export statistics", Message: err.Error()})
 		return
 	}
 
@@ -112,7 +129,7 @@ func (h *StatisticsExportHandler) ExportStatistics(c *gin.Context) {
 		if h.logger != nil {
 			h.logger.Errorf("Failed to render %s export: %v", exportType, err)
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to render export", Message: err.Error()})
+		c.JSON(http.StatusInternalServerError, statisticsErrorResponse{Error: "Failed to render export", Message: err.Error()})
 		return
 	}
 
@@ -259,7 +276,7 @@ func categoryRows(labelHeader, countHeader string, items []analyticscontract.Cat
 func buildCSV(headers []string, rows [][]string) ([]byte, error) {
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF")
-	w := newCSVWriter(&buf)
+	w := newExportCSVWriter(&buf)
 	// 表头列数固定（各类报表 2~8 列），远小于 csv.Writer 内部 4KB bufio
 	// 缓冲，Write 不会失败；行写入与 Flush 错误在下方处理。
 	_ = w.Write(headers)
@@ -277,20 +294,20 @@ func buildXLSX(headers []string, rows [][]string) ([]byte, error) {
 	f := excelize.NewFile()
 	defer f.Close()
 	sheet := "Sheet1"
-	if err := hookExcelizeSetSheetRow(f, sheet, "A1", &headers); err != nil {
+	if err := hookExportExcelizeSetSheetRow(f, sheet, "A1", &headers); err != nil {
 		return nil, err
 	}
 	for i, row := range rows {
-		cell, err := hookExcelizeCellName(1, i+2)
+		cell, err := hookExportExcelizeCellName(1, i+2)
 		if err != nil {
 			return nil, err
 		}
-		if err := hookExcelizeSetSheetRow(f, sheet, cell, &row); err != nil {
+		if err := hookExportExcelizeSetSheetRow(f, sheet, cell, &row); err != nil {
 			return nil, err
 		}
 	}
 	var buf bytes.Buffer
-	if err := hookExcelizeWrite(f, &buf); err != nil {
+	if err := hookExportExcelizeWrite(f, &buf); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

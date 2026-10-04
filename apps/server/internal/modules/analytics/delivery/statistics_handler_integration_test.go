@@ -1,13 +1,18 @@
 //go:build integration
 // +build integration
 
-package handlers
+package delivery
+
+// V1.0 收敛 B2-3：statistics handler 集成测试（自 internal/handlers
+// statistics_handler_test.go 迁移，sqlite 真库打底）。
 
 import (
 	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,14 +23,21 @@ import (
 
 	"servify/apps/server/internal/models"
 	analyticsapp "servify/apps/server/internal/modules/analytics/application"
-	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	analyticsinfra "servify/apps/server/internal/modules/analytics/infra"
 )
+
+var statisticsMemDBSeq atomic.Uint32
+
+// uniqueStatisticsMemDSN 给命名内存库 DSN 追加全局唯一序号，
+// 避免 -count 重跑或 -run 反复执行命中同一命名库。
+func uniqueStatisticsMemDSN(base string) string {
+	return base + "_" + strconv.FormatUint(uint64(statisticsMemDBSeq.Add(1)), 10) + "?mode=memory&cache=shared"
+}
 
 func newTestDBForStatistics(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:statistics_handler")), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueStatisticsMemDSN("file:statistics_handler")), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -52,27 +64,27 @@ func newTestDBForStatistics(t *testing.T) *gorm.DB {
 }
 
 // newStatisticsHandlerService 用 module adapter 构造 handler 依赖。
-func newStatisticsHandlerService(db *gorm.DB, logger *logrus.Logger) *analyticsdelivery.HandlerServiceAdapter {
-	return analyticsdelivery.NewHandlerServiceAdapter(analyticsapp.NewService(analyticsinfra.NewGormRepository(db)))
+func newStatisticsHandlerService(db *gorm.DB, logger *logrus.Logger) *HandlerServiceAdapter {
+	return NewHandlerServiceAdapter(analyticsapp.NewService(analyticsinfra.NewGormRepository(db)))
+}
+
+func newStatisticsIntegrationRouter(t *testing.T, db *gorm.DB) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	logger := logrus.New()
+	logger.SetLevel(logrus.WarnLevel)
+	svc := newStatisticsHandlerService(db, logger)
+	r := gin.New()
+	RegisterStatisticsRoutes(&r.RouterGroup, NewStatisticsHandler(svc, logger), NewStatisticsExportHandler(svc, nil, logger))
+	return r
 }
 
 func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
-
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/dashboard", h.GetDashboardStats)
-	r.GET("/api/statistics/time-range", h.GetTimeRangeStats)
+	r := newStatisticsIntegrationRouter(t, newTestDBForStatistics(t))
 
 	// Dashboard should succeed even with empty DB.
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/dashboard", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/dashboard", nil)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("dashboard status=%d body=%s", w.Code, w.Body.String())
@@ -80,7 +92,7 @@ func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
 
 	// Missing params should fail fast.
 	w2 := httptest.NewRecorder()
-	req2, _ := http.NewRequest(http.MethodGet, "/api/statistics/time-range", nil)
+	req2, _ := http.NewRequest(http.MethodGet, "/statistics/time-range", nil)
 	r.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusBadRequest {
 		t.Fatalf("time-range missing params status=%d body=%s", w2.Code, w2.Body.String())
@@ -89,7 +101,7 @@ func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
 	// Valid params should return 200.
 	today := time.Now().Format("2006-01-02")
 	w3 := httptest.NewRecorder()
-	req3, _ := http.NewRequest(http.MethodGet, "/api/statistics/time-range?start_date="+today+"&end_date="+today, nil)
+	req3, _ := http.NewRequest(http.MethodGet, "/statistics/time-range?start_date="+today+"&end_date="+today, nil)
 	r.ServeHTTP(w3, req3)
 	if w3.Code != http.StatusOK {
 		t.Fatalf("time-range ok status=%d body=%s", w3.Code, w3.Body.String())
@@ -97,22 +109,12 @@ func TestStatisticsHandler_Dashboard_And_TimeRange(t *testing.T) {
 }
 
 func TestStatisticsHandler_GetAgentPerformanceStats_SQLiteError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
-
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/agent-performance", h.GetAgentPerformanceStats)
+	r := newStatisticsIntegrationRouter(t, newTestDBForStatistics(t))
 
 	// SQLite doesn't support PostgreSQL's EXTRACT function, so this returns empty array
 	today := time.Now().Format("2006-01-02")
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/agent-performance?start_date="+today+"&end_date="+today, nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/agent-performance?start_date="+today+"&end_date="+today, nil)
 	r.ServeHTTP(w, req)
 
 	// Should return 200 with empty array (graceful degradation for SQLite)
@@ -130,20 +132,10 @@ func TestStatisticsHandler_GetAgentPerformanceStats_SQLiteError(t *testing.T) {
 }
 
 func TestStatisticsHandler_GetTicketCategoryStats(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
-
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/ticket-category", h.GetTicketCategoryStats)
+	r := newStatisticsIntegrationRouter(t, newTestDBForStatistics(t))
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/ticket-category", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/ticket-category", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -152,20 +144,10 @@ func TestStatisticsHandler_GetTicketCategoryStats(t *testing.T) {
 }
 
 func TestStatisticsHandler_GetTicketPriorityStats(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
-
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/ticket-priority", h.GetTicketPriorityStats)
+	r := newStatisticsIntegrationRouter(t, newTestDBForStatistics(t))
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/ticket-priority", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/ticket-priority", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -174,20 +156,10 @@ func TestStatisticsHandler_GetTicketPriorityStats(t *testing.T) {
 }
 
 func TestStatisticsHandler_GetCustomerSourceStats(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
-
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/customer-source", h.GetCustomerSourceStats)
+	r := newStatisticsIntegrationRouter(t, newTestDBForStatistics(t))
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/customer-source", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/customer-source", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -196,11 +168,7 @@ func TestStatisticsHandler_GetCustomerSourceStats(t *testing.T) {
 }
 
 func TestStatisticsHandler_GetRemoteAssistTicketStats(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
 	db := newTestDBForStatistics(t)
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
 
 	now := time.Now()
 	if err := db.Create(&models.Ticket{Title: "ra-open", CustomerID: 1, Status: "open", Source: "remote_assist", Tags: "remote_assist", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
@@ -214,14 +182,10 @@ func TestStatisticsHandler_GetRemoteAssistTicketStats(t *testing.T) {
 		t.Fatalf("seed non remote assist ticket: %v", err)
 	}
 
-	svc := newStatisticsHandlerService(db, logger)
-	h := NewStatisticsHandler(svc, logger)
-
-	r := gin.New()
-	r.GET("/api/statistics/remote-assist-tickets", h.GetRemoteAssistTicketStats)
+	r := newStatisticsIntegrationRouter(t, db)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/api/statistics/remote-assist-tickets", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/statistics/remote-assist-tickets", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {

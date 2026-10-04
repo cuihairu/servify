@@ -3,6 +3,7 @@ package server
 import (
 	"servify/apps/server/internal/handlers"
 	"servify/apps/server/internal/middleware"
+	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/usersecurity"
@@ -63,9 +64,11 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 
 	statisticsAPI := api.Group("/")
 	statisticsAPI.Use(middleware.RequireResourcePermission("statistics"))
-	handlers.RegisterStatisticsRoutes(statisticsAPI,
-		handlers.NewStatisticsHandler(deps.StatisticsHandlerService, deps.Logger),
-		handlers.NewStatisticsExportHandler(deps.StatisticsHandlerService, deps.SatisfactionService, deps.Logger))
+	// V1.0 收敛 B2-3：statistics 面收口进 analytics 模块（原顶层 handlers
+	// 的 statistics_*.go 已迁入 modules/analytics/delivery）。
+	analyticsdelivery.RegisterStatisticsRoutes(statisticsAPI,
+		analyticsdelivery.NewStatisticsHandler(deps.StatisticsHandlerService, deps.Logger),
+		analyticsdelivery.NewStatisticsExportHandler(deps.StatisticsHandlerService, deps.SatisfactionService, deps.Logger))
 
 	slaAPI := api.Group("/")
 	slaAPI.Use(middleware.RequireResourcePermission("sla"))

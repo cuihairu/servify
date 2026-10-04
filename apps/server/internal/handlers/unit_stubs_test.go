@@ -10,7 +10,6 @@ import (
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
-	analyticscontract "servify/apps/server/internal/modules/analytics/contract"
 	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
 	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
@@ -330,76 +329,6 @@ func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *knowled
 }
 
 func (s *unitKnowledgeService) Delete(ctx context.Context, id uint) error { return s.deleteErr }
-
-// ---- analytics ----
-
-type unitAnalyticsService struct {
-	dashboard    *analyticscontract.DashboardStats
-	timeRange    []analyticscontract.TimeRangeStats
-	agentPerf    []analyticscontract.AgentPerformanceStats
-	category     []analyticscontract.CategoryStats
-	remoteAssist *analyticscontract.RemoteAssistTicketStats
-	dashboardErr error
-	timeRangeErr error
-	agentPerfErr error
-	categoryErr  error
-	sourceErr    error
-	remoteErr    error
-	updateErr    error
-}
-
-func (s *unitAnalyticsService) GetDashboardStats(ctx context.Context) (*analyticscontract.DashboardStats, error) {
-	if s.dashboardErr != nil {
-		return nil, s.dashboardErr
-	}
-	return s.dashboard, nil
-}
-
-func (s *unitAnalyticsService) GetTimeRangeStats(ctx context.Context, startDate, endDate time.Time) ([]analyticscontract.TimeRangeStats, error) {
-	if s.timeRangeErr != nil {
-		return nil, s.timeRangeErr
-	}
-	return s.timeRange, nil
-}
-
-func (s *unitAnalyticsService) GetAgentPerformanceStats(ctx context.Context, startDate, endDate time.Time, limit int) ([]analyticscontract.AgentPerformanceStats, error) {
-	if s.agentPerfErr != nil {
-		return nil, s.agentPerfErr
-	}
-	return s.agentPerf, nil
-}
-
-func (s *unitAnalyticsService) GetTicketCategoryStats(ctx context.Context, startDate, endDate time.Time) ([]analyticscontract.CategoryStats, error) {
-	if s.categoryErr != nil {
-		return nil, s.categoryErr
-	}
-	return s.category, nil
-}
-
-func (s *unitAnalyticsService) GetTicketPriorityStats(ctx context.Context, startDate, endDate time.Time) ([]analyticscontract.CategoryStats, error) {
-	if s.categoryErr != nil {
-		return nil, s.categoryErr
-	}
-	return s.category, nil
-}
-
-func (s *unitAnalyticsService) GetCustomerSourceStats(ctx context.Context) ([]analyticscontract.CategoryStats, error) {
-	if s.sourceErr != nil {
-		return nil, s.sourceErr
-	}
-	return s.category, nil
-}
-
-func (s *unitAnalyticsService) GetRemoteAssistTicketStats(ctx context.Context) (*analyticscontract.RemoteAssistTicketStats, error) {
-	if s.remoteErr != nil {
-		return nil, s.remoteErr
-	}
-	return s.remoteAssist, nil
-}
-
-func (s *unitAnalyticsService) UpdateDailyStats(ctx context.Context, date time.Time) error {
-	return s.updateErr
-}
 
 // ---- routing / session transfer ----
 
