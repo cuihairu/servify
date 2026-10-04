@@ -150,6 +150,78 @@ curl http://localhost:8080/api/knowledge-docs?page=1&page_size=10 \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+## 来源登记与版本（V1.0 收敛 B3-1a）
+
+文档可挂接「知识来源」（`knowledge_sources`：markdown / website / pdf / faq / api 元数据登记），并带版本号（标题或内容变更自增，纯元数据不动）。
+
+### 登记来源 / 挂接到文档
+
+```bash
+# 登记来源
+curl -X POST http://localhost:8080/api/knowledge-docs/sources \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"name": "官方帮助中心", "type": "website", "description": "帮助中心爬取"}'
+
+# 创建/更新文档时挂接（source_id=0 表示未归属来源）
+curl -X POST http://localhost:8080/api/knowledge-docs \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"title": "退款政策", "content": "...", "source_id": 1}'
+```
+
+删除来源时若仍被文档引用会被拒绝（引用守卫）。
+
+### 索引任务
+
+索引任务落 `knowledge_index_jobs` 并关联执行时文档版本，状态与错误可见、失败可重试：
+
+```bash
+# 重建索引（排队并同步执行一次）
+curl -X POST http://localhost:8080/api/knowledge-docs/42/index-jobs \
+  -H "Authorization: Bearer $TOKEN"
+
+# 查看文档的索引任务（状态/版本/错误）
+curl http://localhost:8080/api/knowledge-docs/42/index-jobs?limit=20 \
+  -H "Authorization: Bearer $TOKEN"
+
+# 重试失败任务（done 任务重跑 = 按当前版本重建）
+curl -X POST http://localhost:8080/api/knowledge-docs/index-jobs/<job_id>/retry \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## 检索分析与反馈闭环（V1.0 收敛 B3-1b）
+
+AI 首答旁路记录到 `ai_answers`（query/answer/confidence/strategy/来源快照），反馈落 `answer_feedback`；记录失败静默不阻塞作答。
+
+### 反馈端点
+
+```bash
+curl -X POST http://localhost:8080/api/v1/ai/feedback \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"answer_id": 123, "helpful": true, "comment": "很有用"}'
+```
+
+- 认证即可调用（坐席与访客两面共用）；访客（guest token）强制会话绑定——token 的 `sid` 必须与答案的会话一致；
+- 来源快照只落 document_id/title/score，不落内容全文。
+
+### 检索分析读口
+
+```bash
+curl "http://localhost:8080/api/v1/ai/retrieval-analytics?days=7&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+返回窗口内（默认 7 天，上限 90 天）的 top 问答、零命中问题（知识缺口信号）、低置信问题（置信 < 0.65）与反馈计数。
+
+## 管理面板
+
+管理端（apps/admin）知识库菜单提供完整管理面：
+
+- **文档管理**：文档 CRUD、来源与版本列、挂源、重建索引、任务抽屉（失败重试）；
+- **来源与索引**：`knowledge_sources` 登记（类型枚举校验，删除引用守卫）；
+- **检索分析**：窗口统计（引用命中率/低置信/平均置信/反馈计数）+ 三个榜单。
+
+访客侧 widget 在 AI 终帧带 `answer_id` 与 `sources` 时渲染引用行（`📄 标题 · relevance 0.91`）与"Was this helpful?"反馈条（需嵌入方注入 guest token）。
+
 ## 验收测试
 
 ### 运行验收脚本
@@ -225,25 +297,24 @@ curl http://localhost:9997/v1/embeddings \
 
 ## 架构说明
 
-知识库功能由以下组件构成：
+知识库功能由以下组件构成（V1.0 收敛后为模块化结构，`apps/server/` 下）：
 
+- **knowledge 模块**（domain → application → infra/delivery 分层）：
+  - `internal/modules/knowledge/domain`: 实体（Document / Source / IndexJob）
+  - `internal/modules/knowledge/application`: 业务规则（版本语义、来源枚举校验、引用守卫、索引任务）
+  - `internal/modules/knowledge/infra`: GORM 仓储
+  - `internal/modules/knowledge/delivery`: HTTP 契约适配
+- **ai 模块**（反馈闭环与检索分析）：
+  - `internal/modules/ai/application/feedback.go`: 反馈校验（访客会话绑定）与检索分析聚合
+  - `internal/modules/ai/infra/answer_repository.go`: ai_answers / answer_feedback 仓储
+  - `internal/modules/ai/delivery/`: 记录路径（REST/WS 旁路观测）与反馈/分析端点
 - **EmbeddingProvider**: 将文本转换为向量
-  - `internal/platform/embedding/provider.go`: 接口定义
-  - `internal/platform/embedding/openai`: OpenAI 实现
-  - `internal/platform/embedding/tei`: TEI 实现
-  - `internal/platform/embedding/xinference`: Xinference 实现
-
+  - `internal/platform/embedding/`: 接口与 openai / tei / xinference 实现
 - **KnowledgeProvider**: 向量存储和检索
   - `internal/platform/knowledgeprovider/pgvector`: pgvector 实现
-
-- **Service**: 业务逻辑层
-  - `internal/service/knowledge.go`: 知识库服务
-
-- **API**: HTTP 接口
-  - `internal/app/api/knowledge.go`: 知识库 API 端点
 
 ## 相关文档
 
 - [配置文档](./config/README.md)
 - [API 文档](./docs/api.md)
-- [数据库模型](./apps/server/internal/models/knowledge.go)
+- [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)（§5.3 反馈闭环 / §8 Knowledge 产品化）
