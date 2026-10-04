@@ -108,11 +108,11 @@
 
 - 任务清单（实施切片）：
   - [x] B3-1a knowledge 来源/版本/索引收口（后端）——a66da78（`knowledge_sources` 表〔markdown/website/pdf/faq/api 元数据登记〕+ sources CRUD〔类型枚举校验/删除引用守卫/tenant+workspace scope 隔离〕；`knowledge_docs.source_id`/`version` 挂源与版本号〔标题/内容变更自增、纯元数据不动、存量回填 1〕；`knowledge_index_jobs.document_version` 版本关联；索引任务 HTTP 收口 POST /:id/index-jobs + retry + 按文档列表〔此前 QueueIndexJob/RunIndexJob 无生产调用方〕；迁移 000018 versioned SQL + AutoMigrate 双路径；服务层 + sqlite 集成测试全绿）
-  - [ ] B3-1b 检索分析 + AI 答案持久化（后端）：`ai_answers`（query/answer/confidence/strategy/sources JSON/answer_id 回传，REST+WS 同源 hook）+ `answer_feedback` 落库 + `POST /api/v1/ai/feedback`（§5.3）+ 检索分析读口（top 问答/无命中率/低置信率，从 ai_answers 聚合，§8.3）
+  - [x] B3-1b 检索分析 + AI 答案持久化（后端）——0a7a152（`ai_answers`/`answer_feedback` 领域模型 + 迁移 000019 双路径；记录路径旁路观测：REST ProcessQuery 与 WS ProcessQueryStream〔流式仅终帧落库〕经 AnswerStore 落库，失败静默不阻塞作答，REST 响应与 WS ai-response 帧透出 `answer_id`；`POST /api/v1/ai/feedback` 认证即可 + end_user 强制会话绑定〔§5.3〕；`GET /api/v1/ai/retrieval-analytics` 从 ai_answers 聚合 top 问答/无命中率/低置信率/反馈计数〔§8.3，窗口默认 7 天上限 90 天〕；`LowConfidenceThreshold=0.65` 与 HandoffConfidenceThreshold 对齐；来源快照不落 content 全文；服务层/infra 集成/HTTP 面测试全绿）
   - [ ] B3-2 citation 可视化与反馈入口（前端）：Knowledge 管理页（sources/版本/索引状态/检索分析展示）+ 坐席侧与访客侧 Sources+relevance 渲染（📄 doc relevance 0.91 形态）+ widget "Was this helpful?" 调 feedback 端点 + `README_KNOWLEDGE.md` 更新
 - 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链；`README_KNOWLEDGE.md` 更新
-- 状态：`[ ]`
-- 下一步：B3-1a knowledge 来源/版本/索引收口
+- 状态：`[~]`（2026-10-04 B3-1a/B3-1b 后端已过；剩 B3-2 前端）
+- 下一步：B3-2 citation 可视化与反馈入口（前端）
 - 阻塞项：无
 
 ### [ ] B4 收口与 V1.0 发布（P4 批次）
