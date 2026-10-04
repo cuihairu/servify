@@ -90,14 +90,14 @@
 ### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
 
 - 任务清单：
-  - [ ] B2-1 `routing/application` Scorer 接口与多因子评分（skill/language/availability/workload/priority/tier/channel/SLA）+ `routing_assignments` 落库
+  - [x] B2-1 `routing/application` Scorer 接口与多因子评分（skill/language/availability/workload/priority/tier/channel/SLA）+ `routing_assignments` 落库——fff2116（scorer.go 八因子加权聚合：权重可配、同分按 AgentID 升序可复现；models.RoutingAssignment 新表 + 迁移注册；executeTransfer 为最终分配打分，AssignAgentCommand.Scoring 落库；推荐入口 RecommendAgents 只推荐不执行 §6.2-3）＋ 97f947a（集成验收：`make routing-scoring-acceptance` 全绿——分配评分/八因子/策略/理由经 GET /api/session-transfer/scoring/:session_id 可见，transfer_records 事实双记录）；全量 go test 0 失败
   - [ ] B2-2 Customer Data Boundary：PII 清单 / retention 配置 / 数据导出 / 删除（含关联擦除）管理面
   - [ ] B2-3 statistics 旧 handler 收口进 analytics 模块（含导出）
   - [ ] B2-4 核心业务表 `tenant_id`/`workspace_id` 回填迁移（conversation/customer/routing/ticket 评论，空库+既有库两态可逆）
-- 验收闸：计划书 §6.3 三例（技能/语种权重可复现、空闲坐席优先、分配理由可见）；PII 用例全过；迁移两态可逆
-- 额外收口（B1 过闸发现）：统一分配事件发布路径——等待队列进队（addToWaitingQueue）与 conversation 直派接管（conversation service.AssignAgent）目前不发 routing.* 事件，Timeline 的 routing 投影只能覆盖 routing.Service.AssignAgent 路径；B2-1 落 Scorer 时一并对齐
-- 状态：`[ ]`
-- 下一步：B2-1 Scorer 接口与多因子评分
+- 验收闸：计划书 §6.3 三例（技能/语种权重可复现✅ 单测、空闲坐席优先✅ 单测+集成、分配理由可见✅ 集成验收）；PII 用例全过；迁移两态可逆
+- 额外收口（B1 过闸发现）：统一分配事件发布路径——等待队列进队（addToWaitingQueue）与 conversation 直派接管（conversation service.AssignAgent）目前不发 routing.* 事件，Timeline 的 routing 投影只能覆盖 routing.Service.AssignAgent 路径；连同自动化分派评分（deregister 分派仍用 agent 模块三级分配，评分随 executeTransfer 审计）归入 B2 gate
+- 状态：`[ ]`（B2-1 已闭环）
+- 下一步：B2-2 Customer Data Boundary（PII 清单 / retention / 导出 / 删除）
 - 阻塞项：无
 
 ### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
