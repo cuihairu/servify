@@ -72,14 +72,14 @@
 ### [ ] B1 客服核心产品闭环（P1 批次，计划书最高 ROI）
 
 - 任务清单：
-  - [ ] B1-1 `conversation_events` 落库与投影接线（新表/仓储/事件订阅，Timeline 数据源）
+  - [x] B1-1 `conversation_events` 落库与投影接线（新表/仓储/事件订阅，Timeline 数据源）——commit 5b557ce：models.ConversationEvent + domain/application/infra 仓储链 + delivery.EventBusSubscriber（conversation.created / routing.agent_assigned / routing.transfer_completed 三事件按 AggregateID 前缀投影），装配挂 wireConversationRuntime；`go build ./apps/server/...`、`go vet`、`go test ./apps/server/internal/modules/conversation/...` 全绿
   - [ ] B1-2 Timeline API 与会话页 Timeline 组件（admin）
   - [ ] B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）——计划书 §4 W1-W8 验收
   - [ ] B1-4 薄壳模块叙事降级（README/文档站：sla/satisfaction/shift/macro/custom_field/gamification/suggestion 归位子能力）
 - 验收闸：W1-W8 全过；e2e 访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化通过；`make release-check` 绿
-- 状态：`[ ]`
-- 下一步：等 B0 过闸
-- 阻塞项：B0
+- 状态：`[ ]`（B1-1 已闭环）
+- 下一步：B1-2 Timeline API 与会话页 Timeline 组件；ticket 补 `conversation_id` 列 + ticket.* 事件投影接入
+- 阻塞项：无
 
 ### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
 
