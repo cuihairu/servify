@@ -1,82 +1,68 @@
-# Servify v0.1.0 真实状态审计
+# Servify V1.0 发布判断
 
-> 最后更新: 2026-04-18
-> 这份文件不再把“测试通过”直接等同于“发版完成”。
+> 最后更新: 2026-10-04
+> 本文件只记录当前真实发布判断，不维护"全部完成"式总表；切片级状态源是
+> [todo.md](./todo.md)，逐项证据链是
+> [docs/acceptance-checklist.md](./docs/acceptance-checklist.md)。
 
 ## 当前结论
 
-`v0.1.0` 现在不适合发布。
+`v1.0.0` 按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md) 的口径收口：
 
-原因不是“核心功能完全没写”，而是以下三类问题同时存在：
+- 实施批次 B1（Domain 边界/迁移双路径）✅、B2（Agent Workspace/Routing
+  事件统一/PII 与保留策略）✅、B3（Knowledge 产品化/AI 首答持久化与反馈
+  闭环）✅ 均已过闸，提交号与过闸证据见 todo.md 各批次登记；
+- B4（口径统一与发布）进行中：TASKS.md/验收矩阵/文档站口径统一（本文件
+  即 B4-1 的一部分），随后 `v1.0.0` 发布；
+- 27 个一级模块不增（架构门禁），薄壳模块已按「核心 7 模块的子能力」
+  叙事收口（README 业务模块边界表）。
 
-1. `TASKS.md`、`todo.md`、`docs/acceptance-checklist.md`、`docs/release-notes-v0.1.0.md` 的完成口径不一致。
-2. 仓库里有一批“接口存在 + 测试通过”，但离“真实发布闭环”还有差距的能力。
-3. `0.1.0` blocker 里仍有 `部分通过`、`未验` 或实现语义不够稳定的项。
+## V1.0 产品面（收敛后口径）
 
-## 目前可以确认的最小事实
+产品中心是 7 个核心模块：`conversation`（唯一中心聚合）、`routing`、
+`ticket`、`ai`、`knowledge`、`agent`、`customer`。`sla`/`satisfaction`/
+`custom_field`/`shift`/`macro`/`gamification`/`suggestion`/`quality` 为
+薄壳子能力，不再单列产品叙事。冻结面（不新增能力、不进产品文案）：
+`api_key`、`email`、`push`、`webhook`、`translation`、`app_integration`、
+`auth`（薄壳）、`voice` 及其扩展。
 
-这些能力可以保留“已具备基础能力”表述：
+V1.0 收敛新增/收口的能力面（全部带自动化证据，运行证据见验收矩阵）：
 
-- `make build`、`make release-check CONFIG=./config.yml`、`GET /health`、`GET /ready`、`GET /metrics` 已有明确证据。
-- 核心客服主链路已具备可演示性：工作台、会话详情、消息收发、指派、转接、关闭至少已有自动化与部分人工运行证据。
-- 工单主闭环具备基础可用性：创建、列表、详情、更新、指派、评论、关闭、统计、导出都已有实现和自动化覆盖。
-- Auth session 基础链路不是空壳：登录、refresh、sessions、logout-current、logout-others 已有实现和自动化覆盖。
-- 实时基础能力已具备：WebSocket、WebRTC stats / connections、平台消息路由统计有入口和验证。
+- AI 反馈闭环：`POST /api/v1/ai/feedback`（认证即可，访客 guest token
+  会话绑定）、ai_answers / answer_feedback 持久化（REST+WS 旁路记录）、
+  检索分析读口 `GET /api/v1/ai/retrieval-analytics`；
+- Knowledge 产品化：knowledge_sources 来源登记（枚举/引用守卫）、文档
+  版本（内容变更自增）、索引任务 HTTP 面（排队/执行/重试/版本关联）、
+  admin 管理页（来源/版本/任务抽屉/检索分析）；
+- citation 可视化：坐席侧知识建议面板（relevance 渲染）、访客 widget
+  sources 引用行 + "Was this helpful?" 反馈条；
+- Routing 事件统一：直派接管发 `routing.agent_assigned`、改派发
+  `routing.transfer_completed`（统一分配事件路径）；
+- PII 与保留策略：导出/擦除数据边界、保留策略过期擦除（B2 gate）。
 
-## 当前不能再写成“已完成”的部分
+## 已知限制（如实声明，不阻塞 V1.0 发布口径）
 
-这些项不是“没有代码”，但不能再按“完成验收”描述：
+- 外部 Knowledge Provider（RAGFlow/WeKnora/Dify）的 real 模式端到端
+  证据依赖真实外部环境凭证；mock/兼容模式已有全链自动化与留痕（验收
+  矩阵 §3）。
+- 语音（SIP/PSTN/转写）冻结为扩展边界，V1 不投资源。
+- 多渠道接入（Telegram/WeCom/WhatsApp 等）是 P2+ 扩展，不在 V1。
 
-- AI / Knowledge
-  - `upload`、`sync` 在验收矩阵里仍是 `部分通过`
-  - fallback 仍主要依赖内存态知识库与规则回复
-  - provider 抽象存在未实现空壳与成功语义过宽的问题
-  - `knowledge-docs` 已开始持久化 `provider_id/external_id`，`Create/Update` 会同步当前外部 knowledge provider，`Delete` 也会优先使用外部 `document_id`
-  - Dify 删除路径已恢复为真实能力，当前能基于持久化的外部 `document_id` 精准删除对应 dataset 文档
-  - WeKnora 删除能力仍未闭环，现阶段依然只能按“能力不支持则显式失败并保留本地文档”的保守策略处理
-- 后台基础运营面
-  - customer、macro、custom-field、statistics、satisfaction、automation 等模块大多只有基础 CRUD / 查询面
-  - handler 普遍较薄，错误分类粗，不适合按“高可信完成”描述
-- 会话转接运营面
-  - 验收矩阵中仍为 `未验`
-  - 队列处理与取消等链路存在“部分失败仍返回成功”的风险
-- 满意度后台全量运营面
-  - 验收矩阵中仍为 `未验`
-  - 错误处理仍依赖字符串匹配，稳定性一般
-- 宏 / 自动化 / 排班 / 自定义字段
-  - 这些能力可以继续留在 backlog，不应再在这个文件里写成“全部完成”
-
-## 当前 blocker
-
-按 `docs/release-0.1.0-acceptance.md` 与 `todo.md`，当前至少还有以下 blocker 未闭环：
-
-1. AI / Knowledge 至少 1 条真实 provider 主路径达到 `通过`
-2. Auth 自助 session 链路补齐真实发布证据
-3. 会话工作台主操作补齐到 `通过`
-4. 运行基线最小事实全部回填
-5. Ticket 主闭环高频操作按发布口径补齐证据
-
-## 不可信的旧结论
-
-以下旧结论已不再成立：
-
-- “已完成 37 项”
-- “待完成 0 项”
-- “测试通过即可视为功能完成”
-
-这些说法会误导后续发布判断，现废止。
-
-## 后续维护规则
+## 维护规则（沿用）
 
 1. 以 `todo.md` 和 `docs/acceptance-checklist.md` 作为真实状态源。
-2. 只有同时具备代码、自动化、运行、数据四类证据的功能，才允许标记为 `通过`。
-3. `TASKS.md` 不再维护“全部完成”式总表，只记录当前真实发布判断。
+2. 只有同时具备代码、自动化、运行、数据四类证据的功能，才允许标记为
+   `通过`。
+3. `TASKS.md` 不再维护"全部完成"式总表，只记录当前真实发布判断。
 
 ## 参考验证命令
 
 ```bash
-go test -count=1 ./apps/server/...
-go test -count=1 -tags=integration ./apps/server/internal/handlers ./apps/server/internal/services
+go -C apps/server test -count=1 ./...
+go -C apps/server test -count=1 -tags=integration ./internal/...
 make build
 make release-check CONFIG=./config.yml
+make security-check
+make observability-check
+make local-check
 ```
