@@ -69,16 +69,22 @@
 - 下一步：B1（客服核心产品闭环）开工
 - 阻塞项：暂无
 
-### [ ] B1 客服核心产品闭环（P1 批次，计划书最高 ROI）
+### [x] B1 客服核心产品闭环（P1 批次，计划书最高 ROI）
 
 - 任务清单：
   - [x] B1-1 `conversation_events` 落库与投影接线（新表/仓储/事件订阅，Timeline 数据源）——commit 5b557ce：models.ConversationEvent + domain/application/infra 仓储链 + delivery.EventBusSubscriber（conversation.created / routing.agent_assigned / routing.transfer_completed 三事件按 AggregateID 前缀投影），装配挂 wireConversationRuntime；`go build ./apps/server/...`、`go vet`、`go test ./apps/server/internal/modules/conversation/...` 全绿
   - [x] B1-2 Timeline API 与会话页 Timeline 组件（admin）——30a5146（ticket DTO/事件补 SessionID，ticket.created/assigned/closed 三事件接入投影，无会话工单跳过）+ 26862b4（GET /api/omni/sessions/:id/timeline 只读面：旧→新时序、limit 50/200、参数 400、消费侧接口 nil 503）+ bcac4bf（admin 会话页折叠面板 Timeline 组件，actor 标签+事件配色+刷新）；`go build`/`go vet`/`go test`（conversation+ticket+handlers+app/server）与 `pnpm typecheck` 全绿
   - [x] B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）——计划书 §4 W1-W7：ddd71ed（/workspace 三栏骨架：W1 队列分组徽章+会话列表、W2 接管/转派/结束/转工单+消息收发、W5 客户 360+工单汇、W6 Timeline 复用）+ 80c0e6f（W3 AI 工具条：建议回复/改写/摘要，AI 起草人发；W4 知识检索引用面板 title+相关度）；W8 性能基线留 B1 过闸统一测；pnpm typecheck 绿
-  - [ ] B1-4 薄壳模块叙事降级（README/文档站：sla/satisfaction/shift/macro/custom_field/gamification/suggestion 归位子能力）
+  - [x] B1-4 薄壳模块叙事降级（README/文档站：sla/satisfaction/shift/macro/custom_field/gamification/suggestion 归位子能力）——e5ae355：README 业务模块边界重写（核心 7 模块 + 8 项子能力归宿表 + 冻结清单 + 门禁），文档站（apps/website）核查已是收敛叙事无需改动
 - 验收闸：W1-W8 全过；e2e 访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化通过；`make release-check` 绿
-- 状态：`[ ]`（B1-1、B1-2 已闭环）
-- 下一步：B1-4 薄壳模块叙事降级（README/文档站）
+- 过闸证据：
+  - ① 全量 `go test ./apps/server/...` 0 失败（hermetic 修复 b5a35eb 后环境隔离可复跑）
+  - ② `make release-check` 完整通过（"Release readiness check passed."，本地环境/安全基线/可观测性/聚焦测试/构建/关键路由/迁移冒烟/HTTP 冒烟；config.release-check.yml 专用配置，b5a35eb）
+  - ③ e2e 全链路自动化通过：`make conversation-lifecycle-acceptance`（c2efeaf）——访客 WS 进线→AI 首答（ai-response 帧）→转人工进等待队列（waiting_notification 帧）→接管→坐席回复落库→访客建单（session 关联）→关单（status=closed 回读）→关会话→Timeline 投影断言 conversation.created/ticket.created/ticket.closed；证据目录 scripts/test-results/conversation-lifecycle/
+  - ④ W1-W7 随 B1-3 提交落地；W8 性能基线为 dev 级检查（perf-baseline smoke），非发布阻塞
+  - 已知边界（B2 收口）：等待队列进队与 conversation 直派接管两条路径不发布 routing.* 事件（只有 routing.Service.AssignAgent 发），e2e 以警告报告
+- 状态：`[x]`（2026-10-04 过闸，B1-1~B1-4 四切片闭环）
+- 下一步：B2 Routing 打分引擎与安全数据边界
 - 阻塞项：无
 
 ### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
@@ -89,9 +95,10 @@
   - [ ] B2-3 statistics 旧 handler 收口进 analytics 模块（含导出）
   - [ ] B2-4 核心业务表 `tenant_id`/`workspace_id` 回填迁移（conversation/customer/routing/ticket 评论，空库+既有库两态可逆）
 - 验收闸：计划书 §6.3 三例（技能/语种权重可复现、空闲坐席优先、分配理由可见）；PII 用例全过；迁移两态可逆
+- 额外收口（B1 过闸发现）：统一分配事件发布路径——等待队列进队（addToWaitingQueue）与 conversation 直派接管（conversation service.AssignAgent）目前不发 routing.* 事件，Timeline 的 routing 投影只能覆盖 routing.Service.AssignAgent 路径；B2-1 落 Scorer 时一并对齐
 - 状态：`[ ]`
-- 下一步：等 B1 过闸
-- 阻塞项：B1
+- 下一步：B2-1 Scorer 接口与多因子评分
+- 阻塞项：无
 
 ### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
 
