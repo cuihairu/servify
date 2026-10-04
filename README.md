@@ -445,6 +445,7 @@ Jaeger 默认地址：`http://localhost:16686`
 - [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux 本地开发约定
 - [docs/contributing.md](./docs/contributing.md) - 提交前自检与协作约定
 - [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 产品与架构收敛改造计划书（当前口径）**
+- [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 发布说明（当前版本）**
 - [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 历史发布说明（V1.0 已收敛，仅存档）
 
 ### 📋 实施 backlog
