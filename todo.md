@@ -113,7 +113,7 @@
   - [x] B3-2 citation 可视化与反馈入口（前端）——f7b99e5 + 78361f1 + 3a570ce（f7b99e5：widget ai-response 终帧渲染 sources 引用行〔📄 标题 · relevance 0.91，§8.4〕+"Was this helpful?"反馈条〔带 answer_id 且嵌入方注入 guest token 时出现，POST /api/v1/ai/feedback Bearer 认证，§5.3〕；配套 `derivePrincipalKind` 对 typ=guest 推导 end_user——REST 面访客会话绑定校验生效，WS 握手独立 validator 不受影响，推导/中间件测试全绿。78361f1：admin Knowledge 管理页〔列表/详情来源+版本列、挂源编辑、重建索引、任务抽屉失败重试；新增来源与索引页、检索分析页〔窗口 7/30/90 天 + top 问答/零命中/低置信榜单 + 反馈计数〕〕；typecheck+build 绿。3a570ce：README_KNOWLEDGE.md 收口新能力面 + 架构路径修正。坐席侧 citation 沿用 Workspace W4 知识建议面板既有 relevance 渲染）
 - 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链（来源登记页→文档挂源+版本→索引任务状态/重试→检索分析榜单→widget 反馈条落 answer_feedback，REST/WS 记录路径同源）；`README_KNOWLEDGE.md` 更新 ✓
 - 状态：`[x]`（2026-10-04 过闸：B3-1a/B3-1b/B3-2 三切片 + 验收闸全链；全量 unit+integration 测试绿，admin typecheck+build 绿）
-- 下一步：B4 收口与 V1.0 发布
+- 下一步：B4 收口与 V1.0 发布（B4 已于 2026-10-04 过闸，`v1.0.0` 发布）
 - 阻塞项：无
 
 ### [x] B4 收口与 V1.0 发布（P4 批次）
