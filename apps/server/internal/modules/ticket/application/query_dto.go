@@ -11,6 +11,9 @@ type TicketDTO struct {
 	Title      string     `json:"title"`
 	CustomerID uint       `json:"customer_id"`
 	AgentID    *uint      `json:"agent_id,omitempty"`
+	// SessionID 是工单来源会话（conversation）的 ID；V1.0 收敛 B1-2：
+	// ticket.* 事件借它投影进 conversation_events（Service Timeline）。
+	SessionID  *string    `json:"session_id,omitempty"`
 	Category   string     `json:"category"`
 	Priority   string     `json:"priority"`
 	Status     string     `json:"status"`
@@ -70,6 +73,7 @@ func MapTicket(ticket domain.Ticket) TicketDTO {
 		Title:      ticket.Title,
 		CustomerID: ticket.CustomerID,
 		AgentID:    ticket.AgentID,
+		SessionID:  ticket.SessionID,
 		Category:   ticket.Category,
 		Priority:   ticket.Priority,
 		Status:     ticket.Status,

@@ -8,13 +8,14 @@ import (
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/conversation/domain"
 	routingapp "servify/apps/server/internal/modules/routing/application"
+	ticketapp "servify/apps/server/internal/modules/ticket/application"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
 // EventBusSubscriber 把会话服务过程事件投影为 ConversationEvent 流水
 // （Service Timeline，V1.0 收敛 B1，docs/v1-convergence-plan.md §3.1）。
-// 只做只读投影，不进入业务写路径；ticket.* 事件在工单补齐
-// conversation_id 关联后接入（B1-2 切片）。
+// 只做只读投影，不进入业务写路径；ticket.* 事件借工单的 SessionID
+// （来源会话）归入同一会话的 Timeline（B1-2）。
 type EventBusSubscriber struct {
 	repo conversationapp.ConversationEventRepository
 }
@@ -48,6 +49,21 @@ func (s *EventBusSubscriber) Register(bus eventbus.Bus) {
 			conversationID: conversationIDFromRoutingEvent,
 			actorType:      "routing",
 			summary:        "转接完成",
+		},
+		ticketapp.TicketCreatedEventName: {
+			conversationID: conversationIDFromTicketEvent,
+			actorType:      "system",
+			summary:        "创建工单",
+		},
+		ticketapp.TicketAssignedEventName: {
+			conversationID: conversationIDFromTicketEvent,
+			actorType:      "system",
+			summary:        "工单分配",
+		},
+		ticketapp.TicketClosedEventName: {
+			conversationID: conversationIDFromTicketEvent,
+			actorType:      "system",
+			summary:        "关闭工单",
 		},
 	}
 	for name, projection := range registrations {
@@ -84,6 +100,17 @@ func conversationIDFromEvent(event eventbus.Event) string {
 // （"routing:<sessionID>"）提取会话（session）ID。
 func conversationIDFromRoutingEvent(event eventbus.Event) string {
 	return trimAggregatePrefix(event.AggregateID(), "routing:")
+}
+
+// conversationIDFromTicketEvent 从工单事件提取来源会话 ID：工单事件聚合
+// 是 ticket:<id>，会话关联走事件携带的 SessionID；无来源会话（邮件建单
+// 等）返回空，投影跳过（Timeline 只覆盖会话视角）。
+func conversationIDFromTicketEvent(event eventbus.Event) string {
+	ticketEvent, ok := event.(ticketapp.TicketEvent)
+	if !ok || ticketEvent.SessionID == nil {
+		return ""
+	}
+	return *ticketEvent.SessionID
 }
 
 func trimAggregatePrefix(aggregateID string, prefix string) string {

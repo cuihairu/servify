@@ -379,6 +379,7 @@ func (o *TicketOrchestrator) publishTicketModuleEvent(ctx context.Context, name 
 		Title:      ticket.Title,
 		CustomerID: ticket.CustomerID,
 		AgentID:    ticket.AgentID,
+		SessionID:  ticket.SessionID,
 		Category:   ticket.Category,
 		Priority:   ticket.Priority,
 		Status:     ticket.Status,

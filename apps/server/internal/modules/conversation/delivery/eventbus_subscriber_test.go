@@ -8,6 +8,7 @@ import (
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/conversation/domain"
 	routingapp "servify/apps/server/internal/modules/routing/application"
+	ticketapp "servify/apps/server/internal/modules/ticket/application"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
@@ -30,15 +31,20 @@ func TestEventBusSubscriber_ProjectsTimelineEvents(t *testing.T) {
 	NewEventBusSubscriber(repo).Register(bus)
 
 	ctx := context.Background()
+	sessionID := "conv-1"
 	_ = bus.Publish(ctx, conversationapp.NewConversationEvent(
 		conversationapp.ConversationCreatedEventName, "conv-1", nil))
 	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(
 		routingapp.RoutingAgentAssignedEventName, "conv-1", nil))
 	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(
 		routingapp.RoutingTransferCompletedEventName, "conv-1", nil))
+	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ticketapp.TicketCreatedEventName,
+		ticketapp.TicketDTO{ID: 7, SessionID: &sessionID}))
+	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ticketapp.TicketClosedEventName,
+		ticketapp.TicketDTO{ID: 7, SessionID: &sessionID}))
 
-	if len(repo.appended) != 3 {
-		t.Fatalf("expected 3 projections, got %d", len(repo.appended))
+	if len(repo.appended) != 5 {
+		t.Fatalf("expected 5 projections, got %d", len(repo.appended))
 	}
 
 	byType := map[string]domain.ConversationEvent{}
@@ -58,6 +64,14 @@ func TestEventBusSubscriber_ProjectsTimelineEvents(t *testing.T) {
 	if transferred.ConversationID != "conv-1" || transferred.ActorType != "routing" {
 		t.Errorf("transfer projection wrong: %+v", transferred)
 	}
+	ticketCreated := byType[ticketapp.TicketCreatedEventName]
+	if ticketCreated.ConversationID != "conv-1" || ticketCreated.Summary != "创建工单" {
+		t.Errorf("ticket created projection wrong: %+v", ticketCreated)
+	}
+	ticketClosed := byType[ticketapp.TicketClosedEventName]
+	if ticketClosed.ConversationID != "conv-1" || ticketClosed.Summary != "关闭工单" || ticketClosed.ActorType != "system" {
+		t.Errorf("ticket closed projection wrong: %+v", ticketClosed)
+	}
 	if transferred.OccurredAt.IsZero() {
 		t.Error("OccurredAt should be populated from the event")
 	}
@@ -67,6 +81,20 @@ func TestEventBusSubscriber_ProjectsTimelineEvents(t *testing.T) {
 	}
 	if payload["event_id"] == "" {
 		t.Error("payload should archive the original event_id")
+	}
+}
+
+func TestEventBusSubscriber_TicketWithoutSessionSkipped(t *testing.T) {
+	bus := eventbus.NewInMemoryBus()
+	repo := &fakeEventRepo{}
+	NewEventBusSubscriber(repo).Register(bus)
+
+	// 无来源会话的工单（邮件建单等）不投影进 Timeline。
+	_ = bus.Publish(context.Background(), ticketapp.NewTicketEvent(
+		ticketapp.TicketCreatedEventName, ticketapp.TicketDTO{ID: 9}))
+
+	if len(repo.appended) != 0 {
+		t.Fatalf("expected no projection for session-less ticket, got %d", len(repo.appended))
 	}
 }
 
