@@ -31,6 +31,7 @@ func NewService(db *gorm.DB, provider knowledgeprovider.KnowledgeProvider) *know
 	return knowledgeapp.NewService(
 		knowledgeinfra.NewGormDocumentRepository(db),
 		knowledgeinfra.NewGormIndexJobRepository(db),
+		knowledgeinfra.NewGormSourceRepository(db),
 		provider,
 	)
 }
@@ -81,6 +82,7 @@ func (a *HandlerServiceAdapter) Create(ctx context.Context, req *knowledgeapp.Kn
 		Category: req.Category,
 		Tags:     req.Tags,
 		IsPublic: req.IsPublic,
+		SourceID: req.SourceID,
 	})
 	if err != nil {
 		return nil, err
@@ -98,6 +100,7 @@ func (a *HandlerServiceAdapter) Update(ctx context.Context, id uint, req *knowle
 		Category: req.Category,
 		Tags:     req.Tags,
 		IsPublic: req.IsPublic,
+		SourceID: req.SourceID,
 	})
 	if err != nil {
 		return nil, err
@@ -128,6 +131,8 @@ func knowledgeDocFromDomain(doc *knowledgedomain.Document) (*knowledgedomain.Kno
 		// 外部索引、删除按外部 id 清理」能否被调用方直接观测（验收证据依赖）。
 		ProviderID: doc.ProviderID,
 		ExternalID: doc.ExternalID,
+		SourceID:   doc.SourceID,
+		Version:    doc.Version,
 		CreatedAt:  doc.CreatedAt,
 		UpdatedAt:  doc.UpdatedAt,
 	}, nil

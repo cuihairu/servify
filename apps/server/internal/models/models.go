@@ -496,6 +496,10 @@ type KnowledgeDoc = knowledgedomain.KnowledgeDoc
 // 此处保留类型别名供 legacy 引用方过渡使用。
 type KnowledgeIndexJob = knowledgedomain.KnowledgeIndexJob
 
+// KnowledgeSource 知识来源登记。定义在 modules/knowledge/domain（B3-1a §8.1），
+// 别名供 migrate 注册引用。
+type KnowledgeSource = knowledgedomain.KnowledgeSource
+
 // TenantConfig stores tenant-scoped configuration overrides.
 type TenantConfig struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`

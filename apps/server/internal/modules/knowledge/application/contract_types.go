@@ -10,6 +10,8 @@ type KnowledgeDocCreateRequest struct {
 	Category string   `json:"category"`
 	Tags     []string `json:"tags"`
 	IsPublic bool     `json:"is_public"`
+	// SourceID 来源登记归属（B3-1a §8.1），0=未挂来源。
+	SourceID uint `json:"source_id"`
 }
 
 // KnowledgeDocUpdateRequest 更新知识文档请求契约。
@@ -19,6 +21,8 @@ type KnowledgeDocUpdateRequest struct {
 	Category *string   `json:"category"`
 	Tags     *[]string `json:"tags"`
 	IsPublic *bool     `json:"is_public"`
+	// SourceID 调整来源归属；nil=不改动。
+	SourceID *uint `json:"source_id"`
 }
 
 // KnowledgeDocListRequest 知识文档列表请求契约。

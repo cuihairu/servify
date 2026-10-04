@@ -14,13 +14,15 @@ import (
 type Service struct {
 	documents DocumentRepository
 	indexJobs IndexJobRepository
+	sources   SourceRepository
 	provider  knowledgeprovider.KnowledgeProvider
 }
 
-func NewService(documents DocumentRepository, indexJobs IndexJobRepository, provider knowledgeprovider.KnowledgeProvider) *Service {
+func NewService(documents DocumentRepository, indexJobs IndexJobRepository, sources SourceRepository, provider knowledgeprovider.KnowledgeProvider) *Service {
 	return &Service{
 		documents: documents,
 		indexJobs: indexJobs,
+		sources:   sources,
 		provider:  provider,
 	}
 }
@@ -34,6 +36,9 @@ func (s *Service) CreateDocument(ctx context.Context, req CreateDocumentRequest)
 	if content == "" {
 		return nil, fmt.Errorf("content required")
 	}
+	if err := s.validateSource(ctx, req.SourceID); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	doc := &domain.Document{
 		ID:        strings.TrimSpace(req.ID),
@@ -42,6 +47,8 @@ func (s *Service) CreateDocument(ctx context.Context, req CreateDocumentRequest)
 		Category:  strings.TrimSpace(req.Category),
 		Tags:      compact(req.Tags),
 		IsPublic:  req.IsPublic,
+		SourceID:  req.SourceID,
+		Version:   1,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -62,11 +69,20 @@ func (s *Service) UpdateDocument(ctx context.Context, id string, req UpdateDocum
 	if err != nil {
 		return nil, err
 	}
+	contentChanged := false
 	if req.Title != nil {
-		doc.Title = strings.TrimSpace(*req.Title)
+		trimmed := strings.TrimSpace(*req.Title)
+		if trimmed != doc.Title {
+			contentChanged = true
+		}
+		doc.Title = trimmed
 	}
 	if req.Content != nil {
-		doc.Content = strings.TrimSpace(*req.Content)
+		trimmed := strings.TrimSpace(*req.Content)
+		if trimmed != doc.Content {
+			contentChanged = true
+		}
+		doc.Content = trimmed
 	}
 	if req.Category != nil {
 		doc.Category = strings.TrimSpace(*req.Category)
@@ -82,6 +98,17 @@ func (s *Service) UpdateDocument(ctx context.Context, id string, req UpdateDocum
 	}
 	if doc.Content == "" {
 		return nil, fmt.Errorf("content required")
+	}
+	if req.SourceID != nil {
+		if err := s.validateSource(ctx, *req.SourceID); err != nil {
+			return nil, err
+		}
+		doc.SourceID = *req.SourceID
+	}
+	// 版本号（B3-1a §8.2）：标题/内容变更才自增——这两者决定外部索引内容；
+	// 纯元数据改动（分类/标签/可见性/来源）不产生新版本。
+	if contentChanged {
+		doc.Version++
 	}
 	doc.UpdatedAt = time.Now()
 	if err := s.documents.Update(ctx, doc); err != nil {
@@ -205,16 +232,20 @@ func (s *Service) RunIndexJob(ctx context.Context, req RunIndexJobRequest) (*Ind
 	completed := time.Now()
 	job.Status = domain.IndexJobDone
 	job.Error = ""
+	// 版本关联（B3-1a §8.2）：任务落执行时文档版本，管理页可对照"文档当前
+	// 版本 vs 已索引版本"发现落后。
+	job.DocumentVersion = doc.Version
 	job.UpdatedAt = completed
 	job.CompletedAt = &completed
 	if err := s.indexJobs.Update(ctx, job); err != nil {
 		return nil, err
 	}
 	return &IndexJobResult{
-		JobID:       job.ID,
-		DocumentID:  job.DocumentID,
-		Status:      string(job.Status),
-		CompletedAt: job.CompletedAt,
+		JobID:           job.ID,
+		DocumentID:      job.DocumentID,
+		Status:          string(job.Status),
+		DocumentVersion: job.DocumentVersion,
+		CompletedAt:     job.CompletedAt,
 	}, nil
 }
 
@@ -268,4 +299,113 @@ func (s *Service) syncDocument(ctx context.Context, doc *domain.Document) error 
 		doc.ExternalID = strings.TrimSpace(externalID)
 	}
 	return nil
+}
+
+// validateSource 校验文档挂载的来源登记（B3-1a §8.1）：0=未挂来源合法；
+// 非 0 必须已登记（未装配 sources 仓储时报错，避免静默丢归属）。
+func (s *Service) validateSource(ctx context.Context, sourceID uint) error {
+	if sourceID == 0 {
+		return nil
+	}
+	if s.sources == nil {
+		return fmt.Errorf("knowledge sources repository is not configured")
+	}
+	if _, err := s.sources.Get(ctx, sourceID); err != nil {
+		return fmt.Errorf("knowledge source %d not found", sourceID)
+	}
+	return nil
+}
+
+// CreateSource 登记知识来源（§8.1：markdown/website/PDF/FAQ/API 元数据）。
+func (s *Service) CreateSource(ctx context.Context, req CreateSourceRequest) (*domain.Source, error) {
+	name := strings.TrimSpace(req.Name)
+	sourceType := strings.TrimSpace(req.Type)
+	if name == "" {
+		return nil, fmt.Errorf("source name required")
+	}
+	if !isKnownSourceType(sourceType) {
+		return nil, fmt.Errorf("source type must be one of: %s", strings.Join(domain.SourceTypes, "/"))
+	}
+	now := time.Now()
+	source := &domain.Source{
+		Name:        name,
+		Type:        sourceType,
+		Description: strings.TrimSpace(req.Description),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := s.sources.Create(ctx, source); err != nil {
+		return nil, err
+	}
+	return source, nil
+}
+
+// ListSources 列来源登记（可选按 type 过滤）。
+func (s *Service) ListSources(ctx context.Context, filter ListSourcesFilter) ([]domain.Source, error) {
+	if s.sources == nil {
+		return nil, fmt.Errorf("knowledge sources repository is not configured")
+	}
+	filter.Type = strings.TrimSpace(filter.Type)
+	if filter.Type != "" && !isKnownSourceType(filter.Type) {
+		return nil, fmt.Errorf("source type must be one of: %s", strings.Join(domain.SourceTypes, "/"))
+	}
+	return s.sources.List(ctx, filter)
+}
+
+// DeleteSource 删除来源登记：仍有文档挂载时拒绝（归属不悬空）。
+func (s *Service) DeleteSource(ctx context.Context, id uint) error {
+	if s.sources == nil {
+		return fmt.Errorf("knowledge sources repository is not configured")
+	}
+	if _, err := s.sources.Get(ctx, id); err != nil {
+		return err
+	}
+	references, err := s.sources.CountDocuments(ctx, id)
+	if err != nil {
+		return err
+	}
+	if references > 0 {
+		return fmt.Errorf("knowledge source %d still referenced by %d document(s)", id, references)
+	}
+	return s.sources.Delete(ctx, id)
+}
+
+// ListIndexJobs 按文档列索引任务（§8.2：状态可见），limit 默认 20 上限 100。
+func (s *Service) ListIndexJobs(ctx context.Context, documentID string, limit int) ([]IndexJobDTO, error) {
+	if strings.TrimSpace(documentID) == "" {
+		return nil, fmt.Errorf("document id required")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	jobs, err := s.indexJobs.ListByDocument(ctx, documentID, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]IndexJobDTO, 0, len(jobs))
+	for _, job := range jobs {
+		out = append(out, IndexJobDTO{
+			ID:              job.ID,
+			DocumentID:      job.DocumentID,
+			Status:          string(job.Status),
+			Error:           job.Error,
+			DocumentVersion: job.DocumentVersion,
+			CreatedAt:       job.CreatedAt,
+			UpdatedAt:       job.UpdatedAt,
+			CompletedAt:     job.CompletedAt,
+		})
+	}
+	return out, nil
+}
+
+func isKnownSourceType(sourceType string) bool {
+	for _, known := range domain.SourceTypes {
+		if sourceType == known {
+			return true
+		}
+	}
+	return false
 }

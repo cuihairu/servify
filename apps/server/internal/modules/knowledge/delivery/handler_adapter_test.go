@@ -223,7 +223,7 @@ func (r *stubDocRepo) List(ctx context.Context, filter knowledgeapp.ListDocument
 
 func TestHandlerServiceAdapterInvalidDomainIDs(t *testing.T) {
 	repo := &stubDocRepo{nextID: "not-a-number"}
-	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil))
+	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil, nil))
 	ctx := context.Background()
 
 	if _, err := adapter.Create(ctx, &knowledgeapp.KnowledgeDocCreateRequest{Title: "t", Content: "c"}); err == nil {
@@ -245,7 +245,7 @@ func TestHandlerServiceAdapterInvalidDomainIDs(t *testing.T) {
 
 func TestHandlerServiceAdapterNilDomainDoc(t *testing.T) {
 	repo := &stubDocRepo{nilGetID: "5"}
-	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil))
+	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil, nil))
 
 	doc, err := adapter.Get(context.Background(), 5)
 	if err != nil {
@@ -267,7 +267,7 @@ func TestJoinTagsCSV(t *testing.T) {
 
 func TestHandlerServiceAdapterListServiceError(t *testing.T) {
 	repo := &stubDocRepo{listErr: fmt.Errorf("list boom")}
-	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil))
+	adapter := NewHandlerServiceAdapter(knowledgeapp.NewService(repo, nil, nil, nil))
 
 	if _, _, err := adapter.List(context.Background(), &knowledgeapp.KnowledgeDocListRequest{Page: 1, PageSize: 10}); err == nil || err.Error() != "list boom" {
 		t.Fatalf("expected list error, got %v", err)

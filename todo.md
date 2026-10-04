@@ -106,12 +106,13 @@
 
 ### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
 
-- 任务清单：
-  - [ ] B3-1 knowledge sources / 版本 / 索引状态收口 / retrieval analytics（管理页展示 top 问答与低置信率）
-  - [ ] B3-2 citation 可视化（坐席+访客侧 Sources+relevance）+ `POST /api/v1/ai/feedback` + `answer_feedback` 落库
+- 任务清单（实施切片）：
+  - [ ] B3-1a knowledge 来源/版本/索引收口（后端）：`knowledge_sources` 表（markdown/website/pdf/faq/api 元数据登记）+ `knowledge_docs.source_id`/`version` 挂源与版本号（内容变更自增）+ `knowledge_index_jobs.document_version` 版本关联 + 索引任务 HTTP 收口（排队/执行/重试/按文档列表，现状 QueueIndexJob/RunIndexJob 无生产调用方）+ 迁移 000018（versioned SQL + AutoMigrate 双路径）+ sources CRUD 读口
+  - [ ] B3-1b 检索分析 + AI 答案持久化（后端）：`ai_answers`（query/answer/confidence/strategy/sources JSON/answer_id 回传，REST+WS 同源 hook）+ `answer_feedback` 落库 + `POST /api/v1/ai/feedback`（§5.3）+ 检索分析读口（top 问答/无命中率/低置信率，从 ai_answers 聚合，§8.3）
+  - [ ] B3-2 citation 可视化与反馈入口（前端）：Knowledge 管理页（sources/版本/索引状态/检索分析展示）+ 坐席侧与访客侧 Sources+relevance 渲染（📄 doc relevance 0.91 形态）+ widget "Was this helpful?" 调 feedback 端点 + `README_KNOWLEDGE.md` 更新
 - 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链；`README_KNOWLEDGE.md` 更新
 - 状态：`[ ]`
-- 下一步：B3-1 knowledge sources / 版本 / 索引状态 / retrieval analytics
+- 下一步：B3-1a knowledge 来源/版本/索引收口
 - 阻塞项：无
 
 ### [ ] B4 收口与 V1.0 发布（P4 批次）

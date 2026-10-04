@@ -116,7 +116,7 @@ func (p *failingUpsertProvider) UpsertDocument(ctx context.Context, doc knowledg
 }
 
 func TestServiceCreateDocumentValidationErrors(t *testing.T) {
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, nil)
 	ctx := context.Background()
 
 	if _, err := svc.CreateDocument(ctx, CreateDocumentRequest{Title: "  ", Content: "c"}); err == nil || err.Error() != "title required" {
@@ -132,17 +132,17 @@ func TestServiceCreateDocumentRepositoryErrors(t *testing.T) {
 	req := CreateDocumentRequest{Title: "t", Content: "c"}
 
 	repo := &flakyDocRepo{createErr: errors.New("create boom")}
-	if _, err := NewService(repo, &memJobRepo{}, nil).CreateDocument(ctx, req); err == nil || err.Error() != "create boom" {
+	if _, err := NewService(repo, &memJobRepo{}, nil, nil).CreateDocument(ctx, req); err == nil || err.Error() != "create boom" {
 		t.Fatalf("expected create error, got %v", err)
 	}
 
 	repo = &flakyDocRepo{updateErr: errors.New("update boom")}
-	if _, err := NewService(repo, &memJobRepo{}, nil).CreateDocument(ctx, req); err == nil || err.Error() != "update boom" {
+	if _, err := NewService(repo, &memJobRepo{}, nil, nil).CreateDocument(ctx, req); err == nil || err.Error() != "update boom" {
 		t.Fatalf("expected update error, got %v", err)
 	}
 
 	provider := &failingUpsertProvider{upsertErr: errors.New("upsert boom")}
-	if _, err := NewService(&flakyDocRepo{}, &memJobRepo{}, provider).CreateDocument(ctx, req); err == nil || err.Error() != "upsert boom" {
+	if _, err := NewService(&flakyDocRepo{}, &memJobRepo{}, nil, provider).CreateDocument(ctx, req); err == nil || err.Error() != "upsert boom" {
 		t.Fatalf("expected sync error, got %v", err)
 	}
 }
@@ -151,7 +151,7 @@ func TestServiceUpdateDocumentErrorPaths(t *testing.T) {
 	ctx := context.Background()
 
 	notFound := &flakyDocRepo{getErr: errors.New("not found")}
-	if _, err := NewService(notFound, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "not found" {
+	if _, err := NewService(notFound, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "not found" {
 		t.Fatalf("expected get error, got %v", err)
 	}
 
@@ -161,18 +161,18 @@ func TestServiceUpdateDocumentErrorPaths(t *testing.T) {
 	}
 
 	emptyTitle := ""
-	if _, err := NewService(seeded, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{Title: &emptyTitle}); err == nil || err.Error() != "title required" {
+	if _, err := NewService(seeded, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{Title: &emptyTitle}); err == nil || err.Error() != "title required" {
 		t.Fatalf("expected title required, got %v", err)
 	}
 	emptyContent := ""
-	if _, err := NewService(seeded, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{Content: &emptyContent}); err == nil || err.Error() != "content required" {
+	if _, err := NewService(seeded, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{Content: &emptyContent}); err == nil || err.Error() != "content required" {
 		t.Fatalf("expected content required, got %v", err)
 	}
 
 	updateFails := &flakyDocRepo{memDocRepo: memDocRepo{docs: map[string]*domain.Document{
 		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
 	}}, updateErr: errors.New("update boom")}
-	if _, err := NewService(updateFails, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "update boom" {
+	if _, err := NewService(updateFails, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "update boom" {
 		t.Fatalf("expected update error, got %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestServiceUpdateDocumentErrorPaths(t *testing.T) {
 		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
 	}}}
 	provider := &failingUpsertProvider{upsertErr: errors.New("upsert boom")}
-	if _, err := NewService(syncFails, &memJobRepo{}, provider).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "upsert boom" {
+	if _, err := NewService(syncFails, &memJobRepo{}, nil, provider).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "upsert boom" {
 		t.Fatalf("expected sync error, got %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestServiceUpdateDocumentErrorPaths(t *testing.T) {
 	}}
 	newCategory := "guide"
 	newIsPublic := true
-	updatedAll, err := NewService(allFields, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{
+	updatedAll, err := NewService(allFields, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{
 		Category: &newCategory,
 		IsPublic: &newIsPublic,
 	})
@@ -203,7 +203,7 @@ func TestServiceUpdateDocumentErrorPaths(t *testing.T) {
 	secondUpdateFails := &flakyDocRepo{memDocRepo: memDocRepo{docs: map[string]*domain.Document{
 		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
 	}}, failUpdateCall: 2}
-	if _, err := NewService(secondUpdateFails, &memJobRepo{}, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "update failed on call 2" {
+	if _, err := NewService(secondUpdateFails, &memJobRepo{}, nil, nil).UpdateDocument(ctx, "doc-1", UpdateDocumentRequest{}); err == nil || err.Error() != "update failed on call 2" {
 		t.Fatalf("expected second update error, got %v", err)
 	}
 }
@@ -212,34 +212,34 @@ func TestServiceDeleteDocumentErrorPaths(t *testing.T) {
 	ctx := context.Background()
 
 	getFails := &flakyDocRepo{getErr: errors.New("not found")}
-	if err := NewService(getFails, &memJobRepo{}, nil).DeleteDocument(ctx, "doc-1"); err == nil || err.Error() != "not found" {
+	if err := NewService(getFails, &memJobRepo{}, nil, nil).DeleteDocument(ctx, "doc-1"); err == nil || err.Error() != "not found" {
 		t.Fatalf("expected get error, got %v", err)
 	}
 
 	docRepo := &memDocRepo{}
-	if _, err := NewService(docRepo, &memJobRepo{}, nil).CreateDocument(ctx, CreateDocumentRequest{ID: "doc-1", Title: "t", Content: "c"}); err != nil {
+	if _, err := NewService(docRepo, &memJobRepo{}, nil, nil).CreateDocument(ctx, CreateDocumentRequest{ID: "doc-1", Title: "t", Content: "c"}); err != nil {
 		t.Fatalf("seed doc: %v", err)
 	}
 
 	provider := &mockkp.Provider{}
-	if err := NewService(docRepo, &memJobRepo{}, provider).DeleteDocument(ctx, "doc-1"); err == nil || err.Error() != "knowledge provider deletion is not supported: missing external document id" {
+	if err := NewService(docRepo, &memJobRepo{}, nil, provider).DeleteDocument(ctx, "doc-1"); err == nil || err.Error() != "knowledge provider deletion is not supported: missing external document id" {
 		t.Fatalf("expected missing external id error, got %v", err)
 	}
 
 	docRepo = &memDocRepo{}
-	synced, err := NewService(docRepo, &memJobRepo{}, &mockkp.Provider{}).CreateDocument(ctx, CreateDocumentRequest{ID: "doc-2", Title: "t", Content: "c"})
+	synced, err := NewService(docRepo, &memJobRepo{}, nil, &mockkp.Provider{}).CreateDocument(ctx, CreateDocumentRequest{ID: "doc-2", Title: "t", Content: "c"})
 	if err != nil {
 		t.Fatalf("seed synced doc: %v", err)
 	}
 	deleteFails := &mockkp.Provider{DeleteError: errors.New("delete boom")}
-	if err := NewService(docRepo, &memJobRepo{}, deleteFails).DeleteDocument(ctx, synced.ID); err == nil || err.Error() != "delete boom" {
+	if err := NewService(docRepo, &memJobRepo{}, nil, deleteFails).DeleteDocument(ctx, synced.ID); err == nil || err.Error() != "delete boom" {
 		t.Fatalf("expected provider delete error, got %v", err)
 	}
 }
 
 func TestServiceListDocumentsNormalizesPagination(t *testing.T) {
 	repo := &recordingDocRepo{}
-	svc := NewService(repo, &memJobRepo{}, nil)
+	svc := NewService(repo, &memJobRepo{}, nil, nil)
 
 	cases := []struct {
 		in   ListDocumentsFilter
@@ -260,7 +260,7 @@ func TestServiceListDocumentsNormalizesPagination(t *testing.T) {
 	}
 
 	listFails := &flakyDocRepo{listErr: errors.New("list boom")}
-	if _, _, err := NewService(listFails, &memJobRepo{}, nil).ListDocuments(context.Background(), ListDocumentsFilter{}); err == nil || err.Error() != "list boom" {
+	if _, _, err := NewService(listFails, &memJobRepo{}, nil, nil).ListDocuments(context.Background(), ListDocumentsFilter{}); err == nil || err.Error() != "list boom" {
 		t.Fatalf("expected list error, got %v", err)
 	}
 }
@@ -268,13 +268,13 @@ func TestServiceListDocumentsNormalizesPagination(t *testing.T) {
 func TestServiceQueueIndexJobErrorPaths(t *testing.T) {
 	ctx := context.Background()
 
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, nil)
 	if _, err := svc.QueueIndexJob(ctx, QueueIndexJobRequest{JobID: "job-1", DocumentID: " "}); err == nil || err.Error() != "document id required" {
 		t.Fatalf("expected document id required, got %v", err)
 	}
 
 	createFails := &flakyJobRepo{createErr: errors.New("job create boom")}
-	if _, err := NewService(&memDocRepo{}, createFails, nil).QueueIndexJob(ctx, QueueIndexJobRequest{JobID: "job-1", DocumentID: "doc-1"}); err == nil || err.Error() != "job create boom" {
+	if _, err := NewService(&memDocRepo{}, createFails, nil, nil).QueueIndexJob(ctx, QueueIndexJobRequest{JobID: "job-1", DocumentID: "doc-1"}); err == nil || err.Error() != "job create boom" {
 		t.Fatalf("expected job create error, got %v", err)
 	}
 }
@@ -283,14 +283,14 @@ func TestServiceRunIndexJobErrorPaths(t *testing.T) {
 	ctx := context.Background()
 
 	jobGetFails := &flakyJobRepo{getErr: errors.New("job not found")}
-	if _, err := NewService(&memDocRepo{}, jobGetFails, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "job not found" {
+	if _, err := NewService(&memDocRepo{}, jobGetFails, nil, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "job not found" {
 		t.Fatalf("expected job get error, got %v", err)
 	}
 
 	docGetFails := &flakyDocRepo{getErr: errors.New("doc not found")}
 	if _, err := NewService(docGetFails, &memJobRepo{jobs: map[string]*domain.IndexJob{
 		"job-1": {ID: "job-1", DocumentID: "doc-1", Status: domain.IndexJobQueued},
-	}}, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "doc not found" {
+	}}, nil, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "doc not found" {
 		t.Fatalf("expected doc get error, got %v", err)
 	}
 
@@ -300,7 +300,7 @@ func TestServiceRunIndexJobErrorPaths(t *testing.T) {
 	}
 	if _, err := NewService(&memDocRepo{docs: map[string]*domain.Document{
 		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
-	}}, updateFails, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "update failed on call 1" {
+	}}, updateFails, nil, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "update failed on call 1" {
 		t.Fatalf("expected running update error, got %v", err)
 	}
 
@@ -310,7 +310,7 @@ func TestServiceRunIndexJobErrorPaths(t *testing.T) {
 	}
 	if _, err := NewService(&memDocRepo{docs: map[string]*domain.Document{
 		"doc-1": {ID: "doc-1", Title: "t", Content: "c"},
-	}}, finalUpdateFails, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "update failed on call 2" {
+	}}, finalUpdateFails, nil, nil).RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"}); err == nil || err.Error() != "update failed on call 2" {
 		t.Fatalf("expected final update error, got %v", err)
 	}
 
@@ -319,7 +319,7 @@ func TestServiceRunIndexJobErrorPaths(t *testing.T) {
 	}}
 	jobRepo := &flakyJobRepo{}
 	provider := &failingUpsertProvider{upsertErr: errors.New("upsert boom")}
-	svc := NewService(docRepo, jobRepo, provider)
+	svc := NewService(docRepo, jobRepo, nil, provider)
 	if _, err := svc.QueueIndexJob(ctx, QueueIndexJobRequest{JobID: "job-1", DocumentID: "doc-1"}); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestServiceRunIndexJobExternalIDPersistError(t *testing.T) {
 	}
 
 	provider := &mockkp.Provider{}
-	svc := NewService(docRepo, jobRepo, provider)
+	svc := NewService(docRepo, jobRepo, nil, provider)
 	_, err := svc.RunIndexJob(ctx, RunIndexJobRequest{JobID: "job-1"})
 	if err == nil || err.Error() != "persist boom" {
 		t.Fatalf("RunIndexJob() error = %v, want persist boom", err)
@@ -362,7 +362,7 @@ func TestServiceRunIndexJobExternalIDPersistError(t *testing.T) {
 }
 
 func TestServiceSyncDocumentDirect(t *testing.T) {
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, nil)
 	if err := svc.syncDocument(context.Background(), nil); err != nil {
 		t.Fatalf("expected nil doc sync to be a no-op, got %v", err)
 	}

@@ -330,6 +330,25 @@ func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *knowled
 
 func (s *unitKnowledgeService) Delete(ctx context.Context, id uint) error { return s.deleteErr }
 
+// ---- knowledge sources / index jobs（B3-1a，单元桩固定零值行为） ----
+
+func (s *unitKnowledgeService) ListSources(ctx context.Context, sourceType string) ([]models.KnowledgeSource, error) {
+	return nil, nil
+}
+func (s *unitKnowledgeService) CreateSource(ctx context.Context, req *knowledgedelivery.KnowledgeSourceCreateRequest) (*models.KnowledgeSource, error) {
+	return nil, s.createErr
+}
+func (s *unitKnowledgeService) DeleteSource(ctx context.Context, id uint) error { return s.deleteErr }
+func (s *unitKnowledgeService) ListIndexJobs(ctx context.Context, documentID string, limit int) ([]knowledgedelivery.IndexJobDTO, error) {
+	return nil, nil
+}
+func (s *unitKnowledgeService) IndexDocument(ctx context.Context, documentID string) (*knowledgedelivery.IndexJobResult, error) {
+	return nil, s.createErr
+}
+func (s *unitKnowledgeService) RetryIndexJob(ctx context.Context, jobID string) (*knowledgedelivery.IndexJobResult, error) {
+	return nil, s.createErr
+}
+
 // ---- routing / session transfer ----
 
 type unitTransferService struct {

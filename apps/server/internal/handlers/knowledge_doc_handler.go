@@ -116,6 +116,79 @@ func (h *KnowledgeDocHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Message: "deleted"})
 }
 
+// ListSources 列来源登记（可选 ?type= 过滤，B3-1a §8.1）。
+func (h *KnowledgeDocHandler) ListSources(c *gin.Context) {
+	sources, err := h.service.ListSources(c.Request.Context(), c.Query("type"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to list knowledge sources", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sources)
+}
+
+// CreateSource 登记知识来源。
+func (h *KnowledgeDocHandler) CreateSource(c *gin.Context) {
+	var req knowledgedelivery.KnowledgeSourceCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
+		return
+	}
+	source, err := h.service.CreateSource(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to create knowledge source", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, source)
+}
+
+// DeleteSource 删除来源登记（仍被文档引用时拒绝）。
+func (h *KnowledgeDocHandler) DeleteSource(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: err.Error()})
+		return
+	}
+	if err := h.service.DeleteSource(c.Request.Context(), uint(id)); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to delete knowledge source", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{Message: "deleted"})
+}
+
+// ListIndexJobs 按文档列索引任务（状态/版本/错误可见）。
+func (h *KnowledgeDocHandler) ListIndexJobs(c *gin.Context) {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	jobs, err := h.service.ListIndexJobs(c.Request.Context(), c.Param("id"), limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to list index jobs", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, jobs)
+}
+
+// IndexDocument 排队并执行一次文档索引（重建索引入口）。
+func (h *KnowledgeDocHandler) IndexDocument(c *gin.Context) {
+	result, err := h.service.IndexDocument(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to index knowledge doc", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// RetryIndexJob 重跑索引任务（失败重试/按当前版本重建）。
+func (h *KnowledgeDocHandler) RetryIndexJob(c *gin.Context) {
+	result, err := h.service.RetryIndexJob(c.Request.Context(), c.Param("job_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Failed to retry index job", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func RegisterKnowledgeDocRoutes(r *gin.RouterGroup, handler *KnowledgeDocHandler) {
 	docs := r.Group("/knowledge-docs")
 	{
@@ -124,6 +197,14 @@ func RegisterKnowledgeDocRoutes(r *gin.RouterGroup, handler *KnowledgeDocHandler
 		docs.POST("", handler.Create)
 		docs.PUT("/:id", handler.Update)
 		docs.DELETE("/:id", handler.Delete)
+
+		// 来源登记与索引任务（B3-1a，docs/v1-convergence-plan.md §8.1/§8.2）。
+		docs.GET("/sources", handler.ListSources)
+		docs.POST("/sources", handler.CreateSource)
+		docs.DELETE("/sources/:id", handler.DeleteSource)
+		docs.GET("/:id/index-jobs", handler.ListIndexJobs)
+		docs.POST("/:id/index-jobs", handler.IndexDocument)
+		docs.POST("/index-jobs/:job_id/retry", handler.RetryIndexJob)
 	}
 }
 

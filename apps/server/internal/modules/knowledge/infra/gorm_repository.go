@@ -34,6 +34,8 @@ func (r *GormDocumentRepository) Create(ctx context.Context, doc *domain.Documen
 		Category:    doc.Category,
 		Tags:        strings.Join(doc.Tags, ","),
 		IsPublic:    doc.IsPublic,
+		SourceID:    doc.SourceID,
+		Version:     doc.Version,
 		CreatedAt:   doc.CreatedAt,
 		UpdatedAt:   doc.UpdatedAt,
 	}
@@ -57,6 +59,8 @@ func (r *GormDocumentRepository) Update(ctx context.Context, doc *domain.Documen
 		"category":    doc.Category,
 		"tags":        strings.Join(doc.Tags, ","),
 		"is_public":   doc.IsPublic,
+		"source_id":   doc.SourceID,
+		"version":     doc.Version,
 		"updated_at":  doc.UpdatedAt,
 	})
 	if result.Error != nil {
@@ -158,11 +162,12 @@ func (r *GormIndexJobRepository) Update(ctx context.Context, job *domain.IndexJo
 		return err
 	}
 	result := r.db.WithContext(ctx).Model(&domain.KnowledgeIndexJob{}).Where("id = ?", model.ID).Updates(map[string]interface{}{
-		"document_id":  model.DocumentID,
-		"status":       model.Status,
-		"error":        model.Error,
-		"updated_at":   model.UpdatedAt,
-		"completed_at": model.CompletedAt,
+		"document_id":      model.DocumentID,
+		"status":           model.Status,
+		"error":            model.Error,
+		"document_version": model.DocumentVersion,
+		"updated_at":       model.UpdatedAt,
+		"completed_at":     model.CompletedAt,
 	})
 	if result.Error != nil {
 		return result.Error
@@ -181,6 +186,27 @@ func (r *GormIndexJobRepository) Get(ctx context.Context, id string) (*domain.In
 	return indexJobFromModel(model), nil
 }
 
+// ListByDocument 按文档列索引任务，新任务在前（B3-1a §8.2：索引状态可见）。
+func (r *GormIndexJobRepository) ListByDocument(ctx context.Context, documentID string, limit int) ([]domain.IndexJob, error) {
+	docID, err := parseDocumentID(documentID)
+	if err != nil {
+		return nil, err
+	}
+	var rows []domain.KnowledgeIndexJob
+	if err := r.db.WithContext(ctx).
+		Where("document_id = ?", docID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.IndexJob, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, *indexJobFromModel(row))
+	}
+	return out, nil
+}
+
 func documentFromModel(model domain.KnowledgeDoc) *domain.Document {
 	return &domain.Document{
 		ID:         strconv.FormatUint(uint64(model.ID), 10),
@@ -191,6 +217,8 @@ func documentFromModel(model domain.KnowledgeDoc) *domain.Document {
 		Category:   model.Category,
 		Tags:       splitTags(model.Tags),
 		IsPublic:   model.IsPublic,
+		SourceID:   model.SourceID,
+		Version:    model.Version,
 		CreatedAt:  model.CreatedAt,
 		UpdatedAt:  model.UpdatedAt,
 	}
@@ -205,25 +233,27 @@ func indexJobModelFromDomain(job *domain.IndexJob) (*domain.KnowledgeIndexJob, e
 		return nil, err
 	}
 	return &domain.KnowledgeIndexJob{
-		ID:          strings.TrimSpace(job.ID),
-		DocumentID:  documentID,
-		Status:      string(job.Status),
-		Error:       job.Error,
-		CreatedAt:   job.CreatedAt,
-		UpdatedAt:   job.UpdatedAt,
-		CompletedAt: job.CompletedAt,
+		ID:              strings.TrimSpace(job.ID),
+		DocumentID:      documentID,
+		Status:          string(job.Status),
+		Error:           job.Error,
+		DocumentVersion: job.DocumentVersion,
+		CreatedAt:       job.CreatedAt,
+		UpdatedAt:       job.UpdatedAt,
+		CompletedAt:     job.CompletedAt,
 	}, nil
 }
 
 func indexJobFromModel(model domain.KnowledgeIndexJob) *domain.IndexJob {
 	return &domain.IndexJob{
-		ID:          model.ID,
-		DocumentID:  strconv.FormatUint(uint64(model.DocumentID), 10),
-		Status:      domain.IndexJobStatus(model.Status),
-		Error:       model.Error,
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
-		CompletedAt: model.CompletedAt,
+		ID:              model.ID,
+		DocumentID:      strconv.FormatUint(uint64(model.DocumentID), 10),
+		Status:          domain.IndexJobStatus(model.Status),
+		Error:           model.Error,
+		DocumentVersion: model.DocumentVersion,
+		CreatedAt:       model.CreatedAt,
+		UpdatedAt:       model.UpdatedAt,
+		CompletedAt:     model.CompletedAt,
 	}
 }
 

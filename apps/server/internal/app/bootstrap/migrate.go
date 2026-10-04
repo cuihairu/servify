@@ -27,6 +27,7 @@ func MigrationModels() []interface{} {
 		&models.TicketCustomFieldValue{},
 		&models.KnowledgeDoc{},
 		&models.KnowledgeIndexJob{},
+		&models.KnowledgeSource{}, // V1.0 收敛 B3-1a：知识来源登记（表名 knowledge_sources）
 		&models.WebRTCConnection{},
 		&models.DailyStats{},
 		&models.SLAConfig{},

@@ -90,10 +90,19 @@ func (r *memJobRepo) Get(ctx context.Context, id string) (*domain.IndexJob, erro
 	cp := *job
 	return &cp, nil
 }
+func (r *memJobRepo) ListByDocument(ctx context.Context, documentID string, limit int) ([]domain.IndexJob, error) {
+	out := make([]domain.IndexJob, 0)
+	for _, job := range r.jobs {
+		if job.DocumentID == documentID {
+			out = append(out, *job)
+		}
+	}
+	return out, nil
+}
 
 func TestServiceCreateDocument(t *testing.T) {
 	provider := &mockkp.Provider{}
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, provider)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, provider)
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		Title:    " KB Title ",
 		Content:  " KB Content ",
@@ -122,7 +131,7 @@ func TestServiceCreateDocument(t *testing.T) {
 
 func TestServiceUpdateDocumentSyncsProvider(t *testing.T) {
 	provider := &mockkp.Provider{}
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, provider)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, provider)
 
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
@@ -158,7 +167,7 @@ func TestServiceUpdateDocumentSyncsProvider(t *testing.T) {
 
 func TestServiceDeleteDocumentSyncsProvider(t *testing.T) {
 	provider := &trackingDeleteProvider{}
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, provider)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, provider)
 
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
@@ -185,7 +194,7 @@ func TestServiceDeleteDocumentSyncsProvider(t *testing.T) {
 
 func TestServiceDeleteDocumentFailsWhenProviderDeletionUnsupported(t *testing.T) {
 	provider := &unsupportedDeleteProvider{}
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, provider)
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, provider)
 
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
@@ -212,7 +221,7 @@ func TestServiceRunIndexJob(t *testing.T) {
 	docRepo := &memDocRepo{}
 	jobRepo := &memJobRepo{}
 	provider := &mockkp.Provider{}
-	svc := NewService(docRepo, jobRepo, provider)
+	svc := NewService(docRepo, jobRepo, nil, provider)
 
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
@@ -243,7 +252,7 @@ func TestServiceRunIndexJob(t *testing.T) {
 
 func TestServiceListDocuments(t *testing.T) {
 	docRepo := &memDocRepo{}
-	svc := NewService(docRepo, &memJobRepo{}, nil)
+	svc := NewService(docRepo, &memJobRepo{}, nil, nil)
 	_, _ = svc.CreateDocument(context.Background(), CreateDocumentRequest{ID: "doc-1", Title: "Billing", Content: "billing content", Category: "faq"})
 	_, _ = svc.CreateDocument(context.Background(), CreateDocumentRequest{ID: "doc-2", Title: "Support", Content: "support content", Category: "guide", IsPublic: true})
 
@@ -278,7 +287,7 @@ func TestServiceRunIndexJobProviderSwitchRegression(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			docRepo := &memDocRepo{}
 			jobRepo := &memJobRepo{}
-			svc := NewService(docRepo, jobRepo, provider)
+			svc := NewService(docRepo, jobRepo, nil, provider)
 
 			doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 				ID:      "doc-switch",
@@ -349,7 +358,7 @@ func (p *reindexingProvider) UpsertDocument(ctx context.Context, doc knowledgepr
 // TestServiceSyncDocumentLabelsProviderID P1-1 外部映射一致性：provider_id
 // 落库值为实际驱动自报名（不再硬编码 "pgvector"），更新路径保持既有标签。
 func TestServiceSyncDocumentLabelsProviderID(t *testing.T) {
-	svc := NewService(&memDocRepo{}, &memJobRepo{}, &namedStubProvider{name: "dify"})
+	svc := NewService(&memDocRepo{}, &memJobRepo{}, nil, &namedStubProvider{name: "dify"})
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
 		Title:   "Billing",
@@ -389,7 +398,7 @@ func TestServiceRunIndexJobPersistsExternalMapping(t *testing.T) {
 	docRepo := &memDocRepo{}
 	jobRepo := &memJobRepo{}
 	provider := &reindexingProvider{}
-	svc := NewService(docRepo, jobRepo, provider)
+	svc := NewService(docRepo, jobRepo, nil, provider)
 
 	doc, err := svc.CreateDocument(context.Background(), CreateDocumentRequest{
 		ID:      "doc-1",
