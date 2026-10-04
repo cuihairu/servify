@@ -18,6 +18,120 @@ definitions:
       sender:
         type: string
     type: object
+  application.CustomerDataEraseResult:
+    properties:
+      comments_hit:
+        type: integer
+      customer_id:
+        type: integer
+      erased_at:
+        type: string
+      files_deleted:
+        type: integer
+      messages_hit:
+        type: integer
+      sessions_hit:
+        type: integer
+      tickets_hit:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  application.CustomerDataExport:
+    properties:
+      customer:
+        $ref: '#/definitions/models.Customer'
+      exported_at:
+        type: string
+      messages:
+        items:
+          $ref: '#/definitions/models.Message'
+        type: array
+      pii_catalog:
+        items:
+          $ref: '#/definitions/application.PIIItem'
+        type: array
+      profile:
+        $ref: '#/definitions/models.User'
+      sessions:
+        items:
+          $ref: '#/definitions/models.Session'
+        type: array
+      ticket_comments:
+        items:
+          $ref: '#/definitions/models.TicketComment'
+        type: array
+      ticket_files:
+        items:
+          $ref: '#/definitions/models.TicketFile'
+        type: array
+      tickets:
+        items:
+          $ref: '#/definitions/models.Ticket'
+        type: array
+    type: object
+  application.PIIItem:
+    properties:
+      category:
+        description: 类别
+        type: string
+      erasure:
+        description: anonymize / scrub / delete / never-exported
+        type: string
+      export:
+        description: 数据主体导出是否包含
+        type: boolean
+      fields:
+        description: 涉及字段
+        items:
+          type: string
+        type: array
+      tables:
+        description: 落点表
+        items:
+          type: string
+        type: array
+    type: object
+  application.QuestionStat:
+    properties:
+      avg_confidence:
+        type: number
+      count:
+        type: integer
+      query:
+        type: string
+    type: object
+  application.RetrievalAnalytics:
+    properties:
+      avg_confidence:
+        type: number
+      helpful_count:
+        type: integer
+      hit_answers:
+        type: integer
+      low_confidence_answers:
+        type: integer
+      low_confidence_questions:
+        items:
+          $ref: '#/definitions/application.QuestionStat'
+        type: array
+      no_hit_answers:
+        type: integer
+      no_hit_questions:
+        items:
+          $ref: '#/definitions/application.QuestionStat'
+        type: array
+      not_helpful_count:
+        type: integer
+      top_questions:
+        items:
+          $ref: '#/definitions/application.QuestionStat'
+        type: array
+      total_answers:
+        type: integer
+      window_days:
+        type: integer
+    type: object
   application.SLAComplianceTrend:
     properties:
       compliance_rate:
@@ -724,6 +838,17 @@ definitions:
       tags:
         type: string
     type: object
+  delivery.AnswerFeedbackRequest:
+    properties:
+      answer_id:
+        type: integer
+      comment:
+        type: string
+      helpful:
+        type: boolean
+    required:
+    - answer_id
+    type: object
   delivery.VisitorMessagesPage:
     properties:
       hasMore:
@@ -739,6 +864,15 @@ definitions:
         type: string
       unread_count:
         type: integer
+    type: object
+  delivery.statisticsErrorResponse:
+    properties:
+      code:
+        type: integer
+      error:
+        type: string
+      message:
+        type: string
     type: object
   handlers.AddAnnotationRequest:
     type: object
@@ -2576,6 +2710,68 @@ paths:
       summary: 获取客户活动记录
       tags:
       - 客户管理
+  /api/customers/{id}/erase-data:
+    post:
+      description: 匿名化身份/档案，scrub 消息与工单内容，删除附件元数据
+      parameters:
+      - description: 客户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/application.CustomerDataEraseResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 删除客户数据
+      tags:
+      - 客户管理
+  /api/customers/{id}/export:
+    get:
+      description: 聚合导出客户档案/身份/会话/消息/工单全量 PII（凭证除外）
+      parameters:
+      - description: 客户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/application.CustomerDataExport'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 导出客户数据
+      tags:
+      - 客户管理
   /api/customers/{id}/notes:
     post:
       consumes:
@@ -3878,6 +4074,40 @@ paths:
       summary: 处理等待队列
       tags:
       - 会话转接
+  /api/session-transfer/scoring/{session_id}:
+    get:
+      consumes:
+      - application/json
+      description: 按会话读取路由分配的分数/因子/理由（routing_assignments）
+      parameters:
+      - description: 会话ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: 返回条数（默认 50，最大 200）
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: 获取分配评分审计
+      tags:
+      - 会话转接
   /api/session-transfer/to-agent:
     post:
       consumes:
@@ -4392,11 +4622,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取客服绩效统计
       tags:
       - 统计
@@ -4417,7 +4647,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取客户来源统计
       tags:
       - 统计
@@ -4436,7 +4666,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取仪表板统计数据
       tags:
       - 统计
@@ -4474,7 +4704,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 导出统计报表（CSV / Excel）
       tags:
       - 统计
@@ -4493,7 +4723,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取远程协助工单统计
       tags:
       - 统计
@@ -4523,11 +4753,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取工单分类统计
       tags:
       - 统计
@@ -4557,11 +4787,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取工单优先级统计
       tags:
       - 统计
@@ -4593,11 +4823,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 获取时间范围统计数据
       tags:
       - 统计
@@ -4622,11 +4852,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/handlers.ErrorResponse'
+            $ref: '#/definitions/delivery.statisticsErrorResponse'
       summary: 手动更新每日统计
       tags:
       - 统计
@@ -5030,6 +5260,61 @@ paths:
       summary: 获取工单统计
       tags:
       - 工单
+  /api/v1/ai/feedback:
+    post:
+      consumes:
+      - application/json
+      description: 对一次 AI 首答提交"是否有帮助"评价（访客经会话绑定校验）
+      parameters:
+      - description: 反馈内容
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/delivery.AnswerFeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: AI 答案反馈
+      tags:
+      - AI
+  /api/v1/ai/retrieval-analytics:
+    get:
+      description: Knowledge 管理页展示：窗口内 top 问答、零命中问题、低置信问题与反馈计数
+      parameters:
+      - description: 统计窗口天数（默认 7，上限 90）
+        in: query
+        name: days
+        type: integer
+      - description: 榜单条数（默认 10，上限 50）
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/application.RetrievalAnalytics'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 检索分析读口
+      tags:
+      - AI
   /api/v1/api-keys:
     get:
       responses: {}

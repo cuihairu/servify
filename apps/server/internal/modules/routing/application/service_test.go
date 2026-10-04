@@ -210,7 +210,7 @@ func TestServiceAssignAgentPersistsScoringAudit(t *testing.T) {
 	got, err := svc.AssignAgent(context.Background(), AssignAgentCommand{
 		SessionID:  "sess-scored",
 		AgentID:    7,
-		Scoring: &ScoringDetail{TotalScore: 0.85, Factors: factorsMap(), Reasons: []string{"技能匹配 2/2"}, Strategy: "v1"},
+		Scoring:    &ScoringDetail{TotalScore: 0.85, Factors: factorsMap(), Reasons: []string{"技能匹配 2/2"}, Strategy: "v1"},
 		AssignedAt: now,
 	})
 	if err != nil {
@@ -275,7 +275,7 @@ func TestServiceRecommendAgents(t *testing.T) {
 	}
 	svc.WithScorer(NewDefaultScorer(WeightSet{}))
 	out, err := svc.RecommendAgents(context.Background(), ScoringInput{
-		SessionID: "s1",
+		SessionID:  "s1",
 		Candidates: []AgentCandidate{candidate(1, "online", []string{"billing"}, []string{"zh"}, 0, 5)},
 	})
 	if err != nil {

@@ -75,7 +75,7 @@ func (h *AnswerFeedbackHandler) SubmitFeedback(c *gin.Context) {
 // @Produce json
 // @Param days query int false "统计窗口天数（默认 7，上限 90）"
 // @Param limit query int false "榜单条数（默认 10，上限 50）"
-// @Success 200 {object} aiapp.RetrievalAnalytics
+// @Success 200 {object} application.RetrievalAnalytics
 // @Failure 400 {object} map[string]interface{}
 // @Router /api/v1/ai/retrieval-analytics [get]
 func (h *AnswerFeedbackHandler) RetrievalAnalytics(c *gin.Context) {

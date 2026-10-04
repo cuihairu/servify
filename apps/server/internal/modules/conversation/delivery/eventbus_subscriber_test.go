@@ -149,4 +149,3 @@ func TestSubscriberRegistrationsTimelineAssertion(t *testing.T) {
 		t.Errorf("EventType should equal event name, got %q", repo.appended[0].EventType)
 	}
 }
-

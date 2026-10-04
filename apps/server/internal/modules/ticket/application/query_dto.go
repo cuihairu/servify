@@ -7,10 +7,10 @@ import (
 )
 
 type TicketDTO struct {
-	ID         uint       `json:"id"`
-	Title      string     `json:"title"`
-	CustomerID uint       `json:"customer_id"`
-	AgentID    *uint      `json:"agent_id,omitempty"`
+	ID         uint   `json:"id"`
+	Title      string `json:"title"`
+	CustomerID uint   `json:"customer_id"`
+	AgentID    *uint  `json:"agent_id,omitempty"`
 	// SessionID 是工单来源会话（conversation）的 ID；V1.0 收敛 B1-2：
 	// ticket.* 事件借它投影进 conversation_events（Service Timeline）。
 	SessionID  *string    `json:"session_id,omitempty"`

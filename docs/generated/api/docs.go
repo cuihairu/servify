@@ -1242,6 +1242,100 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/customers/{id}/erase-data": {
+            "post": {
+                "description": "匿名化身份/档案，scrub 消息与工单内容，删除附件元数据",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "客户管理"
+                ],
+                "summary": "删除客户数据",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "客户ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/application.CustomerDataEraseResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/customers/{id}/export": {
+            "get": {
+                "description": "聚合导出客户档案/身份/会话/消息/工单全量 PII（凭证除外）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "客户管理"
+                ],
+                "summary": "导出客户数据",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "客户ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/application.CustomerDataExport"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/customers/{id}/notes": {
             "post": {
                 "description": "为客户添加备注信息",
@@ -3179,6 +3273,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/session-transfer/scoring/{session_id}": {
+            "get": {
+                "description": "按会话读取路由分配的分数/因子/理由（routing_assignments）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "会话转接"
+                ],
+                "summary": "获取分配评分审计",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数（默认 50，最大 200）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/session-transfer/to-agent": {
             "post": {
                 "description": "将会话转接到指定的客服代理",
@@ -3949,13 +4094,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -3987,7 +4132,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4016,7 +4161,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4070,7 +4215,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4099,7 +4244,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4145,13 +4290,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4197,13 +4342,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4251,13 +4396,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4295,13 +4440,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/handlers.ErrorResponse"
+                            "$ref": "#/definitions/delivery.statisticsErrorResponse"
                         }
                     }
                 }
@@ -4911,6 +5056,89 @@ const docTemplate = `{
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/feedback": {
+            "post": {
+                "description": "对一次 AI 首答提交\"是否有帮助\"评价（访客经会话绑定校验）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI"
+                ],
+                "summary": "AI 答案反馈",
+                "parameters": [
+                    {
+                        "description": "反馈内容",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/delivery.AnswerFeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ai/retrieval-analytics": {
+            "get": {
+                "description": "Knowledge 管理页展示：窗口内 top 问答、零命中问题、低置信问题与反馈计数",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "AI"
+                ],
+                "summary": "检索分析读口",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "统计窗口天数（默认 7，上限 90）",
+                        "name": "days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "榜单条数（默认 10，上限 50）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/application.RetrievalAnalytics"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -6226,6 +6454,177 @@ const docTemplate = `{
                 }
             }
         },
+        "application.CustomerDataEraseResult": {
+            "type": "object",
+            "properties": {
+                "comments_hit": {
+                    "type": "integer"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "erased_at": {
+                    "type": "string"
+                },
+                "files_deleted": {
+                    "type": "integer"
+                },
+                "messages_hit": {
+                    "type": "integer"
+                },
+                "sessions_hit": {
+                    "type": "integer"
+                },
+                "tickets_hit": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "application.CustomerDataExport": {
+            "type": "object",
+            "properties": {
+                "customer": {
+                    "$ref": "#/definitions/models.Customer"
+                },
+                "exported_at": {
+                    "type": "string"
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Message"
+                    }
+                },
+                "pii_catalog": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.PIIItem"
+                    }
+                },
+                "profile": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Session"
+                    }
+                },
+                "ticket_comments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TicketComment"
+                    }
+                },
+                "ticket_files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TicketFile"
+                    }
+                },
+                "tickets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Ticket"
+                    }
+                }
+            }
+        },
+        "application.PIIItem": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "description": "类别",
+                    "type": "string"
+                },
+                "erasure": {
+                    "description": "anonymize / scrub / delete / never-exported",
+                    "type": "string"
+                },
+                "export": {
+                    "description": "数据主体导出是否包含",
+                    "type": "boolean"
+                },
+                "fields": {
+                    "description": "涉及字段",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tables": {
+                    "description": "落点表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "application.QuestionStat": {
+            "type": "object",
+            "properties": {
+                "avg_confidence": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "query": {
+                    "type": "string"
+                }
+            }
+        },
+        "application.RetrievalAnalytics": {
+            "type": "object",
+            "properties": {
+                "avg_confidence": {
+                    "type": "number"
+                },
+                "helpful_count": {
+                    "type": "integer"
+                },
+                "hit_answers": {
+                    "type": "integer"
+                },
+                "low_confidence_answers": {
+                    "type": "integer"
+                },
+                "low_confidence_questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.QuestionStat"
+                    }
+                },
+                "no_hit_answers": {
+                    "type": "integer"
+                },
+                "no_hit_questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.QuestionStat"
+                    }
+                },
+                "not_helpful_count": {
+                    "type": "integer"
+                },
+                "top_questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/application.QuestionStat"
+                    }
+                },
+                "total_answers": {
+                    "type": "integer"
+                },
+                "window_days": {
+                    "type": "integer"
+                }
+            }
+        },
         "application.SLAComplianceTrend": {
             "type": "object",
             "properties": {
@@ -7280,6 +7679,23 @@ const docTemplate = `{
                 }
             }
         },
+        "delivery.AnswerFeedbackRequest": {
+            "type": "object",
+            "required": [
+                "answer_id"
+            ],
+            "properties": {
+                "answer_id": {
+                    "type": "integer"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "helpful": {
+                    "type": "boolean"
+                }
+            }
+        },
         "delivery.VisitorMessagesPage": {
             "type": "object",
             "properties": {
@@ -7302,6 +7718,20 @@ const docTemplate = `{
                 },
                 "unread_count": {
                     "type": "integer"
+                }
+            }
+        },
+        "delivery.statisticsErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },

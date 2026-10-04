@@ -22,7 +22,7 @@ type Scorer interface {
 type AgentCandidate struct {
 	AgentID       uint
 	UserID        uint
-	Status        string   // online / busy / offline
+	Status        string // online / busy / offline
 	Skills        []string
 	Languages     []string
 	Channels      []string // 空 = 不限渠道

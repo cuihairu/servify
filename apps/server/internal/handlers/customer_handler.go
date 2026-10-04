@@ -506,7 +506,7 @@ func (h *CustomerHandler) GetCustomerStats(c *gin.Context) {
 // @Tags 客户管理
 // @Produce json
 // @Param id path int true "客户ID"
-// @Success 200 {object} customerapplication.CustomerDataExport
+// @Success 200 {object} application.CustomerDataExport
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -531,7 +531,7 @@ func (h *CustomerHandler) ExportCustomerData(c *gin.Context) {
 // @Tags 客户管理
 // @Produce json
 // @Param id path int true "客户ID"
-// @Success 200 {object} customerapplication.CustomerDataEraseResult
+// @Success 200 {object} application.CustomerDataEraseResult
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse

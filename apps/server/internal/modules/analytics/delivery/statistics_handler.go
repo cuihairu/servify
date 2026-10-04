@@ -42,7 +42,7 @@ func NewStatisticsHandler(statsService HandlerService, logger *logrus.Logger) *S
 // @Tags 统计
 // @Accept json
 // @Produce json
-// @Success 200 {object} analyticscontract.DashboardStats
+// @Success 200 {object} contract.DashboardStats
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/dashboard [get]
 func (h *StatisticsHandler) GetDashboardStats(c *gin.Context) {
@@ -67,7 +67,7 @@ func (h *StatisticsHandler) GetDashboardStats(c *gin.Context) {
 // @Produce json
 // @Param start_date query string true "开始日期 (YYYY-MM-DD)"
 // @Param end_date query string true "结束日期 (YYYY-MM-DD)"
-// @Success 200 {array} analyticscontract.TimeRangeStats
+// @Success 200 {array} contract.TimeRangeStats
 // @Failure 400 {object} statisticsErrorResponse
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/time-range [get]
@@ -131,7 +131,7 @@ func (h *StatisticsHandler) GetTimeRangeStats(c *gin.Context) {
 // @Param start_date query string true "开始日期 (YYYY-MM-DD)"
 // @Param end_date query string true "结束日期 (YYYY-MM-DD)"
 // @Param limit query int false "限制结果数量"
-// @Success 200 {array} analyticscontract.AgentPerformanceStats
+// @Success 200 {array} contract.AgentPerformanceStats
 // @Failure 400 {object} statisticsErrorResponse
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/agent-performance [get]
@@ -192,7 +192,7 @@ func (h *StatisticsHandler) GetAgentPerformanceStats(c *gin.Context) {
 // @Produce json
 // @Param start_date query string false "开始日期 (YYYY-MM-DD)"
 // @Param end_date query string false "结束日期 (YYYY-MM-DD)"
-// @Success 200 {array} analyticscontract.CategoryStats
+// @Success 200 {array} contract.CategoryStats
 // @Failure 400 {object} statisticsErrorResponse
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/ticket-category [get]
@@ -223,7 +223,7 @@ func (h *StatisticsHandler) GetTicketCategoryStats(c *gin.Context) {
 // @Produce json
 // @Param start_date query string false "开始日期 (YYYY-MM-DD)"
 // @Param end_date query string false "结束日期 (YYYY-MM-DD)"
-// @Success 200 {array} analyticscontract.CategoryStats
+// @Success 200 {array} contract.CategoryStats
 // @Failure 400 {object} statisticsErrorResponse
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/ticket-priority [get]
@@ -284,7 +284,7 @@ func (h *StatisticsHandler) parseOptionalRange(c *gin.Context) (time.Time, time.
 // @Tags 统计
 // @Accept json
 // @Produce json
-// @Success 200 {array} analyticscontract.CategoryStats
+// @Success 200 {array} contract.CategoryStats
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/customer-source [get]
 func (h *StatisticsHandler) GetCustomerSourceStats(c *gin.Context) {
@@ -307,7 +307,7 @@ func (h *StatisticsHandler) GetCustomerSourceStats(c *gin.Context) {
 // @Tags 统计
 // @Accept json
 // @Produce json
-// @Success 200 {object} analyticscontract.RemoteAssistTicketStats
+// @Success 200 {object} contract.RemoteAssistTicketStats
 // @Failure 500 {object} statisticsErrorResponse
 // @Router /api/statistics/remote-assist-tickets [get]
 func (h *StatisticsHandler) GetRemoteAssistTicketStats(c *gin.Context) {

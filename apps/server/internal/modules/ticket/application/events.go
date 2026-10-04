@@ -21,11 +21,11 @@ type TicketEvent struct {
 	// SessionID 是工单来源会话 ID；timeline 投影（V1.0 B1-2）借它把
 	// ticket.* 事件归入 conversation_events，无来源会话（如邮件建单）
 	// 时为 nil 且不投影。
-	SessionID  *string
-	Status     string
-	Priority   string
-	Category   string
-	Source     string
+	SessionID *string
+	Status    string
+	Priority  string
+	Category  string
+	Source    string
 }
 
 func NewTicketEvent(name string, ticket TicketDTO) TicketEvent {

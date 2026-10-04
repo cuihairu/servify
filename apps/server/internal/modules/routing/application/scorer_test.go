@@ -158,8 +158,8 @@ func TestDefaultScorerOfflineAndTieBreak(t *testing.T) {
 func TestDefaultScorerWeightOverride(t *testing.T) {
 	scorer := NewDefaultScorer(WeightSet{Skill: 0.6, Language: 0.1, Availability: 0.1, Workload: 0.05, Priority: 0.05, Tier: 0.03, Channel: 0.04, SLA: 0.03})
 	out, err := scorer.Score(context.Background(), ScoringInput{
-		SessionID: "s-6",
-		Skills:    []string{"billing"},
+		SessionID:  "s-6",
+		Skills:     []string{"billing"},
 		Candidates: []AgentCandidate{candidate(1, "online", []string{"general"}, nil, 0, 5)},
 	})
 	if err != nil {
