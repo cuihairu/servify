@@ -32,6 +32,16 @@ func TestDerivePrincipalKind(t *testing.T) {
 			want:    PrincipalEndUser,
 		},
 		{
+			name:    "guest token type infers end user (B3-2)",
+			payload: map[string]interface{}{"typ": "guest", "sid": "ws_1"},
+			want:    PrincipalEndUser,
+		},
+		{
+			name:    "explicit principal kind overrides guest typ",
+			payload: map[string]interface{}{"typ": "guest", "token_type": "agent"},
+			want:    PrincipalAgent,
+		},
+		{
 			name:    "missing signals stays unknown",
 			payload: map[string]interface{}{},
 			want:    PrincipalUnknown,

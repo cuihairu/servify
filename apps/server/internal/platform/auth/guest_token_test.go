@@ -5,9 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 var guestTokenNow = time.Unix(1727000000, 0)
@@ -89,6 +93,44 @@ func TestSignGuestTokenGuards(t *testing.T) {
 		if _, _, err := SignGuestToken(tc.secret, tc.session, tc.ttl, guestTokenNow); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 			t.Fatalf("%s: expected %q, got %v", tc.name, tc.wantErr, err)
 		}
+	}
+}
+
+// TestGuestTokenViaAuthMiddleware 锚定 REST 面推导（V1.0 收敛 B3-2）：
+// guest token 走 AuthMiddleware 时 principal_kind 推导为 end_user、sid
+// 提取为 session_id——POST /api/v1/ai/feedback 的访客会话绑定校验依赖
+// 这两个上下文键；WS 握手仍走独立 validator，不受影响。
+func TestGuestTokenViaAuthMiddleware(t *testing.T) {
+	tok, _, err := SignGuestToken("secret-1", "sess-9", time.Hour, guestTokenNow)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	r := gin.New()
+	r.Use(AuthMiddleware(MiddlewareConfig{
+		Secret: "secret-1",
+		Now:    func() time.Time { return guestTokenNow.Add(time.Minute) },
+	}))
+	r.POST("/ai/feedback", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"principal_kind": c.GetString("principal_kind"),
+			"session_id":     c.GetString("session_id"),
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/ai/feedback", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 got %d body=%s", w.Code, w.Body.String())
+	}
+	var out map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out["principal_kind"] != PrincipalEndUser || out["session_id"] != "sess-9" {
+		t.Fatalf("context = %v（必须 end_user + sid 绑定）", out)
 	}
 }
 

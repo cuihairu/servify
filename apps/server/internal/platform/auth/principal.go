@@ -36,6 +36,13 @@ func derivePrincipalKind(payload map[string]interface{}, roles []string) string 
 		return kind
 	}
 
+	// 访客 token（typ=guest，§10 #2 / D6）：语义上就是 end_user——REST 面
+	// （如 POST /api/v1/ai/feedback 的会话绑定校验）按 sid 提取 session_id
+	// 后以 end_user 口径校验；WS 握手仍走独立 validator，不受此推导影响。
+	if typ, _ := payload["typ"].(string); strings.EqualFold(strings.TrimSpace(typ), "guest") {
+		return PrincipalEndUser
+	}
+
 	for _, role := range roles {
 		switch strings.ToLower(strings.TrimSpace(role)) {
 		case PrincipalAdmin, "super_admin":

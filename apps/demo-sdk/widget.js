@@ -9,7 +9,8 @@
  *     ServifyWidget.create({
  *       baseUrl: 'http://localhost:8080',
  *       sessionId: 'optional-custom-session-id',
- *       primaryColor: '#667eea'  // optional
+ *       primaryColor: '#667eea',  // optional
+ *       accessToken: 'guest-jwt'  // optional：guest token（访客反馈入口需要）
  *     });
  *   </script>
  *
@@ -476,6 +477,58 @@
       return b;
     }
 
+    // ── Citation 引用行 + 反馈条（V1.0 收敛 B3-2，§8.4/§5.3）──────
+    // sources 渲染形态：📄 标题 · relevance 0.91（计划书 §8.4 口径）；
+    // 反馈条只在响应带 answer_id 且嵌入方注入 accessToken 时出现（反馈
+    // 端点走认证面，匿名 demo 模式不可用）。
+
+    function appendSources(bubble, sources) {
+      if (!bubble || !sources || !sources.length || !root.fetch) return;
+      var box = el('div', 'sw-sources');
+      for (var i = 0; i < sources.length; i++) {
+        var s = sources[i] || {};
+        var row = el('div', 'sw-source-row',
+          '📄 ' + (s.title || s.document_id || '未命名文档') +
+          (typeof s.score === 'number' ? ' · relevance ' + s.score.toFixed(2) : ''));
+        box.appendChild(row);
+      }
+      bubble.appendChild(box);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    function appendFeedbackBar(bubble, answerID) {
+      if (!bubble || !answerID || !root.fetch) return;
+      var bar = el('div', 'sw-feedback');
+      bar.appendChild(el('span', 'sw-feedback-label', '这条回答有帮助吗？'));
+      var yes = el('button', 'sw-feedback-btn', '👍');
+      var no = el('button', 'sw-feedback-btn', '👎');
+      var settled = false;
+      function submit(helpful) {
+        if (settled) return;
+        settled = true;
+        yes.disabled = true;
+        no.disabled = true;
+        root.fetch(baseUrl + '/api/v1/ai/feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + opts.accessToken
+          },
+          body: JSON.stringify({ answer_id: answerID, helpful: helpful, comment: '' })
+        }).then(function (r) {
+          bar.textContent = r.ok ? '感谢反馈！' : '反馈提交失败';
+        }).catch(function () {
+          bar.textContent = '反馈提交失败';
+        });
+      }
+      yes.onclick = function () { submit(true); };
+      no.onclick = function () { submit(false); };
+      bar.appendChild(yes);
+      bar.appendChild(no);
+      bubble.appendChild(bar);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
     // ── 流式气泡（PROTOCOL §4.1 三段契约）──────────────────────
     var streaming = null;
 
@@ -608,7 +661,9 @@
     client.on('message', function (msg) {
       if (!msg) return;
 
-      // AI response（终帧）：流式气泡整体覆写幂等收口；无流时照常渲染
+      // AI response（终帧）：流式气泡整体覆写幂等收口；无流时照常渲染。
+      // 终帧带 sources/answer_id 时渲染引用行 + "是否有帮助"反馈条（V1.0
+      // 收敛 B3-2，计划书 §5.3/§8.4：citation 可视化 + 反馈闭环访客入口）。
       if (msg.type === 'ai-response' && msg.data) {
         var data = msg.data;
         var finalText = '';
@@ -619,11 +674,19 @@
         }
         if (finalText) {
           rememberContent(finalText);
+          var bubble;
           if (streaming) {
             streaming.bubble.textContent = finalText;
+            bubble = streaming.bubble;
             streaming = null;
           } else {
-            addMsg('bot', finalText);
+            bubble = addMsg('bot', finalText);
+          }
+          if (typeof data === 'object') {
+            appendSources(bubble, data.sources);
+            if (data.answer_id && opts.accessToken) {
+              appendFeedbackBar(bubble, data.answer_id);
+            }
           }
           bumpUnreadIfHidden();
         }
@@ -715,6 +778,13 @@
 .servify-widget .sw-msg-user .sw-bubble { background:' + color + '; color:#fff; border-bottom-right-radius:4px; }\
 .servify-widget .sw-msg-bot { align-self:flex-start; }\
 .servify-widget .sw-msg-bot .sw-bubble { background:#f0f0f0; color:#333; border-bottom-left-radius:4px; }\
+.servify-widget .sw-sources { margin-top:8px; border-top:1px dashed #d9d9d9; padding-top:6px; }\
+.servify-widget .sw-source-row { font-size:12px; color:#667; line-height:1.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\
+.servify-widget .sw-feedback { margin-top:8px; display:flex; align-items:center; gap:8px; }\
+.servify-widget .sw-feedback-label { font-size:12px; color:#888; }\
+.servify-widget .sw-feedback-btn { background:none; border:1px solid #d9d9d9; border-radius:6px; padding:2px 8px; font-size:13px; cursor:pointer; line-height:1.4; transition:border-color .2s; }\
+.servify-widget .sw-feedback-btn:hover { border-color:' + color + '; }\
+.servify-widget .sw-feedback-btn:disabled { opacity:.5; cursor:default; }\
 .servify-widget .sw-msg-system { align-self:center; max-width:100%; }\
 .servify-widget .sw-msg-system .sw-bubble { background:none; color:#888; font-size:12px; text-align:center; padding:2px 8px; }\
 .servify-widget .sw-msg-voice { max-width:85%; }\
@@ -759,10 +829,13 @@
     var baseUrl = document.currentScript.getAttribute('data-base-url') || (location.protocol + '//' + location.host);
     var sid = document.currentScript.getAttribute('data-session-id') || '';
     var color = document.currentScript.getAttribute('data-primary-color') || '#667eea';
+    var accessToken = document.currentScript.getAttribute('data-access-token') || '';
+    var initOpts = { baseUrl: baseUrl, sessionId: sid, primaryColor: color };
+    if (accessToken) initOpts.accessToken = accessToken;
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () { createWidget({ baseUrl: baseUrl, sessionId: sid, primaryColor: color }); });
+      document.addEventListener('DOMContentLoaded', function () { createWidget(initOpts); });
     } else {
-      createWidget({ baseUrl: baseUrl, sessionId: sid, primaryColor: color });
+      createWidget(initOpts);
     }
   }
 })(typeof window !== 'undefined' ? window : this);
