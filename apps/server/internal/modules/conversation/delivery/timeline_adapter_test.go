@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,13 +16,14 @@ import (
 
 type scriptedTimelineRepo struct {
 	fakeEventRepo
-	events   []domain.ConversationEvent
-	gotLimit int
+	events    []domain.ConversationEvent
+	gotLimit  int
+	gotOffset int
 }
 
 func (f *scriptedTimelineRepo) ListByConversation(_ context.Context, _ string, limit, offset int) ([]domain.ConversationEvent, error) {
 	f.gotLimit = limit
-	_ = offset
+	f.gotOffset = offset
 	return f.events, nil
 }
 
@@ -103,5 +105,46 @@ func TestTimelineAdapter_NilRepoReturns503(t *testing.T) {
 	adapter.HandleListTimeline(ctx)
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", recorder.Code)
+	}
+}
+
+// failingTimelineRepo 覆盖 fakeEventRepo 的读失败，驱动 500 分支。
+type failingTimelineRepo struct {
+	fakeEventRepo
+}
+
+func (f *failingTimelineRepo) ListByConversation(context.Context, string, int, int) ([]domain.ConversationEvent, error) {
+	return nil, errors.New("projection read failed")
+}
+
+func TestTimelineAdapter_RepoErrorReturns500(t *testing.T) {
+	adapter := NewTimelineAdapter(&failingTimelineRepo{})
+	ctx, recorder := newTimelineTestContext(t, "/x")
+	adapter.HandleListTimeline(ctx)
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", recorder.Code)
+	}
+}
+
+func TestTimelineAdapter_EmptyConversationIDReturns400(t *testing.T) {
+	adapter := NewTimelineAdapter(&scriptedTimelineRepo{})
+	ctx, recorder := newTimelineTestContext(t, "/x")
+	ctx.Params = gin.Params{{Key: "id", Value: ""}}
+	adapter.HandleListTimeline(ctx)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestTimelineAdapter_PositiveOffsetPassedThrough(t *testing.T) {
+	repo := &scriptedTimelineRepo{}
+	adapter := NewTimelineAdapter(repo)
+	ctx, recorder := newTimelineTestContext(t, "/x?offset=7")
+	adapter.HandleListTimeline(ctx)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if repo.gotOffset != 7 {
+		t.Fatalf("offset should pass through, got %d", repo.gotOffset)
 	}
 }

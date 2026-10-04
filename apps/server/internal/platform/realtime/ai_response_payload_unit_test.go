@@ -43,3 +43,13 @@ func TestAIResponsePayloadEnhancedExtras(t *testing.T) {
 		t.Fatalf("unexpected extras: %v", payload)
 	}
 }
+
+// TestAIResponsePayloadAnswerID 首答持久化 ID（B3-1b §5.3）非零时透出：
+// 访客 widget 凭它调 POST /api/v1/ai/feedback 完成反馈闭环。
+func TestAIResponsePayloadAnswerID(t *testing.T) {
+	resp := &aidelivery.AIResponse{Content: "hi", AnswerID: 42}
+	payload := aiResponsePayload(resp)
+	if payload["answer_id"] != resp.AnswerID {
+		t.Fatalf("expected answer_id passthrough, got %v", payload["answer_id"])
+	}
+}

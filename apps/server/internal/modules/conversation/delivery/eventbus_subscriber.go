@@ -120,8 +120,12 @@ func trimAggregatePrefix(aggregateID string, prefix string) string {
 	return ""
 }
 
+// eventPayloadMarshal 仅供测试注入的 seam：json.Marshal 对 string/time
+// 载荷不会失败，测试替换它驱动载荷编码失败的降级分支。
+var eventPayloadMarshal = json.Marshal
+
 func encodeEventPayload(event eventbus.Event) string {
-	encoded, err := json.Marshal(map[string]any{
+	encoded, err := eventPayloadMarshal(map[string]any{
 		"event_id":    event.ID(),
 		"occurred_at": event.OccurredAt(),
 	})

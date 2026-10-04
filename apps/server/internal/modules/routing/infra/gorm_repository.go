@@ -200,11 +200,11 @@ func (r *GormRepository) CreateRoutingAssignment(ctx context.Context, item *doma
 	if item == nil {
 		return fmt.Errorf("routing assignment required")
 	}
-	factorsJSON, err := json.Marshal(item.Factors)
+	factorsJSON, err := marshalAssignmentJSON(item.Factors)
 	if err != nil {
 		return fmt.Errorf("marshal factors: %w", err)
 	}
-	reasonsJSON, err := json.Marshal(item.Reasons)
+	reasonsJSON, err := marshalAssignmentJSON(item.Reasons)
 	if err != nil {
 		return fmt.Errorf("marshal reasons: %w", err)
 	}
@@ -389,6 +389,11 @@ func applyRoutingWaitingScopeFields(ctx context.Context, model *models.WaitingRe
 // marshalSkillsJSON 为测试注入点（默认即 json.Marshal）：
 // []string 序列化恒成功，错误分支仅经注入触发。
 var marshalSkillsJSON = json.Marshal
+
+// marshalAssignmentJSON 为测试注入点（默认即 json.Marshal）：评分审计的
+// Factors（map[string]float64）与 Reasons（[]string）常规序列化恒成功，
+// 错误分支仅经注入触发（或 Factors 注入 NaN 走真实失败路径）。
+var marshalAssignmentJSON = json.Marshal
 
 func marshalSkills(skills []string) string {
 	if len(skills) == 0 {

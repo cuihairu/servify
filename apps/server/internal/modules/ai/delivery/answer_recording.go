@@ -17,6 +17,11 @@ import (
 // scopedAIRuntimeService 装配点），失败只记日志不阻塞作答——落库是旁路
 // 观测，不进入业务写路径。
 
+// marshalSources 仅供测试注入的包级 seam（json.Marshal 对 []SourceSnapshot
+// 在真实实现下不会失败，测试替换它驱动序列化错误分支）；默认值保持生产行为，
+// 生产代码不得在运行时改写（与 internal/handlers/seams.go 同口径）。
+var marshalSources = aiapp.MarshalSources
+
 // AnswerStore 首答持久化口。
 type AnswerStore interface {
 	RecordAnswer(ctx context.Context, record AnswerRecord) (uint, error)
@@ -45,7 +50,7 @@ type gormAnswerStore struct {
 }
 
 func (s *gormAnswerStore) RecordAnswer(ctx context.Context, record AnswerRecord) (uint, error) {
-	sourcesJSON, err := aiapp.MarshalSources(record.Sources)
+	sourcesJSON, err := marshalSources(record.Sources)
 	if err != nil {
 		return 0, err
 	}

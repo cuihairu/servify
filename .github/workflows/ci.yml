@@ -21,7 +21,9 @@ jobs:
   go-checks:
     name: Go Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 测试口径带 -tags integration（37 个集成测试文件）后单次跑量增大，
+    # 步骤与作业超时相应放宽，避免冷缓存下误报超时。
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -64,7 +66,7 @@ jobs:
         run: go -C apps/server vet ./...
 
       - name: Run unit tests with coverage
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           TEST_COVERAGE_TARGET: "100"
         run: ./scripts/run-tests.sh

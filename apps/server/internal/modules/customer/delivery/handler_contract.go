@@ -8,6 +8,10 @@ import (
 	customerapp "servify/apps/server/internal/modules/customer/application"
 )
 
+// ErrCustomerNotFound 数据主体不存在（application 层错误透传，handler 据此 404，
+// 避免直引 modules/*/application 违反 handler 边界）。
+var ErrCustomerNotFound = customerapp.ErrCustomerNotFound
+
 // HandlerService is the only customer contract that HTTP handlers should depend on.
 type HandlerService interface {
 	CreateCustomer(ctx context.Context, req *customerapi.CustomerCreateRequest) (*models.User, error)

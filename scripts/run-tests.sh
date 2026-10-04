@@ -19,9 +19,12 @@ cd "$PROJECT_ROOT"
 # 创建测试输出目录
 mkdir -p "$OUT_DIR" "$GOWORK_CACHE_DIR"
 
-# 运行所有 apps/server 模块测试（不仅 services/handlers）
-echo "📊 Running tests with coverage (no race)..."
-go test -v -coverprofile="$OUT_DIR/coverage.out" ./apps/server/...
+# 运行所有 apps/server 模块测试（不仅 services/handlers）。
+# -tags integration：仓库的大块集成测试（37 个文件，sqlite 内存库自足）
+# 挂在 go:build integration 后，覆盖率门禁必须带上它们才真实——否则新
+# 批次代码在统计里裸奔，100% 门禁形同虚设。
+echo "📊 Running tests with coverage (no race, tags=integration)..."
+go test -v -tags integration -coverprofile="$OUT_DIR/coverage.out" ./apps/server/...
 
 # 生成覆盖率HTML报告
 echo "📈 Generating coverage report..."

@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	customerapi "servify/apps/server/internal/modules/customer/api"
-	customerapplication "servify/apps/server/internal/modules/customer/application"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
 
@@ -565,7 +564,7 @@ func (h *CustomerHandler) respondCustomerDataBoundaryError(c *gin.Context, actio
 	if h.logger != nil {
 		h.logger.Errorf("Failed to %s: %v", action, err)
 	}
-	if errors.Is(err, customerapplication.ErrCustomerNotFound) {
+	if errors.Is(err, customerdelivery.ErrCustomerNotFound) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Customer not found"})
 		return
 	}
