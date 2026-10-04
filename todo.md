@@ -104,15 +104,15 @@
 - 下一步：B3 Knowledge 产品化与 AI 反馈闭环
 - 阻塞项：无
 
-### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
+### [x] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
 
 - 任务清单（实施切片）：
   - [x] B3-1a knowledge 来源/版本/索引收口（后端）——a66da78（`knowledge_sources` 表〔markdown/website/pdf/faq/api 元数据登记〕+ sources CRUD〔类型枚举校验/删除引用守卫/tenant+workspace scope 隔离〕；`knowledge_docs.source_id`/`version` 挂源与版本号〔标题/内容变更自增、纯元数据不动、存量回填 1〕；`knowledge_index_jobs.document_version` 版本关联；索引任务 HTTP 收口 POST /:id/index-jobs + retry + 按文档列表〔此前 QueueIndexJob/RunIndexJob 无生产调用方〕；迁移 000018 versioned SQL + AutoMigrate 双路径；服务层 + sqlite 集成测试全绿）
   - [x] B3-1b 检索分析 + AI 答案持久化（后端）——0a7a152（`ai_answers`/`answer_feedback` 领域模型 + 迁移 000019 双路径；记录路径旁路观测：REST ProcessQuery 与 WS ProcessQueryStream〔流式仅终帧落库〕经 AnswerStore 落库，失败静默不阻塞作答，REST 响应与 WS ai-response 帧透出 `answer_id`；`POST /api/v1/ai/feedback` 认证即可 + end_user 强制会话绑定〔§5.3〕；`GET /api/v1/ai/retrieval-analytics` 从 ai_answers 聚合 top 问答/无命中率/低置信率/反馈计数〔§8.3，窗口默认 7 天上限 90 天〕；`LowConfidenceThreshold=0.65` 与 HandoffConfidenceThreshold 对齐；来源快照不落 content 全文；服务层/infra 集成/HTTP 面测试全绿）
-  - [ ] B3-2 citation 可视化与反馈入口（前端）：Knowledge 管理页（sources/版本/索引状态/检索分析展示）+ 坐席侧与访客侧 Sources+relevance 渲染（📄 doc relevance 0.91 形态）+ widget "Was this helpful?" 调 feedback 端点 + `README_KNOWLEDGE.md` 更新
-- 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链；`README_KNOWLEDGE.md` 更新
-- 状态：`[~]`（2026-10-04 B3-1a/B3-1b 后端已过；剩 B3-2 前端）
-- 下一步：B3-2 citation 可视化与反馈入口（前端）
+  - [x] B3-2 citation 可视化与反馈入口（前端）——f7b99e5 + 78361f1 + 3a570ce（f7b99e5：widget ai-response 终帧渲染 sources 引用行〔📄 标题 · relevance 0.91，§8.4〕+"Was this helpful?"反馈条〔带 answer_id 且嵌入方注入 guest token 时出现，POST /api/v1/ai/feedback Bearer 认证，§5.3〕；配套 `derivePrincipalKind` 对 typ=guest 推导 end_user——REST 面访客会话绑定校验生效，WS 握手独立 validator 不受影响，推导/中间件测试全绿。78361f1：admin Knowledge 管理页〔列表/详情来源+版本列、挂源编辑、重建索引、任务抽屉失败重试；新增来源与索引页、检索分析页〔窗口 7/30/90 天 + top 问答/零命中/低置信榜单 + 反馈计数〕〕；typecheck+build 绿。3a570ce：README_KNOWLEDGE.md 收口新能力面 + 架构路径修正。坐席侧 citation 沿用 Workspace W4 知识建议面板既有 relevance 渲染）
+- 验收闸：Knowledge 管理页 source→文档→版本→检索分析→反馈回看全链（来源登记页→文档挂源+版本→索引任务状态/重试→检索分析榜单→widget 反馈条落 answer_feedback，REST/WS 记录路径同源）；`README_KNOWLEDGE.md` 更新 ✓
+- 状态：`[x]`（2026-10-04 过闸：B3-1a/B3-1b/B3-2 三切片 + 验收闸全链；全量 unit+integration 测试绿，admin typecheck+build 绿）
+- 下一步：B4 收口与 V1.0 发布
 - 阻塞项：无
 
 ### [ ] B4 收口与 V1.0 发布（P4 批次）
@@ -121,9 +121,9 @@
   - [ ] B4-1 `TASKS.md`/验收矩阵/文档站与 V1.0 口径统一（README 残余修正、薄壳模块文档面收口完成）
   - [ ] B4-2 `v1.0.0` 发布：release notes 按 V1 收敛口径书写，四门禁全绿
 - 验收闸：累计验收矩阵全绿；`make release-check` + `security-check` + `observability-check` + `local-check` 全绿；27 模块不增（架构门禁）
-- 状态：`[ ]`
-- 下一步：等 B3 过闸
-- 阻塞项：B3
+- 状态：`[ ]`（2026-10-04 解除阻塞：B3 已过闸）
+- 下一步：B4-1 `TASKS.md`/验收矩阵/文档站与 V1.0 口径统一
+- 阻塞项：无
 
 ---
 
