@@ -4,6 +4,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import {
   Alert,
   Button,
+  Collapse,
   Empty,
   Input,
   Modal,
@@ -33,6 +34,8 @@ import {
 } from '@/services/conversation';
 import { createTicket } from '@/services/ticket';
 import { getWorkspaceOverview } from '@/services/workspace';
+// 服务过程时间线（V1.0 收敛 B1-2，W6）：conversation_events 投影只读展示。
+import ServiceTimeline from './components/ServiceTimeline';
 import {
   getTranslationPreference,
   setTranslationPreference,
@@ -1240,6 +1243,17 @@ const ConversationPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            )}
+            {selectedId && (
+              <Collapse
+                size="small"
+                style={{ marginBottom: 12 }}
+                items={[{
+                  key: 'timeline',
+                  label: '服务过程（创建 → 分配 → 转接 → 工单）',
+                  children: <ServiceTimeline sessionId={selectedId} />,
+                }]}
+              />
             )}
             <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: '#fafafa', borderRadius: 8 }}>
               {!selectedId ? (

@@ -156,6 +156,21 @@ declare namespace API {
     created_at: string;
   }
 
+  /** 服务过程时间线事件（conversation_events 投影，V1.0 B1-2，只读）。 */
+  interface ConversationTimelineEvent {
+    event_type: string;
+    actor_type?: string;
+    actor_id?: string;
+    summary: string;
+    occurred_at: string;
+  }
+
+  interface ConversationTimelineResponse {
+    conversation_id: string;
+    items: API.ConversationTimelineEvent[];
+    count: number;
+  }
+
   /**
    * 会话翻译语言偏好（读向由服务端按认证主体推导，请求方不自报）。
    * target_lang 为空串表示未设置自动翻译。
