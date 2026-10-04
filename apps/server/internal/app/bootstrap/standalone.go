@@ -129,6 +129,13 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 			if err := AutoMigrate(db); err != nil {
 				return fmt.Errorf("Failed to migrate database: %w", err)
 			}
+			// V1.0 收敛 B2-4：sqlite/AutoMigrate 路径的 default scope 回填
+			// （postgres 走 versioned SQL 迁移 000017_scope_backfill）。
+			if counts, err := BackfillDefaultScope(db); err != nil {
+				return fmt.Errorf("Failed to backfill default scope: %w", err)
+			} else if touched := sumScopeBackfillCounts(counts); touched > 0 {
+				logger.Infof("Scope backfill touched %d rows across core business tables", touched)
+			}
 		}
 	}
 

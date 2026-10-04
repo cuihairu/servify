@@ -139,6 +139,18 @@ func main() {
 		}
 		log.Println("Database migration completed successfully!")
 
+		// V1.0 收敛 B2-4：default scope 回填（postgres 走 versioned SQL
+		// 迁移 000017_scope_backfill，AutoMigrate 分支在此补齐同语义）。
+		if counts, err := appbootstrap.BackfillDefaultScope(db); err != nil {
+			log.Fatalf("Failed to backfill default scope: %v", err)
+		} else {
+			var touched int64
+			for _, n := range counts {
+				touched += n
+			}
+			log.Printf("Scope backfill touched %d rows", touched)
+		}
+
 		log.Println("Creating additional indexes...")
 		if err := appbootstrap.CreateIndexes(db); err != nil {
 			log.Fatalf("Failed to create indexes: %v", err)
