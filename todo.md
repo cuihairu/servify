@@ -74,11 +74,11 @@
 - 任务清单：
   - [x] B1-1 `conversation_events` 落库与投影接线（新表/仓储/事件订阅，Timeline 数据源）——commit 5b557ce：models.ConversationEvent + domain/application/infra 仓储链 + delivery.EventBusSubscriber（conversation.created / routing.agent_assigned / routing.transfer_completed 三事件按 AggregateID 前缀投影），装配挂 wireConversationRuntime；`go build ./apps/server/...`、`go vet`、`go test ./apps/server/internal/modules/conversation/...` 全绿
   - [x] B1-2 Timeline API 与会话页 Timeline 组件（admin）——30a5146（ticket DTO/事件补 SessionID，ticket.created/assigned/closed 三事件接入投影，无会话工单跳过）+ 26862b4（GET /api/omni/sessions/:id/timeline 只读面：旧→新时序、limit 50/200、参数 400、消费侧接口 nil 503）+ bcac4bf（admin 会话页折叠面板 Timeline 组件，actor 标签+事件配色+刷新）；`go build`/`go vet`/`go test`（conversation+ticket+handlers+app/server）与 `pnpm typecheck` 全绿
-  - [ ] B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）——计划书 §4 W1-W8 验收
+  - [x] B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）——计划书 §4 W1-W7：ddd71ed（/workspace 三栏骨架：W1 队列分组徽章+会话列表、W2 接管/转派/结束/转工单+消息收发、W5 客户 360+工单汇、W6 Timeline 复用）+ 80c0e6f（W3 AI 工具条：建议回复/改写/摘要，AI 起草人发；W4 知识检索引用面板 title+相关度）；W8 性能基线留 B1 过闸统一测；pnpm typecheck 绿
   - [ ] B1-4 薄壳模块叙事降级（README/文档站：sla/satisfaction/shift/macro/custom_field/gamification/suggestion 归位子能力）
 - 验收闸：W1-W8 全过；e2e 访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化通过；`make release-check` 绿
 - 状态：`[ ]`（B1-1、B1-2 已闭环）
-- 下一步：B1-3 Agent Workspace 三栏工作台（Inbox/Queue/Conversation/Customer panel）
+- 下一步：B1-4 薄壳模块叙事降级（README/文档站）
 - 阻塞项：无
 
 ### [ ] B2 Routing 打分引擎与安全数据边界（P2 批次）
