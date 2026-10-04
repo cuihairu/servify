@@ -91,13 +91,14 @@
 
 - 任务清单：
   - [x] B2-1 `routing/application` Scorer 接口与多因子评分（skill/language/availability/workload/priority/tier/channel/SLA）+ `routing_assignments` 落库——fff2116（scorer.go 八因子加权聚合：权重可配、同分按 AgentID 升序可复现；models.RoutingAssignment 新表 + 迁移注册；executeTransfer 为最终分配打分，AssignAgentCommand.Scoring 落库；推荐入口 RecommendAgents 只推荐不执行 §6.2-3）＋ 97f947a（集成验收：`make routing-scoring-acceptance` 全绿——分配评分/八因子/策略/理由经 GET /api/session-transfer/scoring/:session_id 可见，transfer_records 事实双记录）；全量 go test 0 失败
-  - [ ] B2-2 Customer Data Boundary：PII 清单 / retention 配置 / 数据导出 / 删除（含关联擦除）管理面
+  - [x] B2-2a Customer Data Boundary 管理面：PII 清单 / 数据导出 / 删除（含关联擦除）——f9a14b1（customer/application/data_boundary.go：PIICatalog 六类清单〔身份标识/客户档案/聊天记录/工单内容/附件/凭证〕+ ExportCustomerData 聚合导出〔凭证永不导出〕+ EraseCustomerData 关联擦除〔匿名化 erased-c<id>@erased.local、消息/工单内容 scrub "[已擦除]"、附件元数据删除；幂等、不硬删业务行、Unscoped 覆盖软删行〕；GET /api/customers/:id/export + POST /api/customers/:id/erase-data；infra 集成测试导出全覆盖/擦除全 PII 清除/幂等/404 全绿）；retention 配置化归入 B2-2b
+  - [x] B2-2b retention 配置化——4749eea（config 新增 privacy 节：retention_days〔0=关闭默认〕+ cleanup_interval；customer/application/retention.go RetentionService 按 ended_at/closed_at 时间窗批量擦除〔cutoff=now-Nd，未启用零触碰〕；infra 四个集合级清理口 Unscoped 覆盖软删工单、只擦非空非标记行保证幂等计数诚实；worker RetentionCleanupWorker 按 retention_days>0 注册；集成测试过期擦/窗内保留/幂等/未启用 + worker 生命周期全绿）；Timeline 投影核实不含消息内容（payload 只存 event_id/occurred_at、summary 固定文案），retention 无投影泄漏面
   - [ ] B2-3 statistics 旧 handler 收口进 analytics 模块（含导出）
   - [ ] B2-4 核心业务表 `tenant_id`/`workspace_id` 回填迁移（conversation/customer/routing/ticket 评论，空库+既有库两态可逆）
 - 验收闸：计划书 §6.3 三例（技能/语种权重可复现✅ 单测、空闲坐席优先✅ 单测+集成、分配理由可见✅ 集成验收）；PII 用例全过；迁移两态可逆
 - 额外收口（B1 过闸发现）：统一分配事件发布路径——等待队列进队（addToWaitingQueue）与 conversation 直派接管（conversation service.AssignAgent）目前不发 routing.* 事件，Timeline 的 routing 投影只能覆盖 routing.Service.AssignAgent 路径；连同自动化分派评分（deregister 分派仍用 agent 模块三级分配，评分随 executeTransfer 审计）归入 B2 gate
-- 状态：`[ ]`（B2-1 已闭环）
-- 下一步：B2-2 Customer Data Boundary（PII 清单 / retention / 导出 / 删除）
+- 状态：`[ ]`（B2-1、B2-2 全部闭环；剩 B2-3/B2-4）
+- 下一步：B2-3 statistics 旧 handler 收口进 analytics
 - 阻塞项：无
 
 ### [ ] B3 Knowledge 产品化与 AI 反馈闭环（P3 批次）
