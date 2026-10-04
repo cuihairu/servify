@@ -19,6 +19,7 @@ import (
 	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
@@ -1024,4 +1025,8 @@ func transferHistoryFixture() []models.TransferRecord {
 			CreatedAt:     now,
 		},
 	}
+}
+
+func (s *unitTransferService) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error) {
+	return nil, nil
 }

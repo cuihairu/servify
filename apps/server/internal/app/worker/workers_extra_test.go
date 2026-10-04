@@ -22,6 +22,7 @@ import (
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	emaildelivery "servify/apps/server/internal/modules/email/delivery"
 	qualityapp "servify/apps/server/internal/modules/quality/application"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
@@ -912,4 +913,8 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 		}
 		t.Fatalf("missing workers: %v", names)
 	}
+}
+
+func (s *stubRoutingRuntime) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error) {
+	return nil, nil
 }

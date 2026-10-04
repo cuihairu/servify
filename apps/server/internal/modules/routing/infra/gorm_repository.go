@@ -194,6 +194,80 @@ func mapTransferRecordModel(item domain.Assignment) models.TransferRecord {
 	}
 }
 
+// CreateRoutingAssignment 落评分审计（B2-1）：因子/理由序列化为 JSON 文本，
+// tenant/workspace scope 字段与 transfer_records 同口径取自上下文。
+func (r *GormRepository) CreateRoutingAssignment(ctx context.Context, item *domain.RoutingAssignment) error {
+	if item == nil {
+		return fmt.Errorf("routing assignment required")
+	}
+	factorsJSON, err := json.Marshal(item.Factors)
+	if err != nil {
+		return fmt.Errorf("marshal factors: %w", err)
+	}
+	reasonsJSON, err := json.Marshal(item.Reasons)
+	if err != nil {
+		return fmt.Errorf("marshal reasons: %w", err)
+	}
+	model := models.RoutingAssignment{
+		SessionID:   item.SessionID,
+		FromAgentID: item.FromAgentID,
+		ToAgentID:   item.ToAgentID,
+		TotalScore:  item.TotalScore,
+		Factors:     string(factorsJSON),
+		Reasons:     string(reasonsJSON),
+		Strategy:    item.Strategy,
+		AssignedAt:  item.AssignedAt,
+		CreatedAt:   item.AssignedAt,
+	}
+	applyRoutingAssignmentScopeFields(ctx, &model)
+	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+		return err
+	}
+	item.AssignedAt = model.AssignedAt
+	return nil
+}
+
+// ListRoutingAssignments 按会话读评分审计，最新在前（管理面读口）。
+func (r *GormRepository) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]domain.RoutingAssignment, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var items []models.RoutingAssignment
+	if err := applyRoutingScope(r.db.WithContext(ctx), ctx).
+		Where("session_id = ?", sessionID).
+		Order("assigned_at DESC").
+		Limit(limit).
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.RoutingAssignment, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapRoutingAssignment(item))
+	}
+	return out, nil
+}
+
+func mapRoutingAssignment(model models.RoutingAssignment) domain.RoutingAssignment {
+	factors := map[string]float64{}
+	if model.Factors != "" {
+		_ = json.Unmarshal([]byte(model.Factors), &factors)
+	}
+	reasons := []string{}
+	if model.Reasons != "" {
+		_ = json.Unmarshal([]byte(model.Reasons), &reasons)
+	}
+	return domain.RoutingAssignment{
+		SessionID:   model.SessionID,
+		FromAgentID: model.FromAgentID,
+		ToAgentID:   model.ToAgentID,
+		TotalScore:  model.TotalScore,
+		Factors:     factors,
+		Reasons:     reasons,
+		Strategy:    model.Strategy,
+		AssignedAt:  model.AssignedAt,
+	}
+}
+
 func mapTransferRecord(model models.TransferRecord) domain.TransferRecord {
 	return domain.TransferRecord{
 		SessionID:      model.SessionID,
@@ -274,6 +348,18 @@ func applyRoutingScope(db *gorm.DB, ctx context.Context) *gorm.DB {
 		db = db.Where("workspace_id = ?", workspaceID)
 	}
 	return db
+}
+
+func applyRoutingAssignmentScopeFields(ctx context.Context, model *models.RoutingAssignment) {
+	if model == nil {
+		return
+	}
+	if tenantID := platformauth.TenantIDFromContext(ctx); tenantID != "" {
+		model.TenantID = tenantID
+	}
+	if workspaceID := platformauth.WorkspaceIDFromContext(ctx); workspaceID != "" {
+		model.WorkspaceID = workspaceID
+	}
 }
 
 func applyRoutingTransferScopeFields(ctx context.Context, model *models.TransferRecord) {

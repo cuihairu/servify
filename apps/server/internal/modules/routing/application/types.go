@@ -22,6 +22,17 @@ type AssignAgentCommand struct {
 	Notes          string
 	SessionSummary string
 	AssignedAt     time.Time
+	// Scoring 可选：本次分配的打分审计明细（B2-1，落 routing_assignments）。
+	Scoring *ScoringDetail
+}
+
+// ScoringDetail 是单次分配的三要素：总分、因子明细、人读理由（分配理由
+// 可见，docs/v1-convergence-plan.md §6.3-3），随策略标识一起落库。
+type ScoringDetail struct {
+	TotalScore float64
+	Factors    map[string]float64
+	Reasons    []string
+	Strategy   string
 }
 
 type AddToWaitingQueueCommand struct {
@@ -42,6 +53,32 @@ type MarkWaitingTransferredCommand struct {
 	SessionID  string
 	AssignedTo uint
 	AssignedAt time.Time
+}
+
+// RoutingAssignmentDTO 是评分审计的只读 DTO（管理面读写口，
+// GET 默认按会话过滤，limit 默认 50 上限 200）。
+type RoutingAssignmentDTO struct {
+	SessionID   string             `json:"session_id"`
+	FromAgentID *uint              `json:"from_agent_id,omitempty"`
+	ToAgentID   uint               `json:"to_agent_id"`
+	TotalScore  float64            `json:"total_score"`
+	Factors     map[string]float64 `json:"factors"`
+	Reasons     []string           `json:"reasons"`
+	Strategy    string             `json:"strategy"`
+	AssignedAt  time.Time          `json:"assigned_at"`
+}
+
+func MapRoutingAssignment(item domain.RoutingAssignment) RoutingAssignmentDTO {
+	return RoutingAssignmentDTO{
+		SessionID:   item.SessionID,
+		FromAgentID: item.FromAgentID,
+		ToAgentID:   item.ToAgentID,
+		TotalScore:  item.TotalScore,
+		Factors:     item.Factors,
+		Reasons:     item.Reasons,
+		Strategy:    item.Strategy,
+		AssignedAt:  item.AssignedAt,
+	}
 }
 
 type AssignmentDTO struct {

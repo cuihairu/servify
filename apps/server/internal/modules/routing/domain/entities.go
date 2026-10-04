@@ -20,6 +20,19 @@ type Assignment struct {
 	AssignedAt     time.Time
 }
 
+// RoutingAssignment 是评分审计值对象（B2-1，落 models.RoutingAssignment）：
+// transfer_records 记分配事实，本对象记评分视角（分数/因子/理由/策略）。
+type RoutingAssignment struct {
+	SessionID   string
+	FromAgentID *uint
+	ToAgentID   uint
+	TotalScore  float64
+	Factors     map[string]float64
+	Reasons     []string
+	Strategy    string
+	AssignedAt  time.Time
+}
+
 type QueueEntry struct {
 	SessionID     string
 	Reason        string

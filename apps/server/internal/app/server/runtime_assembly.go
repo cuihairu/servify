@@ -299,7 +299,10 @@ func wirePushRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) error {
 
 func wireRoutingRuntime(rt *Runtime) *routingapp.Service {
 	routingRepo := routinginfra.NewGormRepository(rt.DB)
-	return routingapp.NewService(routingRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
+	// V1.0 收敛 B2-1（docs/v1-convergence-plan.md §6.2）：多因子打分引擎，
+	// 分配评分落 routing_assignments 审计；推荐只影响候选序列不自动执行。
+	return routingapp.NewService(routingRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics).
+		WithScorer(routingapp.NewDefaultScorer(routingapp.WeightSet{}))
 }
 
 func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*realtimeplatform.WebRTCService, error) {
@@ -507,7 +510,9 @@ func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 		AgentLoad:         agentdelivery.NewTransferRuntimeAdapter(),
 		DispatchBatchSize: rt.Config.Routing.DispatchBatchSize,
 		ClaimLeaseSeconds: rt.Config.Routing.ClaimLeaseSeconds,
-	})
+	}).
+		// B2-1：转接链路接同一打分引擎，分配审计落 routing_assignments。
+		WithScorer(routingapp.NewDefaultScorer(routingapp.WeightSet{}))
 	rt.TransferHandlerService = transferService
 	rt.transferHandler = transferService
 	state.wsHub.SetSessionTransferService(transferService)

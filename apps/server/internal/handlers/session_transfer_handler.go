@@ -132,6 +132,47 @@ func (h *SessionTransferHandler) GetTransferHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, history)
 }
 
+// GetRoutingAssignmentScoring 获取会话分配评分审计（V1.0 B2-1，
+// docs/v1-convergence-plan.md §6.3-3：分数与因子可见，分配理由展示）。
+// @Summary 获取分配评分审计
+// @Description 按会话读取路由分配的分数/因子/理由（routing_assignments）
+// @Tags 会话转接
+// @Accept json
+// @Produce json
+// @Param session_id path string true "会话ID"
+// @Param limit query int false "返回条数（默认 50，最大 200）"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/session-transfer/scoring/{session_id} [get]
+func (h *SessionTransferHandler) GetRoutingAssignmentScoring(c *gin.Context) {
+	sessionID := c.Param("session_id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Missing session ID",
+			Message: "Session ID is required",
+		})
+		return
+	}
+	limit := 0
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+
+	items, err := h.transferService.ListRoutingAssignments(c.Request.Context(), sessionID, limit)
+	if err != nil {
+		h.logger.Errorf("Failed to list routing assignments for session %s: %v", sessionID, err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "Failed to list routing assignments",
+			Message: err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": items, "count": len(items)})
+}
+
 // ListRecentTransferHistory 获取近期转接历史
 // @Summary 获取近期转接历史
 // @Description 获取最近的会话转接记录
@@ -325,6 +366,7 @@ func RegisterSessionTransferRoutes(r *gin.RouterGroup, handler *SessionTransferH
 		transfer.POST("/to-agent", handler.TransferToAgent)
 		transfer.GET("/history", handler.ListRecentTransferHistory)
 		transfer.GET("/history/:session_id", handler.GetTransferHistory)
+		transfer.GET("/scoring/:session_id", handler.GetRoutingAssignmentScoring)
 		transfer.GET("/waiting", handler.ListWaitingRecords)
 		transfer.POST("/cancel", handler.CancelWaiting)
 		transfer.POST("/process-queue", handler.ProcessWaitingQueue)

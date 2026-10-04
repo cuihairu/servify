@@ -9,6 +9,7 @@ import (
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 
@@ -65,6 +66,7 @@ type HandlerServiceAdapter struct {
 	tickets       ticketdelivery.RuntimeService
 	conversation  conversationdelivery.RuntimeService
 	agents        agentdelivery.RuntimeService
+	scorer        routingapplication.Scorer // B2-1：nil 时转接不带评分审计（不阻塞）
 	dispatchBatch int
 	claimLease    time.Duration
 }
@@ -121,7 +123,7 @@ func (s *HandlerServiceAdapter) TransferToHuman(ctx context.Context, req *routin
 	if err != nil {
 		return s.addToWaitingQueue(ctx, session, req)
 	}
-	return s.executeTransfer(ctx, session, agent.UserID, req.Reason, req.Notes)
+	return s.executeTransfer(ctx, session, agent.UserID, req.Reason, req.Notes, req.TargetSkills, req.Priority)
 }
 
 // selectAgentForTransfer 统一的三级分配入口：亲和（老客户回原坐席）→ 指定组 → 全局池。
@@ -153,10 +155,78 @@ func (s *HandlerServiceAdapter) TransferToAgent(ctx context.Context, sessionID s
 	if agentInfo.CurrentLoad >= agentInfo.MaxConcurrent {
 		return nil, fmt.Errorf("target agent is at maximum capacity")
 	}
-	return s.executeTransfer(ctx, session, targetAgentID, reason, "")
+	return s.executeTransfer(ctx, session, targetAgentID, reason, "", nil, "")
 }
 
-func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *conversationdelivery.TransferSession, targetAgentID uint, reason, notes string) (*routingcontract.TransferResult, error) {
+// WithScorer 注入打分引擎（B2-1）：executeTransfer 为最终分配生成评分
+// 审计（分数/因子/理由落 routing_assignments，分配理由可见）；未注入时
+// 转接照常执行，只是不带审计。
+func (s *HandlerServiceAdapter) WithScorer(scorer routingapplication.Scorer) *HandlerServiceAdapter {
+	if s == nil {
+		return s
+	}
+	s.scorer = scorer
+	return s
+}
+
+// scoreAssignment 为最终分配目标打一次分（B2-1 审计）：候选取目标坐席
+// 在线快照；会话侧技能/优先级由调用方透传（手/自动 handoff 与等待队列
+// 均有记录），拿不到（如坐席离线、未配置 scorer）时返回 nil 静默跳过。
+func (s *HandlerServiceAdapter) scoreAssignment(ctx context.Context, session *conversationdelivery.TransferSession, targetAgentID uint, skills []string, priority string) *routingapplication.ScoringDetail {
+	if s.scorer == nil {
+		return nil
+	}
+	agentInfo, ok := s.agentService.GetOnlineAgent(ctx, targetAgentID)
+	if !ok {
+		return nil
+	}
+	input := routingapplication.ScoringInput{
+		SessionID: session.ID,
+		Channel:   session.Platform,
+		Skills:    skills,
+		Priority:  priority,
+		Candidates: []routingapplication.AgentCandidate{{
+			AgentID:       agentInfo.UserID,
+			UserID:        agentInfo.UserID,
+			Status:        agentInfo.Status,
+			Skills:        agentInfo.Skills,
+			CurrentLoad:   agentInfo.CurrentLoad,
+			MaxConcurrent: agentInfo.MaxConcurrent,
+		}},
+	}
+	scored, err := s.scorer.Score(ctx, input)
+	if err != nil || len(scored) == 0 {
+		if err != nil {
+			s.logger.Warnf("Failed to score assignment for session %s: %v", session.ID, err)
+		}
+		return nil
+	}
+	top := scored[0]
+	strategy := s.scorer.Strategy()
+	return &routingapplication.ScoringDetail{
+		TotalScore: top.Total,
+		Factors:    top.Factors,
+		Reasons:    top.Reasons,
+		Strategy:   strategy,
+	}
+}
+
+// splitSkillLabels 解析坐席技能标签串（逗号分隔，models.Agent.Skills 口径）。
+func splitSkillLabels(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *conversationdelivery.TransferSession, targetAgentID uint, reason, notes string, skills []string, priority string) (*routingcontract.TransferResult, error) {
 	if session.Status == "ended" {
 		return nil, fmt.Errorf("session already ended")
 	}
@@ -208,6 +278,7 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 			Notes:          notes,
 			SessionSummary: summary,
 			AssignedAt:     transferAt,
+			Scoring:        s.scoreAssignment(ctx, session, targetAgentID, skills, priority),
 		})
 		if err != nil {
 			return fmt.Errorf("create transfer record: %w", err)
@@ -305,7 +376,8 @@ func (s *HandlerServiceAdapter) ProcessWaitingQueue(ctx context.Context) (int, e
 			s.releaseClaim(ctx, record.SessionID)
 			continue
 		}
-		result, err := s.executeTransfer(ctx, session, agent.UserID, record.Reason, record.Notes)
+		result, err := s.executeTransfer(ctx, session, agent.UserID, record.Reason, record.Notes,
+			splitSkillLabels(record.TargetSkills), record.Priority)
 		if err != nil {
 			s.logger.Errorf("Failed to transfer waiting session %s: %v", record.SessionID, err)
 			s.releaseClaim(ctx, record.SessionID)
@@ -347,6 +419,11 @@ func (s *HandlerServiceAdapter) GetTransferHistory(ctx context.Context, sessionI
 		return nil, fmt.Errorf("failed to get transfer history: %w", err)
 	}
 	return records, nil
+}
+
+// ListRoutingAssignments 评分审计读口（B2-1，管理面展示分配理由）。
+func (s *HandlerServiceAdapter) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error) {
+	return s.routing.ListRoutingAssignments(ctx, sessionID, limit)
 }
 
 func (s *HandlerServiceAdapter) ListRecentTransferHistory(ctx context.Context, limit int) ([]models.TransferRecord, error) {

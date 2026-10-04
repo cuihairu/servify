@@ -13,6 +13,7 @@ import (
 	"servify/apps/server/internal/models"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 
 	"github.com/glebarez/sqlite"
@@ -254,6 +255,10 @@ func (s *handlerRoutingStub) ReleaseWaitingClaim(ctx context.Context, sessionID 
 		return s.releaseClaim(ctx, sessionID)
 	}
 	return nil
+}
+
+func (s *handlerRoutingStub) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error) {
+	return nil, nil
 }
 
 func (s *handlerRoutingStub) AssignAgent(ctx context.Context, tx *gorm.DB, cmd AssignAgentCommand) (*models.TransferRecord, error) {
@@ -631,7 +636,7 @@ func TestHandlerExecuteTransferFailures(t *testing.T) {
 			routing: newRoutingDeliveryAdapter(db), conversation: conv,
 			tickets: &handlerTicketsStub{}, agents: &handlerLoadStub{},
 		}
-		result, err := svc.executeTransfer(ctx, conv.session, 9, "r", "")
+		result, err := svc.executeTransfer(ctx, conv.session, 9, "r", "", nil, "")
 		require.NoError(t, err)
 		assert.True(t, result.Success)
 		assert.Equal(t, uint(9), result.NewAgentID)

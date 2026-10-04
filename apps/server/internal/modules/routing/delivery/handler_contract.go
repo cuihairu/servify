@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"servify/apps/server/internal/models"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
 )
 
@@ -18,4 +19,6 @@ type HandlerService interface {
 	// ProcessWaitingQueue claim-then-process 分派等待队列，返回本轮转接数。
 	ProcessWaitingQueue(ctx context.Context) (int, error)
 	AutoTransferCheck(ctx context.Context, sessionID string, messages []models.Message) bool
+	// ListRoutingAssignments 评分审计读口（B2-1，分配理由可见）。
+	ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error)
 }

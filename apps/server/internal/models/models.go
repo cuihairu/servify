@@ -287,6 +287,24 @@ type TransferRecord struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// 路由分配评分审计（V1.0 B2-1，docs/v1-convergence-plan.md §6.2）：
+// 自动推荐的候选排序与已执行分配的分数/因子明细落此表，便于审计与
+// analytics 投影；transfer_records 仍是分配事实记录，本表只记评分视角。
+type RoutingAssignment struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	TenantID    string    `gorm:"index:idx_routing_assignments_scope" json:"tenant_id"`
+	WorkspaceID string    `gorm:"index:idx_routing_assignments_scope" json:"workspace_id"`
+	SessionID   string    `gorm:"index" json:"session_id"`
+	FromAgentID *uint     `gorm:"index" json:"from_agent_id,omitempty"`
+	ToAgentID   uint      `gorm:"index" json:"to_agent_id"`
+	TotalScore  float64   `json:"total_score"`
+	Factors     string    `gorm:"type:text" json:"factors"` // JSON: 因子明细 map[string]float64
+	Reasons     string    `gorm:"type:text" json:"reasons"` // JSON: []string 人读理由
+	Strategy    string    `json:"strategy"`                 // 评分策略标识/版本
+	AssignedAt  time.Time `json:"assigned_at"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // 会话等待队列记录
 type WaitingRecord struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`

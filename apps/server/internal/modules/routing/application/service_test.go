@@ -18,6 +18,7 @@ type stubRoutingRepo struct {
 	assignments map[string]*domain.Assignment
 	transferLog []domain.TransferRecord
 	queue       map[string]*domain.QueueEntry
+	scorings    []domain.RoutingAssignment
 	err         error
 }
 
@@ -151,6 +152,21 @@ func (s *stubRoutingRepo) ReleaseQueueClaim(ctx context.Context, sessionID strin
 	return s.err
 }
 
+func (s *stubRoutingRepo) CreateRoutingAssignment(ctx context.Context, item *domain.RoutingAssignment) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.scorings = append(s.scorings, *item)
+	return nil
+}
+
+func (s *stubRoutingRepo) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]domain.RoutingAssignment, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.scorings, nil
+}
+
 func (s *stubRoutingPublisher) Publish(ctx context.Context, event eventbus.Event) error {
 	s.events = append(s.events, event)
 	return nil
@@ -180,6 +196,93 @@ func TestServiceAssignAgentPublishesEvents(t *testing.T) {
 	}
 	if len(pub.events) != 2 || pub.events[0].Name() != RoutingAgentAssignedEventName || pub.events[1].Name() != RoutingTransferCompletedEventName {
 		t.Fatalf("unexpected published events: %+v", pub.events)
+	}
+}
+
+// TestServiceAssignAgentPersistsScoringAudit 覆盖 B2-1：带评分的分配把
+// 分数/因子/理由/策略落 routing_assignments；无评分则不落审计行。
+func TestServiceAssignAgentPersistsScoringAudit(t *testing.T) {
+	repo := &stubRoutingRepo{}
+	svc := NewService(repo, nil)
+	now := time.Now()
+	svc.now = func() time.Time { return now }
+
+	got, err := svc.AssignAgent(context.Background(), AssignAgentCommand{
+		SessionID:  "sess-scored",
+		AgentID:    7,
+		Scoring: &ScoringDetail{TotalScore: 0.85, Factors: factorsMap(), Reasons: []string{"技能匹配 2/2"}, Strategy: "v1"},
+		AssignedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("scored assign error: %v", err)
+	}
+	if got.ToAgentID != 7 {
+		t.Fatalf("unexpected dto: %+v", got)
+	}
+	if len(repo.scorings) != 1 {
+		t.Fatalf("expected scorings persisted, got %+v", repo.scorings)
+	}
+	if repo.scorings[0].SessionID != "sess-scored" || repo.scorings[0].TotalScore != 0.85 || repo.scorings[0].Strategy != "v1" {
+		t.Fatalf("unexpected scoring: %+v", repo.scorings[0])
+	}
+	if len(repo.scorings[0].Reasons) != 1 {
+		t.Fatalf("expected reasons persisted: %+v", repo.scorings[0])
+	}
+
+	// 不带评分的分配不落审计行（评分明细由调用方传入，缺省即无审计）。
+	before := len(repo.scorings)
+	if _, err := svc.AssignAgent(context.Background(), AssignAgentCommand{
+		SessionID: "sess-plain", AgentID: 8, AssignedAt: now,
+	}); err != nil {
+		t.Fatalf("plain assign error: %v", err)
+	}
+	if len(repo.scorings) != before {
+		t.Fatalf("plain assign must not persist scoring, got %+v", repo.scorings)
+	}
+}
+
+func factorsMap() map[string]float64 {
+	return map[string]float64{
+		"skill": 1.0, "language": 1.0, "availability": 1.0, "workload": 0.5,
+		"priority": 1.0, "tier": 1.0, "channel": 1.0, "sla": 1.0,
+	}
+}
+
+func TestServiceListRoutingAssignments(t *testing.T) {
+	repo := &stubRoutingRepo{}
+	svc := NewService(repo, nil)
+	now := time.Now()
+	repo.scorings = []domain.RoutingAssignment{
+		{SessionID: "s1", ToAgentID: 2, TotalScore: 0.9, Factors: factorsMap(), AssignedAt: now},
+	}
+	items, err := svc.ListRoutingAssignments(context.Background(), "s1", 0)
+	if err != nil {
+		t.Fatalf("ListRoutingAssignments() error = %v", err)
+	}
+	if len(items) != 1 || items[0].TotalScore != 0.9 || items[0].Factors["skill"] != 1.0 {
+		t.Fatalf("unexpected dtos: %+v", items)
+	}
+	if _, err := svc.ListRoutingAssignments(context.Background(), "  ", 0); err == nil {
+		t.Fatal("expected error for blank session id")
+	}
+}
+
+func TestServiceRecommendAgents(t *testing.T) {
+	repo := &stubRoutingRepo{}
+	svc := NewService(repo, nil)
+	if _, err := svc.RecommendAgents(context.Background(), ScoringInput{SessionID: "s1"}); err == nil {
+		t.Fatal("expected error when scorer not configured")
+	}
+	svc.WithScorer(NewDefaultScorer(WeightSet{}))
+	out, err := svc.RecommendAgents(context.Background(), ScoringInput{
+		SessionID: "s1",
+		Candidates: []AgentCandidate{candidate(1, "online", []string{"billing"}, []string{"zh"}, 0, 5)},
+	})
+	if err != nil {
+		t.Fatalf("RecommendAgents() error = %v", err)
+	}
+	if len(out) != 1 || out[0].Total <= 0 {
+		t.Fatalf("unexpected recommendations: %+v", out)
 	}
 }
 

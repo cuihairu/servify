@@ -17,6 +17,7 @@ func MigrationModels() []interface{} {
 		&models.Session{},
 		&models.Message{},
 		&models.TransferRecord{},
+		&models.RoutingAssignment{}, // V1.0 收敛 B2-1：路由分配评分审计（表名 routing_assignments）
 		&models.WaitingRecord{},
 		&models.Ticket{},
 		&models.TicketComment{},

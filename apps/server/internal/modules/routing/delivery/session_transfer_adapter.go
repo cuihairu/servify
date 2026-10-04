@@ -34,6 +34,7 @@ func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, c
 		Notes:          cmd.Notes,
 		SessionSummary: cmd.SessionSummary,
 		AssignedAt:     cmd.AssignedAt,
+		Scoring:        cmd.Scoring,
 	})
 	if err != nil {
 		return nil, err
@@ -49,6 +50,11 @@ func (a *SessionTransferAdapter) AssignAgent(ctx context.Context, tx *gorm.DB, c
 		TransferredAt:  item.AssignedAt,
 		CreatedAt:      item.AssignedAt,
 	}, nil
+}
+
+// ListRoutingAssignments 评分审计读口（B2-1），直通 application 层。
+func (a *SessionTransferAdapter) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapp.RoutingAssignmentDTO, error) {
+	return a.service.ListRoutingAssignments(ctx, sessionID, limit)
 }
 
 func (a *SessionTransferAdapter) AddToWaitingQueue(

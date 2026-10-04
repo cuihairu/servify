@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	routingapplication "servify/apps/server/internal/modules/routing/application"
 
 	"gorm.io/gorm"
 )
@@ -17,6 +18,8 @@ type AssignAgentCommand struct {
 	Notes          string
 	SessionSummary string
 	AssignedAt     time.Time
+	// Scoring 可选评分审计（B2-1），直通 application 层落 routing_assignments。
+	Scoring *routingapplication.ScoringDetail
 }
 
 // RuntimeService is the routing contract used by session-transfer runtime glue.
@@ -33,4 +36,6 @@ type RuntimeService interface {
 	ClaimWaitingRecords(ctx context.Context, now, leaseBefore time.Time, limit int) ([]models.WaitingRecord, error)
 	// ReleaseWaitingClaim 处理失败归还租约。
 	ReleaseWaitingClaim(ctx context.Context, sessionID string) error
+	// ListRoutingAssignments 评分审计读口（B2-1，管理面展示分配理由）。
+	ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error)
 }
