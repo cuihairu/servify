@@ -85,7 +85,7 @@
 
 ### 登录风险执行（P2-5 第二刀）
 
-风险判定依赖 `security.session_ip_intelligence` 情报源返回的网络标签：内建启发式只产 `public` / `private` / `loopback` / `unknown` 四类安全标签，永不构成高风险；只有接入外部情报源、来源被标注为 `hosting`、`proxy` 等富标签时才判定为高风险来源。`security.session_risk.login_enforcement` 档位：
+风险判定依赖 `security.session_ip_intelligence` 情报源返回的网络标签：内建启发式只产 `public` / `private` / `loopback` / `unknown` 四类安全标签，一律判为低风险；只有接入外部情报源、来源被标注为 `hosting`、`proxy` 等富标签时才判定为高风险来源。`security.session_risk.login_enforcement` 档位：
 
 - `off`（默认）：不执行，登录行为与既有版本完全一致
 - `step_up`：高风险来源登录强制第二因子——已绑定 TOTP 的用户进入挑战步（即使 2FA 总开关关闭）；未绑定 TOTP 的用户直接拒绝
@@ -169,7 +169,7 @@ scoped config（tenant/workspace 作用域配置文档）的写路径已有完�
 - 当前 verification 已补模板化检查项与最小双人复核约束：reviewer 不能与原始执行人相同，verification 请求必须提交与 `verification_template.checks` 对齐的 `checks`，`passed` 必须带 evidence 且所有必填检查项都要 `passed`，`failed` 必须带 notes 且至少要有一个检查项 `failed`
 - `verification_template` 已进一步按字段风险拆分，并返回根级 `changed_paths` 以及单 check 的 `risk_level` / `changed_paths`，便于对 provider endpoint、KB mapping、session risk threshold 这类高风险配置执行标准化验收
 - 写入响应、history 列表、单条详情和 verify 响应会同步返回 `change_risk` 与 `approval_policy`，把当前配置变更的风险等级、触发原因、审批记录落库状态以及最新审批人信息直接暴露给前端或自动化脚本
-- 同一批响应现在还会统一返回 `governance_status` / `governance_policy`，把审批前置和执行后验证合并为单一治理状态；verify 响应会进一步返回 source change 的闭环状态
+- 同一批响应现在还会统一返回 `governance_status` / `governance_policy`，把审批前置和执行后验证合并为单一治理状态；verify 响应会进一步返回 source change 的治理完成状态
 - history 列表、单条详情和 verify 响应会同步返回 `verification_template` 与更细粒度的 `verification_policy`，用于前端或自动化脚本按模板执行变更后验证
 - history 列表现在还能按 `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action` 直接筛选治理队列，并返回 `governance_summary` 汇总，方便运营或安全值班直接拉取待办视图
 - 后续仍需把关键配置变更沉淀成完整的“执行前审批 / 执行后验证 / 回滚记录”操作手册，并补自动化验收与更细粒度审批编排

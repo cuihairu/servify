@@ -851,7 +851,7 @@ make security-check CONFIG=config.yml
 - 若业务经常经过共享出口或 NAT 网关，谨慎调整 `multi_public_ip_threshold`
 - 若要更早将 session 标为高风险，可降低 `high_risk_score`
 - 若希望开发 / staging / production 使用不同基线，优先通过 `server.environment + security.session_risk_profiles.{environment}` 设定环境级默认值，再用 tenant/workspace scoped config 做细化
-- 当前 auth 自助 `/api/v1/auth/sessions` 已有回归测试验证环境级 profile 会实际影响 `risk_level` 输出，而不只是停留在配置层
+- 当前 auth 自助 `/api/v1/auth/sessions` 已有回归测试验证环境级 profile 会实际影响 `risk_level` 输出
 
 示例：
 

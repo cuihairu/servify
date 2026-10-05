@@ -1,4 +1,4 @@
-# 🎉 WeKnora 集成功能实现完成！
+# WeKnora 集成功能实现完成！
 
 > ⚠️ **快照注记（2026-10-04 文档对账）**：本文是 WeKnora 集成落地时的完成宣告存档，集成本体当前以
 > [docs/WEKNORA_INTEGRATION.md](./docs/WEKNORA_INTEGRATION.md) 与
@@ -7,23 +7,23 @@
 > 声明与实现不符已删除；docker-compose 命令路径已按 `infra/compose/` 实际
 > 布局修正。
 
-## ✅ 已实现的功能
+## 已实现的功能
 
-### 1. 🔧 核心集成功能
+### 1. 核心集成功能
 - **WeKnora HTTP 客户端**: 完整的 REST API 客户端实现
 - **增强 AI 服务**: 支持 WeKnora + 降级的混合架构
 - **熔断器机制**: 自动故障检测和恢复
 - **配置系统**: 完整的 YAML + 环境变量配置
 - **健康监控**: 实时服务状态检查
 
-### 2. 🤖 AI 智能功能
+### 2. AI 智能功能
 - **混合检索策略**: BM25 + 向量搜索 + 知识图谱
 - **自动降级**: WeKnora 故障时切换到传统知识库
 - **置信度计算**: 基于检索质量的动态置信度
 - **知识库同步**: 从传统知识库到 WeKnora 的数据迁移
 - **文档上传**: 支持实时文档上传到 WeKnora
 
-### 3. 🌐 API 接口
+### 3. API 接口
 - **标准 AI API**: `/api/v1/ai/query` - 智能问答
 - **状态监控**: `/api/v1/ai/status` - 服务状态
 - **指标查询**: `/api/v1/ai/metrics` - 性能指标
@@ -31,13 +31,13 @@
 - **控制接口**: 动态开启/关闭 WeKnora
 - **熔断器管理**: 手动重置熔断器
 
-### 4. 🔄 运维功能
+### 4. 运维功能
 - **Docker 集成**: 完整的容器化部署
 - **健康检查**: 深度健康状态监控
 - **日志系统**: 结构化日志记录
 - **性能监控**: 延迟和成功率统计
 
-## 🚀 快速启动指南
+## 快速启动指南
 
 ### 1. 环境准备
 ```bash
@@ -82,7 +82,7 @@ docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 ./scripts/test-weknora-integration.sh
 ```
 
-## 📊 功能对比
+## 功能对比
 
 | 功能 | 标准模式 | WeKnora 增强模式 |
 |------|---------|-----------------|
@@ -95,7 +95,7 @@ docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 | **降级保护** | ❌ | ✅ |
 | **监控指标** | 基础 | 详细 |
 
-## 🔧 配置参数说明
+## 配置参数说明
 
 ### WeKnora 配置
 ```yaml
@@ -126,7 +126,7 @@ fallback:
     reset_timeout: 60s             # 重置超时
 ```
 
-## 🌐 服务地址
+## 服务地址
 
 ### 标准部署
 - **Servify Web**: http://localhost:8080
@@ -139,7 +139,7 @@ fallback:
 - **WeKnora Web**: http://localhost:9001
 - **所有 Servify 功能** + **增强 AI 能力**
 
-## 📝 API 使用示例
+## API 使用示例
 
 ### 1. 智能问答
 ```bash
@@ -172,7 +172,7 @@ curl -X POST http://localhost:8080/api/v1/ai/knowledge/upload \
 curl http://localhost:8080/api/v1/ai/metrics
 ```
 
-## 🧪 测试功能
+## 测试功能
 
 ### 自动化测试
 ```bash
@@ -191,7 +191,7 @@ curl http://localhost:8080/api/v1/ai/metrics
 3. **API 测试**: 使用 Postman 或 curl 测试各种接口
 4. **WeKnora 管理**: 访问 http://localhost:9001 管理知识库
 
-## 🔍 故障排除
+## 故障排除
 
 ### 常见问题
 
@@ -222,7 +222,7 @@ curl http://localhost:8080/api/v1/ai/metrics
 docker stats
 ```
 
-## 📈 性能优化建议
+## 性能优化建议
 
 ### 1. WeKnora 优化
 - 调整 `chunk_size` 参数 (推荐: 512)
@@ -239,7 +239,7 @@ docker stats
 - 配置连接池参数
 - 定期清理过期数据
 
-## 🎯 生产部署建议
+## 生产部署建议
 
 ### 1. 安全配置
 ```yaml
@@ -269,7 +269,7 @@ monitoring:
 - 配置负载均衡器
 - 实施自动故障转移
 
-## 🎊 总结
+## 总结
 
 WeKnora 集成已全面完成！现在您拥有：
 

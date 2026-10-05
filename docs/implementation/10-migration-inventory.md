@@ -137,7 +137,7 @@
 - module 已存在
 - 关键持久化入口已切到 module delivery adapter
 - connection hub、通知、转接协作等运行态对象仍需要持续保持窄接口
-- 后续重点不是回退重迁移，而是避免在 realtime runtime 内重新引入业务直写路径
+- 后续重点是避免在 realtime runtime 内重新引入业务直写路径，不回退重迁移
 
 ### C. 多实现并存，需要先确定默认主路径
 

@@ -188,7 +188,7 @@ curl -X POST http://localhost:8080/api/knowledge-docs/index-jobs/<job_id>/retry 
   -H "Authorization: Bearer $TOKEN"
 ```
 
-## 检索分析与反馈闭环（V1.0 收敛 B3-1b）
+## 检索分析与反馈回传（V1.0 收敛 B3-1b）
 
 AI 首答旁路记录到 `ai_answers`（query/answer/confidence/strategy/来源快照），反馈落 `answer_feedback`；记录失败静默不阻塞作答。
 
@@ -304,7 +304,7 @@ curl http://localhost:9997/v1/embeddings \
   - `internal/modules/knowledge/application`: 业务规则（版本语义、来源枚举校验、引用守卫、索引任务）
   - `internal/modules/knowledge/infra`: GORM 仓储
   - `internal/modules/knowledge/delivery`: HTTP 契约适配
-- **ai 模块**（反馈闭环与检索分析）：
+- **ai 模块**（反馈回传与检索分析）：
   - `internal/modules/ai/application/feedback.go`: 反馈校验（访客会话绑定）与检索分析聚合
   - `internal/modules/ai/infra/answer_repository.go`: ai_answers / answer_feedback 仓储
   - `internal/modules/ai/delivery/`: 记录路径（REST/WS 旁路观测）与反馈/分析端点
@@ -317,4 +317,4 @@ curl http://localhost:9997/v1/embeddings \
 
 - [配置文档](./config/README.md)
 - [API 文档](./docs/api.md)
-- [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)（§5.3 反馈闭环 / §8 Knowledge 产品化）
+- [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)（§5.3 反馈回传 / §8 Knowledge 产品化）

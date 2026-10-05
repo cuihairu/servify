@@ -11,12 +11,12 @@
   `ticket`、`ai`、`knowledge`、`agent`、`customer`；薄壳模块按「核心模块
   子能力」叙事，不再单列产品概念；一级模块总数 27 封顶（架构门禁）。
 - 每批次过闸制实施：B1（Domain 边界/迁移双路径）→ B2（Routing 事件统一/
-  PII 保留策略）→ B3（Knowledge 产品化/AI 反馈闭环）→ B4（收口发布），
+  PII 保留策略）→ B3（Knowledge 产品化/AI 反馈回传）→ B4（收口发布），
   切片提交号与过闸证据见 [todo.md](../todo.md)。
 
 ## 本版本新增能力（V1.0 收敛面）
 
-- **AI 反馈闭环（§5.3）**：AI 首答旁路持久化（`ai_answers`，REST+WS 同源
+- **AI 反馈回传（§5.3）**：AI 首答旁路持久化（`ai_answers`，REST+WS 同源
   hook，失败静默不阻塞作答，来源快照不落内容全文）；`POST /api/v1/ai/feedback`
   坐席/访客双面评价（访客 guest token 强制会话绑定）；`GET /api/v1/ai/
   retrieval-analytics` 检索分析读口（top 问答/无命中率/低置信率/反馈计数）。
@@ -36,7 +36,7 @@
 ## 核心能力基线（延续自 v0.1.0 并收口验收）
 
 - 客服主链路：会话工作台、消息收发、人工接管（直派/排队）/转接/关闭
-- 工单闭环：建单、状态机、指派、评论、关闭、（SLA/评价挂靠 ticket 子能力）
+- 工单全流程：建单、状态机、指派、评论、关闭、（SLA/评价挂靠 ticket 子能力）
 - 认证与会话：登录/注册、refresh 轮转、会话自服务、TOTP 2FA、OIDC、
   session risk 档位；scope/RBAC/audit/token policy 接入管理面
 - AI：QueryOrchestrator + LLMProvider + KnowledgeProvider；知识检索服务

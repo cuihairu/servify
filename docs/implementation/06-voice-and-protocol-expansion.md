@@ -21,7 +21,7 @@
 
 验收：
 
-- 新协议入口不是只有 adapter 单测，而是有完整 HTTP/runtime/voice 链路验证
+- 新协议入口有完整 HTTP/runtime/voice 链路验证，不只 adapter 单测
 
 ## V2 call-control-semantics
 

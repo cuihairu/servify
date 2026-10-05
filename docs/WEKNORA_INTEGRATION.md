@@ -1,40 +1,40 @@
 # 外部知识库集成指南：知识库 provider 路径（Dify dataset 兼容 + WeKnora）
 
-## 🎯 项目概述
+## 项目概述
 
 本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。`Dify` 是当前代码选择链中的默认 provider（历史兼容路径），`WeKnora` 是正统知识库方向的主推 provider，用于已有部署、协议回归和 fallback 验证。
 
 > **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（WeKnora / RAGFlow 双路径建议、Dify 定位降级）见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
 文档名保留 `WEKNORA_INTEGRATION` 主要是为了兼容历史链接；内容语义以通用 knowledge provider 为主。
 
-## 📋 集成计划完成情况
+## 集成计划完成情况
 
-### ✅ 已完成任务
+### 已完成任务
 
-1. **项目路线图更新** ✅
+1. **项目路线图更新**
    - 更新了 README.md 中的第二阶段计划
    - 将外部知识库 provider 集成纳入 AI 演进主路径
    - 更新了技术架构图和技术栈说明
 
-2. **技术实施方案设计** ✅
+2. **技术实施方案设计**
    - `KnowledgeProvider` 抽象与 `QueryOrchestrator`
    - `Dify` provider 适配 (`apps/server/internal/platform/knowledgeprovider/dify/`)
    - `WeKnora` provider 适配 (`apps/server/internal/platform/knowledgeprovider/weknora/`)
    - 降级策略和熔断器机制
 
-3. **开发环境配置** ✅
+3. **开发环境配置**
    - Dify / WeKnora provider 配置模板
    - WeKnora mock 验收配置 (`infra/compose/docker-compose.weknora.yml`)
    - 数据库初始化脚本 (`scripts/init-db.sql`)
    - 环境变量配置模板 (`.env.weknora.example`)
    - 配置文件模板 (`config.weknora.yml`)
 
-4. **兼容路径部署和管理脚本** ✅
+4. **兼容路径部署和管理脚本**
    - 一键启动脚本 (`scripts/start-weknora.sh`)
    - 知识库初始化脚本 (`scripts/init-knowledge-base.sh`)
    - 知识库管理脚本 (`scripts/manage-knowledge-base.sh`)
 
-## 🏗️ 技术架构
+## 技术架构
 
 ### 集成架构
 ```
@@ -57,7 +57,7 @@ Servify 智能客服
          └────────────▶ WeKnora (fallback / compatibility)
 ```
 
-## 🚀 快速开始
+## 快速开始
 
 > 当前项目的默认推荐是优先接入 `Dify`。仓库里的 `infra/compose/docker-compose.weknora.yml` 仍然保留，用于 WeKnora 协议回归和 fallback 验证，不代表 WeKnora 是主路径。
 
@@ -173,7 +173,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 - `ai-query` 必须成功，且不能只返回 `strategy=fallback`
 - `knowledge upload` 和 `knowledge sync` 必须都成功
 
-其中 `WeKnora real` 模式针对兼容路径，不是“尽量通过”，而是严格验收：
+其中 `WeKnora real` 模式针对兼容路径，按严格口径验收：
 
 - `WEKNORA_URL` 不能是 `localhost`、`127.0.0.1`、`0.0.0.0`、私网地址或 `.local/.internal` 主机名
 - 健康检查返回若标识 `service=weknora-mock`，脚本会直接拒绝作为真实证据
@@ -203,7 +203,7 @@ make check-acceptance-evidence
 
 只有 validator 返回成功，才建议把该目录作为“可回填验收清单”的证据集；批量扫描也只会检查已纳入 git 的 manifest，避免把本地临时产物误算成正式证据。
 
-## 🔧 开发指南
+## 开发指南
 
 ### 项目结构
 ```
@@ -273,7 +273,7 @@ docInfo, err := client.UploadDocument(ctx, kbID, &weknora.Document{
 response, err := aiService.ProcessQuery(ctx, userQuery, sessionID)
 ```
 
-## 📊 监控和维护
+## 监控和维护
 
 ### 健康检查端点
 - Servify API: `GET http://localhost:8080/health`
@@ -307,7 +307,7 @@ docker stats
 ./scripts/manage-knowledge-base.sh stats
 ```
 
-## 🔒 安全配置
+## 安全配置
 
 ### 生产环境配置
 1. **修改默认密钥**：
@@ -336,7 +336,7 @@ security:
     requests_per_minute: 60
 ```
 
-## 📈 性能优化
+## 性能优化
 
 ### 推荐配置
 1. **数据库优化**：
@@ -354,7 +354,7 @@ security:
    - 优化 embedding 模型
    - 配置检索策略
 
-## 🐛 故障排除
+## 故障排除
 
 ### 常见问题
 
@@ -390,7 +390,7 @@ curl -H "X-API-Key: default-api-key" \
      http://localhost:9000/api/v1/knowledge/default-kb
 ```
 
-## 🔄 更新和维护
+## 更新和维护
 
 ### 版本更新
 ```bash
@@ -413,7 +413,7 @@ docker-compose -f infra/compose/docker-compose.yml exec postgres pg_dump -U post
 docker cp servify_weknora:/app/data ./backup/weknora_data
 ```
 
-## 📚 相关资源
+## 相关资源
 
 ### 官方文档
 - [WeKnora GitHub](https://github.com/Tencent/WeKnora)
@@ -424,7 +424,7 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 - [WeKnora Issues](https://github.com/Tencent/WeKnora/issues)
 - [PostgreSQL 中文社区](https://www.postgresql.org/community/)
 
-## 🎯 当前状态与后续方向
+## 当前状态与后续方向
 
 当前仓库里的外部知识库集成已经完成了角色调整：
 
@@ -443,7 +443,7 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 3. 把监控、缓存、故障恢复、安全策略沉到平台层，而不是绑定到某一个知识库实现
 4. 让 Web/API/App SDK 统一消费稳定的 AI/knowledge contract，而不是感知具体 provider
 
-## 💬 支持和反馈
+## 支持和反馈
 
 如有问题或建议，请：
 1. 查看本文档的故障排除部分

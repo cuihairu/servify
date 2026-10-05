@@ -128,7 +128,7 @@
 - 变更治理现已补统一状态机：响应会额外返回 `governance_status` / `governance_policy`，当前状态值至少覆盖 `awaiting_approval`、`awaiting_verification`、`verified`、`verification_failed`、`approved`、`not_required`
 - scoped config verification 现已具备最小双人复核约束：verification reviewer 必须是带 `user_id` 的已认证操作者，且不能与原始 update / rollback 执行人相同
 - 管理面现已支持在 scoped config 写入响应、history 列表、单条详情和 verify 响应中直接返回 `change_control` / `change_risk` / `approval_policy` 元数据；其中 `change_control` 会包含 `approval_ref`，`change_risk` 会给出 `risk_level` / `risk_reasons` / `changed_paths`，`approval_policy` 会声明是否必须补审批、审批记录是否已落库、最新审批审计 ID / 时间 / 审批人等真实执行前审批信息
-- verify 响应还会返回 `source_governance_status` / `source_governance_policy`，用于直接判断被验证的那条 source change 当前是否已经闭环
+- verify 响应还会返回 `source_governance_status` / `source_governance_policy`，用于直接判断被验证的那条 source change 当前是否已经收口
 - 管理面现已支持在 scoped config history 列表、单条详情和 verify 响应中直接返回 `operation` / preview / rollback / verify / `verification_status` / `latest_verification` / `verification_template` / `verification_policy` 元数据；其中 `verification_policy` 会额外声明 `checks_required`、`required_check_ids`、`template_check_count` 与失败态检查约束，便于前端或自动化脚本按模板渲染执行后验证流程
 - `GET /security/config/{scope}/history` 现已可直接作为治理工作台数据源，支持 `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action` 筛选，并返回 `governance_summary` 聚合计数与 `applied_filters`，用于渲染待处理变更队列
 - 当前仍缺更通用的跨配置域写接口，以及更完整的双人复核编排、自动化验收模板与发布后验证规则编排

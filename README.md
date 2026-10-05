@@ -4,9 +4,9 @@
 
 <div align="center">
 
-# 🛟 Servify
+# Servify
 
-**开源智能客服系统** — Web 优先，AI 首答，人工接管，工单闭环
+**开源智能客服系统** — Web 优先，AI 首答，人工接管，工单全流程
 
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -23,7 +23,7 @@ Servify 是一个面向企业独立部署的开源智能客服系统。
 
 第一版产品目标先收敛在企业官网、品牌独立站、SaaS 官网和文档站的 Web 智能客服：站点嵌入客服入口，AI 基于知识库首答，复杂问题转人工并沉淀为工单。
 
-它当前的产品重心不是“平台化多租户”，而是先把客服主链路做完整：`Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单闭环`。
+它当前先把客服主链路做完整，暂不往平台化多租户走：`Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程`。
 
 当问题需要更强的引导和排查时，远程协助仍然是保留中的增强方向；但它不再作为第一版验收的中心能力。
 
@@ -31,53 +31,53 @@ Servify 是一个面向企业独立部署的开源智能客服系统。
 
 ---
 
-## 📊 当前状态
+## 当前状态
 
 `v1.0.0` 已于 2026-10-04 发布（见
 [发布说明](./docs/release-notes-v1.0.0.md)），V1.0 收敛改造 B0–B4 批次
 全部过闸：
 
-- ✅ 客服主链路闭环：`conversation`（中心聚合）、`routing`、`ticket`
-- ✅ AI 与知识库产品化：`ai`（首答记录/反馈闭环/检索分析）、`knowledge`
+- 客服主链路打通：`conversation`（中心聚合）、`routing`、`ticket`
+- AI 与知识库产品化：`ai`（首答记录/反馈回传/检索分析）、`knowledge`
   （来源登记/文档版本/索引任务/citation）
-- ✅ 管理面安全基线：认证、审计、token state revoke、session security
+- 管理面安全基线：认证、审计、token state revoke、session security
   surface、PII 导出/擦除与保留策略
-- ✅ 27 个一级模块不增（架构门禁），薄壳模块按「核心 7 模块的子能力」
+- 27 个一级模块不增（架构门禁），薄壳模块按「核心 7 模块的子能力」
   叙事收口
-- ✅ Web 优先、多端预留：Web SDK 已实现，Android/iOS 原生 SDK 已随
+- Web 优先、多端预留：Web SDK 已实现，Android/iOS 原生 SDK 已随
   M1–M3 落地，语音与多渠道冻结为扩展边界
-- 🔄 后续演进：Routing 打分引擎、Ticket 关闭前拦截等（见发布说明
+- 后续演进：Routing 打分引擎、Ticket 关闭前拦截等（见发布说明
   「演进方向」）
 
 ---
 
-## 🎯 产品定位
+## 产品定位
 
 Servify 当前更适合这样理解：
 
 - 一个企业部署一套 Servify
 - 访客从 Web 页面发起咨询
 - AI 先做首答、澄清和知识召回
-- 需要时可进一步升级到协助型处理，但主链路先保证 AI 首答、人工接管和工单闭环
+- 需要时可进一步升级到协助型处理，但主链路先保证 AI 首答、人工接管和工单全流程
 - 坐席随时接管、协作、转接
 - 无法即时解决的问题进入工单继续跟进
 - 管理员在后台管理坐席、知识库、权限和基础配置
 
 这意味着 `tenant/workspace` 更接近治理和隔离能力，而不是产品主叙事。
 
-## 🛟 远程协助当前指什么
+## 远程协助当前指什么
 
 在 Servify 当前阶段，远程协助应该被理解为：
 
 - 客户在 Web 会话中遇到需要一步步引导的问题时，客服可以从“解释”升级到“带着完成”
-- AI、人工接管、实时交互和工单不是割裂的工具，而是一条连续服务链路
+- AI、人工接管、实时交互和工单在同一条连续服务链路上
 - 远程协助结束后，客服仍可以继续转接、协作或沉淀工单，而不是把上下文丢到外部系统
 
 当前仓库已经具备这条能力链路的实时基础，包括会话、消息、WebSocket、WebRTC stats / connections、人工接管和后续工单衔接能力；管理端会话页也已经有最小协助入口，但它现在还不是一个“已经交付完整 co-browsing 产品”的承诺。
 
 ---
 
-## 📁 仓库结构
+## 仓库结构
 
 ```text
 .
@@ -95,14 +95,14 @@ Servify 当前更适合这样理解：
 `-- sdk/                     # SDK 工作区（源码）
 ```
 
-## 🧪 常用校验入口
+## 常用校验入口
 
 - `make local-check`
 - `make security-check CONFIG=./config.yml`
 - `make observability-check CONFIG=./config.yml`
 - `make release-check CONFIG=./config.yml`
 
-## 📂 根目录职责
+## 根目录职责
 
 ### 应包含的内容
 
@@ -132,23 +132,23 @@ Servify 当前更适合这样理解：
 
 ---
 
-## 🏗️ 架构原则
+## 架构原则
 
-- 🧩 **业务模块化**：每个模块具备 `domain`、`application`、`infra`、`delivery`
-- 🔌 **平台能力抽象**：认证、事件总线、AI/Knowledge provider、realtime/SIP 独立
-- 🌐 **多端 SDK 预留**：Web 先落地，API/App 预留 contract，不做伪实现
-- 📞 **语音能力隔离**：通过 `voice` 模块和 SIP adapter 接入，不耦合聊天链路
-- 🔄 **Provider 可替换**：默认 pgvector 自建知识库，Dify 为推荐的外部知识源，WeKnora 为兼容实现之一
+- **业务模块化**：每个模块具备 `domain`、`application`、`infra`、`delivery`
+- **平台能力抽象**：认证、事件总线、AI/Knowledge provider、realtime/SIP 独立
+- **多端 SDK 预留**：Web 先落地，API/App 预留 contract，不做伪实现
+- **语音能力隔离**：通过 `voice` 模块和 SIP adapter 接入，不耦合聊天链路
+- **Provider 可替换**：默认 pgvector 自建知识库，Dify 为推荐的外部知识源，WeKnora 为兼容实现之一
 
 ---
 
-## 🧭 当前重点
+## 当前重点
 
 当前阶段，Servify 优先做好这些事情：
 
 - 把 Web 接入做成正式产品入口
 - 把 AI 协同和人工接管打通
-- 把转接、协作和工单闭环收完整
+- 把转接、协作和工单全流程收完整
 - 把后台运营和安全基线稳定下来
 - 把远程协助保留为后续增强方向，而不是拉高 V1 复杂度
 
@@ -164,7 +164,7 @@ Servify 当前更适合这样理解：
 
 ---
 
-## 🎯 总体架构
+## 总体架构
 
 ```mermaid
 flowchart LR
@@ -188,26 +188,26 @@ flowchart LR
     BUS --> ANALYTICS[analytics module]
 ```
 
-## 📦 业务模块边界
+## 业务模块边界
 
 V1.0 产品中心是 **7 个核心模块**（conversation 为唯一中心聚合，详见
 [ARCHITECTURE.md §6](./ARCHITECTURE.md) 与
 [V1.0 收敛计划](./docs/v1-convergence-plan.md)）。其余业务代码一律按
 「核心模块的子能力」定位，不再单列产品叙事。
 
-### ✅ 核心 7 模块（V1.0 产品中心）
+### 核心 7 模块（V1.0 产品中心）
 
 | 模块 | 产品定位 |
 | --- | --- |
 | `conversation` | **系统中心聚合**：会话、消息、参与者、服务过程时间线（`conversation_events` 投影） |
 | `routing` | 人工接管、排队、分配、转接（打分路由引擎为 V1.0 增强） |
-| `ticket` | 工单闭环：从会话一键建单、状态机、SLA/评价挂靠 |
+| `ticket` | 工单全流程：从会话一键建单、状态机、SLA/评价挂靠 |
 | `ai` | AI 首答、坐席辅助（建议回复/改写/摘要）、知识检索答案 |
 | `knowledge` | 知识库文档、检索与引用（citation） |
 | `agent` | 坐席档案、在线状态/负载、三栏接待工作台数据源 |
 | `customer` | 客户档案、标签、历史与工单汇（客户 360） |
 
-### 🧩 子能力模块（薄壳，挂靠核心，不再是一级产品概念）
+### 子能力模块（薄壳，挂靠核心，不再是一级产品概念）
 
 | 模块 | 归宿 | 说明 |
 | --- | --- | --- |
@@ -225,14 +225,14 @@ V1.0 产品中心是 **7 个核心模块**（conversation 为唯一中心聚合�
 及其扩展（SIP/PSTN/转写）冻结为扩展边界。**架构门禁：不新增一级模块**，
 新能力先找既有模块的子能力归属。
 
-### 🔧 工程视角：模块迁移成熟度
+### 工程视角：模块迁移成熟度
 
 各模块的迁移成熟度与 legacy service 角色（含 `automation`/`analytics`
 facade 收敛、`statistics` 旧 handler 收口计划），以
 [迁移记分卡](./docs/implementation/10-migration-scorecard.md) 与
 [当前架构快照](./docs/current-architecture.md) 为准。
 
-### 🔐 安全与管理面现状
+### 安全与管理面现状
 
 | 能力 | 状态 | 说明 |
 | --- | --- | --- |
@@ -244,7 +244,7 @@ facade 收敛、`statistics` 旧 handler 收口计划），以
 
 ---
 
-## 🤖 AI 与知识库设计
+## AI 与知识库设计
 
 Servify 的 AI 能力已经按照“编排层 + Provider”拆开。
 
@@ -302,7 +302,7 @@ docker run -p 8080:8080 \
 
 ---
 
-## 📦 SDK 与渠道预留
+## SDK 与渠道预留
 
 当前只实现 Web 方向，但架构已经预留多端 SDK 和多渠道接入。（更新：Android/iOS 原生 SDK 已随移动端里程碑 M1–M3 落地（`sdk/android`、`sdk/ios`，SwiftPM/XCFramework 分发），设计与验收见 `docs/mobile-sdk-design.md`；多渠道接入仍是扩展边界。）
 
@@ -337,7 +337,7 @@ flowchart TB
 
 ---
 
-## 📞 SIP 与语音扩展
+## SIP 与语音扩展
 
 当前还没有完整实现全套语音协议栈，但架构上已经明确预留 `signaling + media` 两层扩展。
 
@@ -367,9 +367,9 @@ flowchart LR
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
-### 📋 环境要求
+### 环境要求
 
 - **Go** 1.25.0（toolchain go1.25.7）- 项目使用 Go workspace 模式
 - **PostgreSQL** 12+ 或 SQLite（开发/测试）
@@ -377,7 +377,7 @@ flowchart LR
   - 管理端使用 **pnpm** 10+ 作为包管理器
 - 可选：**Docker** / **Docker Compose**
 
-### 💻 常用命令
+### 常用命令
 
 ```bash
 # 构建与运行
@@ -400,7 +400,7 @@ make clean-runtime                     # 清理运行时输出
 make release-changelog FROM=<tag> TO=HEAD
 ```
 
-### 🔗 常用入口
+### 常用入口
 
 - 健康检查：`GET /health`
 - 就绪检查：`GET /ready`
@@ -415,7 +415,7 @@ make release-changelog FROM=<tag> TO=HEAD
 - 默认使用 PostgreSQL，可通过 `DB_DRIVER=sqlite` 切换到 SQLite（开发/测试）
 - 发布检查脚本在默认配置下使用临时 SQLite 库完成自检
 
-### 📈 可观测性
+### 可观测性
 
 ```yaml
 monitoring:
@@ -437,9 +437,9 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ---
 
-## 📚 文档索引
+## 文档索引
 
-### 📖 核心文档
+### 核心文档
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [docs/current-architecture.md](./docs/current-architecture.md) - 当前真实架构快照
@@ -455,7 +455,7 @@ Jaeger 默认地址：`http://localhost:16686`
 - [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 发布说明（当前版本）**
 - [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 历史发布说明（V1.0 已收敛，仅存档）
 
-### 📋 实施 backlog
+### 实施 backlog
 
 - [docs/implementation/README.md](./docs/implementation/README.md)
 - [docs/implementation/01-platform-and-runtime.md](./docs/implementation/01-platform-and-runtime.md)
@@ -476,7 +476,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ---
 
-## 📈 当前实施进度（V1.0 收敛口径）
+## 当前实施进度（V1.0 收敛口径）
 
 V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md) 实施，
 批次状态、提交号与过闸证据见 [todo.md](./todo.md)：
@@ -487,8 +487,8 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 - **B2（Agent Workspace/Routing 事件统一/PII 保留）✅**：直派与改派事件
   统一路径（`routing.agent_assigned` / `routing.transfer_completed`）、
   凭证导出/擦除 PII 边界、保留策略过期擦除
-- **B3（Knowledge 产品化/AI 反馈闭环）✅**：知识来源登记与文档版本、
-  索引任务 HTTP 面、AI 首答持久化（REST+WS 旁路记录）、反馈闭环
+- **B3（Knowledge 产品化/AI 反馈回传）✅**：知识来源登记与文档版本、
+  索引任务 HTTP 面、AI 首答持久化（REST+WS 旁路记录）、反馈回传
   （`POST /api/v1/ai/feedback`，访客会话绑定）、检索分析读口、访客侧
   citation 引用行与反馈条、admin Knowledge 管理页（来源/版本/任务/分析）
 - **B4（收口与发布）✅**：TASKS.md/验收矩阵/文档站口径统一、四道发布门禁
@@ -500,7 +500,7 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 - 服务端已收敛到模块化单体：`delivery -> application -> domain -> infra`
   分层；跨模块经 module 内 contract 或事件，无 `models.go` 穿透
 - AI 统一到 `QueryOrchestrator + LLMProvider + KnowledgeProvider`；
-  `ai` 模块承载首答记录、反馈闭环与检索分析（失败静默的旁路观测路径）
+  `ai` 模块承载首答记录、反馈回传与检索分析（失败静默的旁路观测路径）
 - 知识检索服务选择链：ragflow → dify → weknora → pgvector → local
   （外部 provider real 模式证据依赖环境凭证，mock/兼容模式全链留痕）
 - 管理面安全基线：scope、RBAC、audit、token policy 已接入管理面
@@ -508,7 +508,7 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 
 ---
 
-## 🌐 官网部署
+## 官网部署
 
 **[servify.cuihairu.site](https://servify.cuihairu.site/)** — 托管在 Cloudflare Pages，由 Cloudflare 侧 Connect to Git 集成在推送后自动部署（不经过本仓库的 GitHub Actions）。（原 servify.cloud 域名未续费已过期）
 
@@ -528,13 +528,13 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
    - 在 Pages 项目设置中添加 `servify.cuihairu.site`
    - Cloudflare 会自动配置 DNS 和 SSL 证书
 
-### 🚀 自动部署
+### 自动部署
 
 当 `apps/website/` 目录下的文件有变更并推送到 `main` 时，Cloudflare Pages 的 Connect to Git 集成会自动重新部署（部署由 Cloudflare 侧触发，本仓库 `.github/workflows/` 不含网站部署 workflow；手动部署可用 `make website-deploy` / `make website-pages-deploy`）。
 
 ---
 
-## 🔄 CI 与文档发布
+## CI 与文档发布
 
 - GitHub Actions 工作流：`.github/workflows/ci.yml`
 - 文档目录按 VitePress 使用方式组织：`docs/`
@@ -542,10 +542,10 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 
 ---
 
-## 🎯 现阶段结论
+## 现阶段结论
 
 V1.0 收敛改造（B0 文档与架构声明 → B1 Domain 边界/迁移双路径 → B2
-Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈闭环 → B4 收口
+Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈回传 → B4 收口
 发布）已全部过闸，`v1.0.0` 已发布。此前的运行时收口、services→modules
 迁移、租户/审计/安全基线、可观测性各阶段 backlog 均已清零（历史记录见
 [todo.md](./todo.md)）。

@@ -8,7 +8,7 @@
 
 ## 0. 目标与原则
 
-**一句话目标：** 把 Servify 从“模块骨架铺得很宽”的阶段，收敛到“一个独立部署的 Web 智能客服，主链路顺滑、坐席工作台高效、知识闭环可用”的 V1.0 状态。
+**一句话目标：** 把 Servify 从“模块骨架铺得很宽”的阶段，收敛到“一个独立部署的 Web 智能客服，主链路顺滑、坐席工作台高效、知识链路可用”的 V1.0 状态。
 
 **格局原则：**
 
@@ -33,7 +33,7 @@
 | `customer` | 补 Profile 读模型（标签、历史、Ticket 汇、Timeline 汇） | §5.2、§6 |
 | `routing` | 打分路由引擎（skill/language/availability/workload/priority/tier/channel/SLA） | §6 |
 | `ticket` | 与 Conversation 的关系显式化（`conversation_id`）、状态机不动、SLA 挂靠 | §7 |
-| `ai` | 首答/助手链路的产品化补齐（结构化输出、反馈闭环、摘要沉淀） | §5.3 |
+| `ai` | 首答/助手链路的产品化补齐（结构化输出、反馈回传、摘要沉淀） | §5.3 |
 | `knowledge` | 产品化（source/document/chunk/index/version/retrieval analytics、citation 展示） | §5.4 |
 
 ### 1.2 降级为子能力（不再是一级产品概念，保留代码但收紧架构存在感）
@@ -111,7 +111,7 @@ Remote Assist（对话内协助入口维持）、Voice/SIP、多渠道、Mobile�
 | customer | `customers`（`models.go:86`）+ Profile 读模型视图（标签、历史、Ticket 汇） | — |
 | agent | `agents`（`models.go:105`）+ `agent_status`/负载快照表（新增或并入） | 供 routing 评分与工作台查询 |
 | routing | `transfer_records`、`waiting_records`（`models.go:276,291`）+ **`routing_assignments`（持久化）** + `queue_entries`（现内存态→补初始持久化可选） | 打分因子落表（skills/language/priority/tier 来自对侧表） |
-| ai / knowledge | 现有检索/文档表 + **`ai_answers`（答案/来源/置信持久化）**、**`answer_feedback`（"是否有帮助"评价）** | Feedback 闭环用 |
+| ai / knowledge | 现有检索/文档表 + **`ai_answers`（答案/来源/置信持久化）**、**`answer_feedback`（"是否有帮助"评价）** | Feedback 回传用 |
 | analytics | 现有 `daily_stats`（`models.go:432`）等，维持 read model 地位 | 统计由事件投影，不在业务写路径 |
 | sla | `sla_configs`、`sla_violations`（`models.go:320,339`）保留 | 降级为 ticket 子能力，表不动 |
 | security | `audit_logs`（`models.go:511`）+ **PII 策略表（retention 规则、删除/导出任务）** | 落地审核 §18-② |
@@ -176,9 +176,9 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 
 ### 5.2 结构化输出收口（对齐 v1-product-scope）
 
-- 首答输出保持 `answer/citations/confidence/next_action/handoff_reason/ticket_summary` 结构；`next_action ∈ {answer, clarify, handoff, ticket}` 为稳定状态集；评审任何新增状态前必须过「不破坏 V1 闭环」检查。
+- 首答输出保持 `answer/citations/confidence/next_action/handoff_reason/ticket_summary` 结构；`next_action ∈ {answer, clarify, handoff, ticket}` 为稳定状态集；评审任何新增状态前必须过「不破坏 V1 主链路」检查。
 
-### 5.3 反馈闭环（新增，P1 内）
+### 5.3 反馈回传（新增，P1 内）
 
 - 端点：`POST /api/v1/ai/feedback`（对一次 ai-answer 评价 `helpful/not_helpful + 可选意见`），落 `answer_feedback`；
 - 会话页与访客侧 widget 都有入口（widget 侧"Was this helpful?"，审核 §21/P4）；
@@ -233,7 +233,7 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 1. **来源模型**：`knowledge_sources`（markdown/website/PDF/FAQ/API 的元数据登记），文档挂 source；
 2. **版本与索引**：document 版本号 + `index_jobs` 关联版本；失败重试与可见状态（现状已有索引任务雏形，补版本与状态枚举收口）；
 3. **检索分析**：读 `retrieval analytics`（top 问答、无命中率、低置信率）→ Knowledge 管理页展示；
-4. **Citation 可视化**：访客侧与坐席侧都渲染 Sources（`📄 refund-policy.md relevance 0.91`），问答闭环依赖 §5.3 feedback。
+4. **Citation 可视化**：访客侧与坐席侧都渲染 Sources（`📄 refund-policy.md relevance 0.91`），问答链路依赖 §5.3 feedback。
 
 ---
 
@@ -265,9 +265,9 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 | 阶段 | 内容 | 产出 | 验收闸门（Gate） |
 | --- | --- | --- | --- |
 | **P0（本轮评审后立即）** | ① 复查文档入库（已完成：verification 报告）② README/文档漂移修正（§9.3-1、current-architecture 快照更新）③ `ARCHITECTURE.md` 6.4-6.6 写死 Conversation 中心与 Ticket 从属关系 + `domain/doc.go` Owns 注释 | 文档 + 架构声明 | `make local-check` 绿；文档站无旧口径残留 |
-| **P1（产品闭环增强）** | Agent Workspace 三栏工作台（§4 全量）；Conversation 补 `conversation_events` 落库与 Timeline 组件；satisfaction/macro/shift 归位叙事降级 | 工作台可完整处理一个会话全流程 | W1-W8 验收表全过；e2e：访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化用例通过；`make release-check` 绿 |
+| **P1（产品链路增强）** | Agent Workspace 三栏工作台（§4 全量）；Conversation 补 `conversation_events` 落库与 Timeline 组件；satisfaction/macro/shift 归位叙事降级 | 工作台可完整处理一个会话全流程 | W1-W8 验收表全过；e2e：访客进线→AI 首答→handoff→坐席回复→建单→关单全链路自动化用例通过；`make release-check` 绿 |
 | **P2（Routing + Security）** | Scorer 打分引擎（§6.2）；PII 边界（§9.3-2）；statistics 收口进 analytics；核心业务表 tenant/workspace 回填 | 打分路由 + 数据合规面 | §6.3 验收三例全过；PII 用例（导出/删除/retention）全过；迁移在空库+既有库两态可逆 |
-| **P3（Knowledge 产品化）** | 来源/版本/检索分析/citation 展示（§8）；feedback 闭环（§5.3） | 知识库管理闭环 | Knowledge 管理页可完成 source→文档→版本→检索分析→反馈回看一条链；`README_KNOWLEDGE.md` 更新 |
+| **P3（Knowledge 产品化）** | 来源/版本/检索分析/citation 展示（§8）；feedback 回传（§5.3） | 知识库管理全流程 | Knowledge 管理页可完成 source→文档→版本→检索分析→反馈回看一条链；`README_KNOWLEDGE.md` 更新 |
 | **P4（收口与发布）** | 薄壳模块叙事收口（§1.2 文档面全部完成）；`TASKS.md`/验收矩阵与 V1.0 口径统一；发布 `v1.0.0` | V1.0 发布 | 全闸累计验收矩阵全绿；`make release-check`+`security-check`+`observability-check` 绿；发布说明按 V1 收敛口径书写 |
 
 **并行不冲突**：P1 工作台与 P2 Routing 的 scoring 依赖 conversation/routing 现状边界，可两路并进；P3 依赖 P2 的 analytics 收口（read model 基座）；P4 为累计收尾。

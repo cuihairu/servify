@@ -41,7 +41,7 @@
 - 已登录自助入口只允许操作自己的认证状态，不复用 management surface 的资源写权限
 - 不承载跨用户、跨租户的后台管理动作
 - 整个 auth 组挂载含失败留痕的审计中间件（成功与 4xx/5xx 一并落库，凭据字段脱敏），失败登录与被风险策略拦截的登录可经 `GET /api/audit/logs` 对账
-- 可选登录风险执行（`security.session_risk.login_enforcement`，默认 `off`）：接入 `session_ip_intelligence` 情报源后，高风险网络来源按档位强制第二因子（`step_up`）或直接拒绝（`block`）；内建启发式标签永不触发
+- 可选登录风险执行（`security.session_risk.login_enforcement`，默认 `off`）：接入 `session_ip_intelligence` 情报源后，高风险网络来源按档位强制第二因子（`step_up`）或直接拒绝（`block`）；内建启发式标签不触发强制档位
 - refresh token 重放处置（`security.session_risk.refresh_reuse_policy`，默认 `off`）：`revoke_family` 档位下检测到已轮换旧 token 重放即吊销整个会话家族（最新 token 一并失效），迫使重新登录；重放拒绝经审计留痕
 
 当前路由：
@@ -136,7 +136,7 @@ P1 引入机器凭据：`Authorization: Bearer` 之外，`AuthMiddleware` 现在
 
 管理面路由（`api_keys` 资源权限）：
 
-- `GET /api/v1/api-keys`（列表，只回显 prefix 与指纹状态，永不回显明文）
+- `GET /api/v1/api-keys`（列表，只回显 prefix 与指纹状态，不回显明文）
 - `POST /api/v1/api-keys`（签发，明文仅在该响应出现一次）
 - `POST /api/v1/api-keys/:id/revoke`（吊销即时生效）
 - `DELETE /api/v1/api-keys/:id`

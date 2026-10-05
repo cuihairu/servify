@@ -7,4 +7,4 @@
 3. LLM provider 失败时，`OrchestratedEnhancedAIService` 也会走 fallback 路径。
 4. retrieval 成功但没有 sources 时，仍然允许 LLM 正常回答，只是响应策略标记为 `fallback`。
 
-这份行为文档的目的不是冻结实现细节，而是说明当前 provider 切换和故障降级边界，后续如引入 retrieval soft-degrade，应同步更新这里与测试矩阵。
+这份行为文档说明当前 provider 切换和故障降级边界，不冻结实现细节；后续如引入 retrieval soft-degrade，应同步更新这里与测试矩阵。

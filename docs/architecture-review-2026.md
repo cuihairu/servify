@@ -137,10 +137,10 @@ policy hooks → guardrails.ValidateInput
 
 ## 8. 不建议动的部分
 
-- ❌ Go 后端整体重写 / 换语言
-- ❌ 全栈迁 Cloudflare Workers（语音 / WebRTC / 多租户 PG 代价过大）
-- ❌ 自行开发全套 agent 框架长期追新
-- ❌ 现在就上 LangGraph 这类重框架（过度工程）
+- Go 后端整体重写 / 换语言
+- 全栈迁 Cloudflare Workers（语音 / WebRTC / 多租户 PG 代价过大）
+- 自行开发全套 agent 框架长期追新
+- 现在就上 LangGraph 这类重框架（过度工程）
 
 ---
 

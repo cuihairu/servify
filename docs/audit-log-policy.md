@@ -69,7 +69,7 @@
 - 配置 `security.audit.archive_dir` 指向持久化目录后，清理 worker 在删除每批过期记录前先把整批行落为 gzip JSON 快照（冷层）；目录为空（默认）时不归档，行为与既往一致
 - 快照文件名形如 `audit-archive-<UTC时间戳>-<首行ID>-<末行ID>.json.gz`，按时间与 id 天然有序，可直接按文件对账
 - 行内完整保留 `prev_hash` / `entry_hash`——冷层数据与热层同一条哈希链，归档后仍可用链式校验对账，不出现「冷层不可审计」的断链
-- 归档失败即中断本轮清理且不删除：热层清库永不出现「未归档先删除」的数据丢失窗口；故障排除后下一轮自动重试
+- 归档失败即中断本轮清理且不删除：热层清库先归档后删除，不存在「未归档先删除」的数据丢失窗口；故障排除后下一轮自动重试
 - 归档写入采用临时文件 + rename 原子落盘，进程中断不会留下半截快照被误当完整冷层数据
 - 后续可将 `archive_dir` 指向对象存储挂载点，或在此基础上再补外部归档任务，不需要改动清理语义
 
@@ -77,7 +77,7 @@
 
 - `scoped_config` 的 `update` / `rollback` 会把 before / after 快照写入审计库，供 `history`、`diff` 和回滚预览复用
 - 高风险 rollback 仍需显式 `confirm=true`、`change_ref`、`reason`，并在命中高风险规则时补真实 `approval_ref`
-- rollback 执行后应继续通过 `POST /api/security/config/{scope}/verify/:audit_id` 回填验证结论，而不是把审计导出当成治理闭环本身
+- rollback 执行后应继续通过 `POST /api/security/config/{scope}/verify/:audit_id` 回填验证结论；审计导出不承担治理职能
 
 ## 后续实现建议
 

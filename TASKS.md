@@ -11,7 +11,7 @@
 
 - 实施批次 B1（Domain 边界/迁移双路径）✅、B2（Agent Workspace/Routing
   事件统一/PII 与保留策略）✅、B3（Knowledge 产品化/AI 首答持久化与反馈
-  闭环）✅、B4（口径统一与发布）✅ 均已过闸，提交号与过闸证据见 todo.md
+  回传）✅、B4（口径统一与发布）✅ 均已过闸，提交号与过闸证据见 todo.md
   各批次登记；`v1.0.0` 已于 2026-10-04 发布（发布说明：
   [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md)）；
 - 27 个一级模块不增（架构门禁），薄壳模块已按「核心 7 模块的子能力」
@@ -28,7 +28,7 @@
 
 V1.0 收敛新增/收口的能力面（全部带自动化证据，运行证据见验收矩阵）：
 
-- AI 反馈闭环：`POST /api/v1/ai/feedback`（认证即可，访客 guest token
+- AI 反馈回传：`POST /api/v1/ai/feedback`（认证即可，访客 guest token
   会话绑定）、ai_answers / answer_feedback 持久化（REST+WS 旁路记录）、
   检索分析读口 `GET /api/v1/ai/retrieval-analytics`；
 - Knowledge 产品化：knowledge_sources 来源登记（枚举/引用守卫）、文档

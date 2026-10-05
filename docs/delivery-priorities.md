@@ -11,12 +11,12 @@
 
 ## 当前判断
 
-当前第一版产品目标已经收敛为 [Web 独立站智能客服](./v1-product-scope.md)：Web widget 接入、AI 基于知识库首答、人工接管、转接协作、工单闭环和必要后台运营。
+当前第一版产品目标已经收敛为 [Web 独立站智能客服](./v1-product-scope.md)：Web widget 接入、AI 基于知识库首答、人工接管、转接协作、工单全流程和必要后台运营。
 
 `v1.0.0` 已于 2026-10-04 发布（[发布说明](./release-notes-v1.0.0.md)）。本文旧版列出的三类收口风险均已处理完毕：
 
 1. 生产路径 `inmemory` / `mock` / `legacy` 兼容实现已收口（P0 批次，`services` 目录已整体移除）。
-2. 主链路验收闭环已完成（P1 批次 + V1.0 收敛 B1–B4 过闸，见 [acceptance-checklist.md](./acceptance-checklist.md)）。
+2. 主链路验收收口已完成（P1 批次 + V1.0 收敛 B1–B4 过闸，见 [acceptance-checklist.md](./acceptance-checklist.md)）。
 3. 文档/待办/实现漂移已通过 V1.0 收敛 B0 文档声明批与文档对账规则治理。
 
 后续演进的取舍以 [v1.0.0 发布说明「演进方向」](./release-notes-v1.0.0.md) 为准：Routing 打分引擎、Ticket 关闭前拦截等，不插队扩张已冻结面（语音、多渠道）。
@@ -34,7 +34,7 @@
 3. 配置、启动、健康检查、依赖装配的真实性
 4. mock / disabled / compatibility 实现与 production 边界是否清晰
 
-### P1 再补主链路验收闭环（已完成）
+### P1 再补主链路验收收口（已完成）
 
 在 P0 没有继续扩大风险前，下一步是把主链路从“代码和测试基本在”推进到“有证据证明能交付”：
 

@@ -2,7 +2,7 @@
 
 对应 `docs/mobile-sdk-design.md` M3 验收条款 ①—③。双端共同里程碑（M1=Android、M2=iOS 各自收口后，M3 起双端同刀推进，用例名逐一镜像防单侧漂移）。自动化项逐条锚定测试与提交；依赖外部环境的项如实标注执行状态——**未执行的项不勾**。
 
-刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）→ 刀 6 推送下发编排 + FCM/APNs HTTP 传输（服务端代码面：dispatcher + 手搓 JWT 双传输 + config push 节，真凭证联调 P1-1 如实留白）→ 刀 7 服务端访客消息增量拉取端点（§10 #1：`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标 + has_more 探测，SDK 双端接入随刀 10 闭环） → 刀 8 服务端访客 token 签发 + WS 握手校验接线（§10 #2 / D6 落地：`POST /api/v1/guest/session` service 链签发 HS256 短期 token、hub 按 `security.guest_token.required` 三层校验 401 拒升级、config gate + 装配兜底双层拒启动；SDK 侧 guestToken 握手参数先行就位 2214bb5 向后兼容）→ 刀 9 服务端访客未读数/已读游标端点（§10 #3 / D7 落地：`POST /api/v1/sessions/:session_id/read` + `GET /api/v1/sessions/:session_id/unread` 免认证，sessions.visitor_read_message_id 迁移 000013，游标只前进不后退、未读口径 sender ∈ {agent, system} 且 ID 大于游标与 D7 客户端推导逐字对齐）→ 刀 10 SDK 双端断线补拉接入（D7 流程 3 客户端面闭环：重连 onOpen 自动对账，`after_id` 游标 + has_more 续拉合并 history，agent/ai 静默期计未读与 WS 帧口径同构，指纹表（容量 200）去重游标确立前的 WS 渲染窗口、不做收尾清空（对账在途帧会被抹掉，Kotlin 侧实测复现），404/IO/HTTP 全失败面静默；双端 ReconcileMessagesTest↔ReconcileMessagesTests 用例名逐一对应）。
+刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4）→ 刀 3a createTicket 门面 + 摘要（7b6ced4）→ 刀 3b UI 入口（11ae3df；iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）→ 刀 6 推送下发编排 + FCM/APNs HTTP 传输（服务端代码面：dispatcher + 手搓 JWT 双传输 + config push 节，真凭证联调 P1-1 如实留白）→ 刀 7 服务端访客消息增量拉取端点（§10 #1：`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标 + has_more 探测，SDK 双端接入随刀 10 打通） → 刀 8 服务端访客 token 签发 + WS 握手校验接线（§10 #2 / D6 落地：`POST /api/v1/guest/session` service 链签发 HS256 短期 token、hub 按 `security.guest_token.required` 三层校验 401 拒升级、config gate + 装配兜底双层拒启动；SDK 侧 guestToken 握手参数先行就位 2214bb5 向后兼容）→ 刀 9 服务端访客未读数/已读游标端点（§10 #3 / D7 落地：`POST /api/v1/sessions/:session_id/read` + `GET /api/v1/sessions/:session_id/unread` 免认证，sessions.visitor_read_message_id 迁移 000013，游标只前进不后退、未读口径 sender ∈ {agent, system} 且 ID 大于游标与 D7 客户端推导逐字对齐）→ 刀 10 SDK 双端断线补拉接入（D7 流程 3 客户端面打通：重连 onOpen 自动对账，`after_id` 游标 + has_more 续拉合并 history，agent/ai 静默期计未读与 WS 帧口径同构，指纹表（容量 200）去重游标确立前的 WS 渲染窗口、不做收尾清空（对账在途帧会被抹掉，Kotlin 侧实测复现），404/IO/HTTP 全失败面静默；双端 ReconcileMessagesTest↔ReconcileMessagesTests 用例名逐一对应）。
 
 ## ① 推送端到端 ⏳ 真实凭证联调未通，注册链路 + 下发代码面已通（如实标注）
 
@@ -12,7 +12,7 @@
 - **端到端链路 ⏳**：后台 → 系统 → 点开 → 增量补拉 → 未读归零。注册链路已通（刀 5）+ 服务端下发编排与 FCM/APNs HTTP 传输已落地（刀 6，代码面）；仍缺外部依赖（不阻塞代码面收口）：真实 FCM 服务账号 / APNs .p8 凭证端到端联调（P1-1）、SDK 双端游标补拉已随刀 10 接入（服务端端点刀 7 已落地，联调以真实环境验收为准）、真机推送环境。
 - **真机手工项 ⏳（外部配套到位后执行）**：后台收推送展示、点开通知进会话页、增量补拉后未读归零、前台期间不重复推送、进程被杀后 cold start 补拉。
 
-## ② 工单创建携带 AI 摘要且坐席侧可见 ✅（SDK + 服务端闭环）
+## ② 工单创建携带 AI 摘要且坐席侧可见 ✅（SDK + 服务端打通）
 
 - **门面（7b6ced4）**：`createTicket(title, description?)` → `POST {apiUrl}/api/v1/tickets`（§10 #4 刀 2 落地的免认证端点），体 `{session_id, title, description?, ai_summary?}`；201→`TicketReceipt(ticketId)`；失败返 null + 错误流（IO→`network`、非 2xx/畸形→`ticket_failed`，与 sendMessage 同风格，ServifyError 非 Throwable）。
 - **摘要（7b6ced4）**：`TicketSummary` 最近 10 条，标注 `[访客]`/`[AI]`/`[客服]`（门面 AI 回复 = System sender + isAiResponse 标志归 `[AI]`）；System 提示行跳过；空会话返 null（请求不带 `ai_summary` 键）。

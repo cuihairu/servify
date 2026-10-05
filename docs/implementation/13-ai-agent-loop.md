@@ -39,7 +39,7 @@
 
 ## 实施步骤
 
-### 阶段 1：非流式 agent loop（先打通闭环）
+### 阶段 1：非流式 agent loop（先跑通循环）
 1. **orchestrator 接收 `ToolExecutor`**：`query_orchestrator.go` struct 加字段；`NewQueryOrchestrator` 加参数（或 `SetToolExecutor`）；`Handle` 构造 `ChatRequest` 时注入 `ToolDefinition`（`registry.List()` → `llm.ToolDefinition`）。
 2. **`Handle` 加循环**：`retrieve → buildPrompt → loop{ Chat(带 tools) → 若 `ToolCalls` 空 break → 逐个 `ToolExecutor.Execute` → 结果作为 `tool` 角色消息回灌 → 再 Chat }`，`maxSteps` 上限（默认 5）；每轮打 span + metrics。
 3. **装配接线**（`orchestrated_ai_enhanced.go`）：构造 `ToolRegistry` 注册 3 工具（Port 接 `CustomerService` / `TicketService` / `HandoffPort.RequestHandoff`）；构造 `ToolExecutor`（带 `PermissionChecker`）；`AIRequest` 设 `ToolPolicy.Enabled=true, AllowedTools=[...]`；把开头 `ShouldTransferToHuman` 关键词短路**降级为兜底**（LLM 未调 handoff 工具时）。
@@ -57,7 +57,7 @@
 
 - **P0 自行开发 minimal loop**：最轻、复用现有 `ToolExecutor` / `LLMProvider` 抽象、2–3 周。
 - **P1 可评估迁 [Eino](https://github.com/cloudwego/eino)**（"Go 版 LangGraph"）：获得 workflow 可视化 / durable / ADK，代价是多一层框架依赖 + 学习成本。
-- **决策依据**：先自行开发验证闭环与产品价值，再决定是否值得换框架。
+- **决策依据**：先自行开发验证收口与产品价值，再决定是否值得换框架。
 
 ## 风险与回退
 

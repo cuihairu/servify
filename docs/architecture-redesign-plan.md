@@ -2,7 +2,7 @@
 
 > ⚠️ **快照注记（2026-10-04 文档对账）**：本文是 services→modules 迁移期的执行框架，其核心目标（services/modules 边界收口、runtime assembly/router/provider 结构稳定）已在后续批次中落地：`internal/services` 已整体移除，业务能力全部收口 `internal/modules/*`（27 模块封顶）。当前权威架构快照见 [current-architecture.md](./current-architecture.md)，V1.0 口径见 [v1-convergence-plan.md](./v1-convergence-plan.md)，本文仅作迁移史存档。
 
-本文不是新的功能 backlog，而是下一轮架构重设计的执行框架。目标是先把文档口径、当前架构、迁移顺序和验收规则对齐，再决定具体代码改动。
+本文是下一轮架构重设计的执行框架，不列新的功能 backlog。目标是先把文档口径、当前架构、迁移顺序和验收规则对齐，再决定具体代码改动。
 
 ## 目标
 
@@ -19,7 +19,7 @@
 
 - 不把后端拆成微服务。
 - 不重写所有 handler 或所有 service。
-- 不用架构重设计替代当前 P1 验收闭环。
+- 不用架构重设计替代当前 P1 验收收口。
 - 不扩张新产品能力来掩盖已有主链路的证据缺口。
 
 ## 设计主线
@@ -151,7 +151,7 @@ flowchart TD
 目标是让架构围绕主产品链路收束（V1 范围见 [v1-product-scope.md](./v1-product-scope.md)）：
 
 ```text
-Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单闭环
+Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程
 ```
 
 远程协助保留为 `人工接管` 之后的增强方向，不进入 V1 主链路验收。这条 V1 链路涉及：
@@ -168,7 +168,7 @@ Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单闭环
 - 主链路的文档、API、SDK、管理端入口和验收清单使用同一套术语。
 - `docs/acceptance-checklist.md` 的状态能回溯到真实请求或运行证据。
 
-## Phase 6 验证闭环
+## Phase 6 验证收口
 
 所有架构重设计任务都必须绑定至少一种验证方式：
 
@@ -189,7 +189,7 @@ Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单闭环
 
 文档整理完成后，优先继续执行 `todo.md` 中当前恢复点：
 
-- `P1-1 AI / Knowledge 验收闭环`
+- `P1-1 AI / Knowledge 验收收口`
 
 同时并行维护模块迁移治理：
 

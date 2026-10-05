@@ -1,6 +1,6 @@
 # 外部知识库集成指南：RAGFlow 知识库 provider（ragflowkp）
 
-## 🎯 项目概述
+## 项目概述
 
 RAGFlow（InfiniFlow 开源 RAG 引擎）是 servify 知识库主推方向之一，定位与 WeKnora 并列为「正统知识库」双路径：**深度文档解析场景走 RAGFlow**（DeepDoc 对复杂 PDF/表格/版式的解析是其强项），**轻量中文生态走 WeKnora**（见 [WEKNORA_INTEGRATION.md](WEKNORA_INTEGRATION.md)）。选型背景与产品全景见 [KNOWLEDGE_BASE_LANDSCAPE.md](KNOWLEDGE_BASE_LANDSCAPE.md)。
 
@@ -16,7 +16,7 @@ ragflow → dify → weknora → pgvector 直配
 
 版本锚定：**RAGFlow v0.27.x**（API 面按此锚定，升级前先跑验收脚本回归）。
 
-## 🏗️ 技术架构
+## 技术架构
 
 ### 代码分层
 
@@ -54,7 +54,7 @@ RAGFlow 上传不覆盖同名文档，driver 的 `UpsertDocument` 依次执行�
 | TopK | 请求级 > `ragflow.search.top_k` | 10 |
 | 相似度阈值 | 请求级 > `ragflow.search.score_threshold` | 0.2 |
 
-## 🚀 快速开始
+## 快速开始
 
 ### 1. 部署 RAGFlow
 
@@ -88,7 +88,7 @@ ragflow:
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/v1/ai/status
 ```
 
-## 🧪 验收
+## 验收
 
 ### mock 模式（全自含，CI 可跑）
 
@@ -96,7 +96,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/v1/ai/status
 make ragflow-acceptance
 ```
 
-脚本全自含：构建真实 servify 二进制 → 内嵌 python3 RAGFlow mock（有状态、请求留痕）→ sqlite 自起服务（ragflow 指向 mock）→ 未认证 401 负例 → `/api/v1/ai/status` 断言 `provider=ragflow` → 检索命中 → 上传×2（第二跳验证删旧建新）→ sync → `/api/knowledge-docs` 管理面 CRUD 闭环（创建带 `external_id`、更新删旧建新、删除按外部 id 清理且回读 404，均以 mock 留痕断言）→ mock 留痕断言。证据落 `scripts/test-results/ragflow-acceptance/`（manifest 与关键响应/留痕入库；含验收 JWT 的 admin-auth.json 不入库）。
+脚本全自含：构建真实 servify 二进制 → 内嵌 python3 RAGFlow mock（有状态、请求留痕）→ sqlite 自起服务（ragflow 指向 mock）→ 未认证 401 负例 → `/api/v1/ai/status` 断言 `provider=ragflow` → 检索命中 → 上传×2（第二跳验证删旧建新）→ sync → `/api/knowledge-docs` 管理面 CRUD 全链（创建带 `external_id`、更新删旧建新、删除按外部 id 清理且回读 404，均以 mock 留痕断言）→ mock 留痕断言。证据落 `scripts/test-results/ragflow-acceptance/`（manifest 与关键响应/留痕入库；含验收 JWT 的 admin-auth.json 不入库）。
 
 ### real 模式（需真实 RAGFlow 环境）
 
@@ -119,13 +119,13 @@ real 模式拒绝 localhost/私网 RAGFlow 地址（防把本地 mock 误留成�
 - 覆盖顺序：system → tenant → workspace → runtime，字段级合并（`enabled` sticky-true、字符串非空覆盖、数值非零覆盖）
 - 请求级构造的 AI 服务会按当前租户/工作区解析后的 ragflow 配置重建选择链
 
-## 🔒 安全配置
+## 安全配置
 
 - staging / production 模板 `ragflow.enabled: false`，启用需显式改配置并配齐凭证
 - `api_key` 属敏感键：模板中只能为 `""` 或 `${RAGFLOW_API_KEY}` 占位（secure-config 模板门禁扫描）
 - 生产建议：RAGFlow 与 servify 同私网段，BaseURL 走内网地址；API Key 经环境变量注入，不落配置文件
 
-## 🐛 故障排除
+## 故障排除
 
 | 现象 | 排查 |
 | --- | --- |
@@ -135,16 +135,16 @@ real 模式拒绝 localhost/私网 RAGFlow 地址（防把本地 mock 误留成�
 | 查重未删除旧文档 | 确认旧文档在 RAGFlow 中的文件名是 `<标题>.txt`（driver 按上传文件名查重） |
 | `ragflow api error code=xxx` | 业务码错误，看 message；`ragflow http 4xx` 则是 HTTP 层（多为鉴权/路径问题） |
 
-## 🎯 当前状态与后续方向
+## 当前状态与后续方向
 
-- ✅ driver 四操作 + HealthCheck 全部落地（100% 测试覆盖）
-- ✅ mock 模式验收全自含入 CI，manifest 入库
-- ✅ 租户/工作区作用域与 dify/weknora 全量对齐
+- driver 四操作 + HealthCheck 全部落地（100% 测试覆盖）
+- mock 模式验收全自含入 CI，manifest 入库
+- 租户/工作区作用域与 dify/weknora 全量对齐
 - ⬜ real 模式真实 RAGFlow 环境端到端运行证据（等外部环境与凭证，阻塞项同 P1-1）
 - ⬜ RAGFlow 版本跟进（v0.27.x 锚定，升级前先 `make ragflow-acceptance` 回归）
 - 不做：dataset 名→id 解析（配置直接给 DatasetID，对齐 dify）、`RebuildIndex`（RAGFlow 侧自管解析管线）
 
-## 📚 相关资源
+## 相关资源
 
 - [RAGFlow 官方文档](https://ragflow.io)
 - [KNOWLEDGE_BASE_LANDSCAPE.md](KNOWLEDGE_BASE_LANDSCAPE.md)——选型全景

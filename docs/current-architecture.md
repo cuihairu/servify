@@ -132,7 +132,7 @@ modules/*/application -> modules/*/domain|infra
 | `statistics` 旧 handler | 已收口：`modules/analytics/delivery/statistics_handler.go` / `statistics_export_handler.go`（V1.0 B2-3） | 无遗留风险；顶层 handlers 仅剩迁移来源测试 |
 | `voice` | 模块化程度较高（完整分层），但不是典型 `services -> modules` 迁移形态 | provider、media、protocol、业务状态容易混在一起；V1.0 冻结为扩展边界 |
 | `realtime` | WebSocket hub 仍是运行态核心对象 | connection runtime 与业务持久化边界必须继续守住 |
-| `AI / Knowledge` | provider 抽象与 mock/容器化验收已闭环（P1-1）；仅 real 模式验收受外部凭证阻塞 | 接口成功不等于真实 provider 主路径命中 |
+| `AI / Knowledge` | provider 抽象与 mock/容器化验收已收口（P1-1）；仅 real 模式验收受外部凭证阻塞 | 接口成功不等于真实 provider 主路径命中 |
 | `storage / uploads` | 当前有 local provider，代码已标注多节点限制 | 多实例部署需要对象存储边界 |
 | `DailyStats` 全局聚合 | `DailyStats` 等系统级汇总表尚无 tenant/workspace 维度拆分口径 | 多租户语义下汇总口径歧义（见 `tenant-workspace-boundaries.md`） |
 

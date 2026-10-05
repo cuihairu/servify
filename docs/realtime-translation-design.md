@@ -63,7 +63,7 @@
   │     AudioWorklet 的 processor 模块经 Blob URL 加载，会被服务端
   │     `default-src 'self'` CSP 拦截；ScriptProcessor 无模块加载全浏览器
   │     可用，代价仅主线程回调——已弃用但各厂商无移除时间表。Opus 编码
-  │     留给移动端/带宽受限形态再评估，Web 面先以 raw pcm16 闭环）
+  │     留给移动端/带宽受限形态再评估，Web 面先以 raw pcm16 走通）
   ▼
 服务端 translation pipeline（每说话方一条）
   1. 流式识别 ASR        ：WebSocket 流式协议（Deepgram/火山/阿里/AssemblyAI，
