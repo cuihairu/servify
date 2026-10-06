@@ -24,7 +24,6 @@
 | --- | --- |
 | `apps/server` | Go 后端，当前架构重设计的主战场 |
 | `apps/admin` | 管理端，UmiJS + Ant Design Pro |
-| `apps/admin-legacy` | 旧静态管理端，保留兼容和演示用途 |
 | `apps/website` | 官网静态站点 |
 | `sdk` | TypeScript SDK workspace，已拆 core、transport、framework binding |
 | `docs` | 文档站、架构说明、验收、实施 backlog、运行手册 |

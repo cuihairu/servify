@@ -61,7 +61,6 @@
 | --- | --- | --- |
 | `api_key`、`email`、`push`、`webhook`、`translation`、`app_integration`、`auth`（模块内薄壳） | **冻结**：不再新增能力面，不进入任何产品文案 | 多渠道/开放平台是 P2+ 扩展；auth 逻辑实际在 `platform/auth` + `handlers/auth_*`，薄壳模块纯占位 |
 | `voice` 及其扩展（SIP/PSTN/transcription） | **冻结为扩展边界**：维持现状（有 domain + provider），不投 V1 资源 | 审核 §14、v1-product-scope P2 |
-| `apps/admin-legacy` | V1 内保留演示兼容；V1 结束后评估删除 | 避免迁移中途破坏回退路径 |
 | 新增任何一级模块 | **禁止**（架构门禁：新能力先找既有模块子能力归属） | 审核 §11 |
 | 新渠道（Telegram/WeCom/WhatsApp/Mobile UI/SIP 深度接入） | 冻结 | v1-product-scope `V1 不做的功能` |
 

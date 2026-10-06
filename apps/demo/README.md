@@ -27,6 +27,5 @@ open apps/demo/index.html
 ## 与其他目录的关系
 
 - `apps/admin` - 正式的管理后台（UmiJS + Ant Design Pro）
-- `apps/admin-legacy` - 旧版静态管理面板（保留用于兼容）
 - `apps/demo-sdk` - SDK 预构建产物与集成示例
 - `sdk/` - SDK 源码（TypeScript）

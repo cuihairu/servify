@@ -84,7 +84,6 @@ Servify 当前更适合这样理解：
 |-- apps/
 |   |-- server/              # Go 服务端
 |   |-- admin/               # Admin 管理面板（UmiJS + Ant Design Pro）
-|   |-- admin-legacy/        # 旧版静态管理面板（保留用于演示/兼容）
 |   |-- demo/                # 产品演示站点
 |   |-- demo-sdk/            # SDK 预构建产物与示例
 |   `-- website/             # 官网静态站点
@@ -111,7 +110,6 @@ Servify 当前更适合这样理解：
 | `apps/` | 应用入口与可运行表面，包括服务端、管理端、演示站点等 |
 | `apps/server/` | Go 服务端（模块化单体架构） |
 | `apps/admin/` | Admin 管理面板（UmiJS + Ant Design Pro） |
-| `apps/admin-legacy/` | 旧版静态管理面板（保留用于演示/兼容） |
 | `apps/demo/` | 产品演示站点与示例 |
 | `apps/demo-sdk/` | SDK 预构建产物（UMD/ESM）与集成示例 |
 | `apps/website/` | 官网静态站点 |

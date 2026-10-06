@@ -144,14 +144,14 @@
 - 下一步：ferry 侧真嵌验收（外部）；其余子项已落地
 - 阻塞项：暂无
 
-### [ ] C2 admin-legacy 清理计划
+### [x] C2 admin-legacy 清理计划
 
 - 任务清单：
-  - [ ] C2-1 盘点 legacy 面板残留面（路由/引用/构建三面清单）
-  - [ ] C2-2 定删除批次并执行（先切流量后删码，分批提交），连同 P0-3 适配层尾巴一起收干净
-  - [ ] C2-3 复核「补测至 100%」测试有无凑数假测试（测试是门禁不是交付，真实走查为准，发现凑数的删改）
-- 状态：`[ ]`
-- 下一步：C2-1 盘点开工
+  - [x] C2-1 盘点 legacy 面板残留面（路由/引用/构建三面清单）
+  - [x] C2-2 定删除批次并执行（先切流量后删码，分批提交），连同 P0-3 适配层尾巴一起收干净
+  - [x] C2-3 复核「补测至 100%」测试有无凑数假测试（测试是门禁不是交付，真实走查为准，发现凑数的删改）
+- 状态：`[x]`
+- 下一步：已完成（见 2026-10-07 附注）
 - 阻塞项：暂无
 
 ### [ ] C3 文档全面重整
@@ -1165,6 +1165,11 @@
   - 修法：000017 就地前置补建两张缺失表（编号序不可变，v17 先于任何新迁移执行；DDL 取自 `cmd/gen-baseline` 对空库的真实捕获、与基线同源，`IF NOT EXISTS` 保证既有库零改动）；000019 表名纠偏 `answer_feedback`→`answer_feedbacks` + 列形对齐捕获（answer_id NOT NULL / confidence decimal）+ `DROP` 错名表（错名只可能来自首版迁移且应用从未写成功过，恒空可安全清）；ci.yml 两处断言改动态取迁移链头部（`000NNN` 最大号），链增长自动跟随；新增 `TestMigrationChainCoversAllModels` 静态对账（52 个冻结清单模型的 GORM 表名 × 迁移链 `CREATE TABLE` 全集，embed FS 扫描面非空断言防假绿）——整类缺口（新模型漏配编号迁移）钉成静态门。
   - 验证：变异验证——还原修前迁移链，守卫精确报 3 张缺表（conversation_events/routing_assignments/answer_feedbacks），修后绿；bootstrap 包全量 `-count=1` 绿（29.7s）+ gofmt/vet 干净；本地全真复刻 CI Integration（清卷全新库 + 覆写端口起栈避本机端口占用）全链绿：健康 200、水位 `19|f`==动态期望、三表按真名在库、备份恢复演练（水位+行数对账）、重启幂等健康、weknora 集成脚本 EXIT=0。
   - 遗留登记（如实，不硬造）：a) 列形级自动化对账（gen-baseline 捕获 vs 迁移链终态 DDL 全链 diff）未建，本刀只手工对齐了 000017/000019 两张；b) 已标脏 v17 的存量真实部署需 `migrate force 16` 手工解锁后再升级（CI/新部署不受影响）。
+
+- 附注（2026-10-07，**C2 admin-legacy 清理完成**）：
+  - C2-1 三面盘点结论：apps/admin-legacy（19 文件 384K）= ①根目录官网页（index/index2/style/script）——职责已被 apps/website 取代；②旧演示页与旧 admin 壳（ws-demo/sdk-demo/kb/satisfaction/admin/）——已被 apps/admin（React）与 apps/demo 取代；③sdk/ 冻结副本——与 demo-sdk 现产物已漂移，其 README「由 SDK 包同步生成、满足 CI 生成产物校验」的说法为陈旧失实（sync 脚本只写 demo-sdk，drift 检查只覆盖 demo-sdk）。路由面：server static.go 不服务该目录（defaultStaticRoots 仅 admin dist），运行时不可达；引用面：仅 5 处描述性文字（README×2/current-architecture/v1-convergence-plan/demo README），无任何链接；构建面：sync/drift/Makefile/CI 全无接线。「先切流量」一步天然满足（无流量可切）。
+  - C2-2 执行：整目录删除 + 5 处文档提法清理（convergence-plan 的「V1 结束后评估删除」行随批次拍板落地）；P0-3 适配层尾巴核实已随 P0-3 关单收净（agent_legacy_runtime_adapter 已不存在，服务端 Go 无 legacyRuntime 残留）。
+  - C2-3 复核结论（286ec0d「补测至 100%」全量 21 个 _extra/_coverage 测试文件）：无凑数假测试，全部保留。断言密度最低位（1/test）与各密度档逐文件走查：走 gin+httptest 真路由断言状态码分支、sqlite 真库断言仓储行为、子进程协议断言退出码与错误文案、错误注入断言具体错误消息、评分器断言具体数值（0.87/因子表/理由表）——是行为测试不是 mock-回-声测试；无需删改。
 
 - 附注（2026-10-07，**C1 web 嵌入集成指南与组件外观落地**；接续 2026-10-05 拍板批次，吸收前一中断会话的半成品（widget.js 外观/主题参数面 + 10 用例测试），补齐 Crisp 体验借鉴与 C1-4 指南）：
   - 承接半成品并核验：icon 三档（6 预设/自定义上传 image/URL 引用）、外观四参（主色/圆角/四角/三档大小+px）、主题 token 全表 22 项亮暗两套、theme auto（prefers-color-scheme 实时跟随）、品牌主色自动生成整套（WCAG 亮度推导对比字色）、品牌位（logo/名称/欢迎语）、远程主题（themeUrl 下发 JSON，失败保本地）、data-* 零配置自动初始化——半成品已带 10 用例 DOM shim 测试全绿，实现质量核验通过后直接续建。
