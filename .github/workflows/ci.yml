@@ -669,10 +669,13 @@ jobs:
       - name: Verify versioned migrations applied
         timeout-minutes: 3
         run: |
+          # 期望版本动态取迁移链头部（000NNN 最大号），不再硬编码——链每加一个
+          # 迁移这里自动跟随（曾钉死 16 而链到 19，Integration 六连红无人在场）。
+          expected=$(printf '%s\n' apps/server/internal/app/bootstrap/migrations/*.up.sql | sed 's|.*/0*\([0-9]*\)_.*|\1|' | sort -n | tail -1)
           state=$(docker compose -f infra/compose/docker-compose.yml exec -T postgres psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations")
-          echo "schema_migrations: $state"
-          if [ "$state" != "16|f" ]; then
-            echo "expected schema_migrations version=15 dirty=false, got: $state"
+          echo "schema_migrations: $state (expected ${expected}|f)"
+          if [ "$state" != "${expected}|f" ]; then
+            echo "expected schema_migrations version=$expected dirty=false, got: $state"
             exit 1
           fi
 
@@ -699,11 +702,13 @@ jobs:
           $COMPOSE exec -T postgres psql -U postgres -d postgres -c "CREATE DATABASE servify"
           $COMPOSE exec -T postgres pg_restore -U postgres -d servify --no-owner < /tmp/servify-drill.dump
 
-          # 4) 对账:迁移水位与播种行数随备份回来(损坏被回滚)
+          # 4) 对账:迁移水位与播种行数随备份回来(损坏被回滚)。期望版本同上:
+          #    动态取迁移链头部,不硬编码
+          expected=$(printf '%s\n' apps/server/internal/app/bootstrap/migrations/*.up.sql | sed 's|.*/0*\([0-9]*\)_.*|\1|' | sort -n | tail -1)
           state=$(pg "SELECT version, dirty FROM schema_migrations")
-          echo "schema_migrations after restore: $state"
-          if [ "$state" != "16|f" ]; then
-            echo "expected schema_migrations version=15 dirty=false after restore, got: $state"
+          echo "schema_migrations after restore: $state (expected ${expected}|f)"
+          if [ "$state" != "${expected}|f" ]; then
+            echo "expected schema_migrations version=$expected dirty=false after restore, got: $state"
             exit 1
           fi
           after=$(pg "SELECT count(*) FROM users")
