@@ -1,22 +1,51 @@
 /**
- * Servify Widget — 可嵌入的客服聊天组件
+ * Servify Widget — 可嵌入的客服聊天组件（外观与主题可配）
  *
- * 使用方式:
- *   <link rel="stylesheet" href="/demo-sdk/widget.css">
+ * 最小接入:
  *   <script src="/demo-sdk/servify-sdk.umd.js"></script>
  *   <script src="/demo-sdk/widget.js"></script>
  *   <script>
- *     ServifyWidget.create({
- *       baseUrl: 'http://localhost:8080',
- *       sessionId: 'optional-custom-session-id',
- *       primaryColor: '#667eea',  // optional
- *       accessToken: 'guest-jwt'  // optional：guest token（访客反馈入口需要）
- *     });
+ *     ServifyWidget.create({ baseUrl: 'http://localhost:8080' });
  *   </script>
  *
- * 或自动初始化:
+ * 外观/主题全部走初始化参数（改样式不改代码）:
+ *   ServifyWidget.create({
+ *     baseUrl: 'http://localhost:8080',
+ *     sessionId: 'optional-custom-session-id',  // 应用侧会话互认：同一 id 恢复同一会话
+ *     accessToken: 'guest-jwt',                 // optional：guest token（访客反馈入口需要）
+ *
+ *     // ── 组件外观 ──
+ *     icon: 'headset',           // 档1 预设: chat/smile/headset/lifebuoy/dots/bolt
+ *     // icon: { image: 'data:image/svg+xml;base64,… 或 <svg…' },  // 档2 自定义上传
+ *     // icon: { url: 'https://host.example/icon.svg' },           // 档3 URL 引用
+ *     color: '#0f766e',          // 主色调（primaryColor 为兼容别名）
+ *     borderRadius: 28,          // 触发按钮圆角（px 数字或任意 CSS 长度值）
+ *     position: 'bottom-right',  // bottom-right|bottom-left|top-right|top-left
+ *     size: 'medium',            // small|medium|large，或按钮直径 px 数字
+ *
+ *     // ── 聊天窗主题（亮暗两套独立配；theme: 'auto' 跟随宿主站深浅）──
+ *     theme: 'light',            // light|dark|auto
+ *     themeLight: { panelBg: '#ffffff', bubbleAgentBg: '#f0f0f0' },   // 亮套覆盖
+ *     themeDark:  { panelBg: '#1f2430', bubbleAgentBg: '#2a3040' },   // 暗套覆盖
+ *     themeTokens: null,         // 当前主题覆盖（同时覆盖亮暗同名字段）
+ *     themeFromColor: '#0f766e', // 给一个品牌主色自动生成整套 token
+ *     themeUrl: '',              // 远程主题 JSON（配置放服务端，多站点统一改）
+ *
+ *     // ── 品牌位 ──
+ *     brand: { logo: '', name: '在线客服', welcome: '' },
+ *   });
+ *
+ * 自动初始化（data-* 属性承载常用面）:
  *   <script src="/demo-sdk/servify-sdk.umd.js" data-servify-sdk></script>
- *   <script src="/demo-sdk/widget.js" data-servify-widget data-base-url="http://localhost:8080"></script>
+ *   <script src="/demo-sdk/widget.js" data-servify-widget
+ *           data-base-url="http://localhost:8080"
+ *           data-icon="headset" data-color="#0f766e"
+ *           data-position="bottom-right" data-size="medium"
+ *           data-theme="auto" data-theme-url="https://host/servify-theme.json"
+ *           data-brand-name="XX 客服" data-brand-logo="https://host/logo.png"
+ *           data-brand-welcome="您好，有什么可以帮您？"></script>
+ *
+ * token 全表与两风格示例见 docs/embedding-guide.md「组件与聊天窗主题」。
  */
 (function (root) {
   'use strict';
@@ -120,6 +149,102 @@
     return this.ws && this.ws.readyState === WebSocket.OPEN;
   };
 
+  // ── 外观与主题（icon 三档 / 样式 / 亮暗 token / 品牌位）──────────
+
+  // 档1 预设图标库：统一 24x24 stroke 风格，currentColor 继承按钮文字色
+  var ICON_PRESETS = {
+    chat: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    smile: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M8.5 14.5s1.5 2 3.5 2 3.5-2 3.5-2"/></svg>',
+    headset: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>',
+    lifebuoy: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>',
+    dots: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/></svg>',
+    bolt: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'
+  };
+
+  function wrapIconContent(content) {
+    if (content.indexOf('<svg') === 0) return content;  // 内联 SVG 直挂
+    return '<img src="' + content + '" alt="" style="width:26px;height:26px;object-fit:contain;display:block;" />';
+  }
+
+  // icon 三档解析：预设名 / {image}（内联 SVG、data URL、图片 URL 均收，
+  // 覆盖「自定义上传」——宿主站把上传产物转 data URL 或直链传入）/ {url}
+  function resolveIconContent(icon) {
+    if (!icon) return ICON_PRESETS.chat;
+    if (typeof icon === 'string') {
+      if (ICON_PRESETS[icon]) return ICON_PRESETS[icon];
+      if (icon.indexOf('<svg') === 0 || icon.indexOf('data:') === 0 || /^https?:\/\//.test(icon)) {
+        return wrapIconContent(icon);
+      }
+      return ICON_PRESETS.chat;
+    }
+    if (icon && icon.image) return wrapIconContent(String(icon.image));
+    if (icon && icon.url) return wrapIconContent(String(icon.url));
+    if (icon && icon.preset && ICON_PRESETS[icon.preset]) return ICON_PRESETS[icon.preset];
+    return ICON_PRESETS.chat;
+  }
+
+  var POSITIONS = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
+
+  var SIZE_PRESETS = {
+    small:  { trigger: 44, panelWidth: 340, panelHeight: 480 },
+    medium: { trigger: 56, panelWidth: 380, panelHeight: 520 },
+    large:  { trigger: 64, panelWidth: 440, panelHeight: 600 }
+  };
+
+  // token 名 → CSS 变量名（--sw- 前缀；值全部经 setProperty 挂在组件根上）
+  var TOKEN_VARS = {
+    primary: 'primary', primaryContrast: 'primary-contrast',
+    panelBg: 'panel-bg', panelText: 'panel-text', msgsBg: 'msgs-bg',
+    bubbleSelfBg: 'bubble-self-bg', bubbleSelfText: 'bubble-self-text',
+    bubbleAgentBg: 'bubble-agent-bg', bubbleAgentText: 'bubble-agent-text',
+    systemText: 'system-text', metaText: 'meta-text',
+    inputBg: 'input-bg', inputBorder: 'input-border', inputText: 'input-text',
+    chipBg: 'chip-bg', chipBorder: 'chip-border', headerBg: 'header-bg',
+    font: 'font', shadowPanel: 'shadow-panel', shadowTrigger: 'shadow-trigger',
+    radiusPanel: 'radius-panel', radiusBubble: 'radius-bubble', radiusInput: 'radius-input'
+  };
+
+  var WIDGET_FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+
+  function defaultLightTheme(color) {
+    return {
+      primary: color, primaryContrast: readableOn(color),
+      panelBg: '#ffffff', panelText: '#333333', msgsBg: '#fafafa',
+      bubbleSelfBg: color, bubbleSelfText: readableOn(color),
+      bubbleAgentBg: '#f0f0f0', bubbleAgentText: '#333333',
+      systemText: '#888888', metaText: '#999999',
+      inputBg: '#ffffff', inputBorder: '#dddddd', inputText: '#333333',
+      chipBg: '#ffffff', chipBorder: '#e0e0e0',
+      headerBg: 'linear-gradient(135deg, ' + color + ', ' + shade(color, -24) + ')',
+      font: WIDGET_FONT,
+      shadowPanel: '0 8px 40px rgba(0,0,0,.15)',
+      shadowTrigger: '0 4px 16px rgba(0,0,0,.25)',
+      radiusPanel: '16px', radiusBubble: '12px', radiusInput: '20px'
+    };
+  }
+
+  function defaultDarkTheme(color) {
+    var primary = shade(color, 20);  // 深色底把主色提亮一档，避免糊底
+    return {
+      primary: primary, primaryContrast: readableOn(primary),
+      panelBg: '#1f2430', panelText: '#e5e7eb', msgsBg: '#171a23',
+      bubbleSelfBg: primary, bubbleSelfText: readableOn(primary),
+      bubbleAgentBg: '#2a3040', bubbleAgentText: '#e5e7eb',
+      systemText: '#9ca3af', metaText: '#8b93a3',
+      inputBg: '#262c3a', inputBorder: '#3a4152', inputText: '#e5e7eb',
+      chipBg: '#262c3a', chipBorder: '#3a4152',
+      headerBg: 'linear-gradient(135deg, ' + primary + ', ' + shade(color, -24) + ')',
+      font: WIDGET_FONT,
+      shadowPanel: '0 8px 40px rgba(0,0,0,.5)',
+      shadowTrigger: '0 4px 16px rgba(0,0,0,.45)',
+      radiusPanel: '16px', radiusBubble: '12px', radiusInput: '20px'
+    };
+  }
+
+  function normalizeThemeMode(mode) {
+    return mode === 'dark' || mode === 'auto' ? mode : 'light';
+  }
+
   // ── Widget UI ──────────────────────────────────────────────────
 
   function createWidget(opts) {
@@ -128,22 +253,38 @@
     // 会话 id 一处生成、多通道共用：会话 WS 与语音 WS（PROTOCOL §9 握手
     // session_id）必须指向同一会话；补拉/推荐问题的 session 归因同理。
     var sessionId = opts.sessionId || ('ws_' + Date.now());
-    var primaryColor = opts.primaryColor || '#667eea';
+    // 主色调：color 正名，primaryColor 兼容别名；themeFromColor 显式指定时
+    // 优先参与 token 自动生成（给一个品牌主色自动生成整套）。
+    var primaryColor = opts.themeFromColor || opts.color || opts.primaryColor || '#667eea';
     var wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1/ws';
     var voiceWsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1/ws/voice';
     // 语音能力探测：旧缓存包没有 VoiceChannel/MicCapture 时按钮不出现，
     // 聊天主链路零影响。
     var voiceSdk = root.Servify && root.Servify.VoiceChannel && root.Servify.MicCapture ? root.Servify : null;
 
-    // Create DOM
-    var wrap = el('div', 'servify-widget');
-    wrap.setAttribute('data-servify', '');
+    // ── 外观参数解析（四角位置/三档大小/触发按钮圆角/icon/品牌位）──
+    var position = POSITIONS.indexOf(opts.position) >= 0 ? opts.position : 'bottom-right';
+    var sizePreset = SIZE_PRESETS[opts.size] || null;
+    var triggerSize = typeof opts.size === 'number' ? opts.size : (sizePreset ? sizePreset.trigger : 56);
+    var panelWidth = sizePreset ? sizePreset.panelWidth : 380;
+    var panelHeight = sizePreset ? sizePreset.panelHeight : 520;
+    var radiusTrigger = typeof opts.borderRadius === 'number' ? opts.borderRadius + 'px'
+      : (typeof opts.borderRadius === 'string' && opts.borderRadius ? opts.borderRadius : '50%');
+    var launcherIconHtml = resolveIconContent(opts.icon);
+    var brand = opts.brand || {};
 
-    // Toggle button
+    // Create DOM
+    var wrap = el('div', 'servify-widget sw-pos-' + position);
+    wrap.setAttribute('data-servify', '');
+    wrap.style.setProperty('--sw-trigger-size', triggerSize + 'px');
+    wrap.style.setProperty('--sw-panel-width', panelWidth + 'px');
+    wrap.style.setProperty('--sw-panel-height', panelHeight + 'px');
+    wrap.style.setProperty('--sw-radius-trigger', radiusTrigger);
+
+    // Toggle button（icon 内容由三档解析产出；颜色走 token 不再内联）
     var btn = el('button', 'sw-trigger');
-    btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-    btn.setAttribute('title', '在线客服');
-    btn.style.background = primaryColor;
+    btn.innerHTML = launcherIconHtml;
+    btn.setAttribute('title', brand.name || '在线客服');
 
     // Close icon
     var closeSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
@@ -152,11 +293,12 @@
     var micOffSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>';
     var micOnSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
 
-    // Panel
+    // Panel（窗头背景/文字色走 token；品牌 logo 挂在标题前；初始收起态）
     var panel = el('div', 'sw-panel');
+    panel.setAttribute('aria-hidden', 'true');
+    btn.setAttribute('aria-expanded', 'false');
     var header = el('div', 'sw-header');
-    header.style.background = 'linear-gradient(135deg, ' + primaryColor + ', ' + adjustColor(primaryColor, -30) + ')';
-    var headerTitle = el('div', 'sw-header-title', '在线客服');
+    var headerTitle = el('div', 'sw-header-title', brand.name || '在线客服');
     var headerStatus = el('div', 'sw-header-status', '未连接');
     headerStatus.style.opacity = '0.75';
     headerStatus.style.fontSize = '12px';
@@ -181,6 +323,13 @@
     var closeBtn = el('button', 'sw-close');
     closeBtn.innerHTML = closeSvg;
 
+    if (brand.logo) {
+      var logoImg = document.createElement('img');
+      logoImg.className = 'sw-header-logo';
+      logoImg.src = brand.logo;
+      logoImg.alt = '';
+      header.appendChild(logoImg);
+    }
     header.appendChild(headerTitle);
     header.appendChild(headerStatus);
     if (voiceSdk) header.appendChild(micBtn);
@@ -192,7 +341,6 @@
     input.type = 'text';
     input.placeholder = '输入消息...';
     var sendBtn = el('button', 'sw-send-btn', '发送');
-    sendBtn.style.background = primaryColor;
 
     inputArea.appendChild(input);
     inputArea.appendChild(sendBtn);
@@ -211,13 +359,97 @@
     wrap.appendChild(badge);
     wrap.appendChild(panel);
 
-    // Inject styles
+    // Inject styles（样式表只含变量引用，颜色全部运行时挂 token）
     if (!document.getElementById('servify-widget-styles')) {
       var style = document.createElement('style');
       style.id = 'servify-widget-styles';
-      style.textContent = getStyles(primaryColor);
+      style.textContent = getStyles();
       document.head.appendChild(style);
     }
+
+    // ── 主题应用：亮暗两套独立 token，auto 跟随宿主站深浅 ──
+    var themeMode = normalizeThemeMode(opts.theme);
+    var themeOverrides = { light: opts.themeLight || {}, dark: opts.themeDark || {} };
+    var mediaDark = root.matchMedia ? root.matchMedia('(prefers-color-scheme: dark)') : null;
+
+    function mergeTokens(mode) {
+      var tokens = mode === 'dark' ? defaultDarkTheme(primaryColor) : defaultLightTheme(primaryColor);
+      var overrides = themeOverrides[mode] || {};
+      var extra = opts.themeTokens || {};
+      var k;
+      for (k in overrides) if (overrides.hasOwnProperty(k) && TOKEN_VARS[k]) tokens[k] = overrides[k];
+      for (k in extra) if (extra.hasOwnProperty(k) && TOKEN_VARS[k]) tokens[k] = extra[k];
+      return tokens;
+    }
+
+    function resolvedThemeMode() {
+      if (themeMode === 'auto') return mediaDark && mediaDark.matches ? 'dark' : 'light';
+      return themeMode;
+    }
+
+    function applyTheme() {
+      var mode = resolvedThemeMode();
+      var tokens = mergeTokens(mode);
+      wrap.setAttribute('data-servify-theme', mode);
+      for (var k in TOKEN_VARS) {
+        if (tokens[k] !== undefined) wrap.style.setProperty('--sw-' + TOKEN_VARS[k], tokens[k]);
+      }
+    }
+
+    if (mediaDark && mediaDark.addEventListener && themeMode === 'auto') {
+      mediaDark.addEventListener('change', applyTheme);
+    }
+
+    // ── 品牌位（logo/名称/欢迎语；远程主题可二次覆盖）──
+    var welcomeText = brand.welcome || '您好！欢迎来到 Servify Demo。请问有什么可以帮您的？';
+    var welcomeBubble = null;
+
+    function applyBrand() {
+      headerTitle.textContent = brand.name || '在线客服';
+      btn.setAttribute('title', brand.name || '在线客服');
+      var existingLogo = header.querySelector('.sw-header-logo');
+      if (brand.logo) {
+        if (existingLogo) {
+          existingLogo.src = brand.logo;
+        } else {
+          var img = document.createElement('img');
+          img.className = 'sw-header-logo';
+          img.src = brand.logo;
+          img.alt = '';
+          header.insertBefore(img, headerTitle);
+        }
+      } else if (existingLogo) {
+        existingLogo.parentNode.removeChild(existingLogo);
+      }
+      if (welcomeBubble && welcomeBubble.parentNode === msgs && msgs.lastChild === welcomeBubble) {
+        // 欢迎语仍是最后一条消息时才允许远程主题改写，不打断进行中的会话
+        welcomeBubble.textContent = brand.welcome || welcomeText;
+      }
+    }
+
+    // ── 远程主题（配置放服务端，多站点统一改）：JSON 形如
+    // {"light":{...},"dark":{...},"brand":{...}}，字段名同 token 全表；
+    // 拉取失败不阻塞，保持本地配置。 ──
+    if (opts.themeUrl && root.fetch) {
+      root.fetch(opts.themeUrl, { cache: 'no-cache' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (t) {
+          if (!t) return;
+          if (t.light) themeOverrides.light = t.light;
+          if (t.dark) themeOverrides.dark = t.dark;
+          if (t.brand) {
+            brand = t.brand;
+            if (t.brand.welcome) welcomeText = t.brand.welcome;
+          }
+          applyTheme();
+          applyBrand();
+        })
+        .catch(function () {
+          if (root.console && root.console.warn) root.console.warn('[ServifyWidget] themeUrl fetch failed, keep local theme');
+        });
+    }
+
+    applyTheme();
 
     document.body.appendChild(wrap);
 
@@ -444,6 +676,11 @@
 
     function togglePanel() {
       panelOpen = !panelOpen;
+      // sw-open 挂在根上：展开动画（面板 scale/translate 入场、触发按钮图标
+      // 旋入）与收起还原都由 CSS 挂钩驱动，JS 只负责状态类
+      wrap.classList.toggle('sw-open', panelOpen);
+      btn.setAttribute('aria-expanded', panelOpen ? 'true' : 'false');
+      panel.setAttribute('aria-hidden', panelOpen ? 'false' : 'true');
       if (panelOpen) {
         panel.classList.add('open');
         btn.innerHTML = closeSvg;
@@ -457,7 +694,7 @@
         }
       } else {
         panel.classList.remove('open');
-        btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+        btn.innerHTML = launcherIconHtml;
         // Stop voice when panel closes
         if (voiceActive || voiceStartPending) stopVoice();
       }
@@ -638,8 +875,8 @@
       if (e.key === 'Enter') { e.preventDefault(); sendMsg(); }
     });
 
-    // Welcome message
-    addMsg('bot', '您好！欢迎来到 Servify Demo。请问有什么可以帮您的？');
+    // Welcome message（品牌位：brand.welcome 可覆盖）
+    welcomeBubble = addMsg('bot', welcomeText);
 
     // Client events
     client.on('status', function (s) {
@@ -754,84 +991,164 @@
     return { mount: wrap, client: client };
   }
 
-  // ── Inline CSS ─────────────────────────────────────────────────
+  // ── Inline CSS（全部引用 --sw-* token；颜色/圆角/阴影运行时挂根元素）──
 
-  function getStyles(color) {
+  function getStyles() {
     return '\
-.servify-widget { position:fixed; right:24px; bottom:24px; z-index:99999; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; font-size:14px; }\
+.servify-widget { position:fixed; right:24px; bottom:24px; z-index:99999; font-family:var(--sw-font); font-size:14px; }\
 .servify-widget * { box-sizing:border-box; }\
-.servify-widget .sw-badge { position:absolute; right:-2px; bottom:44px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:#e53e3e; color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.3); pointer-events:none; }\
-.servify-widget .sw-trigger { width:56px; height:56px; border-radius:50%; border:none; color:#fff; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; transition:transform .2s,box-shadow .2s; }\
-.servify-widget .sw-trigger:hover { transform:scale(1.1); box-shadow:0 6px 24px rgba(0,0,0,.3); }\
-.servify-widget .sw-panel { position:absolute; right:0; bottom:68px; width:380px; height:520px; background:#fff; border-radius:16px; box-shadow:0 8px 40px rgba(0,0,0,.15); display:none; flex-direction:column; overflow:hidden; }\
-.servify-widget .sw-panel.open { display:flex; }\
-.servify-widget .sw-header { padding:16px; color:#fff; display:flex; align-items:center; justify-content:space-between; }\
+.servify-widget.sw-pos-bottom-right { right:24px; bottom:24px; }\
+.servify-widget.sw-pos-bottom-left { left:24px; bottom:24px; }\
+.servify-widget.sw-pos-top-right { right:24px; top:24px; }\
+.servify-widget.sw-pos-top-left { left:24px; top:24px; }\
+.servify-widget .sw-badge { position:absolute; right:-2px; bottom:calc(var(--sw-trigger-size) - 12px); min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:#e53e3e; color:#fff; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.3); pointer-events:none; animation:sw-badge-pop .25s ease-out; }\
+.servify-widget.sw-pos-bottom-left .sw-badge, .servify-widget.sw-pos-top-left .sw-badge { right:auto; left:-2px; }\
+.servify-widget.sw-pos-top-right .sw-badge, .servify-widget.sw-pos-top-left .sw-badge { top:calc(var(--sw-trigger-size) - 12px); bottom:auto; }\
+.servify-widget .sw-trigger { width:var(--sw-trigger-size); height:var(--sw-trigger-size); border-radius:var(--sw-radius-trigger); border:none; background:var(--sw-primary); color:var(--sw-primary-contrast); cursor:pointer; box-shadow:var(--sw-shadow-trigger); display:flex; align-items:center; justify-content:center; transition:transform .2s,box-shadow .2s; }\
+.servify-widget .sw-trigger:hover { transform:scale(1.08); filter:brightness(1.06); }\
+.servify-widget.sw-open .sw-trigger > * { animation:sw-trigger-icon-in .2s ease-out; }\
+.servify-widget .sw-panel { position:absolute; right:0; bottom:calc(var(--sw-trigger-size) + 12px); width:var(--sw-panel-width); height:var(--sw-panel-height); background:var(--sw-panel-bg); color:var(--sw-panel-text); border-radius:var(--sw-radius-panel); box-shadow:var(--sw-shadow-panel); display:flex; flex-direction:column; overflow:hidden; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(12px) scale(.96); transform-origin:bottom right; transition:opacity .18s ease-out,transform .18s ease-out,visibility 0s linear .18s; }\
+.servify-widget.sw-pos-bottom-left .sw-panel { right:auto; left:0; transform-origin:bottom left; }\
+.servify-widget.sw-pos-top-right .sw-panel { bottom:auto; top:calc(var(--sw-trigger-size) + 12px); transform-origin:top right; transform:translateY(-12px) scale(.96); }\
+.servify-widget.sw-pos-top-left .sw-panel { right:auto; left:0; bottom:auto; top:calc(var(--sw-trigger-size) + 12px); transform-origin:top left; transform:translateY(-12px) scale(.96); }\
+.servify-widget .sw-panel.open { opacity:1; visibility:visible; pointer-events:auto; transform:none; transition-delay:0s,0s,0s; }\
+.servify-widget .sw-header { padding:16px; background:var(--sw-header-bg); color:var(--sw-primary-contrast); display:flex; align-items:center; justify-content:space-between; }\
+.servify-widget .sw-header-logo { width:28px; height:28px; border-radius:6px; object-fit:contain; margin-right:10px; flex-shrink:0; background:rgba(255,255,255,.85); }\
 .servify-widget .sw-header-title { font-size:16px; font-weight:600; flex:1; }\
 .servify-widget .sw-header-status { margin:0 12px; }\
 .servify-widget .sw-mic-btn:hover { opacity:1 !important; }\
-.servify-widget .sw-close { background:none; border:none; color:#fff; cursor:pointer; opacity:.8; padding:4px; display:flex; align-items:center; }\
+.servify-widget .sw-close { background:none; border:none; color:var(--sw-primary-contrast); cursor:pointer; opacity:.8; padding:4px; display:flex; align-items:center; }\
 .servify-widget .sw-close:hover { opacity:1; }\
-.servify-widget .sw-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; background:#fafafa; }\
+.servify-widget .sw-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; background:var(--sw-msgs-bg); }\
 .servify-widget .sw-msg { max-width:80%; }\
-.servify-widget .sw-bubble { padding:10px 14px; border-radius:12px; line-height:1.5; word-break:break-word; }\
+.servify-widget .sw-bubble { padding:10px 14px; border-radius:var(--sw-radius-bubble); line-height:1.5; word-break:break-word; }\
 .servify-widget .sw-msg-user { align-self:flex-end; }\
-.servify-widget .sw-msg-user .sw-bubble { background:' + color + '; color:#fff; border-bottom-right-radius:4px; }\
+.servify-widget .sw-msg-user .sw-bubble { background:var(--sw-bubble-self-bg); color:var(--sw-bubble-self-text); border-bottom-right-radius:4px; }\
 .servify-widget .sw-msg-bot { align-self:flex-start; }\
-.servify-widget .sw-msg-bot .sw-bubble { background:#f0f0f0; color:#333; border-bottom-left-radius:4px; }\
-.servify-widget .sw-sources { margin-top:8px; border-top:1px dashed #d9d9d9; padding-top:6px; }\
-.servify-widget .sw-source-row { font-size:12px; color:#667; line-height:1.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\
+.servify-widget .sw-msg-bot .sw-bubble { background:var(--sw-bubble-agent-bg); color:var(--sw-bubble-agent-text); border-bottom-left-radius:4px; }\
+.servify-widget .sw-sources { margin-top:8px; border-top:1px dashed var(--sw-chip-border); padding-top:6px; }\
+.servify-widget .sw-source-row { font-size:12px; color:var(--sw-meta-text); line-height:1.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\
 .servify-widget .sw-feedback { margin-top:8px; display:flex; align-items:center; gap:8px; }\
-.servify-widget .sw-feedback-label { font-size:12px; color:#888; }\
-.servify-widget .sw-feedback-btn { background:none; border:1px solid #d9d9d9; border-radius:6px; padding:2px 8px; font-size:13px; cursor:pointer; line-height:1.4; transition:border-color .2s; }\
-.servify-widget .sw-feedback-btn:hover { border-color:' + color + '; }\
+.servify-widget .sw-feedback-label { font-size:12px; color:var(--sw-meta-text); }\
+.servify-widget .sw-feedback-btn { background:none; border:1px solid var(--sw-chip-border); border-radius:6px; padding:2px 8px; font-size:13px; color:var(--sw-panel-text); cursor:pointer; line-height:1.4; transition:border-color .2s; }\
+.servify-widget .sw-feedback-btn:hover { border-color:var(--sw-primary); }\
 .servify-widget .sw-feedback-btn:disabled { opacity:.5; cursor:default; }\
 .servify-widget .sw-msg-system { align-self:center; max-width:100%; }\
-.servify-widget .sw-msg-system .sw-bubble { background:none; color:#888; font-size:12px; text-align:center; padding:2px 8px; }\
+.servify-widget .sw-msg-system .sw-bubble { background:none; color:var(--sw-system-text); font-size:12px; text-align:center; padding:2px 8px; }\
 .servify-widget .sw-msg-voice { max-width:85%; }\
 .servify-widget .sw-msg-voice-agent { align-self:flex-start; }\
 .servify-widget .sw-msg-voice-visitor { align-self:flex-end; text-align:right; }\
-.servify-widget .sw-voice-chip { font-size:11px; color:#999; margin-bottom:2px; }\
-.servify-widget .sw-msg-voice .sw-bubble { background:#fff; border:1px solid #eee; }\
-.servify-widget .sw-msg-voice-visitor .sw-bubble { background:#f8f9ff; }\
+.servify-widget .sw-voice-chip { font-size:11px; color:var(--sw-meta-text); margin-bottom:2px; }\
+.servify-widget .sw-msg-voice .sw-bubble { background:var(--sw-panel-bg); border:1px solid var(--sw-chip-border); }\
+.servify-widget .sw-msg-voice-visitor .sw-bubble { background:var(--sw-chip-bg); }\
 .servify-widget .sw-voice-content { font-weight:500; }\
-.servify-widget .sw-voice-original { font-size:12px; color:#999; margin-top:4px; }\
-.servify-widget .sw-voice-play { margin-top:6px; padding:4px 12px; border-radius:12px; border:none; background:' + color + '; color:#fff; cursor:pointer; font-size:12px; }\
-.servify-widget .sw-bubble.speaking { border-color:' + color + '; box-shadow:0 0 0 2px ' + color + '33; }\
-.servify-widget .sw-suggests { display:none; padding:8px 12px 0; background:#fff; }\
-.servify-widget .sw-suggest-hint { font-size:11px; color:#999; margin-bottom:6px; }\
+.servify-widget .sw-voice-original { font-size:12px; color:var(--sw-meta-text); margin-top:4px; }\
+.servify-widget .sw-voice-play { margin-top:6px; padding:4px 12px; border-radius:12px; border:none; background:var(--sw-primary); color:var(--sw-primary-contrast); cursor:pointer; font-size:12px; }\
+.servify-widget .sw-bubble.speaking { border-color:var(--sw-primary); box-shadow:0 0 0 2px var(--sw-primary); }\
+.servify-widget .sw-suggests { display:none; padding:8px 12px 0; background:var(--sw-panel-bg); }\
+.servify-widget .sw-suggest-hint { font-size:11px; color:var(--sw-meta-text); margin-bottom:6px; }\
 .servify-widget .sw-suggest-chips { display:flex; flex-wrap:wrap; gap:6px; }\
-.servify-widget .sw-suggest-chip { padding:5px 10px; border:1px solid #e0e0e0; border-radius:14px; background:#fff; color:#555; font-size:12px; cursor:pointer; transition:all .15s; text-align:left; }\
-.servify-widget .sw-suggest-chip:hover { border-color:' + color + '; color:' + color + '; }\
-.servify-widget .sw-input-area { padding:12px; border-top:1px solid #eee; display:flex; gap:8px; background:#fff; }\
-.servify-widget .sw-input { flex:1; padding:10px 14px; border:1px solid #ddd; border-radius:20px; font-size:14px; outline:none; transition:border-color .2s; }\
-.servify-widget .sw-input:focus { border-color:' + color + '; }\
-.servify-widget .sw-send-btn { padding:10px 16px; border-radius:20px; border:none; color:#fff; cursor:pointer; font-size:14px; font-weight:500; transition:opacity .2s; }\
+.servify-widget .sw-suggest-chip { padding:5px 10px; border:1px solid var(--sw-chip-border); border-radius:14px; background:var(--sw-chip-bg); color:var(--sw-panel-text); font-size:12px; cursor:pointer; transition:all .15s; text-align:left; }\
+.servify-widget .sw-suggest-chip:hover { border-color:var(--sw-primary); color:var(--sw-primary); }\
+.servify-widget .sw-input-area { padding:12px; border-top:1px solid var(--sw-chip-border); display:flex; gap:8px; background:var(--sw-panel-bg); }\
+.servify-widget .sw-input { flex:1; padding:10px 14px; border:1px solid var(--sw-input-border); border-radius:var(--sw-radius-input); font-size:14px; background:var(--sw-input-bg); color:var(--sw-input-text); outline:none; transition:border-color .2s; }\
+.servify-widget .sw-input::placeholder { color:var(--sw-meta-text); }\
+.servify-widget .sw-input:focus { border-color:var(--sw-primary); }\
+.servify-widget .sw-send-btn { padding:10px 16px; border-radius:var(--sw-radius-input); border:none; background:var(--sw-primary); color:var(--sw-primary-contrast); cursor:pointer; font-size:14px; font-weight:500; transition:opacity .2s; }\
 .servify-widget .sw-send-btn:hover { opacity:.9; }\
 @media (max-width:480px) {\
-  .servify-widget .sw-panel { width:calc(100vw - 32px); right:-8px; height:60vh; bottom:72px; }\
-}';
+  .servify-widget .sw-panel { width:calc(100vw - 16px); height:calc(100vh - var(--sw-trigger-size) - 40px); height:calc(100dvh - var(--sw-trigger-size) - 40px); }\
+  .servify-widget.sw-pos-bottom-right .sw-panel, .servify-widget.sw-pos-top-right .sw-panel { right:-8px; }\
+  .servify-widget.sw-pos-bottom-left .sw-panel, .servify-widget.sw-pos-top-left .sw-panel { left:-8px; }\
+}\
+@media (prefers-reduced-motion:reduce) {\
+  .servify-widget .sw-panel, .servify-widget .sw-trigger, .servify-widget .sw-trigger > *, .servify-widget .sw-badge { transition:none !important; animation:none !important; }\
+}\
+@keyframes sw-trigger-icon-in { 0% { transform:rotate(-120deg) scale(.4); opacity:0; } 100% { transform:rotate(0deg) scale(1); opacity:1; } }\
+@keyframes sw-badge-pop { 0% { transform:scale(0); } 60% { transform:scale(1.15); } 100% { transform:scale(1); } }';
   }
 
-  function adjustColor(hex, amount) {
-    var num = parseInt(hex.replace('#', ''), 16);
-    var r = Math.min(255, Math.max(0, (num >> 16) + amount));
-    var g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
-    var b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
-    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  // ── 颜色工具（token 自动生成：主色 → 亮暗两套衍生色）────────────
+
+  function hexToRgb(hex) {
+    var num = parseInt(String(hex).replace('#', ''), 16);
+    if (isNaN(num)) num = 0x667eea;
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+
+  function rgbToHex(r, g, b) {
+    var c = function (v) { return Math.min(255, Math.max(0, Math.round(v))); };
+    return '#' + ((1 << 24) + (c(r) << 16) + (c(g) << 8) + c(b)).toString(16).slice(1);
+  }
+
+  // percent > 0 向白靠拢（提亮），< 0 向黑靠拢（压暗）
+  function shade(hex, percent) {
+    var rgb = hexToRgb(hex);
+    var target = percent >= 0 ? 255 : 0;
+    var p = Math.abs(percent) / 100;
+    return rgbToHex(
+      rgb.r + (target - rgb.r) * p,
+      rgb.g + (target - rgb.g) * p,
+      rgb.b + (target - rgb.b) * p
+    );
+  }
+
+  function luminance(hex) {
+    var rgb = hexToRgb(hex);
+    var lin = function (v) {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b);
+  }
+
+  // 主色上的文字色：亮色主色配深字，深色主色配白字
+  function readableOn(hex) {
+    return luminance(hex) > 0.4 ? '#1f2430' : '#ffffff';
   }
 
   // ── Exports ─────────────────────────────────────────────────────
 
   root.ServifyWidget = { create: createWidget };
 
-  // Auto init
+  // Auto init（data-* 属性承载常用外观/主题面，改样式不改代码）
   if (document.currentScript && document.currentScript.hasAttribute('data-servify-widget')) {
-    var baseUrl = document.currentScript.getAttribute('data-base-url') || (location.protocol + '//' + location.host);
-    var sid = document.currentScript.getAttribute('data-session-id') || '';
-    var color = document.currentScript.getAttribute('data-primary-color') || '#667eea';
-    var accessToken = document.currentScript.getAttribute('data-access-token') || '';
-    var initOpts = { baseUrl: baseUrl, sessionId: sid, primaryColor: color };
-    if (accessToken) initOpts.accessToken = accessToken;
+    var cs = document.currentScript;
+    function attr(name) { return cs.getAttribute('data-' + name) || ''; }
+    function attrJSON(name) {
+      var raw = attr(name);
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch (e) {
+        if (root.console && root.console.warn) root.console.warn('[ServifyWidget] invalid JSON in data-' + name);
+        return null;
+      }
+    }
+    var baseUrl = attr('base-url') || (location.protocol + '//' + location.host);
+    var initOpts = { baseUrl: baseUrl };
+    if (attr('session-id')) initOpts.sessionId = attr('session-id');
+    if (attr('access-token')) initOpts.accessToken = attr('access-token');
+    // icon 三档：data-icon-image / data-icon-url 优先，其次 data-icon 预设名
+    if (attr('icon-image')) initOpts.icon = { image: attr('icon-image') };
+    else if (attr('icon-url')) initOpts.icon = { url: attr('icon-url') };
+    else if (attr('icon')) initOpts.icon = attr('icon');
+    var color = attr('color') || attr('primary-color');
+    if (color) initOpts.color = color;
+    var radius = attr('border-radius');
+    if (radius) initOpts.borderRadius = isNaN(Number(radius)) ? radius : Number(radius);
+    if (attr('position')) initOpts.position = attr('position');
+    var size = attr('size');
+    if (size) initOpts.size = isNaN(Number(size)) ? size : Number(size);
+    if (attr('theme')) initOpts.theme = attr('theme');
+    if (attrJSON('theme-light')) initOpts.themeLight = attrJSON('theme-light');
+    if (attrJSON('theme-dark')) initOpts.themeDark = attrJSON('theme-dark');
+    if (attrJSON('theme-tokens')) initOpts.themeTokens = attrJSON('theme-tokens');
+    if (attr('theme-from-color')) initOpts.themeFromColor = attr('theme-from-color');
+    if (attr('theme-url')) initOpts.themeUrl = attr('theme-url');
+    var brandAttrs = {};
+    if (attr('brand-name')) brandAttrs.name = attr('brand-name');
+    if (attr('brand-logo')) brandAttrs.logo = attr('brand-logo');
+    if (attr('brand-welcome')) brandAttrs.welcome = attr('brand-welcome');
+    if (Object.keys(brandAttrs).length) initOpts.brand = brandAttrs;
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function () { createWidget(initOpts); });
     } else {

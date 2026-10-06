@@ -128,6 +128,44 @@
 
 ---
 
+## 发布后批次（2026-10-05 拍板，当前活跃 backlog）
+
+> 三件批：C1 web 嵌入集成指南（含组件外观令+聊天窗主题令）、C2 admin-legacy 清理、C3 文档全面重整。
+> 纪律：连做不等催；每增量 commit（push 失败本地记账）；文档批次提交信息只写「docs: 优化展示」。
+
+### [-] C1 web 嵌入集成指南与组件外观（ferry 对接面）
+
+- 任务清单：
+  - [x] C1-1 组件外观配置面：icon 三档（内置预设图标库若干风格/自定义上传图片与 SVG/URL 引用）+ 样式可配（主色调/圆角/悬浮位置四角/大小）+ 初始化参数承载（嵌入 snippet 带外观配置，改样式不改代码）+ 亮暗两套显示核验
+  - [x] C1-2 聊天窗主题定制：主题 token 整套可配（主色/背景/文字/两侧气泡/输入框/按钮/圆角/字体，支持品牌主色自动生成整套）+ 品牌位（窗头 logo/名称/欢迎语）+ 亮暗两套独立配（跟随宿主站或手动指定）+ 远程主题（配置放服务端多站点统一改）
+  - [x] C1-3 两风格测试页各嵌一次验证（浅色品牌站/深色站），从 icon 到聊天窗整体观感与宿主一致不突兀
+  - [x] C1-4 集成指南文档（docs/）：嵌入方式（iframe/组件/SDK 择优写明）、工单上下文打通 API（客服侧只读展示用户套餐/流量/订单，走服务端接口不泄凭据）、单点登录方案（应用侧签发/会话互认）、事件回调（工单状态回流应用）、部署形态（servify 独立部署+对接地址配置）、「组件与聊天窗主题」节（配置项全表+两种风格示例）；以 curl/最小示例可跟跑为准，验收=ferry 侧真嵌一遍跑通
+- 状态：`[-]`
+- 下一步：ferry 侧真嵌验收（外部）；其余子项已落地
+- 阻塞项：暂无
+
+### [ ] C2 admin-legacy 清理计划
+
+- 任务清单：
+  - [ ] C2-1 盘点 legacy 面板残留面（路由/引用/构建三面清单）
+  - [ ] C2-2 定删除批次并执行（先切流量后删码，分批提交），连同 P0-3 适配层尾巴一起收干净
+  - [ ] C2-3 复核「补测至 100%」测试有无凑数假测试（测试是门禁不是交付，真实走查为准，发现凑数的删改）
+- 状态：`[ ]`
+- 下一步：C2-1 盘点开工
+- 阻塞项：暂无
+
+### [ ] C3 文档全面重整
+
+- 任务清单：
+  - [ ] C3-1 结构重组：按用户视角重排（这是什么/怎么配/跑起来什么样），每个能力一页可跟跑（取得凭据→配置→发出第一个真实请求），导航按用户任务分组不做 API 流水账，README 同步（标题+logo+徽章行规范）
+  - [ ] C3-2 清 AI 味：逐页按 standards 两规范清（空洞强调/总结段/假深度/排比三连/客套/引导废话/粗体冒号滥用/表情装饰/同义词轮换），数字事实代替形容词
+  - [ ] C3-3 内容实盘核对：数据与 API 与代码一致，禁自研/领先/对标词；产出变更报告（改了哪几页/对照什么问题/结构怎么变）
+- 状态：`[ ]`
+- 下一步：C1 批完成后开工（重整覆盖面含 C1 产出，后置避免二次返工）
+- 阻塞项：C1 未完成
+
+---
+
 ## P0 代码审查问题
 
 这些问题来自本轮直接审查代码后的判断，应优先进入执行序列。
@@ -1127,6 +1165,12 @@
   - 修法：000017 就地前置补建两张缺失表（编号序不可变，v17 先于任何新迁移执行；DDL 取自 `cmd/gen-baseline` 对空库的真实捕获、与基线同源，`IF NOT EXISTS` 保证既有库零改动）；000019 表名纠偏 `answer_feedback`→`answer_feedbacks` + 列形对齐捕获（answer_id NOT NULL / confidence decimal）+ `DROP` 错名表（错名只可能来自首版迁移且应用从未写成功过，恒空可安全清）；ci.yml 两处断言改动态取迁移链头部（`000NNN` 最大号），链增长自动跟随；新增 `TestMigrationChainCoversAllModels` 静态对账（52 个冻结清单模型的 GORM 表名 × 迁移链 `CREATE TABLE` 全集，embed FS 扫描面非空断言防假绿）——整类缺口（新模型漏配编号迁移）钉成静态门。
   - 验证：变异验证——还原修前迁移链，守卫精确报 3 张缺表（conversation_events/routing_assignments/answer_feedbacks），修后绿；bootstrap 包全量 `-count=1` 绿（29.7s）+ gofmt/vet 干净；本地全真复刻 CI Integration（清卷全新库 + 覆写端口起栈避本机端口占用）全链绿：健康 200、水位 `19|f`==动态期望、三表按真名在库、备份恢复演练（水位+行数对账）、重启幂等健康、weknora 集成脚本 EXIT=0。
   - 遗留登记（如实，不硬造）：a) 列形级自动化对账（gen-baseline 捕获 vs 迁移链终态 DDL 全链 diff）未建，本刀只手工对齐了 000017/000019 两张；b) 已标脏 v17 的存量真实部署需 `migrate force 16` 手工解锁后再升级（CI/新部署不受影响）。
+
+- 附注（2026-10-07，**C1 web 嵌入集成指南与组件外观落地**；接续 2026-10-05 拍板批次，吸收前一中断会话的半成品（widget.js 外观/主题参数面 + 10 用例测试），补齐 Crisp 体验借鉴与 C1-4 指南）：
+  - 承接半成品并核验：icon 三档（6 预设/自定义上传 image/URL 引用）、外观四参（主色/圆角/四角/三档大小+px）、主题 token 全表 22 项亮暗两套、theme auto（prefers-color-scheme 实时跟随）、品牌主色自动生成整套（WCAG 亮度推导对比字色）、品牌位（logo/名称/欢迎语）、远程主题（themeUrl 下发 JSON，失败保本地）、data-* 零配置自动初始化——半成品已带 10 用例 DOM shim 测试全绿，实现质量核验通过后直接续建。
+  - 本刀增量（体验基准 = Crisp livechat，只借鉴交互模式不取代码资产；借鉴面：悬浮球多状态/展开动画/层级阴影/移动端适配/主题注入）：① 面板展开/收起动画（0.18s scale+translate，transform-origin 随四角，visibility 延迟收场）；② 切换图标旋入动画（sw-trigger-icon-in）；③ 未读徽标弹出动画；④ 移动端 ≤480px 近全高 sheet（dvh 回退 vh）；⑤ aria-expanded/aria-hidden 状态；⑥ prefers-reduced-motion 降级；测试 10→12 用例（动画挂钩 + 未读累计/封顶 99+/展开清零）。
+  - C1-4 指南：docs/embedding-guide.md——嵌入方式三路择优（组件/iframe/自建 SDK）、快速开始、会话互认与访客 token（POST /api/v1/guest/session + X-API-Key 服务面凭据纪律）、工单上下文打通（访客工单 ai_summary + 客户资料同步面）、事件回调（出站 webhook 白名单 + X-Servify-Signature 验签 + 补投）、部署形态（compose + 端口外移 + /demo-sdk/* production 不默认暴露）、主题配置全表（外观五参/token 22 项/data-* 全表/两风格示例指向 examples/）、Crisp 能力差距表（主链路对齐；差距=前摄消息/文件上传 UI/多语言/已读回执/身份合并，列后续批）。全部端点逐一对码核实，docs/index.md 挂链，demo-sdk README 指南入口。
+  - 门禁：widget 测试 12/12 绿（node --test）；测试页与 theme.json 与实现参数面逐一比对一致。遗留：ferry 侧真嵌验收（外部步骤）；widget 测试未接 CI（demo-sdk 无 package.json，留 C3/后续批评估）。
 
 - 附注（2026-10-01，**ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile 抖动确定性化**（两会话并行同一任务，改动合入 `5d6457e`）；派发项为「改等待条件/隔离/超时策略使其稳定，不放宽断言语义，本地 ≥10 轮复跑证明，根因与修法入 todo.md」）：
   - 现场：CI run 36832389106 Android job（`./gradlew --no-daemon build`）该用例红，`AssertionError at ReconcileMessagesTest.kt:77` = awaitUntil 超时抛出行；两段 awaitUntil 共用该行、CI 无 Android 测试报告 artifact，无法判定挂在哪段——按两段同修。本地不复现：改前基线 release 单测 10× 连跑全绿（与「release 变体 + Kotlin daemon 争抢高负载才触发」的 CI 面吻合）。

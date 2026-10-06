@@ -1,0 +1,37 @@
+{
+  "light": {
+    "primary": "#0f766e",
+    "primaryContrast": "#ffffff",
+    "panelBg": "#ffffff",
+    "panelText": "#1f2937",
+    "msgsBg": "#f7f6f2",
+    "bubbleSelfBg": "#0f766e",
+    "bubbleSelfText": "#ffffff",
+    "bubbleAgentBg": "#eef2f1",
+    "bubbleAgentText": "#1f2937",
+    "headerBg": "linear-gradient(135deg, #0f766e, #115e59)",
+    "radiusPanel": "16px",
+    "radiusBubble": "12px",
+    "radiusInput": "20px"
+  },
+  "dark": {
+    "primary": "#2dd4bf",
+    "primaryContrast": "#0b0f19",
+    "panelBg": "#111827",
+    "panelText": "#e5e7eb",
+    "msgsBg": "#0b0f19",
+    "bubbleSelfBg": "#2dd4bf",
+    "bubbleSelfText": "#0b0f19",
+    "bubbleAgentBg": "#1f2937",
+    "bubbleAgentText": "#e5e7eb",
+    "headerBg": "linear-gradient(135deg, #0f766e, #134e4a)",
+    "radiusPanel": "16px",
+    "radiusBubble": "12px",
+    "radiusInput": "20px"
+  },
+  "brand": {
+    "name": "青屿云客服",
+    "logo": "",
+    "welcome": "您好，这里是青屿云（远程主题下发），请问想了解哪款产品？"
+  }
+}

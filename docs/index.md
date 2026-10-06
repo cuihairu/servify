@@ -71,6 +71,7 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 ### 快速了解产品
 
 - [V1 产品收敛](/v1-product-scope)
+- [Web 嵌入集成指南](/embedding-guide)
 - [总体架构设计](/ARCHITECTURE)
 - [当前架构分析](/current-architecture)
 - [架构重设计计划](/architecture-redesign-plan)

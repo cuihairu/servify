@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NightPort — 深色站测试页</title>
+  <style>
+    /* 深色站：近黑底 + 冷灰面板 + 窄边框，模拟代理/节点管理面板 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; background: #0b0f19; color: #e5e7eb; }
+    header { background: #111827; border-bottom: 1px solid #1f2937; padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; }
+    header .logo { font-size: 18px; font-weight: 700; color: #93c5fd; letter-spacing: 1px; }
+    header nav a { color: #9ca3af; text-decoration: none; margin-left: 28px; font-size: 14px; }
+    header nav a:hover { color: #e5e7eb; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 48px 32px; }
+    .wrap h1 { font-size: 26px; margin-bottom: 12px; }
+    .wrap > p { color: #9ca3af; font-size: 14px; line-height: 1.9; margin-bottom: 32px; }
+    table { width: 100%; border-collapse: collapse; background: #111827; border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; }
+    th, td { padding: 12px 16px; text-align: left; font-size: 13px; border-bottom: 1px solid #1f2937; }
+    th { color: #9ca3af; font-weight: 500; background: #0d1320; }
+    tr:last-child td { border-bottom: none; }
+    .ok { color: #34d399; }
+    .warn { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">NIGHTPORT</div>
+    <nav><a href="#">节点</a><a href="#">订阅</a><a href="#">流量</a><a href="#">工单</a></nav>
+  </header>
+  <div class="wrap">
+    <h1>我的节点</h1>
+    <p>深色站点嵌入验收页：widget 需跟随暗色主题（theme: 'dark'），面板/气泡/输入框都不能糊成一片。右下角发起客服会话。</p>
+    <table>
+      <tr><th>节点</th><th>区域</th><th>负载</th><th>状态</th></tr>
+      <tr><td>hk-01</td><td>香港</td><td>32%</td><td class="ok">在线</td></tr>
+      <tr><td>jp-02</td><td>东京</td><td>58%</td><td class="ok">在线</td></tr>
+      <tr><td>sg-03</td><td>新加坡</td><td>91%</td><td class="warn">拥塞</td></tr>
+    </table>
+  </div>
+
+  <!-- 嵌入：暗色主题 + 预设救生圈图标 + 品牌位 + 方形圆角按钮 -->
+  <script src="../servify-sdk.umd.js"></script>
+  <script src="../widget.js"></script>
+  <script>
+    ServifyWidget.create({
+      baseUrl: (location.protocol + '//' + location.host).replace(/:\d+$/, ':8080'),
+      icon: 'lifebuoy',
+      color: '#3b82f6',
+      borderRadius: 14,
+      position: 'bottom-right',
+      size: 'medium',
+      theme: 'dark',
+      brand: {
+        name: 'NightPort 支持',
+        welcome: 'NightPort 在线支持：节点、订阅、流量问题都可以直接问。'
+      }
+    });
+  </script>
+</body>
+</html>

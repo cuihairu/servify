@@ -2,6 +2,11 @@
 
 `apps/demo-sdk` 保存浏览器可直接引用的 SDK 产物，以及一个轻量聊天挂件示例。
 
+嵌入方式、会话互认、工单上下文打通、事件回调与外观/主题配置全表见
+[Web 嵌入集成指南](../../docs/embedding-guide.md)；两风格测试页在
+`examples/`（`page-light.html` / `page-dark.html`，配 `theme.json`
+远程主题样例）。组件门禁测试：`node --test apps/demo-sdk/widget.test.mjs`。
+
 ## 目录说明
 
 - `servify-sdk.esm.js`：由 `sdk/packages/vanilla/dist/index.esm.js` 同步而来

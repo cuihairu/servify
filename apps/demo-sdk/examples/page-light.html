@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>青屿云 — 浅色品牌站测试页</title>
+  <style>
+    /* 浅色品牌站：米白底 + 青绿主色 + 大圆角卡片，模拟 SaaS 官网 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; background: #f7f6f2; color: #1f2937; }
+    header { background: #ffffff; border-bottom: 1px solid #e7e5df; padding: 0 32px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    header .logo { font-size: 20px; font-weight: 700; color: #0f766e; }
+    header nav a { color: #6b7280; text-decoration: none; margin-left: 28px; font-size: 14px; }
+    header nav a:hover { color: #0f766e; }
+    .hero { padding: 72px 32px; max-width: 960px; margin: 0 auto; }
+    .hero h1 { font-size: 34px; line-height: 1.35; margin-bottom: 16px; }
+    .hero h1 em { font-style: normal; color: #0f766e; }
+    .hero p { color: #6b7280; font-size: 16px; line-height: 1.8; max-width: 560px; }
+    .cards { max-width: 960px; margin: 0 auto; padding: 0 32px 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .card { background: #ffffff; border: 1px solid #e7e5df; border-radius: 16px; padding: 28px; }
+    .card h3 { color: #0f766e; font-size: 16px; margin-bottom: 10px; }
+    .card p { color: #6b7280; font-size: 13px; line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">青屿云</div>
+    <nav>
+      <a href="#">产品</a><a href="#">价格</a><a href="#">文档</a><a href="#">控制台</a>
+    </nav>
+  </header>
+  <section class="hero">
+    <h1>轻量云主机与对象存储，<em>5 分钟</em>部署你的第一个站点</h1>
+    <p>面向个人开发者与小微团队的云资源面板。按量计费，随时销毁。遇到问题点右下角悬浮按钮，客服与 AI 助手都在线。</p>
+  </section>
+  <section class="cards">
+    <div class="card"><h3>云主机</h3><p>1C1G 起步，按小时计费，支持快照与镜像。</p></div>
+    <div class="card"><h3>对象存储</h3><p>S3 兼容接口，流量阶梯计价，免费额度每月刷新。</p></div>
+    <div class="card"><h3>工单支持</h3><p>右下角发起会话，AI 先答，人工 5 分钟内接管，历史可转工单。</p></div>
+  </section>
+
+  <!-- 嵌入：浅色主题 + 品牌主色 + 预设耳麦图标 + 品牌位 -->
+  <script src="../servify-sdk.umd.js"></script>
+  <script src="../widget.js"></script>
+  <script>
+    ServifyWidget.create({
+      baseUrl: (location.protocol + '//' + location.host).replace(/:\d+$/, ':8080'),
+      icon: 'headset',
+      color: '#0f766e',
+      position: 'bottom-right',
+      size: 'medium',
+      theme: 'light',
+      brand: {
+        name: '青屿云客服',
+        welcome: '您好，这里是青屿云，请问想了解哪款产品？'
+      }
+    });
+  </script>
+</body>
+</html>
