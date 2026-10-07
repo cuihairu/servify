@@ -1172,9 +1172,9 @@
   - C2-3 复核结论（286ec0d「补测至 100%」全量 21 个 _extra/_coverage 测试文件）：无凑数假测试，全部保留。断言密度最低位（1/test）与各密度档逐文件走查：走 gin+httptest 真路由断言状态码分支、sqlite 真库断言仓储行为、子进程协议断言退出码与错误文案、错误注入断言具体错误消息、评分器断言具体数值（0.87/因子表/理由表）——是行为测试不是 mock-回-声测试；无需删改。
 
 - 附注（2026-10-07，**C1 web 嵌入集成指南与组件外观落地**；接续 2026-10-05 拍板批次，吸收前一中断会话的半成品（widget.js 外观/主题参数面 + 10 用例测试），补齐 Crisp 体验借鉴与 C1-4 指南）：
-  - 承接半成品并核验：icon 三档（6 预设/自定义上传 image/URL 引用）、外观四参（主色/圆角/四角/三档大小+px）、主题 token 全表 22 项亮暗两套、theme auto（prefers-color-scheme 实时跟随）、品牌主色自动生成整套（WCAG 亮度推导对比字色）、品牌位（logo/名称/欢迎语）、远程主题（themeUrl 下发 JSON，失败保本地）、data-* 零配置自动初始化——半成品已带 10 用例 DOM shim 测试全绿，实现质量核验通过后直接续建。
+  - 承接半成品并核验：icon 三档（6 预设/自定义上传 image/URL 引用）、外观四参（主色/圆角/四角/三档大小+px）、主题 token 全表 23 项亮暗两套、theme auto（prefers-color-scheme 实时跟随）、品牌主色自动生成整套（WCAG 亮度推导对比字色）、品牌位（logo/名称/欢迎语）、远程主题（themeUrl 下发 JSON，失败保本地）、data-* 零配置自动初始化——半成品已带 10 用例 DOM shim 测试全绿，实现质量核验通过后直接续建。
   - 本刀增量（体验基准 = Crisp livechat，只借鉴交互模式不取代码资产；借鉴面：悬浮球多状态/展开动画/层级阴影/移动端适配/主题注入）：① 面板展开/收起动画（0.18s scale+translate，transform-origin 随四角，visibility 延迟收场）；② 切换图标旋入动画（sw-trigger-icon-in）；③ 未读徽标弹出动画；④ 移动端 ≤480px 近全高 sheet（dvh 回退 vh）；⑤ aria-expanded/aria-hidden 状态；⑥ prefers-reduced-motion 降级；测试 10→12 用例（动画挂钩 + 未读累计/封顶 99+/展开清零）。
-  - C1-4 指南：docs/embedding-guide.md——嵌入方式三路择优（组件/iframe/自建 SDK）、快速开始、会话互认与访客 token（POST /api/v1/guest/session + X-API-Key 服务面凭据纪律）、工单上下文打通（访客工单 ai_summary + 客户资料同步面）、事件回调（出站 webhook 白名单 + X-Servify-Signature 验签 + 补投）、部署形态（compose + 端口外移 + /demo-sdk/* production 不默认暴露）、主题配置全表（外观五参/token 22 项/data-* 全表/两风格示例指向 examples/）、Crisp 能力差距表（主链路对齐；差距=前摄消息/文件上传 UI/多语言/已读回执/身份合并，列后续批）。全部端点逐一对码核实，docs/index.md 挂链，demo-sdk README 指南入口。
+  - C1-4 指南：docs/embedding-guide.md——嵌入方式三路择优（组件/iframe/自建 SDK）、快速开始、会话互认与访客 token（POST /api/v1/guest/session + X-API-Key 服务面凭据纪律）、工单上下文打通（访客工单 ai_summary + 客户资料同步面）、事件回调（出站 webhook 白名单 + X-Servify-Signature 验签 + 补投）、部署形态（compose + 端口外移 + /demo-sdk/* production 不默认暴露）、主题配置全表（外观五参/token 23 项/data-* 全表/两风格示例指向 examples/）、Crisp 能力差距表（主链路对齐；差距=前摄消息/文件上传 UI/多语言/已读回执/身份合并，列后续批）。全部端点逐一对码核实，docs/index.md 挂链，demo-sdk README 指南入口。
   - 门禁：widget 测试 12/12 绿（node --test）；测试页与 theme.json 与实现参数面逐一比对一致。遗留：ferry 侧真嵌验收（外部步骤）；widget 测试未接 CI（demo-sdk 无 package.json，留 C3/后续批评估）。
 
 - 附注（2026-10-01，**ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile 抖动确定性化**（两会话并行同一任务，改动合入 `5d6457e`）；派发项为「改等待条件/隔离/超时策略使其稳定，不放宽断言语义，本地 ≥10 轮复跑证明，根因与修法入 todo.md」）：
