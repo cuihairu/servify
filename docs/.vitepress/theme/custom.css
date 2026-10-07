@@ -15,13 +15,8 @@
   --vp-button-brand-hover-bg: #6d28d9;
   --vp-button-brand-active-bg: #5b21b6;
 
-  --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(
-    115deg,
-    #5b21b6 8%,
-    #7c3aed 52%,
-    #c4b5fd 96%
-  );
+  /* 首页 hero 名用纯品牌色：不设 name-color/name-background,
+   * VitePress 默认即回落 --vp-c-brand-1 纯色(2026-10-07 去渐变字) */
 
   --vp-custom-outline: #7c3aed;
 
@@ -43,12 +38,7 @@
   --vp-button-brand-hover-bg: #c4b5fd;
   --vp-button-brand-active-bg: #6d28d9;
 
-  --vp-home-hero-name-background: linear-gradient(
-    115deg,
-    #c4b5fd 8%,
-    #7c3aed 52%,
-    #5b21b6 96%
-  );
+  /* 暗色 hero 名同 :root——回落 --vp-c-brand-1(#c4b5fd) 纯色 */
 
   --vp-custom-outline: #c4b5fd;
 }
@@ -57,3 +47,10 @@
 code {
   color: var(--vp-c-brand-1);
 }
+
+/* hero 名用纯品牌色,不用 VitePress 默认渐变名 */
+:root {
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+  --vp-home-hero-name-background: transparent;
+}
+
