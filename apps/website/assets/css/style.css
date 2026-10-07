@@ -12,8 +12,6 @@
   --gray-light: #94a3b8;
   --light: #f8fafc;
   --white: #ffffff;
-  --gradient-primary: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%);
-  --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -94,10 +92,7 @@ a {
 .brand-text {
   font-weight: 700;
   font-size: 22px;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
 }
 
 .nav {
@@ -122,33 +117,7 @@ a {
 /* Hero Section */
 .hero {
   padding: 100px 0 80px;
-  background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 50%, #faf5ff 100%);
-  position: relative;
-  overflow: hidden;
-}
-
-.hero::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 800px;
-  height: 800px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.hero::after {
-  content: '';
-  position: absolute;
-  bottom: -30%;
-  left: -10%;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(79, 130, 246, 0.08) 0%, transparent 70%);
-  border-radius: 50%;
-  pointer-events: none;
+  background: var(--white);
 }
 
 .hero-wrap {
@@ -176,19 +145,7 @@ a {
   margin-bottom: 24px;
 }
 
-.hero-badge::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  background: var(--primary);
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
+/* 装饰圆点已移除：徽标文字自带语义，圆点是伪状态指示（模板脸） */
 
 .hero-copy h1 {
   font-size: 56px;
@@ -199,10 +156,7 @@ a {
 }
 
 .hero-copy h1 span {
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
 }
 
 .hero-copy .subtitle {
@@ -233,7 +187,7 @@ a {
 }
 
 .btn.primary {
-  background: var(--gradient-primary);
+  background: var(--primary);
   color: var(--white);
   border: none;
   box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
@@ -292,12 +246,6 @@ a {
   height: auto;
   display: block;
   filter: drop-shadow(0 25px 50px rgba(79, 70, 229, 0.15));
-  animation: float 6s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
 }
 
 /* Stats Section */
@@ -318,22 +266,16 @@ a {
   text-align: center;
   padding: 28px 20px;
   border-radius: var(--radius);
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--light);
   transition: all 0.3s ease;
 }
 
-.stat-item:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
-}
+/* 统计块非交互：不随 hover 浮起（位移留给真正可点的按钮） */
 
 .stat-value {
   font-size: 38px;
   font-weight: 800;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--primary);
 }
 
 .stat-label {
@@ -408,16 +350,14 @@ a {
   left: 0;
   right: 0;
   height: 4px;
-  background: var(--gradient-primary);
+  background: var(--primary);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card:hover {
-  transform: translateY(-8px);
-  box-shadow: var(--shadow-xl);
-  border-color: transparent;
+  box-shadow: var(--shadow-lg);
 }
 
 .card:hover::before {
@@ -428,7 +368,7 @@ a {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: var(--gradient-primary);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -619,7 +559,7 @@ a {
 }
 
 .phase-indicator.done {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
+  background: #22c55e;
   color: white;
 }
 
@@ -628,7 +568,7 @@ a {
 }
 
 .phase-indicator.wip {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: #f59e0b;
   color: white;
 }
 
@@ -691,18 +631,17 @@ a {
 }
 
 .module-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .module-card.done {
   border-color: #22c55e;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.04) 0%, rgba(34, 197, 94, 0.02) 100%);
+  background: rgba(34, 197, 94, 0.04);
 }
 
 .module-card.wip {
   border-color: #f59e0b;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(245, 158, 11, 0.02) 100%);
+  background: rgba(245, 158, 11, 0.04);
 }
 
 .module-card.pending {
@@ -781,7 +720,7 @@ a {
 
 /* CTA Section */
 .cta-section {
-  background: var(--gradient-primary);
+  background: var(--primary);
   color: var(--white);
   text-align: center;
   padding: 88px 0;
@@ -1071,7 +1010,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--gradient-primary);
+  background: var(--primary);
   color: var(--white);
   font-size: 24px;
   font-weight: 800;
