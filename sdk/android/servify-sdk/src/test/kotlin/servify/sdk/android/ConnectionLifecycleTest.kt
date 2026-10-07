@@ -190,14 +190,18 @@ class ConnectionLifecycleTest {
             branding = Branding(offlineText = "客服当前不在线，请稍后再来"),
         )
         chat.connect()
-        awaitConnected()
+        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
 
         // 提示行走无 replay 的 SharedFlow——先订阅再触发（与 Swift 侧用例同序）。
         val hintDeferred = chatScope.async {
             chat.events.messages.first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
         }
-        chat.disconnectForTesting() // 本地断开（同 reconnectExhaustion 用例：零传播依赖）
-        val hint = withTimeout(5_000) { hintDeferred.await() }
+        // 本地断开（同 reconnectExhaustion 用例：零传播依赖）。提示行在耗尽终态后
+        // 发射，等待链 = 重连耗尽链（该链 CI 重载下实测能烧穿 5s，见三现台账
+        // 37649797496 与 37661395908）——预算同段拉平 15s 纯耐心；提示行不可对
+        // Disconnected fail-fast（hint 恰在终态后到）。
+        chat.disconnectForTesting()
+        val hint = withTimeout(15_000) { hintDeferred.await() }
         assertEquals("test-session", hint.sessionId)
         // 提示行是 SDK 自造 UI 状态行（同流中断提示），不计未读。
         assertEquals(0, chat.events.unreadCount.value)
@@ -209,10 +213,12 @@ class ConnectionLifecycleTest {
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
-        awaitConnected()
+        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
 
+        // 断线→重连耗尽链与 reconnectExhaustion 用例同段（一现 37661395908 烧穿
+        // 裸 5s）——awaitSegmentState 同段拉平：15s 纯耐心 + 段标诊断。
         chat.disconnectForTesting()
-        withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } }
+        awaitSegmentState("重连耗尽", budgetMs = 15_000) { it is ConnectionState.Disconnected }
         // 默认 offlineText=null：快照无任何 System 提示行（流中断提示仅在有活跃流时出现，此处无流）。
         assertEquals(0, chat.historySnapshot().count { it.sender == SenderType.System })
     }
