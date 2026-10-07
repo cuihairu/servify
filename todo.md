@@ -1167,6 +1167,8 @@
   - 本地证明：release 变体 10× 连跑全绿（本地不复现，与 10-01 面一致）。
   - Go 侧 ticket 用例为一现，台账登记不动作：静态读码未见抖动机制（AssignTicket 事务内同步增减 current_load、无异步窗口），复现即按两现条款启动定位。
   - 追加一现（同日）：run 37654701199 attempt 1（b9227fd 纯 todo 头）`ServifyChatTest.reconnectsAfterServerDrop` debug 变体红（`TimeoutCancellationException` 无段位）——同 run 改造版 `reconnectExhaustion`（8aef789）已过，非改造回归；一现 rerun → attempt 2 全绿收口。二现预案：该用例三段 5s 等待（首连/Reconnecting/恢复）与三现用例同家族；`Reconnecting` 为中间态，StateFlow 混洗下订阅协程（async 起跳）在 CI 重载中滞后即漏看——二现即按 `awaitSegmentState` 范式分段化 + 订阅前置（先起订阅再 sendMessage 触发断线）。
+  - 追加修后复红（同日）：run 37656887937 attempt 1（c5cf625 纯 todo 头）`ReconcileMessagesTest.fingerprintSkipsRenderedMessagesOnReconcile` debug 变体红——`AssertionError at ReconcileMessagesTest.kt:100`（awaitUntil 超时分支），非 Timeout 家族；段标+state+history 诊断全在断言 message 里被 gradle 默认 SHORT 格式吃掉，段位不可定位。后续头 run 37659418961 同代码全绿 ⇒ 抖动非回归（5d6457e 修复版的修后一现，复现即按二现条款取 FULL 消息定位）。
+  - 诊断基建刀（9d59c9e）：servify-sdk build.gradle.kts 增 testLogging（events=failed + FULL exceptionFormat + showCauses/showStackTraces）——失败断言消息（段标/状态快照/history）从此完整落 CI 控制台，补「job 无测试报告 artifact + 失败行单行截断」的可诊断性缺口；本地 ReconcileMessagesTest 单类跑绿，run 37659418961 头全绿。
 
 - 附注（2026-10-08，**C 批次遗留收口：每能力一页补坐席工作台/工单全流程 + 导航孤儿二次收口 + AI 味复扫**；派发项为「文档重整批+web 嵌入集成指南+legacy 清理未完项连续做完」）：
   - 批次未完项盘点：C1 余 ferry 侧真嵌验收（外部步骤，维持不动）；C2 三子项 10-07 附注在案全闭环，复核无未完项，本刀未动；C3 遗留两项（implementation/ 子站侧边栏、新能力页未扩写）为本刀实体。
