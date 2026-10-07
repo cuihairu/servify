@@ -255,6 +255,10 @@ jobs:
           chmod +x scripts/sync-sdk-to-demo.sh
           ./scripts/sync-sdk-to-demo.sh
 
+      - name: Test demo widget
+        timeout-minutes: 2
+        run: node --test apps/demo-sdk/widget.test.mjs
+
       - name: Verify generated assets manifest
         timeout-minutes: 2
         run: |
