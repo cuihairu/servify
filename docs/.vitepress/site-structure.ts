@@ -13,6 +13,7 @@ const implementationPages = [
   '/implementation/08-ai-provider-expansion',
   '/implementation/09-runtime-and-repo-hygiene',
   '/implementation/11-tenant-auth-and-audit',
+  '/implementation/11-tenant-scope-inventory',
   '/implementation/12-operator-observability',
   '/implementation/13-ai-agent-loop',
 ];
@@ -39,6 +40,8 @@ const integratePages = [
   '/voice-pstn-twilio',
   '/voice-protocol-template',
 ];
+
+const workbenchPages = ['/agent-workspace', '/ticket-workflow'];
 
 const operatePages = [
   '/deployment',
@@ -102,12 +105,17 @@ const archivePages = [
   '/mobile-sdk-cocoapods-evaluation',
   '/release-notes-v0.1.0',
   '/release-0.1.0-acceptance',
+  '/review/chatgpt-review-2026-10-04',
+  '/review/chatgpt-review-2026-10-04-verification',
+  '/superpowers/plans/2025-05-01-pgvector-knowledge-base',
+  '/superpowers/specs/2025-05-01-pgvector-knowledge-base-design',
 ];
 
 export const docsNav = [
   { text: '首页', link: '/' },
   { text: '产品', link: '/v1-product-scope' },
   { text: 'Web 嵌入', link: '/embedding-guide' },
+  { text: '坐席工作台', link: '/agent-workspace' },
   { text: '部署', link: '/deployment' },
   { text: '运维', link: '/operator-runbook' },
   { text: '移动端 SDK', link: '/mobile-sdk-integration' },
@@ -149,6 +157,7 @@ export const docsSidebar = {
   '/': [
     { text: '开始', items: ['/', ...startPages] },
     { text: '接入与集成', items: integratePages },
+    { text: '坐席与工单', items: workbenchPages },
     { text: '部署与运维', items: operatePages },
     { text: '安全与合规', items: securityPages },
     { text: 'AI 与知识库', items: aiPages },

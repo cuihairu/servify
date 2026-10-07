@@ -38,10 +38,12 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 
 1. [V1 产品收敛](/v1-product-scope)
 2. [Web 嵌入集成指南](/embedding-guide)
-3. [部署指南](/deployment)
-4. [运维手册](/operator-runbook)
-5. [当前交付优先级](/delivery-priorities)
-6. [实施计划索引](/implementation/)
+3. [坐席工作台](/agent-workspace)
+4. [工单全流程](/ticket-workflow)
+5. [部署指南](/deployment)
+6. [运维手册](/operator-runbook)
+7. [当前交付优先级](/delivery-priorities)
+8. [实施计划索引](/implementation/)
 
 ## 你可以从这里继续
 
@@ -61,6 +63,11 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 - [移动端 SDK 接入](/mobile-sdk-integration)
 - [语音实时翻译](/realtime-translation-design)
 - [Twilio PSTN 接入](/voice-pstn-twilio)
+
+### 坐席与工单
+
+- [坐席工作台](/agent-workspace)（转人工队列、接管、回复、转派、会话流水）
+- [工单全流程](/ticket-workflow)（创建、指派、跟进、状态流转、统计导出）
 
 ### 部署与运维
 
