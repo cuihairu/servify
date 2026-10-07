@@ -1159,6 +1159,14 @@
 
 > **活跃恢复点（2026-10-04 起）：`[-] B0`（V1.0 收敛批次），子任务 B0-1 → B0-4。** 本小节下方的历史附注（2026-04 ~ 2026-10-01 执行记录）仅作证据存档，不再作为恢复入口。
 
+- 附注（2026-10-08，**CI 抖动双红处置：Android ConnectionLifecycleTest 三现诊断化 + Go ticket 用例一现台账登记**；巡检令「CI 红即修」+ 抖动台账三现条款）：
+  - 现场：run 37649797496（be59b5f，纯 docs 头）Android job `reconnectExhaustionMarksDisconnectedAndConnectRecovers` 三现（①10-01 f2becb3 ②10-07 cf93cd2 ③本 run，`TimeoutCancellationException` 只落 kotlinx 内部帧，job 无测试报告 artifact，段位不可定位）；同 run Go Checks `TestTicketHandler_Create_Get_List_Assign` 一现（`expected agent 2 load decremented to 0, got 1`）。93f6d13 同 Go/Android 代码全量绿 + rerun attempt 2 全绿（含 Integration）⇒ 两败均为抖动非回归。
+  - 即时处置：`gh run rerun --failed` → attempt 2 全绿，docs 头（be59b5f）CI 收口。
+  - 三现改造（8aef789，仅动测试文件，断言只紧不松）：新增 `awaitSegmentState` 分段等待——段标「首连/重连耗尽/恢复重连」+ 超时与终态错误带当前状态快照 + 恢复段挂 Disconnected 终态 fail-fast（不盲等预算）；首连/恢复预算 5s→10s（同条件同判据纯耐心）。四现时错误消息直达根因段。
+  - 排除面（如实）：`webSocket`/`reconnectAttempt`/`everConnected` 均已 `@Volatile`（ServifyChat.kt），可见性丢失两链（cancel 空操作/重连计数丢更新）排除；响应队列 [upgrade,404,upgrade] 与三次握手协议序一一对应，无到达序重排面。**根因未锁定**（Default 调度延迟下的缺转移嫌疑），待四现数据定向修。
+  - 本地证明：release 变体 10× 连跑全绿（本地不复现，与 10-01 面一致）。
+  - Go 侧 ticket 用例为一现，台账登记不动作：静态读码未见抖动机制（AssignTicket 事务内同步增减 current_load、无异步窗口），复现即按两现条款启动定位。
+
 - 附注（2026-10-08，**C 批次遗留收口：每能力一页补坐席工作台/工单全流程 + 导航孤儿二次收口 + AI 味复扫**；派发项为「文档重整批+web 嵌入集成指南+legacy 清理未完项连续做完」）：
   - 批次未完项盘点：C1 余 ferry 侧真嵌验收（外部步骤，维持不动）；C2 三子项 10-07 附注在案全闭环，复核无未完项，本刀未动；C3 遗留两项（implementation/ 子站侧边栏、新能力页未扩写）为本刀实体。
   - 能力页缺口对照：V1 收敛六能力（v1-product-scope §保留的核心功能）逐一对 docs 面——Web 嵌入=embedding-guide、AI 首答/知识库=WEKNORA/RAGFLOW/ai-fallback、人工接管与坐席工作台、工单全流程两能力此前**零页面**，本刀补齐（agent-workspace.md / ticket-workflow.md）；其余 27 模块中 SLA/排班/质检/游戏化/宏/自动化等属 P1/P2 或后台纵深，不按模块清单扩页（避免 API 流水账，C3-1 口径），后续按需。
