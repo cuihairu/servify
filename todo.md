@@ -131,7 +131,7 @@
 ## 发布后批次（2026-10-05 拍板，当前活跃 backlog）
 
 > 三件批：C1 web 嵌入集成指南（含组件外观令+聊天窗主题令）、C2 admin-legacy 清理、C3 文档全面重整。
-> 纪律：连做不等催；每增量 commit（push 失败本地记账）；文档批次提交信息只写「docs: 优化展示」。
+> 纪律：连做不等催；每增量 commit（push 失败本地记账）；文档批次提交信息写明具体改动（2026-10-07 起，「docs: 优化展示」仅限无从描述的微调兜底）。
 
 ### [-] C1 web 嵌入集成指南与组件外观（ferry 对接面）
 
@@ -1158,6 +1158,14 @@
 ## 当前恢复点
 
 > **活跃恢复点（2026-10-04 起）：`[-] B0`（V1.0 收敛批次），子任务 B0-1 → B0-4。** 本小节下方的历史附注（2026-04 ~ 2026-10-01 执行记录）仅作证据存档，不再作为恢复入口。
+
+- 附注（2026-10-08，**C 批次遗留收口：每能力一页补坐席工作台/工单全流程 + 导航孤儿二次收口 + AI 味复扫**；派发项为「文档重整批+web 嵌入集成指南+legacy 清理未完项连续做完」）：
+  - 批次未完项盘点：C1 余 ferry 侧真嵌验收（外部步骤，维持不动）；C2 三子项 10-07 附注在案全闭环，复核无未完项，本刀未动；C3 遗留两项（implementation/ 子站侧边栏、新能力页未扩写）为本刀实体。
+  - 能力页缺口对照：V1 收敛六能力（v1-product-scope §保留的核心功能）逐一对 docs 面——Web 嵌入=embedding-guide、AI 首答/知识库=WEKNORA/RAGFLOW/ai-fallback、人工接管与坐席工作台、工单全流程两能力此前**零页面**，本刀补齐（agent-workspace.md / ticket-workflow.md）；其余 27 模块中 SLA/排班/质检/游戏化/宏/自动化等属 P1/P2 或后台纵深，不按模块清单扩页（避免 API 流水账，C3-1 口径），后续按需。
+  - 新页对码口径：端点逐一对码（`/api/omni/*`、`/api/session-transfer/*`、`/api/tickets*`、`/api/v1/auth/*` 注册面），载荷与 lifecycle/session-transfer/ticket 三个验收脚本实跑一致；admin 注册仅空用户表生效规则对码 `auth/application/service.go`；工单契约/列表过滤/批量/统计字段对码 `ticket/contract/types.go`。侧边栏新增「坐席与工单」组 + nav「坐席工作台」入口 + index/README 推荐阅读同步。
+  - 导航孤儿二次收口：C3-1 的 57 页双向校验未覆盖子目录页——`implementation/11-tenant-scope-inventory`（11 号盘点附件）入实施主线；`review/chatgpt-review-2026-10-04(+verification)`、`superpowers/` 2025-05 pgvector plan+design（历史计划存档）归「规划与历史存档」。双向校验清零（根/implementation 的 README、index 入口页按 C3 口径维持不入栏；审阅存档里的 ⭐ 评分表为记录原文，不改）。
+  - AI 味复扫（口径照旧）：implementation/、review/、superpowers/、新页全量过 C3-2 模式（空洞强调/表情装饰/客套引导/自研对标词），零新增修复；根页残留 ✅/⚠️ 为功能性判定标记（multi-instance-boundary 安全结论等），沿 C3-2 判定保留。
+  - 门禁：`npm -C docs run build` 绿（32s）；推送 93f6d13。
 
 - 附注（2026-10-07，**CI Integration 断链修复：postgres 版本化迁移链三处 schema 缺陷 + CI 版本断言硬编码**；派发项为「插单巡检，CI@main run 37519510470 红即修，修绿后按队列继续」）：
   - 现场：run 37519510470（cdcf861）Integration job「Wait for health」失败——容器日志 fatal 链 = 迁移 000017 对 `conversation_events` 的 UPDATE 42P01 → `schema_migrations` 标脏 v17 → 容器每次重启 `Dirty database version 17` 致命循环，永不健康。断链自 10-04 `a2fa76d` 落地即在（286ec0d 的 run 同根实证），此前 B1~B4 长链的 CI 全被后续 push 取消，Integration 三天未真正跑完，红段才暴露在最近三笔（286ec0d/cb4055e/cdcf861，只有 Integration 红——Go/Script/Docs 已由前置提交修绿）。
