@@ -748,7 +748,7 @@ a {
 }
 
 .cta-section .btn:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
 }
 
@@ -918,8 +918,6 @@ a {
 .tech-badge:hover {
   border-color: var(--primary);
   color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
 }
 
 /* Code Block */
@@ -1050,8 +1048,7 @@ a {
 }
 
 .tech-item:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
   border-color: var(--primary);
 }
 
@@ -1118,4 +1115,13 @@ a {
 .cta-buttons .btn.secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--white);
+}
+
+/* 标题一律纯色:禁文字渐变(background-clip:text / text-fill 透明)——
+   hero 名与各节大标题保持实色,不铺渐变 */
+h1, h2, h3, .brand-text {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
 }
