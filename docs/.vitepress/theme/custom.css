@@ -19,12 +19,13 @@
    * VitePress 默认即回落 --vp-c-brand-1 纯色(2026-10-07 去渐变字) */
 
   --vp-custom-outline: #7c3aed;
+}
 
-  .VPFeature .icon {
-    border-radius: 10px;
-    background-color: var(--vp-c-brand-soft);
-    color: var(--vp-c-brand-1);
-  }
+/* feature 图标：品牌 soft 底 + brand 前景色（原嵌在 :root 内选择器不生效，移正） */
+.VPFeature .icon {
+  border-radius: 10px;
+  background-color: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
 }
 
 /* 暗色：亮色系主色压暗会发闷，整体提一档 */
