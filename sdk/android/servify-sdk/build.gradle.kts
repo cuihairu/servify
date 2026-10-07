@@ -55,3 +55,17 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
 }
+
+// CI 的 Android job 不上传测试报告 artifact、控制台对失败用例单行截断
+// （只落异常类名+行号）：抖动测试的断言消息（awaitSegmentState/awaitUntil 的
+// 段标、状态快照、history）全在 message 里，必须完整落控制台才可定位段位。
+// 抖动台账口径「诊断消息先行」的基建面：失败用例打全异常链。
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
+}
