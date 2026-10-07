@@ -213,18 +213,19 @@ servify/
 ├── scripts/
 │   ├── start-weknora.sh           # 启动脚本
 │   ├── init-knowledge-base.sh     # 知识库初始化
-│   ├── manage-knowledge-base.sh   # 知识库管理
-│   └── init-db.sql               # 数据库初始化
-├── apps/
-│   └── server/
-│       ├── pkg/weknora/           # WeKnora 客户端
-│       ├── client.go
-│       └── types.go
-│       └── internal/services/
-│           └── ai_enhanced.go     # 增强的 AI 服务
-├── infra/compose/docker-compose.weknora.yml     # WeKnora mock 验收配置
-├── config.weknora.yml            # 配置文件模板
-└── .env.weknora.example          # 环境变量模板
+│   ├── test-weknora-integration.sh # 集成验收（mock/real 两模式）
+│   └── init-db.sql                # 数据库初始化
+├── apps/server/
+│   ├── pkg/weknora/               # WeKnora HTTP 客户端（client.go / types.go）
+│   └── internal/platform/knowledgeprovider/
+│       ├── weknora/               # WeKnora provider（知识库 provider 接口实现）
+│       ├── dify/ ragflow/ local/ memory/ mock/ pgvector/   # 其他 provider
+│       └── provider.go types.go   # provider 契约
+├── infra/compose/
+│   ├── docker-compose.weknora.yml # WeKnora 叠加编排（含 weknora-mock 服务）
+│   └── weknora-mock/              # mock 实现（Dockerfile / main.go / main_test.go）
+├── config.weknora.yml             # 配置文件模板
+└── .env.weknora.example           # 环境变量模板
 ```
 
 ### 核心代码示例

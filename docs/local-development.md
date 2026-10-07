@@ -64,10 +64,9 @@
 当 WSL 中的 Git 提示 `detected dubious ownership` 时，在 WSL 里执行：
 
 ```bash
-git config --global --add safe.directory /mnt/c/Users/cui/Workspaces/servify
+# 在 WSL 内仓库目录执行
+git config --global --add safe.directory "$(pwd)"
 ```
-
-如果仓库路径变化，请替换为实际路径。
 
 ## 换行符与权限位
 

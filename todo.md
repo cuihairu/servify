@@ -154,15 +154,15 @@
 - 下一步：已完成（见 2026-10-07 附注）
 - 阻塞项：暂无
 
-### [ ] C3 文档全面重整
+### [x] C3 文档全面重整
 
 - 任务清单：
-  - [ ] C3-1 结构重组：按用户视角重排（这是什么/怎么配/跑起来什么样），每个能力一页可跟跑（取得凭据→配置→发出第一个真实请求），导航按用户任务分组不做 API 流水账，README 同步（标题+logo+徽章行规范）
-  - [ ] C3-2 清 AI 味：逐页按 standards 两规范清（空洞强调/总结段/假深度/排比三连/客套/引导废话/粗体冒号滥用/表情装饰/同义词轮换），数字事实代替形容词
-  - [ ] C3-3 内容实盘核对：数据与 API 与代码一致，禁自研/领先/对标词；产出变更报告（改了哪几页/对照什么问题/结构怎么变）
-- 状态：`[ ]`
-- 下一步：C1 批完成后开工（重整覆盖面含 C1 产出，后置避免二次返工）
-- 阻塞项：C1 未完成
+  - [x] C3-1 结构重组：按用户视角重排（这是什么/怎么配/跑起来什么样），每个能力一页可跟跑（取得凭据→配置→发出第一个真实请求），导航按用户任务分组不做 API 流水账，README 同步（标题+logo+徽章行规范）
+  - [x] C3-2 清 AI 味：逐页按 standards 两规范清（空洞强调/总结段/假深度/排比三连/客套/引导废话/粗体冒号滥用/表情装饰/同义词轮换），数字事实代替形容词
+  - [x] C3-3 内容实盘核对：数据与 API 与代码一致，禁自研/领先/对标词；产出变更报告（改了哪几页/对照什么问题/结构怎么变）
+- 状态：`[x]`（2026-10-07 完成，附注见下）
+- 下一步：无（批次清零；遗留项见附注末）
+- 阻塞项：无
 
 ---
 
@@ -1165,6 +1165,12 @@
   - 修法：000017 就地前置补建两张缺失表（编号序不可变，v17 先于任何新迁移执行；DDL 取自 `cmd/gen-baseline` 对空库的真实捕获、与基线同源，`IF NOT EXISTS` 保证既有库零改动）；000019 表名纠偏 `answer_feedback`→`answer_feedbacks` + 列形对齐捕获（answer_id NOT NULL / confidence decimal）+ `DROP` 错名表（错名只可能来自首版迁移且应用从未写成功过，恒空可安全清）；ci.yml 两处断言改动态取迁移链头部（`000NNN` 最大号），链增长自动跟随；新增 `TestMigrationChainCoversAllModels` 静态对账（52 个冻结清单模型的 GORM 表名 × 迁移链 `CREATE TABLE` 全集，embed FS 扫描面非空断言防假绿）——整类缺口（新模型漏配编号迁移）钉成静态门。
   - 验证：变异验证——还原修前迁移链，守卫精确报 3 张缺表（conversation_events/routing_assignments/answer_feedbacks），修后绿；bootstrap 包全量 `-count=1` 绿（29.7s）+ gofmt/vet 干净；本地全真复刻 CI Integration（清卷全新库 + 覆写端口起栈避本机端口占用）全链绿：健康 200、水位 `19|f`==动态期望、三表按真名在库、备份恢复演练（水位+行数对账）、重启幂等健康、weknora 集成脚本 EXIT=0。
   - 遗留登记（如实，不硬造）：a) 列形级自动化对账（gen-baseline 捕获 vs 迁移链终态 DDL 全链 diff）未建，本刀只手工对齐了 000017/000019 两张；b) 已标脏 v17 的存量真实部署需 `migrate force 16` 手工解锁后再升级（CI/新部署不受影响）。
+
+- 附注（2026-10-07，**C3 文档全面重整完成**；变更报告按 C3-3 要求逐面对照）：
+  - C3-1 结构重组：`docs/.vitepress/site-structure.ts` 重写——侧边栏从「产品上手/运行安全/研发附录」三组改为按用户任务八组（开始/接入与集成/部署与运维/安全与合规/AI 与知识库/远程协助/架构与研发治理/规划与历史存档），**30 个导航孤儿页全部收口**（改前 58 个根页仅 28 个进 sidebar，含 embedding-guide 只在 index.md 正文挂链）；nav 顶栏新增「Web 嵌入」「运维」入口；同步三面：docs/index.md 与 docs/README.md 的「推荐阅读/你可以从这里继续」按同口径重排（快速了解产品→评估与上手等），根 README.md 推荐先读列表收掉过时的「v1-convergence-plan（当前主计划）」提法（该计划已执行完毕、归档组）并挂 embedding-guide。每能力一页可跟跑口径：Web 接入=embedding-guide（凭据→配置→首条消息→事件回流全链）、移动端=mobile-sdk-integration、语音=realtime-translation-design + voice-pstn-twilio、知识库=WEKNORA_INTEGRATION，均已入导航。
+  - C3-2 清 AI 味：全库扫描（空洞强调词/表情装饰/客套引导/总结废话/自研领先对标词）——整体 AI 味已低（前批次清过），本轮实证残留两处修掉：architecture-review-2026.md 两条「✅ 推荐」装饰性对勾标题（两条路径都打勾反而混乱）→「（短期推荐）/（中期推荐）」纯文字；v1-product-scope.md「无缝转人工」→「转人工」（数字事实代替形容词口径）。判定保留：mobile-sdk-design 等状态台账里的 ✅ 为功能性完成标记（非装饰）；TURN_DEPLOYMENT「业界事实标准」带具名证据（Jitsi/Matrix/Nextcloud 同款，非自夸）；粗体冒号高密度文件（mobile-sdk-design 57 处等）为状态台账字段标签惯用法，非滥用。
+  - C3-3 内容实盘核对（改前先对码，六处实证漂移全修）：① testing-pyramid.md——integration 覆盖面陈述从「handlers + internal/services」（services 已于 P3-2 移除）改为实测口径（`grep -rl go:build integration` 38 文件/15 包，handlers 20 + modules/*/infra|delivery|application + platform/realtime），smoke 清单与 `scripts/run-smoke-tests.sh` 实际 7+2 阶段对齐（AI fallback 现跑 `modules/ai/delivery`，补 conversation/ticket 主链与 go build 阶段）；② CI_SELF_HOSTED.md——Module checks 清单删 `internal/services/...`、补 `cmd/server` 构建（对 ci.yml「Test modular packages / Build modular entrypoints」实际包列表）；③ WEKNORA_INTEGRATION.md 项目结构树——`internal/services/ai_enhanced.go`（已不存在）→ 实际消费面 `internal/platform/knowledgeprovider/{weknora,dify,ragflow,local,memory,mock,pgvector}`，weknora-mock 目录内容按实际（Dockerfile/main.go/main_test.go）修正，删已消失的 `manage-knowledge-base.sh`、补 `test-weknora-integration.sh`；④ mobile-sdk-integration.md——`sdk/scripts/check-ios-sdk-size.sh` 纠偏为 `scripts/check-ios-sdk-size.sh`（脚本实际位置，对码 ci.yml:557）；⑤ acceptance-checklist.md——**144 处 `/Users/cui/Workspaces/servify/` 绝对路径链接**（旧 macOS 机器路径，本机与 CI 全部失效）批量改 `../` 相对路径（与该文档既有 `../scripts/test-results/...` 惯用法一致；142 个唯一目标 71 存活/71 失效，失效者保留路径文本作验收时点存证，ignoreDeadLinks 不拦构建）；⑥ local-development.md——WSL safe.directory 示例里的硬编码个人路径改 `git config --global --add safe.directory "$(pwd)"`（在仓库目录执行）。另外先行修掉一个数字错误：主题 token 实数 23（非 22），embedding-guide/todo 计数订正（已随 16485bf 先行推送）。
+  - 门禁：`npm -C docs run build` 全绿（两次：C3-1 落地后 65s、全部编辑后 288s）；sidebar 草案 57 页路径对文件系统双向校验（无 404、无遗漏）。遗留：widget 测试未接 CI 一项随 C1 附注口径不变（demo-sdk 无 package.json，后续批评估）；implementation/ 子站侧边栏未动（自成体系）。
 
 - 附注（2026-10-07，**C2 admin-legacy 清理完成**）：
   - C2-1 三面盘点结论：apps/admin-legacy（19 文件 384K）= ①根目录官网页（index/index2/style/script）——职责已被 apps/website 取代；②旧演示页与旧 admin 壳（ws-demo/sdk-demo/kb/satisfaction/admin/）——已被 apps/admin（React）与 apps/demo 取代；③sdk/ 冻结副本——与 demo-sdk 现产物已漂移，其 README「由 SDK 包同步生成、满足 CI 生成产物校验」的说法为陈旧失实（sync 脚本只写 demo-sdk，drift 检查只覆盖 demo-sdk）。路由面：server static.go 不服务该目录（defaultStaticRoots 仅 admin dist），运行时不可达；引用面：仅 5 处描述性文字（README×2/current-architecture/v1-convergence-plan/demo README），无任何链接；构建面：sync/drift/Makefile/CI 全无接线。「先切流量」一步天然满足（无流量可切）。

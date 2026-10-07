@@ -2,7 +2,7 @@
 
 ## Integration build tag coverage
 
-Current `integration` coverage is concentrated in `apps/server/internal/handlers` and `apps/server/internal/services`.
+Current `integration` coverage is concentrated in `apps/server/internal/handlers` (HTTP handler to runtime wiring) and spread across `apps/server/internal/modules/*` infra/application/delivery packages plus `internal/platform/realtime` — 38 test files over 15 packages.
 
 Covered areas:
 
@@ -50,14 +50,19 @@ Run with:
 
 - `./scripts/run-smoke-tests.sh`
 
-Current smoke set:
+Current smoke set (see `scripts/run-smoke-tests.sh` for the authoritative list):
 
-- `go test -tags=integration ./apps/server/internal/handlers -run TestVoiceHandler`
-- `go test -tags=integration ./apps/server/internal/services -run TestOrchestratedEnhancedAIServiceFallback`
+- conversation handler / application / infra status mapping
+- ticket handler: create/get/list/assign, custom fields + export, related conversations
+- voice handler integration path
+- orchestrated AI provider fallback (`./apps/server/internal/modules/ai/delivery`)
+- full-project `go build ./...`
 - `npm -C sdk run test:examples`
 
 Why these are in the smoke set:
 
+- `conversation`/`ticket`
+  - the customer-facing main chain: session, message, ticket assignment
 - `voice`
   - exercises protocol route registration and stateful runtime behavior
 - `ai`

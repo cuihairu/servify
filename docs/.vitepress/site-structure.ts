@@ -1,3 +1,7 @@
+// 导航与侧边栏按使用任务分组：开始（评估与上手）→ 接入（把 Servify 嵌进自己的站/端）
+// → 部署运维 → 安全合规 → AI 知识库 → 远程协助 → 架构与研发治理 → 规划与历史存档。
+// implementation/ 有独立侧边栏。新增页面须归入对应分组，避免出现导航孤儿。
+
 const implementationPages = [
   '/implementation/01-platform-and-runtime',
   '/implementation/02-ai-and-knowledge',
@@ -20,50 +24,93 @@ const migrationGovernancePages = [
   '/implementation/10-module-boundaries',
 ];
 
-const productPages = [
+const startPages = [
   '/v1-product-scope',
-  '/ARCHITECTURE',
-  '/current-architecture',
-  '/architecture-review-2026',
-  '/architecture-redesign-plan',
-  '/remote-assistance',
-  '/remote-assistance-status',
-  '/realtime-translation-design',
-  '/deployment',
-  '/webrtc-deployment',
+  '/release-notes-v1.0.0',
+  '/delivery-priorities',
   '/local-development',
-  '/mobile-sdk-integration',
+  '/contributing',
 ];
 
-const operationsPages = [
+const integratePages = [
+  '/embedding-guide',
+  '/mobile-sdk-integration',
+  '/realtime-translation-design',
+  '/voice-pstn-twilio',
+  '/voice-protocol-template',
+];
+
+const operatePages = [
+  '/deployment',
+  '/operator-runbook',
+  '/webrtc-deployment',
+  '/TURN_DEPLOYMENT',
+  '/backup-and-recovery',
+  '/multi-instance-boundary',
+  '/metrics-glossary',
+  '/metrics-spec',
+  '/perf-baseline',
+  '/ai-observability-policy',
+];
+
+const securityPages = [
   '/security-baseline-operations',
   '/configuration-scopes',
   '/token-lifecycle-and-key-rotation',
   '/public-surface-security-checklist',
-  '/multi-instance-boundary',
-  '/backup-and-recovery',
+  '/auth-surface-policy',
+  '/audit-log-policy',
+  '/tenant-workspace-boundaries',
 ];
 
-const appendixPages = [
-  '/ARCHITECTURE',
+const aiPages = [
   '/WEKNORA_INTEGRATION',
   '/RAGFLOW_INTEGRATION',
   '/KNOWLEDGE_BASE_LANDSCAPE',
-  '/TURN_DEPLOYMENT',
+  '/ai-fallback-behavior',
+];
+
+const remoteAssistPages = [
+  '/remote-assistance',
+  '/remote-assistance-status',
+  '/remote-assistance-mvp',
+  '/remote-assistance-current-state',
+];
+
+const engineeringPages = [
+  '/ARCHITECTURE',
+  '/current-architecture',
+  '/modules-dependency-map',
+  '/testing-pyramid',
   '/CI_SELF_HOSTED',
   '/release-versioning',
-  '/testing-pyramid',
-  '/MERMAID_COMPATIBILITY',
+  '/surface-naming',
+  '/generated-assets',
+  '/repo-hygiene',
+  '/demo-and-mock-boundaries',
+  '/acceptance-checklist',
+  '/acceptance-weknora-docker',
   '/mobile-sdk-design',
   '/mobile-sdk-platform-spec',
+  '/MERMAID_COMPATIBILITY',
+];
+
+const archivePages = [
+  '/architecture-review-2026',
+  '/architecture-redesign-plan',
+  '/v1-convergence-plan',
+  '/mobile-sdk-cocoapods-evaluation',
+  '/release-notes-v0.1.0',
+  '/release-0.1.0-acceptance',
 ];
 
 export const docsNav = [
   { text: '首页', link: '/' },
   { text: '产品', link: '/v1-product-scope' },
-  { text: '架构', link: '/ARCHITECTURE' },
+  { text: 'Web 嵌入', link: '/embedding-guide' },
   { text: '部署', link: '/deployment' },
-  { text: 'SDK 接入', link: '/mobile-sdk-integration' },
+  { text: '运维', link: '/operator-runbook' },
+  { text: '移动端 SDK', link: '/mobile-sdk-integration' },
   {
     text: '运行与安全',
     items: [
@@ -78,18 +125,12 @@ export const docsNav = [
     text: '研发附录',
     items: [
       { text: '实施计划', link: '/implementation/' },
+      { text: '总体架构', link: '/ARCHITECTURE' },
       { text: '当前架构分析', link: '/current-architecture' },
-      { text: '架构重设计计划', link: '/architecture-redesign-plan' },
       { text: 'WeKnora 集成', link: '/WEKNORA_INTEGRATION' },
-      { text: 'RAGFlow 集成', link: '/RAGFLOW_INTEGRATION' },
-      { text: '知识库选型全景', link: '/KNOWLEDGE_BASE_LANDSCAPE' },
-      { text: 'TURN 部署选型', link: '/TURN_DEPLOYMENT' },
+      { text: '测试金字塔', link: '/testing-pyramid' },
       { text: 'CI / Runner', link: '/CI_SELF_HOSTED' },
       { text: '版本发布', link: '/release-versioning' },
-      { text: '测试金字塔', link: '/testing-pyramid' },
-      { text: 'Mermaid 兼容性', link: '/MERMAID_COMPATIBILITY' },
-      { text: '移动端 SDK 策划', link: '/mobile-sdk-design' },
-      { text: '移动端 SDK 平台规格', link: '/mobile-sdk-platform-spec' },
     ],
   },
 ];
@@ -106,22 +147,14 @@ export const docsSidebar = {
     },
   ],
   '/': [
-    {
-      text: '产品与上手',
-      items: ['/', ...productPages],
-    },
-    {
-      text: '运行与安全',
-      items: operationsPages,
-    },
-    {
-      text: '研发附录',
-      items: [
-        '/implementation/',
-        ...implementationPages,
-        ...migrationGovernancePages,
-        ...appendixPages.filter((page) => page !== '/ARCHITECTURE'),
-      ],
-    },
+    { text: '开始', items: ['/', ...startPages] },
+    { text: '接入与集成', items: integratePages },
+    { text: '部署与运维', items: operatePages },
+    { text: '安全与合规', items: securityPages },
+    { text: 'AI 与知识库', items: aiPages },
+    { text: '远程协助', items: remoteAssistPages },
+    { text: '架构与研发治理', items: engineeringPages },
+    { text: '规划与历史存档', items: archivePages },
+    { text: '实施计划', items: ['/implementation/', ...implementationPages, ...migrationGovernancePages] },
   ],
 };

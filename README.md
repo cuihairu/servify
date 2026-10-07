@@ -153,10 +153,9 @@ Servify 当前更适合这样理解：
 推荐先读：
 
 - [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md)（当前版本）
-- [V1.0 收敛改造计划](./docs/v1-convergence-plan.md)（当前主计划）
 - [V1 产品收敛](./docs/v1-product-scope.md)
-- [远程协助产品说明](./docs/remote-assistance.md)
-- [文档站首页](./docs/index.md)
+- [Web 嵌入集成指南](./docs/embedding-guide.md)（把客服组件嵌进自有站点）
+- [文档站首页](./docs/index.md)（按任务分组：上手/接入/部署运维/安全/AI 知识库）
 
 当前不会把“平台化租户能力”作为产品中心持续扩张，而是先把独立部署客服产品做扎实。
 
@@ -441,6 +440,7 @@ Jaeger 默认地址：`http://localhost:16686`
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [docs/current-architecture.md](./docs/current-architecture.md) - 当前真实架构快照
+- [docs/embedding-guide.md](./docs/embedding-guide.md) - Web 嵌入集成指南（嵌入方式、会话互认、工单上下文、事件回调、主题全表）
 - [docs/architecture-redesign-plan.md](./docs/architecture-redesign-plan.md) - 架构重设计计划（services→modules 迁移期产物，仅存档）
 - [docs/index.md](./docs/index.md)
 - [docs/WEKNORA_INTEGRATION.md](./docs/WEKNORA_INTEGRATION.md)

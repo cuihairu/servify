@@ -92,14 +92,14 @@ policy hooks → guardrails.ValidateInput
 
 ## 5. 四条演进路径 + 推荐
 
-### 路径 A：Go 内接通 agent loop ✅ 推荐（短期）
+### 路径 A：Go 内接通 agent loop（短期推荐）
 
 把已有 `ToolExecutor` 接进 `Handle`，实现 `while(toolCalls){ 执行→回灌→再 Chat }` 的等价 `stopWhen`，并把 `ChatStream` 接到 WebSocket。
 
 - **优点**：不换语言、2–3 周量级、立即让客服"能动起来"、复用全部脚手架。
 - **缺点**：长期仍要自己跟 streaming / HITL / eval。
 
-### 路径 B：AI 编排独立成 TS 服务 ✅ 推荐（中期）
+### 路径 B：AI 编排独立成 TS 服务（中期推荐）
 
 把 `modules/ai` 抽成一个 TS 服务（Vercel AI SDK 或 Mastra），通过内部 HTTP / gRPC 给 Go 后端调用；Go 保留业务 / 数据 / 路由 / 语音。
 

@@ -25,8 +25,8 @@
 
 - `internal/modules/...` 构建与测试
 - `internal/platform/...` 构建与测试
-- `internal/services/...` 构建与测试
 - `internal/handlers/...` 构建与测试
+- `cmd/server` 入口构建
 
 ### SDK checks
 
