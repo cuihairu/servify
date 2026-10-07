@@ -156,11 +156,11 @@ class ConnectionLifecycleTest {
         // 首连成功后客户端本地断开 → 重连 #1 握手被拒（404）→ 已建连后失败走
         // scheduleReconnect：maxAttempts=1 的 delayFor(2)=null → 耗尽 → disconnected。
         //
-        // 三现台账：35855565576（二现，改本地 cancel）→ 37649797496（三现，2026-10-07，
-        // TimeoutCancellationException 无段位信息）。webSocket/reconnectAttempt/everConnected
-        // 均已 @Volatile，可见性面排除；三段全部改 awaitSegmentState 分段标注——
-        // 首连/恢复 5s→10s（同条件同判据，纯耐心），恢复段挂 Disconnected 终态
-        // fail-fast；四现时错误消息直达根因段。
+        // 台账：35855565576（二现，改本地 cancel）→ 37649797496（三现，Timeout 无段位）
+        // → 37668312028（四现，2026-10-08，段位消息命中：重连耗尽段悬空 Connecting
+        // 整 15s——首连/恢复段均过）。webSocket/reconnectAttempt/everConnected 均已
+        // @Volatile，可见性面排除；三段全部分段标注，首连/恢复 10s，耗尽段 15s 双
+        // 证据（状态 + server 请求计数）——五现起错误消息直接二分根因面。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
@@ -170,8 +170,25 @@ class ConnectionLifecycleTest {
         // 断线触发用本地 cancel（接缝）：server 端 cancel() 的传播在 CI 偶发丢失
         // （35855565576，15s 预算都等不到 onFailure），本地 cancel 零传播、与真实
         // 断线同路径。预算保留 15s 防回归。
+        //
+        // 四现 37668312028 定向数据：该段悬空 Connecting 整 15s（首连/恢复段均过）
+        // ——悬空非缓慢，加预算无意义，改双证据二分根因：预算烧穿时按 server 请求
+        // 计数分流——重连握手（第 2 请求）已到达 → 404 未回/onFailure 丢失面；
+        // 未到达 → 重连接协程或 MockWebServer accept 饿死面。
         chat.disconnectForTesting()
-        awaitSegmentState("重连耗尽", budgetMs = 15_000) { it is ConnectionState.Disconnected }
+        val exhausted = withTimeoutOrNull(15_000) {
+            chat.events.connectionState.first { it == ConnectionState.Disconnected }
+        }
+        if (exhausted == null) {
+            val current = chat.events.connectionState.value
+            val handshakes = server.requestCount
+            val surface = if (handshakes >= 2) {
+                "重连握手已到达 server（请求数=$handshakes）→ 404 未回或 onFailure 丢失面"
+            } else {
+                "重连握手未到达 server（请求数=$handshakes）→ 重连协程/MockWebServer accept 饿死面"
+            }
+            error("[重连耗尽] 15s 未落 Disconnected：当前状态=$current；$surface")
+        }
 
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
