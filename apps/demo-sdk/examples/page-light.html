@@ -3,7 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>青屿云 — 浅色品牌站测试页</title>
+  <title>青屿云 — Web 嵌入示例（浅色品牌站）</title>
+  <!--
+    运行前提：Servify 已在本机 8080 端口运行（默认开发形态）。
+      cd apps/server && go run ./cmd/server
+    打开示例（由 Servify 直接提供示例页）：
+      http://localhost:8080/demo-sdk/examples/page-light.html
+    本页演示：浅色品牌站注入整套客服组件——品牌主色、预设图标、
+    品牌位（名称+欢迎语）、亮色主题；悬浮球/展开动画/未读徽标为内置行为。
+  -->
   <style>
     /* 浅色品牌站：米白底 + 青绿主色 + 大圆角卡片，模拟 SaaS 官网 */
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,6 +28,14 @@
     .card { background: #ffffff; border: 1px solid #e7e5df; border-radius: 16px; padding: 28px; }
     .card h3 { color: #0f766e; font-size: 16px; margin-bottom: 10px; }
     .card p { color: #6b7280; font-size: 13px; line-height: 1.8; }
+    /* 窄视口（≤480px）：卡片单列、导航收紧——组件此时自动切近全高 sheet */
+    @media (max-width: 480px) {
+      header { padding: 0 16px; }
+      header nav a { margin-left: 14px; font-size: 13px; }
+      .hero { padding: 40px 16px; }
+      .hero h1 { font-size: 24px; }
+      .cards { grid-template-columns: 1fr; padding: 0 16px 64px; }
+    }
   </style>
 </head>
 <body>
@@ -36,20 +52,22 @@
   <section class="cards">
     <div class="card"><h3>云主机</h3><p>1C1G 起步，按小时计费，支持快照与镜像。</p></div>
     <div class="card"><h3>对象存储</h3><p>S3 兼容接口，流量阶梯计价，免费额度每月刷新。</p></div>
-    <div class="card"><h3>工单支持</h3><p>右下角发起会话，AI 先答，人工 5 分钟内接管，历史可转工单。</p></div>
+    <div class="card"><h3>工单支持</h3><p>右下角发起会话，AI 先答，人工接管后历史可转工单。</p></div>
   </section>
 
-  <!-- 嵌入：浅色主题 + 品牌主色 + 预设耳麦图标 + 品牌位 -->
-  <script src="../servify-sdk.umd.js"></script>
-  <script src="../widget.js"></script>
+  <!-- ═══ 嵌入 snippet（与 docs/embedding-guide.md §2 一致）═══ -->
+  <!-- 组件资产由 Servify 服务端直接提供（/demo-sdk/*，非 production 环境） -->
+  <script src="http://localhost:8080/demo-sdk/servify-sdk.umd.js"></script>
+  <script src="http://localhost:8080/demo-sdk/widget.js"></script>
   <script>
     ServifyWidget.create({
-      baseUrl: (location.protocol + '//' + location.host).replace(/:\d+$/, ':8080'),
-      icon: 'headset',
+      baseUrl: 'http://localhost:8080',
+      // 品牌注入：主色同时生成整套主题 token（气泡自色/对比字色按 WCAG 亮度推导）
       color: '#0f766e',
-      position: 'bottom-right',
-      size: 'medium',
-      theme: 'light',
+      icon: 'headset',           // 预设图标三档之一（chat/smile/headset/lifebuoy/dots/bolt）
+      position: 'bottom-right',  // 悬浮球四角
+      size: 'medium',            // 44/56/64 三档
+      theme: 'light',            // 亮色主题（'auto' 可跟随宿主站深浅）
       brand: {
         name: '青屿云客服',
         welcome: '您好，这里是青屿云，请问想了解哪款产品？'

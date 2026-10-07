@@ -38,6 +38,17 @@ cd apps/server && go run ./cmd/server
 打开页面，右下角出现悬浮按钮，点击展开聊天窗：AI 首答基于知识库，转人工后
 坐席在管理端（`/`，admin SPA）接待。
 
+**不想手写页面？仓库自带两个可直接打开的示例页**（由 Servify 服务端直接
+提供，snippet 与本节一致、可逐行跟跑；两视口 375/桌面均已验证）：
+
+- 浅色品牌站：`http://localhost:8080/demo-sdk/examples/page-light.html`
+- 深色站：`http://localhost:8080/demo-sdk/examples/page-dark.html`
+
+零依赖体验形态（无 OpenAI key、无外部服务）：config 中 `ai`/`embedding`/
+`knowledge` 三 provider 均置 `local`（配 sqlite），AI 首答走本机抽取式问答——
+先 `POST /api/v1/ai/knowledge/upload`（admin 登录态）上传知识文档即索引，
+再在组件里提问即可命中；注意示例页的 AI 回答内容取决于已上传的知识文档。
+
 不带 `sessionId` 时，组件为每次页面加载生成新会话 id；跨页面保持会话见 §3。
 
 零配置形态也支持：`<script src="…/widget.js" data-servify-widget
@@ -252,10 +263,17 @@ JWT_SECRET=<…> docker compose -f docker-compose.yml -f docker-compose.weknora.
 
 ### 7.5 两风格示例
 
-- 浅色品牌站：`apps/demo-sdk/examples/page-light.html`（米白底青绿主色，
-  `headset` 预设图标 + 品牌位）
-- 深色站：`apps/demo-sdk/examples/page-dark.html`（暗色主题 + 方形圆角按钮
-  + `lifebuoy` 图标）
+起服务后由 Servify 直接提供（无需另起静态服务器）：
+
+- 浅色品牌站：<http://localhost:8080/demo-sdk/examples/page-light.html>
+  （米白底青绿主色，`headset` 预设图标 + 品牌位）
+- 深色站：<http://localhost:8080/demo-sdk/examples/page-dark.html>
+  （暗色主题 + 方形圆角按钮 + `lifebuoy` 图标）
+
+两页均自带窄视口响应式（≤480px 组件自动切近全高 sheet，页面卡片单列），
+嵌入块源码处标有「与 §2 一致」的 snippet 注释，浏览器查看源码即可逐行跟跑。
+源文件：`apps/demo-sdk/examples/page-light.html` / `page-dark.html`。
+
 - 远程主题样例：`apps/demo-sdk/examples/theme.json`（亮暗两套 + 品牌位，
   经 `themeUrl` 下发的完整格式）
 

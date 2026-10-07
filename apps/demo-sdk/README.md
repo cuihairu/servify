@@ -5,7 +5,12 @@
 嵌入方式、会话互认、工单上下文打通、事件回调与外观/主题配置全表见
 [Web 嵌入集成指南](../../docs/embedding-guide.md)；两风格测试页在
 `examples/`（`page-light.html` / `page-dark.html`，配 `theme.json`
-远程主题样例）。组件门禁测试：`node --test apps/demo-sdk/widget.test.mjs`。
+远程主题样例）。起服务后直接打开：
+
+- <http://localhost:8080/demo-sdk/examples/page-light.html>
+- <http://localhost:8080/demo-sdk/examples/page-dark.html>
+
+组件门禁测试：`node --test apps/demo-sdk/widget.test.mjs`。
 
 ## 目录说明
 
@@ -26,6 +31,8 @@
   - 队列 REST API
   - WebRTC call REST API
   - 旧式 REST 会话创建
+  - 客户侧消息历史 REST（`GET /api/v1/sessions/:id/messages` 不存在；
+    `widget.js` 的断线补拉对该地址的 404 会被静默吞掉，WS 主链路不受影响）
 
 ## 浏览器直接使用
 
