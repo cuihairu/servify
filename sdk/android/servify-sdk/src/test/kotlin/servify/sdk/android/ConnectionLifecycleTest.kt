@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -80,6 +81,28 @@ class ConnectionLifecycleTest {
         withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Connected } }
     }
 
+    /**
+     * 分段等待（三现诊断化，37649797496）：reconnectExhaustion 用例三段链
+     * （首连→耗尽→恢复）任意一段烧穿都会以无行号的 TimeoutCancellationException
+     * 落败，CI 无测试报告 artifact 时无法定位段位。本助手给每段带段标与到达时
+     * 状态快照，并支持终态 fail-fast（等 Connected 时提前落 Disconnected 即刻报，
+     * 不盲等预算）。超时/终态错误带段标+当前状态——四现时数据直达根因段。
+     */
+    private suspend fun awaitSegmentState(
+        label: String,
+        budgetMs: Long,
+        failFastOn: (ConnectionState) -> Boolean = { false },
+        isTarget: (ConnectionState) -> Boolean,
+    ): ConnectionState {
+        val matched = withTimeoutOrNull(budgetMs) {
+            chat.events.connectionState.first { isTarget(it) || failFastOn(it) }
+        }
+        if (matched != null && !failFastOn(matched)) return matched
+        val current = chat.events.connectionState.value
+        val reason = if (matched == null) "预算 ${budgetMs}ms 内未达" else "提前落入终态"
+        error("[$label] $reason：当前状态=$current")
+    }
+
     @Test
     fun initialConnectionStateIsIdle() {
         chat = newChat()
@@ -129,28 +152,31 @@ class ConnectionLifecycleTest {
     }
 
     @Test
-    fun reconnectExhaustionMarksDisconnectedAndConnectRecovers() = runBlocking {
+    fun reconnectExhaustionMarksDisconnectedAndConnectRecovers(): Unit = runBlocking {
         // 首连成功后客户端本地断开 → 重连 #1 握手被拒（404）→ 已建连后失败走
         // scheduleReconnect：maxAttempts=1 的 delayFor(2)=null → 耗尽 → disconnected。
+        //
+        // 三现台账：35855565576（二现，改本地 cancel）→ 37649797496（三现，2026-10-07，
+        // TimeoutCancellationException 无段位信息）。webSocket/reconnectAttempt/everConnected
+        // 均已 @Volatile，可见性面排除；三段全部改 awaitSegmentState 分段标注——
+        // 首连/恢复 5s→10s（同条件同判据，纯耐心），恢复段挂 Disconnected 终态
+        // fail-fast；四现时错误消息直达根因段。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
-        awaitConnected()
+        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
 
         // 断线触发用本地 cancel（接缝）：server 端 cancel() 的传播在 CI 偶发丢失
         // （35855565576，15s 预算都等不到 onFailure），本地 cancel 零传播、与真实
         // 断线同路径。预算保留 15s 防回归。
         chat.disconnectForTesting()
-        assertEquals(
-            ConnectionState.Disconnected,
-            withTimeout(15_000) { chat.events.connectionState.first { it == ConnectionState.Disconnected } },
-        )
+        awaitSegmentState("重连耗尽", budgetMs = 15_000) { it is ConnectionState.Disconnected }
 
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat.connect()
-        awaitConnected()
+        awaitSegmentState("恢复重连", budgetMs = 10_000) { it is ConnectionState.Connected }
     }
 
     /** M3 Branding 四件套收口：offlineText 在 disconnected 终态（耗尽/握手失败）追加系统提示行。 */
