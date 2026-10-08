@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 登录（管理端）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/admin.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  body.admin { display: grid; place-items: center; min-height: 100vh; }
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 22px; width: 380px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .mark { width: 40px; height: 40px; border-radius: 10px; background: var(--color-primary); color: var(--color-on-primary); display: grid; place-items: center; font-weight: 700; font-size: 19px; }
+  .brand .word { font-size: 21px; font-weight: 700; letter-spacing: 0.01em; }
+
+  .login-card { width: 100%; padding: 28px 26px 24px; }
+  .lc-title { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+  .lc-sub { font-size: 13px; color: var(--color-text-2); margin: 0 0 20px; }
+
+  .f-lb { display: block; font-size: 13px; font-weight: 500; margin: 14px 0 6px; }
+  .f-in { width: 100%; padding: 9px 12px; font-size: 14px; color: var(--color-text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-control); outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
+  .f-in:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+  .f-row { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 18px; font-size: 13px; }
+  .f-row a { color: var(--color-primary); text-decoration: none; }
+  .f-row label { display: flex; align-items: center; gap: 7px; color: var(--color-text-2); }
+  .submit { width: 100%; justify-content: center; padding: 10px 14px; font-size: 14px; }
+
+  .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px; font-size: 12px; color: var(--color-text-2); }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+  .sso { width: 100%; justify-content: center; padding: 10px 14px; font-size: 14px; }
+  .foot { font-size: 12px; color: var(--color-text-2); }
+</style>
+</head>
+<body class="admin">
+<div class="wrap">
+  <div class="brand"><span class="mark">S</span><span class="word">Servify</span></div>
+  <section class="card login-card" aria-label="登录">
+    <h1 class="lc-title">登录管理后台</h1>
+    <p class="lc-sub">客服运营平台 · 使用工作账号登录</p>
+
+    <label class="f-lb" for="acc">账号</label>
+    <input class="f-in" id="acc" type="text" placeholder="工号 / 邮箱" value="liqing">
+
+    <label class="f-lb" for="pwd">密码</label>
+    <input class="f-in" id="pwd" type="password" placeholder="••••••••" value="password123">
+
+    <div class="f-row">
+      <label><input type="checkbox" checked>记住此设备</label>
+      <a href="#">忘记密码？</a>
+    </div>
+
+    <button class="btn pri submit">登 录</button>
+
+    <div class="divider">或</div>
+    <button class="btn ghost sso">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      使用企业 SSO（OIDC）登录
+    </button>
+  </section>
+  <span class="foot">登录即代表同意服务条款与隐私政策</span>
+</div>
+</body>
+</html>

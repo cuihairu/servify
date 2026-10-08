@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 仪表板（管理端）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/admin.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  .grid-kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+  .grid-2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; align-items: start; }
+
+  /* 纯色柱状图（零渐变）：主色柱 + surface 底柱 */
+  .chart { display: flex; align-items: flex-end; gap: 14px; height: 180px; padding: 6px 16px 0; }
+  .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; }
+  .col .bar { width: 100%; max-width: 46px; border-radius: 6px 6px 0 0; background: var(--color-primary-soft); position: relative; }
+  .col .bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px 6px 0 0; background: var(--color-primary); }
+  .col .lb { font-size: 11px; color: var(--color-text-2); }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--color-text-2); padding: 12px 16px 14px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  .feed { padding: 4px 0; }
+  .feed-it { display: flex; gap: 10px; padding: 10px 16px; font-size: 13px; }
+  .feed-it .tm { margin-left: auto; flex: none; font-size: 12px; color: var(--color-text-2); }
+  .feed-it .tx b { font-weight: 600; }
+  .feed-it .tx .muted { font-size: 12px; }
+  .ic { width: 30px; height: 30px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--color-primary-soft); color: var(--color-primary); }
+  .ic svg { width: 15px; height: 15px; }
+</style>
+</head>
+<body class="admin">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-ws" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5 8-5s6.5 1 8 5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-3.5 4-4.5 7-4.5s6 1 7 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 15.5c2.5 0 4.5 1.5 5 4.5"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/></symbol>
+</svg>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><span class="mark">S</span><span class="word">Servify</span></div>
+    <nav class="side-nav">
+      <a class="side-item on" href="#"><svg><use href="#i-dash"/></svg>仪表板</a>
+      <a class="side-item" href="#"><svg><use href="#i-ticket"/></svg>工单管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-msg"/></svg>会话管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-ws"/></svg>接待工作台</a>
+      <a class="side-item" href="#"><svg><use href="#i-user"/></svg>客户管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-team"/></svg>客服管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-swap"/></svg>路由管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-book"/></svg>知识库</a>
+      <a class="side-item" href="#"><svg><use href="#i-bot"/></svg>AI 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-bolt"/></svg>自动化</a>
+      <a class="side-item" href="#"><svg><use href="#i-shield"/></svg>SLA 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-clock"/></svg>班次管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-gear"/></svg>系统设置</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="crumb">概览 <b>仪表板</b></span>
+      <span class="top-search"><svg width="14" height="14"><use href="#i-search"/></svg>搜索会话 / 工单 / 客户</span>
+      <button class="top-act" aria-label="通知"><svg width="17" height="17"><use href="#i-bell"/></svg><span class="pin"></span></button>
+      <span class="who"><span class="ava">李</span>李晴 · 管理员</span>
+    </header>
+
+    <main class="content">
+      <h1 class="page-title">运营概览</h1>
+      <p class="page-sub">最近 7 天 · 数据每 5 分钟刷新</p>
+
+      <div class="grid-kpi">
+        <section class="card stat"><span class="k">今日会话</span><span class="v">128</span><span class="d"><b>+12%</b> 较昨日</span></section>
+        <section class="card stat"><span class="k">AI 首答解决率</span><span class="v">63%</span><span class="d"><b>+4pt</b> 较上周</span></section>
+        <section class="card stat"><span class="k">平均首响</span><span class="v">48s</span><span class="d"><b>-15s</b> 较上周</span></section>
+        <section class="card stat"><span class="k">满意度 CSAT</span><span class="v">4.6</span><span class="d">共 86 次评价</span></section>
+      </div>
+
+      <div class="grid-2">
+        <section class="card">
+          <div class="card-h"><b>会话量趋势</b><span class="r"><button class="btn ghost sm">近 7 天</button></span></div>
+          <div class="chart" role="img" aria-label="近 7 天会话量柱状图，AI 解决与人工接管两段">
+            <div class="col"><div class="bar" style="height:82%"><i style="height:56%"></i></div><span class="lb">10-02</span></div>
+            <div class="col"><div class="bar" style="height:64%"><i style="height:61%"></i></div><span class="lb">10-03</span></div>
+            <div class="col"><div class="bar" style="height:91%"><i style="height:58%"></i></div><span class="lb">10-04</span></div>
+            <div class="col"><div class="bar" style="height:47%"><i style="height:66%"></i></div><span class="lb">10-05</span></div>
+            <div class="col"><div class="bar" style="height:73%"><i style="height:60%"></i></div><span class="lb">10-06</span></div>
+            <div class="col"><div class="bar" style="height:58%"><i style="height:64%"></i></div><span class="lb">10-07</span></div>
+            <div class="col"><div class="bar" style="height:88%"><i style="height:63%"></i></div><span class="lb">今天</span></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--color-primary)"></i>AI 首答解决</span>
+            <span><i style="background:var(--color-primary-soft)"></i>转人工会话</span>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-h"><b>最新动态</b><span class="r"><button class="btn ghost sm">全部</button></span></div>
+          <div class="feed">
+            <div class="feed-it">
+              <span class="ic"><svg><use href="#i-ws"/></svg></span>
+              <span class="tx"><b>访客 8241</b> 请求转人工，已由 李晴 接管<br><span class="muted">会话 #s_7f2a · 质量问题退换</span></span>
+              <span class="tm">14:34</span>
+            </div>
+            <div class="feed-it">
+              <span class="ic"><svg><use href="#i-ticket"/></svg></span>
+              <span class="tx">工单 <b>#T-1031</b> 升级为 high 优先级<br><span class="muted">SLA 剩余 3h20m</span></span>
+              <span class="tm">14:31</span>
+            </div>
+            <div class="feed-it">
+              <span class="ic"><svg><use href="#i-book"/></svg></span>
+              <span class="tx">知识库 <b>退款政策 v3</b> 完成重新索引<br><span class="muted">12 个片段 · 命中率 +2%</span></span>
+              <span class="tm">13:50</span>
+            </div>
+            <div class="feed-it">
+              <span class="ic"><svg><use href="#i-bot"/></svg></span>
+              <span class="tx">AI 首答 <b>开票流程</b> 命中 9 次<br><span class="muted">0 次点踩</span></span>
+              <span class="tm">13:12</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

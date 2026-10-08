@@ -1,0 +1,112 @@
+/* Servify UI 原型 v1 — 设计 token（三层：primitive → semantic → component）
+ * 来源：ui-ux-pro-max 生成器对标（Flat Design / Inbox blue / Inter）
+ *      × Crisp livechat 交互基准（悬浮球多态/展开动画/窗体层级）
+ *      × 约束：纯色 header 零渐变、正文对比度 ≥4.5:1、圆角语言沿用现有
+ *        widget token（panel 16 / bubble 12 / input 20）、亮暗双版。
+ * 原型层仅用 var(--*)，不写裸色值（组件层除外：阴影/焦点环引用 semantic）。
+ */
+
+:root {
+  /* ---- primitive ---- */
+  --ref-blue-600: #2563eb;
+  --ref-blue-500: #3b82f6;
+  --ref-blue-700: #1d4ed8;
+  --ref-blue-50: #eff6ff;
+  --ref-red-600: #dc2626;
+  --ref-green-600: #16a34a;
+  --ref-amber-600: #d97706;
+  --ref-slate-900: #0f172a;
+  --ref-slate-700: #334155;
+  --ref-slate-500: #64748b;
+  --ref-slate-200: #e2e8f0;
+  --ref-slate-100: #f1f5f9;
+  --ref-white: #ffffff;
+  --ref-night-950: #0b1120;
+  --ref-night-900: #111a2c;
+  --ref-night-800: #1a2540;
+  --ref-night-text: #e6edf7;
+  --ref-night-text-2: #94a3b8;
+
+  /* ---- semantic（light） ---- */
+  --color-primary: var(--ref-blue-600);
+  --color-primary-hover: var(--ref-blue-700);
+  --color-on-primary: var(--ref-white);
+  --color-primary-soft: var(--ref-blue-50);
+  --color-danger: var(--ref-red-600);
+  --color-success: var(--ref-green-600);
+  --color-warning: var(--ref-amber-600);
+  --color-bg: var(--ref-white);
+  --color-surface: var(--ref-slate-100);
+  --color-card: var(--ref-white);
+  --color-text: var(--ref-slate-900);
+  --color-text-2: var(--ref-slate-500);
+  --color-border: var(--ref-slate-200);
+  --color-border-strong: #cbd5e1;
+
+  /* ---- component（light） ---- */
+  --panel-bg: var(--ref-white);
+  --panel-shadow: 0 12px 40px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.08);
+  --card-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --bubble-self-bg: var(--color-primary);
+  --bubble-self-text: var(--ref-white);
+  --bubble-agent-bg: #f1f5f9;
+  --bubble-agent-text: var(--ref-slate-900);
+  --header-bg: var(--color-primary); /* 纯色，零渐变（用户红线） */
+  --header-text: var(--ref-white);
+  --input-bg: #f8fafc;
+  --input-border: var(--ref-slate-200);
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.28);
+  --radius-panel: 16px;
+  --radius-bubble: 12px;
+  --radius-input: 20px;
+  --radius-control: 8px;
+  --font-ui: "Inter", -apple-system, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
+/* ---- semantic / component（dark） ---- */
+[data-theme="dark"] {
+  --color-primary: var(--ref-blue-500);
+  --color-primary-hover: #60a5fa;
+  --color-on-primary: #0b1120;
+  --color-primary-soft: rgba(59, 130, 246, 0.14);
+  --color-bg: var(--ref-night-950);
+  --color-surface: #0e1626;
+  --color-card: var(--ref-night-900);
+  --color-text: var(--ref-night-text);
+  --color-text-2: var(--ref-night-text-2);
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+
+  --panel-bg: var(--ref-night-900);
+  --panel-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --bubble-self-bg: var(--ref-blue-500);
+  --bubble-self-text: #0b1120;
+  --bubble-agent-bg: var(--ref-night-800);
+  --bubble-agent-text: var(--ref-night-text);
+  --header-bg: #16233f; /* 暗版纯色 header：比主色沉一档，保 4.5:1 */
+  --header-text: var(--ref-night-text);
+  --input-bg: #0e1626;
+  --input-border: rgba(255, 255, 255, 0.12);
+  --focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.35);
+}
+
+/* ---- 基础排版 ---- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  font-size: 16px;          /* 基准字号（skill 规则：base 16px） */
+  line-height: 1.5;         /* 行高 1.5 */
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; cursor: pointer; }
+input, textarea { font-family: inherit; }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

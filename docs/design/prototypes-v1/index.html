@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Servify 界面原型 v1 · 设计说明</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<style>
+  body { max-width: 960px; margin: 0 auto; padding: 48px 32px 80px; background: var(--color-bg); }
+  header.top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .mark { width: 34px; height: 34px; border-radius: 9px; background: var(--color-primary); color: var(--color-on-primary); display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .ver { font-size: 12px; color: var(--color-text-2); margin: 0 0 28px; }
+  h2 { font-size: 16px; font-weight: 700; margin: 34px 0 12px; padding-top: 18px; border-top: 1px solid var(--color-border); }
+  p, li { font-size: 14px; line-height: 1.7; color: var(--color-text); }
+  .muted { color: var(--color-text-2); }
+  ul, ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 3px 0; }
+  code { font-size: 12.5px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 5px; padding: 1px 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+  th { text-align: left; font-weight: 500; color: var(--color-text-2); font-size: 12px; padding: 8px 12px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+
+  .swatches { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+  .sw { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--color-text-2); }
+  .sw i { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--color-border); display: inline-block; }
+
+  .screens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
+  .scr { border: 1px solid var(--color-border); border-radius: 10px; padding: 13px 15px; background: var(--color-card); text-decoration: none; transition: border-color 150ms ease; }
+  .scr:hover { border-color: var(--color-primary); }
+  .scr b { display: block; font-size: 13.5px; margin-bottom: 3px; color: var(--color-text); }
+  .scr span { font-size: 12px; color: var(--color-text-2); line-height: 1.5; display: block; }
+  .scr .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-primary); margin-bottom: 7px; }
+
+  .rule { border-left: 3px solid var(--color-danger); padding: 10px 14px; background: rgba(220, 38, 38, 0.06); border-radius: 0 8px 8px 0; font-size: 13.5px; margin: 12px 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="mark">S</span>
+  <h1>Servify 界面原型 v1</h1>
+</header>
+<p class="ver">2026-10-08 · 原型仅供审核，不含实现代码 · 亮暗双版：<code>?theme=dark</code> 或页内切换</p>
+
+<h2>风格结论（从参考例提炼）</h2>
+<p>参考 Crisp 的客服产品体验与交互模式（仅提炼模式，不抄代码与资产），结合设计系统方法生成器多轮对标，收敛为：</p>
+<ul>
+  <li><b>Flat Design + 一层卡片阴影</b>：无重质感、无拟物；层级靠阴影与描边表达，不靠装饰。</li>
+  <li><b>Inbox blue 主色</b>：light <code>#2563eb</code> / dark <code>#3b82f6</code>（暗版提档保 4.5:1 对比度），专业的信任感蓝，同行业客服 SaaS 主流色相。</li>
+  <li><b>Inter 字体栈</b>：数字 tabular-nums；中文回退 PingFang SC / Microsoft YaHei / Noto Sans SC。</li>
+  <li><b>圆角语言</b>：沿用现有 widget token——面板 16 / 气泡 12 / 输入 20（胶囊）/ 控件 8。</li>
+</ul>
+<div class="rule"><b>红线：零渐变。</b>全站（含 header、按钮、悬浮球、图表）只用纯色；亮度分层代替渐变分层。所有原型已按此约束产出，<code>examples/theme.json</code> 中的 <code>headerBg: linear-gradient(...)</code> 为历史遗留，实现阶段一并去除。</div>
+
+<h2>Design tokens（三层结构，组件层禁裸色值）</h2>
+<p class="muted">primitive（色板）→ semantic（bg / text / border / primary / bubble…）→ component（panel / header / chip…）。亮暗切换只换 semantic 层（<code>[data-theme="dark"]</code>），组件样式零改动；客户品牌注入只需覆盖 5 个语义 token（见嵌入演示页）。</p>
+<table>
+  <tr><th>token</th><th>light</th><th>dark</th><th>用途</th></tr>
+  <tr><td><code>--color-primary</code></td><td><span style="display:inline-flex;align-items:center;gap:6px"><i style="width:14px;height:14px;border-radius:4px;background:#2563eb;display:inline-block"></i>#2563eb</span></td><td><span style="display:inline-flex;align-items:center;gap:6px"><i style="width:14px;height:14px;border-radius:4px;background:#3b82f6;display:inline-block"></i>#3b82f6</span></td><td>主操作 / 链接 / 悬浮球</td></tr>
+  <tr><td><code>--color-bg</code> / <code>--color-card</code></td><td>#f8fafc / #ffffff</td><td>#0b1120 / #111a2c</td><td>页面底 / 卡片</td></tr>
+  <tr><td><code>--header-bg</code></td><td>= primary（纯色）</td><td>#16233f（比主色沉一档）</td><td>聊天窗 / 移动 sheet header</td></tr>
+  <tr><td><code>--bubble-self-bg</code></td><td>= primary</td><td>= primary + 深字 #0b1120</td><td>访客气泡</td></tr>
+  <tr><td><code>--color-text</code> / <code>-2</code></td><td>#0f172a / #64748b</td><td>#e2e8f0 / #94a3b8</td><td>主文 / 次文</td></tr>
+  <tr><td><code>--radius-panel / -bubble / -input</code></td><td colspan="2">16 / 12 / 20（控件 8，沿用 <code>--sw-*</code> 现值）</td><td>圆角语言</td></tr>
+</table>
+<div class="swatches">
+  <span class="sw"><i style="background:#2563eb"></i>primary-600</span>
+  <span class="sw"><i style="background:#3b82f6"></i>primary-500</span>
+  <span class="sw"><i style="background:#0f766e"></i>示例品牌 teal（浅）</span>
+  <span class="sw"><i style="background:#14b8a6"></i>示例品牌 teal（暗提档）</span>
+  <span class="sw"><i style="background:#16a34a"></i>success</span>
+  <span class="sw"><i style="background:#d97706"></i>warning</span>
+  <span class="sw"><i style="background:#dc2626"></i>danger</span>
+</div>
+
+<h2>从参考例借鉴的交互模式（原型已落位）</h2>
+<ol>
+  <li><b>悬浮球多态</b>：收起 / 未读徽标 / 展开（240ms spring，自右下角 scale+fade）→ <i>widget-fab</i></li>
+  <li><b>日期分隔行 + 已读回执（双勾）</b> → <i>widget-chat</i></li>
+  <li><b>AI 首答带「AI 徽标 + 知识库来源引用（citation chip）」</b> → <i>widget-chat / embed-*</i></li>
+  <li><b>快捷回复 chips + 转人工入口常驻</b> → 全部聊天屏</li>
+  <li><b>AI → 人工无缝转接</b>：系统行「已为您转接人工 · 李晴」，坐席头像切换 → 全部聊天屏</li>
+  <li><b>移动端底部 sheet + 把手 + 安全区</b> → <i>widget-mobile / embed-light 右侧变体</i></li>
+  <li><b>品牌色注入</b>：客户站覆盖 5 个语义 token 即整体换肤（青屿云 teal 演示，暗版自动提档）→ <i>embed-light / embed-dark</i></li>
+  <li><b>暗色自适应</b>：跟随系统 + 远程主题强制档 → 全部屏</li>
+</ol>
+
+<h2>屏索引（9 屏 · 每屏亮暗双版）</h2>
+<div class="screens">
+  <a class="scr" href="screens/widget-chat.html"><span class="tag">widget</span><b>聊天窗 · 桌面</b><span>380×620 旗舰屏：欢迎语 / AI 首答+引用 / 转人工 / typing / chips / 输入区</span></a>
+  <a class="scr" href="screens/widget-fab.html"><span class="tag">widget</span><b>悬浮球三态</b><span>收起 / 未读徽标 / 展开过渡（spring 240ms）</span></a>
+  <a class="scr" href="screens/widget-mobile.html"><span class="tag">widget</span><b>聊天窗 · 移动端</b><span>375 底部 sheet：把手 / 安全区 / chips 横滚</span></a>
+  <a class="scr" href="screens/admin-login.html"><span class="tag">admin</span><b>登录</b><span>账号密码 + OIDC 企业 SSO</span></a>
+  <a class="scr" href="screens/admin-dashboard.html"><span class="tag">admin</span><b>仪表板</b><span>4 指标卡 + 纯色堆叠柱图 + 最新动态流</span></a>
+  <a class="scr" href="screens/admin-workspace.html"><span class="tag">admin</span><b>接待工作台</b><span>三栏：等待队列 / 会话接管 / 客户上下文 + 宏</span></a>
+  <a class="scr" href="screens/admin-tickets.html"><span class="tag">admin</span><b>工单列表</b><span>状态 tab / 筛选 / 表格 / 分页（徽标六态）</span></a>
+  <a class="scr" href="screens/admin-knowledge.html"><span class="tag">admin</span><b>知识库</b><span>文档 / 片段命中 / 索引状态（AI 首答的来源面）</span></a>
+  <a class="scr" href="screens/embed-light.html"><span class="tag">embed</span><b>嵌入演示 · 浅色站</b><span>青屿云 teal 注入：桌面 980 + 375 变体同页</span></a>
+  <a class="scr" href="screens/embed-dark.html"><span class="tag">embed</span><b>嵌入演示 · 暗色站</b><span>暗版品牌提档（teal-500 保对比度）</span></a>
+</div>
+<p class="muted">截图在 <code>screenshots/</code>（亮暗 × 视口矩阵）。管理端信息架构对齐现有路由 23 项菜单，原型为其中 5 个代表屏。</p>
+
+<h2>待审核确认点</h2>
+<ol>
+  <li><b>主色</b>：Inbox blue（light #2563eb / dark #3b82f6）是否符合预期？</li>
+  <li><b>暗版 header 策略</b>：暗版 header 不用主色、改用「比主色沉一档」的深色（#16233f），避免大面积高饱和；是否接受？</li>
+  <li><b>AI 首答样式</b>：AI 徽标 + 引用 chip 的呈现方式与密度是否合适？</li>
+  <li><b>品牌注入范围</b>：只开放 5 个语义 token（primary 系 + header + 气泡）够不够？</li>
+  <li><b>管理端风格</b>：Flat + Inbox blue 是否同样适用于管理端（与 Ant Design Pro 现状差异较大，属重设计）？</li>
+</ol>
+</body>
+</html>

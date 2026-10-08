@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 工单管理（管理端）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/admin.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .page-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .page-head .r { margin-left: auto; display: flex; gap: 8px; }
+  .table td .t-id { font-weight: 600; }
+  .table td .t-sub { font-size: 12px; color: var(--color-text-2); margin-top: 2px; }
+  .pager { display: flex; align-items: center; gap: 6px; padding: 12px 16px; font-size: 13px; color: var(--color-text-2); }
+  .pg { min-width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-control); border: 1px solid var(--color-border); background: var(--panel-bg); font-size: 12.5px; }
+  .pg.on { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+  .pager .n { margin-left: auto; }
+  .fl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--panel-bg); color: var(--color-text-2); }
+  .fl b { color: var(--color-text); font-weight: 500; }
+</style>
+</head>
+<body class="admin">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-ws" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5 8-5s6.5 1 8 5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-3.5 4-4.5 7-4.5s6 1 7 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 15.5c2.5 0 4.5 1.5 5 4.5"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+</svg>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><span class="mark">S</span><span class="word">Servify</span></div>
+    <nav class="side-nav">
+      <a class="side-item" href="#"><svg><use href="#i-dash"/></svg>仪表板</a>
+      <a class="side-item on" href="#"><svg><use href="#i-ticket"/></svg>工单管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-msg"/></svg>会话管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-ws"/></svg>接待工作台</a>
+      <a class="side-item" href="#"><svg><use href="#i-user"/></svg>客户管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-team"/></svg>客服管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-swap"/></svg>路由管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-book"/></svg>知识库</a>
+      <a class="side-item" href="#"><svg><use href="#i-bot"/></svg>AI 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-bolt"/></svg>自动化</a>
+      <a class="side-item" href="#"><svg><use href="#i-shield"/></svg>SLA 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-clock"/></svg>班次管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-gear"/></svg>系统设置</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="crumb">工单 <b>列表</b></span>
+      <span class="top-search"><svg width="14" height="14"><use href="#i-search"/></svg>搜索工单 / 客户 / 会话</span>
+      <button class="top-act" aria-label="通知"><svg width="17" height="17"><use href="#i-bell"/></svg><span class="pin"></span></button>
+      <span class="who"><span class="ava">李</span>李晴 · 坐席</span>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">工单</h1>
+          <p class="page-sub" style="margin-bottom:0">全部渠道工单 · 42 条</p>
+        </div>
+        <span class="r">
+          <button class="btn ghost"><svg><use href="#i-down"/></svg>导出</button>
+          <button class="btn pri"><svg><use href="#i-plus"/></svg>新建工单</button>
+        </span>
+      </div>
+
+      <div class="toolbar">
+        <span class="search" style="min-width:260px"><svg width="14" height="14"><use href="#i-search"/></svg>按标题 / 订单号 / 访客 ID 搜索</span>
+        <button class="fl">状态 <b>全部</b><svg width="12" height="12"><use href="#i-down"/></svg></button>
+        <button class="fl">优先级 <b>全部</b><svg width="12" height="12"><use href="#i-down"/></svg></button>
+        <button class="fl">受理人 <b>全部</b><svg width="12" height="12"><use href="#i-down"/></svg></button>
+      </div>
+
+      <section class="card">
+        <div class="tabs" style="padding:0 16px">
+          <button class="tab on">全部 42</button>
+          <button class="tab">待处理 12</button>
+          <button class="tab">处理中 18</button>
+          <button class="tab">已解决 10</button>
+          <button class="tab">已关闭 2</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr><th>工单</th><th>客户</th><th>优先级</th><th>状态</th><th>受理人</th><th>更新时间</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="t-id">#T-1031 · 退款未到账催办</div><div class="t-sub">来自会话 #s_7f2a · 质量问题退换</div></td>
+              <td>访客 8241</td>
+              <td><span class="badge b-high">high</span></td>
+              <td><span class="badge b-assigned">处理中</span></td>
+              <td>李晴</td>
+              <td class="mono muted">14:35</td>
+            </tr>
+            <tr>
+              <td><div class="t-id">#T-1029 · 发票抬头修改</div><div class="t-sub">来自会话 #s_5c02 · 开票咨询</div></td>
+              <td>访客 8102</td>
+              <td><span class="badge b-low">low</span></td>
+              <td><span class="badge b-resolved">已解决</span></td>
+              <td>王远</td>
+              <td class="mono muted">13:02</td>
+            </tr>
+            <tr>
+              <td><div class="t-id">#T-1028 · 登录提示密码错误</div><div class="t-sub">来自会话 #s_8236 · 账号问题</div></td>
+              <td>访客 8236</td>
+              <td><span class="badge b-mid">mid</span></td>
+              <td><span class="badge b-open">待处理</span></td>
+              <td class="muted">—</td>
+              <td class="mono muted">12:47</td>
+            </tr>
+            <tr>
+              <td><div class="t-id">#T-1024 · 质量问题退换申请</div><div class="t-sub">来自会话 #s_7f2a · 退款政策</div></td>
+              <td>访客 8241</td>
+              <td><span class="badge b-high">high</span></td>
+              <td><span class="badge b-assigned">处理中</span></td>
+              <td>李晴</td>
+              <td class="mono muted">11:20</td>
+            </tr>
+            <tr>
+              <td><div class="t-id">#T-1019 · 物流时效咨询</div><div class="t-sub">来自会话 #s_6d91 · 配送</div></td>
+              <td>访客 8099</td>
+              <td><span class="badge b-low">low</span></td>
+              <td><span class="badge b-resolved">已解决</span></td>
+              <td>AI 首答解决</td>
+              <td class="mono muted">10-07</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pager">
+          <span>第 1 / 9 页</span>
+          <span style="margin-left:auto"></span>
+          <button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">…</button><button class="pg">9</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

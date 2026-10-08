@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 接待工作台（管理端）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/admin.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  .ws { display: grid; grid-template-columns: 250px 1fr 280px; gap: 14px; height: calc(100vh - 52px - 40px); }
+
+  /* 左栏：转人工等待队列（GET /api/session-transfer/waiting） */
+  .queue { display: flex; flex-direction: column; min-height: 0; }
+  .q-list { overflow-y: auto; padding: 8px; }
+  .q-item { display: flex; gap: 10px; padding: 10px; border-radius: 10px; border: 1px solid transparent; transition: background 150ms ease; }
+  .q-item:hover { background: var(--color-surface); }
+  .q-item.on { background: var(--color-primary-soft); border-color: var(--color-primary); }
+  .q-info { flex: 1; min-width: 0; }
+  .q-name { font-size: 13px; font-weight: 600; }
+  .q-msg { font-size: 12px; color: var(--color-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .q-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+  .q-wait { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--color-warning); }
+  .q-wait.hot { color: var(--color-danger); }
+
+  /* 中栏：会话区 */
+  .conv { display: flex; flex-direction: column; min-height: 0; }
+  .conv-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+  .conv-head .t { font-size: 14px; font-weight: 600; }
+  .conv-head .src { font-size: 12px; color: var(--color-text-2); }
+  .conv-head .r { margin-left: auto; display: flex; gap: 8px; }
+  .msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--color-surface); }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row.self { justify-content: flex-end; }
+  .ava2 { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+  .bubble { max-width: 68%; padding: 9px 12px; border-radius: var(--radius-bubble); font-size: 13.5px; line-height: 1.55; background: var(--bubble-agent-bg); color: var(--bubble-agent-text); border-bottom-left-radius: 4px; }
+  .row.self .bubble { background: var(--bubble-self-bg); color: var(--bubble-self-text); border-bottom-left-radius: var(--radius-bubble); border-bottom-right-radius: 4px; }
+  .meta { font-size: 11px; color: var(--color-text-2); margin-top: 3px; }
+  .row.self .meta { text-align: right; }
+  .sysline { display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 12px; color: var(--color-text-2); }
+  .sysline::before, .sysline::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+  .composer { border-top: 1px solid var(--color-border); padding: 10px 14px; background: var(--panel-bg); }
+  .macros { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .macro { font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--color-border); color: var(--color-text-2); background: var(--panel-bg); }
+  .macro:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .c-row { display: flex; gap: 8px; align-items: flex-end; }
+  .c-field { flex: 1; border: 1px solid var(--input-border); border-radius: 10px; background: var(--input-bg); padding: 8px 12px; }
+  .c-field textarea { width: 100%; border: 0; background: transparent; resize: none; font-size: 13px; color: var(--color-text); outline: none; height: 40px; }
+  .c-hint { font-size: 11px; color: var(--color-text-2); margin-top: 6px; display: flex; justify-content: space-between; }
+
+  /* 右栏：客户上下文 */
+  .ctx { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .kv { display: grid; grid-template-columns: 76px 1fr; gap: 6px 10px; padding: 12px 16px; font-size: 13px; }
+  .kv dt { color: var(--color-text-2); margin: 0; }
+  .kv dd { margin: 0; font-weight: 500; }
+  .mini-li { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12.5px; color: var(--color-text-2); }
+  .mini-li b { color: var(--color-text); font-weight: 500; flex: 1; }
+</style>
+</head>
+<body class="admin">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-ws" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5 8-5s6.5 1 8 5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-3.5 4-4.5 7-4.5s6 1 7 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 15.5c2.5 0 4.5 1.5 5 4.5"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-headset" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-board" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 2h6v4H9z"/><path d="M9 11h6M9 15h4"/></symbol>
+</svg>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><span class="mark">S</span><span class="word">Servify</span></div>
+    <nav class="side-nav">
+      <a class="side-item" href="#"><svg><use href="#i-dash"/></svg>仪表板</a>
+      <a class="side-item" href="#"><svg><use href="#i-ticket"/></svg>工单管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-msg"/></svg>会话管理</a>
+      <a class="side-item on" href="#"><svg><use href="#i-ws"/></svg>接待工作台</a>
+      <a class="side-item" href="#"><svg><use href="#i-user"/></svg>客户管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-team"/></svg>客服管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-swap"/></svg>路由管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-book"/></svg>知识库</a>
+      <a class="side-item" href="#"><svg><use href="#i-bot"/></svg>AI 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-bolt"/></svg>自动化</a>
+      <a class="side-item" href="#"><svg><use href="#i-shield"/></svg>SLA 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-clock"/></svg>班次管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-headset"/></svg>语音管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-board"/></svg>质检抽检</a>
+      <a class="side-item" href="#"><svg><use href="#i-search"/></svg>审计日志</a>
+      <a class="side-item" href="#"><svg><use href="#i-gear"/></svg>系统设置</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="crumb">接待 <b>工作台</b></span>
+      <span class="top-search"><svg width="14" height="14"><use href="#i-search"/></svg>搜索会话 / 工单 / 客户</span>
+      <button class="top-act" aria-label="通知"><svg width="17" height="17"><use href="#i-bell"/></svg><span class="pin"></span></button>
+      <span class="who"><span class="ava">李</span>李晴 · 坐席</span>
+    </header>
+
+    <main class="content">
+      <div class="ws">
+        <!-- 左：等待队列 -->
+        <section class="card queue" aria-label="转人工等待队列">
+          <div class="card-h"><b>等待队列</b><span class="r"><span class="badge b-high">3 人等待</span></span></div>
+          <div class="q-list">
+            <div class="q-item on">
+              <span class="ava2" style="background:var(--color-primary-soft);color:var(--color-primary)">访</span>
+              <div class="q-info">
+                <div class="q-name">访客 8241 <span class="muted">· web</span></div>
+                <div class="q-msg">退款政策之后还想看下发票怎么开…</div>
+              </div>
+              <div class="q-meta"><span class="q-wait hot"><svg width="11" height="11"><use href="#i-clock"/></svg>2m10s</span></div>
+            </div>
+            <div class="q-item">
+              <span class="ava2" style="background:rgba(217,119,6,.12);color:var(--color-warning)">访</span>
+              <div class="q-info">
+                <div class="q-name">访客 8239 <span class="muted">· web</span></div>
+                <div class="q-msg">AI 答了但我想确认物流时效</div>
+              </div>
+              <div class="q-meta"><span class="q-wait"><svg width="11" height="11"><use href="#i-clock"/></svg>0m48s</span></div>
+            </div>
+            <div class="q-item">
+              <span class="ava2" style="background:rgba(22,163,74,.12);color:var(--color-success)">访</span>
+              <div class="q-info">
+                <div class="q-name">访客 8236 <span class="muted">· web</span></div>
+                <div class="q-msg">账号登不上，提示密码错误</div>
+              </div>
+              <div class="q-meta"><span class="q-wait"><svg width="11" height="11"><use href="#i-clock"/></svg>0m12s</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 中：会话区 -->
+        <section class="card conv" aria-label="当前会话">
+          <div class="conv-head">
+            <span class="t">访客 8241</span>
+            <span class="src">来源页 /pricing · 会话 #s_7f2a</span>
+            <span class="r">
+              <button class="btn ghost sm"><svg><use href="#i-swap"/></svg>转派</button>
+              <button class="btn ghost sm"><svg><use href="#i-ticket"/></svg>建工单</button>
+              <button class="btn pri sm"><svg><use href="#i-check"/></svg>结束会话</button>
+            </span>
+          </div>
+          <div class="msgs">
+            <div class="sysline">AI 首答解决未果 · 访客请求转人工</div>
+            <div class="row">
+              <span class="ava2" style="background:var(--color-primary-soft);color:var(--color-primary)">访</span>
+              <div><div class="bubble">你们的退款政策是怎么样的？购买后 7 天内可以退吗？</div><div class="meta">14:32</div></div>
+            </div>
+            <div class="row">
+              <span class="ava2" style="background:var(--color-surface);color:var(--color-text-2)"><svg width="14" height="14"><use href="#i-bot"/></svg></span>
+              <div><div class="bubble">自签收起 7 天内，未拆封且不影响二次销售，可自助提交退款，1–3 个工作日原路退回。<br><span class="cite" style="display:inline-flex;gap:4px;margin-top:6px;padding:3px 8px;font-size:11px;border:1px solid var(--color-border);border-radius:6px">来源：帮助中心 · 退款政策 v3</span></div><div class="meta">AI 首答 · 14:32</div></div>
+            </div>
+            <div class="row">
+              <span class="ava2" style="background:var(--color-primary-soft);color:var(--color-primary)">访</span>
+              <div><div class="bubble">我这个已经拆封了，但是有质量问题…</div><div class="meta">14:33</div></div>
+            </div>
+            <div class="sysline">已转接人工 · 李晴 接管</div>
+            <div class="row self">
+              <div><div class="bubble">您好，质量问题不受 7 天拆封限制，可以走质保退换。麻烦发我订单号和问题照片～</div><div class="meta">坐席 · 李晴 · 14:34</div></div>
+              <span class="ava2" style="background:rgba(217,119,6,.12);color:var(--color-warning)">李</span>
+            </div>
+            <div class="row">
+              <span class="ava2" style="background:var(--color-primary-soft);color:var(--color-primary)">访</span>
+              <div><div class="bubble">订单号 SO-20261008-3341，照片稍等发您</div><div class="meta">14:35</div></div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="macros">
+              <button class="macro">常见问题引导</button>
+              <button class="macro">请提供订单号</button>
+              <button class="macro">物流时效说明</button>
+              <button class="macro">结束语+满意度</button>
+            </div>
+            <div class="c-row">
+              <label class="c-field"><textarea placeholder="回复访客…（Enter 发送，Shift+Enter 换行）" aria-label="回复输入"></textarea></label>
+              <button class="icon-btn" aria-label="添加附件" style="display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:var(--color-text-2)"><svg width="17" height="17"><use href="#i-clip"/></svg></button>
+              <button class="send" aria-label="发送" style="display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:var(--color-primary);color:var(--color-on-primary)"><svg width="16" height="16"><use href="#i-send"/></svg></button>
+            </div>
+            <div class="c-hint"><span>会话 #s_7f2a · 已接管 3m22s</span><span>1 张图片待发送</span></div>
+          </div>
+        </section>
+
+        <!-- 右：客户上下文 -->
+        <aside class="ctx" aria-label="客户上下文">
+          <section class="card">
+            <div class="card-h"><b>客户上下文</b></div>
+            <dl class="kv">
+              <dt>访客</dt><dd>访客 8241（未注册）</dd>
+              <dt>来源</dt><dd>web 嵌入 · /pricing</dd>
+              <dt>会话</dt><dd>#s_7f2a · 6 条消息</dd>
+              <dt>AI 首答</dt><dd>已答 · 未解决</dd>
+            </dl>
+          </section>
+          <section class="card">
+            <div class="card-h"><b>历史会话</b><span class="r"><button class="btn ghost sm">全部</button></span></div>
+            <div class="mini-li"><b>#s_6d91 · 物流时效咨询</b><span>10-06</span></div>
+            <div class="mini-li"><b>#s_5c02 · 发票开具</b><span>09-28</span></div>
+          </section>
+          <section class="card">
+            <div class="card-h"><b>关联工单</b><span class="r"><button class="btn pri sm">+ 新建</button></span></div>
+            <div class="mini-li"><b>#T-1024 · 质量问题退换</b><span class="badge b-assigned">assigned</span></div>
+            <div class="mini-li"><b>#T-0987 · 发票抬头修改</b><span class="badge b-resolved">resolved</span></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

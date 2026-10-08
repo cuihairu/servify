@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 知识库（管理端）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/admin.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .page-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .page-head .r { margin-left: auto; display: flex; gap: 8px; }
+  .idx { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .idx .ok { color: var(--color-success); }
+  .idx .run { color: var(--color-warning); }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-border); border-top-color: var(--color-warning); animation: sp 1s linear infinite; display: inline-block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .hitbar { width: 120px; height: 6px; border-radius: 3px; background: var(--color-surface); overflow: hidden; display: inline-block; vertical-align: middle; }
+  .hitbar i { display: block; height: 100%; background: var(--color-primary); border-radius: 3px; }
+  .src-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-2); border: 1px solid var(--color-border); border-radius: 999px; padding: 2px 9px; background: var(--panel-bg); }
+</style>
+</head>
+<body class="admin">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-ws" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5 8-5s6.5 1 8 5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-3.5 4-4.5 7-4.5s6 1 7 4.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 15.5c2.5 0 4.5 1.5 5 4.5"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></symbol>
+</svg>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><span class="mark">S</span><span class="word">Servify</span></div>
+    <nav class="side-nav">
+      <a class="side-item" href="#"><svg><use href="#i-dash"/></svg>仪表板</a>
+      <a class="side-item" href="#"><svg><use href="#i-ticket"/></svg>工单管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-msg"/></svg>会话管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-ws"/></svg>接待工作台</a>
+      <a class="side-item" href="#"><svg><use href="#i-user"/></svg>客户管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-team"/></svg>客服管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-swap"/></svg>路由管理</a>
+      <a class="side-item on" href="#"><svg><use href="#i-book"/></svg>知识库</a>
+      <a class="side-item" href="#"><svg><use href="#i-bot"/></svg>AI 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-bolt"/></svg>自动化</a>
+      <a class="side-item" href="#"><svg><use href="#i-shield"/></svg>SLA 管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-clock"/></svg>班次管理</a>
+      <a class="side-item" href="#"><svg><use href="#i-gear"/></svg>系统设置</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="crumb">知识库 <b>文档管理</b></span>
+      <span class="top-search"><svg width="14" height="14"><use href="#i-search"/></svg>搜索文档 / 来源</span>
+      <button class="top-act" aria-label="通知"><svg width="17" height="17"><use href="#i-bell"/></svg><span class="pin"></span></button>
+      <span class="who"><span class="ava">李</span>李晴 · 管理员</span>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div>
+          <h1 class="page-title">知识库</h1>
+          <p class="page-sub" style="margin-bottom:0">AI 首答引用的知识来源 · 12 篇文档 · 3 个站点来源</p>
+        </div>
+        <span class="r">
+          <button class="btn ghost"><svg><use href="#i-refresh"/></svg>重建索引</button>
+          <button class="btn pri"><svg><use href="#i-plus"/></svg>新增文档</button>
+        </span>
+      </div>
+
+      <section class="card">
+        <div class="tabs" style="padding:0 16px">
+          <button class="tab on">文档管理 12</button>
+          <button class="tab">来源与索引 3</button>
+          <button class="tab">检索分析</button>
+        </div>
+        <table class="table">
+          <thead>
+            <tr><th>文档</th><th>来源</th><th>片段</th><th>7 天命中</th><th>索引状态</th><th>更新时间</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>退款政策 v3</b><div class="t-sub muted" style="font-size:12px;margin-top:2px">退货窗口 / 质保例外 / 原路退回时效</div></td>
+              <td><span class="src-pill">帮助中心</span></td>
+              <td class="mono">12</td>
+              <td><span class="hitbar"><i style="width:78%"></i></span> <span class="mono muted">38 次</span></td>
+              <td><span class="idx ok">● 已索引</span></td>
+              <td class="mono muted">10-08 13:50</td>
+            </tr>
+            <tr>
+              <td><b>开票流程指引</b><div class="t-sub muted" style="font-size:12px;margin-top:2px">抬头 / 税号 / 电子发票送达</div></td>
+              <td><span class="src-pill">帮助中心</span></td>
+              <td class="mono">8</td>
+              <td><span class="hitbar"><i style="width:52%"></i></span> <span class="mono muted">21 次</span></td>
+              <td><span class="idx ok">● 已索引</span></td>
+              <td class="mono muted">10-07 18:12</td>
+            </tr>
+            <tr>
+              <td><b>物流时效说明</b><div class="t-sub muted" style="font-size:12px;margin-top:2px">普通 / 次日达 / 偏远地区</div></td>
+              <td><span class="src-pill">官网 FAQ</span></td>
+              <td class="mono">6</td>
+              <td><span class="hitbar"><i style="width:41%"></i></span> <span class="mono muted">17 次</span></td>
+              <td><span class="idx ok">● 已索引</span></td>
+              <td class="mono muted">10-06 09:44</td>
+            </tr>
+            <tr>
+              <td><b>账号与登录问题排查</b><div class="t-sub muted" style="font-size:12px;margin-top:2px">密码重置 / 验证码 / 锁定</div></td>
+              <td><span class="src-pill">帮助中心</span></td>
+              <td class="mono">9</td>
+              <td><span class="hitbar"><i style="width:33%"></i></span> <span class="mono muted">9 次</span></td>
+              <td><span class="idx"><span class="spin"></span>索引中 60%</span></td>
+              <td class="mono muted">索引中</td>
+            </tr>
+            <tr>
+              <td><b>质保条款</b><div class="t-sub muted" style="font-size:12px;margin-top:2px">质保期 / 质量问题判定 / 换货流程</div></td>
+              <td><span class="src-pill">官网 FAQ</span></td>
+              <td class="mono">5</td>
+              <td><span class="hitbar"><i style="width:12%"></i></span> <span class="mono muted">3 次</span></td>
+              <td><span class="idx ok">● 已索引</span></td>
+              <td class="mono muted">10-02 15:30</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

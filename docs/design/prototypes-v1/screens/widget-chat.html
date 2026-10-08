@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 聊天窗（桌面）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  body { display: grid; place-items: center; min-height: 100vh; background: var(--color-surface); }
+  .stage { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .stage-label { font-size: 13px; color: var(--color-text-2); letter-spacing: 0.02em; }
+
+  /* ---- 聊天窗面板（对应 widget --sw-panel-*，380×620，Crisp 层级阴影） ---- */
+  .panel {
+    width: 380px; height: 620px;
+    display: flex; flex-direction: column;
+    background: var(--panel-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--panel-shadow);
+    overflow: hidden;
+  }
+
+  /* header：纯色（零渐变，用户红线），比内容区沉一档 */
+  .p-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px;
+    background: var(--header-bg); color: var(--header-text);
+  }
+  .p-brand { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .p-name { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+  .p-status { display: flex; align-items: center; gap: 5px; font-size: 12px; opacity: 0.85; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; }
+  .p-act {
+    display: grid; place-items: center; width: 32px; height: 32px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--header-text);
+    opacity: 0.85; transition: background 150ms ease, opacity 150ms ease;
+  }
+  .p-act:hover { background: rgba(255, 255, 255, 0.16); opacity: 1; }
+
+  /* 消息区 */
+  .p-msgs { flex: 1; overflow-y: auto; padding: 12px 14px 6px; display: flex; flex-direction: column; gap: 8px; background: var(--color-surface); }
+  .t-div { text-align: center; font-size: 12px; color: var(--color-text-2); margin: 0 0 2px; }
+  .row { display: flex; gap: 8px; align-items: flex-end; max-width: 100%; }
+  .row.self { justify-content: flex-end; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    background: var(--color-primary-soft); color: var(--color-primary);
+    font-size: 12px; font-weight: 600;
+  }
+  .bubble {
+    max-width: 76%; padding: 9px 12px;
+    border-radius: var(--radius-bubble);
+    font-size: 14px; line-height: 1.55;
+    background: var(--bubble-agent-bg); color: var(--bubble-agent-text);
+    border-bottom-left-radius: 4px;
+  }
+  .row.self .bubble {
+    background: var(--bubble-self-bg); color: var(--bubble-self-text);
+    border-bottom-left-radius: var(--radius-bubble); border-bottom-right-radius: 4px;
+  }
+  .meta { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-2); margin-top: 3px; }
+  .row.self .meta { justify-content: flex-end; }
+  .meta svg { width: 14px; height: 14px; }
+
+  .ai-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; color: var(--color-primary);
+    background: var(--color-primary-soft);
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 5px;
+  }
+  .ai-tag svg { width: 12px; height: 12px; }
+  .cite {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 7px; padding: 4px 9px;
+    font-size: 12px; color: var(--color-text-2);
+    border: 1px solid var(--color-border); border-radius: 8px;
+    background: var(--panel-bg);
+  }
+  .cite svg { width: 12px; height: 12px; }
+
+  .sysline { display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 12px; color: var(--color-text-2); margin: 2px 0; }
+  .sysline::before, .sysline::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+
+  .typing { display: inline-flex; gap: 4px; align-items: center; padding: 12px 14px; }
+  .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-2); opacity: 0.5; animation: tp 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay: 0.15s; }
+  .typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes tp { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-3px); opacity: 0.9; } }
+
+  /* 快捷回复 chips（对应 --sw-chip-*） */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 8px; background: var(--color-surface); }
+  .chip {
+    padding: 6px 13px; font-size: 13px;
+    border: 1px solid var(--color-primary); border-radius: 999px;
+    color: var(--color-primary); background: var(--panel-bg);
+    transition: background 150ms ease;
+  }
+  .chip:hover { background: var(--color-primary-soft); }
+  .chip.human { border-color: var(--color-border); color: var(--color-text-2); display: inline-flex; align-items: center; gap: 5px; }
+  .chip.human svg { width: 13px; height: 13px; }
+
+  /* 输入区 */
+  .p-input { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--color-border); background: var(--panel-bg); }
+  .field {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    border-radius: var(--radius-input); padding: 9px 14px;
+  }
+  .field input { flex: 1; border: 0; background: transparent; font-size: 14px; color: var(--color-text); outline: none; }
+  .field input::placeholder { color: var(--color-text-2); }
+  .icon-btn { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--color-text-2); transition: background 150ms ease; }
+  .icon-btn:hover { background: var(--color-surface); }
+  .send {
+    display: grid; place-items: center; width: 38px; height: 38px;
+    border: 0; border-radius: 50%;
+    background: var(--color-primary); color: var(--color-on-primary);
+    transition: background 150ms ease, transform 150ms ease;
+  }
+  .send:hover { background: var(--color-primary-hover); }
+  .send:active { transform: scale(0.96); }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-label">聊天窗 · 桌面 380×620 · <span id="mode">light</span></div>
+  <section class="panel" aria-label="Servify 客服聊天窗">
+    <header class="p-head">
+      <span class="avatar" style="background:rgba(255,255,255,.2);color:var(--header-text)">S</span>
+      <div class="p-brand">
+        <span class="p-name">Servify 客服</span>
+        <span class="p-status"><span class="dot"></span>客服在线 · 通常几分钟内回复</span>
+      </div>
+      <button class="p-act" aria-label="最小化">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+      </button>
+      <button class="p-act" aria-label="关闭">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <div class="p-msgs">
+      <div class="t-div">今天 14:32</div>
+
+      <div class="row">
+        <span class="avatar">S</span>
+        <div>
+          <div class="bubble">您好！欢迎来到 Servify，请问有什么可以帮您？</div>
+          <div class="meta">14:32</div>
+        </div>
+      </div>
+
+      <div class="row self">
+        <div>
+          <div class="bubble">7 天内可以退款吗？</div>
+          <div class="meta">14:33
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="avatar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+        </span>
+        <div>
+          <div class="bubble">
+            <span class="ai-tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+              AI 首答
+            </span><br>
+            自签收起 7 天内，未拆封且不影响二次销售可自助提交，1–3 个工作日原路退回。
+            <span class="cite">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+              来源：帮助中心 · 退款政策 v3
+            </span>
+          </div>
+          <div class="meta">14:33 · 引用 2 条知识库来源</div>
+        </div>
+      </div>
+
+      <div class="sysline">已为您转接人工客服 · 李晴</div>
+
+      <div class="row">
+        <span class="avatar">李</span>
+        <div class="bubble typing" aria-label="客服李晴正在输入"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div class="chips" role="group" aria-label="快捷回复">
+      <button class="chip">7 天无理由退款</button>
+      <button class="chip">如何开具发票</button>
+      <button class="chip human">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+        转人工
+      </button>
+    </div>
+
+    <div class="p-input">
+      <button class="icon-btn" aria-label="添加附件">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <label class="field">
+        <input type="text" placeholder="输入消息…" aria-label="输入消息">
+      </label>
+      <button class="send" aria-label="发送">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </button>
+    </div>
+  </section>
+</div>
+<script>document.getElementById("mode").textContent = document.documentElement.dataset.theme === "dark" ? "dark" : "light";</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · 聊天窗（移动端 375）</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<script>
+  (function () {
+    var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark") document.documentElement.dataset.theme = "dark";
+  })();
+</script>
+<style>
+  body { display: grid; place-items: center; min-height: 100vh; background: var(--color-surface); }
+  .stage { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .stage-label { font-size: 13px; color: var(--color-text-2); }
+
+  /* 375 视口壳：整屏 sheet（Crisp 移动端模式：自底部滑入、圆角顶、拖拽把手） */
+  .phone {
+    width: 375px; height: 700px;
+    border-radius: 24px; overflow: hidden; position: relative;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--panel-shadow);
+    display: flex; flex-direction: column;
+  }
+  .scrim { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; top: 44px;
+    display: flex; flex-direction: column;
+    background: var(--panel-bg);
+    border-radius: 20px 20px 0 0;
+    overflow: hidden;
+  }
+  .handle { display: grid; place-items: center; padding: 8px 0 2px; background: var(--header-bg); }
+  .handle i { width: 36px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.45); }
+
+  .p-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px 12px;
+    background: var(--header-bg); color: var(--header-text);
+  }
+  .p-brand { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+  .p-name { font-size: 15px; font-weight: 600; }
+  .p-status { display: flex; align-items: center; gap: 5px; font-size: 12px; opacity: 0.85; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; }
+  .p-act {
+    display: grid; place-items: center; width: 32px; height: 32px;
+    border: 0; border-radius: 8px; background: transparent; color: var(--header-text); opacity: 0.85;
+  }
+
+  .p-msgs { flex: 1; overflow-y: auto; padding: 14px 12px 6px; display: flex; flex-direction: column; gap: 9px; background: var(--color-surface); }
+  .t-div { text-align: center; font-size: 12px; color: var(--color-text-2); margin: 2px 0 4px; }
+  .row { display: flex; gap: 7px; align-items: flex-end; }
+  .row.self { justify-content: flex-end; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--color-primary-soft); color: var(--color-primary); font-size: 11px; font-weight: 600; }
+  .bubble { max-width: 80%; padding: 9px 12px; border-radius: var(--radius-bubble); font-size: 14px; line-height: 1.55; background: var(--bubble-agent-bg); color: var(--bubble-agent-text); border-bottom-left-radius: 4px; }
+  .row.self .bubble { background: var(--bubble-self-bg); color: var(--bubble-self-text); border-bottom-left-radius: var(--radius-bubble); border-bottom-right-radius: 4px; }
+  .meta { font-size: 11px; color: var(--color-text-2); margin-top: 3px; }
+  .row.self .meta { text-align: right; }
+  .ai-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--color-primary); background: var(--color-primary-soft); padding: 2px 8px; border-radius: 999px; margin-bottom: 5px; }
+  .cite { display: inline-flex; align-items: center; gap: 4px; margin-top: 7px; padding: 4px 9px; font-size: 12px; color: var(--color-text-2); border: 1px solid var(--color-border); border-radius: 8px; background: var(--panel-bg); }
+  .sysline { display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 12px; color: var(--color-text-2); margin: 2px 0; }
+  .sysline::before, .sysline::after { content: ""; flex: 1; height: 1px; background: var(--color-border); }
+
+  .chips { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--color-surface); }
+  .chip { flex: none; padding: 6px 13px; font-size: 13px; border: 1px solid var(--color-primary); border-radius: 999px; color: var(--color-primary); background: var(--panel-bg); }
+
+  .p-input { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px calc(10px + 14px); border-top: 1px solid var(--color-border); background: var(--panel-bg); }
+  .field { flex: 1; display: flex; align-items: center; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-input); padding: 9px 14px; }
+  .field input { flex: 1; border: 0; background: transparent; font-size: 14px; color: var(--color-text); outline: none; }
+  .field input::placeholder { color: var(--color-text-2); }
+  .send { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: var(--color-primary); color: var(--color-on-primary); flex: none; }
+  .home-ind { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 120px; height: 4px; border-radius: 2px; background: var(--color-border-strong); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="stage-label">聊天窗 · 移动端 375 · 底部滑入 sheet + 安全区</div>
+  <div class="phone">
+    <div class="scrim"></div>
+    <section class="sheet" aria-label="Servify 客服聊天窗">
+      <div class="handle"><i></i></div>
+      <header class="p-head">
+        <span class="avatar" style="background:rgba(255,255,255,.2);color:var(--header-text)">S</span>
+        <div class="p-brand">
+          <span class="p-name">Servify 客服</span>
+          <span class="p-status"><span class="dot"></span>客服在线</span>
+        </div>
+        <button class="p-act" aria-label="关闭">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+
+      <div class="p-msgs">
+        <div class="t-div">今天 14:32</div>
+        <div class="row"><span class="avatar">S</span><div class="bubble">您好！欢迎来到 Servify，请问有什么可以帮您？</div></div>
+        <div class="row self"><div class="bubble">你们的退款政策是怎么样的？</div></div>
+        <div class="row">
+          <span class="avatar">S</span>
+          <div class="bubble">
+            <span class="ai-tag">AI 首答</span><br>
+            自签收起 7 天内，商品未拆封且不影响二次销售，可在「订单详情 → 申请退款」自助提交，1–3 个工作日原路退回。
+            <span class="cite">来源：帮助中心 · 退款政策 v3</span>
+          </div>
+        </div>
+        <div class="sysline">已为您转接人工客服 · 李晴</div>
+        <div class="row"><span class="avatar">李</span><div class="bubble">您好，方便把订单号发我一下吗？</div></div>
+      </div>
+
+      <div class="chips" role="group" aria-label="快捷回复">
+        <button class="chip">7 天无理由退款</button>
+        <button class="chip">开具发票</button>
+        <button class="chip">转人工</button>
+      </div>
+
+      <div class="p-input">
+        <label class="field"><input type="text" placeholder="输入消息…" aria-label="输入消息"></label>
+        <button class="send" aria-label="发送">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        </button>
+      </div>
+    </section>
+    <div class="home-ind"></div>
+  </div>
+</div>
+</body>
+</html>
