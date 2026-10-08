@@ -50,6 +50,8 @@
 - 落点：`apps/server/internal/modules/translation/`（application/delivery，
   domain/infra 为后续阶段占位）；路由挂管理面
   （agent/admin/service + EnforceRequestScope），`docs` API 注解齐全。
+  （Phase 0.5 起改为双面单一注册：AuthMiddleware 即可、无主体种类限制，
+  见 §6。）
 - 复用面：provider 配置（`ai.*`）、超时/参数（`llmfactory.RuntimeParams`）、
   错误口径（参数 400 / 未装配 503 / 上游 502 / 超时 504）。
 

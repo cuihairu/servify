@@ -82,6 +82,8 @@
 
 通过 `daily_stats` 表存储，由 Worker 定时更新或事件驱动递增。
 
+> 注：下列「递增事件」为 `IncrementKind` 常量（`modules/analytics/application/types.go`），统一经 `IncrementDailyStat` 单一仓库方法写入（按 Kind 分派到对应列），并非八个独立方法。
+
 | 字段 | 说明 | 递增事件 |
 |------|------|----------|
 | `total_sessions` | 当日会话数 | `IncrementSessions` |

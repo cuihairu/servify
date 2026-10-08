@@ -218,8 +218,9 @@ V1.0 产品中心是 **7 个核心模块**（conversation 为唯一中心聚合�
 | `quality` | → `conversation` | 会话分析与质检视角 |
 
 冻结（不新增能力面、不进入产品文案）：`api_key`、`email`、`push`、
-`webhook`、`translation`、`app_integration`、`auth`（薄壳）；`voice`
-及其扩展（SIP/PSTN/转写）冻结为扩展边界。**架构门禁：不新增一级模块**，
+`webhook`、`translation`、`app_integration`、`auth`（能力面冻结；
+登录/刷新/2FA/OIDC 逻辑在 `modules/auth/application` + `platform/auth`）；
+`voice` 及其扩展（SIP/PSTN/转写）冻结为扩展边界。**架构门禁：不新增一级模块**，
 新能力先找既有模块的子能力归属。
 
 ### 工程视角：模块迁移成熟度
@@ -496,10 +497,14 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 当前代码状态说明：
 
 - 服务端已收敛到模块化单体：`delivery -> application -> domain -> infra`
-  分层；跨模块经 module 内 contract 或事件，无 `models.go` 穿透
+  分层；跨模块经 module 内 contract 或事件。共享模型层（`internal/models`）
+  收敛进行中：过渡别名引用已清零并有 parser 级门禁钉住，残余跨模块直查
+  若干处（现状见 [modules-dependency-map](./docs/modules-dependency-map.md)）
 - AI 统一到 `QueryOrchestrator + LLMProvider + KnowledgeProvider`；
   `ai` 模块承载首答记录、反馈回传与检索分析（失败静默的旁路观测路径）
-- 知识检索服务选择链：ragflow → dify → weknora → pgvector → local
+- 知识检索两级结构：`knowledge.provider = pgvector | local` 时配置直通
+  （优先于外部源）；未配置时走外部源选择链 ragflow → dify → weknora，
+  逐级健康降级，终点为无知识源运行
   （外部 provider real 模式证据依赖环境凭证，mock/兼容模式全链留痕）
 - 管理面安全基线：scope、RBAC、audit、token policy 已接入管理面
 - 数据库层支持 PostgreSQL 与 SQLite（开发/测试回退），迁移走双路径

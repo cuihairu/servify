@@ -2,9 +2,9 @@
 
 ## 项目概述
 
-本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。`Dify` 是当前代码选择链中的默认 provider（历史兼容路径），`WeKnora` 是正统知识库方向的主推 provider，用于已有部署、协议回归和 fallback 验证。
+本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。当前代码选择链以 `RagFlow` 为首选 provider，`Dify` 为次选兼容路径，`WeKnora` 用于协议回归与 fallback 验证；未启用外部源时回落 pgvector 直配或无知识源运行（选择链实现见 `apps/server/internal/app/server/knowledge_source.go`，选型全景见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)）。
 
-> **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（WeKnora / RAGFlow 双路径建议、Dify 定位降级）见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
+> **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（RAGFlow 链首、pgvector 直配默认路径、Dify 定位降级）见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
 文档名保留 `WEKNORA_INTEGRATION` 主要是为了兼容历史链接；内容语义以通用 knowledge provider 为主。
 
 ## 集成计划完成情况
@@ -31,8 +31,7 @@
 
 4. **兼容路径部署和管理脚本**
    - 一键启动脚本 (`scripts/start-weknora.sh`)
-   - 知识库初始化脚本 (`scripts/init-knowledge-base.sh`)
-   - 知识库管理脚本 (`scripts/manage-knowledge-base.sh`)
+   - 知识库初始化脚本 (`scripts/init-knowledge-base.sh`；初始化完成时会生成 `scripts/manage-knowledge-base.sh` 辅助脚本，供 search/list/stats 使用)
 
 ## 技术架构
 
@@ -42,24 +41,28 @@ Servify 智能客服
        ↓
  Query Orchestrator
        ↓
- KnowledgeProvider
-   ├─ Dify (primary)
-   └─ WeKnora (fallback/compatibility)
+ KnowledgeProvider（外部选择链：健康逐级降级，终点为无知识源运行）
+   ├─ RagFlow (primary)
+   ├─ Dify (secondary / compatibility)
+   └─ WeKnora (compatibility)
+（provider=pgvector / local 时配置直通，优先于外部选择链）
 ```
 
 ### 服务部署图
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   Servify   │───▶│    Dify     │
+│   Servify   │───▶│   RagFlow   │
 │  (Port 8080)│    │  (primary)  │
 └─────────────┘    └─────────────┘
          │
-         └────────────▶ WeKnora (fallback / compatibility)
+         ├────────────▶ Dify (secondary / compatibility)
+         │
+         └────────────▶ WeKnora (compatibility)
 ```
 
 ## 快速开始
 
-> 当前项目的默认推荐是优先接入 `Dify`。仓库里的 `infra/compose/docker-compose.weknora.yml` 仍然保留，用于 WeKnora 协议回归和 fallback 验证，不代表 WeKnora 是主路径。
+> 当前项目的默认推荐是接入 `RagFlow`（外部专职知识库）或 `pgvector`（零外部依赖、进程内直配）；`Dify` 作为兼容路径保留。仓库里的 `infra/compose/docker-compose.weknora.yml` 仍然保留，用于 WeKnora 协议回归和 fallback 验证，不代表 WeKnora 是主路径。
 
 ### 1. 环境准备
 ```bash
@@ -79,7 +82,9 @@ cp .env.weknora.example .env
 
 # 编辑环境变量，至少需要配置：
 # - OPENAI_API_KEY: OpenAI API 密钥
-# - DIFY_API_KEY / DIFY_DATASET_ID: 推荐主路径
+# - RagFlow（链首）走 config.yml 的 ragflow 段（enabled/base_url/api_key/dataset_id）；
+#   或 knowledge.provider=pgvector 直配（零外部依赖）
+# - DIFY_API_KEY / DIFY_DATASET_ID: Dify 兼容路径（次选）
 # - WEKNORA_API_KEY: 仅在需要兼容或 fallback 验收时配置
 nano .env
 ```
@@ -104,18 +109,18 @@ nano .env
 curl http://localhost:8080/health
 curl http://localhost:9000/api/v1/health
 
-# 测试知识库搜索
+# 测试知识库搜索（manage-knowledge-base.sh 由 init-knowledge-base.sh 初始化时生成）
 ./scripts/manage-knowledge-base.sh search "远程协助"
 ```
 
 ### 6. 运行 provider 验收脚本
 ```bash
-# Dify 主路径 mock 回归
+# Dify 兼容路径 mock 回归
 DIFY_ACCEPTANCE_MODE=mock \
 EVIDENCE_DIR=./scripts/test-results/dify-acceptance/mock \
 ./scripts/test-dify-integration.sh
 
-# Dify 主路径真实环境验收
+# Dify 兼容路径真实环境验收
 DIFY_ACCEPTANCE_MODE=real \
 SERVIFY_URL=http://localhost:8080 \
 DIFY_URL=https://<real-dify-host>/v1 \
@@ -138,7 +143,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 
 脚本会输出最小验收证据：
 
-- Dify 主路径：
+- Dify 兼容路径：
   - `summary.txt`
   - `manifest.json`
   - `servify-health.json`
@@ -165,7 +170,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 - `ai-status-after-enable.json`
 - `circuit-breaker-reset.json`
 
-其中 `Dify real` 模式会严格拒绝 `localhost`、`127.0.0.1`、`0.0.0.0`、私网地址和 `.local/.internal` 主机名，避免把本地 mock 或内网临时地址误记为真实主路径证据；同时要求：
+其中 `Dify real` 模式会严格拒绝 `localhost`、`127.0.0.1`、`0.0.0.0`、私网地址和 `.local/.internal` 主机名，避免把本地 mock 或内网临时地址误记为真实环境证据；同时要求：
 
 - `dify-dataset` 探针成功
 - `knowledge provider` 当前激活为 `dify`
@@ -186,7 +191,7 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 
 可以通过 `make dify-acceptance`、`make weknora-acceptance` 作为统一入口运行脚本；其中 `knowledge-provider-acceptance` 目前等价于 `make weknora-acceptance`，用于兼容路径回归。
 
-只有满足以上条件，才能把结果回填到 `docs/acceptance-checklist.md` 里，分别作为 Dify 主路径和 WeKnora compatibility 路径的真实运行证据。
+只有满足以上条件，才能把结果回填到 `docs/acceptance-checklist.md` 里，分别作为 Dify 兼容路径和 WeKnora compatibility 路径的真实运行证据。
 
 `manifest.json` 是机器可读验收索引，包含 provider、mode、关键状态、核心检查结果和实际生成的证据文件列表。真实环境回填时优先以 `manifest.json` 判断是否满足验收门槛，再引用具体响应文件作为人工审阅证据。
 
@@ -270,7 +275,7 @@ docInfo, err := client.UploadDocument(ctx, kbID, &weknora.Document{
 
 #### AI 服务集成
 ```go
-// 处理用户查询（优先使用 Dify，必要时 fallback 到 WeKnora 或本地知识库）
+// 处理用户查询（知识源按 provider 直通 + ragflow→dify→weknora 选择链逐级降级，终点为无知识源运行）
 response, err := aiService.ProcessQuery(ctx, userQuery, sessionID)
 ```
 
@@ -304,7 +309,7 @@ docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 # 查看资源使用情况
 docker stats
 
-# 查看知识库统计
+# 查看知识库统计（脚本由 init-knowledge-base.sh 初始化时生成）
 ./scripts/manage-knowledge-base.sh stats
 ```
 
@@ -378,12 +383,12 @@ docker-compose -f infra/compose/docker-compose.yml exec postgres pg_isready -U p
 
 # 检查网络连接
 docker network ls
-docker network inspect servify_servify_network
+docker network inspect servify-network
 ```
 
 #### 3. 知识库搜索无结果
 ```bash
-# 检查文档是否上传成功
+# 检查文档是否上传成功（脚本由 init-knowledge-base.sh 初始化时生成）
 ./scripts/manage-knowledge-base.sh list
 
 # 检查索引状态
@@ -429,7 +434,7 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 
 当前仓库里的外部知识库集成已经完成了角色调整：
 
-- `Dify` 是当前推荐和优先的 `KnowledgeProvider`
+- 外部知识库选择链以 `RagFlow` 为首选，`Dify` 为次选兼容路径（provider=pgvector/local 时配置直通、优先于外部链）
 - `WeKnora` 不再作为系统内核能力存在，而是 `KnowledgeProvider` 的一个兼容实现
 - AI 主流程已经迁移到 `QueryOrchestrator`，只依赖统一检索抽象
 - 标准模式和增强模式都可以在不改 handler 协议的前提下切换到编排式实现
@@ -439,7 +444,7 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 
 后续增量工作不再单独挂在 WeKnora 文档里，而是归到下面几个长期方向：
 
-1. 新增更多 `KnowledgeProvider` 实现，例如 pgvector、Milvus、Elasticsearch 或自行开发检索服务
+1. 新增更多 `KnowledgeProvider` 实现，例如 Milvus、Elasticsearch 或自行开发检索服务（pgvector 已实现：`internal/platform/knowledgeprovider/pgvector/`，经 `knowledge.provider=pgvector` 直配）
 2. 补齐文档上传、批量索引、重建索引等管理能力的统一接口
 3. 把监控、缓存、故障恢复、安全策略沉到平台层，而不是绑定到某一个知识库实现
 4. 让 Web/API/App SDK 统一消费稳定的 AI/knowledge contract，而不是感知具体 provider
@@ -454,4 +459,4 @@ docker cp servify_weknora:/app/data ./backup/weknora_data
 
 ---
 
-当前结论：`Dify` 应作为默认知识库 provider 使用；`WeKnora` 可以继续作为兼容或回退适配器保留，但系统架构已经不再依赖单一 provider。
+当前结论：外部知识库默认推荐接入 `RagFlow`（专职知识库，选择链首选）或 `pgvector`（零外部依赖直配）；`Dify` 作为次选兼容路径保留，`WeKnora` 可以继续作为兼容或回退适配器保留，但系统架构已经不再依赖单一 provider。

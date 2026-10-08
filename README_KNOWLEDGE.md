@@ -12,7 +12,7 @@
 
 ### 2. 启用知识库
 
-在配置文件 `config/config.yaml` 中添加以下配置：
+在配置文件 `config.yml`（仓根）中添加以下配置：
 
 ```yaml
 embedding:
@@ -28,7 +28,7 @@ knowledge:
     search:
       top_k: 5           # 返回结果数量
       threshold: 0.7     # 相似度阈值
-      strategy: hybrid    # 搜索策略: cosine, euclidean, hybrid
+      strategy: cosine    # 搜索策略: cosine（默认）, euclidean
     indexing:
       chunk_size: 1000       # 文档分块大小（字符数）
       chunk_overlap: 200     # 分块重叠大小
@@ -37,8 +37,7 @@ knowledge:
 ### 3. 运行数据库迁移
 
 ```bash
-cd apps/server
-./bin/migrate up
+make migrate
 ```
 
 ## Embedding Provider 选择
@@ -99,9 +98,12 @@ embedding:
 
 ### 搜索策略 (Strategy)
 
-- `cosine`: 余弦相似度，适合大多数文本搜索场景
+- `cosine`: 余弦相似度，适合大多数文本搜索场景（默认值）
 - `euclidean`: 欧几里得距离，适合需要精确距离计算的场景
-- `hybrid`: 混合策略，默认选项
+
+> 仅以上两个合法值：pgvector 检索按 strategy 分派 SQL 排序，其余取值
+> （如历史文档出现过的 `hybrid`）会在查询期报
+> `unsupported search strategy`。
 
 ### 分块配置 (Indexing)
 
@@ -190,7 +192,7 @@ curl -X POST http://localhost:8080/api/knowledge-docs/index-jobs/<job_id>/retry 
 
 ## 检索分析与反馈回传（V1.0 收敛 B3-1b）
 
-AI 首答旁路记录到 `ai_answers`（query/answer/confidence/strategy/来源快照），反馈落 `answer_feedback`；记录失败静默不阻塞作答。
+AI 首答旁路记录到 `ai_answers`（query/answer/confidence/strategy/来源快照），反馈落 `answer_feedbacks`；记录失败静默不阻塞作答。
 
 ### 反馈端点
 
@@ -242,7 +244,9 @@ TEST_TOKEN=your-test-token \
 
 ### 验收标准
 
-1. 健康检查通过 (`/health` 返回知识库状态为 healthy)
+1. 健康检查通过（`/health` 返回 200；知识库状态项仅在启用外部知识源
+   weknora/dify 健康检查时出现，默认 pgvector 部署不含该项——以文档
+   CRUD/语义检索链路可用为准）
 2. 文档创建成功
 3. 文档列表查询正常
 4. 语义搜索返回相关结果（相似度分数 > threshold）
@@ -306,7 +310,7 @@ curl http://localhost:9997/v1/embeddings \
   - `internal/modules/knowledge/delivery`: HTTP 契约适配
 - **ai 模块**（反馈回传与检索分析）：
   - `internal/modules/ai/application/feedback.go`: 反馈校验（访客会话绑定）与检索分析聚合
-  - `internal/modules/ai/infra/answer_repository.go`: ai_answers / answer_feedback 仓储
+  - `internal/modules/ai/infra/answer_repository.go`: ai_answers / answer_feedbacks 仓储
   - `internal/modules/ai/delivery/`: 记录路径（REST/WS 旁路观测）与反馈/分析端点
 - **EmbeddingProvider**: 将文本转换为向量
   - `internal/platform/embedding/`: 接口与 openai / tei / xinference 实现
@@ -315,6 +319,6 @@ curl http://localhost:9997/v1/embeddings \
 
 ## 相关文档
 
-- [配置文档](./config/README.md)
-- [API 文档](./docs/api.md)
+- [配置文档](./docs/configuration-scopes.md)
+- [API 文档](./docs/generated/api/)
 - [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)（§5.3 反馈回传 / §8 Knowledge 产品化）

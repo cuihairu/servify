@@ -29,6 +29,7 @@ Specialized integration tag:
 
 - `integration && sqlite_integration`
   - `apps/server/internal/modules/ticket/infra/gorm_repository_test.go`
+  - `apps/server/internal/modules/ticket/infra/gorm_repository_scope_integration_test.go`
 
 Previously missing from the integration layer and now covered:
 

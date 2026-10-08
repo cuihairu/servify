@@ -6,7 +6,7 @@
 
 - `/public/*`
 - 匿名 websocket / realtime 建连入口
-- 匿名认证入口，如 `/api/v1/auth/login`、`/api/v1/auth/register`、`/api/v1/auth/refresh`
+- 匿名认证入口，如 `/api/v1/auth/login`、`/api/v1/auth/register`、`/api/v1/auth/refresh`、`/api/v1/auth/2fa/verify`、`/api/v1/auth/oidc/*`
 - 公开文件访问入口，如 `/uploads/*`
 - 未来开放给第三方或终端用户的公开 API
 
@@ -83,6 +83,7 @@
 ### `/api/v1/auth/*` 匿名入口
 
 - `/login`、`/register`、`/refresh` 必须有独立路径级限流
+- `/2fa/verify`（匿名 OTP 挑战步）与 `/oidc/start|callback|status` 同属本面：2FA 校验口重点防 OTP 暴力枚举（沿用 auth 前缀限流 25rpm），OIDC callback 重点防开放重定向与 state 伪造
 - 不在错误响应里泄漏账号存在性、内部状态或策略细节
 - 对暴力尝试、refresh 滥用、批量注册建立告警
 - 全局 `security.max_body_bytes` 对超限请求直接 413（生产模板 16MB）

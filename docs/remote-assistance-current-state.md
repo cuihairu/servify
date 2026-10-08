@@ -1,5 +1,7 @@
 # 远程协助现状盘点
 
+> ⚠️ **本文已被 [remote-assistance-status.md](./remote-assistance-status.md) 取代**：assist 权限组现已挂 `/api/assist/remote-assist/*` 七端点（远程协助已落地，`router_management.go` RequireResourcePermission("assist")）。本文保留为 2026-09「能力盘点/差距识别」时点存档。
+
 本文用于收口 `Gap C / G3-2`：盘点 Servify 当前在服务端、管理端和产品表达层面，哪些能力已经可以作为远程协助基础，哪些仍然只是底层能力，哪些产品入口还缺失。
 
 ## 结论先行

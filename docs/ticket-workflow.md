@@ -84,8 +84,15 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/api/tickets/$TICKET_ID/conversations
 ```
 
-状态面：`open` → `assigned` → `resolved` → `closed`。`PUT` 改 `status`
-走流转；收单用关闭端点（记录关闭原因）：
+状态面：`open` / `assigned` / `in_progress` / `resolved` / `closed` 五态，
+完整流转规则（`ticket/application/status_policy.go`）：
+
+- `open` → `assigned` / `resolved` / `closed`
+- `assigned` → `open`（可退回）/ `in_progress` / `resolved` / `closed`
+- `in_progress` → `open`（可退回）/ `resolved` / `closed`
+- `resolved` / `closed` → `closed`（同态提交幂等放行）
+
+`PUT` 改 `status` 走流转；收单用关闭端点（记录关闭原因）：
 
 ```sh
 curl -sS -X PUT http://localhost:8080/api/tickets/$TICKET_ID \

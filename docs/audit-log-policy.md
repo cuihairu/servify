@@ -7,6 +7,7 @@
 - 管理面查询：`GET /api/audit/logs`
 - 管理面单条查询：`GET /api/audit/logs/:id`
 - 管理面差异预览：`GET /api/audit/logs/:id/diff`
+- 管理面全链校验：`GET /api/audit/verify`（对整条哈希链做逐条校验，verifier 未装配时 404）
 
 支持过滤：
 

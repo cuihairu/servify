@@ -1,6 +1,6 @@
 # 10 Migration Scorecard
 
-> ⚠️ **快照注记（2026-10-04，V1.0 收敛 B0 批次）**：本记分卡为 2026-09-25 迁移期快照。此后 `services` 目录已整体移除（P3-2），自动机与统计的事件订阅已由 module delivery 装配（`internal/app/server/runtime_assembly.go:389,417`），agent 运行态已入驻 `modules/agent/infra/redis_registry.go`。当前权威快照= `docs/current-architecture.md`（2026-10-04 核验）；本表个别行（agent/automation）的 legacy service 表述仅作迁移史，不再代表现状。
+> ⚠️ **快照注记（2026-10-04，V1.0 收敛 B0 批次）**：本记分卡为 2026-09-25 迁移期快照。此后 `services` 目录已整体移除（P3-2），自动机与统计的事件订阅已由 module delivery 装配（`internal/app/server/runtime_assembly.go:401,429`），agent 运行态已入驻 `modules/agent/infra/redis_registry.go`。当前权威快照= `docs/current-architecture.md`（2026-10-04 核验）；本表个别行（agent/automation）的 legacy service 表述仅作迁移史，不再代表现状。
 
 本文件记录 `10-service-to-module-migration` 的当前完成度，用于支持 M5 的持续追踪。
 

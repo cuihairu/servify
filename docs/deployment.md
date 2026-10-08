@@ -525,7 +525,7 @@ monitoring:
 
 | 密钥 | 说明 |
 |------|------|
-| `DIFY_API_KEY` | Dify API Key（推荐主知识源） |
+| `DIFY_API_KEY` | Dify API Key（Dify dataset 兼容保留；选择链位置见 §4.2 拍板口径） |
 | `DIFY_DATASET_ID` | Dify dataset ID |
 | `WEKNORA_API_KEY` | WeKnora compatibility 知识库 API Key |
 | `WEKNORA_TENANT_ID` | WeKnora compatibility 租户 ID |
@@ -569,16 +569,13 @@ make release-check CONFIG=config.yml
 
 ### 7.4 Docker Secrets 方式
 
-```bash
-# 创建密钥文件
-echo "your-strong-jwt-secret" > ./secrets/jwt_secret
-echo "sk-your-openai-key" > ./secrets/openai_api_key
+服务端**不解析** `*_FILE` 形式的环境变量（如 `JWT_SECRET_FILE`），只读常规环境变量。使用 Docker Secrets 时，需在容器入口自行把 secret 内容导出为常规环境变量：
 
+```yaml
 # docker-compose.yml 中引用
 services:
   servify:
-    environment:
-      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+    entrypoint: ["/bin/sh", "-c", "export JWT_SECRET=$(cat /run/secrets/jwt_secret) && /app/servify"]
     secrets:
       - jwt_secret
 
@@ -623,7 +620,7 @@ healthcheck:
 
 ### 8.3 告警规则
 
-预定义 10 条告警规则在 `deploy/observability/alerts/rules.yaml`：
+预定义 14 条告警规则在 `deploy/observability/alerts/rules.yaml`（以该文件为唯一真相）：
 
 | 告警 | 级别 | 触发条件 |
 |------|------|---------|
@@ -631,13 +628,16 @@ healthcheck:
 | HighP99Latency | Warning | P99 延迟 > 5s 持续 10 分钟 |
 | HighRateLimitDrops | Info | 限流丢弃速率 > 10/s 持续 5 分钟 |
 | HighGoroutineCount | Warning | goroutines > 10000 持续 10 分钟 |
-| HighSystemErrorRate | Critical | 系统错误 > 0.01/s 持续 5 分钟 |
-| HighDependencyErrorRate | Warning | 依赖错误 > 0.1/s 持续 5 分钟 |
 | EventBusHandlerFailures | Warning | 事件处理失败持续 5 分钟 |
 | EventBusDeadLetters | Info | dead letter 持续 10 分钟 |
+| WorkerJobFailures | Warning | Worker 失败持续 10 分钟 |
 | AIProviderDegraded | Critical | AI 失败率 > 20% 持续 5 分钟 |
 | AIHighLatency | Warning | AI P95 延迟 > 10s 持续 10 分钟 |
-| WorkerJobFailures | Warning | Worker 失败持续 10 分钟 |
+| AIFallbackRatioHigh | Warning | AI fallback 比例 > 50% |
+| VoiceTranslationDegradedHigh | Warning | 语音翻译降级比例 > 20% |
+| SLOAvailabilityFastBurn | Critical | 可用性 SLO 快烧（14.4x，1 小时烧掉约 2% 的 30 天预算） |
+| SLOAvailabilitySlowBurn | Warning | 可用性 SLO 慢烧（6x，6 小时烧掉约 5% 的 30 天预算） |
+| SLOLatencyFastBurn | Critical | 延迟 SLO 快烧（14.4x，1 小时烧掉约 2% 的 30 天预算） |
 
 生产建议直接从 `config.production.secure.example.yml` 启动，并显式保留：
 
@@ -668,11 +668,11 @@ redis-cli ping
 
 **数据库迁移问题**
 
-Servify 使用 GORM AutoMigrate，首次启动会自动建表。如需手动初始化：
+Servify 首次启动走 GORM AutoMigrate 自动建表；版本化迁移文件在 `apps/server/internal/app/bootstrap/migrations/`，如需手动执行：
 
 ```bash
-# Docker 环境
-docker compose exec postgres psql -U postgres -d servify -f /docker-entrypoint-initdb.d/01-init.sql
+# 标准入口（见 Makefile:107）
+make migrate
 ```
 
 **查看日志**

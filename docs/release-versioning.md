@@ -19,9 +19,7 @@
   - `@servify/vue`
   - `@servify/vanilla`
 - Internal cross-package dependencies are pinned to the exact same version, not a loose range
-- Reserved packages stay `private` and `0.0.0` until they become a supported surface:
-  - `@servify/api-client`
-  - `@servify/app-core`
+- `@servify/api-client` and `@servify/app-core` currently share the workspace version (`1.0.0`) and have no standalone publish entry: neither declares `private`, and no publish flow targets them (only the `sdk` workspace root sets `private: true`)
 - Use:
   - `npm -C sdk run version:sync`
   - `npm -C sdk run version:check`

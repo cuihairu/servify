@@ -81,7 +81,7 @@
 | `show(hostActivity / presentingVC)` | 拉起会话 UI（抽屉或全屏）；首次调用触发 WS 连接 | UI 参数是宿主当前前台上下文，SDK 不自行推断 |
 | `hide()` | 收起会话 UI，连接保持 | 前后台切换由 SDK 内部处理（策划 §5 时序 4），接入方无需挂钩 |
 | `sendMessage(text)` | 发送 `text-message`；成功判据=收到自己回显帧（PROTOCOL.md §6.3），超时本地标记失败 | V1 仅 text；挂起函数 / async |
-| `createTicket(subject, aiSummaryIncluded)` | 升级为工单（M3）：真实上报 `POST /api/v1/tickets`（§10 #4 已落地），体含 session_id + 标题/描述 + 自动组装的 AI 会话摘要 | 成功返回 `TicketReceipt(ticketId)`；失败返回 null 且 `error` 流给码（IO→`network`、非 2xx/畸形→`ticket_failed`），不静默成功 |
+| `createTicket(title, description?)` | 升级为工单（M3）：真实上报 `POST /api/v1/tickets`（§10 #4 已落地），体含 session_id + 标题/描述 + 自动组装的 AI 会话摘要 | 成功返回 `TicketReceipt(ticketId)`；失败返回 null 且 `error` 流给码（IO→`network`、非 2xx/畸形→`ticket_failed`），不静默成功 |
 | `registerPushToken()`（M3） | 调 `pushTokenProvider` 取 token → 按 app-core `PushTokenRegistration` 形状上报 | `pushTokenProvider` 未配置时调用返回 `unsupported` |
 | `syncReadState()`（增强面） | 把补拉链自持的最新服务端消息 ID 提交为服务端已读游标：`POST {apiUrl}/api/v1/sessions/{id}/read`（§10 #3，体 `{"last_read_message_id": "<id>"}`） | 无已确认消息（尚未对账）→静默 false 且零请求（正常态非错误）；IO/HTTP 失败→`error` 流 `network` + false（可重报）；响应体不消费——V1 未读仍以客户端推导为基线，本方法是宿主需要跨设备/跨入口一致未读时的增强提交口；游标只前进不后退，重复/回退提交幂等 |
 | `destroy()` | 断连接、取消作用域、清订阅；快照保留（下次 create 恢复） | 宿主真正退出时调用；普通退后台**不要**调用 |

@@ -1,5 +1,7 @@
 # Servify 0.1.0 Release Acceptance
 
+> 注：本文为 **v0.1.0 历史版本验收规范**（已被 v1.0.0 取代，现行口径见 [acceptance-checklist.md](./acceptance-checklist.md)）。文内 `internal/services/*` 证据路径为当时时点——该目录已随 P3-2 整体移除，测试迁移落点见 acceptance-checklist。
+
 这份文档定义 `Servify v0.1.0` 的发布验收范围、准入门槛、必测功能、证据要求和已知边界。
 
 版本定位：

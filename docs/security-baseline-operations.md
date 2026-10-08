@@ -52,7 +52,7 @@
 - `/public/portal/config`
 - `/public/kb/*`
 - `/public/csat/*`
-- `/api/v1/auth/*` 中的匿名入口（`login` / `register` / `refresh`）
+- `/api/v1/auth/*` 中的匿名入口（`login` / `register` / `refresh` / `2fa/verify`（匿名 OTP 挑战步，沿用 auth 前缀限流 25rpm）/ `oidc/start|callback|status`）
 - `/api/v1/ws`
 - `/api/v1/ws/voice`（语音翻译通道；沿用 `/api/v1/ws` 前缀限流条目）
 - `/uploads/*`

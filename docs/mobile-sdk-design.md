@@ -36,7 +36,7 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 |---|---|---|
 | 会话窗口 | 浮钮 + 底部面板（widget 自绘，绕过 SDK） | 浮钮 + 底部抽屉 + 全屏会话页 |
 | 消息收发 | WS `text-message`（客户上行）/ `agent-message`（坐席）/ `ai-response` + `ai-response-delta`（AI 首答，流式增量 + 终帧） | 同协议，消息模型逐字段对齐 |
-| WebSocket 链路 | `/api/v1/ws?session_id=`（publicV1 组免认证；`access_token` 参数可选，默认不消费，`security.guest_token.required` 开启后握手强制校验签名/时效/会话绑定，校验失败 401 拒升级），心跳 30s，指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同路径；重连策略叠加前后台切换与网络可达性感知；鉴权见 D6 访客 token 方案（✅ 服务端已随刀 8 落地） |
+| WebSocket 链路 | `/api/v1/ws?session_id=`（publicV1 组免认证；`access_token` 参数可选，默认不消费，`security.guest_token.required` 开启后握手强制校验签名/时效/会话绑定，校验失败 401 拒升级），服务端协议层 ping 54s 保活（JSON 心跳已移除，见下文契约核查），指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同路径；重连策略叠加前后台切换与网络可达性感知；鉴权见 D6 访客 token 方案（✅ 服务端已随刀 8 落地） |
 | 未读与新消息通知 | **无任何实现**（无计数、无角标） | 客户端内未读计数为基线；系统推送为可选模块（D7） |
 | AI 首答与引用 | WS `ai-response` 帧一等携带 `{content, confidence, source}` + 编排附加输出 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略）；流式经 `ai-response-delta` 增量帧（2026-09 服务端已接出） | 增量拼接 + 完成帧替换渲染；引用来源可展开列表；置信门建议（next_action=handoff）透出"转人工"提示 |
 | 转人工状态 | `transfer_notification`（含 message/agent_id）/ `waiting_notification`（入队）两帧；widget 未特判，走"当 bot 文本渲染"的兜底分支。**注意：core SDK 曾声明并处理的 `session_update`/`agent_status` 帧服务端从不发送（死分支，已随 core 清理刀从类型与运行时中移除）** | 状态机改由真实帧驱动：ai_answering →（transfer/waiting_notification）→ waiting_human →（agent-message 到达）→ agent_chatting（见 D5 状态机） |
@@ -100,7 +100,7 @@ Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packag
 2. **契约文档化**：`sdk/PROTOCOL.md` 首版已入库（2026-09），逐帧列明消息类型、载荷字段、方向与边界语义，全部条目经服务端源码核实并带文件行号锚点。事实核查的关键产出已固化进契约：core 类型声明的六个死分支帧（`session_update`/`agent_status`/`typing`/`message`/`error`/`system`）单独立表声明"移动端契约不含"（**后续 core 清理刀已将其从类型联合与运行时整体移除，§5 表保留为边界记录**）；心跳双向机制澄清（服务端协议层 Ping 54s，Web core 的 JSON `system/ping` 帧服务端不处理，移动端走平台原生协议层保活；**该 JSON 心跳后续亦已从 core 移除**）；慢客户端 256 帧缓冲踢线、发送成功判据=收到自己回显等边界语义成文。命名混用（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case）**在契约里冻结现状、不借机改名**，改名是服务端 breaking change，V1 不做。
 3. **互验测试**：Android/iOS 各建一组"契约回放测试"，用同一组 JSON 样例（放 `sdk/protocol-fixtures/`，与 core 测试共用）驱动反序列化与状态机断言。服务端 WS 契约变更时，改 fixtures 会让三端测试同时红，这比"人记得三处都改"可靠。
 
-**消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:72-83`）：
+**消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:77-88`）：
 
 ```
 ConversationMessage {
@@ -161,7 +161,7 @@ servify.show(activity)
 
 // 4. 发送 / 工单
 servify.sendMessage("我的订单 #123 退款到账了吗")
-servify.createTicket(subject = "退款咨询", aiSummaryIncluded = true)
+servify.createTicket(title = "退款咨询", description = "…")
 ```
 
 **iOS（Swift，伪代码）**：
@@ -183,7 +183,7 @@ servify.show(from: presentingViewController)
 
 // 4. 发送 / 工单
 try await servify.sendMessage("我的订单 #123 退款到账了吗")
-try await servify.createTicket(subject: "退款咨询", aiSummaryIncluded: true)
+try await servify.createTicket(title: "退款咨询", description: "…")
 ```
 
 **初始化时序（两平台一致）**：

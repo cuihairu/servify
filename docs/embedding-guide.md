@@ -163,8 +163,11 @@ curl -X POST https://servify.example.com/api/webhooks \
   -d '{"url": "https://app.example.com/hooks/servify", "events": ["ticket.created","ticket.assigned","ticket.closed"]}'
 ```
 
-- 可订阅事件以 `GET /api/webhooks/events` 返回的白名单为准；当前收录
-  `ticket.created` / `ticket.assigned` / `ticket.closed`。
+- 可订阅事件以 `GET /api/webhooks/events` 返回的白名单为准；当前收录 12 类：
+  `ticket.created` / `ticket.assigned` / `ticket.closed`、
+  `conversation.created` / `conversation.message_received`、
+  `routing.agent_assigned` / `routing.transfer_completed`、
+  `call.started` / `call.held` / `call.resumed` / `call.transferred` / `call.ended`。
 - 每次投递带 `X-Servify-Signature: t=<unix秒>,v1=<hex>` 头，`v1 =
   HMAC-SHA256(secret, "<t>.<body>")`；宿主侧先验签再处理，拒绝重放
   （时间窗校验）。

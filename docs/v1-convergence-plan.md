@@ -59,7 +59,7 @@
 
 | 项 | 动作 | 理由 |
 | --- | --- | --- |
-| `api_key`、`email`、`push`、`webhook`、`translation`、`app_integration`、`auth`（模块内薄壳） | **冻结**：不再新增能力面，不进入任何产品文案 | 多渠道/开放平台是 P2+ 扩展；auth 逻辑实际在 `platform/auth` + `handlers/auth_*`，薄壳模块纯占位 |
+| `api_key`、`email`、`push`、`webhook`、`translation`、`app_integration`、`auth`（模块内薄壳） | **冻结**：不再新增能力面，不进入任何产品文案 | 多渠道/开放平台是 P2+ 扩展；注：auth 冻结的是能力面扩展，其登录/刷新/2FA/OIDC 逻辑实际在 `modules/auth/application`（Register/Login/RefreshToken/TOTP/OIDC）+ `platform/auth` 策略层，非纯占位 |
 | `voice` 及其扩展（SIP/PSTN/transcription） | **冻结为扩展边界**：维持现状（有 domain + provider），不投 V1 资源 | 审核 §14、v1-product-scope P2 |
 | 新增任何一级模块 | **禁止**（架构门禁：新能力先找既有模块子能力归属） | 审核 §11 |
 | 新渠道（Telegram/WeCom/WhatsApp/Mobile UI/SIP 深度接入） | 冻结 | v1-product-scope `V1 不做的功能` |
@@ -105,16 +105,16 @@ Remote Assist（对话内协助入口维持）、Voice/SIP、多渠道、Mobile�
 
 | 域 | 表（现状→目标） | 说明 |
 | --- | --- | --- |
-| conversation | `sessions`、`messages`（现状 `models.go:235,260`）→ + `conversation_participants`（独立表，现为 Session 内嵌或外键）、`channel_bindings`、**`conversation_events`（新增）** | `conversation_events` 是 Service Timeline 的落库源：`{conversation_id, event_type, actor, payload, occurred_at, tenant_id, workspace_id}` |
-| ticket | `tickets`、`ticket_comments`、`ticket_files`、`ticket_statuses`、`ticket_custom_field_values`（`models.go:129-221`）+ **`tickets.conversation_id`** | 关单评价（satisfaction）以 ticket 为锚 |
-| customer | `customers`（`models.go:86`）+ Profile 读模型视图（标签、历史、Ticket 汇） | — |
-| agent | `agents`（`models.go:105`）+ `agent_status`/负载快照表（新增或并入） | 供 routing 评分与工作台查询 |
-| routing | `transfer_records`、`waiting_records`（`models.go:276,291`）+ **`routing_assignments`（持久化）** + `queue_entries`（现内存态→补初始持久化可选） | 打分因子落表（skills/language/priority/tier 来自对侧表） |
+| conversation | `sessions`、`messages`（`models.go` 内集中定义）→ + `conversation_participants`（独立表，现为 Session 内嵌或外键）、`channel_bindings`、**`conversation_events`（新增）** | `conversation_events` 是 Service Timeline 的落库源：`{conversation_id, event_type, actor, payload, occurred_at, tenant_id, workspace_id}` |
+| ticket | `tickets`、`ticket_comments`、`ticket_files`、`ticket_statuses`、`ticket_custom_field_values`（`models.go`）+ **`tickets.conversation_id`** | 关单评价（satisfaction）以 ticket 为锚 |
+| customer | `customers`（`models.go`）+ Profile 读模型视图（标签、历史、Ticket 汇） | — |
+| agent | `agents`（`models.go`）+ `agent_status`/负载快照表（新增或并入） | 供 routing 评分与工作台查询 |
+| routing | `transfer_records`、`waiting_records`（`models.go`）+ **`routing_assignments`（持久化）** + `queue_entries`（现内存态→补初始持久化可选） | 打分因子落表（skills/language/priority/tier 来自对侧表） |
 | ai / knowledge | 现有检索/文档表 + **`ai_answers`（答案/来源/置信持久化）**、**`answer_feedback`（"是否有帮助"评价）** | Feedback 回传用 |
-| analytics | 现有 `daily_stats`（`models.go:432`）等，维持 read model 地位 | 统计由事件投影，不在业务写路径 |
-| sla | `sla_configs`、`sla_violations`（`models.go:320,339`）保留 | 降级为 ticket 子能力，表不动 |
-| security | `audit_logs`（`models.go:511`）+ **PII 策略表（retention 规则、删除/导出任务）** | 落地审核 §18-② |
-| tenant/workspace | `tenant_configs`、`workspace_configs`（`models.go:482,496`）+ **核心业务表补 `tenant_id`/`workspace_id` 列** | 先 ticket（已完成），V1 内扩到 conversation/customer/ticket 附件/routing/ticket 评论 |
+| analytics | 现有 `daily_stats`（`models.go`）等，维持 read model 地位 | 统计由事件投影，不在业务写路径 |
+| sla | `sla_configs`、`sla_violations`保留 | 降级为 ticket 子能力，表不动 |
+| security | `audit_logs`（`models.go`）+ **PII 策略表（retention 规则、删除/导出任务）** | 落地审核 §18-② |
+| tenant/workspace | `tenant_configs`、`workspace_configs`（`models.go`）+ **核心业务表补 `tenant_id`/`workspace_id` 列** | 先 ticket（已完成），V1 内扩到 conversation/customer/ticket 附件/routing/ticket 评论 |
 
 ### 3.2 tenant/workspace 落库规则（V1 一步到位）
 
@@ -193,7 +193,7 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 
 ### 6.1 现状（保留）
 
-`queue/assignment/transfer/skill match/availability/load balance` 已存在（`routing/domain/entities.go:5-57`），escalation 走 SLA+automation（`models.go:331,345`；`automation/application/service.go:427`）——V1 不动。
+`queue/assignment/transfer/skill match/availability/load balance` 已存在（`routing/domain/entities.go:5-57`），escalation 走 SLA+automation（`models.go`；`automation/application/service.go:427`）——V1 不动。
 
 ### 6.2 演进（P2 内，审核 §6 打分模型）
 

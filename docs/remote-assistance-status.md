@@ -24,9 +24,9 @@
 
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
-| 发起（管理面） | 已实现 | `POST /api/remote-assist/sessions`（`apps/server/internal/handlers/assist_handler.go:43`）创建 active 记录；管理端 `handleStartRemoteAssist`（`apps/admin/src/pages/Conversation/index.tsx:351`）REST 落记录后开独立信令 WS |
+| 发起（管理面） | 已实现 | `POST /api/remote-assist/sessions`（`apps/server/internal/handlers/assist_handler.go:44`）创建 active 记录；管理端 `handleStartRemoteAssist`（`apps/admin/src/pages/Conversation/index.tsx:351`）REST 落记录后开独立信令 WS |
 | 发起（访客面） | 已实现 | SDK `startRemoteAssist`（`sdk/packages/core/src/sdk.ts:317`）：建 PC + DataChannel + 屏幕采集 + 录制 |
-| 结束 | 已实现 | `POST /api/remote-assist/sessions/:id/end`（`assist_handler.go:85`，重复结束 409）；录制元数据可随结束落库 |
+| 结束 | 已实现 | `POST /api/remote-assist/sessions/:id/end`（`assist_handler.go:84`，重复结束 409）；录制元数据可随结束落库 |
 | 接受/加入 | 部分实现 | 坐席经同 session WS + `RTCPeerConnection` 加入（`index.tsx:399-501`）；**无"邀请→接受/拒绝"握手**，访客端由宿主页面自行调用 `startRemoteAssist`，不知道协助已发起 |
 | 邀请 ID 传递 | 未实现（端到端） | 坐席经 DataChannel 发 `{type:'assist-session', assist_id}`（`index.tsx:405-412`）；服务端 `OnDataChannel` 收到后按 WS `data-channel-message` 帧广播（`apps/server/internal/platform/realtime/webrtc_service.go:173`）；但访客 SDK **只在自己 DataChannel 的 onmessage 上监听**（`sdk.ts:341`），WS 层该帧无人消费，assist_id 实际传不到访客端 |
 
@@ -48,7 +48,7 @@
 | 媒体链路（服务端桥接） | 未实现 | 信令为**服务端终结模式**：`HandleOffer` 每次新建服务端 PC 应答（`webrtc_service.go:209-235`），访客与坐席各连服务端一条 PC，两条 PC 之间**无媒体转发**，`webrtc_service.go` 全文件无 `OnTrack`/`AddTrack`/`NewTrackLocal*`，坐席端 `ontrack` 实际不会触发，**端到端画面不通** |
 | DataChannel 透传 | 部分实现 | 服务端 `OnDataChannel` 收文本后按 `data-channel-message` 广播回同 session（`webrtc_service.go:173-197`）、`SendDataChannelMessage` 可下行（`webrtc_service.go:339-355`）；仅纯文本 `SendText`，无二进制，且见上文"访客端不消费 WS 帧"断点 |
 | 远程控制（鼠标/键盘） | 未实现 | 全仓（Go + apps/admin + sdk）无 co-browsing / 输入事件转发代码；标注（rect/freehand/arrow）是**录制回放批注**（`domain/models.go:34`），不是实时屏幕标注 |
-| WebRTC 连接观测 | 已实现 | `GET /api/v1/webrtc/stats`、`/api/v1/webrtc/connections`、`/api/v1/rtc/ice-servers`（`apps/server/internal/app/server/router_realtime.go:38-42`）；连接状态变化经 `webrtc-state-change` 帧下发 |
+| WebRTC 连接观测 | 已实现 | `GET /api/v1/webrtc/stats`、`/api/v1/webrtc/connections`、`/api/v1/rtc/ice-servers`（`apps/server/internal/app/server/router_realtime.go:51-54`）；连接状态变化经 `webrtc-state-change` 帧下发 |
 
 ### 4. 文件传输：已实现（一次性上传形态）
 
@@ -61,8 +61,8 @@
 
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
-| WS 自动重连 | 已实现 | SDK 指数退避：默认 5 次、1s 起、2 倍、封顶 30s（`sdk/packages/core/src/contracts/reconnect.ts:5-10`），手动关闭不重连 |
-| 消息补拉 | 已实现 | 重连后 `reconcileMissedMessages` 按 lastMessageId 游标分页补拉去重（`sdk.ts:652-690`）；服务端 `ListAfter`（`router_realtime.go:24`） |
+| WS 自动重连 | 已实现 | SDK 指数退避：默认 5 次、1s 起、2 倍、封顶 30s（`sdk/packages/core/src/contracts/reconnect.ts:8-13`），手动关闭不重连 |
+| 消息补拉 | 已实现 | 重连后 `reconcileMissedMessages` 按 lastMessageId 游标分页补拉去重（`sdk.ts:686 起`）；服务端 `ListAfter`（`router_realtime.go:35`） |
 | 协助记录恢复 | 已实现 | 协助会话/标注/录制元数据全落库，进程重启不丢（`infra/gorm_repository.go`） |
 | WebRTC 恢复 | 部分实现（服务端半边本轮修复） | 服务端 `HandleOffer` 前回收同 session 终态旧 PC（`webrtc_service.go` `closeTerminalConnections`，仅 disconnected/failed/closed，存活 PC 不动）；SDK 侧 WS 重连仍不触发 PC 重建/重协商（`sdk.ts:154` 仅透传事件）；hub unregister 不清理 rtc 连接（`websocket_hub.go:246-253`） |
 
@@ -87,7 +87,7 @@
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
 | 管理面鉴权链 | 已实现 | 见第 2 行管理面 RBAC；audit 组有独立 audit 权限查看留痕 |
-| TURN/STUN | 已实现 | coturn 独立部署 + 时间限 HMAC 短时凭据（`apps/server/internal/platform/realtime/iceturn.go:74-89`），配置双层 gate（`config.go:750-758`）；ICE 配置经 WS `webrtc-ice-config`（`websocket_hub.go:230-244`）与 REST `GET /api/v1/rtc/ice-servers` 双通道下发；交付资产 `infra/compose/docker-compose.coturn.yml` |
+| TURN/STUN | 已实现 | coturn 独立部署 + 时间限 HMAC 短时凭据（`apps/server/internal/platform/iceturn/iceturn.go:74-89`），配置双层 gate（`config.go:750-758`）；ICE 配置经 WS `webrtc-ice-config`（`websocket_hub.go:230-244`）与 REST `GET /api/v1/rtc/ice-servers` 双通道下发；交付资产 `infra/compose/docker-compose.coturn.yml` |
 | 坐席端 ICE | 已实现（本轮修复） | 管理端消费服务端下发：WS `webrtc-ice-config` 推送缓存 → REST `GET /api/v1/rtc/ice-servers` 回退（`services/remoteAssist.ts` `getIceServers`），两者皆空才退公网 STUN，与访客 SDK（`sdk.ts` `resolveServerIceServers`）同口径，严格网络下由服务端 TURN 兜住 |
 | 数据面租户隔离 | 已实现（本轮修复） | 见第 2 行"租户/工作区隔离" |
 

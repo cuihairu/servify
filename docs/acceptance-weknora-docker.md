@@ -3,6 +3,8 @@
 **日期**: 2026-04-19
 **环境**: Docker Compose (Servify + PostgreSQL + Redis + WeKnora Mock)
 
+> 注（2026-10-08 文档对账）：本文 §1/§2 的 compose 挂载技术细节已被 **2026-09-29 挂载修正取代**——挂载点现为 `/root/{logs,uploads,config.yml}`（见 `infra/compose/docker-compose.yml:71-76`，有 runtime 测试与 checklist 双守卫）；文中 `expandViperEnvVars()` 现名 `expandEnvVarsInConfig`（`bootstrap/config.go:164`）。验收结论保留为历史存档。
+
 ## 验收结果
 
 ### 核心功能通过

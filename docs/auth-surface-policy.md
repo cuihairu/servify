@@ -46,7 +46,7 @@
 
 当前路由：
 
-- 匿名认证入口：`/api/v1/auth/login`、`/api/v1/auth/register`、`/api/v1/auth/refresh`
+- 匿名认证入口：`/api/v1/auth/login`、`/api/v1/auth/register`、`/api/v1/auth/refresh`、`/api/v1/auth/2fa/verify`（2FA 登录挑战步，匿名提交 OTP）、`/api/v1/auth/oidc/start`、`/api/v1/auth/oidc/callback`、`/api/v1/auth/oidc/status`（OIDC SSO 跳转；未配置 provider 时 status 返回兜底响应）
 - 已登录自助入口：`/api/v1/auth/me`、`/api/v1/auth/sessions`、`/api/v1/auth/sessions/logout-current`、`/api/v1/auth/sessions/logout-others`
 
 ### 3. Management Surface
@@ -130,16 +130,16 @@ P1 引入机器凭据：`Authorization: Bearer` 之外，`AuthMiddleware` 现在
 
 开放面路由（挂 management surface，`RequireResourcePermission` 控权）：
 
-- `GET /api/v1/tickets`（既有 tickets read 权限）
-- `GET /api/v1/conversations`、`GET /api/v1/conversations/:id`、`GET /api/v1/conversations/:id/messages`（conversations read）
+- `GET /api/tickets`（既有 tickets read 权限；注意 `/api/v1/tickets` 是访客免登录 POST 提单口，不是 API-Key 读口）
+- `GET /api/conversations`、`GET /api/conversations/:id`、`GET /api/conversations/:id/messages`（conversations read）
 - `POST /api/v1/metrics/ingest`（既有 service surface 能力的重复入口）
 
 管理面路由（`api_keys` 资源权限）：
 
-- `GET /api/v1/api-keys`（列表，只回显 prefix 与指纹状态，不回显明文）
-- `POST /api/v1/api-keys`（签发，明文仅在该响应出现一次）
-- `POST /api/v1/api-keys/:id/revoke`（吊销即时生效）
-- `DELETE /api/v1/api-keys/:id`
+- `GET /api/api-keys`（列表，只回显 prefix 与指纹状态，不回显明文）
+- `POST /api/api-keys`（签发，明文仅在该响应出现一次）
+- `POST /api/api-keys/:id/revoke`（吊销即时生效）
+- `DELETE /api/api-keys/:id`
 
 ## 后续扩展
 

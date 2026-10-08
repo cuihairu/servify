@@ -3,6 +3,7 @@
 > 复查基线：`cuihairu/servify`（GitHub 公开仓）今日（2026-10-04）HEAD `8e2034d`（docs: ChatGPT 审核文档入库）
 > 复查方式：逐条对照当前代码与文档（`README.md` / `ARCHITECTURE.md` / `docs/v1-product-scope.md` / `apps/server/internal/*`）给出证据。
 > 结论统计见文末；每条标注【属实 / 部分属实 / 已过时 / 不成立 / 建议未落地】。
+> **快照注记（2026-10-08 文档对账）**：本报告为 `8e2034d` 时点快照。同日 V1.0 收敛 B0-B4 过闸后，§5 / §10 / §18-② / §19 / §22 的「未落地」判定已不反映当前状态（Service Timeline、PII 边界 retention 门、knowledge sources/versions/index-jobs/检索分析均已落地），现状见 [acceptance-checklist.md](../acceptance-checklist.md) §14。
 
 ---
 

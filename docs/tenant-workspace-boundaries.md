@@ -7,7 +7,8 @@
 - `tenant`
   - 代表部署级业务租户边界
   - 当前已在配置与 provider 参数中出现，例如 knowledge provider 的 `tenant_id`
-  - 当前业务表大多尚未显式落库 `tenant_id`
+  - 核心业务表已普遍落 `tenant_id` / `workspace_id`（逐对象归属见下文），
+    残余未收口面见文末清单
 
 - `workspace`
   - 代表租户下的操作空间或管理空间

@@ -20,7 +20,7 @@ API 语义逐一镜像。本页面向接入方；协议细节见 `sdk/PROTOCOL.m
 
 当前为仓库内分发（无正式发布渠道前，不内置自动发版）：
 
-- **Android**：CI `android` job 的 AAR 产物，或本地构建：
+- **Android**：CI `android-probe` job 的 AAR 产物（artifact `servify-sdk-aar`），或本地构建：
   `cd sdk/android && ./gradlew :servify-sdk:assembleRelease`（产物 `servify-sdk/build/outputs/aar/`）。
 - **iOS**：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`），CI `ios-macos` job 产物，
   或本地构建：`scripts/check-ios-sdk-size.sh`（产物 `sdk/ios/build/ServifyKit.xcframework`）。
@@ -90,8 +90,8 @@ struct ContentView: View {
 | `loggingEnabled` | Bool | false | 调试日志 |
 | `pushTokenProvider` | 闭包 | null/nil | 推送 token 获取闭包（宿主 FCM/APNs 集成面）；null = 推送不启用 |
 
-**Branding 四件套**：`primaryColor`（Int/UInt32，ARGB，默认 `0xFF2563EB` 品牌蓝）、
-`welcomeText`（欢迎行）、`agentTitle`（坐席显示名）、`offlineText`（断线系统提示行，null = 不出提示行）。
+**Branding 四件套**：`title`（组件标题，默认「在线客服」）、`primaryColor`（Int/UInt32，ARGB，默认 `0xFF2563EB` 品牌蓝）、
+`welcomeText`（欢迎行）、`offlineText`（断线系统提示行，null = 不出提示行）。
 
 ## 5. 工单创建 / 推送注册 / 离线提示（M3 API）
 
@@ -156,8 +156,8 @@ hide 期间消息不丢）。
 
 ## 7. 错误码
 
-`network` / `send_timeout` / `echo_timeout` / `ws_closed` / `protocol_invalid` /
-`ticket_failed` / `unsupported` / `config_invalid`（构造期抛出）。详细语义见
+`config_invalid`（构造期抛出）/ `network` / `server_unavailable` / `handshake_rejected` /
+`send_timeout` / `unsupported` / `ticket_failed`——双端 `ServifyError` 七码一致。详细语义见
 [平台规格 §4.5](/mobile-sdk-platform-spec)。
 
 ## 8. 接入自验清单

@@ -24,15 +24,16 @@
 - 实例崩溃后其 agent 状态随 TTL 过期自动消失，`agentRuntimeMaintenance`
   的 `cleanupInactiveAgents`（每实例运行、操作幂等）做兜底清理。
 - 两实例共享 Redis + DB 时互相观测 presence 与 transfer load 的行为
-  有 integration 测试锁定
-  （`services/agent_service_redis_integration_test.go`）。
+  原由 integration 测试锁定
+  （`services/agent_service_redis_integration_test.go`）；该测试已随
+  P3-2 `internal/services` 移除而删除，当前无等价锚，补测为待办。
 - 前提：所有实例必须连**同一个 Redis**（`BuildAgentServiceAssembly`
   注入的共享 client）。
 
 ### 2. WebSocket / WebRTC 实时路由 —— 单实例硬约束 ❌
 
-- `WebSocketHub` 的连接表是进程内 map（`services/websocket.go`），
-  `SendToSession` 只能投递到**本实例**持有连接的会话。
+- `WebSocketHub` 的连接表是进程内 map（`platform/realtime/websocket_hub.go`，
+  struct 定义 :88），`SendToSession`（:559）只能投递到**本实例**持有连接的会话。
 - WebRTC 信令、语音媒体协商同样经 hub 进程内转发。
 - 多副本下的失效模式：客户 WS 连在实例 A、坐席连在实例 B →
   实时推送互相不可见（HTTP 消息仍会入库，但实时性丢失）。
@@ -83,8 +84,8 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
   **进程级重启恢复**（worker 状态在 DB、事件在 Redis stream、
   presence TTL 自动收敛）+ 快速拉起满足，不通过多副本满足。
 - 事件总线：生产用 `event_bus.provider = "redis"`；`inmemory` 仅限
-  dev/demo（该边界见 P0-1 与 config 示例；production/staging 启动
-  校验与装配层均拒绝 `inmemory`——P3-3）。
+  dev/demo（该边界见 P0-1 与 config 示例；production 启动校验与装配层
+  拒绝 `inmemory`，staging 无独立校验分支——P3-3）。
 - 单实例进程崩溃的最大损失面：in-flight HTTP 请求、未投递的实时
   推送（会话数据已入库，重连后可见）、pub/sub 通知窗口内的事件消费
   （stream 记录仍在）。
@@ -108,7 +109,8 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
 - 广播语义测试锚点：`platform/eventbus/redis_bus_multi_instance_test.go`
   —— 两个 `RedisBus` 实例共享同一 Redis，一条事件两边订阅方都收到
   （锁定本文档第 3 节的声明，防止未来静默改成竞争消费或丢失广播）。
-- Agent 多实例证据：`services/agent_service_redis_integration_test.go`
-  （P0-3）。
+- Agent 多实例证据：原锚定测试
+  `services/agent_service_redis_integration_test.go` 已随 P3-2 services
+  移除而删除，当前无等价锚，补测为待办（P0-3）。
 - routing 租约样板：`routing/infra/gorm_repository.go`
   `ClaimQueueEntries` / `ReleaseQueueClaim`。

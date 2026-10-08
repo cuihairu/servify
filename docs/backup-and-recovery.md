@@ -22,7 +22,8 @@ Servify 的恢复口径按部署形态分两轨：
 注释即该教义），失败迁移不走反向 SQL，而是把数据库恢复到迁移前
 的备份点。该口径的 postgres 可执行证据在 CI Integration job 的
 "Backup & restore drill (pg_dump/pg_restore)" 步骤：DROP 整库 →
-重建 → `pg_restore` → 迁移水位 `8|f` 随备份回来。
+重建 → `pg_restore` → 迁移链头部版本的水位（当前 `19|f`；CI 动态
+对账链头，不硬编码）随备份回来。
 
 ## 备份对象与清单格式
 
@@ -79,13 +80,13 @@ P2-3 的明确边界，不是遗漏。
 ## sqlite 恢复步骤
 
 ```bash
-# 备份（迁移/升级前必做）
-go run ./cmd/dbrecovery db-backup -dsn /data/servify.db -out /backup/db-$(date +%F)
-go run ./cmd/dbrecovery files-backup -dir /data/uploads -archive /backup/files-$(date +%F).tar.gz
+# 备份（迁移/升级前必做；go.mod 在 apps/server/，统一用 -C 指定模块目录）
+go -C apps/server run ./cmd/dbrecovery db-backup -dsn /data/servify.db -out /backup/db-$(date +%F)
+go -C apps/server run ./cmd/dbrecovery files-backup -dir /data/uploads -archive /backup/files-$(date +%F).tar.gz
 
 # 恢复（停服后执行；工具会整体校验通过才落库）
-go run ./cmd/dbrecovery db-restore -dsn /data/servify.db -backup /backup/db-2026-09-17
-go run ./cmd/dbrecovery files-restore -archive /backup/files-2026-09-17.tar.gz \
+go -C apps/server run ./cmd/dbrecovery db-restore -dsn /data/servify.db -backup /backup/db-2026-09-17
+go -C apps/server run ./cmd/dbrecovery files-restore -archive /backup/files-2026-09-17.tar.gz \
   -manifest /backup/files-2026-09-17.tar.gz.manifest.json -dest /data/uploads
 ```
 
@@ -104,7 +105,7 @@ docker compose -f infra/compose/docker-compose.yml exec -T postgres \
 docker compose -f infra/compose/docker-compose.yml exec -T postgres \
   pg_restore -U postgres -d servify --no-owner backup/servify.dump
 
-# 对账：迁移水位必须等于备份时刻（如 8|f）
+# 对账：迁移水位必须等于备份时刻（= 备份时的迁移链头部版本，如 19|f）
 docker compose -f infra/compose/docker-compose.yml exec -T postgres \
   psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations"
 ```
@@ -136,6 +137,7 @@ schema，服务启动会按迁移 Runner 正常补跑其后的版本——这同
   `backup-restore` case 逐项校验并随仓库留档。
 - **postgres 演练**：CI Integration job（pgvector/pgvector:pg15）
   播种 → `pg_dump -Fc` → 删光 users → `DROP DATABASE WITH (FORCE)`
-  → 重建 → `pg_restore` → 校验 `schema_migrations = 8|f` 与行数
+  → 重建 → `pg_restore` → 校验 `schema_migrations` 等于迁移链头部
+  版本（当前 `19|f`，CI 动态取链头对账、不硬编码）与行数
   回到备份时刻。
 - 两轨任一失败 CI 即红：恢复链路不是文档承诺，是门禁约束。

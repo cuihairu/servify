@@ -129,7 +129,7 @@ fly logs
 
 - 设置 `readinessProbe` 指向 `/ready`，`livenessProbe` 指向 `/health`
 - 通过 `Secret` 对象注入敏感配置
-- 建议副本数 >= 2，配置 `PodDisruptionBudget`
+- 副本数保持 `replicas: 1`：当前交付边界为单实例优先，多副本会产生重复副作用或实时推送丢失（见 `docs/deployment.md` §5 与 `docs/multi-instance-boundary.md` 的收口条件）
 
 ---
 
@@ -374,8 +374,8 @@ psql -h localhost -U postgres -d servify -c "SELECT 1"
 # 检查表结构
 psql -h localhost -U postgres -d servify -c "\dt"
 
-# Docker 环境中手动初始化
-docker compose exec postgres psql -U postgres -d servify -f /docker-entrypoint-initdb.d/01-init.sql
+# 版本化迁移在 apps/server/internal/app/bootstrap/migrations/，手动执行走标准入口：
+make migrate
 ```
 
 ---
@@ -597,7 +597,7 @@ curl -s http://localhost:8080/metrics | grep go_sql_open_connections
 
 **常见原因**：
 - 数据库连接池耗尽：增加连接池大小或减少慢查询
-- 外部依赖（LLM、knowledge provider，默认优先 Dify）不可用：检查 circuit breaker 状态
+- 外部依赖（LLM、knowledge provider）不可用：知识源按 provider 直通（pgvector/local）+ ragflow→dify→weknora 选择链，检查 circuit breaker 状态
 - 部署后配置错误：回滚或修正配置
 
 ### 10.3 AI 功能异常
@@ -732,27 +732,28 @@ pg_dump -h $DB_HOST -U postgres servify > backup_$(date +%Y%m%d_%H%M%S).sql
 | 内存 | 1 GB | 2 GB | 4 GB |
 | 数据库内存 | 1 GB | 2 GB | 4 GB |
 
-### 12.2 水平扩容
+### 12.2 扩容边界
+
+当前交付边界为**单实例优先**（`docs/deployment.md` §5：`replicas: 1`，不通过多副本满足扩容诉求——多副本会产生重复副作用或实时推送丢失）。扩容在单实例边界内进行：
 
 **Kubernetes：**
 
 ```bash
-# 手动扩容
-kubectl scale deployment/servify --replicas=4
+# 垂直扩容：调整资源规格
+kubectl set resources deployment/servify --limits=cpu=4,memory=8Gi
 
-# 自动扩容（需配置 HPA）
-kubectl autoscale deployment/servify --min=2 --max=8 --cpu-percent=70
+# 滚动重启（单副本滚动替换，不中断）
+kubectl rollout restart deployment/servify
 ```
 
 **Fly.io：**
 
 ```bash
-# 增加实例
-fly scale count 3
-
-# 调整实例规格
+# 调整实例规格（不增加实例数）
 fly scale vm shared-cpu-2x
 ```
+
+多副本 / 水平拆分的诉求，需先满足 `docs/multi-instance-boundary.md` 的收口条件（Redis+DB 共享、worker 租约、WebSocket 跨实例路由等），在该文档列为待办收口项，当前不做。
 
 ### 12.3 数据库扩容
 

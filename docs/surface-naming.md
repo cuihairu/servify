@@ -18,7 +18,7 @@ SDK 侧登记见 `sdk/SURFACE_GOVERNANCE.md`（Breaking Change Checklist 要求�
 | --- | --- | --- |
 | `weknora.*` 配置键（`ai.weknora`、`health_checks.weknora`、`WEKNORA_*` 环境变量） | `apps/server/internal/config`、`bootstrap/config.go` | P0-5 裁决：WeKnora 是 knowledge provider 的**产品实名**（兼容接入路径），不是旧名；`knowledge.provider` 是开关面，`weknora.*` 是该 provider 的配置命名空间 |
 | `weknora_usage_count` / `weknora_latency`（`AIMetrics` JSON 字段、`servify_ai_weknora_usage_total` 指标） | `modules/ai/delivery/contract_types.go`、`handlers/ai_handler.go` | 与 `knowledge_provider_usage_count` 是**父子维度**而非新旧名：总量按 active provider 分派计数（dify/weknora 各自的子计数与延迟）。删除会丢失 per-provider 观测维度 |
-| `WeKnoraUsageToday`（analytics `weknora_usage_today`） | `modules/analytics/{contract,application}/types.go` | 同上：per-provider 统计维度，与 `knowledge_provider_usage_today` 并存 |
+| `WeKnoraUsageToday`（analytics `weknora_usage_today`） | `modules/analytics/{contract,domain}`（`contract/types.go` 与 `domain/entities.go`） | 同上：per-provider 统计维度，与 `knowledge_provider_usage_today` 并存 |
 | `service_type='weknora'` 枚举值 | `scripts/init-db.sql`、knowledge 映射模块 | 存储契约：DB 行里的 provider 实名标识 |
 | `servify_weknora_mappings` 表 | `scripts/init-db.sql` | 存储契约：表名含 provider 实名，改名即迁移，无混名收益 |
 | `fallback.legacy_kb_enabled` | `config.go` | P0-5 裁决：语义就是"legacy 内置知识库开关"，`legacy` 是准确描述而非混名 |

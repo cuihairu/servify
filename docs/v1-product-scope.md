@@ -90,7 +90,7 @@ AI 在 V1 里的角色是“客服协同助手”，不是完全自治的业务�
 
 V1 需要把知识库做成客服首答的核心资产：
 
-- 支持文档创建、更新、删除（当前 HTTP 仅暴露 CRUD；索引任务管理与搜索预览为 P1 增强项）
+- 支持文档创建、更新、删除（当前 HTTP 已暴露 CRUD 与索引任务管理：`GET/POST /:id/index-jobs`、`POST /index-jobs/:job_id/retry`，含 source 登记；搜索预览仍为 P1 增强项）
 - 支持站点 FAQ、产品说明、帮助文档、售后政策等内容沉淀
 - 支持 provider 可替换，不把核心逻辑绑定到 Dify、WeKnora、pgvector 或某个模型厂商
 - 支持索引状态、检索命中、fallback 情况的可观测信息

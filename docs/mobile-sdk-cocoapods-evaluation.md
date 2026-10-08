@@ -6,7 +6,8 @@
 ## 1. 现状
 
 - 分发形态：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`）+ Swift Package Manager
-  二进制分发。CI `ios-swift` job 在每次 push 产出并过体积门禁（≤ 2MB，M2 验收②）。
+  二进制分发。CI `ios-macos` job 在每次 push 产出 XCFramework（artifact `servify-kit-xcframework`）
+  并过体积门禁（≤ 2MB，M2 验收②；`ios-swift` 是源码测试 job，不出产物）。
 - 仓库内无 `.podspec`；接入文档（M4 产出）只需覆盖 SwiftPM 接入路径。
 
 ## 2. 评估维度

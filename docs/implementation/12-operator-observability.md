@@ -23,10 +23,9 @@
 当前进展：
 
 - `internal/observability/telemetry/names.go` — 全量指标名、标签名、span 名、日志字段常量
-- `internal/observability/telemetry/context.go` — request_id / session_id / tenant_id / trace_id 上下文传播
-- `internal/observability/telemetry/request_id.go` — Gin RequestID 中间件，自动生成 UUID 并注入上下文
-- `internal/observability/telemetry/logfields.go` — `FieldsFromContext()` 从上下文构建 logrus.Fields
-- 已集成到 `internal/app/server/middleware.go`，RequestID 中间件在 gin.Logger() 之前执行
+- `internal/observability/telemetry/request_id.go` — Gin RequestID 中间件，自动生成 UUID 并注入上下文（含 `FieldRequestID` 日志字段）
+- 上下文传播现状：request_id 传播已落地（request_id.go + `internal/app/server/middleware.go` 挂 RequestID 中间件，先于 gin.Logger() 执行）；session_id 落日志由 gin 中间件注入（`internal/app/server/gin_middleware.go`）
+- tenant_id / trace_id 透传**未落地**：`names.go` 已预留 `FieldTenantID` / `FieldTraceID` 常量，当前无消费方，`telemetry/context.go` / `logfields.go`（`FieldsFromContext`）文件不存在
 
 ## O2 core-service-level-indicators
 

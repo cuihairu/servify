@@ -6,7 +6,7 @@
 |------|------|---------|---------|
 | 活跃会话数 | 状态为 active 的会话 | `sessions.status = 'active'` | 实时计数 |
 | 等待客服数 | 状态为 waiting_human 的会话 | `sessions.status = 'waiting_human'` | 实时计数 |
-| 已结束会话数 | 状态为 ended 的会话 | `sessions.status = 'ended'` | 实时计数 |
+| 已结束会话数 | 状态为 ended 的会话 | `sessions.status = 'ended'`（落库值；domain 层 closed 经 conversation/infra 映射为 ended） | 数据口径；当前 DashboardStats 契约未透出该指标 |
 | 平均响应时间 | 客服首次回复的平均耗时 | `agents.avg_response_time` | 取 agent 表平均值 |
 
 ## 2. 工单统计
@@ -15,7 +15,7 @@
 |------|------|---------|---------|
 | 工单总数 | 所有工单 | `tickets` 表 | 按时间范围计数 |
 | 按状态分布 | open/assigned/in_progress/resolved/closed | `tickets.status` | 分组计数 |
-| 按优先级分布 | low/medium/high/urgent | `tickets.priority` | 分组计数 |
+| 按优先级分布 | low/normal/high/urgent | `tickets.priority` | 分组计数 |
 | 按分类分布 | 自定义分类 | `tickets.category` | 分组计数 |
 | 工单创建趋势 | 按日/周/月聚合 | `tickets.created_at` | 时间序列计数 |
 
@@ -54,26 +54,35 @@
 
 ## 6. 时间范围与筛选
 
-所有统计接口支持以下查询参数：
+statistics 族接口（`/api/statistics/*`，除 dashboard 外）要求以下查询参数：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `start_date` | YYYY-MM-DD | 起始日期（必填） |
+| `end_date` | YYYY-MM-DD | 结束日期（必填） |
+| `tenant_id` | string | 租户筛选（从 auth context 自动注入） |
+| `workspace_id` | string | 工作区筛选（从 auth context 自动注入） |
+
+满意度接口（`/api/satisfactions/stats`）使用：
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `date_from` | ISO 8601 | 起始时间 |
 | `date_to` | ISO 8601 | 结束时间 |
-| `period` | string | 聚合粒度：`day`/`week`/`month` |
-| `tenant_id` | string | 租户筛选（从 auth context 自动注入） |
-| `workspace_id` | string | 工作区筛选（从 auth context 自动注入） |
 
 ## 7. 前后端字段映射
 
 ### Dashboard API (`/api/statistics/dashboard`)
+
+后端 `DashboardStats`（`modules/analytics/contract/types.go`）按 json tag 原样透出，前端 `stats.<json_tag>` 一一对应：
+
 ```
-前端 stats.total_tickets    ← 后端 TotalTickets
-前端 stats.active_sessions  ← 后端 ActiveSessions
-前端 stats.pending_tickets  ← 后端 PendingTickets
-前端 stats.ai_usage_count   ← 后端 AIUsageCount
-前端 stats.avg_satisfaction ← 后端 AvgSatisfaction
-前端 stats.online_agents    ← 后端 OnlineAgents
+total_customers / total_agents / total_tickets / total_sessions
+today_tickets / today_sessions / today_messages
+open_tickets / assigned_tickets / resolved_tickets / closed_tickets
+online_agents / busy_agents / active_sessions
+avg_response_time / avg_resolution_time / customer_satisfaction
+ai_usage_today / knowledge_provider_usage_today / weknora_usage_today
 ```
 
 ### Satisfaction Stats API (`/api/satisfactions/stats`)
