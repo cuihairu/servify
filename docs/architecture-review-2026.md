@@ -1,5 +1,7 @@
 # 架构评估：AI / Agent 方向（2026-07）
 
+> ⚠️ **快照注记（2026-10-08 文档对账）**：本文是 2026-07 评估时点快照，其核心结论「AI 层＝单轮 RAG、agent-loop 尚未接线、Handle 不调用 ToolExecutor」已被后续批次推翻：agent loop（ToolPolicy 多步 tool 循环 + ChatStream 流式）已于 2026-10-04 接线进入主链路（`modules/ai/application/query_orchestrator.go`，核实记录见 [13-ai-agent-loop.md](./implementation/13-ai-agent-loop.md)）；`internal/services` 已整体移除、业务能力收口 `internal/modules/*`（27 模块封顶），platform 包现为 20 个。当前权威架构快照见 [current-architecture.md](./current-architecture.md)，本文仅作评估史存档。
+
 > 状态：评估文档（未改动任何产品代码）
 > 范围：结合 2025–2026 新出现的框架，重新审视 Servify 架构，聚焦 **AI/Agent 框架方向**，给出架构师视角的客观判断。
 > 配套阅读：[当前架构分析](./current-architecture.md)、[架构重设计计划](./architecture-redesign-plan.md)、[V1 产品范围](./v1-product-scope.md)
