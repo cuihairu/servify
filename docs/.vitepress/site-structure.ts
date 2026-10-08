@@ -26,6 +26,8 @@ const migrationGovernancePages = [
 ];
 
 const startPages = [
+  { text: '竞品调研（同类客服产品）', link: '/research/competitive-survey' },
+  { text: '界面原型 v1 设计说明', link: '/design/prototypes-v1/' },
   '/v1-product-scope',
   '/release-notes-v1.0.0',
   '/delivery-priorities',
@@ -132,6 +134,8 @@ export const docsNav = [
   {
     text: '研发附录',
     items: [
+      { text: '竞品调研', link: '/research/competitive-survey' },
+      { text: '界面原型 v1', link: '/design/prototypes-v1/' },
       { text: '实施计划', link: '/implementation/' },
       { text: '总体架构', link: '/ARCHITECTURE' },
       { text: '当前架构分析', link: '/current-architecture' },

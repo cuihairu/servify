@@ -33,6 +33,9 @@
   .scr b { display: block; font-size: 13.5px; margin-bottom: 3px; color: var(--color-text); }
   .scr span { font-size: 12px; color: var(--color-text-2); line-height: 1.5; display: block; }
   .scr .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-primary); margin-bottom: 7px; }
+  .scr .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 0 10px; }
+  .scr .shots.one { grid-template-columns: 1fr; }
+  .scr .shots img { display: block; width: 100%; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); }
 
   .rule { border-left: 3px solid var(--color-danger); padding: 10px 14px; background: rgba(220, 38, 38, 0.06); border-radius: 0 8px 8px 0; font-size: 13.5px; margin: 12px 0; }
 </style>
@@ -42,7 +45,7 @@
   <span class="mark">S</span>
   <h1>Servify 界面原型 v1</h1>
 </header>
-<p class="ver">2026-10-08 · 原型仅供审核，不含实现代码 · 亮暗双版：<code>?theme=dark</code> 或页内切换</p>
+<p class="ver"><a href="../../" style="color:var(--color-text-2)">← 文档站</a> · 2026-10-08 · 原型仅供审核，不含实现代码 · 亮暗双版：<code>?theme=dark</code> 或页内切换</p>
 
 <h2>风格结论（从参考例提炼）</h2>
 <p>参考 Crisp 的客服产品体验与交互模式（仅提炼模式，不抄代码与资产），结合设计系统方法生成器多轮对标，收敛为：</p>
@@ -76,6 +79,7 @@
 </div>
 
 <h2>从参考例借鉴的交互模式（原型已落位）</h2>
+<p class="muted">结论：8 条全部为<b>可参考</b>级——均为参考例验证过的成熟模式，且与竞品调研 <a href="../../research/competitive-survey.html">《竞品调研》</a>§四结论一致（聊天体验是同质化标配，差异点在 AI 首答形态与转人工顺滑度），故全部保留进原型；对应实现验收点是 todo <code>C1-2</code>（主题定制）与 <code>C1-3</code>（两风格真机验证），实现阶段按下列各项逐条对屏验收。</p>
 <ol>
   <li><b>悬浮球多态</b>：收起 / 未读徽标 / 展开（240ms spring，自右下角 scale+fade）→ <i>widget-fab</i></li>
   <li><b>日期分隔行 + 已读回执（双勾）</b> → <i>widget-chat</i></li>
@@ -87,20 +91,21 @@
   <li><b>暗色自适应</b>：跟随系统 + 远程主题强制档 → 全部屏</li>
 </ol>
 
-<h2>屏索引（9 屏 · 每屏亮暗双版）</h2>
+<h2>屏索引（10 屏 · 缩略图已内嵌，点击进单屏亮暗原稿）</h2>
+<p class="muted">结论：widget 三屏覆盖访客全旅程（进线 → 聊天 → 悬浮球形态），admin 五屏取 23 项菜单里流量最高的代表面，embed 两屏演示品牌注入——10 屏即 v1 实现范围的可视化清单。</p>
 <div class="screens">
-  <a class="scr" href="screens/widget-chat.html"><span class="tag">widget</span><b>聊天窗 · 桌面</b><span>380×620 旗舰屏：欢迎语 / AI 首答+引用 / 转人工 / typing / chips / 输入区</span></a>
-  <a class="scr" href="screens/widget-fab.html"><span class="tag">widget</span><b>悬浮球三态</b><span>收起 / 未读徽标 / 展开过渡（spring 240ms）</span></a>
-  <a class="scr" href="screens/widget-mobile.html"><span class="tag">widget</span><b>聊天窗 · 移动端</b><span>375 底部 sheet：把手 / 安全区 / chips 横滚</span></a>
-  <a class="scr" href="screens/admin-login.html"><span class="tag">admin</span><b>登录</b><span>账号密码 + OIDC 企业 SSO</span></a>
-  <a class="scr" href="screens/admin-dashboard.html"><span class="tag">admin</span><b>仪表板</b><span>4 指标卡 + 纯色堆叠柱图 + 最新动态流</span></a>
-  <a class="scr" href="screens/admin-workspace.html"><span class="tag">admin</span><b>接待工作台</b><span>三栏：等待队列 / 会话接管 / 客户上下文 + 宏</span></a>
-  <a class="scr" href="screens/admin-tickets.html"><span class="tag">admin</span><b>工单列表</b><span>状态 tab / 筛选 / 表格 / 分页（徽标六态）</span></a>
-  <a class="scr" href="screens/admin-knowledge.html"><span class="tag">admin</span><b>知识库</b><span>文档 / 片段命中 / 索引状态（AI 首答的来源面）</span></a>
-  <a class="scr" href="screens/embed-light.html"><span class="tag">embed</span><b>嵌入演示 · 浅色站</b><span>青屿云 teal 注入：桌面 980 + 375 变体同页</span></a>
-  <a class="scr" href="screens/embed-dark.html"><span class="tag">embed</span><b>嵌入演示 · 暗色站</b><span>暗版品牌提档（teal-500 保对比度）</span></a>
+  <a class="scr" href="screens/widget-chat.html"><span class="shots"><img src="screenshots/widget-chat-light.png" alt="聊天窗桌面端 亮版" loading="lazy"><img src="screenshots/widget-chat-dark.png" alt="聊天窗桌面端 暗版" loading="lazy"></span><span class="tag">widget</span><b>聊天窗 · 桌面</b><span>380×620 旗舰屏：欢迎语 / AI 首答+引用 / 转人工 / typing / chips / 输入区</span></a>
+  <a class="scr" href="screens/widget-fab.html"><span class="shots one"><img src="screenshots/widget-fab-light.png" alt="悬浮球三态（收起 / 未读 / 展开）" loading="lazy"></span><span class="tag">widget</span><b>悬浮球三态</b><span>收起 / 未读徽标 / 展开过渡（spring 240ms）</span></a>
+  <a class="scr" href="screens/widget-mobile.html"><span class="shots"><img src="screenshots/widget-mobile-light.png" alt="聊天窗移动端 亮版" loading="lazy"><img src="screenshots/widget-mobile-dark.png" alt="聊天窗移动端 暗版" loading="lazy"></span><span class="tag">widget</span><b>聊天窗 · 移动端</b><span>375 底部 sheet：把手 / 安全区 / chips 横滚</span></a>
+  <a class="scr" href="screens/admin-login.html"><span class="shots"><img src="screenshots/admin-login-light.png" alt="登录 亮版" loading="lazy"><img src="screenshots/admin-login-dark.png" alt="登录 暗版" loading="lazy"></span><span class="tag">admin</span><b>登录</b><span>账号密码 + OIDC 企业 SSO</span></a>
+  <a class="scr" href="screens/admin-dashboard.html"><span class="shots"><img src="screenshots/admin-dashboard-light.png" alt="仪表板 亮版" loading="lazy"><img src="screenshots/admin-dashboard-dark.png" alt="仪表板 暗版" loading="lazy"></span><span class="tag">admin</span><b>仪表板</b><span>4 指标卡 + 纯色堆叠柱图 + 最新动态流</span></a>
+  <a class="scr" href="screens/admin-workspace.html"><span class="shots"><img src="screenshots/admin-workspace-light.png" alt="接待工作台 亮版" loading="lazy"><img src="screenshots/admin-workspace-dark.png" alt="接待工作台 暗版" loading="lazy"></span><span class="tag">admin</span><b>接待工作台</b><span>三栏：等待队列 / 会话接管 / 客户上下文 + 宏</span></a>
+  <a class="scr" href="screens/admin-tickets.html"><span class="shots"><img src="screenshots/admin-tickets-light.png" alt="工单列表 亮版" loading="lazy"><img src="screenshots/admin-tickets-dark.png" alt="工单列表 暗版" loading="lazy"></span><span class="tag">admin</span><b>工单列表</b><span>状态 tab / 筛选 / 表格 / 分页（徽标六态）</span></a>
+  <a class="scr" href="screens/admin-knowledge.html"><span class="shots"><img src="screenshots/admin-knowledge-light.png" alt="知识库 亮版" loading="lazy"><img src="screenshots/admin-knowledge-dark.png" alt="知识库 暗版" loading="lazy"></span><span class="tag">admin</span><b>知识库</b><span>文档 / 片段命中 / 索引状态（AI 首答的来源面）</span></a>
+  <a class="scr" href="screens/embed-light.html"><span class="shots one"><img src="screenshots/embed-light.png" alt="嵌入演示 浅色站（青屿云 teal 注入）" loading="lazy"></span><span class="tag">embed</span><b>嵌入演示 · 浅色站</b><span>青屿云 teal 注入：桌面 980 + 375 变体同页</span></a>
+  <a class="scr" href="screens/embed-dark.html"><span class="shots one"><img src="screenshots/embed-dark.png" alt="嵌入演示 暗色站（品牌提档）" loading="lazy"></span><span class="tag">embed</span><b>嵌入演示 · 暗色站</b><span>暗版品牌提档（teal-500 保对比度）</span></a>
 </div>
-<p class="muted">截图在 <code>screenshots/</code>（亮暗 × 视口矩阵）。管理端信息架构对齐现有路由 23 项菜单，原型为其中 5 个代表屏。</p>
+<p class="muted">管理端信息架构对齐现有路由 23 项菜单，原型为其中 5 个代表屏；全尺寸原始截图（亮暗 × 视口矩阵共 18 张）在 <code>screenshots/</code>，单屏亮暗对照请点卡片进对应页面。</p>
 
 <h2>待审核确认点</h2>
 <ol>

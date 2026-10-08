@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vitepress dev . --host 0.0.0.0 --port 8082",
-    "build": "vitepress build .",
+    "build": "vitepress build . && mkdir -p .vitepress/dist/design && cp -r design/prototypes-v1 .vitepress/dist/design/",
     "preview": "vitepress preview . --host 0.0.0.0 --port 8082"
   },
   "devDependencies": {
