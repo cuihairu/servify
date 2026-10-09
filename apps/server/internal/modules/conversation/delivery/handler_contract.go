@@ -21,4 +21,5 @@ type HandlerService interface {
 	AssignAgent(ctx context.Context, sessionID string, agentID uint) (*ConversationDTO, error)
 	Transfer(ctx context.Context, sessionID string, toAgentID uint) (*ConversationDTO, error)
 	Close(ctx context.Context, sessionID string) (*ConversationDTO, error)
+	CloseWithOptions(ctx context.Context, sessionID string, opts conversationapp.CloseOptions) (*ConversationDTO, error)
 }

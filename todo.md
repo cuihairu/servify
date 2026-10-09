@@ -1172,6 +1172,14 @@
   - 追加同链一现+加固（同日）：run 37661395908（8821fd6 纯 todo 头）`offlineHintOmittedWhenNotConfigured` debug 变体红——FULL 日志首秀直达段位：`ConnectionLifecycleTest.kt:215`（断线→重连耗尽→Disconnected 段，裸 5s），即 reconnectExhaustion 三现立案的**同一条链**（该链 CI 重载下实测能烧穿 5s）。同文件范式现成，不走 rerun 循环直接加固（d7c33a2）：offlineHint 两用例首连改 awaitSegmentState 10s、耗尽段拉平 15s（与 reconnectExhaustion 同段同预算）、段标入错；hint 等待 15s 纯耐心（hint 恰在终态后发射不可 fail-fast，注释在案）。断言只紧不松；本地 release 10×/10 绿。
   - 四现+定向修（同日）：run 37668312028（4311f96 纯 todo 头）`reconnectExhaustion` release 变体红，awaitSegmentState 段位消息**首次命中**：`[重连耗尽] 预算 15000ms 内未达：当前状态=Connecting`——悬空非缓慢（首连/恢复段均过，重连 connect() 已设 Connecting 后握手结果 15s 不到来），加预算无意义。定向修（仅动测试，不加预算）：耗尽段改双证据——烧穿时按 `server.requestCount` 分流二分根因面（≥2 =「重连握手已到达 → 404 未回/onFailure 丢失面」；<2 =「重连协程/MockWebServer accept 饿死面」），五现起错误消息直达根因面。台账注释同步四现。本地 release 10× 绿。
 
+- 附注（2026-10-09，**演进方向刀一：Ticket 关闭前拦截（§7.1 P1）**；派发项为「额度重置火力全开，按 todo/上一批未完项连做，每模块一笔 commit」；todo 主链全 [x] 后从 release notes 演进方向开工）：
+  - 数据面（7eeff38，ticket 模块）：`ListTicketsQuery.SessionID` 过滤（infra `session_id = ?`）+ `QueryService.CountOpenBySession`（未完结口径 open/assigned/in_progress，取样上限 100，返回 total+ids 供拦截提示）；接口不动、Service 组合 ListTickets，stub 零破坏。
+  - 拦截面（本刀，conversation 模块）：`OpenTicketChecker` 本地窄接口（依赖倒置，Attach 式注入 nil 安全）+ `Close → CloseWithOptions(CloseOptions)`——未结单 >0 时 `ErrOpenTicketsRemain` 拒关（fail-closed，查询面报错同样拒）；`AllowOpenTickets=true` 为明确降级通道；关闭成功发布 `conversation.closed`（forced 标记）。命名空间已核：ticket.SessionID=sessions 表 ID（访客建单 `PrepareCreateVisitorTicket` 强校验存在性，orchestrator.go:158），与 conversation.ID 同域，管理员建单为请求体约定值。
+  - HTTP 面：`POST /api/omni/sessions/:id/close` 被拦回 409+工单明细，`?force=true` 走降级 200；HandlerService 接口 +`CloseWithOptions`（adapter+测试 stub 两实现同步）。
+  - 组装：`wireConversationRuntime` 注入 `ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB))`（同一 rt.DB）。
+  - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
+  - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
+
 - 附注（2026-10-08，**C 批次遗留收口：每能力一页补坐席工作台/工单全流程 + 导航孤儿二次收口 + AI 味复扫**；派发项为「文档重整批+web 嵌入集成指南+legacy 清理未完项连续做完」）：
   - 批次未完项盘点：C1 余 ferry 侧真嵌验收（外部步骤，维持不动）；C2 三子项 10-07 附注在案全闭环，复核无未完项，本刀未动；C3 遗留两项（implementation/ 子站侧边栏、新能力页未扩写）为本刀实体。
   - 能力页缺口对照：V1 收敛六能力（v1-product-scope §保留的核心功能）逐一对 docs 面——Web 嵌入=embedding-guide、AI 首答/知识库=WEKNORA/RAGFLOW/ai-fallback、人工接管与坐席工作台、工单全流程两能力此前**零页面**，本刀补齐（agent-workspace.md / ticket-workflow.md）；其余 27 模块中 SLA/排班/质检/游戏化/宏/自动化等属 P1/P2 或后台纵深，不按模块清单扩页（避免 API 流水账，C3-1 口径），后续按需。

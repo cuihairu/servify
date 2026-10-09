@@ -56,7 +56,9 @@ import (
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	suggestioninfra "servify/apps/server/internal/modules/suggestion/infra"
+	ticketapp "servify/apps/server/internal/modules/ticket/application"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	ticketinfra "servify/apps/server/internal/modules/ticket/infra"
 	translationapp "servify/apps/server/internal/modules/translation/application"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	translationinfra "servify/apps/server/internal/modules/translation/infra"
@@ -171,7 +173,12 @@ func wireRealtimeRuntime(rt *Runtime) (*realtimeplatform.WebSocketHub, *realtime
 
 func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, voiceHub *realtimeplatform.VoiceHub) (*conversationdelivery.WebSocketMessageAdapter, error) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
-	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).AttachBusinessMetrics(rt.BusinessMetrics)
+	// 会话关闭前拦截（v1-convergence-plan §7.1）：注入 ticket 查询面（同一
+	// rt.DB），Close 前置未结工单检查；ticket.SessionID 与会话 ID 同命名空间
+	// （sessions 表 ID，访客建单 PrepareCreateVisitorTicket 强校验存在性）。
+	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).
+		AttachBusinessMetrics(rt.BusinessMetrics).
+		AttachOpenTicketChecker(ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB)))
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
 	historyAdapter := conversationdelivery.NewWebSocketMessageAdapter(conversationService)
 	wsHub.SetConversationMessageWriter(historyAdapter)

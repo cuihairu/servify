@@ -12,6 +12,8 @@ import (
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	conversationdomain "servify/apps/server/internal/modules/conversation/domain"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
+	ticketapp "servify/apps/server/internal/modules/ticket/application"
+	ticketinfra "servify/apps/server/internal/modules/ticket/infra"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 
 	"github.com/gin-gonic/gin"
@@ -502,5 +504,57 @@ func TestConversationWorkspaceHandler_CloseSession_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestConversationWorkspaceHandler_CloseSession_BlockedByOpenTickets(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := newConversationWorkspaceTestDB(t)
+	if err := db.AutoMigrate(&models.Ticket{}, &models.CustomField{}, &models.TicketCustomFieldValue{}, &models.Agent{}); err != nil {
+		t.Fatalf("auto migrate tickets: %v", err)
+	}
+	// 注入未结单查询面（组装层同款：同一 db、ticket/application.QueryService）。
+	service := seedConversation(t, db).AttachOpenTicketChecker(
+		ticketapp.NewQueryService(ticketinfra.NewGormRepository(db)))
+	handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(service), nil, nil)
+
+	ticketID := uint(11)
+	customerID := uint(1)
+	if err := db.Create(&models.Ticket{
+		ID:         ticketID,
+		Title:      "follow-up",
+		CustomerID: customerID,
+		SessionID:  &[]string{"sess-1"}[0],
+		Status:     "open",
+		Priority:   "normal",
+		Category:   "general",
+	}).Error; err != nil {
+		t.Fatalf("seed open ticket: %v", err)
+	}
+
+	router := gin.New()
+	group := router.Group("/api")
+	RegisterConversationWorkspaceRoutes(group, handler)
+
+	// 默认路径：未结工单拦截 → 409，会话保持 active。
+	req := httptest.NewRequest(http.MethodPost, "/api/omni/sessions/sess-1/close", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+	if dto, err := service.GetConversation(context.Background(), "sess-1"); err != nil || dto.Status != "active" {
+		t.Fatalf("conversation should stay active after 409, got %+v err=%v", dto, err)
+	}
+
+	// 明确降级通道：?force=true → 200，会话关闭。
+	req = httptest.NewRequest(http.MethodPost, "/api/omni/sessions/sess-1/close?force=true", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with force=true, got %d: %s", w.Code, w.Body.String())
+	}
+	if dto, err := service.GetConversation(context.Background(), "sess-1"); err != nil || dto.Status != "closed" {
+		t.Fatalf("conversation should be closed after forced close, got %+v err=%v", dto, err)
 	}
 }

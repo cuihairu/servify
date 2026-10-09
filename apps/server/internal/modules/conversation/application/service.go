@@ -12,10 +12,11 @@ import (
 )
 
 type Service struct {
-	repo      ConversationRepository
-	publisher EventPublisher
-	now       func() time.Time
-	metrics   *svcmetrics.BusinessMetrics
+	repo        ConversationRepository
+	publisher   EventPublisher
+	now         func() time.Time
+	metrics     *svcmetrics.BusinessMetrics
+	openTickets OpenTicketChecker
 }
 
 func NewService(repo ConversationRepository, publisher EventPublisher) *Service {
@@ -33,6 +34,17 @@ func (s *Service) AttachBusinessMetrics(m *svcmetrics.BusinessMetrics) *Service 
 		return s
 	}
 	s.metrics = m
+	return s
+}
+
+// AttachOpenTicketChecker 注入未结工单查询面（nil 安全，可链式）。
+// 未注入时不拦截——既有组装路径（会话自闭环场景）行为不变；
+// 注入后 Close 前置未结单检查（v1-convergence-plan §7.1）。
+func (s *Service) AttachOpenTicketChecker(checker OpenTicketChecker) *Service {
+	if s == nil {
+		return s
+	}
+	s.openTickets = checker
 	return s
 }
 
@@ -249,12 +261,29 @@ func (s *Service) Transfer(ctx context.Context, conversationID string, toAgentID
 }
 
 func (s *Service) Close(ctx context.Context, conversationID string) (*ConversationDTO, error) {
+	return s.CloseWithOptions(ctx, conversationID, CloseOptions{})
+}
+
+// CloseWithOptions 关闭会话：默认前置未结工单拦截（checker 已注入时）——
+// 仍有 open/assigned/in_progress 工单则拒绝并回传工单号，须先收尾结单或以
+// AllowOpenTickets=true 显式降级（v1-convergence-plan §7.1）。关闭成功发布
+// conversation.closed 事件（forced 标记是否走了降级通道）。
+func (s *Service) CloseWithOptions(ctx context.Context, conversationID string, opts CloseOptions) (*ConversationDTO, error) {
 	if strings.TrimSpace(conversationID) == "" {
 		return nil, fmt.Errorf("conversation_id required")
 	}
 	conv, err := s.repo.GetConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
+	}
+	if !opts.AllowOpenTickets && s.openTickets != nil {
+		open, ids, err := s.openTickets.CountOpenBySession(ctx, conversationID)
+		if err != nil {
+			return nil, fmt.Errorf("check open tickets: %w", err)
+		}
+		if open > 0 {
+			return nil, fmt.Errorf("%w: %d unresolved (ids %v): resolve them first or retry with allow_open_tickets", ErrOpenTicketsRemain, open, ids)
+		}
 	}
 	now := s.now()
 	conv.Status = domain.ConversationStatusClosed
@@ -265,6 +294,11 @@ func (s *Service) Close(ctx context.Context, conversationID string) (*Conversati
 	// Emit system event for close
 	_, _ = s.ingestMessage(ctx, conversationID, "", domain.ParticipantRoleSystem, domain.MessageKindSystem,
 		"会话已结束", nil)
+	s.publish(ctx, ConversationClosedEventName, conversationID, map[string]interface{}{
+		"conversation_id": conversationID,
+		"ended_at":        now,
+		"forced":          opts.AllowOpenTickets,
+	})
 	dto := MapConversation(*conv)
 	return &dto, nil
 }

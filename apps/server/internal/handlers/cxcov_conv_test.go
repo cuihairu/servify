@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,9 @@ func (s *cxcConversationService) Transfer(ctx context.Context, sessionID string,
 	return &conversationdelivery.ConversationDTO{}, nil
 }
 func (s *cxcConversationService) Close(ctx context.Context, sessionID string) (*conversationdelivery.ConversationDTO, error) {
+	return &conversationdelivery.ConversationDTO{}, nil
+}
+func (s *cxcConversationService) CloseWithOptions(ctx context.Context, sessionID string, opts conversationapp.CloseOptions) (*conversationdelivery.ConversationDTO, error) {
 	return &conversationdelivery.ConversationDTO{}, nil
 }
 

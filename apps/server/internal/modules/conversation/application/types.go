@@ -33,6 +33,14 @@ type IngestSystemEventCommand struct {
 	Metadata       map[string]string
 }
 
+// CloseOptions 控制会话关闭行为。
+type CloseOptions struct {
+	// AllowOpenTickets 为 true 时跳过未结工单拦截——「明确降级」通道
+	// （v1-convergence-plan §7.1：关闭时未完结工作必须要求先建单或明确降级）。
+	// false 且存在未完结工单时关闭被拒绝（ErrOpenTicketsRemain）。
+	AllowOpenTickets bool
+}
+
 type ConversationDTO struct {
 	ID            string                `json:"id"`
 	CustomerID    *uint                 `json:"customer_id,omitempty"`

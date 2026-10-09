@@ -123,6 +123,19 @@ func (a *HandlerServiceAdapter) Close(ctx context.Context, sessionID string) (*c
 	return dto, nil
 }
 
+// CloseWithOptions 透传关闭选项（未结工单拦截 / AllowOpenTickets 显式降级，
+// v1-convergence-plan §7.1）；ErrOpenTicketsRemain 原样上抛由 HTTP 层映射 409。
+func (a *HandlerServiceAdapter) CloseWithOptions(ctx context.Context, sessionID string, opts conversationapp.CloseOptions) (*conversationapp.ConversationDTO, error) {
+	dto, err := a.service.CloseWithOptions(ctx, sessionID, opts)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrConversationNotFound
+		}
+		return nil, err
+	}
+	return dto, nil
+}
+
 var _ HandlerService = (*HandlerServiceAdapter)(nil)
 
 func synthesizeConversationDTO(sessionID string, lastMessageAt time.Time) *conversationapp.ConversationDTO {

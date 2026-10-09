@@ -11,6 +11,7 @@ import (
 const (
 	ConversationCreatedEventName         = "conversation.created"
 	ConversationMessageReceivedEventName = "conversation.message_received"
+	ConversationClosedEventName          = "conversation.closed"
 )
 
 type ConversationEvent struct {

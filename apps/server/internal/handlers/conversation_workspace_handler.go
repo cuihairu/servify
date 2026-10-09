@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -364,11 +365,18 @@ func (h *ConversationWorkspaceHandler) CloseSession(c *gin.Context) {
 	}
 
 	sessionID := c.Param("id")
-	dto, err := h.service.Close(c.Request.Context(), sessionID)
+	// ?force=true 走「明确降级」通道：跳过未结工单拦截强制关闭
+	// （v1-convergence-plan §7.1），默认路径被拦截时返回 409 + 工单明细。
+	allowOpenTickets := c.Query("force") == "true"
+	dto, err := h.service.CloseWithOptions(c.Request.Context(), sessionID, conversationapp.CloseOptions{
+		AllowOpenTickets: allowOpenTickets,
+	})
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, conversationdelivery.ErrConversationNotFound) {
 			status = http.StatusNotFound
+		} else if errors.Is(err, conversationapp.ErrOpenTicketsRemain) {
+			status = http.StatusConflict
 		}
 		c.JSON(status, ErrorResponse{
 			Error:   "Failed to close conversation",
