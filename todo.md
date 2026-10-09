@@ -153,7 +153,7 @@
 > 三件批：C1 web 嵌入集成指南（含组件外观令+聊天窗主题令）、C2 admin-legacy 清理、C3 文档全面重整。
 > 纪律：连做不等催；每增量 commit（push 失败本地记账）；文档批次提交信息写明具体改动（2026-10-07 起，「docs: 优化展示」仅限无从描述的微调兜底）。
 
-### [-] C1 web 嵌入集成指南与组件外观（ferry 对接面）
+### [x] C1 web 嵌入集成指南与组件外观（ferry 对接面）
 
 - 任务清单：
   - [x] C1-1 组件外观配置面：icon 三档（内置预设图标库若干风格/自定义上传图片与 SVG/URL 引用）+ 样式可配（主色调/圆角/悬浮位置四角/大小）+ 初始化参数承载（嵌入 snippet 带外观配置，改样式不改代码）+ 亮暗两套显示核验
@@ -167,6 +167,7 @@
   - 全量门禁绿：Go 153 包 0 失败 + admin lint/typecheck 绿；源码 TODO/FIXME 零遗留（仅 `.umi-production` 生成目录内框架自留一条，非源码）；docs 站点导航 72 登记页无断链；demo-sdk README/示例页与 widget.js 一致
 - 下一步：已完成（ferry 回报见下）；我侧无待办（问询随到随答）
 - ferry 验收回报（2026-10-10）：ferry commits 18d045b（feat(panel): add optional servify support chat embed）+ 46d81e7（fix(server): require auth on admin data plane）。落地形态=FERRY_SUPPORT_URL/FERRY_SUPPORT_SERVICE_KEY 双 env 配置门控，未配置时 enabled:false 零依赖零外呼；采用 widget.js 直嵌方案 A（ServifyWidget.create，icon=headset/color=#6e79d6/theme=auto/brand=ferry 支持）；GET /api/panel/support 签发 guest token + 服务端同步客户上下文（context_synced:true，notes 携带套餐状态/流量/到期）。实机链路全通：servify customer 建+source=ferry、WS 会话建立+消息收发+AI 流式通道响应、POST /api/v1/tickets 201（session 绑定 ferry_user、source=chat）、agent 视图可见工单；guest token 三层绑定验讫（正确 200/错会话 401/无 token 401，security.guest_token.required=true）；顺带发现并修复 ferry admin 数据面裸奔（/api 组无鉴权）
+- 我侧勾收核对（2026-10-10，servify 侧）：ferry 四点互证成立（ferry 仓 18d045b/46d81e7/a7914ea + 本仓 6f6f89e），验收主体（真嵌主链路：组件直嵌→会话→工单→客户上下文→鉴权面）实机跑通，C1-4 与父项勾收；边界留痕——预登记步骤⑤webhook 回流验签与⑥themeUrl 远程主题两项未在 ferry 实机链路覆盖（ferry 场景用 theme=auto、未配 webhook，非该场景必要路径；我侧 §15 核对已确认两接口路由注册与签名形态在册），如后续宿主接 webhook 或远程主题再按 §5/§7.3 走一次
 - 阻塞项：无
 
 ### [x] C2 admin-legacy 清理计划
