@@ -99,7 +99,9 @@ wait_for() {
 }
 
 start_server() {
-  bash -c 'cd "$1" && exec env SERVIFY_JWT_SECRET="${SERVIFY_JWT_SECRET:-dev-secret}" DB_DRIVER=sqlite DB_DSN="$2" SERVIFY_PORT="$3" "$4"' \
+  # 验收窗口按 UTC 日界（date -u），服务落库时间戳必须同为 UTC，否则本机
+  # 非 UTC 时区下 created_at 为本地墙上时间，文本比较错位会滤掉当天工单。
+  bash -c 'cd "$1" && exec env TZ=UTC SERVIFY_JWT_SECRET="${SERVIFY_JWT_SECRET:-dev-secret}" DB_DRIVER=sqlite DB_DSN="$2" SERVIFY_PORT="$3" "$4"' \
     _ "$WORK_DIR" "$DB_DSN" "$SERVIFY_PORT" "$PROJECT_ROOT/bin/servify" \
     >> "$EVIDENCE_DIR/server-log.txt" 2>&1 &
   SERVER_PID=$!
