@@ -12,7 +12,7 @@
 //
 // Usage:
 //
-//	GOTOOLCHAIN=go1.25.7 go -C apps/server run ./cmd/gen-baseline \
+//	go -C apps/server run ./cmd/gen-baseline \
 //	  -dsn "postgres://postgres:postgres@localhost:55432/servify?sslmode=disable" \
 //	  -out internal/app/bootstrap/migrations/000001_init.up.sql
 //
