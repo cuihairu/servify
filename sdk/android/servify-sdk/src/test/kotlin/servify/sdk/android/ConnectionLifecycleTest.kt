@@ -158,9 +158,11 @@ class ConnectionLifecycleTest {
         //
         // 台账：35855565576（二现，改本地 cancel）→ 37649797496（三现，Timeout 无段位）
         // → 37668312028（四现，2026-10-08，段位消息命中：重连耗尽段悬空 Connecting
-        // 整 15s——首连/恢复段均过）。webSocket/reconnectAttempt/everConnected 均已
+        // 整 15s——首连/恢复段均过）→ 37867895291（六现，2026-10-09，恢复段悬空
+        // Connecting 整 10s——耗尽段双证据生效后烧点迁移至恢复段，恢复段同款补齐）。
+        // webSocket/reconnectAttempt/everConnected 均已
         // @Volatile，可见性面排除；三段全部分段标注，首连/恢复 10s，耗尽段 15s 双
-        // 证据（状态 + server 请求计数）——五现起错误消息直接二分根因面。
+        // 证据（状态 + server 请求计数）——五/六现起错误消息直接二分根因面。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
@@ -191,9 +193,30 @@ class ConnectionLifecycleTest {
         }
 
         // §4.4：disconnected ─(用户再次打开会话页)→ connecting → connected。
+        //
+        // 六现 37867895291（2026-10-09，8288d65 纯 test 头）段位消息命中：恢复段
+        // 悬空 Connecting 整 10s（首连/耗尽段均过）——与四现耗尽段同症，恢复段
+        // 补同款双证据：烧穿按 server 请求计数二分（第 3 请求 = 恢复握手），
+        // ≥3 → upgrade 未回/onOpen 丢失面；<3 → 恢复 connect 协程/accept 饿死面。
+        // 提前落 Disconnected 同样带计数即刻报（fail-fast 只提前，不改判据）。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat.connect()
-        awaitSegmentState("恢复重连", budgetMs = 10_000) { it is ConnectionState.Connected }
+        val recovered = withTimeoutOrNull(10_000) {
+            chat.events.connectionState.first {
+                it == ConnectionState.Connected || it == ConnectionState.Disconnected
+            }
+        }
+        if (recovered != ConnectionState.Connected) {
+            val current = chat.events.connectionState.value
+            val handshakes = server.requestCount
+            val surface = if (handshakes >= 3) {
+                "恢复握手已到达 server（请求数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
+            } else {
+                "恢复握手未到达 server（请求数=$handshakes）→ 恢复 connect 协程/MockWebServer accept 饿死面"
+            }
+            val how = if (recovered == null) "10s 未达 Connected" else "提前落入 Disconnected"
+            error("[恢复重连] $how：当前状态=$current；$surface")
+        }
     }
 
     /** M3 Branding 四件套收口：offlineText 在 disconnected 终态（耗尽/握手失败）追加系统提示行。 */
