@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README.zh.md)
+
 <p align="center">
   <img src="./docs/.vitepress/public/icon.png" width="80" alt="Servify Logo">
 </p>
@@ -6,7 +8,7 @@
 
 # Servify
 
-**开源智能客服系统** — Web 优先，AI 首答，人工接管，工单全流程
+**Open-source intelligent customer service system** — Web-first, AI first response, human takeover, full ticket lifecycle
 
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -19,149 +21,149 @@
 
 ---
 
-Servify 是一个面向企业独立部署的开源智能客服系统。
+Servify is an open-source intelligent customer service system designed for enterprise self-hosted deployment.
 
-第一版产品目标先收敛在企业官网、品牌独立站、SaaS 官网和文档站的 Web 智能客服：站点嵌入客服入口，AI 基于知识库首答，复杂问题转人工并沉淀为工单。
+The first release focuses on Web-based intelligent customer service for corporate websites, brand sites, SaaS marketing sites, and documentation sites: a site embeds a customer service entry point, AI answers first based on the knowledge base, and complex questions are escalated to human agents and recorded as tickets.
 
-它当前先把客服主链路做完整，暂不往平台化多租户走：`Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程`。
+For now, the product completes the core service chain first and does not expand toward a multi-tenant platform: `Web entry -> AI first response -> human takeover -> transfer and collaboration -> full ticket lifecycle`.
 
-当问题需要更强的引导和排查时，远程协助仍然是保留中的增强方向；但它不再作为第一版验收的中心能力。
+Remote assistance remains a reserved enhancement direction for scenarios that need stronger step-by-step guidance and troubleshooting, but it is no longer a central acceptance capability of the first release.
 
-当前仓库已经收敛到 `模块化单体` 架构，重点围绕会话、路由、工单、AI、知识库和后台运营持续演化；多端 SDK、更多渠道和语音能力属于后续扩展边界，而不是当前产品中心。
-
----
-
-## 当前状态
-
-`v1.0.0` 已于 2026-10-04 发布（见
-[发布说明](./docs/release-notes-v1.0.0.md)），V1.0 收敛改造 B0–B4 批次
-全部过闸：
-
-- 客服主链路打通：`conversation`（中心聚合）、`routing`、`ticket`
-- AI 与知识库产品化：`ai`（首答记录/反馈回传/检索分析）、`knowledge`
-  （来源登记/文档版本/索引任务/citation）
-- 管理面安全基线：认证、审计、token state revoke、session security
-  surface、PII 导出/擦除与保留策略
-- 27 个一级模块不增（架构门禁），薄壳模块按「核心 7 模块的子能力」
-  叙事收口
-- Web 优先、多端预留：Web SDK 已实现，Android/iOS 原生 SDK 已随
-  M1–M3 落地，语音与多渠道冻结为扩展边界
-- 后续演进：Routing 打分引擎、Ticket 关闭前拦截等（见发布说明
-  「演进方向」）
+The repository has converged on a `modular monolith` architecture, evolving around conversation, routing, ticket, AI, knowledge base, and back-office operations; multi-platform SDKs, additional channels, and voice capabilities are future extension boundaries rather than the current product center.
 
 ---
 
-## 产品定位
+## Current Status
 
-Servify 当前更适合这样理解：
+`v1.0.0` was released on 2026-10-04 (see the
+[release notes](./docs/release-notes-v1.0.0.md)); all convergence batches
+B0–B4 of the V1.0 overhaul passed their gates:
 
-- 一个企业部署一套 Servify
-- 访客从 Web 页面发起咨询
-- AI 先做首答、澄清和知识召回
-- 需要时可进一步升级到协助型处理，但主链路先保证 AI 首答、人工接管和工单全流程
-- 坐席随时接管、协作、转接
-- 无法即时解决的问题进入工单继续跟进
-- 管理员在后台管理坐席、知识库、权限和基础配置
-
-这意味着 `tenant/workspace` 更接近治理和隔离能力，而不是产品主叙事。
-
-## 远程协助当前指什么
-
-在 Servify 当前阶段，远程协助应该被理解为：
-
-- 客户在 Web 会话中遇到需要一步步引导的问题时，客服可以从“解释”升级到“带着完成”
-- AI、人工接管、实时交互和工单在同一条连续服务链路上
-- 远程协助结束后，客服仍可以继续转接、协作或沉淀工单，而不是把上下文丢到外部系统
-
-当前仓库已经具备这条能力链路的实时基础，包括会话、消息、WebSocket、WebRTC stats / connections、人工接管和后续工单衔接能力；管理端会话页也已经有最小协助入口，但它现在还不是一个“已经交付完整 co-browsing 产品”的承诺。
+- Core service chain in place: `conversation` (central aggregate), `routing`, `ticket`
+- AI and knowledge base productization: `ai` (first-response records / feedback loop / retrieval analytics), `knowledge`
+  (source registration / document versions / index jobs / citation)
+- Admin-plane security baseline: authentication, audit logging, token state revocation, session security
+  surface, PII export/erasure, and retention policies
+- 27 top-level modules, none added (enforced by an architecture gate); thin-shell modules are narrated as
+  "sub-capabilities of the 7 core modules"
+- Web-first with other surfaces reserved: the Web SDK is implemented, native Android/iOS SDKs landed with
+  M1–M3, and voice and additional channels are frozen as extension boundaries
+- Follow-up evolution: the routing scoring engine, pre-close ticket interception, and more (see "Evolution
+  directions" in the release notes)
 
 ---
 
-## 仓库结构
+## Product Positioning
+
+Servify is best understood this way at present:
+
+- One enterprise deploys one Servify instance
+- Visitors start a conversation from a web page
+- AI handles the first response, clarification, and knowledge retrieval
+- Escalation to assistance-style handling is available when needed, but the main chain guarantees AI first response, human takeover, and the full ticket lifecycle
+- Agents can take over, collaborate, and transfer at any time
+- Issues that cannot be resolved immediately move into tickets for follow-up
+- Administrators manage agents, the knowledge base, permissions, and basic configuration in the admin console
+
+This means `tenant/workspace` functions closer to a governance and isolation capability than the product's main narrative.
+
+## What Remote Assistance Means Today
+
+At the current stage, remote assistance should be understood as:
+
+- When a customer hits a problem that needs step-by-step guidance in a web conversation, the agent can move from "explaining" to "completing it together"
+- AI, human takeover, real-time interaction, and tickets live on one continuous service chain
+- After remote assistance ends, the agent can still transfer, collaborate, or record a ticket, instead of dropping the context into an external system
+
+The repository already has the real-time foundation for this capability chain, including conversations, messages, WebSocket, WebRTC stats / connections, human takeover, and downstream ticket linkage; the admin conversation page also has a minimal assistance entry point. It is not yet a commitment of a "fully delivered co-browsing product".
+
+---
+
+## Repository Structure
 
 ```text
 .
 |-- apps/
-|   |-- server/              # Go 服务端
-|   |-- admin/               # Admin 管理面板（UmiJS + Ant Design Pro）
-|   |-- demo/                # 产品演示站点
-|   |-- demo-sdk/            # SDK 预构建产物与示例
-|   `-- website/             # 官网静态站点
+|   |-- server/              # Go server
+|   |-- admin/               # Admin console (UmiJS + Ant Design Pro)
+|   |-- demo/                # Product demo site
+|   |-- demo-sdk/            # Prebuilt SDK artifacts and examples
+|   `-- website/             # Official static website
 |-- docs/
-|   `-- implementation/      # 分主题实施 backlog
-|-- infra/                   # compose、部署辅助
-|-- internal/                # 共用内部包
-`-- sdk/                     # SDK 工作区（源码）
+|   `-- implementation/      # Topic-based implementation backlogs
+|-- infra/                   # Compose files, deployment helpers
+|-- internal/                # Shared internal packages
+`-- sdk/                     # SDK workspace (source)
 ```
 
-## 常用校验入口
+## Common Verification Entry Points
 
 - `make local-check`
 - `make security-check CONFIG=./config.yml`
 - `make observability-check CONFIG=./config.yml`
 - `make release-check CONFIG=./config.yml`
 
-## 根目录职责
+## Repository Root Responsibilities
 
-### 应包含的内容
+### What Belongs Here
 
-| 目录/文件 | 说明 |
+| Directory / File | Description |
 |-----------|------|
-| `apps/` | 应用入口与可运行表面，包括服务端、管理端、演示站点等 |
-| `apps/server/` | Go 服务端（模块化单体架构） |
-| `apps/admin/` | Admin 管理面板（UmiJS + Ant Design Pro） |
-| `apps/demo/` | 产品演示站点与示例 |
-| `apps/demo-sdk/` | SDK 预构建产物（UMD/ESM）与集成示例 |
-| `apps/website/` | 官网静态站点 |
-| `docs/` | 说明文档、实施 backlog、发布与协作规则 |
-| `infra/` | 本地或部署环境相关的 compose、可观测性与辅助配置 |
-| `scripts/` | CI、本地开发、生成物与检查脚本 |
-| `sdk/` | SDK workspace 源码（TypeScript） |
-| `config.yml`、`config.weknora.yml` | 本地运行配置样例；`config.yml` 默认使用 pgvector 自建知识库，`config.weknora.yml` 用于 WeKnora 兼容部署 |
-| `config.production.secure.example.yml` | 生产环境安全配置模板 |
-| `generated-assets.manifest` | 必须提交的生成物清单 |
-| `Makefile`、`build.sh` | 常用构建与开发入口 |
+| `apps/` | Application entry points and runnable surfaces: server, admin console, demo site, etc. |
+| `apps/server/` | Go server (modular monolith architecture) |
+| `apps/admin/` | Admin console (UmiJS + Ant Design Pro) |
+| `apps/demo/` | Product demo site and examples |
+| `apps/demo-sdk/` | Prebuilt SDK artifacts (UMD/ESM) and integration examples |
+| `apps/website/` | Official static website |
+| `docs/` | Documentation, implementation backlogs, release and collaboration rules |
+| `infra/` | Compose files, observability, and helper configuration for local or deployed environments |
+| `scripts/` | CI, local development, generated-asset, and check scripts |
+| `sdk/` | SDK workspace source (TypeScript) |
+| `config.yml`, `config.weknora.yml` | Local runtime configuration samples; `config.yml` uses the self-hosted pgvector knowledge base by default, `config.weknora.yml` targets WeKnora-compatible deployments |
+| `config.production.secure.example.yml` | Production security configuration template |
+| `generated-assets.manifest` | Manifest of generated assets that must be committed |
+| `Makefile`, `build.sh` | Common build and development entry points |
 
-### 不应长期出现的内容
+### What Should Not Linger Here
 
-- 本地构建二进制，例如 `server`、`server.exe`
-- 运行时输出目录，例如 `uploads/`、`.runtime/`
-- 临时调试文件、测试残留、缓存文件
-
----
-
-## 架构原则
-
-- **业务模块化**：每个模块具备 `domain`、`application`、`infra`、`delivery`
-- **平台能力抽象**：认证、事件总线、AI/Knowledge provider、realtime/SIP 独立
-- **多端 SDK 预留**：Web 先落地，API/App 预留 contract，不做伪实现
-- **语音能力隔离**：通过 `voice` 模块和 SIP adapter 接入，不耦合聊天链路
-- **Provider 可替换**：默认 pgvector 自建知识库，Dify 为推荐的外部知识源，WeKnora 为兼容实现之一
+- Locally built binaries, such as `server`, `server.exe`
+- Runtime output directories, such as `uploads/`, `.runtime/`
+- Temporary debug files, test leftovers, cache files
 
 ---
 
-## 当前重点
+## Architecture Principles
 
-当前阶段，Servify 优先做好这些事情：
-
-- 把 Web 接入做成正式产品入口
-- 把 AI 协同和人工接管打通
-- 把转接、协作和工单全流程收完整
-- 把后台运营和安全基线稳定下来
-- 把远程协助保留为后续增强方向，而不是拉高 V1 复杂度
-
-推荐先读：
-
-- [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md)（当前版本）
-- [V1 产品收敛](./docs/v1-product-scope.md)
-- [Web 嵌入集成指南](./docs/embedding-guide.md)（把客服组件嵌进自有站点）
-- [文档站首页](./docs/index.md)（按任务分组：上手/接入/部署运维/安全/AI 知识库）
-
-当前不会把“平台化租户能力”作为产品中心持续扩张，而是先把独立部署客服产品做扎实。
+- **Modular business domains**: every module carries `domain`, `application`, `infra`, and `delivery`
+- **Platform capability abstraction**: authentication, event bus, AI/Knowledge providers, realtime/SIP are independent
+- **Multi-platform SDK reservation**: Web ships first, API/App contracts are reserved, no fake implementations
+- **Voice capability isolation**: integrated through the `voice` module and a SIP adapter, decoupled from the chat chain
+- **Replaceable providers**: the self-hosted pgvector knowledge base is the default, Dify is the recommended external knowledge source, and WeKnora is one compatible implementation
 
 ---
 
-## 总体架构
+## Current Focus
+
+At this stage, Servify prioritizes:
+
+- Making the Web entry point a production-grade product surface
+- Connecting AI collaboration and human takeover end to end
+- Completing transfer, collaboration, and the full ticket lifecycle
+- Stabilizing back-office operations and the security baseline
+- Keeping remote assistance as a future enhancement instead of raising V1 complexity
+
+Recommended first reads:
+
+- [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md) (current release)
+- [V1 Product Scope](./docs/v1-product-scope.md)
+- [Web Embedding Guide](./docs/embedding-guide.md) (embedding the chat widget into your own site)
+- [Documentation Home](./docs/index.md) (grouped by task: getting started / integration / deployment & operations / security / AI knowledge base)
+
+The product will not keep expanding "platform-grade tenant capabilities" as its center; it first consolidates the self-hosted customer service product.
+
+---
+
+## Overall Architecture
 
 ```mermaid
 flowchart LR
@@ -185,66 +187,66 @@ flowchart LR
     BUS --> ANALYTICS[analytics module]
 ```
 
-## 业务模块边界
+## Business Module Boundaries
 
-V1.0 产品中心是 **7 个核心模块**（conversation 为唯一中心聚合，详见
-[ARCHITECTURE.md §6](./ARCHITECTURE.md) 与
-[V1.0 收敛计划](./docs/v1-convergence-plan.md)）。其余业务代码一律按
-「核心模块的子能力」定位，不再单列产品叙事。
+The V1.0 product center is **7 core modules** (conversation is the only central aggregate; see
+[ARCHITECTURE.md §6](./ARCHITECTURE.md) and the
+[V1.0 convergence plan](./docs/v1-convergence-plan.md)). All other business code is positioned as
+"sub-capabilities of a core module" and no longer carries its own product narrative.
 
-### 核心 7 模块（V1.0 产品中心）
+### The 7 Core Modules (V1.0 Product Center)
 
-| 模块 | 产品定位 |
+| Module | Product Positioning |
 | --- | --- |
-| `conversation` | **系统中心聚合**：会话、消息、参与者、服务过程时间线（`conversation_events` 投影） |
-| `routing` | 人工接管、排队、分配、转接（打分路由引擎为 V1.0 增强） |
-| `ticket` | 工单全流程：从会话一键建单、状态机、SLA/评价挂靠 |
-| `ai` | AI 首答、坐席辅助（建议回复/改写/摘要）、知识检索答案 |
-| `knowledge` | 知识库文档、检索与引用（citation） |
-| `agent` | 坐席档案、在线状态/负载、三栏接待工作台数据源 |
-| `customer` | 客户档案、标签、历史与工单汇（客户 360） |
+| `conversation` | **System central aggregate**: conversations, messages, participants, service timeline (`conversation_events` projection) |
+| `routing` | Human takeover, queueing, assignment, transfer (scoring-based routing engine is a V1.0 enhancement) |
+| `ticket` | Full ticket lifecycle: one-click ticket creation from a conversation, state machine, SLA/satisfaction attachment |
+| `ai` | AI first response, agent assist (suggested replies / rewriting / summarization), knowledge-grounded answers |
+| `knowledge` | Knowledge base documents, retrieval, and citation |
+| `agent` | Agent profiles, presence/workload, data source for the three-pane agent workspace |
+| `customer` | Customer profiles, tags, history, and ticket aggregation (customer 360) |
 
-### 子能力模块（薄壳，挂靠核心，不再是一级产品概念）
+### Sub-capability Modules (thin shells attached to core modules, no longer top-level product concepts)
 
-| 模块 | 归宿 | 说明 |
+| Module | Belongs To | Description |
 | --- | --- | --- |
-| `sla` | → `ticket` | SLA 评估/违背事件，本属工单生命周期 |
-| `satisfaction` | → `ticket` | 关单后评价 |
-| `custom_field` | → `ticket` | 自定义字段作用于工单 |
-| `shift` | → `agent` | 排班是坐席 availability 数据源 |
-| `macro` | → `agent` | 快捷回复是坐席工具 |
-| `gamification` | → `analytics` | 表现评分是 read model 派生 |
-| `suggestion` | → `conversation` | 推荐/意图辅助 |
-| `quality` | → `conversation` | 会话分析与质检视角 |
+| `sla` | → `ticket` | SLA evaluation / violation events, part of the ticket lifecycle |
+| `satisfaction` | → `ticket` | Post-close satisfaction surveys |
+| `custom_field` | → `ticket` | Custom fields applied to tickets |
+| `shift` | → `agent` | Scheduling is a data source for agent availability |
+| `macro` | → `agent` | Quick replies are an agent tool |
+| `gamification` | → `analytics` | Performance scoring is a derived read model |
+| `suggestion` | → `conversation` | Recommendations / intent assistance |
+| `quality` | → `conversation` | Conversation analytics and quality inspection perspective |
 
-冻结（不新增能力面、不进入产品文案）：`api_key`、`email`、`push`、
-`webhook`、`translation`、`app_integration`、`auth`（能力面冻结；
-登录/刷新/2FA/OIDC 逻辑在 `modules/auth/application` + `platform/auth`）；
-`voice` 及其扩展（SIP/PSTN/转写）冻结为扩展边界。**架构门禁：不新增一级模块**，
-新能力先找既有模块的子能力归属。
+Frozen (no new capability surfaces, excluded from product copy): `api_key`, `email`, `push`,
+`webhook`, `translation`, `app_integration`, `auth` (capability surface frozen;
+login/refresh/2FA/OIDC logic lives in `modules/auth/application` + `platform/auth`);
+`voice` and its extensions (SIP/PSTN/transcription) are frozen as an extension boundary. **Architecture gate: no new top-level modules**;
+new capabilities must first find a home as a sub-capability of an existing module.
 
-### 工程视角：模块迁移成熟度
+### Engineering Perspective: Module Migration Maturity
 
-各模块的迁移成熟度与 legacy service 角色（含 `automation`/`analytics`
-facade 收敛、`statistics` 旧 handler 收口计划），以
-[迁移记分卡](./docs/implementation/10-migration-scorecard.md) 与
-[当前架构快照](./docs/current-architecture.md) 为准。
+For each module's migration maturity and the legacy service roles (including the `automation`/`analytics`
+facade convergence and the plan for winding down legacy `statistics` handlers), refer to the
+[migration scorecard](./docs/implementation/10-migration-scorecard.md) and the
+[current architecture snapshot](./docs/current-architecture.md).
 
-### 安全与管理面现状
+### Security and Admin-Plane Status
 
-| 能力 | 状态 | 说明 |
+| Capability | Status | Description |
 | --- | --- | --- |
-| tenant / workspace scope | 已接入管理面 | 管理类路由统一经过 `AuthMiddleware`、`EnforceRequestScope`、`RequirePrincipalKinds`、`RequireResourcePermission` |
-| 审计日志 | 已接入管理面 | 关键管理操作统一经过 `AuditMiddleware`，敏感字段做脱敏 |
-| 用户 token 状态失效 | 已完成首轮能力 | 支持 `token_valid_after` + `token_version`，并在 router auth middleware 中强制校验 |
-| 通用 user security surface | 已完成首轮能力 | 提供 `/api/security/users/:id` 与 `/api/security/users/:id/revoke-tokens` |
-| 会话 / refresh token 管理 | 已完成首轮能力 | `POST /api/v1/auth/refresh`、`GET /auth/sessions`、`logout-current` / `logout-others`、TOTP 2FA、OIDC 与 session risk 档位（refresh 重放处置/登录风险）均已落地；revoke list 由平台 `RevokedTokenPolicy` 承载；剩余为审批回滚等管理面增强（V1.0 收口外） |
+| tenant / workspace scope | Wired into the admin plane | Admin routes uniformly pass through `AuthMiddleware`, `EnforceRequestScope`, `RequirePrincipalKinds`, `RequireResourcePermission` |
+| Audit logging | Wired into the admin plane | Key admin operations uniformly pass through `AuditMiddleware`, with sensitive fields masked |
+| User token state invalidation | First iteration complete | Supports `token_valid_after` + `token_version`, enforced in the router auth middleware |
+| General user security surface | First iteration complete | Provides `/api/security/users/:id` and `/api/security/users/:id/revoke-tokens` |
+| Session / refresh token management | First iteration complete | `POST /api/v1/auth/refresh`, `GET /auth/sessions`, `logout-current` / `logout-others`, TOTP 2FA, OIDC, and session risk tiers (refresh replay handling / sign-in risk) are all in place; the revocation list is carried by the platform `RevokedTokenPolicy`; remaining items are admin-plane enhancements such as approval rollback (outside the V1.0 scope) |
 
 ---
 
-## AI 与知识库设计
+## AI and Knowledge Base Design
 
-Servify 的 AI 能力已经按照“编排层 + Provider”拆开。
+Servify's AI capability is split into an "orchestration layer + providers".
 
 ```mermaid
 flowchart LR
@@ -261,21 +263,21 @@ flowchart LR
     LLM --> MOCK[Mock Adapter]
 ```
 
-**结论：**
+**Summary:**
 
-- 默认知识源是 pgvector 自建知识库（见下节）；Dify 是推荐的外部知识源，WeKnora 是 compatibility 适配器之一
-- 后续如果切 Milvus、Elasticsearch 或自行开发知识库，只需要新增 provider adapter（pgvector 已是内置 provider）
-- AI 主流程不应该感知具体知识库实现，只依赖统一检索 contract
+- The default knowledge source is the self-hosted pgvector knowledge base (see the next section); Dify is the recommended external knowledge source, and WeKnora is one of the compatibility adapters
+- Switching to Milvus or Elasticsearch later, or building a custom knowledge base, only requires a new provider adapter (pgvector is already a built-in provider)
+- The main AI flow should not be aware of specific knowledge base implementations; it depends only on the unified retrieval contract
 
-### 自建知识库 (pgvector)
+### Self-hosted Knowledge Base (pgvector)
 
-Servify 现在支持基于 pgvector 的自建知识库，这是企业私有部署的推荐方案。
+Servify supports a self-hosted knowledge base based on pgvector, which is the recommended option for private enterprise deployments.
 
-**配置:**
+**Configuration:**
 
 ```yaml
 embedding:
-  provider: "openai"  # 或 tei, xinference
+  provider: "openai"  # or tei, xinference
   openai:
     api_key: "${OPENAI_API_KEY}"
     model: "text-embedding-3-small"
@@ -288,9 +290,9 @@ knowledge:
       threshold: 0.7
 ```
 
-**内网部署:**
+**Intranet deployment:**
 
-使用 TEI (Text Embeddings Inference) 进行本地 embedding：
+Use TEI (Text Embeddings Inference) for local embeddings:
 
 ```bash
 docker run -p 8080:8080 \
@@ -300,9 +302,9 @@ docker run -p 8080:8080 \
 
 ---
 
-## SDK 与渠道预留
+## SDK and Channel Reservation
 
-当前只实现 Web 方向，但架构已经预留多端 SDK 和多渠道接入。（更新：Android/iOS 原生 SDK 已随移动端里程碑 M1–M3 落地（`sdk/android`、`sdk/ios`，SwiftPM/XCFramework 分发），设计与验收见 `docs/mobile-sdk-design.md`；多渠道接入仍是扩展边界。）
+Only the Web direction is implemented today, but the architecture reserves multi-platform SDKs and multi-channel entry. (Update: native Android/iOS SDKs have landed with the mobile milestones M1–M3 (`sdk/android`, `sdk/ios`, distributed via SwiftPM/XCFramework); design and acceptance are documented in `docs/mobile-sdk-design.md`; multi-channel entry remains an extension boundary.)
 
 ```mermaid
 flowchart TB
@@ -327,17 +329,17 @@ flowchart TB
     CH --> ROUTING[routing module]
 ```
 
-设计约束：
+Design constraints:
 
-- `sdk/packages/core` 只放跨端 contract，不放浏览器 UI 逻辑
-- Web SDK 已实现；App SDK（Android/iOS）已按 `docs/mobile-sdk-design.md` 落地原生实现（协议契约与 Web 对齐，运行时结构按各平台惯例）；API SDK 仍只保留目录和协议设计
-- 渠道接入统一映射到 `conversation` 和 `routing`，不允许直接穿透到旧 service
+- `sdk/packages/core` holds only cross-platform contracts, no browser UI logic
+- The Web SDK is implemented; the App SDKs (Android/iOS) have native implementations per `docs/mobile-sdk-design.md` (protocol contracts aligned with Web, runtime structure follows each platform's conventions); the API SDK remains directory and protocol design only
+- Channel integrations map uniformly onto `conversation` and `routing`; reaching into legacy services directly is not allowed
 
 ---
 
-## SIP 与语音扩展
+## SIP and Voice Extension
 
-当前还没有完整实现全套语音协议栈，但架构上已经明确预留 `signaling + media` 两层扩展。
+The full voice protocol stack is not implemented yet, but the architecture explicitly reserves a `signaling + media` two-layer extension.
 
 ```mermaid
 flowchart LR
@@ -349,71 +351,71 @@ flowchart LR
     VOICE --> CONV[conversation module]
 ```
 
-这意味着：
+This means:
 
-- SIP 不会变成聊天模块里的特殊分支
-- SIP-WS、PSTN provider webhook 等未来也应走同一 signaling adapter 边界
-- runtime 已内置 `voiceprotocol.Registry`，统一注册 SIP、SIP-WS、PSTN provider 和 WebRTC media adapter
-- HTTP 已暴露统一协议入口：`/api/voice/protocols/:protocol/call-events/:event` 与 `/api/voice/protocols/:protocol/media-events/:event`
-- 语音会先进入 `voice` 业务模型
-- WebRTC、RTP/SRTP、录音、转写等媒体能力会走独立 media adapter
-- 录音和转写也应走 provider 抽象，而不是把第三方云厂商 SDK 直接写进 `voice` service
-- 当前录音/转写已形成独立应用层用例，后续只需要替换 provider
-- 当前 runtime 已通过 `VoiceCoordinator` 将 WebRTC 生命周期挂入 `voice` 模块
-- `voice` 再与 `routing`、`agent`、`conversation` 协同
-- 后续支持呼叫转接、录音、转写、语音质检时，边界仍然清晰
+- SIP will not become a special branch inside the chat modules
+- SIP-WS, PSTN provider webhooks, and future variants should go through the same signaling adapter boundary
+- The runtime ships a `voiceprotocol.Registry` that uniformly registers SIP, SIP-WS, PSTN providers, and WebRTC media adapters
+- HTTP exposes unified protocol endpoints: `/api/voice/protocols/:protocol/call-events/:event` and `/api/voice/protocols/:protocol/media-events/:event`
+- Voice events enter the `voice` domain model first
+- Media capabilities such as WebRTC, RTP/SRTP, recording, and transcription go through dedicated media adapters
+- Recording and transcription should also go through provider abstractions rather than embedding third-party cloud SDKs directly into the `voice` service
+- Recording/transcription already exist as standalone application-layer use cases; only the provider needs replacing later
+- The runtime already attaches the WebRTC lifecycle to the `voice` module via `VoiceCoordinator`
+- `voice` then collaborates with `routing`, `agent`, and `conversation`
+- When call transfer, recording, transcription, and voice quality inspection arrive later, the boundaries stay intact
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 环境要求
+### Requirements
 
-- **Go** 1.25.0（toolchain go1.25.7）- 项目使用 Go workspace 模式
-- **PostgreSQL** 12+ 或 SQLite（开发/测试）
-- **Node.js** 24+（仅 Web/管理端/文档相关任务需要）
-  - 管理端使用 **pnpm** 10+ 作为包管理器
-- 可选：**Docker** / **Docker Compose**
+- **Go** 1.25.0 (toolchain go1.25.7) - the project uses Go workspace mode
+- **PostgreSQL** 12+ or SQLite (development/testing)
+- **Node.js** 24+ (only needed for Web / admin / documentation tasks)
+  - The admin console uses **pnpm** 10+ as its package manager
+- Optional: **Docker** / **Docker Compose**
 
-### 常用命令
+### Common Commands
 
 ```bash
-# 构建与运行
+# Build and run
 make build
-make run                               # 启动服务端
-make migrate                           # 数据库迁移
+make run                               # Start the server
+make migrate                           # Run database migrations
 
-# 开发验证
-make local-check                       # 本地环境检查
+# Development verification
+make local-check                       # Local environment check
 make security-check CONFIG=./config.yml
 make observability-check CONFIG=./config.yml
 make release-check CONFIG=./config.yml
 
-# 仓库卫生
-make repo-hygiene                      # 验证生成物未被跟踪
-make generated-assets                  # 重新生成并验证提交的生成物
+# Repository hygiene
+make repo-hygiene                      # Verify generated assets are not tracked
+make generated-assets                  # Regenerate and verify committed generated assets
 
-# 其他
-make clean-runtime                     # 清理运行时输出
+# Miscellaneous
+make clean-runtime                     # Clean runtime output
 make release-changelog FROM=<tag> TO=HEAD
 ```
 
-### 常用入口
+### Common Endpoints
 
-- 健康检查：`GET /health`
-- 就绪检查：`GET /ready`
-- 指标端点：`GET /metrics`
-- WebSocket：`GET /api/v1/ws?session_id=...`
-- AI 查询：`POST /api/v1/ai/query`
-- 语音协议列表：`GET /api/voice/protocols`
-- 管理后台：`/admin/`
-- 公开知识库：`/public/kb/docs`
+- Health check: `GET /health`
+- Readiness check: `GET /ready`
+- Metrics endpoint: `GET /metrics`
+- WebSocket: `GET /api/v1/ws?session_id=...`
+- AI query: `POST /api/v1/ai/query`
+- Voice protocol list: `GET /api/voice/protocols`
+- Admin console: `/admin/`
+- Public knowledge base: `/public/kb/docs`
 
-**数据库配置：**
-- 默认使用 PostgreSQL，可通过 `DB_DRIVER=sqlite` 切换到 SQLite（开发/测试）
-- 发布检查脚本在默认配置下使用临时 SQLite 库完成自检
+**Database configuration:**
+- PostgreSQL is the default; switch to SQLite with `DB_DRIVER=sqlite` (development/testing)
+- Under the default configuration, the release check script self-verifies against a temporary SQLite database
 
-### 可观测性
+### Observability
 
 ```yaml
 monitoring:
@@ -425,36 +427,36 @@ monitoring:
     service_name: servify
 ```
 
-本地追踪链路：
+Local tracing stack:
 
 ```bash
 make docker-up-observ
 ```
 
-Jaeger 默认地址：`http://localhost:16686`
+Jaeger is available by default at `http://localhost:16686`.
 
 ---
 
-## 文档索引
+## Documentation Index
 
-### 核心文档
+### Core Documents
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [docs/current-architecture.md](./docs/current-architecture.md) - 当前真实架构快照
-- [docs/embedding-guide.md](./docs/embedding-guide.md) - Web 嵌入集成指南（嵌入方式、会话互认、工单上下文、事件回调、主题全表）
-- [docs/architecture-redesign-plan.md](./docs/architecture-redesign-plan.md) - 架构重设计计划（services→modules 迁移期产物，仅存档）
+- [docs/current-architecture.md](./docs/current-architecture.md) - Snapshot of the current real architecture
+- [docs/embedding-guide.md](./docs/embedding-guide.md) - Web embedding guide (embedding methods, session identity handoff, ticket context, event callbacks, full theme table)
+- [docs/architecture-redesign-plan.md](./docs/architecture-redesign-plan.md) - Architecture redesign plan (an artifact of the services→modules migration period, archived)
 - [docs/index.md](./docs/index.md)
 - [docs/WEKNORA_INTEGRATION.md](./docs/WEKNORA_INTEGRATION.md)
-- [docs/CI_SELF_HOSTED.md](./docs/CI_SELF_HOSTED.md) - GitHub Hosted CI 说明
-- [docs/repo-hygiene.md](./docs/repo-hygiene.md) - 运行时产物、生成物与 ignore 边界
-- [docs/generated-assets.md](./docs/generated-assets.md) - 受控生成物、重建入口与校验规则
-- [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux 本地开发约定
-- [docs/contributing.md](./docs/contributing.md) - 提交前自检与协作约定
-- [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 产品与架构收敛改造计划书（当前口径）**
-- [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 发布说明（当前版本）**
-- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 历史发布说明（V1.0 已收敛，仅存档）
+- [docs/CI_SELF_HOSTED.md](./docs/CI_SELF_HOSTED.md) - GitHub-hosted CI notes
+- [docs/repo-hygiene.md](./docs/repo-hygiene.md) - Runtime artifacts, generated assets, and ignore boundaries
+- [docs/generated-assets.md](./docs/generated-assets.md) - Controlled generated assets, rebuild entry points, and verification rules
+- [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux local development conventions
+- [docs/contributing.md](./docs/contributing.md) - Pre-commit self-checks and collaboration conventions
+- [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 product and architecture convergence plan (current baseline)**
+- [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 release notes (current release)**
+- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 historical release notes (superseded by V1.0, archived)
 
-### 实施 backlog
+### Implementation Backlogs
 
 - [docs/implementation/README.md](./docs/implementation/README.md)
 - [docs/implementation/01-platform-and-runtime.md](./docs/implementation/01-platform-and-runtime.md)
@@ -475,93 +477,92 @@ Jaeger 默认地址：`http://localhost:16686`
 
 ---
 
-## 当前实施进度（V1.0 收敛口径）
+## Current Implementation Progress (V1.0 Convergence Baseline)
 
-V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md) 实施，
-批次状态、提交号与过闸证据见 [todo.md](./todo.md)：
+The V1.0 convergence work was carried out per the [V1.0 convergence plan](./docs/v1-convergence-plan.md);
+batch status, commit hashes, and gate evidence are tracked in [todo.md](./todo.md):
 
-- **B1（Domain 边界/迁移双路径）✅**：核心 7 模块边界与依赖方向治理、
-  模块依赖只允许 `delivery → application → domain`、迁移双路径
-  （postgres versioned SQL + sqlite AutoMigrate）
-- **B2（Agent Workspace/Routing 事件统一/PII 保留）✅**：直派与改派事件
-  统一路径（`routing.agent_assigned` / `routing.transfer_completed`）、
-  凭证导出/擦除 PII 边界、保留策略过期擦除
-- **B3（Knowledge 产品化/AI 反馈回传）✅**：知识来源登记与文档版本、
-  索引任务 HTTP 面、AI 首答持久化（REST+WS 旁路记录）、反馈回传
-  （`POST /api/v1/ai/feedback`，访客会话绑定）、检索分析读口、访客侧
-  citation 引用行与反馈条、admin Knowledge 管理页（来源/版本/任务/分析）
-- **B4（收口与发布）✅**：TASKS.md/验收矩阵/文档站口径统一、四道发布门禁
-  全绿（2026-10-04），`v1.0.0` 已发布（见
-  [发布说明](./docs/release-notes-v1.0.0.md)）
+- **B1 (Domain boundaries / dual migration paths) ✅**: governance of the 7 core module boundaries and dependency directions,
+  module dependencies restricted to `delivery → application → domain`, dual migration paths
+  (postgres versioned SQL + sqlite AutoMigrate)
+- **B2 (Agent workspace / unified routing events / PII retention) ✅**: unified paths for direct-assignment and reassignment events
+  (`routing.agent_assigned` / `routing.transfer_completed`), credential export / PII erasure boundaries,
+  retention-policy expiry erasure
+- **B3 (Knowledge productization / AI feedback loop) ✅**: knowledge source registration and document versions,
+  index-job HTTP surface, AI first-response persistence (REST + WS side-channel recording), feedback loop
+  (`POST /api/v1/ai/feedback`, bound to visitor sessions), retrieval analytics read surface, visitor-side
+  citation rows and feedback entries, and the admin Knowledge management page (sources / versions / jobs / analytics)
+- **B4 (Closure and release) ✅**: TASKS.md / acceptance matrix / documentation-site baseline unification, all four release gates
+  green (2026-10-04), `v1.0.0` released (see the
+  [release notes](./docs/release-notes-v1.0.0.md))
 
-当前代码状态说明：
+Current code status notes:
 
-- 服务端已收敛到模块化单体：`delivery -> application -> domain -> infra`
-  分层；跨模块经 module 内 contract 或事件。共享模型层（`internal/models`）
-  收敛进行中：过渡别名引用已清零并有 parser 级门禁钉住，残余跨模块直查
-  若干处（现状见 [modules-dependency-map](./docs/modules-dependency-map.md)）
-- AI 统一到 `QueryOrchestrator + LLMProvider + KnowledgeProvider`；
-  `ai` 模块承载首答记录、反馈回传与检索分析（失败静默的旁路观测路径）
-- 知识检索两级结构：`knowledge.provider = pgvector | local` 时配置直通
-  （优先于外部源）；未配置时走外部源选择链 ragflow → dify → weknora，
-  逐级健康降级，终点为无知识源运行
-  （外部 provider real 模式证据依赖环境凭证，mock/兼容模式全链留痕）
-- 管理面安全基线：scope、RBAC、audit、token policy 已接入管理面
-- 数据库层支持 PostgreSQL 与 SQLite（开发/测试回退），迁移走双路径
-
----
-
-## 官网部署
-
-**[servify.cuihairu.site](https://servify.cuihairu.site/)** — 托管在 Cloudflare Pages，由 Cloudflare 侧 Connect to Git 集成在推送后自动部署（不经过本仓库的 GitHub Actions）。（原 servify.cloud 域名未续费已过期）
-
-### 首次设置
-
-1. **创建 Cloudflare Pages 项目**
-   - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)
-   - 进入 **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
-   - 选择 GitHub 仓库 `cuihairu/servify`
-   - 项目名称设为：`servify-website`
-   - 构建设置（静态站点无需构建）：
-     - 生产分支：`main`
-     - 构建命令：留空
-     - 构建输出目录：`apps/website`
-
-2. **配置自定义域名**
-   - 在 Pages 项目设置中添加 `servify.cuihairu.site`
-   - Cloudflare 会自动配置 DNS 和 SSL 证书
-
-### 自动部署
-
-当 `apps/website/` 目录下的文件有变更并推送到 `main` 时，Cloudflare Pages 的 Connect to Git 集成会自动重新部署（部署由 Cloudflare 侧触发，本仓库 `.github/workflows/` 不含网站部署 workflow；手动部署可用 `make website-deploy` / `make website-pages-deploy`）。
+- The server has converged to a modular monolith: `delivery -> application -> domain -> infra`
+  layering; cross-module access goes through in-module contracts or events. The shared model layer (`internal/models`)
+  is being consolidated: transitional alias references have been eliminated and are pinned by a parser-level gate; a handful of residual cross-module direct queries remain (see
+  [modules-dependency-map](./docs/modules-dependency-map.md))
+- AI is unified behind `QueryOrchestrator + LLMProvider + KnowledgeProvider`;
+  the `ai` module carries first-response records, the feedback loop, and retrieval analytics (a side-channel observation path that fails silently)
+- Knowledge retrieval has a two-tier structure: when `knowledge.provider = pgvector | local` is configured, configuration passes through directly
+  (taking precedence over external sources); when unconfigured, an external source selection chain ragflow → dify → weknora applies,
+  degrading level by level on health checks, ending with no knowledge source at all
+  (real-mode evidence for external providers depends on environment credentials; mock/compatible modes leave a full trace)
+- Admin-plane security baseline: scope, RBAC, audit, and token policy are wired into the admin plane
+- The database layer supports PostgreSQL and SQLite (development/testing fallback), with dual migration paths
 
 ---
 
-## CI 与文档发布
+## Website Deployment
 
-- GitHub Actions 工作流：`.github/workflows/ci.yml`
-- 文档目录按 VitePress 使用方式组织：`docs/`
-- CI 运行环境与检查项见 [docs/CI_SELF_HOSTED.md](./docs/CI_SELF_HOSTED.md)
+**[servify.cuihairu.site](https://servify.cuihairu.site/)** — hosted on Cloudflare Pages, deployed automatically on push by Cloudflare's Connect to Git integration (not via this repository's GitHub Actions). (The former servify.cloud domain was not renewed and has expired.)
+
+### First-time Setup
+
+1. **Create a Cloudflare Pages project**
+   - Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com)
+   - Go to **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
+   - Select the GitHub repository `cuihairu/servify`
+   - Set the project name to: `servify-website`
+   - Build settings (a static site needs no build):
+     - Production branch: `main`
+     - Build command: leave empty
+     - Build output directory: `apps/website`
+
+2. **Configure the custom domain**
+   - Add `servify.cuihairu.site` in the Pages project settings
+   - Cloudflare provisions DNS and the SSL certificate automatically
+
+### Automatic Deployment
+
+When files under `apps/website/` change and are pushed to `main`, Cloudflare Pages' Connect to Git integration redeploys automatically (deployment is triggered on the Cloudflare side; this repository's `.github/workflows/` contains no website deployment workflow; for manual deployment use `make website-deploy` / `make website-pages-deploy`).
 
 ---
 
-## 现阶段结论
+## CI and Documentation Publishing
 
-V1.0 收敛改造（B0 文档与架构声明 → B1 Domain 边界/迁移双路径 → B2
-Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈回传 → B4 收口
-发布）已全部过闸，`v1.0.0` 已发布。此前的运行时收口、services→modules
-迁移、租户/审计/安全基线、可观测性各阶段 backlog 均已清零（历史记录见
-[todo.md](./todo.md)）。
+- GitHub Actions workflows: `.github/workflows/ci.yml`
+- The docs directory is organized for VitePress usage: `docs/`
+- CI runtime environment and checks are documented in [docs/CI_SELF_HOSTED.md](./docs/CI_SELF_HOSTED.md)
 
-后续演进按 [v1.0.0 发布说明](./docs/release-notes-v1.0.0.md)「演进方向」：
-Routing 打分引擎（多因子）、Ticket 关闭前拦截规则、薄壳模块文档面收口
-剩余项。
+---
+
+## Where Things Stand
+
+The V1.0 convergence work (B0 documentation and architecture statements → B1 domain boundaries / dual migration paths → B2
+unified routing events / PII retention → B3 knowledge productization / AI feedback loop → B4 closure
+and release) has passed all gates, and `v1.0.0` is released. The earlier backlogs — runtime closure, services→modules
+migration, tenant/audit/security baseline, and observability — have all been cleared (history in
+[todo.md](./todo.md)).
+
+Follow-up evolution follows the "Evolution directions" section of the [v1.0.0 release notes](./docs/release-notes-v1.0.0.md):
+the routing scoring engine (multi-factor), pre-close ticket interception rules, and the remaining thin-shell module documentation cleanup.
 
 ---
 
 <div align="center">
 
-**[⬆ 返回顶部](#-servify)**
+**[⬆ Back to top](#servify)**
 
 Made with ❤️ by [cuihairu](https://github.com/cuihairu)
 
