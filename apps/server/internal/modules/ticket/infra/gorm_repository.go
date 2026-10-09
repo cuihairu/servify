@@ -640,6 +640,9 @@ func applyListTicketFilters(db *gorm.DB, query application.ListTicketsQuery) *go
 	if query.CustomerID != nil {
 		db = db.Where("customer_id = ?", *query.CustomerID)
 	}
+	if query.SessionID != nil {
+		db = db.Where("session_id = ?", *query.SessionID)
+	}
 	if search := strings.TrimSpace(query.Search); search != "" {
 		like := "%" + search + "%"
 		db = db.Where("title LIKE ? OR description LIKE ?", like, like)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	"servify/apps/server/internal/modules/ticket/application"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -203,3 +204,34 @@ func TestGormRepositoryUpdateTicketModelReturnsNotFoundWhenMissing(t *testing.T)
 		t.Fatalf("expected ErrRecordNotFound, got %v", err)
 	}
 }
+
+func TestGormRepositoryListTicketsFiltersBySession(t *testing.T) {
+	db := newTicketInfraTestDB(t)
+	repo := NewGormRepository(db)
+
+	seed := []models.Ticket{
+		{ID: 1, Title: "conv-1 open", CustomerID: 1, SessionID: strPtrInfra("conv-1"), Status: "open", Priority: "normal", Category: "billing"},
+		{ID: 2, Title: "conv-1 resolved", CustomerID: 1, SessionID: strPtrInfra("conv-1"), Status: "resolved", Priority: "normal", Category: "billing"},
+		{ID: 3, Title: "conv-2 open", CustomerID: 2, SessionID: strPtrInfra("conv-2"), Status: "open", Priority: "normal", Category: "billing"},
+		{ID: 4, Title: "no session", CustomerID: 3, Status: "open", Priority: "normal", Category: "billing"},
+	}
+	if err := db.Create(&seed).Error; err != nil {
+		t.Fatalf("seed tickets: %v", err)
+	}
+
+	session := "conv-1"
+	got, total, err := repo.ListTickets(context.Background(), application.ListTicketsQuery{
+		Page:     1,
+		PageSize: 10,
+		Status:   []string{"open", "assigned", "in_progress"},
+		SessionID: &session,
+	})
+	if err != nil {
+		t.Fatalf("list tickets: %v", err)
+	}
+	if total != 1 || len(got) != 1 || got[0].ID != 1 {
+		t.Fatalf("expected only ticket 1 for conv-1 open filter, got total=%d items=%+v", total, got)
+	}
+}
+
+func strPtrInfra(s string) *string { return &s }

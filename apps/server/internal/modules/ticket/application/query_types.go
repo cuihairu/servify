@@ -12,6 +12,7 @@ type ListTicketsQuery struct {
 	Tag                string
 	AgentID            *uint
 	CustomerID         *uint
+	SessionID          *string
 	Search             string
 	SortBy             string
 	SortOrder          string
