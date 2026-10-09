@@ -37,6 +37,7 @@ type WebRTCConnection struct {
 	CreatedAt      time.Time
 
 	statusMu sync.RWMutex
+	dcMu     sync.RWMutex
 }
 
 // SetStatus 更新连接状态，供 pion 状态回调 goroutine 调用。
@@ -50,6 +51,20 @@ func (c *WebRTCConnection) statusValue() string {
 	c.statusMu.RLock()
 	defer c.statusMu.RUnlock()
 	return c.Status
+}
+
+// SetDataChannel 记录协商出的数据通道，供 pion OnDataChannel 回调 goroutine 调用；
+// 读取方（发送/统计）持读锁取引用，消除字段读写竞争（CI race 变体实证）。
+func (c *WebRTCConnection) SetDataChannel(dc *webrtc.DataChannel) {
+	c.dcMu.Lock()
+	defer c.dcMu.Unlock()
+	c.DataChannel = dc
+}
+
+func (c *WebRTCConnection) dataChannel() *webrtc.DataChannel {
+	c.dcMu.RLock()
+	defer c.dcMu.RUnlock()
+	return c.DataChannel
 }
 
 type WebRTCSignal struct {
@@ -172,7 +187,7 @@ func (s *WebRTCService) CreatePeerConnection(sessionID string) (*WebRTCConnectio
 	// 处理数据通道
 	peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 		logrus.Infof("New data channel for connection %s: %s", connectionID, dc.Label())
-		conn.DataChannel = dc
+		conn.SetDataChannel(dc)
 
 		dc.OnOpen(func() {
 			logrus.Infof("Data channel %s opened", dc.Label())
@@ -359,10 +374,10 @@ func (s *WebRTCService) GetConnectionStats(sessionID string) (map[string]interfa
 	}
 
 	// 获取数据通道信息
-	if conn.DataChannel != nil {
+	if dc := conn.dataChannel(); dc != nil {
 		statsMap["data_channel"] = map[string]interface{}{
-			"label":       conn.DataChannel.Label(),
-			"ready_state": conn.DataChannel.ReadyState().String(),
+			"label":       dc.Label(),
+			"ready_state": dc.ReadyState().String(),
 		}
 	}
 
@@ -375,11 +390,12 @@ func (s *WebRTCService) SendDataChannelMessage(sessionID, message string) error 
 		return err
 	}
 
-	if conn.DataChannel == nil {
+	dc := conn.dataChannel()
+	if dc == nil {
 		return fmt.Errorf("data channel not available for session %s", sessionID)
 	}
 
-	err = conn.DataChannel.SendText(message)
+	err = dc.SendText(message)
 	if err != nil {
 		return fmt.Errorf("failed to send data channel message: %w", err)
 	}
