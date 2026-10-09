@@ -1184,7 +1184,7 @@
 
 ## 当前恢复点
 
-> **活跃恢复点（2026-10-04 起）：`[-] B0`（V1.0 收敛批次），子任务 B0-1 → B0-4。** 本小节下方的历史附注（2026-04 ~ 2026-10-01 执行记录）仅作证据存档，不再作为恢复入口。
+> **活跃恢复点：无（2026-10-10 起）。** B0 批次（V1.0 收敛）四个子任务全 `[x]`、C1-C3 文档重整批次全闭环、P0-P3 全 `[x]`；release notes 演进方向三条已全部消化（1=Routing 打分引擎 B2-1+刀二评分审计展示、2=Ticket 关闭前拦截刀一、3=薄壳模块降级叙事——README/docs 站均已收口）。todo 主链清零，剩余唯一 `[-]` 项 P1-1 为纯外部凭证阻塞（real 模式验收等真实 Dify/WeKnora/RAGFlow 环境）；dependabot 仅剩 braces/sprintf-js 两条无上游修复保留项。**本仓库已无可推进的本地项，等外部条件。**
 
 - 附注（2026-10-08，**CI 抖动处置台账：Android ConnectionLifecycleTest 三现诊断化 + Go ticket 用例一现 + reconnectsAfterServerDrop 一现**；巡检令「CI 红即修」+ 抖动台账三现条款）：
   - 现场：run 37649797496（be59b5f，纯 docs 头）Android job `reconnectExhaustionMarksDisconnectedAndConnectRecovers` 三现（①10-01 f2becb3 ②10-07 cf93cd2 ③本 run，`TimeoutCancellationException` 只落 kotlinx 内部帧，job 无测试报告 artifact，段位不可定位）；同 run Go Checks `TestTicketHandler_Create_Get_List_Assign` 一现（`expected agent 2 load decremented to 0, got 1`）。93f6d13 同 Go/Android 代码全量绿 + rerun attempt 2 全绿（含 Integration）⇒ 两败均为抖动非回归。
@@ -1206,6 +1206,12 @@
   - 组装：`wireConversationRuntime` 注入 `ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB))`（同一 rt.DB）。
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
+
+- 附注（2026-10-10，**列形对账刀：audit_logs 哈希链两列漏配迁移修复 + 模型-迁移列级静态守卫**；派发项为「连续推进未完成项」——10-07 CI Integration 附注遗留的「列形级自动化对账未建」与「当前恢复点 B0 指针漂移」两处台账/守卫缺口，本轮收口）：
+  - 缺口实证（探针先行）：10-07 的 `TestMigrationChainCoversAllModels` 只对账表级（CREATE TABLE 名字集合），列级漂移不可见——新探针（52 模型 `schema.Parse` 内存推导列集合 vs 迁移链终态「基线列 ∪ 增量 ADD COLUMN − DROP COLUMN ± RENAME」）双向 diff 一次抓出**真缺口**：`AuditLog.PrevHash/EntryHash`（R2 哈希链，70ba271 09-27 加列时未配迁移）——09-27~10-07 Integration 断链三天未真正跑完把它掩盖至今，**全新 postgres 版本化库写审计日志必 42P01**（sqlite AutoMigrate 建表路径掩盖，与 10-07 整类缺口同源）。
+  - 修复（3201805，一笔三件）：① 迁移 `000020_audit_hash_chain.up.sql`（audit_logs 补 prev_hash/entry_hash 两列 + `idx_audit_logs_prev_hash`/`idx_audit_logs_entry_hash` 两索引，命名对齐基线 `;index` 列惯例）；② `TestMigrationChainCoversAllModelColumns` 列形级静态守卫定稿（与表级守卫互补，口径边界如实声明：只对「模型列 ⊆ 链列」方向、WeKnora 兼容表豁免、AutoMigrate 自动 FK 展开方向盲——52 模型探针验证零假阳性）；③ migrate.go 注释漂移（answer_feedback→answer_feedbacks，000019 纠偏未回写注释）。
+  - 变异验证：还原 000020 → 守卫精确报 audit_logs 两列缺失（不多不少）；恢复 → 绿。门禁：bootstrap 24.6s 绿 + apps/server 全量绿 + module-boundaries 过。
+  - 台账卫生：release notes 演进方向三条全消化（主条未动——发布快照不改）；「当前恢复点」段从 `[-] B0` 更新为「无活跃恢复点」（B0 全 [x]，todo 主链清零，剩 P1-1 外部阻塞）。
 
 - 附注（2026-10-09，**演进方向刀二/三收口确认 + §7.2 复核闭环 + §7.1 NOT NULL 升拍板面**；派发项同刀一续跑）：
   - 刀二/§6.3-3（1260364，admin 模块）：Routing 页第三块「分配评分审计」ProTable——routing_assignments 的 total_score/factors/reasons/strategy 可见（因子 Tooltip、总分三档色标、按会话 ID 查询）。打分引擎本体 B2-1 已在案（scorer.go 八因子加权 + routing_assignments 落分数），本刀只补展示面。
