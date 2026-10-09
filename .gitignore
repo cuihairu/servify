@@ -1,6 +1,7 @@
 # 构建产物
 /servify
 /server
+/gen-baseline
 /server.exe
 *.exe
 apps/server/server
