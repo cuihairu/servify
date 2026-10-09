@@ -221,9 +221,9 @@ func TestGormRepositoryListTicketsFiltersBySession(t *testing.T) {
 
 	session := "conv-1"
 	got, total, err := repo.ListTickets(context.Background(), application.ListTicketsQuery{
-		Page:     1,
-		PageSize: 10,
-		Status:   []string{"open", "assigned", "in_progress"},
+		Page:      1,
+		PageSize:  10,
+		Status:    []string{"open", "assigned", "in_progress"},
 		SessionID: &session,
 	})
 	if err != nil {

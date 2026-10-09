@@ -63,9 +63,9 @@ func (s *QueryService) CountOpenBySession(ctx context.Context, sessionID string)
 		return 0, nil, fmt.Errorf("session id required")
 	}
 	items, total, err := s.repo.ListTickets(ctx, ListTicketsQuery{
-		Page:     1,
-		PageSize: openTicketScanLimit,
-		Status:   openTicketStatuses,
+		Page:      1,
+		PageSize:  openTicketScanLimit,
+		Status:    openTicketStatuses,
 		SessionID: &sessionID,
 	})
 	if err != nil {
