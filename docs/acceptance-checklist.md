@@ -427,6 +427,15 @@ V1.0 收敛改造（2026-10-04 前过闸）新增/收口的能力面。切片登
 | Routing 统一分配事件路径 | conversation.Service.AssignAgent / Transfer | 直派接管、改派后查事件流 | 分别发布 `routing.agent_assigned` / `routing.transfer_completed`（aggregate `routing:<id>`，与 EventBusSubscriber 投影口径一致）；等待队列进队不加事件（进队非分配） | [service_test.go TestServiceAssignAgent / TestServiceTransfer](../apps/server/internal/modules/conversation/application/service_test.go)（B2 gate，21fc7de） | 通过 |
 | PII 数据边界与保留策略 | customer 导出/擦除；retention | 导出全覆盖、擦除全 PII（文本 “[已擦除]”）、过期擦除/窗内保留/幂等 | 导出/擦除幂等、404 精确；保留策略过期擦除、窗内保留 | [data_boundary_repository_test.go](../apps/server/internal/modules/customer/infra/data_boundary_repository_test.go)、retention 四用例（B2 gate ①②，todo.md B2 登记） | 通过 |
 
+### 15. 发布后批次 C1 web 嵌入集成指南（ferry 真嵌验收）
+
+任务清单与拍板段见 [todo.md](../todo.md) C1；验收口径=ferry 侧按
+[embedding-guide.md](embedding-guide.md) 真嵌一遍跑通。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| web 嵌入真嵌验收（C1-4） | [docs/embedding-guide.md](embedding-guide.md)（§1 嵌入方式 / §2 快速开始 / §3 会话互认 / §4 工单上下文 / §5 事件回调 / §6 部署形态 / §7 主题全表） | ferry 侧真嵌：①两示例页（light/dark）组件展开与宿主观感一致；②组件 snippet 嵌入自有页面；③访客聊天→建单（`POST /api/v1/tickets`）；④宿主后端同步客户上下文（`POST /api/customers*`）；⑤webhook 注册与 `ticket.created/assigned/closed` 回流验签；⑥远程主题下发（`themeUrl`） | 指南内 curl/最小示例可跟跑；2026-10-10 我侧契约核对通过：路由注册逐项对上（`/api/v1/ws`、`/api/v1/tickets`、`/api/v1/guest/session`、`/api/v1/ai/knowledge/upload`、`/api/customers*`、`/api/webhooks*`）、widget `data-*` 全表 19 项与 §7.4 逐项一致、§7.1-7.3 参数消费点（icon 六档/position 四档/themeFromColor/themeUrl/auto）落地；全量门禁绿（Go 153 包 + admin lint/typecheck） | [sdk_route_drift_test.go](../apps/server/internal/app/server/sdk_route_drift_test.go)、[sdk_route_contract_test.go](../apps/server/internal/app/server/sdk_route_contract_test.go)、[widget.test.mjs](../apps/demo-sdk/widget.test.mjs) | 进行中（ferry 侧验收回报后勾收，todo.md C1-4/父项同步） |
+
 ## 权限与异常路径必须额外验
 
 即使主流程通过，也不能直接判定完成，还必须补下面这些：
