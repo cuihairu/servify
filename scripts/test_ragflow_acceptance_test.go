@@ -44,7 +44,8 @@ func TestRagflowScriptWritesEvidence(t *testing.T) {
 		servifyPort, mockPort, evidenceDir,
 	))
 	cmd.Dir = "."
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=go1.25.7")
+	// GOTOOLCHAIN 曾钉 go1.25.7 求稳；go 指令升 1.26 后钉版反而让子进程构建失败
+	// （1.25 无法编译声明 1.26 的模块），改回默认 auto 随 go.work 自动切换。
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("expected mock mode success, err=%v\noutput=%s", err, string(output))
