@@ -75,15 +75,20 @@ func TestMigrationChainCoversModelNotNullColumns(t *testing.T) {
 				}
 			}
 		}
-		for _, m := range columnAlterRe.FindAllStringSubmatch(sqlText, -1) {
-			if colDefs[m[1]] == nil {
+		for _, loc := range columnAlterRe.FindAllStringSubmatchIndex(sqlText, -1) {
+			table, col := sqlText[loc[2]:loc[3]], sqlText[loc[4]:loc[5]]
+			if colDefs[table] == nil {
 				continue
 			}
-			// ADD COLUMN 段：NOT NULL 标记只可能出现在 ADD 之后
-			lower := strings.ToLower(m[0])
-			if i := strings.Index(lower, "add"); i >= 0 {
-				colDefs[m[1]][m[2]] = m[0][i:]
+			// ADD COLUMN 段列定义 = ADD 起点到行尾/分号（columnAlterRe 匹配止于
+			// 列名，NOT NULL/DEFAULT 在其后的类型段，须扩读原文到语句尾）
+			lower := strings.ToLower(sqlText[loc[0]:loc[1]])
+			i := strings.Index(lower, "add")
+			segText := sqlText[loc[0]+i:]
+			if j := strings.IndexAny(segText, ";\n"); j >= 0 {
+				segText = segText[:j]
 			}
+			colDefs[table][col] = segText
 		}
 		// 后置收紧（SET NOT NULL）：并入收紧集合，对账时等价列定义 NOT NULL
 		for _, m := range setNotNullRe.FindAllStringSubmatch(sqlText, -1) {

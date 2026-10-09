@@ -1207,6 +1207,16 @@
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
 
+- 附注（2026-10-10，**列 DEFAULT 对账守卫 + NOT NULL 守卫解析修复 + 守卫家族六件收官**；接 NOT NULL 刀，盘「模型 default tag 字段在链终态列定义是否真有 DEFAULT」）：
+  - 探针定盘（52 模型 HasDefaultValue 字段 vs 链列定义）：初跑报 6 条 DEFAULT-LESS 全为探针自身截断假阳性——columnAlterRe 匹配止于列名，类型/DEFAULT 在其后的语句段；扩读到行尾/分号后重跑 **missing=0**，DEFAULT 面当前零缺口。顺手发现 NOT NULL 守卫同款截断缺陷（当前无假红但未来加「not null + default」ALTER 列会假红），一并修复。
+  - 交付（守卫家族第六件，schema tag 面闭环）：`TestMigrationChainCoversModelDefaultColumns`——新 default 字段只进模型不配迁移/漏 DEFAULT 时报红（postgres 插入行为与 AutoMigrate 漂移）。守卫自身曾红一轮：bigserial 自增主键的 DefaultValue 是序列语义非字面 DEFAULT，豁免 PrimaryKey 字段后绿。变异验证：000008 临时删 totp_enabled 的 DEFAULT → 精确报 1；恢复 → 六守卫全绿。门禁：bootstrap 36.7s 绿 + boundaries 过。
+  - 家族收官口径：表级（000017）→列级（3201805）→运行时索引级（0852423）→tag 索引级（81f195b）→NOT NULL（26ba743）→DEFAULT（本刀）——MigrationModels() 经 AutoMigrate 建出的全部 schema 面（表/列/索引/约束/默认值）已各有静态守卫对账迁移链；剩余声明盲区（非指针字段隐式 NOT NULL、列类型）在守卫注释如实声明（须 gen-baseline 重捕获 diff 才可钉）。
+
+- 附注（2026-10-10，**列 NOT NULL 约束对账刀：api_keys 两列漂移修复 + 守卫家族第五件**；接 tag 索引刀，盘「模型 not null tag 字段在链终态列定义是否真 NOT NULL」）：
+  - 缺口实证（探针先行，52 模型 NotNull 字段 vs 链列定义，diff 仅 2 条）：`api_keys.prefix`/`key_hash`——baeea93（09-25）给模型加 not null tag 与基线入库同一 commit（捕获早于 tag），基线列无 NOT NULL 且后无迁移收紧 → postgres 版本化路径全新库可空、AutoMigrate/sqlite 路径强制 NOT NULL，两路径约束漂移（与 000019 修复时 B3-1b 的 NOT NULL 缺失同族）。
+  - 修复（26ba743，一笔两件）：① 迁移 `000022_api_key_not_null.up.sql`（ALTER COLUMN SET NOT NULL，不用 UPDATE 兜底静默改数据——NULL 行存在即显式暴露，业务写入恒非 NULL 非指针 string）；② `TestMigrationChainCoversModelNotNullColumns` 守卫（家族第五件：表级→列级→运行时索引级→tag 索引级→NOT NULL 级）。守卫自身曾红一轮：初版不识别 `ALTER COLUMN ... SET NOT NULL` 形态（columnAlterRe 只认 ADD）——补 setNotNullRe 后端到端闭环（000022 自身被守卫看见）。变异验证：删 000022 → 精确报 2 缺口；恢复 → 五守卫全绿。门禁：bootstrap 28.4s 绿 + boundaries 过。
+  - 口径边界（注释如实声明）：只对 not null tag 显式字段；「非指针字段默认 NOT NULL」是 dialector 行为静态面不可见（注释声明须 gen-baseline 重捕获 diff 才可钉）；缺列由列级守卫报不重复。
+
 - 附注（2026-10-10，**tag 索引对账刀：waiting_records.target_group_id 漏配索引修复 + 守卫家族第四件**；接索引守卫刀，盘「模型 gorm index/uniqueIndex tag 声明的 AutoMigrate 索引是否在迁移链」）：
   - 缺口实证（探针先行，52 模型 schema.Parse→ParseIndexes() vs 链 CREATE INDEX 集合，假阳性为零唯一缺口）：`idx_waiting_records_target_group_id`——000005（C5 队列认领租约）补 target_group_id 列时漏配模型 tag 对应索引，postgres 版本化路径全新库（不跑 AutoMigrate）该列无索引，与 sqlite/AutoMigrate 路径形态不一致。
   - 修复（81f195b，一笔两件）：① 迁移 `000021_waiting_records_target_group_idx.up.sql`（号复用——上一刀误判出的 000021 已删，编号空档）；② `TestMigrationChainCoversAllModelTagIndexes` 守卫（守卫家族第四件：表级→列级→运行时索引级→tag 索引级，migrations tag 面闭环）。变异验证：删 000021 → 精确报 1 缺口；恢复 → 绿。门禁：bootstrap 23.7s 绿 + module-boundaries 过。
