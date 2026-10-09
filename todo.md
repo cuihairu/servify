@@ -160,13 +160,14 @@
   - [x] C1-2 聊天窗主题定制：主题 token 整套可配（主色/背景/文字/两侧气泡/输入框/按钮/圆角/字体，支持品牌主色自动生成整套）+ 品牌位（窗头 logo/名称/欢迎语）+ 亮暗两套独立配（跟随宿主站或手动指定）+ 远程主题（配置放服务端多站点统一改）
   - [x] C1-3 两风格测试页各嵌一次验证（浅色品牌站/深色站），从 icon 到聊天窗整体观感与宿主一致不突兀
   - [x] C1-4 集成指南文档（docs/）：嵌入方式（iframe/组件/SDK 择优写明）、工单上下文打通 API（客服侧只读展示用户套餐/流量/订单，走服务端接口不泄凭据）、单点登录方案（应用侧签发/会话互认）、事件回调（工单状态回流应用）、部署形态（servify 独立部署+对接地址配置）、「组件与聊天窗主题」节（配置项全表+两种风格示例）；以 curl/最小示例可跟跑为准，验收=ferry 侧真嵌一遍跑通
-- 状态：`[-]`（2026-10-10 续批点火：ferry 侧真嵌验收启动；我侧核对完成，等 ferry 回报）
+- 状态：`[x]`（2026-10-10 收：ferry 侧真嵌验收完成并回报，C1-4/父项勾收）
 - 附注（2026-10-10，我侧核对记录）：
   - 指南完备性核对通过——`docs/embedding-guide.md` 六节对照 C1-4 清单齐备，无缺漏无需补齐；路由契约逐项对上实际注册（`/api/v1/ws`、`/api/v1/ws/voice` 条件装配、`/api/v1/tickets` 访客免认证面、`/api/v1/guest/session` service 面、`/api/v1/ai/knowledge/upload` 管理面、`/api/customers*` 与 `/api/webhooks*` 挂 `/api` 前缀）；widget `data-*` 全表 19 项与 §7.4 逐项一致，§7.1-7.3 参数消费点（icon 六档/position 四档/themeFromColor 默认 #667eea/themeUrl fetch 失败兜底/prefers-color-scheme auto）在 `apps/demo-sdk/widget.js` 源码落地
   - 验收预登记：`docs/acceptance-checklist.md` §15 节（状态=进行中，ferry 回报后勾收）已入册（946ad7e）
   - 全量门禁绿：Go 153 包 0 失败 + admin lint/typecheck 绿；源码 TODO/FIXME 零遗留（仅 `.umi-production` 生成目录内框架自留一条，非源码）；docs 站点导航 72 登记页无断链；demo-sdk README/示例页与 widget.js 一致
-- 下一步：ferry 侧真嵌验收回报后勾收 C1-4/父项；我侧无待办（问询随到随答）
-- 阻塞项：ferry 侧验收回报（外部）
+- 下一步：已完成（ferry 回报见下）；我侧无待办（问询随到随答）
+- ferry 验收回报（2026-10-10）：ferry commits 18d045b（feat(panel): add optional servify support chat embed）+ 46d81e7（fix(server): require auth on admin data plane）。落地形态=FERRY_SUPPORT_URL/FERRY_SUPPORT_SERVICE_KEY 双 env 配置门控，未配置时 enabled:false 零依赖零外呼；采用 widget.js 直嵌方案 A（ServifyWidget.create，icon=headset/color=#6e79d6/theme=auto/brand=ferry 支持）；GET /api/panel/support 签发 guest token + 服务端同步客户上下文（context_synced:true，notes 携带套餐状态/流量/到期）。实机链路全通：servify customer 建+source=ferry、WS 会话建立+消息收发+AI 流式通道响应、POST /api/v1/tickets 201（session 绑定 ferry_user、source=chat）、agent 视图可见工单；guest token 三层绑定验讫（正确 200/错会话 401/无 token 401，security.guest_token.required=true）；顺带发现并修复 ferry admin 数据面裸奔（/api 组无鉴权）
+- 阻塞项：无
 
 ### [x] C2 admin-legacy 清理计划
 
