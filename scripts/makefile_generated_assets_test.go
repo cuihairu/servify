@@ -198,12 +198,13 @@ func TestMakefileWebsiteTargetsPointAtStaticSite(t *testing.T) {
 		t.Error("apps/website/wrangler.jsonc assets.directory 必须为 \".\"（相对配置文件的 apps/website 自身）")
 	}
 
-	// README 部署说明里的「构建输出目录」必须指向真实存在的目录。
+	// README 部署说明里的「构建输出目录」必须指向真实存在的目录
+	// （双语口径：中文版「构建输出目录：`x`」/ 英文版 "Build output directory: `x`"）。
 	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
 	if err != nil {
 		t.Fatalf("read README.md: %v", err)
 	}
-	outDirs := regexp.MustCompile("构建输出目录：`([^`]+)`").FindAllStringSubmatch(string(readme), -1)
+	outDirs := regexp.MustCompile("(?:构建输出目录：|Build output directory: ?)`([^`]+)`").FindAllStringSubmatch(string(readme), -1)
 	if len(outDirs) == 0 {
 		t.Fatal("README.md 未找到「构建输出目录」部署口径（网站部署文档缺失？）")
 	}
