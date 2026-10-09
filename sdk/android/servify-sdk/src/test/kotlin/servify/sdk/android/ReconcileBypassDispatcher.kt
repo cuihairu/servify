@@ -1,6 +1,7 @@
 package servify.sdk.android
 
 import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.RecordedRequest
@@ -26,6 +27,7 @@ internal class ReconcileBypassDispatcher(
 ) : Dispatcher() {
     private val lock = Object()
     private val responses = ArrayDeque<MockResponse>()
+    private val wsHandshakes = AtomicInteger()
 
     /** 替代 server.enqueue（自定义 Dispatcher 后 MockWebServer.enqueue 会抛）。 */
     fun enqueue(response: MockResponse) {
@@ -35,10 +37,18 @@ internal class ReconcileBypassDispatcher(
         }
     }
 
+    /**
+     * WS 握手到达数（补拉 404 不计）：server.requestCount 把补拉 GET 也算进去
+     * （七现 37885639220 证据歧义源——首连+补拉+重连+恢复=4，与「多余第 4 握手」
+     * 无法区分），段位二分证据只数走 FIFO 队列的握手请求，阈值即握手序号。
+     */
+    fun wsHandshakeCount(): Int = wsHandshakes.get()
+
     override fun dispatch(request: RecordedRequest): MockResponse {
         if (request.method == "GET" && request.path.orEmpty().startsWith("/api/v1/sessions/")) {
             return MockResponse().setResponseCode(404)
         }
+        wsHandshakes.incrementAndGet()
         val deadline = System.currentTimeMillis() + queueTimeoutMs
         while (true) {
             synchronized(lock) { responses.pollFirst() }?.let { return it }

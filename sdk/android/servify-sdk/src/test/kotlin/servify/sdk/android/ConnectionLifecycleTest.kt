@@ -162,7 +162,7 @@ class ConnectionLifecycleTest {
         // Connecting 整 10s——耗尽段双证据生效后烧点迁移至恢复段，恢复段同款补齐）。
         // webSocket/reconnectAttempt/everConnected 均已
         // @Volatile，可见性面排除；三段全部分段标注，首连/恢复 10s，耗尽段 15s 双
-        // 证据（状态 + server 请求计数）——五/六现起错误消息直接二分根因面。
+        // 证据（状态 + WS 握手数）——五/六现起错误消息直接二分根因面。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
@@ -174,20 +174,23 @@ class ConnectionLifecycleTest {
         // 断线同路径。预算保留 15s 防回归。
         //
         // 四现 37668312028 定向数据：该段悬空 Connecting 整 15s（首连/恢复段均过）
-        // ——悬空非缓慢，加预算无意义，改双证据二分根因：预算烧穿时按 server 请求
-        // 计数分流——重连握手（第 2 请求）已到达 → 404 未回/onFailure 丢失面；
-        // 未到达 → 重连接协程或 MockWebServer accept 饿死面。
+        // ——悬空非缓慢，加预算无意义，改双证据二分根因：预算烧穿时按 WS 握手数
+        // （bypass.wsHandshakeCount，补拉 404 不计）分流——重连握手（第 2 次握手）
+        // 已到达 → 404 未回/onFailure 丢失面；未到达 → 重连接协程或 MockWebServer
+        // accept 饿死面。
         chat.disconnectForTesting()
         val exhausted = withTimeoutOrNull(15_000) {
             chat.events.connectionState.first { it == ConnectionState.Disconnected }
         }
         if (exhausted == null) {
             val current = chat.events.connectionState.value
-            val handshakes = server.requestCount
+            // 计数口径=WS 握手数（bypass.wsHandshakeCount，补拉 404 不计）：server.requestCount
+            // 混入补拉 GET，阈值边界有歧义；纯握手数下 ≥2 即「第 2 次握手（重连）已到」。
+            val handshakes = bypass.wsHandshakeCount()
             val surface = if (handshakes >= 2) {
-                "重连握手已到达 server（请求数=$handshakes）→ 404 未回或 onFailure 丢失面"
+                "重连握手已到达 server（握手数=$handshakes）→ 404 未回或 onFailure 丢失面"
             } else {
-                "重连握手未到达 server（请求数=$handshakes）→ 重连协程/MockWebServer accept 饿死面"
+                "重连握手未到达 server（握手数=$handshakes）→ 重连协程/MockWebServer accept 饿死面"
             }
             error("[重连耗尽] 15s 未落 Disconnected：当前状态=$current；$surface")
         }
@@ -196,8 +199,10 @@ class ConnectionLifecycleTest {
         //
         // 六现 37867895291（2026-10-09，8288d65 纯 test 头）段位消息命中：恢复段
         // 悬空 Connecting 整 10s（首连/耗尽段均过）——与四现耗尽段同症，恢复段
-        // 补同款双证据：烧穿按 server 请求计数二分（第 3 请求 = 恢复握手），
+        // 补同款双证据：烧穿按 WS 握手数二分（第 3 次握手 = 恢复握手），
         // ≥3 → upgrade 未回/onOpen 丢失面；<3 → 恢复 connect 协程/accept 饿死面。
+        // 七现 37885639220（2026-10-09）证据歧义暴露后改纯握手计数：requestCount
+        // 混入补拉 GET，「请求数=4」无法区分恢复到达/补拉多发。
         // 提前落 Disconnected 同样带计数即刻报（fail-fast 只提前，不改判据）。
         bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
         chat.connect()
@@ -208,11 +213,13 @@ class ConnectionLifecycleTest {
         }
         if (recovered != ConnectionState.Connected) {
             val current = chat.events.connectionState.value
-            val handshakes = server.requestCount
+            // 同耗尽段口径=纯握手数（七现 37885639220 requestCount=4 因混入补拉有歧义：
+            // 恢复握手确实到达，还是补拉多发一条，无法区分）；≥3 即恢复握手（第 3 次）已到。
+            val handshakes = bypass.wsHandshakeCount()
             val surface = if (handshakes >= 3) {
-                "恢复握手已到达 server（请求数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
+                "恢复握手已到达 server（握手数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
             } else {
-                "恢复握手未到达 server（请求数=$handshakes）→ 恢复 connect 协程/MockWebServer accept 饿死面"
+                "恢复握手未到达 server（握手数=$handshakes）→ 恢复 connect 协程/MockWebServer accept 饿死面"
             }
             val how = if (recovered == null) "10s 未达 Connected" else "提前落入 Disconnected"
             error("[恢复重连] $how：当前状态=$current；$surface")
