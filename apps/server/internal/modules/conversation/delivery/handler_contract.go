@@ -13,6 +13,13 @@ var ErrConversationNotFound = errors.New("conversation not found")
 type ConversationDTO = conversationapp.ConversationDTO
 type ConversationMessageDTO = conversationapp.ConversationMessageDTO
 
+// CloseOptions / ErrOpenTicketsRemain 供 handlers 消费关闭拦截面（模块边界：
+// handlers 只 import delivery，不 import application；errors.Is 对 sentinel
+// 语义经别名保持不变）。
+type CloseOptions = conversationapp.CloseOptions
+
+var ErrOpenTicketsRemain = conversationapp.ErrOpenTicketsRemain
+
 type HandlerService interface {
 	GetConversation(ctx context.Context, sessionID string) (*ConversationDTO, error)
 	ListMessages(ctx context.Context, sessionID string, limit int) ([]ConversationMessageDTO, error)
