@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ProCard, StatisticCard } from '@ant-design/pro-components';
-import { Tag, Button, Input, Space, Divider, Row, Col, Spin } from 'antd';
+import { Button, Input, Space, Divider, Row, Col, Spin } from 'antd';
 import { getAIStatus, getAIMetrics, queryAI } from '@/services/ai';
 
 const AIManagementPage: React.FC = () => {

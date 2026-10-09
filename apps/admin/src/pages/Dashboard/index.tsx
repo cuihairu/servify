@@ -19,9 +19,6 @@ import {
   exportStatistics,
   getDashboardStats,
   getTimeRangeStats,
-  getTicketCategoryStats,
-  getTicketPriorityStats,
-  getCustomerSourceStats,
   type StatisticsExportType,
 } from '@/services/statistics';
 import { getErrorMessage } from '@/utils/error';

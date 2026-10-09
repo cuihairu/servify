@@ -11,7 +11,6 @@ import {
   Form,
   Input,
   Modal,
-  Select,
   Space,
   Switch,
   Tabs,

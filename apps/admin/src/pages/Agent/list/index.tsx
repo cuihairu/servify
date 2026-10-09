@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ProTable } from '@ant-design/pro-components';
 import type { ProColumns, ActionType } from '@ant-design/pro-components';
-import { Tag, Button, Space, Progress, Modal, Form, Input, InputNumber, message, Select } from 'antd';
+import { Tag, Button, Space, Progress, Modal, Form, Input, InputNumber, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { navigateTo } from '@/lib/navigation';
 import { AGENT_STATUS_MAP } from '@/utils/constants';

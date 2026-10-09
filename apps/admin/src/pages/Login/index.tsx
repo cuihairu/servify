@@ -19,6 +19,14 @@ const OIDC_ERROR_MESSAGES: Record<string, string> = {
   oidc_login_denied: '当前账号不允许通过单点登录进入',
 };
 
+/** 登录成功后的本地会话落库：access 必存，refresh/用户信息按载荷补齐。 */
+function applyTokens(token: string, refreshToken?: string) {
+  setToken(token);
+  if (refreshToken) setRefreshToken(refreshToken);
+  const user = parseJwtPayload(token);
+  if (user) setUserInfo(user);
+}
+
 const LoginPage: React.FC = () => {
   const [oidcEnabled, setOidcEnabled] = useState(false);
   const [oidcIssuerHost, setOidcIssuerHost] = useState('');
@@ -197,12 +205,5 @@ const LoginPage: React.FC = () => {
     </div>
   );
 };
-
-function applyTokens(token: string, refreshToken?: string) {
-  setToken(token);
-  if (refreshToken) setRefreshToken(refreshToken);
-  const user = parseJwtPayload(token);
-  if (user) setUserInfo(user);
-}
 
 export default LoginPage;
