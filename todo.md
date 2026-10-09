@@ -1207,6 +1207,11 @@
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
 
+- 附注（2026-10-10，**运行时索引对账守卫 + 一次假阴性误报的自我修正**；接上轮列形对账刀，盘「CreateIndexes 15 条运行时索引是否在迁移链」姊妹面）：
+  - 初判与修正：带引号 grep（`IF NOT EXISTS "idx_..."`）报 13/15 MISSING，一度误判为「postgres 版本化路径静默全表扫」并已写出 000021 迁移——**变异验证拦住**：删除 000021 守卫仍绿（守卫正则引号可选、命中基线无引号形态），追查证实 gen-baseline 捕获 CreateIndexes 原始语句（无引号）入基线 000001，15/15 全在，索引面零缺口（否定性结论坑再现：初判正则形态不全 →「不存在」假结论，与 10-07 domain 枚举≠DB 持久值同族）。
+  - 交付（0852423，单文件）：`TestMigrationChainCoversCreateIndexes` 从 migrate.go 源码动态提取 CreateIndexes 清单（新加索引忘配迁移自动报红），对账迁移链 CREATE INDEX 名集合（引号可选）。真实价值=钉未来增量：RunStandalone versioned 分支只跑 RunMigrations 不调 CreateIndexes（仅 cmd/migrate 与 cmd/gen-baseline 调），新索引只进清单不配迁移则 postgres 全新库静默缺索引。变异验证：migrate.go 临时改名一条 → 精确报 1 缺口；恢复 → 绿。000021 已删（不需要），无迁移变更。
+  - 门禁：bootstrap 27.4s 绿；CI 由 head run 跟踪。
+
 - 附注（2026-10-10，**列形对账刀：audit_logs 哈希链两列漏配迁移修复 + 模型-迁移列级静态守卫**；派发项为「连续推进未完成项」——10-07 CI Integration 附注遗留的「列形级自动化对账未建」与「当前恢复点 B0 指针漂移」两处台账/守卫缺口，本轮收口）：
   - 缺口实证（探针先行）：10-07 的 `TestMigrationChainCoversAllModels` 只对账表级（CREATE TABLE 名字集合），列级漂移不可见——新探针（52 模型 `schema.Parse` 内存推导列集合 vs 迁移链终态「基线列 ∪ 增量 ADD COLUMN − DROP COLUMN ± RENAME」）双向 diff 一次抓出**真缺口**：`AuditLog.PrevHash/EntryHash`（R2 哈希链，70ba271 09-27 加列时未配迁移）——09-27~10-07 Integration 断链三天未真正跑完把它掩盖至今，**全新 postgres 版本化库写审计日志必 42P01**（sqlite AutoMigrate 建表路径掩盖，与 10-07 整类缺口同源）。
   - 修复（3201805，一笔三件）：① 迁移 `000020_audit_hash_chain.up.sql`（audit_logs 补 prev_hash/entry_hash 两列 + `idx_audit_logs_prev_hash`/`idx_audit_logs_entry_hash` 两索引，命名对齐基线 `;index` 列惯例）；② `TestMigrationChainCoversAllModelColumns` 列形级静态守卫定稿（与表级守卫互补，口径边界如实声明：只对「模型列 ⊆ 链列」方向、WeKnora 兼容表豁免、AutoMigrate 自动 FK 展开方向盲——52 模型探针验证零假阳性）；③ migrate.go 注释漂移（answer_feedback→answer_feedbacks，000019 纠偏未回写注释）。
