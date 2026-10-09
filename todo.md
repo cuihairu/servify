@@ -1180,6 +1180,12 @@
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
 
+- 附注（2026-10-09，**演进方向刀二/三收口确认 + §7.2 复核闭环 + §7.1 NOT NULL 升拍板面**；派发项同刀一续跑）：
+  - 刀二/§6.3-3（1260364，admin 模块）：Routing 页第三块「分配评分审计」ProTable——routing_assignments 的 total_score/factors/reasons/strategy 可见（因子 Tooltip、总分三档色标、按会话 ID 查询）。打分引擎本体 B2-1 已在案（scorer.go 八因子加权 + routing_assignments 落分数），本刀只补展示面。
+  - 刀四/测试基建（3615031，android）：reconnectExhaustion 七现（37885639220）证据歧义暴露——server.requestCount 混入补拉 GET（首连+补拉+重连+恢复=4，与「多余第 4 握手」不可区分）；ReconcileBypassDispatcher 增 `wsHandshakeCount()`（只数走 FIFO 队列的握手请求），耗尽/恢复两段证据改读纯握手计数，阈值=握手序号字面值。本地 release 单类绿。
+  - §7.2 复核：已闭环无需再排——ticket.* 事件全集三个（created/assigned/closed，ticket/application/events.go）均已在 conversation/delivery/eventbus_subscriber.go 投影注册（B1-2 落地时一并收口），无第四个事件名遗漏。
+  - §7.1 NOT NULL 升拍板面：`CreateTicketRequest.SessionID`（管理员建单 contract/types.go:13）无 required，且 admin 工单管理页创建表单不传 session_id（Ticket/list/index.tsx 创建分支无该字段）——「新数据必填」一刀切会砍掉 admin 独立建单流程（customer_id 直填、无会话上下文）。与「邮件建单 SessionID=nil 不投影」（B1-2 设计注释在案）同属产品语义决策：砍独立建单 / 保留 session 可空（计划降级解释），留用户拍板，不自主实施。
+
 - 附注（2026-10-08，**C 批次遗留收口：每能力一页补坐席工作台/工单全流程 + 导航孤儿二次收口 + AI 味复扫**；派发项为「文档重整批+web 嵌入集成指南+legacy 清理未完项连续做完」）：
   - 批次未完项盘点：C1 余 ferry 侧真嵌验收（外部步骤，维持不动）；C2 三子项 10-07 附注在案全闭环，复核无未完项，本刀未动；C3 遗留两项（implementation/ 子站侧边栏、新能力页未扩写）为本刀实体。
   - 能力页缺口对照：V1 收敛六能力（v1-product-scope §保留的核心功能）逐一对 docs 面——Web 嵌入=embedding-guide、AI 首答/知识库=WEKNORA/RAGFLOW/ai-fallback、人工接管与坐席工作台、工单全流程两能力此前**零页面**，本刀补齐（agent-workspace.md / ticket-workflow.md）；其余 27 模块中 SLA/排班/质检/游戏化/宏/自动化等属 P1/P2 或后台纵深，不按模块清单扩页（避免 API 流水账，C3-1 口径），后续按需。
