@@ -54,6 +54,12 @@
 2. **dependabot 告警——有修复版本即升级，无修复版本保留**。excelize 20 条（双 manifest ×10）已两次 bump：先升 dependabot 给的修复伪版本（2026-09-10 commit），重扫又出 6 条新 CVE 后升 master HEAD（2026-10-09，连带 go 指令 1.25.0→1.26.0，CI 按 go-version-file 自动跟版本）；重扫后自动消单。braces@3.0.3 / sprintf-js@1.0.3（admin pnpm-lock，`@umijs/lint`→`@typescript-eslint/typescript-estree`→`micromatch` 与 umi→babel-jest→argparse 传递依赖）上游无修复版本（npm 最新即当前版本），保留并记录，等上游发版后再升级。
 3. **admin lint 74 个 parsing error——已修到零**（2026-10-09）：根因是 max lint 无任何 eslint 配置（默认 espree script 模式解析 ESM+TS 全文件报 parsing error），补 `.eslintrc.js` extends `@umijs/max/eslint` 后暴露的 14 个真实规则错误全部清零（5 个未用 import、Login applyTokens 提前、`eqeqeq` 配 `always+null:ignore` 保住 `!= null` 可选字段判断语义）；lint/typecheck/build 三绿。
 
+### 演进方向收口状态（2026-10-09）
+
+- Routing 打分引擎（§6）：闭环——引擎 B2-1 + admin 评分审计面板（1260364）。
+- Ticket 关闭前拦截（§7）：闭环——拦截已落地（刀一），NOT NULL 项按拍板段口径保持可空。
+- 薄壳模块文档面与叙事完全收口（§1.2 剩余项）：闭环——`statistics` 迁移来源测试文件更名归位 `session_transfer_unit_test.go`（内容本就测 session transfer，statistics 前缀是迁移期误挂），`current-architecture.md` 两处表述同步；至此 §1.2 表格 9 行全部收口，顶层 handlers 无 statistics 命名残留。
+
 ---
 
 ## V1.0 收敛批次（2026-10-04 拍板，当前唯一活跃 backlog）

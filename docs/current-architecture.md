@@ -12,7 +12,7 @@
 - 主入口已经从 `cmd/server` 下沉到 `internal/app/bootstrap` 与 `internal/app/server`。
 - 业务能力已全部收口到 `modules/*`，其中 14 个模块具备完整 `domain/application/infra/delivery`（agent、ai、analytics、assist、automation、conversation、customer、knowledge、quality、routing、ticket、translation、voice、webhook），另有 13 个薄壳模块（无 `domain` 层：api_key、app_integration、auth、custom_field、email、gamification、macro、push、satisfaction、shift、sla、suggestion、workspace），其业务逻辑仍以 legacy handler/service 承载。
 - `handlers` 大多已经依赖 module delivery contract 或 handler-local contract，而不是直接依赖 concrete legacy service。
-- `statistics` 已收口进 `analytics` 模块（V1.0 B2-3，`modules/analytics/delivery/statistics_*.go`），顶层 `internal/handlers` 不再保留 statistics 业务面（仅剩迁移来源的单元测试文件）。
+- `statistics` 已收口进 `analytics` 模块（V1.0 B2-3，`modules/analytics/delivery/statistics_*.go`），顶层 `internal/handlers` 不再保留 statistics 业务面（迁移来源的单元测试文件已随 2026-10-09 收口更名 `session_transfer_unit_test.go`，文件内容本就测 session transfer，statistics 前缀是迁移期误挂）。
 
 换句话说，当前系统不是纯目标态，也不是旧架构；它是有边界守护的迁移后架构。V1.0 收敛改造（B0–B4）已于 2026-10-04 完成并发布 `v1.0.0`：27 个模块不再增加，核心 7 模块（conversation/ticket/routing/ai/knowledge/customer/agent）围绕 Conversation 中心模型打磨，13 个薄壳模块叙事降级为子能力。
 
@@ -128,7 +128,7 @@ modules/*/application -> modules/*/domain|infra
 
 | 区域 | 现状 | 风险 |
 | --- | --- | --- |
-| `statistics` 旧 handler | 已收口：`modules/analytics/delivery/statistics_handler.go` / `statistics_export_handler.go`（V1.0 B2-3） | 无遗留风险；顶层 handlers 仅剩迁移来源测试 |
+| `statistics` 旧 handler | 已收口：`modules/analytics/delivery/statistics_handler.go` / `statistics_export_handler.go`（V1.0 B2-3） | 无遗留风险；迁移来源测试已更名归位（2026-10-09） |
 | `voice` | 模块化程度较高（完整分层），但不是典型 `services -> modules` 迁移形态 | provider、media、protocol、业务状态容易混在一起；V1.0 冻结为扩展边界 |
 | `realtime` | WebSocket hub 仍是运行态核心对象 | connection runtime 与业务持久化边界必须继续守住 |
 | `AI / Knowledge` | provider 抽象与 mock/容器化验收已收口（P1-1）；仅 real 模式验收受外部凭证阻塞 | 接口成功不等于真实 provider 主路径命中 |
