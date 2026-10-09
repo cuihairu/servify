@@ -919,6 +919,28 @@ case "$PROVIDER" in
     require_file_listed "audit-diff.json"
     require_file_listed "audit-export.csv"
     ;;
+  webhook)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.admin_auth_ok // ""' "true"
+    require_equals '.checks.endpoint_created_ok // ""' "true"
+    require_equals '.checks.secret_hidden_ok // ""' "true"
+    require_equals '.checks.events_whitelist_ok // ""' "true"
+    require_equals '.checks.session_msg_ok // ""' "true"
+    require_equals '.checks.ticket_created_ok // ""' "true"
+    require_equals '.checks.delivery_signature_ok // ""' "true"
+    require_equals '.checks.delivery_status_ok // ""' "true"
+    require_equals '.checks.selftest_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "admin-auth.json"
+    require_file_listed "webhook-endpoint-create.json"
+    require_file_listed "webhook-endpoint-list.json"
+    require_file_listed "webhook-events.json"
+    require_file_listed "visitor-ticket.json"
+    require_file_listed "webhook-delivery-headers.json"
+    require_file_listed "webhook-deliveries.json"
+    require_file_listed "webhook-endpoint-test.json"
+    ;;
   *)
     echo "❌ 不支持的 provider: $PROVIDER" >&2
     exit 1

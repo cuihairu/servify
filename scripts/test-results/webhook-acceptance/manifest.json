@@ -1,0 +1,35 @@
+{
+  "provider": "webhook",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18096",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "admin_auth_ok": "true",
+    "endpoint_created_ok": "true",
+    "secret_hidden_ok": "true",
+    "events_whitelist_ok": "true",
+    "session_msg_ok": "true",
+    "ticket_created_ok": "true",
+    "delivery_signature_ok": "true",
+    "delivery_status_ok": "true",
+    "selftest_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "build-output.txt",
+    "receiver.log",
+    "server-log.txt",
+    "summary.txt",
+    "visitor-ticket.json",
+    "webhook-deliveries.json",
+    "webhook-delivery-headers.json",
+    "webhook-endpoint-create.json",
+    "webhook-endpoint-list.json",
+    "webhook-endpoint-test.json",
+    "webhook-events.json",
+    "ws-session.log"
+  ]
+}

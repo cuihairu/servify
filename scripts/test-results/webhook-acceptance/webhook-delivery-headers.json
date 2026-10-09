@@ -1,0 +1,7 @@
+{
+  "x-servify-signature": "t=1791568039,v1=32d33a2c4516b84306c937fca2116abb8b4b5a7620910173194edfbbbab9da01",
+  "x-servify-event": "ticket.created",
+  "x-servify-event-id": "ticket.created-1-1791568017134617832",
+  "x-servify-delivery-id": "1",
+  "content-type": "application/json"
+}

@@ -1,0 +1,1 @@
+{"events":["ticket.created","ticket.assigned","ticket.closed","conversation.created","conversation.message_received","routing.agent_assigned","routing.transfer_completed","call.started","call.held","call.resumed","call.transferred","call.ended"]}
