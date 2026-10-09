@@ -1207,6 +1207,11 @@
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
 
+- 附注（2026-10-10，**tag 索引对账刀：waiting_records.target_group_id 漏配索引修复 + 守卫家族第四件**；接索引守卫刀，盘「模型 gorm index/uniqueIndex tag 声明的 AutoMigrate 索引是否在迁移链」）：
+  - 缺口实证（探针先行，52 模型 schema.Parse→ParseIndexes() vs 链 CREATE INDEX 集合，假阳性为零唯一缺口）：`idx_waiting_records_target_group_id`——000005（C5 队列认领租约）补 target_group_id 列时漏配模型 tag 对应索引，postgres 版本化路径全新库（不跑 AutoMigrate）该列无索引，与 sqlite/AutoMigrate 路径形态不一致。
+  - 修复（81f195b，一笔两件）：① 迁移 `000021_waiting_records_target_group_idx.up.sql`（号复用——上一刀误判出的 000021 已删，编号空档）；② `TestMigrationChainCoversAllModelTagIndexes` 守卫（守卫家族第四件：表级→列级→运行时索引级→tag 索引级，migrations tag 面闭环）。变异验证：删 000021 → 精确报 1 缺口；恢复 → 绿。门禁：bootstrap 23.7s 绿 + module-boundaries 过。
+  - 口径边界（注释如实声明）：只对账模型 tag 声明索引；CreateIndexes 运行时清单归姊妹守卫；belongs to 自动 FK 隐式索引方向盲（与列级守卫同族）。
+
 - 附注（2026-10-10，**运行时索引对账守卫 + 一次假阴性误报的自我修正**；接上轮列形对账刀，盘「CreateIndexes 15 条运行时索引是否在迁移链」姊妹面）：
   - 初判与修正：带引号 grep（`IF NOT EXISTS "idx_..."`）报 13/15 MISSING，一度误判为「postgres 版本化路径静默全表扫」并已写出 000021 迁移——**变异验证拦住**：删除 000021 守卫仍绿（守卫正则引号可选、命中基线无引号形态），追查证实 gen-baseline 捕获 CreateIndexes 原始语句（无引号）入基线 000001，15/15 全在，索引面零缺口（否定性结论坑再现：初判正则形态不全 →「不存在」假结论，与 10-07 domain 枚举≠DB 持久值同族）。
   - 交付（0852423，单文件）：`TestMigrationChainCoversCreateIndexes` 从 migrate.go 源码动态提取 CreateIndexes 清单（新加索引忘配迁移自动报红），对账迁移链 CREATE INDEX 名集合（引号可选）。真实价值=钉未来增量：RunStandalone versioned 分支只跑 RunMigrations 不调 CreateIndexes（仅 cmd/migrate 与 cmd/gen-baseline 调），新索引只进清单不配迁移则 postgres 全新库静默缺索引。变异验证：migrate.go 临时改名一条 → 精确报 1 缺口；恢复 → 绿。000021 已删（不需要），无迁移变更。
