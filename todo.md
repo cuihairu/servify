@@ -60,6 +60,13 @@
 - Ticket 关闭前拦截（§7）：闭环——拦截已落地（刀一），NOT NULL 项按拍板段口径保持可空。
 - 薄壳模块文档面与叙事完全收口（§1.2 剩余项）：闭环——`statistics` 迁移来源测试文件更名归位 `session_transfer_unit_test.go`（内容本就测 session transfer，statistics 前缀是迁移期误挂），`current-architecture.md` 两处表述同步；至此 §1.2 表格 9 行全部收口，顶层 handlers 无 statistics 命名残留。
 
+- 附注（2026-10-09，**巡检三令执行 + go 1.26 升级连带三修**；派发项为「待拍板面按仓内口径自行定并记录」）：
+  - ①dependabot（420ae5c + e1ae50e，deps）：excelize 双 manifest 20 条两轮 bump——先升修复伪版本（2026-09-10 commit），重扫出 6 条新 CVE 后升 master HEAD（2026-10-09，连带 go 指令 1.25.0→1.26.0，mscfb/golang.org/x 同步）；apps/server manifest 份额重扫已消，根 go.mod 名下 15 条为 dependabot 闭包缓存陈旧态（根 go.mod/go.sum 实际无 excelize），批扫自动消单。braces/sprintf-js 上游无修复版本保留（拍板段在案）。
+  - ②admin lint 74→0（8c65fd2）：根因=无任何 eslint 配置（max lint 默认 espree script 模式解析 ESM+TS 全文件 parsing error）；补 `.eslintrc.js` extends `@umijs/max/eslint`，暴露的 14 个真实错误清零（5 未用 import、Login applyTokens 提前、eqeqeq always+null:ignore 保 `!= null` 语义）；lint/typecheck/build 三绿。
+  - ③§7.1 session_id 保持可空（7f61e5c，拍板段在案）；§1.2 statistics 收口闭环（970c6a4，测试文件更名+架构快照同步）。
+  - 连带三修（go 1.26 升级暴露）：a) Script 门 ragflow 验收测试 `GOTOOLCHAIN=go1.25.7` 钉版构建必败（296060c，删钉改默认 auto）；b) Integration 门 Dockerfile builder `golang:1.25-alpine` 镜像 GOTOOLCHAIN=local 无法编译 1.26 模块（d9bad86，升 1.26-alpine；mock 两 Dockerfile 标准库独立构建不动）；c) gen-baseline 注释过时 toolchain 示例更正（b15f6a6）。教训入 CI 门坑清单：升 go 指令先 `grep -rn GOTOOLCHAIN scripts/`。
+  - Android 八现（37918246493，b15f6a6 attempt 1）：恢复段 10s 未达 Connected——纯握手计数首战精确命中 `握手数=3 → upgrade 未回或 onOpen 丢失面`，读码排除 guard/赋值链破绽 ⇒ OkHttp onOpen 回调派发饿死（CI 线程竞争面，本地不复现），rerun attempt 2 全绿收口；台账与二现预案（测试面结构修）入抖动记忆。
+
 ---
 
 ## V1.0 收敛批次（2026-10-04 拍板，当前唯一活跃 backlog）
