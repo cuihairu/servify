@@ -1,7 +1,7 @@
 [English](README.md) | [中文](README.zh.md)
 
 <p align="center">
-  <img src="./docs/.vitepress/public/icon.png" width="80" alt="Servify Logo">
+  <img src="./docs/.vitepress/public/icon.png" width="64" height="64" alt="Servify Logo">
 </p>
 
 <div align="center">
@@ -14,7 +14,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
 [![codecov](https://codecov.io/gh/cuihairu/servify/graph/badge.svg)](https://codecov.io/gh/cuihairu/servify)
-[![GitHub Stars](https://img.shields.io/github/stars/cuihairu/servify?style=social)](https://github.com/cuihairu/servify)
 [![Website](https://img.shields.io/badge/website-servify.cuihairu.site-6366f1?logo=cloudflare)](https://servify.cuihairu.site/)
 
 </div>
