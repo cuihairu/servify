@@ -10,7 +10,9 @@ COPY apps/admin/ .
 RUN pnpm build
 
 # Stage 2: Build Go server
-FROM golang:1.25-alpine AS builder
+# Base tracks apps/server/go.mod go directive; GOTOOLCHAIN=local in the
+# golang image means the pinned major must satisfy the module requirement.
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 # Build uses module in apps/server
