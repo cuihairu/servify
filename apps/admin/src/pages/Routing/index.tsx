@@ -1,12 +1,18 @@
 import React, { useRef, useState } from 'react';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { Button, Input, Tag, message } from 'antd';
-import { getTransferHistory, getWaitingQueue, processQueue } from '@/services/sessionTransfer';
+import { Button, Input, Tag, Tooltip, Typography, message } from 'antd';
+import {
+  getRoutingScoring,
+  getTransferHistory,
+  getWaitingQueue,
+  processQueue,
+} from '@/services/sessionTransfer';
 
 const RoutingPage: React.FC = () => {
   const queueActionRef = useRef<ActionType>();
   const historyActionRef = useRef<ActionType>();
+  const scoringActionRef = useRef<ActionType>();
   const [sessionId, setSessionId] = useState('');
 
   const queueColumns: ProColumns<API.TransferQueueRecord>[] = [
@@ -54,6 +60,60 @@ const RoutingPage: React.FC = () => {
     {
       title: '转接时间',
       dataIndex: 'transferred_at',
+      valueType: 'dateTime',
+      width: 180,
+    },
+  ];
+
+  // 分配评分审计（routing_assignments，§6.3-3 分数与因子可见）：
+  // 每次经打分引擎的分配落 total_score + factors + reasons + strategy。
+  const formatFactors = (factors?: Record<string, number>) => {
+    if (!factors || Object.keys(factors).length === 0) return '-';
+    return Object.entries(factors)
+      .map(([key, value]) => `${key} ${(value * 100).toFixed(0)}`)
+      .join(' / ');
+  };
+
+  const scoringColumns: ProColumns<API.RoutingAssignmentScore>[] = [
+    { title: '会话ID', dataIndex: 'session_id', width: 180 },
+    {
+      title: '方向',
+      width: 160,
+      render: (_, record) =>
+        `${record.from_agent_id ?? '-'} → ${record.to_agent_id ?? '-'}`,
+    },
+    {
+      title: '总分',
+      dataIndex: 'total_score',
+      width: 100,
+      render: (_, record) => (
+        <Tag color={record.total_score >= 0.7 ? 'green' : record.total_score >= 0.4 ? 'blue' : 'default'}>
+          {record.total_score.toFixed(2)}
+        </Tag>
+      ),
+    },
+    { title: '策略', dataIndex: 'strategy', width: 170, render: (_, record) => record.strategy || '-' },
+    {
+      title: '因子',
+      ellipsis: true,
+      render: (_, record) => (
+        <Tooltip title={formatFactors(record.factors)}>
+          <Typography.Text style={{ maxWidth: 260 }} ellipsis>
+            {formatFactors(record.factors)}
+          </Typography.Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '理由',
+      dataIndex: 'reasons',
+      ellipsis: true,
+      render: (_, record) =>
+        record.reasons && record.reasons.length > 0 ? record.reasons.join('；') : '-',
+    },
+    {
+      title: '分配时间',
+      dataIndex: 'assigned_at',
       valueType: 'dateTime',
       width: 180,
     },
@@ -126,6 +186,50 @@ const RoutingPage: React.FC = () => {
             return { data: result.items, total: result.count, success: true };
           } catch (error) {
             console.error('获取转接历史失败:', error);
+            return { data: [], total: 0, success: true };
+          }
+        }}
+        search={false}
+        pagination={{ defaultPageSize: 10 }}
+      />
+
+      <ProTable<API.RoutingAssignmentScore>
+        headerTitle="分配评分审计"
+        rowKey={(record) =>
+          `${record.session_id}-${record.to_agent_id ?? '-'}-${record.assigned_at ?? ''}`
+        }
+        columns={scoringColumns}
+        actionRef={scoringActionRef}
+        style={{ marginTop: 16 }}
+        toolBarRender={() => [
+          <Input
+            key="session-id"
+            allowClear
+            placeholder="按会话ID查询评分"
+            style={{ width: 240 }}
+            value={sessionId}
+            onChange={(event) => {
+              setSessionId(event.target.value);
+            }}
+            onPressEnter={() => scoringActionRef.current?.reload()}
+          />,
+          <Button
+            key="search"
+            type="primary"
+            onClick={() => scoringActionRef.current?.reload()}
+          >
+            查询
+          </Button>,
+        ]}
+        request={async () => {
+          if (!sessionId.trim()) {
+            return { data: [], total: 0, success: true };
+          }
+          try {
+            const result = await getRoutingScoring(sessionId, 50);
+            return { data: result.data, total: result.count, success: true };
+          } catch (error) {
+            console.error('获取分配评分失败:', error);
             return { data: [], total: 0, success: true };
           }
         }}

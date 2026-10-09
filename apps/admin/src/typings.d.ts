@@ -745,6 +745,17 @@ declare namespace API {
     target_agent_id?: number;
   }
 
+  interface RoutingAssignmentScore {
+    session_id: string;
+    from_agent_id?: number;
+    to_agent_id?: number;
+    total_score: number;
+    factors?: Record<string, number>;
+    reasons?: string[];
+    strategy?: string;
+    assigned_at?: string;
+  }
+
   interface LeaderboardRecord {
     id: string | number;
     rank: number;

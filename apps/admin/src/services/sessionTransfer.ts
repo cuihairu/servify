@@ -36,3 +36,15 @@ export async function cancelTransfer(sessionId: string) {
 export async function processQueue() {
   return request<API.MessageResponse>('/api/session-transfer/process-queue', { method: 'POST' });
 }
+
+export async function getRoutingScoring(sessionId: string, limit = 50) {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId) {
+    return { count: 0, data: [] as API.RoutingAssignmentScore[] };
+  }
+  const payload = await request<{ count?: number; data?: API.RoutingAssignmentScore[] }>(
+    `/api/session-transfer/scoring/${normalizedSessionId}`,
+    { params: { limit } },
+  );
+  return { count: payload.count ?? 0, data: payload.data ?? [] };
+}
