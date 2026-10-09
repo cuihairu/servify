@@ -66,6 +66,7 @@
   - ③§7.1 session_id 保持可空（7f61e5c，拍板段在案）；§1.2 statistics 收口闭环（970c6a4，测试文件更名+架构快照同步）。
   - 连带三修（go 1.26 升级暴露）：a) Script 门 ragflow 验收测试 `GOTOOLCHAIN=go1.25.7` 钉版构建必败（296060c，删钉改默认 auto）；b) Integration 门 Dockerfile builder `golang:1.25-alpine` 镜像 GOTOOLCHAIN=local 无法编译 1.26 模块（d9bad86，升 1.26-alpine；mock 两 Dockerfile 标准库独立构建不动）；c) gen-baseline 注释过时 toolchain 示例更正（b15f6a6）。教训入 CI 门坑清单：升 go 指令先 `grep -rn GOTOOLCHAIN scripts/`。
   - Android 八现（37918246493，b15f6a6 attempt 1）：恢复段 10s 未达 Connected——纯握手计数首战精确命中 `握手数=3 → upgrade 未回或 onOpen 丢失面`，读码排除 guard/赋值链破绽 ⇒ OkHttp onOpen 回调派发饿死（CI 线程竞争面，本地不复现），rerun attempt 2 全绿收口；台账与二现预案（测试面结构修）入抖动记忆。
+  - 追加（a8e65fc run 37921812379，Go Checks race 变体）：`TestWebRTC_LoopbackDataChannel` DATA RACE——pion OnDataChannel 回调 goroutine 写 `conn.DataChannel`（webrtc_service.go:175）与 `SendDataChannelMessage`/`GetConnectionStats` 并发读（:378/:362）无锁竞争，go 1.26 race runtime 时序下首次实抓（既有并发面非新引入）。修复（f336ca4）：`WebRTCConnection` 加 `dcMu`，字段访问收口 `SetDataChannel`/`dataChannel()`（照 statusMu 同款模式），本地 -race 3× 绿、realtime 包覆盖率保持 100.0%。
 
 ---
 
