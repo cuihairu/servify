@@ -1230,6 +1230,11 @@
   - 家族守卫（TestAcceptanceScriptEvidenceFamily）：扫全部 test-*.sh 的 EVIDENCE_DIR 声明 → 每个 dir 须 manifest.json 存在且 git tracked → manifest.provider 在 validate-acceptance-manifest.sh 须有 case 分支；豁免清单带理由（dify-acceptance=P1-1 外部凭证且 mock 路径有 Go 测试覆盖）；CI 白名单补 AcceptanceScriptEvidenceFamily（CoversEveryScriptsTest/WhitelistHasNoStaleEntries 双 meta-test 过）。新 acceptance 脚本漏 manifest/分支/证据即 CI 红。
   - 门禁：bash -n + text-encoding + scripts 包全量绿（含家族守卫先红后绿验证——守卫在证据入库前精确报 conversation-lifecycle 一条）。
 
+- 附注（2026-10-10，**可选小刀：knowledge-acceptance 遗留脚本删除**；上刀家族守卫豁免清单中唯一可本地收口的项）：
+  - 删 `scripts/test-knowledge-acceptance.sh`（72 行死脚本：打 localhost:8080 外部服务、openai/tei embedding、无 manifest 约定，被 K3 `test-local-knowledge-acceptance.sh` 三 local 零依赖形态取代）+ 本地未入库证据残渣 + Makefile `knowledge-acceptance` 目标/help/.PHONY + 家族守卫豁免条目（豁免仅剩 dify-acceptance）；README_KNOWLEDGE.md 验收节改指 `make local-knowledge-acceptance` 并留一行删档说明。
+  - 两份 2025-05-01 superpowers 冻结档（plan/spec）不改内容，按 spec 自带状态字段惯例补「已被取代」状态行（指向 successor），历史计划快照不篡改。
+  - 门禁：go test ./scripts 全量 + admin typecheck/build（pnpm 10.22.0 钉版）+ text-encoding 绿；CI run 38039384048 首跑 Android SDK 红（`ServifyChatTest.historySnapshotAccumulatesAndMergesStreamById` awaitConnected 5s 烧尽——本提交零 Android 面改动、前三 run 同代码全绿，判无关抖动 rerun --failed 绿；抖动台账已记一现）。
+
 - 附注（2026-10-10，**真库 schema 对等门禁：cmd/schema-parity + 30 条漂移定盘 + 守卫家族盲区收口**；外部条件核实双未到位（braces/sprintf-js 上游 npm 仍 3.0.3/1.1.3 无修复版；P1-1 无新凭证）后自定位——静态守卫家族注释声明的盲区（隐式 NOT NULL、列类型映射）须真库捕获 diff 才可钉）：
   - 工具（60ac4f0）：`apps/server/cmd/schema-parity`——同一 postgres 起两个临时库（A=迁移链 `RunMigrations`，B=`AutoMigrate`+`CreateIndexes` 与 gen-baseline 同构），`information_schema.columns` 逐列 diff（类型/udt/charMax/nullable/default/numeric 精度），模型表集限定比对（豁免 WeKnora 兼容表/schema_migrations），diff 非空 exit 1。CI Integration job 新增 step（水位断言后、备份演练前）。
   - 首跑抓 **30 条真漂移 / 12 表**（全部为静态面不可见的历史措辞差，逐条评估）：**E 类 2 条修模型侧**——`assist/domain.ConsentStatus` 补 `not null;default:''`、`translation/domain.ViewerRole` 补 `not null;default:'agent'`（000014/000016 手写迁移比模型严；赋值点恒显式赋值，default tag 无行为变化，零生产风险），修复后 AutoMigrate 侧收敛（30→28）；**A/B/C/D 类 28 条进显式白名单**（每条带豁免理由注释）：text vs varchar(size)（收紧须 ALTER 生产列且存量超长行会炸 / 去 size 丢声明意图，仅 legacy escape hatch 受影响）、integer vs bigint（迁移写窄，计数列值域内）、double precision vs numeric（float 措辞）、inert DEFAULT（模型未声明，GORM 恒插值两路径都不触发；补 tag 会改 GORM 零值跳过行为）。**新漂移不在白名单即红**——门禁价值=防未来增量。
