@@ -2,13 +2,16 @@
 
 # 会话服务全链路（V1.0 B1 gate）acceptance 测试。
 #
-# 覆盖：访客 WS 进线 -> AI 首答（fallback 策略）-> 转人工 handoff（进入
+# 覆盖：访客 WS 进线 -> AI 首答（local 抽取基线，零知识时诚实空答，断言
+# 落在 source/strategy/answer_id 链路可观测面）-> 转人工 handoff（进入
 # 等待队列）-> 坐席接管 -> 坐席回复 -> 访客建单（session 关联）-> 关单
 # -> 关会话 -> Service Timeline 投影断言（conversation_events 落库链路，
 # docs/v1-convergence-plan.md §3.1/W6）。
 #
-# 自包含：默认自己构建并启动真实服务（sqlite、无外部 AI provider、
-# AI 主链路天然走 fallback）；SERVIFY_URL 提供时复用既有服务。
+# 自包含：默认自己构建并启动真实服务（sqlite、ai.provider=local 零出站，
+# 同 translation 走查口径——仓库默认 openai 即便空 key 也会真实打到
+# api.openai.com，自起形态必须显式 local 才对齐自包含声明）；SERVIFY_URL
+# 提供时复用既有服务（外部栈需自备 ai.provider=local 配置）。
 #
 # 可选环境变量:
 #   SERVIFY_URL            服务地址(默认自起 http://127.0.0.1:18093)
@@ -50,6 +53,7 @@ OVERALL_STATUS=failed
 
 SERVER_PID=""
 DB_DSN=""
+WORK_DIR=""
 ADMIN_TOKEN=""
 
 cleanup() {
@@ -59,6 +63,9 @@ cleanup() {
   fi
   if [ -n "$DB_DSN" ] && [ -f "$DB_DSN" ]; then
     rm -f "$DB_DSN" || true
+  fi
+  if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+    rm -rf "$WORK_DIR" || true
   fi
 }
 
@@ -335,13 +342,30 @@ if [ -z "${SERVIFY_URL:-}" ]; then
     exit 1
   fi
   DB_DSN="$(mktemp -u "${TMPDIR:-/tmp}/lifecycle-XXXXXX.sqlite")"
-  echo "🚀 启动真实服务 (sqlite, bin/servify, 无外部 AI provider): $SERVIFY_URL"
-  SERVIFY_JWT_SECRET=${SERVIFY_JWT_SECRET:-lifecycle-dev-secret} \
-  DB_DRIVER=sqlite DB_DSN="$DB_DSN" SERVIFY_PORT="$SERVIFY_PORT" \
-    "$PROJECT_ROOT/bin/servify" > "$EVIDENCE_DIR/server-log.txt" 2>&1 &
+  WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lifecycle-work-XXXXXX")"
+  # 临时 config：ai.provider=local（零网络出站，同 translation 走查口径）。
+  #    服务起在 WORK_DIR（viper 按 cwd 找 ./config.yml），落库 TZ 钉 UTC。
+  python3 - "$PROJECT_ROOT/config.yml" "$WORK_DIR/config.yml" <<'PY'
+import sys
+import yaml
+
+src, dst = sys.argv[1], sys.argv[2]
+with open(src, encoding="utf-8") as fh:
+    cfg = yaml.safe_load(fh)
+
+# 零依赖抽取式问答基线：无出站请求、无 key 要求（自起形态唯一选型）。
+cfg["ai"]["provider"] = "local"
+
+with open(dst, "w", encoding="utf-8") as fh:
+    yaml.safe_dump(cfg, fh, allow_unicode=True)
+PY
+  echo "🚀 启动真实服务 (sqlite + ai.provider=local, 零出站): $SERVIFY_URL"
+  bash -c 'cd "$1" && exec env TZ=UTC SERVIFY_JWT_SECRET="${SERVIFY_JWT_SECRET:-lifecycle-dev-secret}" DB_DRIVER=sqlite DB_DSN="$2" SERVIFY_PORT="$3" "$4"' \
+    _ "$WORK_DIR" "$DB_DSN" "$SERVIFY_PORT" "$PROJECT_ROOT/bin/servify" \
+    > "$EVIDENCE_DIR/server-log.txt" 2>&1 &
   SERVER_PID=$!
 fi
-append_summary "servify_url=$SERVIFY_URL"
+append_summary "servify_url=$SERVIFY_URL (sqlite local, ai=local)"
 
 wait_for "Servify Health" "$SERVIFY_URL/health" 30 2 || exit 1
 
@@ -395,18 +419,30 @@ with open(sys.argv[1], encoding="utf-8") as f:
 for frame in frames:
     if frame.get("type") == "ai-response":
         data = frame.get("data") or {}
-        content = data.get("content") or ""
-        if content.strip():
-            print(content)
+        if data.get("source") == "ai":
+            print("strategy=" + str(data.get("strategy") or ""))
+            print("next_action=" + str(data.get("next_action") or ""))
+            print("answer_id=" + str(data.get("answer_id") or ""))
+            print("content=" + str(data.get("content") or ""))
             break
 PY
-AI_REPLY=$(cat "$EVIDENCE_DIR/ai-first-reply.txt")
-if [ -n "$AI_REPLY" ]; then
-  echo "✅ AI 首答收到（fallback 策略）: ${AI_REPLY:0:40}..."
+AI_STRATEGY=$(sed -n 's/^strategy=//p' "$EVIDENCE_DIR/ai-first-reply.txt")
+AI_NEXT_ACTION=$(sed -n 's/^next_action=//p' "$EVIDENCE_DIR/ai-first-reply.txt")
+AI_ANSWER_ID=$(sed -n 's/^answer_id=//p' "$EVIDENCE_DIR/ai-first-reply.txt")
+AI_REPLY=$(sed -n 's/^content=//p' "$EVIDENCE_DIR/ai-first-reply.txt")
+# ai.provider=local 是零知识抽取式基线：知识库为空时 content 恒为空（诚实空答，
+# 不倾倒任意句子），因此断言落在链路可观测面——source=ai（经 AI 编排而非规则兜底）、
+# strategy=llm（本地 LLM 链已处理）、answer_id 已落库（首答持久化）；置信门
+# next_action=handoff 一并留档。覆盖「有知识→逐字抽取」由 local-knowledge 验收承担。
+if [ "$AI_STRATEGY" = "llm" ] && [ "$AI_NEXT_ACTION" = "handoff" ] && [ -n "$AI_ANSWER_ID" ] && [ "$AI_ANSWER_ID" != "None" ]; then
+  echo "✅ AI 首答链通（strategy=llm，next_action=handoff，answer_id=$AI_ANSWER_ID，content 长度=${#AI_REPLY}）"
   AI_FIRST_REPLY_OK=true
   append_summary "ai_first_reply_ok=true"
+  append_summary "ai_first_reply_strategy=llm"
+  append_summary "ai_first_reply_answer_id=$AI_ANSWER_ID"
+  append_summary "ai_first_reply_content_len=${#AI_REPLY}"
 else
-  echo "❌ 未在 WS 帧里收到 AI 首答"
+  echo "❌ 未收到 AI 首答链证据（strategy=${AI_STRATEGY:-无}，next_action=${AI_NEXT_ACTION:-无}，answer_id=${AI_ANSWER_ID:-无}）"
   append_summary "ai_first_reply_ok=false"
   exit 1
 fi

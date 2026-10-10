@@ -1,10 +1,13 @@
 build_ok=true
-servify_url=http://127.0.0.1:18093
+servify_url=http://127.0.0.1:18093 (sqlite local, ai=local)
 register_status=201
 admin_auth_ok=true
 agent_id=1
 visitor_ingress_ok=true
 ai_first_reply_ok=true
+ai_first_reply_strategy=llm
+ai_first_reply_answer_id=1
+ai_first_reply_content_len=0
 visitor_handoff_request=true
 assign_ok=true
 agent_reply_ok=true

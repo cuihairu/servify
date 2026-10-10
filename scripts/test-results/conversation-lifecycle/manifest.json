@@ -26,6 +26,7 @@
     "agent-register.json",
     "ai-first-reply.txt",
     "build-output.txt",
+    "manifest.json",
     "server-log.txt",
     "session-after-handoff.json",
     "session-assign.json",
