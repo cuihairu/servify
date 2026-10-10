@@ -1,0 +1,42 @@
+{
+  "provider": "conversation-lifecycle",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18093",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "admin_auth_ok": "true",
+    "agent_created_ok": "true",
+    "visitor_ingress_ok": "true",
+    "ai_first_reply_ok": "true",
+    "handoff_queued_ok": "true",
+    "assign_ok": "true",
+    "agent_reply_ok": "true",
+    "ticket_linked_ok": "true",
+    "ticket_close_ok": "true",
+    "session_close_ok": "true",
+    "timeline_projected_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "agent-create.json",
+    "agent-message.json",
+    "agent-register.json",
+    "ai-first-reply.txt",
+    "build-output.txt",
+    "server-log.txt",
+    "session-after-handoff.json",
+    "session-assign.json",
+    "session-close.json",
+    "session-messages.json",
+    "summary.txt",
+    "ticket-after-close.json",
+    "ticket-close.json",
+    "ticket-create.json",
+    "timeline.json",
+    "visitor-first-round.json",
+    "visitor-handoff-round.json"
+  ]
+}

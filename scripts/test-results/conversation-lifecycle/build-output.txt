@@ -1,0 +1,7 @@
+Building Servify...
+make _build-with-ldflags
+make[1]: Entering directory '/home/cui/workspaces/servify'
+go -C apps/server build -ldflags "-X 'servify/apps/server/internal/version.Version=dev' -X 'servify/apps/server/internal/version.Commit=e3184fd' -X 'servify/apps/server/internal/version.BuildTime=2026-10-10T06:39:18Z'" -o ../../bin/servify ./cmd/server
+go -C apps/server build -ldflags "-X 'servify/apps/server/internal/version.Version=dev' -X 'servify/apps/server/internal/version.Commit=e3184fd' -X 'servify/apps/server/internal/version.BuildTime=2026-10-10T06:39:18Z'" -o ../../bin/migrate ./cmd/migrate
+go -C apps/server build -ldflags "-X 'servify/apps/server/internal/version.Version=dev' -X 'servify/apps/server/internal/version.Commit=e3184fd' -X 'servify/apps/server/internal/version.BuildTime=2026-10-10T06:39:18Z'" -o ../../bin/servify-cli ./cmd
+make[1]: Leaving directory '/home/cui/workspaces/servify'

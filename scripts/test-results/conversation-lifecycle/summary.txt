@@ -1,0 +1,17 @@
+build_ok=true
+servify_url=http://127.0.0.1:18093
+register_status=201
+admin_auth_ok=true
+agent_id=1
+visitor_ingress_ok=true
+ai_first_reply_ok=true
+visitor_handoff_request=true
+assign_ok=true
+agent_reply_ok=true
+ticket_create_status=201
+ticket_id=1 session_link_ok=true
+ticket_close_ok=true
+session_close_ok=true
+timeline_event_types=conversation.created,routing.agent_assigned,ticket.created,ticket.closed
+routing_events_projected=true
+overall_status=passed

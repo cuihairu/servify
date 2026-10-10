@@ -35,6 +35,19 @@ mkdir -p "$EVIDENCE_DIR"
 : > "$EVIDENCE_DIR/summary.txt"
 
 BUILD_OK=false
+ADMIN_AUTH_OK=false
+AGENT_CREATED_OK=false
+VISITOR_INGRESS_OK=false
+AI_FIRST_REPLY_OK=false
+HANDOFF_QUEUED_OK=false
+ASSIGN_OK=false
+AGENT_REPLY_OK=false
+TICKET_LINKED_OK=false
+TICKET_CLOSE_OK=false
+SESSION_CLOSE_OK=false
+TIMELINE_PROJECTED_OK=false
+OVERALL_STATUS=failed
+
 SERVER_PID=""
 DB_DSN=""
 ADMIN_TOKEN=""
@@ -48,7 +61,62 @@ cleanup() {
     rm -f "$DB_DSN" || true
   fi
 }
-trap cleanup EXIT
+
+write_manifest() {
+  MANIFEST_MODE="${LIFECYCLE_ACCEPTANCE_MODE:-real}" \
+  MANIFEST_SERVIFY_URL="${SERVIFY_URL:-}" \
+  MANIFEST_OVERALL_STATUS="${OVERALL_STATUS:-unknown}" \
+  MANIFEST_BUILD_OK="${BUILD_OK:-false}" \
+  MANIFEST_ADMIN_AUTH_OK="${ADMIN_AUTH_OK:-false}" \
+  MANIFEST_AGENT_CREATED_OK="${AGENT_CREATED_OK:-false}" \
+  MANIFEST_VISITOR_INGRESS_OK="${VISITOR_INGRESS_OK:-false}" \
+  MANIFEST_AI_FIRST_REPLY_OK="${AI_FIRST_REPLY_OK:-false}" \
+  MANIFEST_HANDOFF_QUEUED_OK="${HANDOFF_QUEUED_OK:-false}" \
+  MANIFEST_ASSIGN_OK="${ASSIGN_OK:-false}" \
+  MANIFEST_AGENT_REPLY_OK="${AGENT_REPLY_OK:-false}" \
+  MANIFEST_TICKET_LINKED_OK="${TICKET_LINKED_OK:-false}" \
+  MANIFEST_TICKET_CLOSE_OK="${TICKET_CLOSE_OK:-false}" \
+  MANIFEST_SESSION_CLOSE_OK="${SESSION_CLOSE_OK:-false}" \
+  MANIFEST_TIMELINE_PROJECTED_OK="${TIMELINE_PROJECTED_OK:-false}" \
+  python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
+import json
+import os
+import sys
+
+out = sys.argv[1]
+evidence_dir = os.path.dirname(out)
+payload = {
+    "provider": "conversation-lifecycle",
+    "mode": os.environ.get("MANIFEST_MODE", "real"),
+    "servify_url": os.environ.get("MANIFEST_SERVIFY_URL", ""),
+    "status": {
+        "overall": os.environ.get("MANIFEST_OVERALL_STATUS", "unknown"),
+    },
+    "checks": {
+        "build_ok": os.environ.get("MANIFEST_BUILD_OK", "false"),
+        "admin_auth_ok": os.environ.get("MANIFEST_ADMIN_AUTH_OK", "false"),
+        "agent_created_ok": os.environ.get("MANIFEST_AGENT_CREATED_OK", "false"),
+        "visitor_ingress_ok": os.environ.get("MANIFEST_VISITOR_INGRESS_OK", "false"),
+        "ai_first_reply_ok": os.environ.get("MANIFEST_AI_FIRST_REPLY_OK", "false"),
+        "handoff_queued_ok": os.environ.get("MANIFEST_HANDOFF_QUEUED_OK", "false"),
+        "assign_ok": os.environ.get("MANIFEST_ASSIGN_OK", "false"),
+        "agent_reply_ok": os.environ.get("MANIFEST_AGENT_REPLY_OK", "false"),
+        "ticket_linked_ok": os.environ.get("MANIFEST_TICKET_LINKED_OK", "false"),
+        "ticket_close_ok": os.environ.get("MANIFEST_TICKET_CLOSE_OK", "false"),
+        "session_close_ok": os.environ.get("MANIFEST_SESSION_CLOSE_OK", "false"),
+        "timeline_projected_ok": os.environ.get("MANIFEST_TIMELINE_PROJECTED_OK", "false"),
+    },
+    "evidence_files": sorted(
+        name for name in os.listdir(evidence_dir)
+        if os.path.isfile(os.path.join(evidence_dir, name))
+    ),
+}
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, ensure_ascii=False, indent=2)
+    fh.write("\n")
+PY
+}
+trap 'cleanup; write_manifest' EXIT
 
 append_summary() {
   printf '%s\n' "$1" >> "$EVIDENCE_DIR/summary.txt"
@@ -287,6 +355,7 @@ append_summary "register_status=$RESPONSE_STATUS"
 assert_status "201" "$RESPONSE_STATUS" "admin_register"
 ADMIN_TOKEN=$(json_get "$RESPONSE_BODY" ".token")
 [ -n "$ADMIN_TOKEN" ] || { echo "❌ 未拿到 admin token"; exit 1; }
+ADMIN_AUTH_OK=true
 append_summary "admin_auth_ok=true"
 
 # ---- 2. 坐席用户 + 坐席实体（接管目标） ----
@@ -305,6 +374,7 @@ save_response "agent-create" "$RESPONSE_BODY"
 assert_status "201" "$RESPONSE_STATUS" "agent_create"
 AGENT_ID=$(json_get "$RESPONSE_BODY" ".id")
 [ -n "$AGENT_ID" ] && [ "$AGENT_ID" != "0" ] || { echo "❌ 未拿到 agent id"; exit 1; }
+AGENT_CREATED_OK=true
 append_summary "agent_id=$AGENT_ID"
 
 # ---- 3. 访客 WS 进线 + 消息（AI 首答窗口） ----
@@ -315,6 +385,7 @@ echo "💬 访客 WS 进线: $SESSION_ID"
 visitor_ws_roundtrip "$SERVIFY_URL/api/v1/ws?session_id=${SESSION_ID}" \
   "$(printf '{"type":"text-message","data":{"content":"%s"}}' "$VISITOR_CONTENT")" 8 \
   "$EVIDENCE_DIR/visitor-first-round.json"
+VISITOR_INGRESS_OK=true
 append_summary "visitor_ingress_ok=true"
 
 python3 - "$EVIDENCE_DIR/visitor-first-round.json" <<'PY' > "$EVIDENCE_DIR/ai-first-reply.txt"
@@ -332,6 +403,7 @@ PY
 AI_REPLY=$(cat "$EVIDENCE_DIR/ai-first-reply.txt")
 if [ -n "$AI_REPLY" ]; then
   echo "✅ AI 首答收到（fallback 策略）: ${AI_REPLY:0:40}..."
+  AI_FIRST_REPLY_OK=true
   append_summary "ai_first_reply_ok=true"
 else
   echo "❌ 未在 WS 帧里收到 AI 首答"
@@ -369,6 +441,7 @@ if [ "$HANDOFF_WAITING" != "yes" ]; then
   echo "❌ 未收到等待队列确认帧（waiting_notification / 等待队列 ai-response）"
   exit 1
 fi
+HANDOFF_QUEUED_OK=true
 echo "✅ handoff 完成（已进等待队列）"
 
 # ---- 5. 坐席接管 ----
@@ -377,6 +450,7 @@ request_json "POST" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/assign" \
   "$(printf '{"agent_id":%s}' "$AGENT_ID")" "$ADMIN_TOKEN"
 save_response "session-assign" "$RESPONSE_BODY"
 assert_status "200" "$RESPONSE_STATUS" "session_assign"
+ASSIGN_OK=true
 append_summary "assign_ok=true"
 echo "✅ 接管完成"
 
@@ -388,6 +462,7 @@ request_json "POST" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/messages" \
   "$ADMIN_TOKEN"
 save_response "agent-message" "$RESPONSE_BODY"
 assert_status "201" "$RESPONSE_STATUS" "agent_message"
+AGENT_REPLY_OK=true
 append_summary "agent_reply_ok=true"
 
 request_json "GET" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/messages?limit=50" "" "$ADMIN_TOKEN"
@@ -412,6 +487,7 @@ TICKET_ID=$(json_get "$RESPONSE_BODY" ".id")
 [ -n "$TICKET_ID" ] && [ "$TICKET_ID" != "0" ] || { echo "❌ 未拿到 ticket id"; exit 1; }
 TICKET_SESSION=$(json_get "$RESPONSE_BODY" ".session_id")
 [ "$TICKET_SESSION" = "$SESSION_ID" ] || { echo "❌ 工单未关联会话: $TICKET_SESSION"; exit 1; }
+TICKET_LINKED_OK=true
 append_summary "ticket_id=$TICKET_ID session_link_ok=true"
 echo "✅ 建单完成（ticket=$TICKET_ID，session 关联）"
 
@@ -425,6 +501,7 @@ save_response "ticket-after-close" "$RESPONSE_BODY"
 assert_status "200" "$RESPONSE_STATUS" "ticket_detail"
 TICKET_STATUS=$(json_get "$RESPONSE_BODY" ".status")
 [ "$TICKET_STATUS" = "closed" ] || { echo "❌ 工单状态应为 closed，got $TICKET_STATUS"; exit 1; }
+TICKET_CLOSE_OK=true
 append_summary "ticket_close_ok=true"
 echo "✅ 关单完成（status=closed）"
 
@@ -433,6 +510,7 @@ echo "结束会话..."
 request_json "POST" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/close" "" "$ADMIN_TOKEN"
 save_response "session-close" "$RESPONSE_BODY"
 assert_status "200" "$RESPONSE_STATUS" "session_close"
+SESSION_CLOSE_OK=true
 append_summary "session_close_ok=true"
 echo "✅ 关会话完成"
 
@@ -459,11 +537,25 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 echo "✅ Timeline 投影完整（conversation.created/ticket.created/ticket.closed）"
+TIMELINE_PROJECTED_OK=true
 printf '%s' "$TIMELINE_TYPES" | grep -q "routing\." \
   && echo "✅ routing 事件已投影（$(printf '%s' "$TIMELINE_TYPES" | grep -c 'routing\.') 条）" \
   && append_summary "routing_events_projected=true" \
   || { echo "⚠️ routing 事件未进 Timeline（转接路径未走 routing.Service.AssignAgent 时属预期）"; append_summary "routing_events_projected=false"; }
 
+if [ "$BUILD_OK" != "true" ] || [ "$ADMIN_AUTH_OK" != "true" ] || [ "$AGENT_CREATED_OK" != "true" ] \
+  || [ "$VISITOR_INGRESS_OK" != "true" ] || [ "$AI_FIRST_REPLY_OK" != "true" ] \
+  || [ "$HANDOFF_QUEUED_OK" != "true" ] || [ "$ASSIGN_OK" != "true" ] \
+  || [ "$AGENT_REPLY_OK" != "true" ] || [ "$TICKET_LINKED_OK" != "true" ] \
+  || [ "$TICKET_CLOSE_OK" != "true" ] || [ "$SESSION_CLOSE_OK" != "true" ] \
+  || [ "$TIMELINE_PROJECTED_OK" != "true" ]; then
+  OVERALL_STATUS=failed
+  append_summary "overall_status=failed"
+  echo "❌ 会话服务全链路 acceptance 未通过" >&2
+  exit 1
+fi
+
 echo
 echo "🎉 会话服务全链路 acceptance 通过"
+OVERALL_STATUS=passed
 append_summary "overall_status=passed"
