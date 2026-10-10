@@ -1,0 +1,7 @@
+PROBE_STEP connect url=ws://127.0.0.1:18099/api/v1/ws?session_id=mp-acc-session-1791613051
+PROBE_STEP send-visitor-message
+PROBE_STEP visitor-echo-received
+PROBE_STEP ai-answer-complete streaming_deltas=4
+PROBE_STEP send-transfer-keyword
+PROBE_STEP handoff-state state=AgentChatting event=TransferReceived(agentId=2, message=您的会话已转接至人工客服。转接原因：user_request。客服将很快为您提供帮助。, stateAccepted=true)
+PROBE_OK full chain: connect → echo → ai-answer → handoff → agent-reply

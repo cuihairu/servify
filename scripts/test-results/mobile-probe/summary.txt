@@ -1,0 +1,17 @@
+Mobile probe acceptance summary
+visitor_session=mp-acc-session-1791613051
+servify_url=http://127.0.0.1:18099
+mock_llm_port=18199
+step=build
+build_ok=true
+probe_build_ok=true
+step=mock_llm
+mock_llm_ok=true
+step=ready
+ready_ok=true
+step=entities
+agent_online=true agent_id=2
+step=probe_full_chain
+agent_send_status=201
+step=verdict
+visitor_echo_ok=true streaming_deltas=4 ai_final_ok=true handoff_ok=true agent_reply_ok=true

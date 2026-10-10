@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Session-ID, X-Request-ID
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Content-Type: application/json; charset=utf-8
+Vary: Origin
+X-Request-Id: 7973704b-bf57-4fd7-8b30-5987d8894db3
+Date: Sat, 10 Oct 2026 06:19:31 GMT
+Content-Length: 46
+
+{"agent_id":2,"message":"Agent is now online"}

@@ -1,0 +1,10 @@
+HTTP/1.1 201 Created
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Session-ID, X-Request-ID
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Content-Type: application/json; charset=utf-8
+Vary: Origin
+X-Request-Id: 326f8c87-0641-4f86-87e6-f422ac069492
+Date: Sat, 10 Oct 2026 06:19:31 GMT
+Content-Length: 1056
+
+{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3OTE2OTk1NzEsImlhdCI6MTc5MTYxMzE3MSwianRpIjoianRpX2Y0OTMxOWYyMjdmY2ZhNTMyZWRiMjY2N2NmZGJjNDYwIiwicm9sZXMiOlsiYWdlbnQiXSwic2Vzc2lvbl9pZCI6ImF1dGhfMjYzYWQyMTFjMmNlYWI1NzM4MmZjMGUwMWMwNzkzN2UiLCJzZXNzaW9uX3Rva2VuX3ZlcnNpb24iOjAsInN1YiI6MiwidG9rZW5fdXNlIjoiYWNjZXNzIiwidG9rZW5fdmVyc2lvbiI6MCwidXNlcl9pZCI6Mn0.gt8j78mEeoLd7YGHuX7gPLdPhMNN98b8D16GuRfOSbA","expires_in":86400,"refresh_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3OTIyMTc5NzEsImlhdCI6MTc5MTYxMzE3MSwianRpIjoianRpXzRiYmExYzMwOTQ5MDc0Nzk4ZGRmZDZiNTgzYjNhYzc2Iiwicm9sZXMiOlsiYWdlbnQiXSwic2Vzc2lvbl9pZCI6ImF1dGhfMjYzYWQyMTFjMmNlYWI1NzM4MmZjMGUwMWMwNzkzN2UiLCJzZXNzaW9uX3Rva2VuX3ZlcnNpb24iOjAsInN1YiI6MiwidG9rZW5fdXNlIjoicmVmcmVzaCIsInRva2VuX3ZlcnNpb24iOjAsInVzZXJfaWQiOjJ9.VnOxVwCATdrnKzNA8oYm1sOadLiIOWqWJ22CTXsnMsM","refresh_expires_in":604800,"user":{"id":2,"username":"mp-agent-1791613170","email":"mp-agent-1791613170@servify.io","name":"MP Agent","phone":"","avatar":"","role":"agent","status":"active","totp_enabled":false}}

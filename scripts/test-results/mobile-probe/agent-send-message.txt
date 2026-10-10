@@ -1,0 +1,10 @@
+HTTP/1.1 201 Created
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Session-ID, X-Request-ID
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Content-Type: application/json; charset=utf-8
+Vary: Origin
+X-Request-Id: cd4b536d-d2a3-49db-80b8-25dd5ec358a6
+Date: Sat, 10 Oct 2026 06:19:37 GMT
+Content-Length: 264
+
+{"message":"Message sent successfully","data":{"id":"4","conversation_id":"mp-acc-session-1791613051","sender":"agent","kind":"text","content":"您好，我是坐席 MP Agent，退货问题我来为您处理。","created_at":"2026-10-10T14:19:37.071717096+08:00"}}

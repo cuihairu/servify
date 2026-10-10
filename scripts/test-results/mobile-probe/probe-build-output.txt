@@ -1,0 +1,28 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+The Kotlin Gradle plugin was loaded multiple times in different subprojects, which is not supported and may break the build. 
+This might happen in subprojects that apply the Kotlin plugins with the Gradle 'plugins { ... }' DSL if they specify explicit versions, even if the versions are equal.
+Please add the Kotlin plugin to the common parent project or the root project, then remove the versions in the subprojects.
+If the parent project does not need the plugin, add 'apply false' to the plugin line.
+See: https://docs.gradle.org/current/userguide/plugins.html#sec:subprojects_plugins_dsl
+The Kotlin plugin was loaded in the following projects: ':demo', ':probe', ':servify-sdk'
+> Task :probe:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :probe:compileKotlin UP-TO-DATE
+> Task :probe:compileJava NO-SOURCE
+> Task :probe:processResources NO-SOURCE
+> Task :probe:classes UP-TO-DATE
+> Task :probe:jar UP-TO-DATE
+> Task :probe:startScripts UP-TO-DATE
+> Task :probe:installDist
+
+[Incubating] Problems report is available at: file:///home/cui/workspaces/servify/sdk/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 38s
+4 actionable tasks: 1 executed, 3 up-to-date

@@ -137,5 +137,3 @@ apps/website/.wrangler/cache/
 /docs/swagger.json
 /docs/swagger.yaml
 
-# 探针产物（时间戳漂移，勿提交）
-/scripts/test-results/mobile-probe/manifest.json
