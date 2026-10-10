@@ -1207,6 +1207,12 @@
   - 测试：application 5 用例（拦/force/无单/无 checker 兼容/错误传播）+ handler 集成（409→状态保持→force 200→closed）+ ticket 侧单测/集成过滤用例；`go test ./apps/server/...` 全绿。
   - 下一步：§6.2 Routing 打分引擎（Scorer 多因子 + routing_assignments 落分数）为刀二；§7.1 余项 `tickets.conversation_id NOT NULL` 迁移回填与 §7.2 ticket.* 事件投影 conversation_events 待排。
 
+- 附注（2026-10-10，**真库 schema 对等门禁：cmd/schema-parity + 30 条漂移定盘 + 守卫家族盲区收口**；外部条件核实双未到位（braces/sprintf-js 上游 npm 仍 3.0.3/1.1.3 无修复版；P1-1 无新凭证）后自定位——静态守卫家族注释声明的盲区（隐式 NOT NULL、列类型映射）须真库捕获 diff 才可钉）：
+  - 工具（60ac4f0）：`apps/server/cmd/schema-parity`——同一 postgres 起两个临时库（A=迁移链 `RunMigrations`，B=`AutoMigrate`+`CreateIndexes` 与 gen-baseline 同构），`information_schema.columns` 逐列 diff（类型/udt/charMax/nullable/default/numeric 精度），模型表集限定比对（豁免 WeKnora 兼容表/schema_migrations），diff 非空 exit 1。CI Integration job 新增 step（水位断言后、备份演练前）。
+  - 首跑抓 **30 条真漂移 / 12 表**（全部为静态面不可见的历史措辞差，逐条评估）：**E 类 2 条修模型侧**——`assist/domain.ConsentStatus` 补 `not null;default:''`、`translation/domain.ViewerRole` 补 `not null;default:'agent'`（000014/000016 手写迁移比模型严；赋值点恒显式赋值，default tag 无行为变化，零生产风险），修复后 AutoMigrate 侧收敛（30→28）；**A/B/C/D 类 28 条进显式白名单**（每条带豁免理由注释）：text vs varchar(size)（收紧须 ALTER 生产列且存量超长行会炸 / 去 size 丢声明意图，仅 legacy escape hatch 受影响）、integer vs bigint（迁移写窄，计数列值域内）、double precision vs numeric（float 措辞）、inert DEFAULT（模型未声明，GORM 恒插值两路径都不触发；补 tag 会改 GORM 零值跳过行为）。**新漂移不在白名单即红**——门禁价值=防未来增量。
+  - 变异验证：删白名单一条 → 精确报 1 diff + exit 1；恢复 → `591 列 × 52 表 0 diff (28 allowlisted)` 绿。本地全真复刻（compose postgres + POSTGRES_PUBLISH_PORT 覆盖临时文件）验证。门禁：apps/server 全量绿 + module-boundaries 过；CI 由尾部 run 跟踪。
+  - 附带发现：`internal/models.RemoteAssistSession`/`TranslationLanguagePreference` 是 P3-2 的模块 domain 类型别名——实体 gorm tag 在 `modules/*/domain`（查 tag 别只看 internal/models）。
+
 - 附注（2026-10-10，**列 DEFAULT 对账守卫 + NOT NULL 守卫解析修复 + 守卫家族六件收官**；接 NOT NULL 刀，盘「模型 default tag 字段在链终态列定义是否真有 DEFAULT」）：
   - 探针定盘（52 模型 HasDefaultValue 字段 vs 链列定义）：初跑报 6 条 DEFAULT-LESS 全为探针自身截断假阳性——columnAlterRe 匹配止于列名，类型/DEFAULT 在其后的语句段；扩读到行尾/分号后重跑 **missing=0**，DEFAULT 面当前零缺口。顺手发现 NOT NULL 守卫同款截断缺陷（当前无假红但未来加「not null + default」ALTER 列会假红），一并修复。
   - 交付（守卫家族第六件，schema tag 面闭环）：`TestMigrationChainCoversModelDefaultColumns`——新 default 字段只进模型不配迁移/漏 DEFAULT 时报红（postgres 插入行为与 AutoMigrate 漂移）。守卫自身曾红一轮：bigserial 自增主键的 DefaultValue 是序列语义非字面 DEFAULT，豁免 PrimaryKey 字段后绿。变异验证：000008 临时删 totp_enabled 的 DEFAULT → 精确报 1；恢复 → 六守卫全绿。门禁：bootstrap 36.7s 绿 + boundaries 过。
