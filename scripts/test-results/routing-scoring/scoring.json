@@ -1,0 +1,1 @@
+{"count":1,"data":[{"session_id":"scoring-1791613016-9682","to_agent_id":2,"total_score":1,"factors":{"availability":1,"channel":1,"language":1,"priority":1,"skill":1,"sla":1,"tier":1,"workload":1},"reasons":[],"strategy":"default_weighted_v1","assigned_at":"2026-10-10T14:16:58.841801134+08:00"}]}

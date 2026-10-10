@@ -919,6 +919,23 @@ case "$PROVIDER" in
     require_file_listed "audit-diff.json"
     require_file_listed "audit-export.csv"
     ;;
+  routing-scoring)
+    require_equals '.status.overall // ""' "passed"
+    require_equals '.checks.build_ok // ""' "true"
+    require_equals '.checks.admin_auth_ok // ""' "true"
+    require_equals '.checks.agent_ready_ok // ""' "true"
+    require_equals '.checks.visitor_ingress_ok // ""' "true"
+    require_equals '.checks.transfer_assigned_ok // ""' "true"
+    require_equals '.checks.scoring_audit_ok // ""' "true"
+    require_equals '.checks.transfer_record_ok // ""' "true"
+    require_file_listed "summary.txt"
+    require_file_listed "build-output.txt"
+    require_file_listed "server-log.txt"
+    require_file_listed "visitor-ingress.txt"
+    require_file_listed "transfer-result.json"
+    require_file_listed "scoring.json"
+    require_file_listed "transfer-history.json"
+    ;;
   translation)
     require_equals '.status.overall // ""' "passed"
     require_equals '.llm_provider // ""' "local"

@@ -1,0 +1,9 @@
+build_ok=true
+servify_url=http://127.0.0.1:18094
+admin_auth_ok=true
+agent_online=true agent_id=1 user_id=2
+visitor_ingress_ok=true
+assigned_agent=2
+scoring_audit_ok=true
+transfer_record_ok=true
+overall_status=passed

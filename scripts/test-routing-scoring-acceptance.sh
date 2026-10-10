@@ -25,6 +25,15 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD:-"Scoring!12345"}
 mkdir -p "$EVIDENCE_DIR"
 : > "$EVIDENCE_DIR/summary.txt"
 
+BUILD_OK=false
+ADMIN_AUTH_OK=false
+AGENT_READY_OK=false
+VISITOR_INGRESS_OK=false
+TRANSFER_ASSIGNED_OK=false
+SCORING_AUDIT_OK=false
+TRANSFER_RECORD_OK=false
+OVERALL_STATUS=failed
+
 SERVER_PID=""
 DB_DSN=""
 
@@ -37,7 +46,52 @@ cleanup() {
     rm -f "$DB_DSN" || true
   fi
 }
-trap cleanup EXIT
+
+write_manifest() {
+  MANIFEST_MODE="${MANIFEST_MODE:-real}" \
+  MANIFEST_SERVIFY_URL="${SERVIFY_URL:-}" \
+  MANIFEST_OVERALL_STATUS="${OVERALL_STATUS:-unknown}" \
+  MANIFEST_BUILD_OK="${BUILD_OK:-false}" \
+  MANIFEST_ADMIN_AUTH_OK="${ADMIN_AUTH_OK:-false}" \
+  MANIFEST_AGENT_READY_OK="${AGENT_READY_OK:-false}" \
+  MANIFEST_VISITOR_INGRESS_OK="${VISITOR_INGRESS_OK:-false}" \
+  MANIFEST_TRANSFER_ASSIGNED_OK="${TRANSFER_ASSIGNED_OK:-false}" \
+  MANIFEST_SCORING_AUDIT_OK="${SCORING_AUDIT_OK:-false}" \
+  MANIFEST_TRANSFER_RECORD_OK="${TRANSFER_RECORD_OK:-false}" \
+  python3 - "$EVIDENCE_DIR/manifest.json" <<'PY'
+import json
+import os
+import sys
+
+out = sys.argv[1]
+evidence_dir = os.path.dirname(out)
+payload = {
+    "provider": "routing-scoring",
+    "mode": os.environ.get("MANIFEST_MODE", "real"),
+    "servify_url": os.environ.get("MANIFEST_SERVIFY_URL", ""),
+    "status": {
+        "overall": os.environ.get("MANIFEST_OVERALL_STATUS", "unknown"),
+    },
+    "checks": {
+        "build_ok": os.environ.get("MANIFEST_BUILD_OK", "false"),
+        "admin_auth_ok": os.environ.get("MANIFEST_ADMIN_AUTH_OK", "false"),
+        "agent_ready_ok": os.environ.get("MANIFEST_AGENT_READY_OK", "false"),
+        "visitor_ingress_ok": os.environ.get("MANIFEST_VISITOR_INGRESS_OK", "false"),
+        "transfer_assigned_ok": os.environ.get("MANIFEST_TRANSFER_ASSIGNED_OK", "false"),
+        "scoring_audit_ok": os.environ.get("MANIFEST_SCORING_AUDIT_OK", "false"),
+        "transfer_record_ok": os.environ.get("MANIFEST_TRANSFER_RECORD_OK", "false"),
+    },
+    "evidence_files": sorted(
+        name for name in os.listdir(evidence_dir)
+        if os.path.isfile(os.path.join(evidence_dir, name))
+    ),
+}
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, ensure_ascii=False, indent=2)
+    fh.write("\n")
+PY
+}
+trap 'cleanup; write_manifest' EXIT
 
 append_summary() { printf '%s\n' "$1" >> "$EVIDENCE_DIR/summary.txt"; }
 
@@ -155,6 +209,8 @@ assert_status() {
 # ---- 0. 构建 + 自起服务 ----
 echo "🔍 make build..."
 (cd "$PROJECT_ROOT" && make build > "$EVIDENCE_DIR/build-output.txt" 2>&1) || { echo "❌ build 失败"; exit 1; }
+BUILD_OK=true
+append_summary "build_ok=true"
 
 if [ -z "${SERVIFY_URL:-}" ]; then
   SERVIFY_PORT=${SERVIFY_PORT:-18094}
@@ -181,6 +237,8 @@ request_json "POST" "$SERVIFY_URL/api/v1/auth/register" \
 assert_status "201" "$RESPONSE_STATUS" "admin_register"
 ADMIN_TOKEN=$(json_get "$RESPONSE_BODY" ".token")
 [ -n "$ADMIN_TOKEN" ] || { echo "❌ 未拿到 admin token"; exit 1; }
+ADMIN_AUTH_OK=true
+append_summary "admin_auth_ok=true"
 
 echo "🧑‍💻 创建带技能坐席..."
 AGENT_USERNAME="scoring-agent-${RANDOM}"
@@ -200,6 +258,7 @@ echo "🟢 坐席上线..."
 # 注意：/agents/:id/online 的 :id 按 user_id 查（GetAgentByUserID），非实体 ID。
 request_json "POST" "$SERVIFY_URL/api/agents/${AGENT_USER_ID}/online" "" "$ADMIN_TOKEN"
 assert_status "200" "$RESPONSE_STATUS" "agent_online"
+AGENT_READY_OK=true
 append_summary "agent_online=true agent_id=$AGENT_ID user_id=$AGENT_USER_ID"
 
 # ---- 2. 访客 WS 进线（建会话） ----
@@ -208,6 +267,7 @@ SESSION_ID="scoring-${TIMESTAMP}-${RANDOM}"
 echo "💬 访客进线: $SESSION_ID"
 visitor_ws_ingress "$SERVIFY_URL/api/v1/ws?session_id=${SESSION_ID}" \
   "$EVIDENCE_DIR/visitor-ingress.txt"
+VISITOR_INGRESS_OK=true
 append_summary "visitor_ingress_ok=true"
 
 # ---- 3. TransferToHuman（在线坐席 → 直接分配，executeTransfer 评分） ----
@@ -219,6 +279,7 @@ save_response "transfer-result" "$RESPONSE_BODY"
 assert_status "200" "$RESPONSE_STATUS" "transfer_to_human"
 NEW_AGENT_ID=$(json_get "$RESPONSE_BODY" ".new_agent_id")
 [ -n "$NEW_AGENT_ID" ] && [ "$NEW_AGENT_ID" != "0" ] || { echo "❌ 未直接分配到坐席（结果=$RESPONSE_BODY）"; exit 1; }
+TRANSFER_ASSIGNED_OK=true
 append_summary "assigned_agent=$NEW_AGENT_ID"
 echo "✅ 已分配坐席（agent=$NEW_AGENT_ID）"
 
@@ -247,6 +308,7 @@ print(f"SCORE total={top['total_score']:.3f} factors={json.dumps(factors, ensure
 print(f"REASONS={top['reasons']}")
 PY
 append_summary "scoring_audit_ok=true"
+SCORING_AUDIT_OK=true
 echo "✅ 评分审计完整（八因子 + 策略 + 理由）"
 
 # ---- 5. 事实记录双写断言（transfer_records） ----
@@ -256,8 +318,19 @@ save_response "transfer-history" "$RESPONSE_BODY"
 assert_status "200" "$RESPONSE_STATUS" "transfer_history"
 printf '%s' "$RESPONSE_BODY" | grep -q "scoring_acceptance" || { echo "❌ 转接事实记录缺失"; exit 1; }
 append_summary "transfer_record_ok=true"
+TRANSFER_RECORD_OK=true
 echo "✅ 转接事实与评分审计双记录完整"
 
+if [ "$BUILD_OK" != "true" ] || [ "$ADMIN_AUTH_OK" != "true" ] || [ "$AGENT_READY_OK" != "true" ] \
+  || [ "$VISITOR_INGRESS_OK" != "true" ] || [ "$TRANSFER_ASSIGNED_OK" != "true" ] \
+  || [ "$SCORING_AUDIT_OK" != "true" ] || [ "$TRANSFER_RECORD_OK" != "true" ]; then
+  OVERALL_STATUS=failed
+  append_summary "overall_status=failed"
+  echo "❌ 路由评分审计 acceptance 未通过" >&2
+  exit 1
+fi
+
+OVERALL_STATUS=passed
+append_summary "overall_status=passed"
 echo
 echo "🎉 路由评分审计 acceptance 通过"
-append_summary "overall_status=passed"

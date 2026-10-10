@@ -1,0 +1,26 @@
+{
+  "provider": "routing-scoring",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18094",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "admin_auth_ok": "true",
+    "agent_ready_ok": "true",
+    "visitor_ingress_ok": "true",
+    "transfer_assigned_ok": "true",
+    "scoring_audit_ok": "true",
+    "transfer_record_ok": "true"
+  },
+  "evidence_files": [
+    "build-output.txt",
+    "scoring.json",
+    "server-log.txt",
+    "summary.txt",
+    "transfer-history.json",
+    "transfer-result.json",
+    "visitor-ingress.txt"
+  ]
+}
