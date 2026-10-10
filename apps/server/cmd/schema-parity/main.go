@@ -108,6 +108,64 @@ var allowlist = map[columnKey]string{
 	{"remote_assist_annotations", "timestamp_ms"}:        "inert DEFAULT 0 the model never declared",
 }
 
+// Names of the two scratch databases; openChildDB rewrites the admin DSN path
+// onto these.
+const (
+	scratchMigratedDB = "servify_parity_migrated"
+	scratchAutomigDB  = "servify_parity_automigrate"
+)
+
+// Test seams: run() reaches every postgres-specific step through these
+// package variables; the defaults below are the production implementations.
+// Tests inject sqlite/noop/fake implementations to drive run() end to end
+// (including every error branch) without a postgres server — same pattern as
+// cmd/gen-baseline.
+var (
+	// openAdminDB connects to the maintenance database.
+	openAdminDB = openPostgresAdmin
+	// resetScratchDBs drops and recreates both scratch databases.
+	resetScratchDBs = dropCreateScratchDBs
+	// openChildDB opens one scratch database.
+	openChildDB = openPostgresChild
+	// prepareExtensions creates the extensions the AutoMigrate side needs.
+	prepareExtensions = createPostgresExtensions
+	// Schema application for both sides; defaults are the appbootstrap
+	// implementations (their bodies are covered in the bootstrap package).
+	runChainMigrations = appbootstrap.RunMigrations
+	runAutoMigrate     = appbootstrap.AutoMigrate
+	runCreateIndexes   = appbootstrap.CreateIndexes
+	// loadModelTables resolves MigrationModels() to their table-name set.
+	loadModelTables = modelTableSet
+	// postgresDialector builds the dialector for scratch connections; tests
+	// inject sqlite to drive the connect-success path.
+	postgresDialector = func(dsn string) gorm.Dialector { return postgres.Open(dsn) }
+)
+
+// scratchResetStatements returns the statements executed against the admin
+// connection per scratch database; tests replace them with sqlite-executable
+// statements (a func seam keeps the format strings constant for vet).
+var scratchResetStatements = func(name string) []string {
+	return []string{
+		fmt.Sprintf(`DROP DATABASE IF EXISTS %s WITH (FORCE)`, name),
+		fmt.Sprintf(`CREATE DATABASE %s`, name),
+	}
+}
+
+// postgresExtensions are created on the AutoMigrate side before AutoMigrate;
+// data seam, tests may empty it to cover the no-extension success path.
+var postgresExtensions = []string{"vector", "hstore"}
+
+const postgresColumnsQuery = `
+SELECT table_name, column_name, data_type, udt_name,
+       character_maximum_length, is_nullable, column_default,
+       numeric_precision, numeric_scale
+FROM information_schema.columns
+WHERE table_schema = 'public'`
+
+// columnsQuery is the metadata query readColumns executes; data seam, tests
+// swap in a sqlite-compatible query against a seeded table.
+var columnsQuery = postgresColumnsQuery
+
 func main() {
 	dsn := flag.String("dsn", os.Getenv("SCHEMA_PARITY_DSN"), "maintenance postgres DSN (scratch databases are recreated by this tool)")
 	flag.Parse()
@@ -121,9 +179,7 @@ func run(dsn string, out io.Writer) error {
 	if strings.TrimSpace(dsn) == "" {
 		return fmt.Errorf("-dsn or SCHEMA_PARITY_DSN is required")
 	}
-	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	admin, err := openAdminDB(dsn)
 	if err != nil {
 		return fmt.Errorf("connect admin postgres: %w", err)
 	}
@@ -133,59 +189,42 @@ func run(dsn string, out io.Writer) error {
 	}
 	defer sqlAdmin.Close()
 
-	const (
-		migratedDB = "servify_parity_migrated"
-		automigDB  = "servify_parity_automigrate"
-	)
 	// Model table set bounds the comparison: the migrated side legitimately
 	// carries extra tables (WeKnora compatibility, schema_migrations) and the
 	// AutoMigrate side must not create them.
-	modelTables := map[string]bool{}
-	for _, model := range appbootstrap.MigrationModels() {
-		s, err := schema.Parse(model, &sync.Map{}, schema.NamingStrategy{})
-		if err != nil {
-			return fmt.Errorf("parse model %T: %w", model, err)
-		}
-		modelTables[s.Table] = true
+	modelTables, err := loadModelTables(appbootstrap.MigrationModels())
+	if err != nil {
+		return err
 	}
 
-	for _, name := range []string{migratedDB, automigDB} {
-		for _, stmt := range []string{
-			fmt.Sprintf(`DROP DATABASE IF EXISTS %s WITH (FORCE)`, name),
-			fmt.Sprintf(`CREATE DATABASE %s`, name),
-		} {
-			if err := admin.Exec(stmt).Error; err != nil {
-				return fmt.Errorf("%s: %w", stmt, err)
-			}
-		}
+	if err := resetScratchDBs(admin); err != nil {
+		return err
 	}
 
 	// Side A: full versioned migration chain.
-	migrated, err := openChild(dsn, migratedDB)
+	migrated, err := openChildDB(dsn, scratchMigratedDB)
 	if err != nil {
 		return err
 	}
 	defer closeDB(migrated)
-	if err := appbootstrap.RunMigrations(migrated); err != nil {
-		return fmt.Errorf("migrate %s: %w", migratedDB, err)
+	if err := runChainMigrations(migrated); err != nil {
+		return fmt.Errorf("migrate %s: %w", scratchMigratedDB, err)
 	}
 
 	// Side B: legacy AutoMigrate + CreateIndexes (same config as gen-baseline).
-	automig, err := openChild(dsn, automigDB)
+	automig, err := openChildDB(dsn, scratchAutomigDB)
 	if err != nil {
 		return err
 	}
 	defer closeDB(automig)
-	for _, ext := range []string{"vector", "hstore"} {
-		if err := automig.Exec("CREATE EXTENSION IF NOT EXISTS " + ext).Error; err != nil {
-			return fmt.Errorf("create extension %s: %w", ext, err)
-		}
+	if err := prepareExtensions(automig); err != nil {
+		return err
 	}
-	if err := appbootstrap.AutoMigrate(automig); err != nil {
-		return fmt.Errorf("automigrate %s: %w", automigDB, err)
+	if err := runAutoMigrate(automig); err != nil {
+		return fmt.Errorf("automigrate %s: %w", scratchAutomigDB, err)
 	}
-	if err := appbootstrap.CreateIndexes(automig); err != nil {
-		return fmt.Errorf("createindexes %s: %w", automigDB, err)
+	if err := runCreateIndexes(automig); err != nil {
+		return fmt.Errorf("createindexes %s: %w", scratchAutomigDB, err)
 	}
 
 	migratedCols, err := readColumns(migrated, modelTables)
@@ -227,6 +266,20 @@ func run(dsn string, out io.Writer) error {
 	return nil
 }
 
+// modelTableSet resolves the table name of every model via GORM's schema
+// parser (same naming strategy as the migrators).
+func modelTableSet(models []interface{}) (map[string]bool, error) {
+	modelTables := map[string]bool{}
+	for _, model := range models {
+		s, err := schema.Parse(model, &sync.Map{}, schema.NamingStrategy{})
+		if err != nil {
+			return nil, fmt.Errorf("parse model %T: %w", model, err)
+		}
+		modelTables[s.Table] = true
+	}
+	return modelTables, nil
+}
+
 func closeDB(db *gorm.DB) {
 	if sqlDB, err := db.DB(); err == nil {
 		_ = sqlDB.Close()
@@ -235,12 +288,7 @@ func closeDB(db *gorm.DB) {
 
 // readColumns loads information_schema.columns for the model tables.
 func readColumns(db *gorm.DB, modelTables map[string]bool) (map[columnKey]columnShape, error) {
-	rows, err := db.Raw(`
-SELECT table_name, column_name, data_type, udt_name,
-       character_maximum_length, is_nullable, column_default,
-       numeric_precision, numeric_scale
-FROM information_schema.columns
-WHERE table_schema = 'public'`).Rows()
+	rows, err := db.Raw(columnsQuery).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("read information_schema.columns: %w", err)
 	}
@@ -260,13 +308,41 @@ WHERE table_schema = 'public'`).Rows()
 	return cols, rows.Err()
 }
 
-func openChild(adminDSN, name string) (*gorm.DB, error) {
+// childDSN rewrites the admin DSN path onto the scratch database name.
+func childDSN(adminDSN, name string) (string, error) {
 	u, err := url.Parse(adminDSN)
 	if err != nil {
-		return nil, fmt.Errorf("parse admin dsn: %w", err)
+		return "", fmt.Errorf("parse admin dsn: %w", err)
 	}
 	u.Path = "/" + name
-	db, err := gorm.Open(postgres.Open(u.String()), &gorm.Config{
+	return u.String(), nil
+}
+
+func openPostgresAdmin(dsn string) (*gorm.DB, error) {
+	return gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+}
+
+// dropCreateScratchDBs recreates both scratch databases from scratch so the
+// run always starts from a clean slate.
+func dropCreateScratchDBs(admin *gorm.DB) error {
+	for _, name := range []string{scratchMigratedDB, scratchAutomigDB} {
+		for _, stmt := range scratchResetStatements(name) {
+			if err := admin.Exec(stmt).Error; err != nil {
+				return fmt.Errorf("%s: %w", stmt, err)
+			}
+		}
+	}
+	return nil
+}
+
+func openPostgresChild(adminDSN, name string) (*gorm.DB, error) {
+	dsn, err := childDSN(adminDSN, name)
+	if err != nil {
+		return nil, err
+	}
+	db, err := gorm.Open(postgresDialector(dsn), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Silent),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
@@ -274,4 +350,15 @@ func openChild(adminDSN, name string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("connect %s: %w", name, err)
 	}
 	return db, nil
+}
+
+// createPostgresExtensions creates the extensions the AutoMigrate side
+// depends on (the vector column type requires them to exist).
+func createPostgresExtensions(db *gorm.DB) error {
+	for _, ext := range postgresExtensions {
+		if err := db.Exec("CREATE EXTENSION IF NOT EXISTS " + ext).Error; err != nil {
+			return fmt.Errorf("create extension %s: %w", ext, err)
+		}
+	}
+	return nil
 }
