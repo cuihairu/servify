@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -79,7 +80,23 @@ class ServifyChatTest {
     private val testScope get() = chatScope
 
     private suspend fun awaitConnected() {
-        withTimeout(5_000) { chat.events.connectionState.first { it == ConnectionState.Connected } }
+        // 首连段：CI 重载下 MockWebServer accept/handshake 实测能烧穿 5s（一现
+        // 38039384048 attempt 1，2026-10-10：historySnapshotAccumulatesAndMergesStreamById
+        // TimeoutCancellationException 烧在本 helper）——预算拉平 10s（与
+        // ConnectionLifecycleTest 首连段同预算）+ 段标 + 3edeff4 双证据：烧穿按
+        // WS 握手数二分（第 1 次握手=首连），响应未回/回调丢失 vs accept 饿死即刻二分。
+        val matched = withTimeoutOrNull(10_000) {
+            chat.events.connectionState.first { it == ConnectionState.Connected }
+        }
+        if (matched != null) return
+        val current = chat.events.connectionState.value
+        val handshakes = bypass.wsHandshakeCount()
+        val surface = if (handshakes >= 1) {
+            "首连握手已到达 server（握手数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
+        } else {
+            "首连握手未到达 server（握手数=$handshakes）→ connect 协程/MockWebServer accept 饿死面"
+        }
+        error("[首连] 10s 未达 Connected：当前状态=$current；$surface")
     }
 
     private suspend fun CompletableDeferred<Unit>.awaitReady() {

@@ -1235,6 +1235,15 @@
   - 两份 2025-05-01 superpowers 冻结档（plan/spec）不改内容，按 spec 自带状态字段惯例补「已被取代」状态行（指向 successor），历史计划快照不篡改。
   - 门禁：go test ./scripts 全量 + admin typecheck/build（pnpm 10.22.0 钉版）+ text-encoding 绿；CI run 38039384048 首跑 Android SDK 红（`ServifyChatTest.historySnapshotAccumulatesAndMergesStreamById` awaitConnected 5s 烧尽——本提交零 Android 面改动、前三 run 同代码全绿，判无关抖动 rerun --failed 绿；抖动台账已记一现）。
 
+- 附注（2026-10-10，**Android offlineHint 二现定向修：3edeff4 范式双证据并入 helper + awaitConnected 预算对齐**；上批 CI 观察立案——`ConnectionLifecycleTest.offlineHintOmittedWhenNotConfigured` 二现 38041138101 attempt 1 报 `[重连耗尽] 预算 15000ms 内未达：当前状态=Connecting`，段标命中耗尽段悬空 Connecting 整 15s，纯测试面非产品面）：
+  - 修法一（证据并入 helper）：`awaitSegmentState` 增可选 `handshakeOrdinal`——预算烧穿/提前落终态时按 `bypass.wsHandshakeCount` 纯握手数二分根因面（第 N 次握手已到达 server→响应未回或回调丢失面；未到达→客户端协程/MockWebServer accept 饿死面），不传 ordinal 时消息与旧版逐字一致；离线提示三个用例挂序号（首连=1 ×3、重连耗尽=2）。
+  - 修法二（提示行三分面）：`offlineHintEmittedOnReconnectExhaustionWhenConfigured` 裸 `withTimeout(15s)` 改 `withTimeoutOrNull` + 三分面（链已完成而提示行未达→SharedFlow 订阅/发射丢失面 / 重连握手已到→404 未回或 onFailure 丢失面 / 未到达→accept 饿死面）——提示行不可对 Disconnected fail-fast（恰在终态后到），故按提示行链三分而非状态段二分。
+  - 修法三（收裸等待）：`offlineHintEmittedOnHandshakeFailureWhenConfigured` 原裸 `first{}` 零超时（同族链烧穿会挂死测试进程等 gradle 兜底 10min+），补 15s 预算 + 同款三分面（首连=1）。
+  - 修法四（首连预算对齐，一现条款落地）：`ServifyChatTest.awaitConnected` 5s→10s（与 `ConnectionLifecycleTest` 首连段同预算）+ `[首连]` 段标 + 双证据二分；该 helper 被 8 处调用点共享，一处修全用例受益——`historySnapshotAccumulatesAndMergesStreamById` 一现条款（拉预算+段标）即由此覆盖。
+  - 未动：`reconnectExhaustion` 用例既有两段内联双证据（措辞已锚定台账不重写）；`awaitSegmentState` 作用域仅 ConnectionLifecycleTest 一个文件，改动面受控。
+  - 口径：诊断面 + 首连预算对齐同段，判据（超时即判失败）未放宽——失败从「不可归因 TimeoutCancellationException」变「带段位与握手数即刻归因」。
+  - 门禁：servify-sdk debug 变体两用例类绿；release 变体 `--rerun-tasks` 10×/10 绿（flake 家族既定标准）；全文 `./gradlew --no-daemon build` 与 CI 逐 job 复核待跑。
+
 - 附注（2026-10-10，**真库 schema 对等门禁：cmd/schema-parity + 30 条漂移定盘 + 守卫家族盲区收口**；外部条件核实双未到位（braces/sprintf-js 上游 npm 仍 3.0.3/1.1.3 无修复版；P1-1 无新凭证）后自定位——静态守卫家族注释声明的盲区（隐式 NOT NULL、列类型映射）须真库捕获 diff 才可钉）：
   - 工具（60ac4f0）：`apps/server/cmd/schema-parity`——同一 postgres 起两个临时库（A=迁移链 `RunMigrations`，B=`AutoMigrate`+`CreateIndexes` 与 gen-baseline 同构），`information_schema.columns` 逐列 diff（类型/udt/charMax/nullable/default/numeric 精度），模型表集限定比对（豁免 WeKnora 兼容表/schema_migrations），diff 非空 exit 1。CI Integration job 新增 step（水位断言后、备份演练前）。
   - 首跑抓 **30 条真漂移 / 12 表**（全部为静态面不可见的历史措辞差，逐条评估）：**E 类 2 条修模型侧**——`assist/domain.ConsentStatus` 补 `not null;default:''`、`translation/domain.ViewerRole` 补 `not null;default:'agent'`（000014/000016 手写迁移比模型严；赋值点恒显式赋值，default tag 无行为变化，零生产风险），修复后 AutoMigrate 侧收敛（30→28）；**A/B/C/D 类 28 条进显式白名单**（每条带豁免理由注释）：text vs varchar(size)（收紧须 ALTER 生产列且存量超长行会炸 / 去 size 丢声明意图，仅 legacy escape hatch 受影响）、integer vs bigint（迁移写窄，计数列值域内）、double precision vs numeric（float 措辞）、inert DEFAULT（模型未声明，GORM 恒插值两路径都不触发；补 tag 会改 GORM 零值跳过行为）。**新漂移不在白名单即红**——门禁价值=防未来增量。

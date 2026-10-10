@@ -92,6 +92,7 @@ class ConnectionLifecycleTest {
         label: String,
         budgetMs: Long,
         failFastOn: (ConnectionState) -> Boolean = { false },
+        handshakeOrdinal: Int? = null,
         isTarget: (ConnectionState) -> Boolean,
     ): ConnectionState {
         val matched = withTimeoutOrNull(budgetMs) {
@@ -100,7 +101,22 @@ class ConnectionLifecycleTest {
         if (matched != null && !failFastOn(matched)) return matched
         val current = chat.events.connectionState.value
         val reason = if (matched == null) "预算 ${budgetMs}ms 内未达" else "提前落入终态"
-        error("[$label] $reason：当前状态=$current")
+        // 3edeff4 范式的双证据（2026-10-10 offlineHint 二现 38041138101 起并入
+        // helper）：预算烧穿/提前落终态时按 WS 握手数（bypass.wsHandshakeCount，
+        // 补拉 404 不计）二分根因面——第 N 次握手已到达 → 响应未回或回调丢失面；
+        // 未到达 → 客户端协程/MockWebServer accept 饿死面。不传 ordinal 时消息
+        // 与旧版完全一致。
+        val surface = if (handshakeOrdinal == null) {
+            ""
+        } else {
+            val handshakes = bypass.wsHandshakeCount()
+            if (handshakes >= handshakeOrdinal) {
+                "；第 $handshakeOrdinal 次握手已到达 server（握手数=$handshakes）→ 响应未回或回调丢失面"
+            } else {
+                "；第 $handshakeOrdinal 次握手未到达 server（握手数=$handshakes）→ 客户端协程/MockWebServer accept 饿死面"
+            }
+        }
+        error("[$label] $reason：当前状态=$current$surface")
     }
 
     @Test
@@ -167,7 +183,7 @@ class ConnectionLifecycleTest {
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
-        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
+        awaitSegmentState("首连", budgetMs = 10_000, handshakeOrdinal = 1) { it is ConnectionState.Connected }
 
         // 断线触发用本地 cancel（接缝）：server 端 cancel() 的传播在 CI 偶发丢失
         // （35855565576，15s 预算都等不到 onFailure），本地 cancel 零传播、与真实
@@ -237,7 +253,7 @@ class ConnectionLifecycleTest {
             branding = Branding(offlineText = "客服当前不在线，请稍后再来"),
         )
         chat.connect()
-        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
+        awaitSegmentState("首连", budgetMs = 10_000, handshakeOrdinal = 1) { it is ConnectionState.Connected }
 
         // 提示行走无 replay 的 SharedFlow——先订阅再触发（与 Swift 侧用例同序）。
         val hintDeferred = chatScope.async {
@@ -246,9 +262,24 @@ class ConnectionLifecycleTest {
         // 本地断开（同 reconnectExhaustion 用例：零传播依赖）。提示行在耗尽终态后
         // 发射，等待链 = 重连耗尽链（该链 CI 重载下实测能烧穿 5s，见三现台账
         // 37649797496 与 37661395908）——预算同段拉平 15s 纯耐心；提示行不可对
-        // Disconnected fail-fast（hint 恰在终态后到）。
+        // Disconnected fail-fast（hint 恰在终态后到）。烧穿按 3edeff4 范式双证据
+        // 三分面：链已完成而提示行未达（SharedFlow 丢失面）/ 重连握手已到达
+        // （404 未回或 onFailure 丢失面）/ 未到达（重连协程或 accept 饿死面）。
         chat.disconnectForTesting()
-        val hint = withTimeout(15_000) { hintDeferred.await() }
+        val hint = withTimeoutOrNull(15_000) { hintDeferred.await() }
+        if (hint == null) {
+            val current = chat.events.connectionState.value
+            val handshakes = bypass.wsHandshakeCount()
+            val surface = when {
+                current is ConnectionState.Disconnected && handshakes >= 2 ->
+                    "耗尽链已完成而提示行未达（握手数=$handshakes）→ SharedFlow 订阅/发射丢失面"
+                handshakes >= 2 ->
+                    "重连握手已到达 server（握手数=$handshakes）→ 404 未回或 onFailure 丢失面"
+                else ->
+                    "重连握手未到达 server（握手数=$handshakes）→ 重连协程/MockWebServer accept 饿死面"
+            }
+            error("[重连耗尽提示行] 15s 未达：当前状态=$current；$surface")
+        }
         assertEquals("test-session", hint.sessionId)
         // 提示行是 SDK 自造 UI 状态行（同流中断提示），不计未读。
         assertEquals(0, chat.events.unreadCount.value)
@@ -260,12 +291,15 @@ class ConnectionLifecycleTest {
         bypass.enqueue(MockResponse().setResponseCode(404))
         chat = newChat(policy = ReconnectPolicy(maxAttempts = 1, initialDelayMs = 50, multiplier = 2, maxDelayMs = 100))
         chat.connect()
-        awaitSegmentState("首连", budgetMs = 10_000) { it is ConnectionState.Connected }
+        awaitSegmentState("首连", budgetMs = 10_000, handshakeOrdinal = 1) { it is ConnectionState.Connected }
 
         // 断线→重连耗尽链与 reconnectExhaustion 用例同段（一现 37661395908 烧穿
-        // 裸 5s）——awaitSegmentState 同段拉平：15s 纯耐心 + 段标诊断。
+        // 裸 5s）——awaitSegmentState 同段拉平：15s 纯耐心 + 段标诊断。二现
+        // 38041138101（2026-10-10，36279d1 纯 todo 头）段标命中耗尽段悬空
+        // Connecting 整 15s——按 3edeff4 范式补双证据（第 2 次握手=重连握手），
+        // onFailure 丢失 vs accept 饿死即刻二分。
         chat.disconnectForTesting()
-        awaitSegmentState("重连耗尽", budgetMs = 15_000) { it is ConnectionState.Disconnected }
+        awaitSegmentState("重连耗尽", budgetMs = 15_000, handshakeOrdinal = 2) { it is ConnectionState.Disconnected }
         // 默认 offlineText=null：快照无任何 System 提示行（流中断提示仅在有活跃流时出现，此处无流）。
         assertEquals(0, chat.historySnapshot().count { it.sender == SenderType.System })
     }
@@ -277,9 +311,26 @@ class ConnectionLifecycleTest {
 
         // onSubscription 钩在订阅点后才 connect：hint 是无 replay SharedFlow，回调线程
         // 可能在断言开始前就发射（CI release 变体实测翻车——本地 debug 恰好没翻）。
-        val hint = chat.events.messages
-            .onSubscription { chat.connect() }
-            .first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
+        // 裸 first{} 无超时——同族链烧穿会挂死测试进程等 gradle 兜底；补 15s
+        // 预算 + 3edeff4 双证据三分面（SharedFlow 丢失 / onFailure 丢失 / accept 饿死）。
+        val hint = withTimeoutOrNull(15_000) {
+            chat.events.messages
+                .onSubscription { chat.connect() }
+                .first { it.sender == SenderType.System && it.content == "客服当前不在线，请稍后再来" }
+        }
+        if (hint == null) {
+            val current = chat.events.connectionState.value
+            val handshakes = bypass.wsHandshakeCount()
+            val surface = when {
+                current is ConnectionState.Disconnected && handshakes >= 1 ->
+                    "握手失败链已完成而提示行未达（握手数=$handshakes）→ SharedFlow 订阅/发射丢失面"
+                handshakes >= 1 ->
+                    "首连握手已到达 server（握手数=$handshakes）→ 404 未回或 onFailure 丢失面"
+                else ->
+                    "首连握手未到达 server（握手数=$handshakes）→ connect 协程/MockWebServer accept 饿死面"
+            }
+            error("[握手失败提示行] 15s 未达：当前状态=$current；$surface")
+        }
         assertEquals("test-session", hint.sessionId)
         // notifyOfflineHint 在 set Disconnected 之后调用：hint 到达即蕴含终态已落。
         assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
