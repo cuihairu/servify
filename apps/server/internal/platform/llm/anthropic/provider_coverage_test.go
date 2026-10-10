@@ -637,8 +637,8 @@ func TestProviderChatStreamHTTPErrorStatus(t *testing.T) {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
 	content, _, done := drainChunks(ch)
-	if !done || !strings.Contains(content, "overloaded") {
-		t.Fatalf("stream = %q done=%v, want error chunk with response body", content, done)
+	if !done || content != "" {
+		t.Fatalf("stream = %q done=%v, want empty terminal done chunk (no error text in content)", content, done)
 	}
 }
 
@@ -653,8 +653,8 @@ func TestProviderChatStreamRequestFailure(t *testing.T) {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
 	content, _, done := drainChunks(ch)
-	if !done || !strings.HasPrefix(content, "stream error:") {
-		t.Fatalf("stream = %q done=%v, want stream error done chunk", content, done)
+	if !done || content != "" {
+		t.Fatalf("stream = %q done=%v, want empty terminal done chunk (no error text in content)", content, done)
 	}
 }
 
@@ -668,8 +668,8 @@ func TestProviderChatStreamMarshalError(t *testing.T) {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
 	content, _, done := drainChunks(ch)
-	if !done || !strings.Contains(content, "marshal anthropic stream request") {
-		t.Fatalf("stream = %q done=%v", content, done)
+	if !done || content != "" {
+		t.Fatalf("stream = %q done=%v, want empty terminal done chunk (no error text in content)", content, done)
 	}
 }
 
@@ -680,8 +680,8 @@ func TestProviderChatStreamInvalidBaseURL(t *testing.T) {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
 	content, _, done := drainChunks(ch)
-	if !done || !strings.Contains(content, "create anthropic stream request") {
-		t.Fatalf("stream = %q done=%v", content, done)
+	if !done || content != "" {
+		t.Fatalf("stream = %q done=%v, want empty terminal done chunk (no error text in content)", content, done)
 	}
 }
 
@@ -698,8 +698,8 @@ func TestProviderChatStreamLineTooLong(t *testing.T) {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
 	content, _, done := drainChunks(ch)
-	if !done || !strings.Contains(content, "read anthropic stream") {
-		t.Fatalf("stream = %q done=%v", content, done)
+	if !done || content != "" {
+		t.Fatalf("stream = %q done=%v, want empty terminal done chunk (no error text in content)", content, done)
 	}
 }
 

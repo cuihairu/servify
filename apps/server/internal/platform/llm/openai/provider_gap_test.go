@@ -75,7 +75,8 @@ func TestProviderChatUnmarshalableToolSchema(t *testing.T) {
 	}
 }
 
-// TestProviderChatStreamUnmarshalableToolSchema 覆盖 streamOnce 的请求序列化失败分支。
+// TestProviderChatStreamUnmarshalableToolSchema 覆盖 streamOnce 的请求序列化
+// 失败分支：失败只进服务端日志，流侧只给终末空增量（不透出错误文本）。
 func TestProviderChatStreamUnmarshalableToolSchema(t *testing.T) {
 	provider := NewProvider("key", "http://openai-stub.local")
 	ch, err := provider.ChatStream(context.Background(), llm.ChatRequest{
@@ -88,14 +89,12 @@ func TestProviderChatStreamUnmarshalableToolSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
-	var streamErr string
+	var last llm.ChatChunk
 	for chunk := range ch {
-		if strings.Contains(chunk.ContentDelta, "marshal openai stream request") {
-			streamErr = chunk.ContentDelta
-		}
+		last = chunk
 	}
-	if streamErr == "" {
-		t.Fatal("expected marshal error to be delivered on the stream")
+	if !last.Done || last.ContentDelta != "" {
+		t.Fatalf("last chunk = %+v, want empty terminal done chunk (no error text in content)", last)
 	}
 }
 

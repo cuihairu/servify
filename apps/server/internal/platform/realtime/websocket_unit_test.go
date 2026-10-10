@@ -459,8 +459,13 @@ func TestWebSocket_ProcessMessageWithAI_Variants(t *testing.T) {
 
 		c.processMessageWithAI(WebSocketMessage{Type: "text-message", Data: "transfer me"})
 		msg := waitForMessage(t, c.Send)
-		if !strings.Contains(msg.Data.(map[string]interface{})["content"].(string), "转接人工客服失败") {
+		content := msg.Data.(map[string]interface{})["content"].(string)
+		if !strings.Contains(content, "转接人工客服") || !strings.Contains(content, "稍后再试") {
 			t.Fatalf("unexpected failure message: %+v", msg.Data)
+		}
+		// 访客面不透传原始错误：注入的 err 文案不得出现在帧里。
+		if strings.Contains(content, "no agents") {
+			t.Fatalf("raw error leaked to visitor frame: %+v", msg.Data)
 		}
 	})
 

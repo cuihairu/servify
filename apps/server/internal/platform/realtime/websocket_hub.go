@@ -719,10 +719,13 @@ func (c *WebSocketClient) processMessageWithAI(message WebSocketMessage) {
 					Reason:    "user_request",
 				})
 				if err != nil {
+					// 访客面固定友好文案（同 voice-error 约定：帧文案固定，
+					// 不透传 provider/服务原始错误）；原始错误只留服务端日志。
+					logrus.Errorf("transfer to human failed (session_id=%s): %v", sessionID, err)
 					c.Hub.SendToSession(sessionID, WebSocketMessage{
 						Type: "ai-response",
 						Data: map[string]interface{}{
-							"content":    "转接人工客服失败：" + err.Error(),
+							"content":    "很抱歉，暂时无法为您转接人工客服，请稍后再试。",
 							"confidence": 1.0,
 							"source":     "system",
 						},

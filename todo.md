@@ -1244,6 +1244,14 @@
   - 口径：诊断面 + 首连预算对齐同段，判据（超时即判失败）未放宽——失败从「不可归因 TimeoutCancellationException」变「带段位与握手数即刻归因」。
   - 门禁：servify-sdk debug 变体两用例类绿；release 变体 `--rerun-tasks` 10×/10 绿（flake 家族既定标准）；全文 `./gradlew --no-daemon build` 与 CI 逐 job 复核待跑。
 
+- 附注（2026-10-10，**拍板两项执行：conversation-lifecycle 自起改 ai.provider=local + 访客面错误帧收口**；上轮「验收打磨第三刀」附带观察的两点待议经用户拍板定调——①自起模式改 ai.provider=local（同 translation 走查口径，消除对 api.openai.com 的真实出站，与脚本自包含声明对齐）；②AI 错误帧对访客改友好文案，不透传原始错误 JSON；P1-1 real 模式验收维持挂起）：
+  - ①落地：自起段复制 translation 走查口径——临时 WORK_DIR/config.yml 置 `ai.provider=local`、`cd WORK_DIR`（viper 按 cwd 找 ./config.yml）、`TZ=UTC` 钉库时区（sqlite 文本比较错位坑）、cleanup 补 WORK_DIR 清理；头注与 servify_url 摘要标注零出站形态。
+  - ①连带（断言口径修正）：local 是零知识抽取式基线，知识库为空时 content 恒空（provider 明码约定「无从抽取不倾倒任意句子」）；旧的「content 非空」断言建立在 openai 空 key 走 legacy fallback 拿规则文案之上。改断链路可观测面——`source=ai`（经 AI 编排而非规则兜底）+ `strategy=llm`（本地 LLM 链已处理）+ `next_action=handoff`（置信门生效）+ `answer_id` 已落库（首答持久化），content 长度留档；「有知识→逐字抽取」归 local-knowledge 验收承担。
+  - ②两处泄露面（均实证）：**（a）provider 根因**——openai/anthropic `ChatStream` 失败分支把 err 编码成 `ContentDelta`（`"stream error: %v"`），流式管线逐字推成 ai-response-delta 帧；旁证是旧证据文件 `ai-first-reply.txt` 里躺着整段 `stream error: openai provider error (auth_failed:401): {"error":{...}}`——上轮走查的「AI 首答」实为原始 401 JSON，①②两条拍板项的根源同一条链。收口为终末空增量 `Done` + `logrus.Errorf` 只留服务端日志，`llm.ChatChunk` 契约注释同步「错误文本绝不进 ContentDelta」。**（b）转人工失败帧**——`websocket_hub` 的 `"转接人工客服失败："+err.Error()` 改固定友好文案 + logrus 留原始错误（与 voice-error「message 固定文案、不透传 provider 原始错误」既有约定对齐）。
+  - 口径：错误未吞——服务端日志与 span 仍可观测，只不再进访客帧；mock 路径不涉（同步错误返回，非内容编码）。
+  - 测试改写 8 处 pin 旧泄露行为的断言：openai provider_coverage/gap 各 1、anthropic provider_coverage 5、realtime transfer failure 1（新增「原始错误不得出现在访客帧」回归断言）。
+  - 门禁：llm 四包 + ai 模块 + realtime 全绿；apps/server 全量 `./internal/...` 绿；scripts 包全量绿（含家族守卫，521s）；conversation-lifecycle 走查本机 12 步全绿（AI 首答链 strategy=llm/next_action=handoff/answer_id=1/content 长度 0）+ 证据刷新入库。
+
 - 附注（2026-10-10，**真库 schema 对等门禁：cmd/schema-parity + 30 条漂移定盘 + 守卫家族盲区收口**；外部条件核实双未到位（braces/sprintf-js 上游 npm 仍 3.0.3/1.1.3 无修复版；P1-1 无新凭证）后自定位——静态守卫家族注释声明的盲区（隐式 NOT NULL、列类型映射）须真库捕获 diff 才可钉）：
   - 工具（60ac4f0）：`apps/server/cmd/schema-parity`——同一 postgres 起两个临时库（A=迁移链 `RunMigrations`，B=`AutoMigrate`+`CreateIndexes` 与 gen-baseline 同构），`information_schema.columns` 逐列 diff（类型/udt/charMax/nullable/default/numeric 精度），模型表集限定比对（豁免 WeKnora 兼容表/schema_migrations），diff 非空 exit 1。CI Integration job 新增 step（水位断言后、备份演练前）。
   - 首跑抓 **30 条真漂移 / 12 表**（全部为静态面不可见的历史措辞差，逐条评估）：**E 类 2 条修模型侧**——`assist/domain.ConsentStatus` 补 `not null;default:''`、`translation/domain.ViewerRole` 补 `not null;default:'agent'`（000014/000016 手写迁移比模型严；赋值点恒显式赋值，default tag 无行为变化，零生产风险），修复后 AutoMigrate 侧收敛（30→28）；**A/B/C/D 类 28 条进显式白名单**（每条带豁免理由注释）：text vs varchar(size)（收紧须 ALTER 生产列且存量超长行会炸 / 去 size 丢声明意图，仅 legacy escape hatch 受影响）、integer vs bigint（迁移写窄，计数列值域内）、double precision vs numeric（float 措辞）、inert DEFAULT（模型未声明，GORM 恒插值两路径都不触发；补 tag 会改 GORM 零值跳过行为）。**新漂移不在白名单即红**——门禁价值=防未来增量。

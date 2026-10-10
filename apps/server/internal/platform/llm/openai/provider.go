@@ -15,6 +15,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/platform/llm"
 
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -124,9 +125,13 @@ func (p *Provider) ChatStream(ctx context.Context, req llm.ChatRequest) (<-chan 
 		defer close(ch)
 		err := p.streamOnce(ctx, req, ch)
 		if err != nil {
+			// 失败绝不编码成内容增量——ContentDelta 会被下游逐字推给访客
+			// （ai-response-delta 帧 = 原始错误 JSON 泄露面）。终末空增量
+			// Done 即流终止信号，调用方按无响应处理；真实错误只留服务端日志。
+			logrus.Errorf("openai stream failed: %v", err)
 			select {
 			case <-ctx.Done():
-			case ch <- llm.ChatChunk{ContentDelta: fmt.Sprintf("stream error: %v", err), Done: true}:
+			case ch <- llm.ChatChunk{Done: true}:
 			}
 		}
 	}()

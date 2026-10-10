@@ -274,8 +274,8 @@ func TestProviderChatStreamRequestFailure(t *testing.T) {
 	for chunk := range ch {
 		last = chunk
 	}
-	if !last.Done || !strings.HasPrefix(last.ContentDelta, "stream error:") {
-		t.Fatalf("last chunk = %+v, want stream error done chunk", last)
+	if !last.Done || last.ContentDelta != "" {
+		t.Fatalf("last chunk = %+v, want empty terminal done chunk (no error text in content)", last)
 	}
 }
 
