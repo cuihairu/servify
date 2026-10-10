@@ -1,0 +1,1 @@
+{"success":true,"data":{"text":"把用户给出的内容翻译成目标语言，要求：只输出译文本身，不加任何解释、前缀、引号或代码块；保留原文的换行、列表与占位符（如 {name}、%s、URL、邮箱）不翻译；语气与礼貌程度与原文一致；原文已是目标语言时原样返回。","source_lang":"auto","target_lang":"en","provider":"local","token_usage":{"input_tokens":158,"output_tokens":109,"total_tokens":267}},"timestamp":"2026-10-10T05:59:39.027739429Z","duration":"202.127µs"}

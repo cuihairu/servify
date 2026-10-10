@@ -1,0 +1,51 @@
+{
+  "provider": "translation",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18108",
+  "llm_provider": "local",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "ready_ok": "true",
+    "unauthenticated_translate_rejected_401": "true",
+    "admin_auth_ok": "true",
+    "api_key_created_ok": "true",
+    "api_key_list_hides_plaintext_ok": "true",
+    "guest_token_issued_ok": "true",
+    "agent_pref_set_ok": "true",
+    "visitor_pref_set_ok": "true",
+    "visitor_pref_mismatch_rejected_403": "true",
+    "pref_roundtrip_ok": "true",
+    "translate_endpoint_ok": "true",
+    "translate_deterministic_ok": "true",
+    "translate_invalid_lang_rejected_400": "true",
+    "ws_visitor_to_agent_translation_ok": "true",
+    "agent_send_ok": "true",
+    "ws_agent_to_visitor_translation_ok": "true",
+    "pref_delete_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "agent-send.json",
+    "api-key-create.json",
+    "api-key-list.json",
+    "build-output.txt",
+    "guest-session.json",
+    "pref-agent-get.json",
+    "pref-agent-put.json",
+    "pref-delete.json",
+    "pref-visitor-get-after-delete.json",
+    "pref-visitor-get.json",
+    "pref-visitor-mismatch.json",
+    "pref-visitor-put.json",
+    "server-log.txt",
+    "summary.txt",
+    "translate-direct-repeat.json",
+    "translate-direct.json",
+    "translate-invalid-lang.json",
+    "unauthenticated-translate.json",
+    "ws-frames.jsonl"
+  ]
+}

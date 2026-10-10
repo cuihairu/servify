@@ -1,0 +1,46 @@
+Translation acceptance summary（Phase 0/1 实机走查，ai.provider=local）
+step=make_build
+build_ok=true
+step=setup
+servify_url=http://127.0.0.1:18108 (sqlite local, ai=local)
+ready_ok=true
+step=unauth_translate
+unauth_translate_status=401
+unauthenticated_translate_rejected_401=true
+step=admin_auth
+register_status=201
+admin_auth_ok=true
+step=api_key
+api_key_create_status=201
+api_key_created_ok=true
+api_key_list_status=200
+api_key_list_hides_plaintext_ok=true
+step=guest_token
+guest_session_status=201
+guest_token_issued_ok=true
+step=pref_dual_viewer
+agent_pref_put_status=200
+agent_pref_set_ok=true
+visitor_pref_put_status=200
+visitor_pref_set_ok=true
+visitor_pref_mismatch_status=403
+visitor_pref_mismatch_rejected_403=true
+step=pref_roundtrip
+pref_roundtrip agent=en visitor=ja
+pref_roundtrip_ok=true
+step=translate_endpoint
+translate_status=200
+translate provider=local target=en source=auto text_len=109
+translate_endpoint_ok=true
+translate_deterministic_ok=true
+translate_invalid_lang_status=400
+translate_invalid_lang_rejected_400=true
+step=ws_translation
+ws_visitor_to_agent_ok=true
+agent_send_status=201
+agent_send_ok=true
+ws_agent_to_visitor_ok=true
+step=pref_delete
+pref_delete_status=200 visitor_lang_after=
+pref_delete_ok=true
+overall_status=passed

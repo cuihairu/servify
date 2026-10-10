@@ -1,0 +1,1138 @@
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/ (anonymous public surface baseline)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/kb/ (public knowledge base enumeration and crawl risk)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/csat/ (public survey token access and submission risk)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/auth/ (anonymous auth entrypoints)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/ws (anonymous realtime connection surface)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /uploads/ (public uploaded asset surface)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/metrics/ingest (service ingestion surface)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/remote-assist/ (visitor assist consent and recording write surface)"
+time="2026-10-10T05:59:36Z" level=warning msg="security baseline warning: ai.openai.api_key is empty"
+{"file":"/home/cui/workspaces/servify/apps/server/internal/config/logger.go:87","func":"servify/apps/server/internal/config.InitLogger","level":"info","msg":"Logger initialized - Level: info, Format: json, Output: stdout","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/ (anonymous public surface baseline)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/kb/ (public knowledge base enumeration and crawl risk)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /public/csat/ (public survey token access and submission risk)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/auth/ (anonymous auth entrypoints)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/ws (anonymous realtime connection surface)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /uploads/ (public uploaded asset surface)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/metrics/ingest (service ingestion surface)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: security.rate_limiting.paths has no dedicated limit for /api/v1/remote-assist/ (visitor assist consent and recording write surface)","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/security.go:113","func":"servify/apps/server/internal/app/bootstrap.LogSecurityWarnings","level":"warning","msg":"security baseline warning: ai.openai.api_key is empty","time":"2026-10-10 05:59:36"}
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.352ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="users"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.709ms] [34;1m[rows:0][0m CREATE TABLE `users` (`id` integer PRIMARY KEY AUTOINCREMENT,`username` text NOT NULL,`email` text NOT NULL,`password` text NOT NULL,`name` text,`phone` text,`avatar` text,`role` text DEFAULT "customer",`status` text DEFAULT "active",`last_login` datetime,`token_valid_after` datetime,`token_version` integer DEFAULT 0,`totp_secret` text DEFAULT "",`totp_enabled` numeric DEFAULT false,`totp_enabled_at` datetime,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime,CONSTRAINT `uni_users_username` UNIQUE (`username`),CONSTRAINT `uni_users_email` UNIQUE (`email`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.404ms] [34;1m[rows:0][0m CREATE INDEX `idx_users_deleted_at` ON `users`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.049ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="user_auth_sessions"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.530ms] [34;1m[rows:0][0m CREATE TABLE `user_auth_sessions` (`id` text,`user_id` integer NOT NULL,`status` text DEFAULT "active",`token_version` integer DEFAULT 0,`device_fingerprint` text,`user_agent` text,`client_ip` text,`last_seen_at` datetime,`last_refreshed_at` datetime,`revoked_at` datetime,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.311ms] [34;1m[rows:0][0m CREATE INDEX `idx_user_auth_sessions_deleted_at` ON `user_auth_sessions`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.328ms] [34;1m[rows:0][0m CREATE INDEX `idx_user_auth_sessions_device_fingerprint` ON `user_auth_sessions`(`device_fingerprint`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.246ms] [34;1m[rows:0][0m CREATE INDEX `idx_user_auth_sessions_status` ON `user_auth_sessions`(`status`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.250ms] [34;1m[rows:0][0m CREATE INDEX `idx_user_auth_sessions_user_id` ON `user_auth_sessions`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.037ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="revoked_tokens"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.381ms] [34;1m[rows:0][0m CREATE TABLE `revoked_tokens` (`id` integer PRIMARY KEY AUTOINCREMENT,`jti` text NOT NULL,`user_id` integer,`session_id` text,`token_use` text,`reason` text,`expires_at` datetime,`revoked_at` datetime NOT NULL,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.270ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_revoked_tokens_jti` ON `revoked_tokens`(`jti`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.252ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_deleted_at` ON `revoked_tokens`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.246ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_revoked_at` ON `revoked_tokens`(`revoked_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.243ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_expires_at` ON `revoked_tokens`(`expires_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.243ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_token_use` ON `revoked_tokens`(`token_use`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.248ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_session_id` ON `revoked_tokens`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.215ms] [34;1m[rows:0][0m CREATE INDEX `idx_revoked_tokens_user_id` ON `revoked_tokens`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="customers"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.394ms] [34;1m[rows:0][0m CREATE TABLE `customers` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`user_id` integer,`company` text,`industry` text,`source` text,`tags` text,`notes` text,`priority` text DEFAULT "normal",`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.242ms] [34;1m[rows:0][0m CREATE INDEX `idx_customers_deleted_at` ON `customers`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.241ms] [34;1m[rows:0][0m CREATE INDEX `idx_customers_user_id` ON `customers`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.298ms] [34;1m[rows:0][0m CREATE INDEX `idx_customers_scope` ON `customers`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="agents"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.359ms] [34;1m[rows:0][0m CREATE TABLE `agents` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`user_id` integer,`department` text,`skills` text,`status` text DEFAULT "offline",`max_concurrent` integer DEFAULT 5,`current_load` integer DEFAULT 0,`rating` real DEFAULT 5,`total_tickets` integer DEFAULT 0,`avg_response_time` integer DEFAULT 0,`last_activity_at` datetime,`connected_at` datetime,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.228ms] [34;1m[rows:0][0m CREATE INDEX `idx_agents_scope` ON `agents`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.253ms] [34;1m[rows:0][0m CREATE INDEX `idx_agents_deleted_at` ON `agents`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.237ms] [34;1m[rows:0][0m CREATE INDEX `idx_agents_user_id` ON `agents`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.048ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="tickets"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.346ms] [34;1m[rows:0][0m CREATE TABLE `tickets` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`title` text NOT NULL,`description` text,`ai_summary` text,`customer_id` integer,`agent_id` integer,`session_id` text,`category` text,`priority` text DEFAULT "normal",`status` text DEFAULT "open",`source` text,`tags` text,`due_date` datetime,`resolved_at` datetime,`closed_at` datetime,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.235ms] [34;1m[rows:0][0m CREATE INDEX `idx_tickets_agent_id` ON `tickets`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.270ms] [34;1m[rows:0][0m CREATE INDEX `idx_tickets_customer_id` ON `tickets`(`customer_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.350ms] [34;1m[rows:0][0m CREATE INDEX `idx_tickets_scope` ON `tickets`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.351ms] [34;1m[rows:0][0m CREATE INDEX `idx_tickets_deleted_at` ON `tickets`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.260ms] [34;1m[rows:0][0m CREATE INDEX `idx_tickets_session_id` ON `tickets`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.058ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="sessions"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.354ms] [34;1m[rows:0][0m CREATE TABLE `sessions` (`id` text,`tenant_id` text,`workspace_id` text,`user_id` integer,`agent_id` integer,`ticket_id` integer,`status` text DEFAULT "active",`platform` text,`started_at` datetime,`ended_at` datetime,`created_at` datetime,`updated_at` datetime,`visitor_read_message_id` integer DEFAULT 0,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.243ms] [34;1m[rows:0][0m CREATE INDEX `idx_sessions_user_id` ON `sessions`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.327ms] [34;1m[rows:0][0m CREATE INDEX `idx_sessions_scope` ON `sessions`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.244ms] [34;1m[rows:0][0m CREATE INDEX `idx_sessions_ticket_id` ON `sessions`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.291ms] [34;1m[rows:0][0m CREATE INDEX `idx_sessions_agent_id` ON `sessions`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="messages"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.304ms] [34;1m[rows:0][0m CREATE TABLE `messages` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text,`user_id` integer,`content` text,`type` text,`sender` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.310ms] [34;1m[rows:0][0m CREATE INDEX `idx_messages_user_id` ON `messages`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.276ms] [34;1m[rows:0][0m CREATE INDEX `idx_messages_session_id` ON `messages`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.219ms] [34;1m[rows:0][0m CREATE INDEX `idx_messages_scope` ON `messages`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="transfer_records"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.384ms] [34;1m[rows:0][0m CREATE TABLE `transfer_records` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text,`from_agent_id` integer,`to_agent_id` integer,`reason` text,`notes` text,`session_summary` text,`transferred_at` datetime,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.283ms] [34;1m[rows:0][0m CREATE INDEX `idx_transfer_records_scope` ON `transfer_records`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.275ms] [34;1m[rows:0][0m CREATE INDEX `idx_transfer_records_to_agent_id` ON `transfer_records`(`to_agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.294ms] [34;1m[rows:0][0m CREATE INDEX `idx_transfer_records_from_agent_id` ON `transfer_records`(`from_agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.292ms] [34;1m[rows:0][0m CREATE INDEX `idx_transfer_records_session_id` ON `transfer_records`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.033ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="routing_assignments"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.408ms] [34;1m[rows:0][0m CREATE TABLE `routing_assignments` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text,`from_agent_id` integer,`to_agent_id` integer,`total_score` real,`factors` text,`reasons` text,`strategy` text,`assigned_at` datetime,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.252ms] [34;1m[rows:0][0m CREATE INDEX `idx_routing_assignments_session_id` ON `routing_assignments`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.348ms] [34;1m[rows:0][0m CREATE INDEX `idx_routing_assignments_scope` ON `routing_assignments`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.281ms] [34;1m[rows:0][0m CREATE INDEX `idx_routing_assignments_to_agent_id` ON `routing_assignments`(`to_agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.217ms] [34;1m[rows:0][0m CREATE INDEX `idx_routing_assignments_from_agent_id` ON `routing_assignments`(`from_agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.060ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="waiting_records"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.289ms] [34;1m[rows:0][0m CREATE TABLE `waiting_records` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text,`reason` text,`target_skills` text,`target_group_id` integer,`priority` text,`notes` text,`status` text DEFAULT "waiting",`queued_at` datetime,`claimed_at` datetime,`assigned_at` datetime,`assigned_to` integer,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.202ms] [34;1m[rows:0][0m CREATE INDEX `idx_waiting_records_session_id` ON `waiting_records`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.208ms] [34;1m[rows:0][0m CREATE INDEX `idx_waiting_records_scope` ON `waiting_records`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.241ms] [34;1m[rows:0][0m CREATE INDEX `idx_waiting_records_assigned_to` ON `waiting_records`(`assigned_to`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.265ms] [34;1m[rows:0][0m CREATE INDEX `idx_waiting_records_claim` ON `waiting_records`(`claimed_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.335ms] [34;1m[rows:0][0m CREATE INDEX `idx_waiting_records_target_group_id` ON `waiting_records`(`target_group_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.033ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="ticket_comments"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.287ms] [34;1m[rows:0][0m CREATE TABLE `ticket_comments` (`id` integer PRIMARY KEY AUTOINCREMENT,`ticket_id` integer,`user_id` integer,`content` text NOT NULL,`type` text DEFAULT "comment",`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.246ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_comments_user_id` ON `ticket_comments`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.261ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_comments_ticket_id` ON `ticket_comments`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.032ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="ticket_files"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.248ms] [34;1m[rows:0][0m CREATE TABLE `ticket_files` (`id` integer PRIMARY KEY AUTOINCREMENT,`ticket_id` integer,`user_id` integer,`file_name` text NOT NULL,`file_path` text NOT NULL,`file_size` integer,`mime_type` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.217ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_files_user_id` ON `ticket_files`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.216ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_files_ticket_id` ON `ticket_files`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="ticket_statuses"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.317ms] [34;1m[rows:0][0m CREATE TABLE `ticket_statuses` (`id` integer PRIMARY KEY AUTOINCREMENT,`ticket_id` integer,`user_id` integer,`from_status` text,`to_status` text,`reason` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.198ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_statuses_user_id` ON `ticket_statuses`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.208ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_statuses_ticket_id` ON `ticket_statuses`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="custom_fields"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.352ms] [34;1m[rows:0][0m CREATE TABLE `custom_fields` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`resource` text DEFAULT "ticket",`key` text NOT NULL,`name` text NOT NULL,`type` text NOT NULL,`required` numeric DEFAULT false,`active` numeric DEFAULT true,`options_json` text,`validation_json` text,`show_when_json` text,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime,CONSTRAINT `uni_custom_fields_key` UNIQUE (`key`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.196ms] [34;1m[rows:0][0m CREATE INDEX `idx_custom_fields_deleted_at` ON `custom_fields`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.216ms] [34;1m[rows:0][0m CREATE INDEX `idx_custom_fields_resource` ON `custom_fields`(`resource`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.240ms] [34;1m[rows:0][0m CREATE INDEX `idx_custom_fields_workspace_id` ON `custom_fields`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.188ms] [34;1m[rows:0][0m CREATE INDEX `idx_custom_fields_tenant_id` ON `custom_fields`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.038ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="ticket_custom_field_values"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.247ms] [34;1m[rows:0][0m CREATE TABLE `ticket_custom_field_values` (`id` integer PRIMARY KEY AUTOINCREMENT,`ticket_id` integer,`custom_field_id` integer,`value` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.215ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_custom_field_values_custom_field_id` ON `ticket_custom_field_values`(`custom_field_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.246ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `uniq_ticket_field` ON `ticket_custom_field_values`(`ticket_id`,`custom_field_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.231ms] [34;1m[rows:0][0m CREATE INDEX `idx_ticket_custom_field_values_ticket_id` ON `ticket_custom_field_values`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.039ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="knowledge_docs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.433ms] [34;1m[rows:0][0m CREATE TABLE `knowledge_docs` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`provider_id` text,`external_id` text,`title` text,`content` text,`category` text,`tags` text,`is_public` numeric DEFAULT false,`source_id` integer DEFAULT 0,`version` integer DEFAULT 1,`embedding` vector(1536),`chunk_index` integer DEFAULT 0,`doc_chunk_id` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.215ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_workspace_id` ON `knowledge_docs`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.268ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_tenant_id` ON `knowledge_docs`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.199ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_doc_chunk_id` ON `knowledge_docs`(`doc_chunk_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.197ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_source_id` ON `knowledge_docs`(`source_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.222ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_is_public` ON `knowledge_docs`(`is_public`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.251ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_external_id` ON `knowledge_docs`(`external_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.177ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_docs_provider_id` ON `knowledge_docs`(`provider_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="knowledge_index_jobs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.339ms] [34;1m[rows:0][0m CREATE TABLE `knowledge_index_jobs` (`id` text,`document_id` integer NOT NULL,`status` text NOT NULL,`error` text,`document_version` integer DEFAULT 0,`created_at` datetime,`updated_at` datetime,`completed_at` datetime,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.386ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_index_jobs_status` ON `knowledge_index_jobs`(`status`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.238ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_index_jobs_document_id` ON `knowledge_index_jobs`(`document_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="knowledge_sources"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.258ms] [34;1m[rows:0][0m CREATE TABLE `knowledge_sources` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text,`type` text,`description` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.235ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_sources_type` ON `knowledge_sources`(`type`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.188ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_sources_workspace_id` ON `knowledge_sources`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.272ms] [34;1m[rows:0][0m CREATE INDEX `idx_knowledge_sources_tenant_id` ON `knowledge_sources`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="ai_answers"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.203ms] [34;1m[rows:0][0m CREATE TABLE `ai_answers` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text,`query` text,`answer` text,`confidence` real,`strategy` text,`sources_json` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.208ms] [34;1m[rows:0][0m CREATE INDEX `idx_ai_answers_tenant_id` ON `ai_answers`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.236ms] [34;1m[rows:0][0m CREATE INDEX `idx_ai_answers_created_at` ON `ai_answers`(`created_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.234ms] [34;1m[rows:0][0m CREATE INDEX `idx_ai_answers_strategy` ON `ai_answers`(`strategy`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.205ms] [34;1m[rows:0][0m CREATE INDEX `idx_ai_answers_session_id` ON `ai_answers`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.181ms] [34;1m[rows:0][0m CREATE INDEX `idx_ai_answers_workspace_id` ON `ai_answers`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="answer_feedbacks"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.309ms] [34;1m[rows:0][0m CREATE TABLE `answer_feedbacks` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`answer_id` integer NOT NULL,`helpful` numeric,`comment` text,`created_by` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.199ms] [34;1m[rows:0][0m CREATE INDEX `idx_answer_feedbacks_answer_id` ON `answer_feedbacks`(`answer_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.180ms] [34;1m[rows:0][0m CREATE INDEX `idx_answer_feedbacks_workspace_id` ON `answer_feedbacks`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.223ms] [34;1m[rows:0][0m CREATE INDEX `idx_answer_feedbacks_tenant_id` ON `answer_feedbacks`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.343ms] [34;1m[rows:0][0m CREATE INDEX `idx_answer_feedbacks_created_at` ON `answer_feedbacks`(`created_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.028ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="web_rtc_connections"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.368ms] [34;1m[rows:0][0m CREATE TABLE `web_rtc_connections` (`id` text,`session_id` text,`status` text DEFAULT "connecting",`connection_type` text,`created_at` datetime,`updated_at` datetime,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.236ms] [34;1m[rows:0][0m CREATE INDEX `idx_web_rtc_connections_session_id` ON `web_rtc_connections`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.029ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="daily_stats"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.279ms] [34;1m[rows:0][0m CREATE TABLE `daily_stats` (`id` integer PRIMARY KEY AUTOINCREMENT,`date` datetime,`total_sessions` integer DEFAULT 0,`total_messages` integer DEFAULT 0,`total_tickets` integer DEFAULT 0,`resolved_tickets` integer DEFAULT 0,`avg_response_time` integer DEFAULT 0,`avg_resolution_time` integer DEFAULT 0,`customer_satisfaction` real DEFAULT 0,`ai_usage_count` integer DEFAULT 0,`we_knora_usage_count` integer DEFAULT 0,`sla_violations` integer DEFAULT 0,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.251ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_daily_stats_date` ON `daily_stats`(`date`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.029ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="sla_configs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.309ms] [34;1m[rows:0][0m CREATE TABLE `sla_configs` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text NOT NULL,`priority` text NOT NULL,`customer_tier` text DEFAULT "",`tags` text,`warning_threshold` integer DEFAULT 80,`first_response_time` integer NOT NULL,`resolution_time` integer NOT NULL,`escalation_time` integer NOT NULL,`business_hours_only` numeric DEFAULT false,`active` numeric DEFAULT true,`created_at` datetime,`updated_at` datetime,CONSTRAINT `uni_sla_configs_name` UNIQUE (`name`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.245ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_configs_workspace_id` ON `sla_configs`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.278ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_configs_tenant_id` ON `sla_configs`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.039ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="sla_violations"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.419ms] [34;1m[rows:0][0m CREATE TABLE `sla_violations` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`ticket_id` integer,`sla_config_id` integer,`violation_type` text NOT NULL,`deadline` datetime,`violated_at` datetime,`resolved_at` datetime,`resolved` numeric DEFAULT false,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.434ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_violations_sla_config_id` ON `sla_violations`(`sla_config_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.365ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_violations_ticket_id` ON `sla_violations`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.352ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_violations_workspace_id` ON `sla_violations`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.312ms] [34;1m[rows:0][0m CREATE INDEX `idx_sla_violations_tenant_id` ON `sla_violations`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.044ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="customer_satisfactions"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.469ms] [34;1m[rows:0][0m CREATE TABLE `customer_satisfactions` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`ticket_id` integer,`customer_id` integer,`agent_id` integer,`rating` integer NOT NULL,`comment` text,`category` text,`created_at` datetime,CONSTRAINT `chk_customer_satisfactions_rating` CHECK (rating >= 1 AND rating <= 5))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.352ms] [34;1m[rows:0][0m CREATE INDEX `idx_customer_satisfactions_workspace_id` ON `customer_satisfactions`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.455ms] [34;1m[rows:0][0m CREATE INDEX `idx_customer_satisfactions_tenant_id` ON `customer_satisfactions`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.327ms] [34;1m[rows:0][0m CREATE INDEX `idx_customer_satisfactions_agent_id` ON `customer_satisfactions`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.317ms] [34;1m[rows:0][0m CREATE INDEX `idx_customer_satisfactions_customer_id` ON `customer_satisfactions`(`customer_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.346ms] [34;1m[rows:0][0m CREATE INDEX `idx_customer_satisfactions_ticket_id` ON `customer_satisfactions`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.044ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="satisfaction_surveys"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.491ms] [34;1m[rows:0][0m CREATE TABLE `satisfaction_surveys` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`ticket_id` integer,`customer_id` integer,`agent_id` integer,`channel` text DEFAULT "email",`status` text DEFAULT "queued",`survey_token` text,`sent_at` datetime,`expires_at` datetime,`completed_at` datetime,`satisfaction_id` integer,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.322ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_status` ON `satisfaction_surveys`(`status`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.303ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_agent_id` ON `satisfaction_surveys`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.175ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_customer_id` ON `satisfaction_surveys`(`customer_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.170ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_ticket_id` ON `satisfaction_surveys`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.239ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_workspace_id` ON `satisfaction_surveys`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.216ms] [34;1m[rows:0][0m CREATE INDEX `idx_satisfaction_surveys_tenant_id` ON `satisfaction_surveys`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.191ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_satisfaction_surveys_survey_token` ON `satisfaction_surveys`(`survey_token`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="app_integrations"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.375ms] [34;1m[rows:0][0m CREATE TABLE `app_integrations` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text NOT NULL,`slug` text NOT NULL,`vendor` text,`category` text,`summary` text,`icon_url` text,`capabilities` text,`config_schema` text,`i_frame_url` text,`enabled` numeric DEFAULT true,`last_sync_status` text,`created_at` datetime,`updated_at` datetime,CONSTRAINT `uni_app_integrations_name` UNIQUE (`name`),CONSTRAINT `uni_app_integrations_slug` UNIQUE (`slug`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.206ms] [34;1m[rows:0][0m CREATE INDEX `idx_app_integrations_workspace_id` ON `app_integrations`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.214ms] [34;1m[rows:0][0m CREATE INDEX `idx_app_integrations_tenant_id` ON `app_integrations`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="shift_schedules"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.344ms] [34;1m[rows:0][0m CREATE TABLE `shift_schedules` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`agent_id` integer,`shift_type` text NOT NULL,`start_time` datetime NOT NULL,`end_time` datetime NOT NULL,`date` datetime,`status` text DEFAULT "scheduled",`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.237ms] [34;1m[rows:0][0m CREATE INDEX `idx_shift_schedules_tenant_id` ON `shift_schedules`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.314ms] [34;1m[rows:0][0m CREATE INDEX `idx_shift_schedules_date` ON `shift_schedules`(`date`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.278ms] [34;1m[rows:0][0m CREATE INDEX `idx_shift_schedules_agent_id` ON `shift_schedules`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.234ms] [34;1m[rows:0][0m CREATE INDEX `idx_shift_schedules_workspace_id` ON `shift_schedules`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.042ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="automation_triggers"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.419ms] [34;1m[rows:0][0m CREATE TABLE `automation_triggers` (`id` integer PRIMARY KEY AUTOINCREMENT,`name` text NOT NULL,`event` text NOT NULL,`conditions` text,`actions` text,`active` numeric DEFAULT true,`created_at` datetime,`updated_at` datetime,CONSTRAINT `uni_automation_triggers_name` UNIQUE (`name`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="automation_runs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.275ms] [34;1m[rows:0][0m CREATE TABLE `automation_runs` (`id` integer PRIMARY KEY AUTOINCREMENT,`trigger_id` integer,`ticket_id` integer,`status` text,`message` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.229ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_runs_status` ON `automation_runs`(`status`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.263ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_runs_ticket_id` ON `automation_runs`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.238ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_runs_trigger_id` ON `automation_runs`(`trigger_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="macros"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.301ms] [34;1m[rows:0][0m CREATE TABLE `macros` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text NOT NULL,`description` text,`language` text DEFAULT "zh",`content` text,`active` numeric DEFAULT true,`created_at` datetime,`updated_at` datetime,CONSTRAINT `uni_macros_name` UNIQUE (`name`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.280ms] [34;1m[rows:0][0m CREATE INDEX `idx_macros_workspace_id` ON `macros`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.295ms] [34;1m[rows:0][0m CREATE INDEX `idx_macros_tenant_id` ON `macros`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="tenant_configs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.279ms] [34;1m[rows:0][0m CREATE TABLE `tenant_configs` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text NOT NULL,`portal_json` text,`open_ai_json` text,`dify_json` text,`we_knora_json` text,`rag_flow_json` text,`session_risk_json` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.235ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_tenant_configs_tenant_id` ON `tenant_configs`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.046ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="workspace_configs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.349ms] [34;1m[rows:0][0m CREATE TABLE `workspace_configs` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text NOT NULL,`workspace_id` text NOT NULL,`portal_json` text,`open_ai_json` text,`dify_json` text,`we_knora_json` text,`rag_flow_json` text,`session_risk_json` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.302ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_workspace_configs_scope` ON `workspace_configs`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="audit_logs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.444ms] [34;1m[rows:0][0m CREATE TABLE `audit_logs` (`id` integer PRIMARY KEY AUTOINCREMENT,`actor_user_id` integer,`principal_kind` text NOT NULL,`action` text NOT NULL,`resource_type` text NOT NULL,`resource_id` text,`route` text NOT NULL,`method` text NOT NULL,`status_code` integer,`success` numeric,`request_id` text,`client_ip` text,`user_agent` text,`tenant_id` text,`workspace_id` text,`request_json` text,`before_json` text,`after_json` text,`prev_hash` text,`entry_hash` text,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.375ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_entry_hash` ON `audit_logs`(`entry_hash`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.277ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_resource_type` ON `audit_logs`(`resource_type`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.218ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_action` ON `audit_logs`(`action`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.349ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_principal_kind` ON `audit_logs`(`principal_kind`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.255ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_actor_user_id` ON `audit_logs`(`actor_user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.203ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_prev_hash` ON `audit_logs`(`prev_hash`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.274ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_workspace_id` ON `audit_logs`(`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.270ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_tenant_id` ON `audit_logs`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.221ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_request_id` ON `audit_logs`(`request_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.278ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_success` ON `audit_logs`(`success`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.295ms] [34;1m[rows:0][0m CREATE INDEX `idx_audit_logs_resource_id` ON `audit_logs`(`resource_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="voice_calls"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.354ms] [34;1m[rows:0][0m CREATE TABLE `voice_calls` (`id` text,`session_id` text,`status` text DEFAULT "started",`started_at` datetime,`answered_at` datetime,`held_at` datetime,`resumed_at` datetime,`ended_at` datetime,`transfer_to_agent` integer,`created_at` datetime,`updated_at` datetime,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.374ms] [34;1m[rows:0][0m CREATE INDEX `idx_voice_calls_session_id` ON `voice_calls`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.050ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="voice_recordings"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.421ms] [34;1m[rows:0][0m CREATE TABLE `voice_recordings` (`id` text,`call_id` text,`provider` text,`status` text DEFAULT "recording",`storage_uri` text,`started_at` datetime,`created_at` datetime,`updated_at` datetime,PRIMARY KEY (`id`))
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.376ms] [34;1m[rows:0][0m CREATE INDEX `idx_voice_recordings_call_id` ON `voice_recordings`(`call_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.045ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="voice_transcripts"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.482ms] [34;1m[rows:0][0m CREATE TABLE `voice_transcripts` (`id` integer PRIMARY KEY AUTOINCREMENT,`call_id` text,`content` text,`language` text,`finalized` numeric DEFAULT false,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.254ms] [34;1m[rows:0][0m CREATE INDEX `idx_voice_transcripts_call_id` ON `voice_transcripts`(`call_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="webhook_endpoints"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.444ms] [34;1m[rows:0][0m CREATE TABLE `webhook_endpoints` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text NOT NULL,`url` text NOT NULL,`secret` text NOT NULL,`events` text,`description` text,`active` numeric DEFAULT true,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.263ms] [34;1m[rows:0][0m CREATE INDEX `idx_webhook_endpoints_deleted_at` ON `webhook_endpoints`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.030ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="webhook_deliveries"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.514ms] [34;1m[rows:0][0m CREATE TABLE `webhook_deliveries` (`id` integer PRIMARY KEY AUTOINCREMENT,`endpoint_id` integer,`event_name` text NOT NULL,`event_id` text,`aggregate_id` text,`status` text DEFAULT "pending",`attempt` integer DEFAULT 0,`http_status` integer,`duration_ms` integer,`last_error` text,`payload` text,`created_at` datetime,`updated_at` datetime,`delivered_at` datetime,`next_retry_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.385ms] [34;1m[rows:0][0m CREATE INDEX `idx_webhook_deliveries_endpoint_id` ON `webhook_deliveries`(`endpoint_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.344ms] [34;1m[rows:0][0m CREATE INDEX `idx_webhook_deliveries_status_next_retry` ON `webhook_deliveries`(`status`,`next_retry_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.028ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="api_keys"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.219ms] [34;1m[rows:0][0m CREATE TABLE `api_keys` (`id` integer PRIMARY KEY AUTOINCREMENT,`name` text NOT NULL,`prefix` text NOT NULL,`key_hash` text NOT NULL,`tenant_id` text,`workspace_id` text,`scopes` text,`created_by` text,`last_used_at` datetime,`expires_at` datetime,`revoked_at` datetime,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.292ms] [34;1m[rows:0][0m CREATE INDEX `idx_api_keys_tenant_id` ON `api_keys`(`tenant_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.253ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_api_keys_key_hash` ON `api_keys`(`key_hash`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.219ms] [34;1m[rows:0][0m CREATE INDEX `idx_api_keys_prefix` ON `api_keys`(`prefix`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.052ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="quality_reviews"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.403ms] [34;1m[rows:0][0m CREATE TABLE `quality_reviews` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text NOT NULL,`customer_id` integer,`agent_id` integer,`status` text DEFAULT "pending",`trigger` text DEFAULT "worker",`message_count` integer,`duration_seconds` integer,`violations_json` text,`violation_count` integer,`max_severity` text,`dimensions_json` text,`llm_total_score` real,`llm_summary` text,`llm_provider` text,`llm_model` text,`attempt_count` integer,`next_retry_at` datetime,`last_error` text,`manual_score` real,`manual_result` text,`review_note` text,`reviewed_by` integer,`reviewed_at` datetime,`scored_at` datetime,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.211ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_retry` ON `quality_reviews`(`next_retry_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.286ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_max_severity` ON `quality_reviews`(`max_severity`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.251ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_status` ON `quality_reviews`(`status`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.209ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_agent_id` ON `quality_reviews`(`agent_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.293ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_customer_id` ON `quality_reviews`(`customer_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.250ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `uniq_quality_reviews_session` ON `quality_reviews`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.550ms] [34;1m[rows:0][0m CREATE INDEX `idx_quality_reviews_scope` ON `quality_reviews`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.043ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="agent_groups"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.549ms] [34;1m[rows:0][0m CREATE TABLE `agent_groups` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`name` text NOT NULL,`description` text,`priority` integer,`overflow_policy` text,`enabled` numeric,`parent_id` integer,`created_at` datetime,`updated_at` datetime,`deleted_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.321ms] [34;1m[rows:0][0m CREATE INDEX `idx_agent_groups_deleted_at` ON `agent_groups`(`deleted_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.242ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `uniq_agent_groups_name` ON `agent_groups`(`tenant_id`,`workspace_id`,`name`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.253ms] [34;1m[rows:0][0m CREATE INDEX `idx_agent_groups_scope` ON `agent_groups`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.041ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="agent_group_members"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.318ms] [34;1m[rows:0][0m CREATE TABLE `agent_group_members` (`id` integer PRIMARY KEY AUTOINCREMENT,`group_id` integer NOT NULL,`agent_user_id` integer NOT NULL,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.226ms] [34;1m[rows:0][0m CREATE INDEX `idx_agent_group_members_group_id` ON `agent_group_members`(`group_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.231ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `uniq_agent_group_members` ON `agent_group_members`(`group_id`,`agent_user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.031ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="remote_assist_sessions"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.280ms] [34;1m[rows:0][0m CREATE TABLE `remote_assist_sessions` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`conversation_session_id` text,`agent_user_id` integer,`status` text,`started_at` datetime,`ended_at` datetime,`consent_status` text NOT NULL DEFAULT "",`consent_at` datetime,`recording_key` text,`recording_mime` text,`recording_duration_ms` integer,`recording_size` integer,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.225ms] [34;1m[rows:0][0m CREATE INDEX `idx_remote_assist_sessions_conversation_session_id` ON `remote_assist_sessions`(`conversation_session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.043ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="remote_assist_annotations"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.318ms] [34;1m[rows:0][0m CREATE TABLE `remote_assist_annotations` (`id` integer PRIMARY KEY AUTOINCREMENT,`assist_session_id` integer NOT NULL,`timestamp_ms` integer,`shape` text,`payload` text,`created_by` integer,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.229ms] [34;1m[rows:0][0m CREATE INDEX `idx_assist_annotations_session` ON `remote_assist_annotations`(`assist_session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.029ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="automation_timers"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.266ms] [34;1m[rows:0][0m CREATE TABLE `automation_timers` (`id` integer PRIMARY KEY AUTOINCREMENT,`trigger_id` integer,`ticket_id` integer,`actions_json` text,`due_at` datetime,`status` text DEFAULT "pending",`last_error` text,`created_at` datetime,`executed_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.226ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_timers_status_due_at` ON `automation_timers`(`status`,`due_at`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.224ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_timers_ticket_id` ON `automation_timers`(`ticket_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.266ms] [34;1m[rows:0][0m CREATE INDEX `idx_automation_timers_trigger_id` ON `automation_timers`(`trigger_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.028ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="user_recovery_codes"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.282ms] [34;1m[rows:0][0m CREATE TABLE `user_recovery_codes` (`id` integer PRIMARY KEY AUTOINCREMENT,`user_id` integer NOT NULL,`code_hash` text NOT NULL,`used_at` datetime,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.301ms] [34;1m[rows:0][0m CREATE INDEX `idx_user_recovery_codes_user_id` ON `user_recovery_codes`(`user_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.036ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="suggestion_exposure_logs"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.376ms] [34;1m[rows:0][0m CREATE TABLE `suggestion_exposure_logs` (`id` integer PRIMARY KEY AUTOINCREMENT,`session_id` text DEFAULT "",`kind` text,`strategy` text,`questions` text,`converted_question` text DEFAULT "",`converted_at` datetime,`created_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.331ms] [34;1m[rows:0][0m CREATE INDEX `idx_suggestion_exposure_logs_session_id` ON `suggestion_exposure_logs`(`session_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.064ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="push_tokens"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.373ms] [34;1m[rows:0][0m CREATE TABLE `push_tokens` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`session_id` text DEFAULT "",`platform` text,`token` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.296ms] [34;1m[rows:0][0m CREATE INDEX `idx_push_tokens_session_platform` ON `push_tokens`(`session_id`,`platform`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.386ms] [34;1m[rows:0][0m CREATE INDEX `idx_push_tokens_scope` ON `push_tokens`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.041ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="translation_language_preferences"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.359ms] [34;1m[rows:0][0m CREATE TABLE `translation_language_preferences` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`conversation_session_id` text,`viewer_role` text NOT NULL DEFAULT "agent",`target_lang` text,`created_at` datetime,`updated_at` datetime)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.370ms] [34;1m[rows:0][0m CREATE UNIQUE INDEX `idx_translation_prefs_session_viewer` ON `translation_language_preferences`(`conversation_session_id`,`viewer_role`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.296ms] [34;1m[rows:0][0m CREATE INDEX `idx_translation_prefs_scope` ON `translation_language_preferences`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:32
+[0m[33m[0.034ms] [34;1m[rows:-][0m SELECT count(*) FROM sqlite_master WHERE type='table' AND name="conversation_events"
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/migrate.go:77
+[0m[33m[0.314ms] [34;1m[rows:0][0m CREATE TABLE `conversation_events` (`id` integer PRIMARY KEY AUTOINCREMENT,`tenant_id` text,`workspace_id` text,`conversation_id` text NOT NULL,`event_type` text NOT NULL,`actor_type` text DEFAULT "",`actor_id` text DEFAULT "",`summary` text,`payload` text,`occurred_at` datetime NOT NULL)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.231ms] [34;1m[rows:0][0m CREATE INDEX `idx_conv_events_conversation` ON `conversation_events`(`conversation_id`,`event_type`)
+
+2026/10/10 05:59:36 [32m/home/cui/go/pkg/mod/github.com/glebarez/sqlite@v1.11.0/migrator.go:274
+[0m[33m[0.291ms] [34;1m[rows:0][0m CREATE INDEX `idx_conv_events_scope` ON `conversation_events`(`tenant_id`,`workspace_id`)
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.221ms] [34;1m[rows:0][0m UPDATE `sessions` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.105ms] [34;1m[rows:0][0m UPDATE `sessions` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.197ms] [34;1m[rows:0][0m UPDATE `messages` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.124ms] [34;1m[rows:0][0m UPDATE `messages` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.168ms] [34;1m[rows:0][0m UPDATE `conversation_events` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.221ms] [34;1m[rows:0][0m UPDATE `conversation_events` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.185ms] [34;1m[rows:0][0m UPDATE `tickets` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.147ms] [34;1m[rows:0][0m UPDATE `tickets` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.152ms] [34;1m[rows:0][0m UPDATE `customers` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.152ms] [34;1m[rows:0][0m UPDATE `customers` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.215ms] [34;1m[rows:0][0m UPDATE `knowledge_docs` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.166ms] [34;1m[rows:0][0m UPDATE `knowledge_docs` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.159ms] [34;1m[rows:0][0m UPDATE `transfer_records` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.133ms] [34;1m[rows:0][0m UPDATE `transfer_records` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.171ms] [34;1m[rows:0][0m UPDATE `waiting_records` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.167ms] [34;1m[rows:0][0m UPDATE `waiting_records` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.146ms] [34;1m[rows:0][0m UPDATE `routing_assignments` SET `tenant_id`="default" WHERE tenant_id IS NULL OR tenant_id = ''
+
+2026/10/10 05:59:36 [32m/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/scope_backfill.go:67
+[0m[33m[0.082ms] [34;1m[rows:0][0m UPDATE `routing_assignments` SET `workspace_id`="default" WHERE workspace_id IS NULL OR workspace_id = ''
+{"file":"/home/cui/workspaces/servify/apps/server/internal/modules/ai/delivery/legacy_fallback.go:271","func":"servify/apps/server/internal/modules/ai/delivery.(*AIService).InitializeKnowledgeBase","level":"info","msg":"Knowledge base initialized with default documents","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/server/ai_runtime.go:153","func":"servify/apps/server/internal/app/server.buildPgvectorAssembly","level":"warning","msg":"knowledge.provider=pgvector set but embedding.provider is not configured; continuing without it","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/server/runtime_assembly.go:329","func":"servify/apps/server/internal/app/server.wireRealtimeGateways","level":"info","msg":"WebRTC ICE assembled: stun=1,turn=disabled","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/server/voice_runtime.go:35","func":"servify/apps/server/internal/app/server.buildVoiceRecordingProvider","level":"warning","msg":"voice recording provider is disabled; recording endpoints will return service unavailable until an explicit provider is configured","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/server/voice_runtime.go:71","func":"servify/apps/server/internal/app/server.buildVoiceTranscriptProvider","level":"warning","msg":"voice transcript provider is disabled; transcript endpoints will return service unavailable until an explicit provider is configured","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/server/runtime_assembly.go:395","func":"servify/apps/server/internal/app/server.newAgentRegistry","level":"warning","msg":"using in-memory agent registry - not suitable for multi-instance deployment","time":"2026-10-10 05:59:36"}
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+{"file":"/home/cui/workspaces/servify/apps/server/internal/platform/realtime/message_router.go:126","func":"servify/apps/server/internal/platform/realtime.(*MessageRouter).Start","level":"info","msg":"Message router started","time":"2026-10-10 05:59:36"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/server.go:78","func":"servify/apps/server/internal/app/bootstrap.StartHTTPServer.func1","level":"info","msg":"Starting server on 0.0.0.0:18108","time":"2026-10-10 05:59:36"}
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:116
+[0m[33m[0.523ms] [34;1m[rows:0][0m SELECT * FROM `webhook_deliveries` WHERE status = "pending" AND (next_retry_at IS NULL OR next_retry_at <= "2026-10-10 05:59:38.156") ORDER BY id LIMIT 50
+[GIN] 2026/10/10 - 05:59:38 | 200 |     209.857µs |       127.0.0.1 | GET      "/ready"
+[GIN] 2026/10/10 - 05:59:38 | 401 |     101.389µs |       127.0.0.1 | POST     "/api/v1/translation/translate"
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/auth/application/service.go:135
+[0m[33m[0.248ms] [34;1m[rows:1][0m SELECT count(*) FROM `users` WHERE (username = "translation-admin" OR email = "translation-admin@servify.io") AND `users`.`deleted_at` IS NULL
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/auth/application/service.go:151
+[0m[33m[0.203ms] [34;1m[rows:1][0m SELECT count(*) FROM `users` WHERE `users`.`deleted_at` IS NULL
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/auth/application/service.go:166
+[0m[33m[0.460ms] [34;1m[rows:1][0m INSERT INTO `users` (`username`,`email`,`password`,`name`,`phone`,`avatar`,`role`,`status`,`last_login`,`token_valid_after`,`token_version`,`totp_secret`,`totp_enabled`,`totp_enabled_at`,`created_at`,`updated_at`,`deleted_at`) VALUES ("translation-admin","translation-admin@servify.io","$2a$10$0W0RGTuIUCA.D46U5raqJ.n6kBs/rd/tOZ4m3a8N5M43TRdAGBbNC","Translation Admin","","","admin","active",NULL,NULL,0,"",false,NULL,"2026-10-10 05:59:38.464","2026-10-10 05:59:38.464",NULL) RETURNING `id`
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/auth/application/service.go:445
+[0m[33m[0.266ms] [34;1m[rows:1][0m INSERT INTO `user_auth_sessions` (`id`,`user_id`,`status`,`token_version`,`device_fingerprint`,`user_agent`,`client_ip`,`last_seen_at`,`last_refreshed_at`,`revoked_at`,`created_at`,`updated_at`,`deleted_at`) VALUES ("auth_3462f6f64c16285890bb46bbaf11c575",1,"active",0,"62f47d0922fae0a3c1adf828028e2b88","curl/8.18.0","127.0.0.1","2026-10-10 05:59:38.464",NULL,NULL,"2026-10-10 05:59:38.464","2026-10-10 05:59:38.464",NULL)
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/auth/application/service.go:419
+[0m[33m[0.286ms] [34;1m[rows:1][0m UPDATE `users` SET `last_login`="2026-10-10 05:59:38.465",`updated_at`="2026-10-10 05:59:38.465" WHERE `users`.`deleted_at` IS NULL AND `id` = 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/chain.go:167
+[0m[33m[0.096ms] [34;1m[rows:0][0m SELECT `entry_hash` FROM `audit_logs` WHERE entry_hash <> '' ORDER BY id DESC LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/recorder.go:81
+[0m[33m[0.279ms] [34;1m[rows:1][0m INSERT INTO `audit_logs` (`actor_user_id`,`principal_kind`,`action`,`resource_type`,`resource_id`,`route`,`method`,`status_code`,`success`,`request_id`,`client_ip`,`user_agent`,`tenant_id`,`workspace_id`,`request_json`,`before_json`,`after_json`,`prev_hash`,`entry_hash`,`created_at`) VALUES (NULL,"","auth.register","auth","","/api/v1/auth/register","POST",201,true,"","127.0.0.1","curl/8.18.0","","","{""email"":""translation-admin@servify.io"",""name"":""Translation Admin"",""password"":""[REDACTED]"",""role"":""admin"",""username"":""translation-admin""}","","","0000000000000000000000000000000000000000000000000000000000000000","c05cc71bd50ef4182f5ed0855d603aeb67306e8a2ebfef62e581b706aeb3ab74","2026-10-10 05:59:38.465") RETURNING `id`
+[GIN] 2026/10/10 - 05:59:38 | 201 |   83.082555ms |       127.0.0.1 | POST     "/api/v1/auth/register"
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.190ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.114ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.117ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/api_key/infra/gorm_repository.go:48
+[0m[33m[0.340ms] [34;1m[rows:1][0m INSERT INTO `api_keys` (`name`,`prefix`,`key_hash`,`tenant_id`,`workspace_id`,`scopes`,`created_by`,`last_used_at`,`expires_at`,`revoked_at`,`created_at`,`updated_at`) VALUES ("translation-acceptance","sv_b7f8f653","0953b85d82bdd76b2ddd2146f627e4253d66cdac3de823fdebdcf61de286b76e","","","","1",NULL,NULL,NULL,"2026-10-10 05:59:38.534","2026-10-10 05:59:38.534") RETURNING `id`
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/chain.go:167
+[0m[33m[0.096ms] [34;1m[rows:1][0m SELECT `entry_hash` FROM `audit_logs` WHERE entry_hash <> '' ORDER BY id DESC LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/recorder.go:81
+[0m[33m[0.317ms] [34;1m[rows:1][0m INSERT INTO `audit_logs` (`actor_user_id`,`principal_kind`,`action`,`resource_type`,`resource_id`,`route`,`method`,`status_code`,`success`,`request_id`,`client_ip`,`user_agent`,`tenant_id`,`workspace_id`,`request_json`,`before_json`,`after_json`,`prev_hash`,`entry_hash`,`created_at`) VALUES (1,"admin","api_keys.create","api_keys","","/api/api-keys","POST",201,true,"","127.0.0.1","curl/8.18.0","","","{""name"":""translation-acceptance"",""scopes"":""""}","","","c05cc71bd50ef4182f5ed0855d603aeb67306e8a2ebfef62e581b706aeb3ab74","4b46afbaf26583e5731dae9cc29f3d4d2e17e2a80ba5e339b884eb5714640964","2026-10-10 05:59:38.535") RETURNING `id`
+[GIN] 2026/10/10 - 05:59:38 | 201 |    1.827679ms |       127.0.0.1 | POST     "/api/api-keys"
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.239ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.106ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.122ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/api_key/infra/gorm_repository.go:41
+[0m[33m[0.145ms] [34;1m[rows:1][0m SELECT * FROM `api_keys` ORDER BY created_at DESC, id DESC
+[GIN] 2026/10/10 - 05:59:38 | 200 |     934.767µs |       127.0.0.1 | GET      "/api/api-keys"
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/apikey_db.go:33
+[0m[33m[0.371ms] [34;1m[rows:1][0m SELECT * FROM `api_keys` WHERE key_hash = "0953b85d82bdd76b2ddd2146f627e4253d66cdac3de823fdebdcf61de286b76e" ORDER BY `api_keys`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/apikey_db.go:62
+[0m[33m[0.410ms] [34;1m[rows:1][0m UPDATE `api_keys` SET `last_used_at`="2026-10-10 05:59:38.663" WHERE id = 1 AND (last_used_at IS NULL OR last_used_at < "2026-10-10 05:58:38.663")
+[GIN] 2026/10/10 - 05:59:38 | 201 |     1.17248ms |       127.0.0.1 | POST     "/api/v1/guest/session"
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.193ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.096ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.131ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83 [35;1mrecord not found
+[0m[33m[0.111ms] [34;1m[rows:0][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "agent" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:61
+[0m[33m[0.407ms] [34;1m[rows:1][0m INSERT INTO `translation_language_preferences` (`tenant_id`,`workspace_id`,`conversation_session_id`,`viewer_role`,`target_lang`,`created_at`,`updated_at`) VALUES ("","","trans-acc-1","agent","en","2026-10-10 05:59:38.733","2026-10-10 05:59:38.733") ON CONFLICT (`conversation_session_id`,`viewer_role`) DO NOTHING RETURNING `id`
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[0.133ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "agent" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:38 | 200 |    1.640247ms |       127.0.0.1 | PUT      "/api/v1/translation/preferences/trans-acc-1"
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83 [35;1mrecord not found
+[0m[33m[0.280ms] [34;1m[rows:0][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:61
+[0m[33m[0.395ms] [34;1m[rows:1][0m INSERT INTO `translation_language_preferences` (`tenant_id`,`workspace_id`,`conversation_session_id`,`viewer_role`,`target_lang`,`created_at`,`updated_at`) VALUES ("","","trans-acc-1","visitor","ja","2026-10-10 05:59:38.802","2026-10-10 05:59:38.802") ON CONFLICT (`conversation_session_id`,`viewer_role`) DO NOTHING RETURNING `id`
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[0.144ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:38 | 200 |    1.109412ms |       127.0.0.1 | PUT      "/api/v1/translation/preferences/trans-acc-1"
+[GIN] 2026/10/10 - 05:59:38 | 403 |     151.931µs |       127.0.0.1 | PUT      "/api/v1/translation/preferences/other-session"
+
+2026/10/10 05:59:38 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.180ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.122ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.099ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[0.161ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "agent" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:38 | 200 |      958.45µs |       127.0.0.1 | GET      "/api/v1/translation/preferences/trans-acc-1"
+
+2026/10/10 05:59:38 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[0.280ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:38 | 200 |     485.835µs |       127.0.0.1 | GET      "/api/v1/translation/preferences/trans-acc-1"
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.215ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.127ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.164ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:39 | 200 |    1.094634ms |       127.0.0.1 | POST     "/api/v1/translation/translate"
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.263ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.144ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.169ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:39 | 200 |    1.104945ms |       127.0.0.1 | POST     "/api/v1/translation/translate"
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.190ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.095ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.100ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:39 | 400 |     729.933µs |       127.0.0.1 | POST     "/api/v1/translation/translate"
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/automation/infra/gorm_repository.go:148
+[0m[33m[0.358ms] [34;1m[rows:0][0m SELECT * FROM `automation_timers` WHERE status = "pending" AND due_at <= "2026-10-10 05:59:39.343" ORDER BY due_at, id LIMIT 50
+[GIN] 2026/10/10 - 05:59:39 | 200 |      211.05µs |       127.0.0.1 | GET      "/api/v1/ws?session_id=trans-acc-1"
+{"file":"/home/cui/workspaces/servify/apps/server/internal/platform/realtime/websocket_hub.go:249","func":"servify/apps/server/internal/platform/realtime.(*WebSocketHub).Run","level":"info","msg":"Client client_1791611979519183317_1 connected","time":"2026-10-10 05:59:39"}
+{"client_id":"client_1791611979519183317_1","file":"/home/cui/workspaces/servify/apps/server/internal/platform/realtime/websocket_hub.go:645","func":"servify/apps/server/internal/platform/realtime.(*WebSocketClient).persistTextMessage","level":"info","msg":"Text message persisted","session_id":"trans-acc-1","time":"2026-10-10 05:59:39","timestamp":"2026-10-10T05:59:39.531363283Z","type":"text-message"}
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:46 [35;1mrecord not found
+[0m[33m[0.242ms] [34;1m[rows:0][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:34
+[0m[33m[0.402ms] [34;1m[rows:1][0m INSERT INTO `sessions` (`id`,`tenant_id`,`workspace_id`,`user_id`,`agent_id`,`ticket_id`,`status`,`platform`,`started_at`,`ended_at`,`created_at`,`updated_at`,`visitor_read_message_id`) VALUES ("trans-acc-1","","",0,NULL,NULL,"active","web","2026-10-10 05:59:39.531",NULL,"2026-10-10 05:59:39.531","2026-10-10 05:59:39.531",0)
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/conversation_event_repository.go:29
+[0m[33m[0.359ms] [34;1m[rows:1][0m INSERT INTO `conversation_events` (`tenant_id`,`workspace_id`,`conversation_id`,`event_type`,`actor_type`,`actor_id`,`summary`,`payload`,`occurred_at`) VALUES ("","","trans-acc-1","conversation.created","system","","会话创建","{""event_id"":""conversation.created-trans-acc-1-1791611979532255010"",""occurred_at"":""2026-10-10T05:59:39.532256233Z""}","2026-10-10 05:59:39.532") RETURNING `id`
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/automation/infra/gorm_repository.go:34
+[0m[33m[0.104ms] [34;1m[rows:0][0m SELECT * FROM `automation_triggers` WHERE event = "conversation.created" AND active = true ORDER BY id ASC
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:390 [35;1mrecord not found
+[0m[33m[0.104ms] [34;1m[rows:0][0m SELECT * FROM `daily_stats` WHERE date = "2026-10-10 00:00:00" ORDER BY `daily_stats`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:393
+[0m[33m[0.333ms] [34;1m[rows:1][0m INSERT INTO `daily_stats` (`date`,`total_sessions`,`total_messages`,`total_tickets`,`resolved_tickets`,`avg_response_time`,`avg_resolution_time`,`customer_satisfaction`,`ai_usage_count`,`we_knora_usage_count`,`sla_violations`,`created_at`,`updated_at`) VALUES ("2026-10-10 00:00:00",0,0,0,0,0,0,0,0,0,0,"2026-10-10 05:59:39.533","2026-10-10 05:59:39.533") RETURNING `id`
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:400
+[0m[33m[0.242ms] [34;1m[rows:1][0m UPDATE `daily_stats` SET `total_sessions`=total_sessions + 1 WHERE `id` = 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:174
+[0m[33m[0.167ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:28
+[0m[33m[0.093ms] [34;1m[rows:0][0m SELECT * FROM `webhook_endpoints` WHERE `webhook_endpoints`.`deleted_at` IS NULL ORDER BY id
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:46
+[0m[33m[0.189ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:92
+[0m[33m[0.418ms] [34;1m[rows:1][0m INSERT INTO `messages` (`tenant_id`,`workspace_id`,`session_id`,`user_id`,`content`,`type`,`sender`,`created_at`) VALUES ("","","trans-acc-1",0,"您好，我的订单三天了还没发货","text","user","2026-10-10 05:59:39.534") RETURNING `id`
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:82
+[0m[33m[0.257ms] [34;1m[rows:1][0m UPDATE `sessions` SET `platform`="web",`status`="active",`updated_at`="2026-10-10 05:59:39.534" WHERE id = "trans-acc-1"
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/automation/infra/gorm_repository.go:34
+[0m[33m[0.109ms] [34;1m[rows:0][0m SELECT * FROM `automation_triggers` WHERE event = "conversation.message_received" AND active = true ORDER BY id ASC
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:390
+[0m[33m[0.159ms] [34;1m[rows:1][0m SELECT * FROM `daily_stats` WHERE date = "2026-10-10 00:00:00" ORDER BY `daily_stats`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:400
+[0m[33m[0.274ms] [34;1m[rows:1][0m UPDATE `daily_stats` SET `total_messages`=total_messages + 1 WHERE `id` = 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:174
+[0m[33m[0.117ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:28
+[0m[33m[0.094ms] [34;1m[rows:0][0m SELECT * FROM `webhook_endpoints` WHERE `webhook_endpoints`.`deleted_at` IS NULL ORDER BY id
+
+2026/10/10 05:59:39 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/suggestion/infra/gorm_repository.go:119 [35;1mrecord not found
+[0m[33m[0.128ms] [34;1m[rows:0][0m SELECT * FROM `suggestion_exposure_logs` WHERE session_id = "trans-acc-1" AND converted_question = "" ORDER BY created_at DESC, id DESC,`suggestion_exposure_logs`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:46
+[0m[33m[0.273ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:108
+[0m[33m[0.152ms] [34;1m[rows:1][0m SELECT * FROM `messages` WHERE session_id = "trans-acc-1" ORDER BY created_at DESC LIMIT 6
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:108
+[0m[33m[0.302ms] [34;1m[rows:1][0m SELECT * FROM `messages` WHERE session_id = "trans-acc-1" ORDER BY created_at DESC LIMIT 9
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/ai/infra/answer_repository.go:57
+[0m[33m[4.042ms] [34;1m[rows:1][0m INSERT INTO `ai_answers` (`tenant_id`,`workspace_id`,`session_id`,`query`,`answer`,`confidence`,`strategy`,`sources_json`,`created_at`) VALUES ("","","trans-acc-1","您好，我的订单三天了还没发货","",0.6,"llm","","2026-10-10 05:59:39.537") RETURNING `id`
+
+2026/10/10 05:59:39 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[6.284ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "agent" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [31;1m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:93 [35;1mrecord not found
+[0m[33m[0.305ms] [34;1m[rows:0][0m SELECT `id`,`jti`,`expires_at`,`revoked_at` FROM `revoked_tokens` WHERE jti = "jti_9776b21192f5d4149cac2cfa69b11866" AND `revoked_tokens`.`deleted_at` IS NULL ORDER BY `revoked_tokens`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:26
+[0m[33m[0.115ms] [34;1m[rows:1][0m SELECT `id`,`status`,`token_valid_after`,`token_version` FROM `users` WHERE `users`.`id` = 1 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/platform/auth/user_state_policy.go:56
+[0m[33m[0.107ms] [34;1m[rows:1][0m SELECT `id`,`user_id`,`status`,`token_version`,`revoked_at` FROM `user_auth_sessions` WHERE (id = "auth_3462f6f64c16285890bb46bbaf11c575" AND user_id = 1) AND `user_auth_sessions`.`deleted_at` IS NULL ORDER BY `user_auth_sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:46
+[0m[33m[0.233ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:46
+[0m[33m[0.179ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:92
+[0m[33m[0.471ms] [34;1m[rows:1][0m INSERT INTO `messages` (`tenant_id`,`workspace_id`,`session_id`,`user_id`,`content`,`type`,`sender`,`created_at`) VALUES ("","","trans-acc-1",0,"您好，我的订单三天了还没发货","text","agent","2026-10-10 05:59:40.447") RETURNING `id`
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/conversation/infra/gorm_repository.go:82
+[0m[33m[0.243ms] [34;1m[rows:1][0m UPDATE `sessions` SET `platform`="web",`status`="active",`updated_at`="2026-10-10 05:59:40.447" WHERE id = "trans-acc-1"
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/automation/infra/gorm_repository.go:34
+[0m[33m[0.191ms] [34;1m[rows:0][0m SELECT * FROM `automation_triggers` WHERE event = "conversation.message_received" AND active = true ORDER BY id ASC
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:390
+[0m[33m[0.136ms] [34;1m[rows:1][0m SELECT * FROM `daily_stats` WHERE date = "2026-10-10 00:00:00" ORDER BY `daily_stats`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/analytics/infra/gorm_repository.go:400
+[0m[33m[0.178ms] [34;1m[rows:1][0m UPDATE `daily_stats` SET `total_messages`=total_messages + 1 WHERE `id` = 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:174
+[0m[33m[0.176ms] [34;1m[rows:1][0m SELECT * FROM `sessions` WHERE id = "trans-acc-1" ORDER BY `sessions`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/webhook/infra/gorm_repository.go:28
+[0m[33m[0.112ms] [34;1m[rows:0][0m SELECT * FROM `webhook_endpoints` WHERE `webhook_endpoints`.`deleted_at` IS NULL ORDER BY id
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/chain.go:167
+[0m[33m[0.139ms] [34;1m[rows:1][0m SELECT `entry_hash` FROM `audit_logs` WHERE entry_hash <> '' ORDER BY id DESC LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83
+[0m[33m[0.329ms] [34;1m[rows:1][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/platform/audit/recorder.go:81
+[0m[33m[0.471ms] [34;1m[rows:1][0m INSERT INTO `audit_logs` (`actor_user_id`,`principal_kind`,`action`,`resource_type`,`resource_id`,`route`,`method`,`status_code`,`success`,`request_id`,`client_ip`,`user_agent`,`tenant_id`,`workspace_id`,`request_json`,`before_json`,`after_json`,`prev_hash`,`entry_hash`,`created_at`) VALUES (1,"admin","sessions.messages","sessions","trans-acc-1","/api/omni/sessions/:id/messages","POST",201,true,"","127.0.0.1","curl/8.18.0","","","{""content"":""您好，我的订单三天了还没发货""}","","","4b46afbaf26583e5731dae9cc29f3d4d2e17e2a80ba5e339b884eb5714640964","67825e06c88f5dc7af7a26e7928d7f5ada2cd21c7c3178e793b9af6d2ab849e2","2026-10-10 05:59:40.449") RETURNING `id`
+[GIN] 2026/10/10 - 05:59:40 | 201 |     4.12953ms |       127.0.0.1 | POST     "/api/omni/sessions/trans-acc-1/messages"
+{"file":"/home/cui/workspaces/servify/apps/server/internal/platform/realtime/websocket_hub.go:271","func":"servify/apps/server/internal/platform/realtime.(*WebSocketHub).Run","level":"info","msg":"Client client_1791611979519183317_1 disconnected","time":"2026-10-10 05:59:40"}
+
+2026/10/10 05:59:40 [32m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:97
+[0m[33m[0.463ms] [34;1m[rows:1][0m DELETE FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor"
+[GIN] 2026/10/10 - 05:59:40 | 200 |     763.534µs |       127.0.0.1 | DELETE   "/api/v1/translation/preferences/trans-acc-1"
+
+2026/10/10 05:59:40 [31;1m/home/cui/workspaces/servify/apps/server/internal/modules/translation/infra/gorm_preference_repository.go:83 [35;1mrecord not found
+[0m[33m[0.245ms] [34;1m[rows:0][0m SELECT * FROM `translation_language_preferences` WHERE conversation_session_id = "trans-acc-1" AND viewer_role = "visitor" ORDER BY `translation_language_preferences`.`id` LIMIT 1
+[GIN] 2026/10/10 - 05:59:40 | 200 |     459.543µs |       127.0.0.1 | GET      "/api/v1/translation/preferences/trans-acc-1"
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/standalone.go:161","func":"servify/apps/server/internal/app/bootstrap.RunStandalone","level":"info","msg":"Shutting down server...","time":"2026-10-10 05:59:40"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/platform/realtime/message_router.go:140","func":"servify/apps/server/internal/platform/realtime.(*MessageRouter).Stop","level":"info","msg":"Message router stopped","time":"2026-10-10 05:59:40"}
+{"file":"/home/cui/workspaces/servify/apps/server/internal/app/bootstrap/standalone.go:179","func":"servify/apps/server/internal/app/bootstrap.shutdownStandalone","level":"info","msg":"Server exited","time":"2026-10-10 05:59:40"}
