@@ -23,7 +23,7 @@ type TranslationLanguagePreference struct {
 	TenantID              string    `gorm:"index:idx_translation_prefs_scope" json:"tenant_id"`
 	WorkspaceID           string    `gorm:"index:idx_translation_prefs_scope" json:"workspace_id"`
 	ConversationSessionID string    `gorm:"uniqueIndex:idx_translation_prefs_session_viewer" json:"conversation_session_id"`
-	ViewerRole            string    `gorm:"uniqueIndex:idx_translation_prefs_session_viewer" json:"viewer_role"`
+	ViewerRole            string    `gorm:"uniqueIndex:idx_translation_prefs_session_viewer;not null;default:'agent'" json:"viewer_role"`
 	TargetLang            string    `json:"target_lang"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`

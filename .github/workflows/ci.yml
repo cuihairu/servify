@@ -683,6 +683,22 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Go (schema parity)
+        timeout-minutes: 2
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/server/go.mod
+
+      - name: Schema parity (migrated vs automigrate)
+        timeout-minutes: 6
+        # 真库对等门禁：静态守卫（migrations_parity_test 家族）看不见的
+        # dialector 面（隐式 NOT NULL、列类型映射）由这里对真 postgres 收口——
+        # 迁移链库 vs AutoMigrate 库逐列 diff，漂移须进 cmd/schema-parity
+        # 白名单（每条带豁免理由）才会绿。
+        run: |
+          go -C apps/server run ./cmd/schema-parity \
+            -dsn "postgres://postgres:password@localhost:5432/postgres?sslmode=disable"
+
       - name: Backup & restore drill (pg_dump/pg_restore)
         timeout-minutes: 5
         run: |
