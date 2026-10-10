@@ -1,7 +1,7 @@
 # 基于 pgvector 的自建知识库设计文档
 
 **创建日期：** 2025-05-01
-**状态：** 设计阶段
+**状态：** 已被取代（2026-10-10 注）——pgvector 自建 provider 与 openai/tei embedding 验收路径已由 local 自含知识引擎（`scripts/test-local-knowledge-acceptance.sh`，`make local-knowledge-acceptance`）及各 provider 验收脚本（ragflow/dify/weknora/pgvector）取代；`test-knowledge-acceptance.sh` 已删除，保留本文档作历史记录。
 **作者：** AI Assistant
 
 ## 1. 概述

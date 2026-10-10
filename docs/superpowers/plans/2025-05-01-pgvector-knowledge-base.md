@@ -1,5 +1,7 @@
 # 基于 pgvector 的自建知识库实施计划
 
+> **状态（2026-10-10 注）：已被取代。** 本计划的 pgvector 自建 provider 与 openai/tei embedding 验收路径已由 local 自含知识引擎（`scripts/test-local-knowledge-acceptance.sh`，`make local-knowledge-acceptance`）及各 provider 验收脚本（ragflow/dify/weknora/pgvector）取代；`test-knowledge-acceptance.sh` 已删除，本计划保留作历史记录。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现基于 pgvector 的自建知识库，支持 Embedding 服务抽象层和向量检索，作为默认知识库 provider
