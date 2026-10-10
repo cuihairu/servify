@@ -21,7 +21,10 @@ var evidenceDirExemptions = map[string]string{
 	"knowledge-acceptance": "legacy script superseded by test-local-knowledge-acceptance.sh",
 }
 
-var evidenceDirDeclRe = regexp.MustCompile(`EVIDENCE_DIR=\$\{EVIDENCE_DIR:-"?\$\{?PROJECT_ROOT\}?/scripts/test-results/([A-Za-z0-9_-]+)`)
+// evidenceDirDeclRe 匹配脚本里 EVIDENCE_DIR 的默认值声明（已知三种形态：
+// EVIDENCE_DIR=${EVIDENCE_DIR:-"..."}、EVIDENCE_DIR="${EVIDENCE_DIR:-...}"、
+// 内层路径 $PROJECT_ROOT/...、${PROJECT_ROOT}/...、./...；出现新形态时在此登记）。
+var evidenceDirDeclRe = regexp.MustCompile(`(?m)^EVIDENCE_DIR="?\$\{EVIDENCE_DIR:-"?(\$\{PROJECT_ROOT\}|\$PROJECT_ROOT|\.)/scripts/test-results/([A-Za-z0-9_-]+)`)
 
 // TestAcceptanceScriptEvidenceFamily 把验收脚本家族钉在
 // 「manifest 约定 + validator 分支 + 证据入库」三件套上：每个声明
@@ -50,10 +53,10 @@ func TestAcceptanceScriptEvidenceFamily(t *testing.T) {
 			t.Fatalf("read %s: %v", name, err)
 		}
 		for _, match := range evidenceDirDeclRe.FindAllStringSubmatch(string(raw), -1) {
-			if prev, ok := dirs[match[1]]; ok && prev != name {
-				t.Fatalf("evidence dir %q declared by multiple scripts: %s and %s", match[1], prev, name)
+			if prev, ok := dirs[match[2]]; ok && prev != name {
+				t.Fatalf("evidence dir %q declared by multiple scripts: %s and %s", match[2], prev, name)
 			}
-			dirs[match[1]] = name
+			dirs[match[2]] = name
 		}
 	}
 	if len(dirs) == 0 {
