@@ -226,40 +226,26 @@ curl "http://localhost:8080/api/v1/ai/retrieval-analytics?days=7&limit=10" \
 
 ## 验收测试
 
-### 运行验收脚本
+本地自含知识引擎（`knowledge.provider=local` + `embedding.provider=local` +
+`ai.provider=local` 三 local，零外部依赖、零网络出站）的验收走
+`test-local-knowledge-acceptance.sh`：
 
 ```bash
-# 使用 OpenAI Embedding Provider
-SERVIFY_URL=http://localhost:8080 \
-EMBEDDING_PROVIDER=openai \
-TEST_TOKEN=your-test-token \
-./scripts/test-knowledge-acceptance.sh
-
-# 使用 TEI Embedding Provider
-SERVIFY_URL=http://localhost:8080 \
-EMBEDDING_PROVIDER=tei \
-TEST_TOKEN=your-test-token \
-./scripts/test-knowledge-acceptance.sh
+make local-knowledge-acceptance
 ```
 
-### 验收标准
+全链路真实留证：build → 起服 ready → 401 负例 → 首用户自动 admin → `ai/status`
+报 local → enable→healthy → 上传三篇主题文档（真实分块+确定性哈希嵌入落库）→
+sync 留档 → sqlite3 数据证据（行数/chunking/维度 256）→ 语义检索正例命中与
+无关 query 过滤 → 回答逐字来自知识原文（extractive 断言）。
 
-1. 健康检查通过（`/health` 返回 200；知识库状态项仅在启用外部知识源
-   weknora/dify 健康检查时出现，默认 pgvector 部署不含该项——以文档
-   CRUD/语义检索链路可用为准）
-2. 文档创建成功
-3. 文档列表查询正常
-4. 语义搜索返回相关结果（相似度分数 > threshold）
+清单行见 [acceptance-checklist.md](acceptance-checklist.md) §3「AI 与外部知识库」
+（本地自含知识引擎行，状态：通过）；manifest 与证据在
+`scripts/test-results/local-knowledge/`。
 
-### 检查验收证据
-
-验收脚本会在 `./scripts/test-results/knowledge-acceptance/` 目录下生成以下文件：
-
-- `health.json`: 健康检查结果
-- `create-doc.json`: 文档创建结果
-- `list-docs.json`: 文档列表
-- `search-result.json`: 搜索结果
-- `manifest.json`: 验收清单
+历史脚本 `test-knowledge-acceptance.sh`（openai/tei embedding provider、
+localhost:8080 外部服务）已删除，由本脚本与 ragflow/dify/weknora/pgvector 各
+provider 验收脚本取代。
 
 ## 故障排查
 

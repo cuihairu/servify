@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance ragflow-acceptance weknora-acceptance knowledge-provider-acceptance knowledge-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance local-knowledge-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance conversation-lifecycle-acceptance routing-scoring-acceptance perf-baseline mobile-probe-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance ragflow-acceptance weknora-acceptance knowledge-provider-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance local-knowledge-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance conversation-lifecycle-acceptance routing-scoring-acceptance perf-baseline mobile-probe-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -45,7 +45,6 @@ help:
 	@echo "  ragflow-acceptance - Run the RAGFlow knowledge provider acceptance script"
 	@echo "  weknora-acceptance - Run the WeKnora compatibility acceptance script"
 	@echo "  knowledge-provider-acceptance - Alias of weknora-acceptance for provider compatibility runs"
-	@echo "  knowledge-acceptance - Run the knowledge base acceptance script"
 	@echo "  auth-session-acceptance - Run the auth self-service session acceptance script"
 	@echo "  workspace-acceptance - Run the conversation workspace acceptance script"
 	@echo "  ticket-acceptance - Run the ticket high-frequency operations acceptance script"
@@ -296,11 +295,6 @@ weknora-acceptance:
 	./scripts/test-weknora-integration.sh
 
 knowledge-provider-acceptance: weknora-acceptance
-
-knowledge-acceptance:
-	@echo "Running knowledge base acceptance..."
-	chmod +x ./scripts/test-knowledge-acceptance.sh
-	./scripts/test-knowledge-acceptance.sh
 
 auth-session-acceptance:
 	@echo "Running auth self-service session acceptance..."

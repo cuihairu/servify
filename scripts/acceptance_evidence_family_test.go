@@ -17,8 +17,6 @@ var evidenceDirExemptions = map[string]string{
 	// dify 真实模式需外部 Dify 凭证（todo P1-1 外部阻塞），mock 路径已由
 	// TestDifyIntegrationScriptMockModeWritesEvidence / ...PersistsFailureEvidence 覆盖。
 	"dify-acceptance": "external dify credentials (P1-1); mock path covered by dify script tests",
-	// 遗留知识库验收脚本，已被 test-local-knowledge-acceptance.sh 取代，不再跑。
-	"knowledge-acceptance": "legacy script superseded by test-local-knowledge-acceptance.sh",
 }
 
 // evidenceDirDeclRe 匹配脚本里 EVIDENCE_DIR 的默认值声明（已知三种形态：
