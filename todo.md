@@ -1219,6 +1219,11 @@
   - 译文内容断言口径：local provider 是抽取式问答基线（从 system 提示词抽句回声），脚本断言链路接线（帧到达/original/target_lang/source_lang/确定性双跑恒等）不断言语义质量——生产语义翻译仍配 openai/anthropic（local-knowledge 脚本同款定位声明）。
   - 证据 21 文件入库 scripts/test-results/translation-acceptance/（webhook 同款 git add -f：dev 密钥 JWT/明文 key 均为 127.0.0.1 验收产物作存档公开）；validate-acceptance-manifest.sh 新增 translation provider 分支（19 checks + 20 证据文件）；全量门禁 run-tests.sh exit 0（100.0%）+ text-encoding + scripts 包 validator Go 测试绿。
 
+- 附注（2026-10-10，**验收打磨第二刀：routing-scoring manifest 补挂 + mobile-probe 证据入库**；接翻译走查同线，巡检 acceptance 家族剩余两处缺口——routing-scoring 有脚本有证据但未挂 manifest 约定、mobile-probe 有 validator 分支但零入库证据）：
+  - routing-scoring：脚本补 flags + write_manifest + trap 写盘 + 尾部全 flag 守卫，validate-acceptance-manifest.sh 新增 routing-scoring 分支（7 checks + 7 证据文件）；重跑绿，重跑时发现原脚本尾行本有 overall_status=passed，改挂 manifest 时避免双写（summary 恒一处）。
+  - mobile-probe：重跑绿（建连 → 回显 → AI 首答流式 4 增量 → 转人工 → 坐席回复），证据 13 文件入库；.gitignore 撤「探针产物勿提交」旧豁免——时间戳漂移仅落在 visitor_session 数字段不影响校验，CI 门禁价值优先（webhook/auth-session 快照同款口径）。
+  - 门禁：bash -n + text-encoding + scripts 包 validator Go 测试 + check-acceptance-evidence.sh（translation/routing-scoring/mobile-probe 三 manifest 全过）绿；全量 run-tests.sh 于 46884ee 已绿（本批仅 shell+证据，零 Go 面）。
+
 - 附注（2026-10-10，**真库 schema 对等门禁：cmd/schema-parity + 30 条漂移定盘 + 守卫家族盲区收口**；外部条件核实双未到位（braces/sprintf-js 上游 npm 仍 3.0.3/1.1.3 无修复版；P1-1 无新凭证）后自定位——静态守卫家族注释声明的盲区（隐式 NOT NULL、列类型映射）须真库捕获 diff 才可钉）：
   - 工具（60ac4f0）：`apps/server/cmd/schema-parity`——同一 postgres 起两个临时库（A=迁移链 `RunMigrations`，B=`AutoMigrate`+`CreateIndexes` 与 gen-baseline 同构），`information_schema.columns` 逐列 diff（类型/udt/charMax/nullable/default/numeric 精度），模型表集限定比对（豁免 WeKnora 兼容表/schema_migrations），diff 非空 exit 1。CI Integration job 新增 step（水位断言后、备份演练前）。
   - 首跑抓 **30 条真漂移 / 12 表**（全部为静态面不可见的历史措辞差，逐条评估）：**E 类 2 条修模型侧**——`assist/domain.ConsentStatus` 补 `not null;default:''`、`translation/domain.ViewerRole` 补 `not null;default:'agent'`（000014/000016 手写迁移比模型严；赋值点恒显式赋值，default tag 无行为变化，零生产风险），修复后 AutoMigrate 侧收敛（30→28）；**A/B/C/D 类 28 条进显式白名单**（每条带豁免理由注释）：text vs varchar(size)（收紧须 ALTER 生产列且存量超长行会炸 / 去 size 丢声明意图，仅 legacy escape hatch 受影响）、integer vs bigint（迁移写窄，计数列值域内）、double precision vs numeric（float 措辞）、inert DEFAULT（模型未声明，GORM 恒插值两路径都不触发；补 tag 会改 GORM 零值跳过行为）。**新漂移不在白名单即红**——门禁价值=防未来增量。
