@@ -256,12 +256,15 @@ python3 "$RECEIVER_SCRIPT" "$EVIDENCE_DIR/received" "$RECEIVER_PORT" > "$EVIDENC
 RECEIVER_PID=$!
 
 # 5) admin 注册 webhook 端点（订阅 ticket.created）
+# URL 必须跟本地接收端同一 RECEIVER_PORT：heredoc 内硬编码端口会让
+# RECEIVER_PORT 覆盖静默失效（接收端起在新端口、投递仍打旧端口）。
 append_summary "step=create_endpoint"
-CREATE_BODY=$(python3 - <<'PY'
+CREATE_BODY=$(RECEIVER_PORT="$RECEIVER_PORT" python3 - <<'PY'
 import json
+import os
 print(json.dumps({
     "name": "acceptance-receiver",
-    "url": "http://127.0.0.1:18097/hooks",
+    "url": "http://127.0.0.1:%s/hooks" % os.environ["RECEIVER_PORT"],
     "events": "ticket.created",
     "description": "webhook acceptance receiver",
 }, ensure_ascii=False))
