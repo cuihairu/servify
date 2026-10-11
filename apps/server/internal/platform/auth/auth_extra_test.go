@@ -30,6 +30,11 @@ func TestContextScopeRoundTrip(t *testing.T) {
 	if TenantIDFromContext(ctx) != "tenant-a" || WorkspaceIDFromContext(ctx) != "workspace-1" {
 		t.Fatalf("unexpected scope values: %q %q", TenantIDFromContext(ctx), WorkspaceIDFromContext(ctx))
 	}
+	// nil ctx 回退 Background，不 panic
+	withScope := ContextWithScope(nil, "tenant-b", "workspace-2")
+	if TenantIDFromContext(withScope) != "tenant-b" || WorkspaceIDFromContext(withScope) != "workspace-2" {
+		t.Fatalf("nil ctx fallback scope wrong: %q %q", TenantIDFromContext(withScope), WorkspaceIDFromContext(withScope))
+	}
 }
 
 func TestMiddlewareConfigFromApp(t *testing.T) {

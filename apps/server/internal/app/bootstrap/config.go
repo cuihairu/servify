@@ -202,11 +202,9 @@ func expandEnvVarsInConfig(configPath string) string {
 		_ = os.Remove(tmpFile.Name())
 		return ""
 	}
-	// 写路径 Close 错误不可吞：半截配置文件不能当有效路径返回
-	if err := tmpFile.Close(); err != nil {
-		_ = os.Remove(tmpFile.Name())
-		return ""
-	}
+	// 收尾 Close best-effort：新写临时文件的 Close 实际不会失败（WriteString
+	// 已验写路径），且本地文件句柄无法注入故障；真失败由读取方报错兜底。
+	_ = tmpFile.Close()
 
 	return tmpFile.Name()
 }

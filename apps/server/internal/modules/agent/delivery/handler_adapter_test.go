@@ -46,6 +46,31 @@ func TestHandlerServiceAdapter_ApplySessionTransferSwallowsError(t *testing.T) {
 	adapter.ApplySessionTransfer(context.Background(), "sess-x", &from, 42)
 }
 
+// transferLoadFailingRepo 让 UpdateChatLoad 失败：toAgentID 在 registry 命中时
+// module ApplySessionTransfer 会真实报错。
+type transferLoadFailingRepo struct {
+	maintenanceTestRepo
+	loadErr error
+}
+
+func (r *transferLoadFailingRepo) UpdateChatLoad(ctx context.Context, userID uint, currentLoad int) error {
+	return r.loadErr
+}
+
+func TestHandlerServiceAdapter_ApplySessionTransferWarnsOnModuleError(t *testing.T) {
+	// module 报错（UpdateChatLoad 失败）→ adapter 吞错只记日志，转接主流程不中断。
+	// 顺带覆盖 nil ctx 回退 Background（调用方直接透传上层 ctx 的 nil 场景）。
+	module := agentapp.NewService(
+		&transferLoadFailingRepo{loadErr: errors.New("boom: chat load")},
+		&maintenanceTestRegistry{items: map[uint]agentapp.AgentRuntimeDTO{42: {UserID: 42}}},
+	)
+	adapter := NewHandlerServiceAdapter(module, logrus.New())
+
+	var ctx context.Context // nil，adapter 内回退 Background
+	from := uint(1)
+	adapter.ApplySessionTransfer(ctx, "sess-x", &from, 42)
+}
+
 func TestHandlerServiceAdapter_GetOnlineAgentMiss(t *testing.T) {
 	repo := &maintenanceTestRepo{} // profile/model nil → ErrRecordNotFound
 	module := agentapp.NewService(repo, &maintenanceTestRegistry{items: map[uint]agentapp.AgentRuntimeDTO{}})

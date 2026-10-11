@@ -181,12 +181,16 @@ func TestTicketCovListTickets(t *testing.T) {
 	seedTicketCovUser(t, db, 2, "bob")
 	require.NoError(t, db.Create(&models.Agent{UserID: 2, Status: "online"}).Error)
 	now := time.Now()
+	sessionID := "conv-cov-1"
 	for i := 1; i <= 3; i++ {
 		ticket := models.Ticket{
 			ID: uint(i), Title: fmt.Sprintf("Ticket %d", i), Description: "searchable alpha",
 			CustomerID: 1, AgentID: &agentID, Status: "open", Priority: "high",
 			Category: "technical", Source: "web", Tags: "vip", TenantID: "t1", WorkspaceID: "w1",
 			CreatedAt: now.Add(time.Duration(i) * time.Hour),
+		}
+		if i == 1 {
+			ticket.SessionID = &sessionID
 		}
 		if i == 2 {
 			ticket.Status = "resolved"
@@ -243,6 +247,13 @@ func TestTicketCovListTickets(t *testing.T) {
 	modelsDesc, _, err := repo.ListTicketModels(ctx, application.ListTicketsQuery{Page: 1, PageSize: 10, SortBy: "title", SortOrder: "DESC"})
 	require.NoError(t, err)
 	require.Len(t, modelsDesc, 3)
+
+	// SessionID 过滤（会话关闭前未结单拦截面走这条查询形态）。
+	bySession, total, err := repo.ListTicketModels(context.Background(), application.ListTicketsQuery{Page: 1, PageSize: 10, SessionID: &sessionID})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, bySession, 1)
+	assert.Equal(t, "Ticket 1", bySession[0].Title)
 	assert.Equal(t, "Ticket 3", modelsDesc[0].Title)
 
 	empty, total, err := repo.ListTicketModels(ctx, application.ListTicketsQuery{Page: 1, PageSize: 10, Tag: "  "})

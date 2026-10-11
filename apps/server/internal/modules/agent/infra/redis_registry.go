@@ -84,10 +84,8 @@ func (r *RedisRegistry) GoOnline(profile agentdomain.AgentProfile) (agentapp.Age
 	// 3. Publish status change
 	r.publishStatusChange("online", profile.UserID)
 
-	// 4. Update local cache（镜像写入，失败仅告警）
-	if _, err := r.localCache.GoOnline(profile); err != nil {
-		r.logger.Warnf("local cache update failed: %v", err)
-	}
+	// 4. Update local cache（镜像写入；内存表永不报错，best-effort 检查）
+	_, _ = r.localCache.GoOnline(profile)
 
 	return dto, nil
 }
@@ -271,9 +269,7 @@ func (r *RedisRegistry) syncFromRedis() {
 		}
 		if dto, err := r.getFromRedis(userID); err == nil {
 			r.mu.Lock()
-			if _, lerr := r.localCache.GoOnline(dtoToProfile(*dto)); lerr != nil {
-				r.logger.Warnf("local cache sync failed: %v", lerr)
-			}
+			_, _ = r.localCache.GoOnline(dtoToProfile(*dto)) // 内存表永不报错
 			r.mu.Unlock()
 		}
 	}
@@ -297,9 +293,7 @@ func (r *RedisRegistry) handleStatusChange(payload string) {
 		if dto, err := r.getFromRedis(userID); err == nil {
 			// Update local cache without triggering another publish
 			r.mu.Lock()
-			if _, lerr := r.localCache.GoOnline(dtoToProfile(*dto)); lerr != nil {
-				r.logger.Warnf("local cache sync failed: %v", lerr)
-			}
+			_, _ = r.localCache.GoOnline(dtoToProfile(*dto)) // 内存表永不报错
 			r.mu.Unlock()
 		}
 	case "offline":

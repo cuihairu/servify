@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -171,5 +172,15 @@ func TestQueryServiceCountOpenBySessionRejectsBlankSession(t *testing.T) {
 		if _, _, err := svc.CountOpenBySession(context.Background(), sessionID); err == nil {
 			t.Fatalf("expected error for blank session id %q", sessionID)
 		}
+	}
+}
+
+func TestQueryServiceCountOpenBySessionListError(t *testing.T) {
+	// ListTickets 失败原样上抛（拦截面不可用时关闭主流程不被静默放行）。
+	repo := &stubQueryRepo{err: errors.New("boom: list")}
+	svc := NewQueryService(repo)
+
+	if _, _, err := svc.CountOpenBySession(context.Background(), "conv-1"); err == nil || err.Error() != "boom: list" {
+		t.Fatalf("expected list error passthrough, got %v", err)
 	}
 }

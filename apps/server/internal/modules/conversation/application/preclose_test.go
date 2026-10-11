@@ -135,3 +135,11 @@ func TestServiceClosePropagatesCheckerError(t *testing.T) {
 		t.Fatalf("conversation should stay active on checker error")
 	}
 }
+
+func TestServiceAttachOpenTicketCheckerNilReceiver(t *testing.T) {
+	// nil receiver 链式安全：未注入 checker 时不 panic。
+	var svc *Service
+	if got := svc.AttachOpenTicketChecker(stubOpenTicketChecker{}); got != nil {
+		t.Fatalf("nil receiver should chain through as nil, got %+v", got)
+	}
+}

@@ -378,3 +378,31 @@ func TestHandlerServiceAdapterCloseBranches(t *testing.T) {
 		t.Fatalf("expected get boom, got %v", err)
 	}
 }
+
+// CloseWithOptions 三分支：成功 / not found 映射 ErrConversationNotFound /
+// 其他错误原样透传（如空 conversation_id 的入参校验错）。
+func TestHandlerServiceAdapterCloseWithOptionsBranches(t *testing.T) {
+	repo := &scriptedConversationRepo{conversations: map[string]*conversationdomain.Conversation{
+		"sess-1": {ID: "sess-1", Status: conversationdomain.ConversationStatusActive},
+	}}
+	handler := NewHandlerService(conversationapp.NewService(repo, nil))
+
+	dto, err := handler.CloseWithOptions(context.Background(), "sess-1", conversationapp.CloseOptions{})
+	if err != nil {
+		t.Fatalf("expected close success, got %v", err)
+	}
+	if dto.Status != string(conversationdomain.ConversationStatusClosed) {
+		t.Fatalf("expected closed status, got %q", dto.Status)
+	}
+
+	repo = &scriptedConversationRepo{}
+	handler = NewHandlerService(conversationapp.NewService(repo, nil))
+	if _, err := handler.CloseWithOptions(context.Background(), "sess-x", conversationapp.CloseOptions{}); err != ErrConversationNotFound {
+		t.Fatalf("expected ErrConversationNotFound, got %v", err)
+	}
+
+	handler = NewHandlerService(conversationapp.NewService(&scriptedConversationRepo{}, nil))
+	if _, err := handler.CloseWithOptions(context.Background(), " ", conversationapp.CloseOptions{}); err == nil {
+		t.Fatal("expected blank id error passthrough")
+	}
+}

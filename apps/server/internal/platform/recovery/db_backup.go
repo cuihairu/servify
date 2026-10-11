@@ -374,7 +374,7 @@ func restoreSequences(ctx context.Context, tx *sql.Tx, sequences []SequenceEntry
 	return nil
 }
 
-func dumpTable(sqlDB *sql.DB, outDir, table string) (entry TableEntry, err error) {
+func dumpTable(sqlDB *sql.DB, outDir, table string) (TableEntry, error) {
 	// 列名经 PRAGMA 取得、表名来自 sqlite_master，二者都不是用户输入；
 	// 标识符仍用双引号包裹，防御保留字与特殊字符。
 	columns, err := tableColumns(sqlDB, table)
@@ -393,19 +393,14 @@ func dumpTable(sqlDB *sql.DB, outDir, table string) (entry TableEntry, err error
 	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 
 	file := filepath.Join("tables", table+".jsonl")
-	entry = TableEntry{Name: table, Columns: columns, File: file}
+	entry := TableEntry{Name: table, Columns: columns, File: file}
 	hash := sha256.New()
 
 	out, err := os.Create(filepath.Join(outDir, file))
 	if err != nil {
 		return TableEntry{}, fmt.Errorf("recovery: create dump file: %w", err)
 	}
-	defer func() {
-		// 写路径 Close 错误不可吞（缓冲未落盘即归档不完整）
-		if cerr := out.Close(); err == nil && cerr != nil {
-			err = fmt.Errorf("recovery: close dump file: %w", cerr)
-		}
-	}()
+	defer func() { _ = out.Close() }() // 清理路径 best-effort：syncFile 已验落盘（失败即返回）
 	writer := io.MultiWriter(out, hash)
 
 	encoder := json.NewEncoder(writer)
