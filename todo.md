@@ -1888,3 +1888,22 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 ```
 
 **提交纪律**：本轮零代码变更（巡检只读），仅补记 `todo.md` 巡检结论。工作树现有 `sdk/android/.../ServifyChat.kt` 与 `sdk/ios/.../ServifyChat.swift` 变更属并发会话产出（D7 读游标同步），非本轮内容，**不纳入本次 git add**。
+
+---
+
+## 附注（2026-10-11，验收脚本 CI 重放收口 + webhook 端口硬编码修复）
+
+**背景**：自查发现六个验收脚本（webhook/translation/voice-pstn/conversation-lifecycle/routing-scoring/mobile-probe）有入库 manifest + validator 分支但无任何 CI 重放——CI 只校验已入库证据，脚本本身从不执行（TestAcceptanceScriptEvidenceFamily 只查 manifest 存在 + 分支存在，陈旧证据可蒙混过关）。本批把其中五个接进 CI 重放门禁；mobile-probe 因 probe 构建需 Android 工具链（./gradlew，script-checks job 无 Java）暂不入列，候选挂到 android-probe job 侧（需补 Go setup + Go 工具链）。
+
+**落地**：
+- 新增五个证据测试：`scripts/test_webhook_acceptance_test.go` / `test_translation_acceptance_test.go` / `test_conversation_lifecycle_acceptance_test.go` / `test_routing_scoring_acceptance_test.go` / `test_voice_pstn_acceptance_test.go`。前四者真跑脚本自起模式（make build + sqlite 真实服务，动态端口 freePort），voice-pstn 由测试自起真实服务（WORK_DIR 临时 config：`voice.pstn.provider=twilio` + 共享 auth token；TZ=UTC sqlite 落库；`/api/v1/auth/register` 注册 admin 供出站断言）。断言面：证据文件清单 + summary 标记 + manifest 键；voice-pstn 全断言面（签名/幂等/录音/403/400/sqlite 落库/出站 webhook）首次在测试中贯通。
+- ci.yml：五个测试名登记进 script-checks `-run` 白名单（元守卫 `TestCIScriptChecksCoversEveryScriptsTest` 强制同步）；步骤 timeout 10→15、job 20→30（五个真起服务测试叠加首个 make build 冷编译）。
+- **顺手修真 bug**：`test-webhook-acceptance.sh` 接收端 `RECEIVER_PORT` 可 env 覆盖，但投递端点 URL 在 python heredoc 内硬编码 18097——RECEIVER_PORT 覆盖静默失效（接收端起新端口、服务端投递仍打旧端口 → connection refused）。改为 heredoc 注入 RECEIVER_PORT 构造 URL。新测试首跑即抓到此 bug。
+
+**过程中排除的环境疑点**：lifecycle/translation/mobile-probe 的 `import yaml` 在本机 hermes python（无 PyYAML）下 ModuleNotFoundError；atlasd 守 18091-18094 撞 lifecycle 18093 / routing-scoring 18094 默认端口。均为本机 PATH / 无关守护进程工件：`bash -lc`（登录 profile 重排 PATH 取 /usr/bin/python3，带 PyYAML）+ freePort 动态端口（local-knowledge 测试既有模式）下全部复绿；CI runner 无此两面。已核 16 个 `import yaml` 脚本同此口径，无脚本改动需求。
+
+**断言口径**：summary 标记名 ≠ manifest 键名（如 `ws_visitor_to_agent_ok` vs `ws_visitor_to_agent_translation_ok`），测试期望清单以现行脚本 append_summary/save_response 实际产出 + validator 分支为准。conversation-lifecycle 入库证据里的 `session-after-handoff.json` 是旧脚本版产物（现行 save_response 11 文件清单无它，validator 分支也未 require，暂留不清理）。
+
+**验证**：`TestCIScriptChecksCoversEveryScriptsTest` + `TestCIScriptChecksWhitelistHasNoStaleEntries` PASS；五个证据测试本地全绿（webhook ~118s / voice-pstn ~76s / lifecycle ~61s / translation ~47s / routing-scoring ~42s）。
+
+**下一步候选**（自查审计排序）：① mobile-probe 证据测试挂 android-probe job；② check-security-baseline.sh / observability-check / release-check 无任何 CI 挂载（入库 manifest 有 validator 分支但从不重跑）；③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（`enhanced_service.go:178-181` 注册 CustomerLookup/TicketLookup/Handoff 均传 nil，任何工具调用必报 "port is not configured"——`docs/implementation/13-ai-agent-loop.md:9-11` 已登记遗留，真实功能死路）；④ EventTenantID 声明未填充（`eventbus/event.go:19`，生产 publish 零携带）；⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）。

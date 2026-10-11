@@ -346,7 +346,7 @@ jobs:
   script-checks:
     name: Script Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -371,10 +371,12 @@ jobs:
           ./scripts/check-text-encoding.sh
 
       - name: Verify provider acceptance scripts
-        # perf 基线驱动测试真跑 smoke 档（内含 make build），冷缓存下较慢。
-        timeout-minutes: 10
+        # perf 基线驱动测试真跑 smoke 档（内含 make build），冷缓存下较慢；
+        # webhook/translation/lifecycle/routing-scoring/voice-pstn 五个证据
+        # 测试各真起一次真实服务（首个 make build 冷编译后续增量复用）。
+        timeout-minutes: 15
         run: |
-          go test ./scripts -run "Test(WeKnoraMockProtocolSurface|Compose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts|Servify(HealthcheckProbeExistsInRuntimeImage|MountsLiveUnderImageWorkdir|RuntimeContractHoldsInEveryComposeFile))|WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|RagflowScript(WritesEvidence|RealModeRejectsLocalHost)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|LocalKnowledgeScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|AcceptanceScriptEvidenceFamily|ModulesDoNot(ImportLegacyServices|UseMigratedTypeAliases)|MakefileDocsTargetMatchesGeneratedAssetsPipeline|MakefileWebsiteTargetsPointAtStaticSite|CIScriptChecksCoversEveryScriptsTest|CIScriptChecksWhitelistHasNoStaleEntries|AdminVoiceEntry(FramesMatchProtocolNine|WiringContract))$"
+          go test ./scripts -run "Test(WeKnoraMockProtocolSurface|Compose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts|Servify(HealthcheckProbeExistsInRuntimeImage|MountsLiveUnderImageWorkdir|RuntimeContractHoldsInEveryComposeFile))|WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|RagflowScript(WritesEvidence|RealModeRejectsLocalHost)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|LocalKnowledgeScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|WebhookAcceptanceScriptWritesEvidence|TranslationAcceptanceScriptWritesEvidence|ConversationLifecycleAcceptanceScriptWritesEvidence|RoutingScoringAcceptanceScriptWritesEvidence|VoicePstnAcceptanceScriptWritesEvidence|AcceptanceScriptEvidenceFamily|ModulesDoNot(ImportLegacyServices|UseMigratedTypeAliases)|MakefileDocsTargetMatchesGeneratedAssetsPipeline|MakefileWebsiteTargetsPointAtStaticSite|CIScriptChecksCoversEveryScriptsTest|CIScriptChecksWhitelistHasNoStaleEntries|AdminVoiceEntry(FramesMatchProtocolNine|WiringContract))$"
 
       - name: Test perfbench and weknora-mock packages
         # 全仓覆盖率收口刀：非 internal 的可测包（perfbench 负载引擎 +
