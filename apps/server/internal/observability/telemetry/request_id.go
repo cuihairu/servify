@@ -23,6 +23,12 @@ func RequestIDMiddleware() gin.HandlerFunc {
 		// Store in Gin context for other middleware.
 		c.Set(FieldRequestID, id)
 
+		// 上游透传的 X-Trace-ID 存 gin ctx 供 FieldsFromContext 兜底（无
+		// OTel span 时日志侧 trace_id 来源）。
+		if traceID := c.GetHeader(traceIDHeader); traceID != "" {
+			c.Set(FieldTraceID, traceID)
+		}
+
 		c.Next()
 	}
 }

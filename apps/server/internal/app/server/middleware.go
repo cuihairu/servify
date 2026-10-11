@@ -29,7 +29,9 @@ func registerBaseMiddleware(r *gin.Engine, cfg *config.Config, httpMetrics *svcm
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r.Use(telemetry.RequestIDMiddleware())
-	r.Use(gin.Logger())
+	// 访问日志走 logrus 标准出口并携带 O1 透传字段（request_id/tenant_id/
+	// trace_id），替代 gin.Logger 的独立文本流（O1 透传规则落地）。
+	r.Use(telemetry.AccessLogger())
 	r.Use(gin.Recovery())
 	// 安全响应头在限流/body 上限之前挂载：429/413 等中止响应也带安全头。
 	r.Use(middleware.SecurityHeadersMiddleware(cfg))

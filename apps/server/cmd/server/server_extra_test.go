@@ -141,12 +141,13 @@ func TestServerMainForcedShutdownTimeout(t *testing.T) {
 		"\r\nContent-Type: text/plain\r\nContent-Length: 100\r\n\r\nonly-ten-bytes"))
 	require.NoError(t, err)
 
-	// 等服务端确认已读到该请求（gin 访问日志打出 POST "/health"）再发 SIGTERM：
+	// 等服务端确认已读到该请求（访问日志打出 POST，logrus JSON 口径
+	// `"method":"POST"`，健康轮询是 GET 不会误中）再发 SIGTERM：
 	// 若 SIGTERM 先于服务端读请求头到达，该连接在服务端视角仍是 idle，
 	// Shutdown 会直接关闭它并优雅退出 exit 0，强制超时分支根本不触发
 	// （高负载 runner 上曾出现该竞态翻面）。
 	require.Eventually(t, func() bool {
-		return strings.Contains(out.String(), "| POST ")
+		return strings.Contains(out.String(), `"method":"POST"`)
 	}, 10*time.Second, 100*time.Millisecond,
 		"server did not acknowledge the stalled request: %s", out.String())
 
