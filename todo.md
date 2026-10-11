@@ -1907,3 +1907,17 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 **验证**：`TestCIScriptChecksCoversEveryScriptsTest` + `TestCIScriptChecksWhitelistHasNoStaleEntries` PASS；五个证据测试本地全绿（webhook ~118s / voice-pstn ~76s / lifecycle ~61s / translation ~47s / routing-scoring ~42s）。
 
 **下一步候选**（自查审计排序）：① mobile-probe 证据测试挂 android-probe job；② check-security-baseline.sh / observability-check / release-check 无任何 CI 挂载（入库 manifest 有 validator 分支但从不重跑）；③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（`enhanced_service.go:178-181` 注册 CustomerLookup/TicketLookup/Handoff 均传 nil，任何工具调用必报 "port is not configured"——`docs/implementation/13-ai-agent-loop.md:9-11` 已登记遗留，真实功能死路）；④ EventTenantID 声明未填充（`eventbus/event.go:19`，生产 publish 零携带）；⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）。
+
+## 附注（2026-10-11，strict 基线 + release-readiness 挂 CI；mobile-probe 挂 android-probe）
+
+**增量 4——strict 基线与 release-readiness 门挂 CI**（提交 9956c7a）：上批候选②落地。新增 `scripts/test_config_baseline_checks_test.go` 两测试：`TestSecurityObservabilityBaselineChecksPassStrict` 真跑 check-security-baseline.sh / check-observability-baseline.sh（`--strict` 硬编码在脚本内），`TestReleaseReadinessCheckPasses` 真跑 check-release-readiness.sh（本地环境 → strict 双基线 → 聚焦 Go 回归 → 三二进制构建 → 路由校验 → sqlite 迁移冒烟 → HTTP health/ready/metrics）。两脚本此前同样只入库 manifest 从不重跑。
+
+**为何目标是 config.production.secure.example.yml 而非 config.yml**：dev config.yml 是开发形态（空 jwt secret / 空库密码 / 空 openai key），strict 下必红——这正是两门从未挂 CI 的原因。示例配置的 `${VAR}` 占位经 bootstrap 的 expandEnvVarsInConfig 由 env 展开为非空哨兵值，jwt secret 避开 InsecureJWTSecrets 弱值清单，DIFY_API_KEY/DIFY_DATASET_ID 需同时给（dify enabled 缺一即红）；release-readiness 走默认 config.yml 的 sqlite 豁免口径 + SERVIFY_RELEASE_CHECK_PORT 动态端口。校验的是配置面结构，非真实凭据。验证：6.46s / 145.17s 本地 PASS。
+
+**增量 5——mobile-probe 证据测试挂 android-probe job**（提交 1dce8b0）：上批候选①落地。新增 `scripts/test_mobile_probe_acceptance_test.go` 真跑 test-mobile-probe-acceptance.sh 全链路（服务端 make build + mock LLM + probe 二进制 gradle installDist，SDK M0 验收②）；probe 构建依赖 Android 工具链，故测试挂 android-probe job（补 Setup Go @v7 + go-version-file/cache-dependency-path 与 repo 惯例一致）而非 script-checks，job timeout 25→35，步骤 12 分钟（本地实跑 202s）。断言 13 证据文件 + 9 summary 标记 + manifest 七键（注意：该脚本 summary 无 `overall_status=` 行，总判在 manifest `"overall": "passed"`）。
+
+**元守卫扩展为多调用点**：`ci_script_checks_coverage_test.go` 从单一 `ciScriptChecksPattern` 改 `ciScriptChecksPatterns []*regexp.Regexp`（FindAllString 抓全部 `go test ./scripts -run "..."` 调用点），union 口径覆盖（每个 Test 函数须被至少一个调用点命中）+ 陈旧登记逐调用点点名（`调用点 %d: %q`）。原注释「多处请扩展本测试」的死锁就此解开——拒绝「注册但 skip」的静默非门方案。
+
+**验证**：元守卫双测试 PASS；TestMobileProbeAcceptanceScriptWritesEvidence 本地 PASS 202s。
+
+**剩余候选**（更新）：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（`enhanced_service.go:178-181`——任何工具调用必报 "port is not configured"，`docs/implementation/13-ai-agent-loop.md:9-11` 已登记遗留；Handoff 是副作用动作、与 PROTOCOL.md「转接仍由用户显式发起」契约相抵，且模型侧无 customer_id 上下文、只读查询实际不可达——需产品拍板，不宜单方面接线）；④ EventTenantID 声明未填充（`eventbus/event.go:19`，生产 publish 零携带）；⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）。
