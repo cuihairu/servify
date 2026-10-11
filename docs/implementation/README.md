@@ -80,13 +80,12 @@
   [13-ai-agent-loop.md](./13-ai-agent-loop.md) 头部核实注记）
 - V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是
   [todo.md](../../todo.md) 与 [验收矩阵](../acceptance-checklist.md)；后续
-  演进见 [v1.0.0 发布说明](../release-notes-v1.0.0.md)「演进方向」
+  演进见 「演进方向」
 
 当前阅读顺序：
 
 1. 先读 [当前架构分析](../current-architecture.md)，确认仓库真实状态。
-2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)与
-   [v1.0.0 发布说明](../release-notes-v1.0.0.md)，确认当前产品/架构口径。
+2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)，确认当前产品/架构口径。
 3. 历史实施主线（架构重设计计划、10-series 迁移档案）仅作迁移史参考。
 
 配套专题：

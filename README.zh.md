@@ -34,9 +34,7 @@ Servify 是一个面向企业独立部署的开源智能客服系统。
 
 ## 当前状态
 
-`v1.0.0` 已于 2026-10-04 发布（见
-[发布说明](./docs/release-notes-v1.0.0.md)），V1.0 收敛改造 B0–B4 批次
-全部过闸：
+V1.0 收敛改造 B0–B4 批次全部过闸：
 
 - 客服主链路打通：`conversation`（中心聚合）、`routing`、`ticket`
 - AI 与知识库产品化：`ai`（首答记录/反馈回传/检索分析）、`knowledge`
@@ -153,7 +151,6 @@ Servify 当前更适合这样理解：
 
 推荐先读：
 
-- [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md)（当前版本）
 - [V1 产品收敛](./docs/v1-product-scope.md)
 - [Web 嵌入集成指南](./docs/embedding-guide.md)（把客服组件嵌进自有站点）
 - [文档站首页](./docs/index.md)（按任务分组：上手/接入/部署运维/安全/AI 知识库）
@@ -452,8 +449,6 @@ Jaeger 默认地址：`http://localhost:16686`
 - [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux 本地开发约定
 - [docs/contributing.md](./docs/contributing.md) - 提交前自检与协作约定
 - [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 产品与架构收敛改造计划书（当前口径）**
-- [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 发布说明（当前版本）**
-- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 历史发布说明（V1.0 已收敛，仅存档）
 
 ### 实施 backlog
 
@@ -492,8 +487,7 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
   （`POST /api/v1/ai/feedback`，访客会话绑定）、检索分析读口、访客侧
   citation 引用行与反馈条、admin Knowledge 管理页（来源/版本/任务/分析）
 - **B4（收口与发布）✅**：TASKS.md/验收矩阵/文档站口径统一、四道发布门禁
-  全绿（2026-10-04），`v1.0.0` 已发布（见
-  [发布说明](./docs/release-notes-v1.0.0.md)）
+  全绿（2026-10-04）。
 
 当前代码状态说明：
 
@@ -550,11 +544,11 @@ V1.0 收敛改造按 [V1.0 收敛改造计划书](./docs/v1-convergence-plan.md)
 
 V1.0 收敛改造（B0 文档与架构声明 → B1 Domain 边界/迁移双路径 → B2
 Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈回传 → B4 收口
-发布）已全部过闸，`v1.0.0` 已发布。此前的运行时收口、services→modules
+发布）已全部过闸。此前的运行时收口、services→modules
 迁移、租户/审计/安全基线、可观测性各阶段 backlog 均已清零（历史记录见
 [todo.md](./todo.md)）。
 
-后续演进按 [v1.0.0 发布说明](./docs/release-notes-v1.0.0.md)「演进方向」：
+后续演进按 「演进方向」：
 Routing 打分引擎（多因子）、Ticket 关闭前拦截规则、薄壳模块文档面收口
 剩余项。
 

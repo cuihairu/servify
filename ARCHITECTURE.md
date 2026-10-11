@@ -804,8 +804,7 @@ Landing status: partially landed — `voice` module, SIP/PSTN/WebRTC
 adapters, recording/transcript provider seams and call analytics already
 exist; transcript/recording providers default to `disabled`; channel
 normalization and the reserved `api-client`/`app-core` SDKs remain
-extension-boundary work (frozen for V1.0, see
-`docs/release-notes-v1.0.0.md`).
+extension-boundary work (frozen for V1.0).
 
 ## 16. Design Decisions
 

@@ -73,12 +73,12 @@
 - `10` services→modules 迁移已完成（`internal/services` 已整体移除，27 个一级模块封顶），配套 inventory / scorecard / boundaries 为迁移期档案
 - `11` 和 `12` 主体已落地（租户/审计/安全基线接入管理面；tracing/metrics/告警通过 observability baseline 门禁）
 - `13` AI agent loop 主循环已接通（tool-calling 循环 + 流式 + 三工具注册；工具 Port 数据源与权限校验接入为遗留项，状态见 [13-ai-agent-loop.md](./13-ai-agent-loop.md) 头部核实注记）
-- V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是 [todo.md](../../todo.md) 与 [验收矩阵](../acceptance-checklist.md)；后续演进见 [v1.0.0 发布说明](../release-notes-v1.0.0.md)「演进方向」
+- V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是 [todo.md](../../todo.md) 与 [验收矩阵](../acceptance-checklist.md)；后续演进见 「演进方向」
 
 当前阅读顺序：
 
 1. 先读 [当前架构分析](../current-architecture.md)，确认仓库真实状态。
-2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)与 [v1.0.0 发布说明](../release-notes-v1.0.0.md)，确认当前产品/架构口径。
+2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)，确认当前产品/架构口径。
 3. 历史实施主线（架构重设计计划、10-series 迁移档案）仅作迁移史参考。
 
 配套专题：

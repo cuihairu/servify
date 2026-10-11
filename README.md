@@ -34,9 +34,7 @@ The repository has converged on a `modular monolith` architecture, evolving arou
 
 ## Current Status
 
-`v1.0.0` was released on 2026-10-04 (see the
-[release notes](./docs/release-notes-v1.0.0.md)); all convergence batches
-B0–B4 of the V1.0 overhaul passed their gates:
+All convergence batches B0–B4 of the V1.0 overhaul passed their gates:
 
 - Core service chain in place: `conversation` (central aggregate), `routing`, `ticket`
 - AI and knowledge base productization: `ai` (first-response records / feedback loop / retrieval analytics), `knowledge`
@@ -47,8 +45,7 @@ B0–B4 of the V1.0 overhaul passed their gates:
   "sub-capabilities of the 7 core modules"
 - Web-first with other surfaces reserved: the Web SDK is implemented, native Android/iOS SDKs landed with
   M1–M3, and voice and additional channels are frozen as extension boundaries
-- Follow-up evolution: the routing scoring engine, pre-close ticket interception, and more (see "Evolution
-  directions" in the release notes)
+- Follow-up evolution: the routing scoring engine, pre-close ticket interception, and more
 
 ---
 
@@ -153,7 +150,6 @@ At this stage, Servify prioritizes:
 
 Recommended first reads:
 
-- [v1.0.0 Release Notes](./docs/release-notes-v1.0.0.md) (current release)
 - [V1 Product Scope](./docs/v1-product-scope.md)
 - [Web Embedding Guide](./docs/embedding-guide.md) (embedding the chat widget into your own site)
 - [Documentation Home](./docs/index.md) (grouped by task: getting started / integration / deployment & operations / security / AI knowledge base)
@@ -452,8 +448,6 @@ Jaeger is available by default at `http://localhost:16686`.
 - [docs/local-development.md](./docs/local-development.md) - Windows / WSL / Linux local development conventions
 - [docs/contributing.md](./docs/contributing.md) - Pre-commit self-checks and collaboration conventions
 - [docs/v1-convergence-plan.md](./docs/v1-convergence-plan.md) - **V1.0 product and architecture convergence plan (current baseline)**
-- [docs/release-notes-v1.0.0.md](./docs/release-notes-v1.0.0.md) - **v1.0.0 release notes (current release)**
-- [docs/release-notes-v0.1.0.md](./docs/release-notes-v0.1.0.md) - v0.1.0 historical release notes (superseded by V1.0, archived)
 
 ### Implementation Backlogs
 
@@ -492,8 +486,7 @@ batch status, commit hashes, and gate evidence are tracked in [todo.md](./todo.m
   (`POST /api/v1/ai/feedback`, bound to visitor sessions), retrieval analytics read surface, visitor-side
   citation rows and feedback entries, and the admin Knowledge management page (sources / versions / jobs / analytics)
 - **B4 (Closure and release) ✅**: TASKS.md / acceptance matrix / documentation-site baseline unification, all four release gates
-  green (2026-10-04), `v1.0.0` released (see the
-  [release notes](./docs/release-notes-v1.0.0.md))
+  green (2026-10-04).
 
 Current code status notes:
 
@@ -550,11 +543,11 @@ When files under `apps/website/` change and are pushed to `main`, Cloudflare Pag
 
 The V1.0 convergence work (B0 documentation and architecture statements → B1 domain boundaries / dual migration paths → B2
 unified routing events / PII retention → B3 knowledge productization / AI feedback loop → B4 closure
-and release) has passed all gates, and `v1.0.0` is released. The earlier backlogs — runtime closure, services→modules
+and release) has passed all gates. The earlier backlogs — runtime closure, services→modules
 migration, tenant/audit/security baseline, and observability — have all been cleared (history in
 [todo.md](./todo.md)).
 
-Follow-up evolution follows the "Evolution directions" section of the [v1.0.0 release notes](./docs/release-notes-v1.0.0.md):
+Follow-up evolution follows the "Evolution directions" section of the :
 the routing scoring engine (multi-factor), pre-close ticket interception rules, and the remaining thin-shell module documentation cleanup.
 
 ---

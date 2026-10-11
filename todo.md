@@ -40,7 +40,7 @@
 2. 验收矩阵主链路已通过（P1-1…P1-5、P2-6 管理端八刀）。
 3. 企业级基座已补齐（P2 全批：可观测性五刀、安全治理、SDK 契约、性能基线）。
 
-2026-10-04 ChatGPT 审核复查后拍板，进入 **V1.0 收敛改造阶段**，同日 B0-B4 全部批次闭环，`v1.0.0` 已发布（tag 已推送，release notes：`docs/release-notes-v1.0.0.md`）：
+2026-10-04 ChatGPT 审核复查后拍板，进入 **V1.0 收敛改造阶段**，同日 B0-B4 全部批次闭环：
 
 - 复查结论：产品定位收敛判断属实；架构「过度平台化」判断属实（27 个一级模块、13 个无 domain 薄壳，而客服核心产品模型与 Agent Workspace 单薄）。
 - 计划书：`docs/v1-convergence-plan.md`（保留/降级/删除清单、Domain 边界、数据模型、Workspace/AI/Routing/Ticket、P0-P4 批次、验收标准）。

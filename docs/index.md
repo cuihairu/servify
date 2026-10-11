@@ -74,7 +74,6 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 ### 评估与上手
 
 - [V1 产品收敛](/v1-product-scope)
-- [v1.0.0 Release Notes](/release-notes-v1.0.0)
 - [当前交付优先级](/delivery-priorities)
 - [本地开发](/local-development)
 - [贡献指南](/contributing)
