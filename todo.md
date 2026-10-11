@@ -1933,3 +1933,19 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 **验证**：gofmt/vet/build 全净；apps/server 全量（除 scripts 验收家族）EXIT=0；四个守卫测试 PASS。CI 待 run。
 
 **剩余候选**（更新）：⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）；③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板，见上批附注）。
+
+## 附注（2026-10-11，O1 透传字段落地）
+
+**背景**：`12-operator-observability.md` O1 现状自述——tenant_id/trace_id 透传未落地：`names.go` 常量已预留但无消费方，`FieldsFromContext` 不存在，访问日志走 `gin.Logger()` 独立文本流（与 logrus 标准出口分叉）。P2-4 第十二刀曾把孤儿 telemetry context/logfields 当死链删掉——本次是消费链真接上，非重造孤儿。
+
+**落地**（提交 3306feb）：
+- `telemetry/logfields.go`：`FieldsFromContext` 汇集三源——request_id（RequestIDMiddleware 注入 gin ctx）/ tenant_id（auth 中间件盖进 request ctx，与仓储写入、事件盖章同源）/ trace_id（OTel span 优先，缺失回退上游 X-Trace-ID 头）。空值不入字段集。
+- `RequestIDMiddleware` 增接 X-Trace-ID 头入 gin ctx（无 OTel span 时日志 trace_id 来源）。
+- `AccessLogger()` 替代 `gin.Logger()`：访问日志走 logrus 标准出口（与 InitLogger 的 JSON/text 格式、输出目标合一）+ method/path/query/status/latency_ms/client_ip。
+- 五个测试：三源汇总、X-Trace-ID 回退、span 优先、AccessLogger 字段级断言、无 span 空值。
+- 连带修一处测试同步标记：`TestServerMainForcedShutdownTimeout` 原 grep gin 文本格式 `| POST `，改新口径 `"method":"POST"`（健康轮询是 GET 不误中）。
+- 更新 12 号文档 O1 现状自述为已落地。
+
+**验证**：gofmt/vet/build 全净；apps/server 全量（除 scripts）绿；telemetry 8 测试 PASS；force-shutdown 测试 30.7s 过。
+
+**剩余候选**：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板——Handoff 是副作用动作、与 PROTOCOL.md「转接仍由用户显式发起」契约相抵，模型侧无 customer_id 上下文）。
