@@ -1981,3 +1981,13 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 ### 附注补三（2026-10-11 深夜，本地覆盖率门与 CI 口径对齐）
 
 `scripts/run-tests.sh` 的 `TEST_COVERAGE_TARGET` 默认从 20% 改为 100%（与 CI Go Checks step 同口径，快跑可显式 `TEST_COVERAGE_TARGET=20` 放宽）——默认 20% 曾让生产代码新增未覆盖分支在本地全绿、push 后 CI 才红（附注补二三连红的第③环）。新增结构守卫 `TestCoverageGateTargetMatchesCIPin`（scripts/lint_gate_parity_test.go）双向钉住：run-tests.sh 默认值必须是 `TEST_COVERAGE_TARGET:-100.0` 且 CI 必须带 `TEST_COVERAGE_TARGET: "100"`，CI whitelist regex 同步加 token；变异验证：临时改回 20.0 守卫精确红、还原即绿。
+
+### 附注补四（2026-10-11 深夜，0134257 CI 红：ticket handler 测试与异步自动派单竞态）
+
+**红点（Go Checks / Run unit tests with coverage，run 38121864334）**：`TestTicketHandler_Create_Get_List_Assign` 断言 `expected agent 2 load decremented to 0, got 1`——`internal/handlers` 包 12.8s 全 FAIL、其余 job 全绿（覆盖率 100.0% 正常收口，与附注补二/三的修复无关）。本地单独跑与全包跑均绿，典型时序抖动。
+
+**根因**：`POST /api/tickets`（adapter.CreateTicket → ApplyCreateTicketSideEffects）在 orchestrator.go:185 起**异步自动派单 goroutine**（`go o.autoAssignAgent(ticket.ID)`，FindAutoAssignableAgent 只认 `status='online'`）。测试种子把两个 agent 都种成 online，于是 create 返回后自动派单与本测试的显式派单（assign to 2）竞态：两者都从 `ticket.agent_id=nil` 出发时，agent2 的 current_load 被 +1 两次（显式一次、自动一次），随后转派 agent3 只减一次 → agent2 终态 1 而非 0。CI 慢机/负载下窗口更大；本地快、自动派单先完成走了 adapter 的同坐席去重早退路径，故复现不了。
+
+**修复**：测试种子状态改 `busy`（ticket_handler_test.go）——`FindAutoAssignableAgent` 只找 online → 自动派单确定性空转；显式派单的 `AgentAssignable` 接受 online|busy → 被测路径不变。20 连跑绿。同文件另一处 online 种子（AuditSnapshots）直接 `db.Create` 工单不走 HTTP create，无 goroutine，不竞态，保持原样。
+
+**登记（未修，属独立批次）**：生产侧同型竞态真实存在——并发显式派单 vs 自动派单都从 nil 读 `agent_id` 时，`AssignTicketModel` 事务外的 stale previousAgentID 会让坐席负载计数漂移（+2 减 1）。收口思路：事务内先锁工单行（条件 UPDATE 占位或 SELECT FOR UPDATE）再以库内值为准做增减。涉及核心事务语义，等专批处理。

@@ -134,13 +134,19 @@ func TestTicketHandler_Create_Get_List_Assign(t *testing.T) {
 	if err := db.Create(&models.User{ID: 2, Username: "a1", Name: "a1", Email: "a1@example.com", Role: "agent"}).Error; err != nil {
 		t.Fatalf("seed agent user: %v", err)
 	}
-	if err := db.Create(&models.Agent{UserID: 2, Status: "online", MaxConcurrent: 5, CurrentLoad: 0}).Error; err != nil {
+	// 状态必须用 busy 而非 online：create 接口会起异步自动派单 goroutine
+	// （orchestrator.go 的 go autoAssignAgent，FindAutoAssignableAgent 只认
+	// online），它会与本测试的显式派单竞态——两者都从 agent_id=nil 出发时
+	// agent 2 被 +1 两次、转派只减一次，终态 load=1 触发断言红（CI 实证，
+	// 2026-10-11）。busy 令自动派单确定性空转，显式派单的 AgentAssignable
+	// 仍接受 busy，路径不受影响。
+	if err := db.Create(&models.Agent{UserID: 2, Status: "busy", MaxConcurrent: 5, CurrentLoad: 0}).Error; err != nil {
 		t.Fatalf("seed agent: %v", err)
 	}
 	if err := db.Create(&models.User{ID: 3, Username: "a2", Name: "a2", Email: "a2@example.com", Role: "agent"}).Error; err != nil {
 		t.Fatalf("seed agent user 2: %v", err)
 	}
-	if err := db.Create(&models.Agent{UserID: 3, Status: "online", MaxConcurrent: 5, CurrentLoad: 0}).Error; err != nil {
+	if err := db.Create(&models.Agent{UserID: 3, Status: "busy", MaxConcurrent: 5, CurrentLoad: 0}).Error; err != nil {
 		t.Fatalf("seed agent 2: %v", err)
 	}
 
