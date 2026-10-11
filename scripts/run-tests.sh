@@ -51,9 +51,11 @@ echo "  - coverage.out: Raw coverage data"
 echo "  - coverage.html: Coverage report (open in browser)"
 echo "  - benchmark.txt: Benchmark results"
 
-# 覆盖率阈值（默认 20%，可通过 TEST_COVERAGE_TARGET 环境变量覆盖）
+# 覆盖率阈值：默认与 CI 门同口径 100%（快跑可 TEST_COVERAGE_TARGET=20 放宽）。
+# 默认值曾为 20%，本地全绿掩盖覆盖率回归、只在 push 后的 CI 红出来（2026-10-11
+# 三连红）。本地与 CI 口径必须一致，否则任何一边的绿都不作数。
 COVERAGE=$(go tool cover -func="$OUT_DIR/coverage.out" | tail -1 | awk '{print $3}' | sed 's/%//')
-TARGET=${TEST_COVERAGE_TARGET:-20.0}
+TARGET=${TEST_COVERAGE_TARGET:-100.0}
 
 echo ""
 echo "🎯 Coverage Target: ${TARGET}%"

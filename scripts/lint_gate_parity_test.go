@@ -111,6 +111,17 @@ func TestLintGateFlagsUncappedEverywhere(t *testing.T) {
 	}
 }
 
+// TestCoverageGateTargetMatchesCIPin 本地覆盖率门默认阈值必须与 CI 同口径。
+// run-tests.sh 默认曾是 20%（CI 的 Go Checks step 才设 TEST_COVERAGE_TARGET:
+// "100"），生产代码新增未覆盖分支在本地悄然掉覆盖、push 后 CI 才红
+// （2026-10-11 三连红实证：聚合 99.9% vs 目标 100%）。
+func TestCoverageGateTargetMatchesCIPin(t *testing.T) {
+	requireContains(t, lintRunTestsShPath, "TEST_COVERAGE_TARGET:-100.0",
+		"本地覆盖率门默认值必须与 CI 同口径（100%）")
+	requireContains(t, lintCIPath, `TEST_COVERAGE_TARGET: "100"`,
+		"CI Go Checks 的覆盖率门口径")
+}
+
 func TestCILintStepPinsVersion(t *testing.T) {
 	raw, err := os.ReadFile(lintCIPath)
 	if err != nil {
