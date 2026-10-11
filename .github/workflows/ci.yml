@@ -449,7 +449,7 @@ jobs:
   android-probe:
     name: Android SDK
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     defaults:
       run:
         shell: bash
@@ -457,6 +457,15 @@ jobs:
       - name: Checkout
         timeout-minutes: 3
         uses: actions/checkout@v7
+
+      - name: Setup Go
+        timeout-minutes: 3
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/server/go.mod
+          cache-dependency-path: |
+            apps/server/go.sum
+            go.work.sum
 
       - name: Setup Java
         timeout-minutes: 3
@@ -484,6 +493,15 @@ jobs:
           ./gradlew --no-daemon :servify-sdk:createDebugUnitTestCoverageReport
           chmod +x ../../scripts/check-android-sdk-coverage.sh
           ../../scripts/check-android-sdk-coverage.sh
+
+      # mobile-probe 证据测试（SDK M0 验收②：probe 二进制全链路）。probe 构建
+      # 依赖 Android 工具链，故挂在本 job 而非 script-checks；脚本自身会
+      # make build 服务端并起 mock LLM（CI 此前只校验已入库 manifest，
+      # 从不重放脚本）。
+      - name: Verify mobile probe acceptance script
+        timeout-minutes: 12
+        run: |
+          go test ./scripts -run "Test(MobileProbeAcceptanceScriptWritesEvidence)$"
 
       # M4 验收③（产物流程就绪）：AAR 作为接入方可取产物随 CI 归档（可重建，30 天足够）。
       - name: Upload AAR artifact

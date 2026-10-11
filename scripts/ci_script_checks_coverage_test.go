@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,8 +12,11 @@ import (
 	"testing"
 )
 
-// 本测试守护 CI「Script Checks / Verify provider acceptance scripts」步骤的
-// -run 白名单与 scripts 包实际测试面同步。
+// 本测试守护 CI 的 scripts 守卫测试 -run 白名单与 scripts 包实际测试面
+// 同步。白名单可分布在 ci.yml 多个调用点（script-checks 主名单 + 需特殊
+// 工具链的 job，如 android-probe 里的 mobile-probe 证据测试——probe 构建
+// 依赖 gradle，script-checks job 无 Java），本测试按 union 口径校验：
+// 每个 scripts Test 函数须被至少一个调用点命中。
 //
 // 背景（2026-09-30 审计发现）：该步骤用一条手工维护的 alternation 正则挑选
 // 要在 CI 跑的脚本守卫测试。白名单是逐笔追加的——每加一个守卫测试就要记得把
@@ -72,9 +76,11 @@ func scriptsTestFuncNames(t *testing.T) []string {
 	return names
 }
 
-// ciScriptChecksPattern 返回 CI script-checks 步骤的 -run 正则（已 strip 外层
-// "Test(...)" 的 Test 前缀与锚点，留下一段可逐测试名匹配的 alternation 主体）。
-func ciScriptChecksPattern(t *testing.T) *regexp.Regexp {
+// ciScriptChecksPatterns 返回 CI 里全部 `go test ./scripts -run "..."` 的
+// 正则（已 strip 外层 "Test(...)" 的 Test 前缀与锚点，留下一段可逐测试名
+// 匹配的 alternation 主体）。允许多个调用点（不同 job 按工具链分工，见
+// 本文件头注释）；返回顺序按出现顺序。
+func ciScriptChecksPatterns(t *testing.T) []*regexp.Regexp {
 	t.Helper()
 	raw, err := os.ReadFile(ciWorkflowPath)
 	if err != nil {
@@ -84,34 +90,42 @@ func ciScriptChecksPattern(t *testing.T) *regexp.Regexp {
 	if len(m) == 0 {
 		t.Fatalf("%s 未找到 `go test ./scripts -run \"...\"` 调用（Script Checks 步骤被改名或删除？）", ciWorkflowPath)
 	}
-	if len(m) > 1 {
-		t.Fatalf("%s 中出现 %d 处 `go test ./scripts -run`（本测试按唯一调用点解析；多处请扩展本测试）", ciWorkflowPath, len(m))
+	rxs := make([]*regexp.Regexp, 0, len(m))
+	for _, match := range m {
+		rx, err := regexp.Compile(match[1])
+		if err != nil {
+			t.Fatalf("CI -run 正则非法 %q: %v", match[1], err)
+		}
+		rxs = append(rxs, rx)
 	}
-	rx, err := regexp.Compile(m[0][1])
-	if err != nil {
-		t.Fatalf("CI -run 正则非法 %q: %v", m[0][1], err)
-	}
-	return rx
+	return rxs
 }
 
 // TestCIScriptChecksCoversEveryScriptsTest 自身也在这条枚举里——它要求
 // scripts 包每个 Test 函数都被白名单命中，故本元测试无法在不登记自己的情况下
 // 通过（自指要求，无需另立一条）。
 func TestCIScriptChecksCoversEveryScriptsTest(t *testing.T) {
-	rx := ciScriptChecksPattern(t)
+	rxs := ciScriptChecksPatterns(t)
 	names := scriptsTestFuncNames(t)
 
 	var missing []string
 	for _, name := range names {
-		if !rx.MatchString(name) {
+		covered := false
+		for _, rx := range rxs {
+			if rx.MatchString(name) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
 			missing = append(missing, name)
 		}
 	}
 	if len(missing) > 0 {
 		// 漏登记的守卫在 CI 上根本不会执行——本地全绿、CI 全绿，缺陷照样能合进
-		// 干。逐条点名，便于照单补进 ci.yml 的 alternation。
+		// 干。逐条点名，便于照单补进对应 job 的 alternation。
 		for _, name := range missing {
-			t.Errorf("scripts 测试 %s 未登记进 %s 的 script-checks -run 白名单（该守卫在 CI 上不会被执行）", name, ciWorkflowPath)
+			t.Errorf("scripts 测试 %s 未登记进 %s 任何一个 `go test ./scripts -run` 白名单（该守卫在 CI 上不会被执行）", name, ciWorkflowPath)
 		}
 	}
 }
@@ -125,25 +139,27 @@ func TestCIScriptChecksCoversEveryScriptsTest(t *testing.T) {
 // 「该 token 是否出现在某个真实测试名里」——出现即对应某条真实测试（分组前缀
 // 或嵌套子分支皆满足），一个都不出现才是陈旧项或拼写错误。
 func TestCIScriptChecksWhitelistHasNoStaleEntries(t *testing.T) {
-	rx := ciScriptChecksPattern(t)
+	rxs := ciScriptChecksPatterns(t)
 	known := scriptsTestFuncNames(t)
 
-	// 白名单主体里可穷举的标识符片段（非正则元字符）。
-	body := strings.TrimSuffix(strings.TrimPrefix(rx.String(), "Test("), "$")
 	var stale []string
-	for _, tok := range regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]{11,}`).FindAllString(body, -1) {
-		found := false
-		for _, name := range known {
-			if strings.Contains(name, tok) {
-				found = true
-				break
+	for i, rx := range rxs {
+		// 白名单主体里可穷举的标识符片段（非正则元字符）。
+		body := strings.TrimSuffix(strings.TrimPrefix(rx.String(), "Test("), "$")
+		for _, tok := range regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]{11,}`).FindAllString(body, -1) {
+			found := false
+			for _, name := range known {
+				if strings.Contains(name, tok) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				stale = append(stale, fmt.Sprintf("调用点 %d: %q", i+1, tok))
 			}
 		}
-		if !found {
-			stale = append(stale, tok)
-		}
 	}
-	for _, tok := range stale {
-		t.Errorf("白名单条目片段 %q 不对应 scripts 包任何测试函数（测试被删/改名后的陈旧登记会让 alternation 静默失准）", tok)
+	for _, entry := range stale {
+		t.Errorf("白名单条目片段 %s 不对应 scripts 包任何测试函数（测试被删/改名后的陈旧登记会让 alternation 静默失准）", entry)
 	}
 }
