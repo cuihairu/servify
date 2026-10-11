@@ -1964,4 +1964,10 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 
 **验证**：`make lint` 0 issues；`gofmt`/`go vet`/`build` 全净；apps/server 全量（除 scripts）绿（首轮 16 处大写文案断言同步后）；`go test ./scripts/perfbench/` 与 scripts 结构守卫（manifest validator / modules-boundaries / docker-compose / acceptance evidence / CI -run 白名单）绿。CI 待 run。
 
-**剩余候选**：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板，见前批附注）；依赖上游/需外部凭据：真实模式 Dify/WeKnora 凭据（P1-1）、`CODECOV_TOKEN`。
+**剩余候选**：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（已拍板：保持死路不接线，见下方附注补一）；依赖上游/需外部凭据：真实模式 Dify/WeKnora 凭据（P1-1）、`CODECOV_TOKEN`。
+
+### 附注补一（2026-10-11 晚，两笔：lint 门 CI 首红修复 + ③ 拍板闭环）
+
+**1. lint 门 CI 首红（Go Checks / Lint step，run 38109334432）**：`config verify` 报 `jsonschema: "run.build-tags" does not validate ... got string, want array`——v2 schema 的 `run.build-tags` 要数组，本批写成了字符串标量 `build-tags: integration`。**本地 `make lint` 绿掩盖了它**：`golangci-lint run` 对该形态宽容（或静默忽略），只有 CI action 的 `config verify`（run 前置步骤）才校验 schema——又一例「本地绿 ≠ CI 绿」，以后改 `.golangci.yml` 一律先本地跑 `golangci-lint config verify`。修复：改块式数组（`build-tags:` + `- integration`，60ca3cc）；连带把 `scripts/lint_gate_parity_test.go` 的守卫断言从字符串形态改为解析 `build-tags` 值列表含 `integration`（同时接受块式与内联 flow 式、拒绝字符串形态），变异验证：临时改回字符串形态守卫精确红、还原即绿。
+
+**2. ③ AI agent-loop 三工具拍板（用户 2026-10-11 明令，记入仓记录）**：**保持登记为死路、不接线**。理由：Handoff 属副作用动作、与 PROTOCOL.md「转接仍由用户显式发起」契约相抵；CustomerLookup/TicketLookup 模型侧无 customer_id 上下文、只读查询实际不可达；接线需改契约属产品面，等用户明令再动。至此本批代码面剩余候选清零，仓库活跃项只剩外部依赖：真实模式 Dify/WeKnora 凭据（P1-1）、`CODECOV_TOKEN`。

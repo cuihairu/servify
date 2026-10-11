@@ -41,14 +41,65 @@ func requireContains(t *testing.T, path, want, why string) {
 
 // TestLintGateConfigPinsTestGateParity 钉住 lint 门与测试门 build-tag 同口径。
 func TestLintGateConfigPinsTestGateParity(t *testing.T) {
-	requireContains(t, lintGolangciConfigPath, "build-tags: integration",
-		"lint 必须与测试门分析同一源码集，否则 unused 对 integration 标签下的 helper 误判")
+	raw, err := os.ReadFile(lintGolangciConfigPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", lintGolangciConfigPath, err)
+	}
+	// build-tags 必须是数组形态（v2 schema：字符串形态 config verify 直接红，
+	// 且 CI action 会先跑 config verify）。接受块式列表与内联 flow 式两种。
+	if !golangciBuildTagsIncludeIntegration(string(raw)) {
+		t.Fatalf("%s 的 run.build-tags 未声明 integration（lint 必须与测试门分析同一源码集，否则 unused 对 integration 标签下的 helper 误判）", lintGolangciConfigPath)
+	}
 	requireContains(t, lintGolangciConfigPath, "default: standard",
 		"显式钉住默认 linter 集，防上游默认漂移悄悄扩面")
 
 	// 测试门锚点：run-tests.sh 带 -tags integration，是 build-tag 口径的源头。
 	requireContains(t, lintRunTestsShPath, "-tags integration",
 		"测试门口径，lint 门必须与其对齐")
+}
+
+// golangciBuildTagsIncludeIntegration 解析 .golangci.yml 的 run.build-tags，
+// 返回其值列表是否包含 integration。支持块式（`build-tags:` + 后续 `- x`）
+// 与内联 flow 式（`build-tags: [integration, ...]`）；字符串形态
+// （`build-tags: integration`）不通过——v2 schema 要求数组，字符串会让
+// CI action 的 config verify 直接红（2026-10-11 实证）。
+func golangciBuildTagsIncludeIntegration(config string) bool {
+	lines := strings.Split(config, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "build-tags:") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "build-tags:"))
+		if strings.HasPrefix(rest, "[") {
+			// 内联 flow 式：截到闭合括号，逐项看是否含 integration。
+			end := strings.Index(rest, "]")
+			if end < 0 {
+				return false
+			}
+			for _, item := range strings.Split(rest[1:end], ",") {
+				if strings.TrimSpace(item) == "integration" {
+					return true
+				}
+			}
+			return false
+		}
+		// 块式：值在后续行的 `- x` 项里。
+		for _, next := range lines[i+1:] {
+			t := strings.TrimSpace(next)
+			if strings.HasPrefix(t, "-") {
+				if strings.TrimPrefix(t, "-") == "integration" || strings.TrimSpace(strings.TrimPrefix(t, "-")) == "integration" {
+					return true
+				}
+				continue
+			}
+			if t != "" && !strings.HasPrefix(t, "#") {
+				break
+			}
+		}
+		return false
+	}
+	return false
 }
 
 func TestLintGateFlagsUncappedEverywhere(t *testing.T) {
