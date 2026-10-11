@@ -503,7 +503,7 @@ func TestServicePublishIgnoresPublisherError(t *testing.T) {
 
 func TestNewConversationEventFields(t *testing.T) {
 	payload := map[string]string{"k": "v"}
-	event := NewConversationEvent(ConversationCreatedEventName, "conv-1", payload)
+	event := NewConversationEvent(context.Background(), ConversationCreatedEventName, "conv-1", payload)
 
 	if event.Name() != ConversationCreatedEventName || event.ConversationID != "conv-1" {
 		t.Fatalf("unexpected event header: %+v", event)

@@ -270,5 +270,5 @@ func (s *Service) publish(ctx context.Context, name, sessionID string, payload i
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, NewRoutingEvent(name, sessionID, payload))
+	_ = s.publisher.Publish(ctx, NewRoutingEvent(ctx, name, sessionID, payload))
 }

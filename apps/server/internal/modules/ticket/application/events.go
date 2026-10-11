@@ -1,9 +1,11 @@
 package application
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
@@ -28,12 +30,15 @@ type TicketEvent struct {
 	Source    string
 }
 
-func NewTicketEvent(name string, ticket TicketDTO) TicketEvent {
+// NewTicketEvent 从 auth ctx 盖事件租户章，与仓储写入同源；系统 worker
+// 无租户 ctx 时留空。
+func NewTicketEvent(ctx context.Context, name string, ticket TicketDTO) TicketEvent {
 	return TicketEvent{
 		BaseEvent: eventbus.BaseEvent{
 			EventID:          fmt.Sprintf("%s-%d-%d", name, ticket.ID, time.Now().UnixNano()),
 			EventName:        name,
 			EventOccurredAt:  time.Now(),
+			EventTenantID:    platformauth.TenantIDFromContext(ctx),
 			EventAggregateID: fmt.Sprintf("ticket:%d", ticket.ID),
 		},
 		TicketID:   ticket.ID,

@@ -390,7 +390,7 @@ func (o *TicketOrchestrator) publishTicketModuleEvent(ctx context.Context, name 
 		ResolvedAt: ticket.ResolvedAt,
 		ClosedAt:   ticket.ClosedAt,
 	}
-	if err := o.bus.Publish(ctx, ticketapp.NewTicketEvent(name, dto)); err != nil {
+	if err := o.bus.Publish(ctx, ticketapp.NewTicketEvent(ctx, name, dto)); err != nil {
 		o.logger.Warnf("Failed to publish ticket event %s for ticket %d: %v", name, ticket.ID, err)
 	}
 }

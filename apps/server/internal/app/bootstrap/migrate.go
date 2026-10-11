@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"servify/apps/server/internal/models"
+	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 
 	"gorm.io/gorm"
 )
@@ -44,9 +45,9 @@ func MigrationModels() []interface{} {
 		&models.TenantConfig{},
 		&models.WorkspaceConfig{},
 		&models.AuditLog{},
-		&models.VoiceCall{},
-		&models.VoiceRecording{},
-		&models.VoiceTranscript{},
+		&voiceinfra.VoiceCall{},
+		&voiceinfra.VoiceRecording{},
+		&voiceinfra.VoiceTranscript{},
 		&models.WebhookEndpoint{},
 		&models.WebhookDelivery{},
 		&models.APIKey{},

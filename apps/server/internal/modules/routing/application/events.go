@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
@@ -20,12 +21,15 @@ type RoutingEvent struct {
 	Payload   interface{}
 }
 
-func NewRoutingEvent(name string, sessionID string, payload interface{}) RoutingEvent {
+// NewRoutingEvent 从 auth ctx 盖事件租户章，与仓储写入同源；系统 worker
+// 无租户 ctx 时留空。
+func NewRoutingEvent(ctx context.Context, name string, sessionID string, payload interface{}) RoutingEvent {
 	return RoutingEvent{
 		BaseEvent: eventbus.BaseEvent{
 			EventID:          fmt.Sprintf("%s-%s-%d", name, sessionID, time.Now().UnixNano()),
 			EventName:        name,
 			EventOccurredAt:  time.Now(),
+			EventTenantID:    platformauth.TenantIDFromContext(ctx),
 			EventAggregateID: fmt.Sprintf("routing:%s", sessionID),
 		},
 		SessionID: sessionID,

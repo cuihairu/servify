@@ -113,7 +113,7 @@ func decodedMail(t *testing.T, raw []byte) string {
 }
 
 func agentMessageEvent(conversationID, content string) conversationapp.ConversationEvent {
-	return conversationapp.NewConversationEvent(
+	return conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName,
 		conversationID,
 		conversationapp.ConversationMessageDTO{
@@ -153,12 +153,12 @@ func TestOutboundDispatch_NonAgentOrNonEmail_Skips(t *testing.T) {
 	db.seedSession(t, "sess-web", 12, "web")
 
 	// 访客消息：不出站
-	bus.Publish(context.Background(), conversationapp.NewConversationEvent(
+	bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-email",
 		conversationapp.ConversationMessageDTO{ConversationID: "sess-email", Sender: "user", Content: "咨询"},
 	))
 	// AI 回复：本期不外发
-	bus.Publish(context.Background(), conversationapp.NewConversationEvent(
+	bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-email",
 		conversationapp.ConversationMessageDTO{ConversationID: "sess-email", Sender: "ai", Content: "自动回复"},
 	))

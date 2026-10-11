@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/eventbus"
 )
 
@@ -24,12 +25,15 @@ type VoiceEvent struct {
 	Payload interface{}
 }
 
-func NewVoiceEvent(name, aggregateID string, payload interface{}) VoiceEvent {
+// NewVoiceEvent 从 auth ctx 盖事件租户章，与仓储写入同源；系统 worker
+// 无租户 ctx 时留空。
+func NewVoiceEvent(ctx context.Context, name, aggregateID string, payload interface{}) VoiceEvent {
 	return VoiceEvent{
 		BaseEvent: eventbus.BaseEvent{
 			EventID:          aggregateID + ":" + name,
 			EventName:        name,
 			EventOccurredAt:  time.Now(),
+			EventTenantID:    platformauth.TenantIDFromContext(ctx),
 			EventAggregateID: aggregateID,
 		},
 		Payload: payload,

@@ -190,7 +190,7 @@ func TestResolveMessageGuardBranches(t *testing.T) {
 	d := &ChannelOutboundDispatcher{db: db.DB}
 
 	// ConversationEvent 但 payload 不是 ConversationMessageDTO
-	nonDTO := conversationapp.NewConversationEvent(
+	nonDTO := conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-x", "raw-string-payload")
 	if _, _, ok := d.resolveMessage(nonDTO); ok {
 		t.Fatal("non-DTO payload must not resolve")

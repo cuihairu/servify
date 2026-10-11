@@ -359,7 +359,7 @@ func (s *Service) publish(ctx context.Context, name string, conversationID strin
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, NewConversationEvent(name, conversationID, payload))
+	_ = s.publisher.Publish(ctx, NewConversationEvent(ctx, name, conversationID, payload))
 }
 
 // publishRouting 以 routing 模块的事件形态发布分配类事件：aggregate 用
@@ -370,7 +370,7 @@ func (s *Service) publishRouting(ctx context.Context, name string, sessionID str
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, routingapp.NewRoutingEvent(name, sessionID, payload))
+	_ = s.publisher.Publish(ctx, routingapp.NewRoutingEvent(ctx, name, sessionID, payload))
 }
 
 func cloneMetadata(in map[string]string) map[string]string {

@@ -106,7 +106,7 @@ func (s *RecordingService) publish(ctx context.Context, name, aggregateID string
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, NewVoiceEvent(name, aggregateID, payload))
+	_ = s.publisher.Publish(ctx, NewVoiceEvent(ctx, name, aggregateID, payload))
 }
 
 func (s *RecordingService) SetRetryPolicy(policy RetryPolicy) {

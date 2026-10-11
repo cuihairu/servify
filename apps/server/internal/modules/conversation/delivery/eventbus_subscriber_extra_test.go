@@ -23,7 +23,7 @@ func TestEventBusSubscriberSkipsTicketEventWithoutSession(t *testing.T) {
 	// 邮件建单等无来源会话：SessionID 为 nil，投影跳过（Timeline 只覆盖
 	// 会话视角）。
 	if err := bus.Publish(context.Background(), ticketapp.NewTicketEvent(
-		ticketapp.TicketCreatedEventName, ticketapp.TicketDTO{ID: 8})); err != nil {
+		context.Background(), ticketapp.TicketCreatedEventName, ticketapp.TicketDTO{ID: 8})); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	if len(repo.appended) != 0 {
@@ -36,7 +36,7 @@ func TestEncodeEventPayloadMarshalFailureFallsBackToEmpty(t *testing.T) {
 	defer func() { eventPayloadMarshal = orig }()
 	eventPayloadMarshal = func(any) ([]byte, error) { return nil, errors.New("boom") }
 
-	event := ticketapp.NewTicketEvent(ticketapp.TicketClosedEventName, ticketapp.TicketDTO{ID: 1})
+	event := ticketapp.NewTicketEvent(context.Background(), ticketapp.TicketClosedEventName, ticketapp.TicketDTO{ID: 1})
 	if got := encodeEventPayload(event); got != "" {
 		t.Fatalf("encode failure must fall back to empty, got %q", got)
 	}
@@ -55,7 +55,7 @@ func TestEventBusSubscriberZeroOccurredAtFallsBackToNow(t *testing.T) {
 	if err := bus.Publish(context.Background(), zero); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
-	if err := bus.Publish(context.Background(), conversationapp.NewConversationEvent(
+	if err := bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationCreatedEventName, "conv-zero", nil)); err != nil {
 		t.Fatalf("publish: %v", err)
 	}

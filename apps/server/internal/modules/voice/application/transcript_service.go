@@ -65,7 +65,7 @@ func (s *TranscriptService) publish(ctx context.Context, name, aggregateID strin
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, NewVoiceEvent(name, aggregateID, payload))
+	_ = s.publisher.Publish(ctx, NewVoiceEvent(ctx, name, aggregateID, payload))
 }
 
 func (s *TranscriptService) SetRetryPolicy(policy RetryPolicy) {

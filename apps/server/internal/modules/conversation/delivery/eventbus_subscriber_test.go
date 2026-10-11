@@ -32,15 +32,15 @@ func TestEventBusSubscriber_ProjectsTimelineEvents(t *testing.T) {
 
 	ctx := context.Background()
 	sessionID := "conv-1"
-	_ = bus.Publish(ctx, conversationapp.NewConversationEvent(
+	_ = bus.Publish(ctx, conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationCreatedEventName, "conv-1", nil))
-	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(
+	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(context.Background(),
 		routingapp.RoutingAgentAssignedEventName, "conv-1", nil))
-	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(
+	_ = bus.Publish(ctx, routingapp.NewRoutingEvent(context.Background(),
 		routingapp.RoutingTransferCompletedEventName, "conv-1", nil))
-	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ticketapp.TicketCreatedEventName,
+	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ctx, ticketapp.TicketCreatedEventName,
 		ticketapp.TicketDTO{ID: 7, SessionID: &sessionID}))
-	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ticketapp.TicketClosedEventName,
+	_ = bus.Publish(ctx, ticketapp.NewTicketEvent(ctx, ticketapp.TicketClosedEventName,
 		ticketapp.TicketDTO{ID: 7, SessionID: &sessionID}))
 
 	if len(repo.appended) != 5 {
@@ -91,7 +91,7 @@ func TestEventBusSubscriber_TicketWithoutSessionSkipped(t *testing.T) {
 
 	// 无来源会话的工单（邮件建单等）不投影进 Timeline。
 	_ = bus.Publish(context.Background(), ticketapp.NewTicketEvent(
-		ticketapp.TicketCreatedEventName, ticketapp.TicketDTO{ID: 9}))
+		context.Background(), ticketapp.TicketCreatedEventName, ticketapp.TicketDTO{ID: 9}))
 
 	if len(repo.appended) != 0 {
 		t.Fatalf("expected no projection for session-less ticket, got %d", len(repo.appended))
@@ -105,7 +105,7 @@ func TestEventBusSubscriber_SkipsUnknownAggregatePrefix(t *testing.T) {
 
 	ctx := context.Background()
 	// ticket:* / 空聚合 ID 事件应被跳过（B1-2 才接入 ticket 投影）。
-	event := routingapp.NewRoutingEvent(routingapp.RoutingAgentAssignedEventName, "conv-9", nil)
+	event := routingapp.NewRoutingEvent(context.Background(), routingapp.RoutingAgentAssignedEventName, "conv-9", nil)
 	event.EventAggregateID = ""
 	_ = bus.Publish(ctx, event)
 
@@ -140,7 +140,7 @@ func TestSubscriberRegistrationsTimelineAssertion(t *testing.T) {
 	bus := eventbus.NewInMemoryBus()
 	repo := &fakeEventRepo{}
 	NewEventBusSubscriber(repo).Register(bus)
-	_ = bus.Publish(context.Background(), conversationapp.NewConversationEvent(
+	_ = bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationCreatedEventName, "conv-1", nil))
 	if len(repo.appended) == 0 {
 		t.Fatal("expected projection")

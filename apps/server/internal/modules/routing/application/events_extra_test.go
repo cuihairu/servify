@@ -16,10 +16,10 @@ func TestBufferPublisherDefersEventsUntilDrained(t *testing.T) {
 	if buf == nil {
 		t.Fatal("constructor returned nil")
 	}
-	if err := buf.Publish(context.Background(), NewRoutingEvent(RoutingAgentAssignedEventName, "conv-1", nil)); err != nil {
+	if err := buf.Publish(context.Background(), NewRoutingEvent(context.Background(), RoutingAgentAssignedEventName, "conv-1", nil)); err != nil {
 		t.Fatalf("buffered publish must not fail: %v", err)
 	}
-	if err := buf.Publish(context.Background(), NewRoutingEvent(RoutingTransferCompletedEventName, "conv-1", nil)); err != nil {
+	if err := buf.Publish(context.Background(), NewRoutingEvent(context.Background(), RoutingTransferCompletedEventName, "conv-1", nil)); err != nil {
 		t.Fatalf("buffered publish must not fail: %v", err)
 	}
 	drained := buf.Events()
@@ -34,7 +34,7 @@ func TestBufferPublisherDefersEventsUntilDrained(t *testing.T) {
 
 func TestBufferPublisherNilTargetStillBuffers(t *testing.T) {
 	buf := NewBufferPublisher(nil)
-	if err := buf.Publish(context.Background(), NewRoutingEvent("x", "conv-2", nil)); err != nil {
+	if err := buf.Publish(context.Background(), NewRoutingEvent(context.Background(), "x", "conv-2", nil)); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	if len(buf.Events()) != 1 {

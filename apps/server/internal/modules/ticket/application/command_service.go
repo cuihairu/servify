@@ -341,7 +341,7 @@ func (s *CommandService) publishTicketEvent(ctx context.Context, name string, ti
 	if s.bus == nil {
 		return nil
 	}
-	return s.bus.Publish(ctx, NewTicketEvent(name, ticket))
+	return s.bus.Publish(ctx, NewTicketEvent(ctx, name, ticket))
 }
 
 func (s *CommandService) bulkUpdateOne(ctx context.Context, ticketID uint, cmd BulkUpdateTicketsCommand) error {

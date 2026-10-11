@@ -117,7 +117,7 @@ func seedPushVisitorSession(t *testing.T, db *gorm.DB, sessionID string) {
 }
 
 func agentPushEvent(sessionID, content string) conversationapp.ConversationEvent {
-	return conversationapp.NewConversationEvent(
+	return conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName,
 		sessionID,
 		conversationapp.ConversationMessageDTO{
@@ -173,7 +173,7 @@ func TestPushOutbound_SkipsNonAgentAndEmptyContent(t *testing.T) {
 	_, bus, fcm, apns, _, db := newPushOutbound(t)
 	seedPushVisitorSession(t, db, "sess-1")
 
-	visitor := conversationapp.NewConversationEvent(
+	visitor := conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-1",
 		conversationapp.ConversationMessageDTO{
 			ID: "m2", ConversationID: "sess-1", Sender: "visitor",
@@ -394,7 +394,7 @@ func TestPushOutbound_ResolveMessageSkipPaths(t *testing.T) {
 	// ConversationEvent 但 payload 非 DTO（防御面）
 	bus := eventbus.NewInMemoryBus() // 仅占位；直接调 dispatch 不经订阅
 	_ = bus
-	d.dispatch(context.Background(), conversationapp.NewConversationEvent(
+	d.dispatch(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-1", nil))
 	// redis 事件无 conversation: 前缀：不回查
 	d.dispatch(context.Background(), &aggregateOnlyEvent{

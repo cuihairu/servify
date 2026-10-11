@@ -7,7 +7,6 @@ import (
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 	translationdomain "servify/apps/server/internal/modules/translation/domain"
-	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	"time"
 )
 
@@ -464,15 +463,6 @@ type DailyStats struct {
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
-
-// VoiceCall 语音通话记录。定义已迁至 modules/voice/infra，此处保留类型别名供 legacy 引用方使用。
-type VoiceCall = voiceinfra.VoiceCall
-
-// VoiceRecording 语音录音记录。定义已迁至 modules/voice/infra，此处保留类型别名供 legacy 引用方使用。
-type VoiceRecording = voiceinfra.VoiceRecording
-
-// VoiceTranscript 语音转写记录。定义已迁至 modules/voice/infra，此处保留类型别名供 legacy 引用方使用。
-type VoiceTranscript = voiceinfra.VoiceTranscript
 
 // RemoteAssistSession 远程协助会话。定义已迁至 modules/assist/domain，
 // 此处保留类型别名供 legacy 引用方使用（assist_handler.go /

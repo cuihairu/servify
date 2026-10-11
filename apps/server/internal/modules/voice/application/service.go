@@ -70,5 +70,5 @@ func (s *Service) publish(ctx context.Context, name, callID string, payload inte
 		return
 	}
 	// aggregateID 统一带 voice: 前缀，供 webhook 按 voice:<callID> 回查快照
-	_ = s.publisher.Publish(ctx, NewVoiceEvent(name, "voice:"+callID, payload))
+	_ = s.publisher.Publish(ctx, NewVoiceEvent(ctx, name, "voice:"+callID, payload))
 }
