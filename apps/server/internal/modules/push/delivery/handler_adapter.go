@@ -48,8 +48,8 @@ func (a *PushRegistrationAdapter) RegisterPushToken(ctx context.Context, req *pu
 	err = a.db.WithContext(ctx).
 		Where("session_id = ? AND platform = ?", prepared.SessionID, prepared.Platform).
 		First(&existing).Error
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		// 保活/换 token：token 与 updated_at 始终刷新；摘要沿用已存在的行 id
 		// （map 更新不走 GORM 结构体回填，也不用 pg 方言的 Returning——
 		// sqlite 测试面与 pg 生产面同语义）。
@@ -69,7 +69,7 @@ func (a *PushRegistrationAdapter) RegisterPushToken(ctx context.Context, req *pu
 			Platform:  prepared.Platform,
 			UpdatedAt: now,
 		}, nil
-	case err == gorm.ErrRecordNotFound:
+	case gorm.ErrRecordNotFound:
 		if err := a.db.WithContext(ctx).Create(prepared).Error; err != nil {
 			return nil, err
 		}

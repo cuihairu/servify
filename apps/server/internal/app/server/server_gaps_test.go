@@ -123,7 +123,7 @@ func TestChannelOutboundDispatcherRegisterGuards(t *testing.T) {
 
 func TestOutboundDispatchSessionNotFoundSkips(t *testing.T) {
 	_, bus, sender, _ := newOutboundTestEnv(t)
-	bus.Publish(context.Background(), agentMessageEvent("sess-ghost", "无人认领"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-ghost", "无人认领"))
 	time.Sleep(150 * time.Millisecond)
 	if got := sender.count(); got != 0 {
 		t.Fatalf("unknown session must not send, got %d", got)
@@ -146,7 +146,7 @@ func TestOutboundDispatchOwnerLookupFailureLogs(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	bus.Publish(context.Background(), agentMessageEvent("sess-orphan", "回复"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-orphan", "回复"))
 	capture.waitContains(t, "has no owner user")
 }
 
@@ -167,7 +167,7 @@ func TestOutboundDispatchSendFailureLogs(t *testing.T) {
 	bus := eventbus.NewInMemoryBus()
 	d.Register(bus)
 
-	bus.Publish(context.Background(), agentMessageEvent("sess-fail", "投递失败"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-fail", "投递失败"))
 	capture.waitContains(t, "failed to send email reply")
 }
 

@@ -29,7 +29,7 @@ func TestLocalProviderSaveAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }() // 测试收尾
 	buf := make([]byte, 20)
 	n, _ := rc.Read(buf)
 	if string(buf[:n]) != "hello world" {
@@ -84,5 +84,5 @@ func TestLocalProviderSaveCreatesDirs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open nested: %v", err)
 	}
-	rc.Close()
+	_ = rc.Close() // 测试收尾
 }

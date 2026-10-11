@@ -151,7 +151,7 @@ func (s *AIService) callOpenAI(ctx context.Context, prompt string) (string, erro
 		span.SetStatus(codes.Error, err.Error())
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

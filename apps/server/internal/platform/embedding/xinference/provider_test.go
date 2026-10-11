@@ -61,7 +61,7 @@ func TestProvider_Embed_Single(t *testing.T) {
 			t.Errorf("unexpected model: %s", req.Model)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":[{"embedding":[0.1,0.2,0.3],"index":0}],"model":"test-model"}`)
+		_, _ = fmt.Fprint(w, `{"data":[{"embedding":[0.1,0.2,0.3],"index":0}],"model":"test-model"}`)
 	}))
 	defer server.Close()
 
@@ -81,7 +81,7 @@ func TestProvider_Embed_Single(t *testing.T) {
 func TestProvider_Embed_Multiple_SortByIndex(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":[{"embedding":[3],"index":2},{"embedding":[1],"index":0},{"embedding":[2],"index":1}],"model":"m"}`)
+		_, _ = fmt.Fprint(w, `{"data":[{"embedding":[3],"index":2},{"embedding":[1],"index":0},{"embedding":[2],"index":1}],"model":"m"}`)
 	}))
 	defer server.Close()
 
@@ -126,7 +126,7 @@ func TestProvider_Embed_HTTPError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.status)
-				fmt.Fprint(w, "boom")
+				_, _ = fmt.Fprint(w, "boom")
 			}))
 			defer server.Close()
 
@@ -148,7 +148,7 @@ func TestProvider_Embed_HTTPError(t *testing.T) {
 func TestProvider_Embed_MalformedJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{invalid`)
+		_, _ = fmt.Fprint(w, `{invalid`)
 	}))
 	defer server.Close()
 
@@ -165,7 +165,7 @@ func TestProvider_Embed_MalformedJSON(t *testing.T) {
 func TestProvider_Embed_ResponseErrorField(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":[],"model":"m","error":{"message":"model not found","code":"404"}}`)
+		_, _ = fmt.Fprint(w, `{"data":[],"model":"m","error":{"message":"model not found","code":"404"}}`)
 	}))
 	defer server.Close()
 
@@ -198,7 +198,7 @@ func TestProvider_Embed_CountMismatch(t *testing.T) {
 				for i := 0; i < tt.dataLen; i++ {
 					data = append(data, fmt.Sprintf(`{"embedding":[1],"index":%d}`, i))
 				}
-				fmt.Fprintf(w, `{"data":[%s],"model":"m"}`, strings.Join(data, ","))
+				_, _ = fmt.Fprintf(w, `{"data":[%s],"model":"m"}`, strings.Join(data, ","))
 			}))
 			defer server.Close()
 
@@ -227,7 +227,7 @@ func TestProvider_Embed_InvalidIndex(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"data":[{"embedding":[1],"index":%d},{"embedding":[2],"index":0}],"model":"m"}`, tt.index)
+				_, _ = fmt.Fprintf(w, `{"data":[{"embedding":[1],"index":%d},{"embedding":[2],"index":0}],"model":"m"}`, tt.index)
 			}))
 			defer server.Close()
 
@@ -285,8 +285,8 @@ func TestProvider_Embed_ReadBodyError(t *testing.T) {
 		}
 		// 声明 Content-Length 大于实际写入的 body，随后关闭连接，
 		// 客户端读取 body 时会得到 unexpected EOF
-		conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort"))
-		conn.Close()
+		_, _ = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort"))
+		_ = conn.Close() // 测试/清理 best-effort
 	}))
 	defer server.Close()
 
@@ -316,7 +316,7 @@ func TestProvider_HealthCheck(t *testing.T) {
 			t.Errorf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `[]`)
+		_, _ = fmt.Fprint(w, `[]`)
 	}))
 	defer server.Close()
 

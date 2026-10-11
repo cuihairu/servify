@@ -187,7 +187,7 @@ func run(dsn string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer sqlAdmin.Close()
+	defer func() { _ = sqlAdmin.Close() }() // 清理路径 best-effort
 
 	// Model table set bounds the comparison: the migrated side legitimately
 	// carries extra tables (WeKnora compatibility, schema_migrations) and the
@@ -241,7 +241,7 @@ func run(dsn string, out io.Writer) error {
 		b, ok := automigCols[key]
 		if !ok {
 			diffs++
-			fmt.Fprintf(out, "MISSING-IN-AUTOMIGRATE %s.%s migrated: %s\n", key.table, key.column, a.describe())
+			_, _ = fmt.Fprintf(out, "MISSING-IN-AUTOMIGRATE %s.%s migrated: %s\n", key.table, key.column, a.describe()) // 报告输出，真实失败由 run() 的返回错误兜底
 			continue
 		}
 		if a.differ(b) {
@@ -250,16 +250,16 @@ func run(dsn string, out io.Writer) error {
 				continue
 			}
 			diffs++
-			fmt.Fprintf(out, "DRIFT %s.%s\n  migrated:    %s\n  automigrate: %s\n", key.table, key.column, a.describe(), b.describe())
+			_, _ = fmt.Fprintf(out, "DRIFT %s.%s\n  migrated:    %s\n  automigrate: %s\n", key.table, key.column, a.describe(), b.describe()) // 报告输出，真实失败由 run() 的返回错误兜底
 		}
 	}
 	for key, b := range automigCols {
 		if _, ok := migratedCols[key]; !ok {
 			diffs++
-			fmt.Fprintf(out, "MISSING-IN-MIGRATED %s.%s automigrate: %s\n", key.table, key.column, b.describe())
+			_, _ = fmt.Fprintf(out, "MISSING-IN-MIGRATED %s.%s automigrate: %s\n", key.table, key.column, b.describe()) // 报告输出，真实失败由 run() 的返回错误兜底
 		}
 	}
-	fmt.Fprintf(out, "compared %d columns across %d model tables: %d diffs (%d allowlisted)\n", len(migratedCols), len(modelTables), diffs, skipped)
+	_, _ = fmt.Fprintf(out, "compared %d columns across %d model tables: %d diffs (%d allowlisted)\n", len(migratedCols), len(modelTables), diffs, skipped) // 报告输出，真实失败由 run() 的返回错误兜底
 	if diffs > 0 {
 		return fmt.Errorf("schema parity drift detected: %d diffs", diffs)
 	}
@@ -292,7 +292,7 @@ func readColumns(db *gorm.DB, modelTables map[string]bool) (map[columnKey]column
 	if err != nil {
 		return nil, fmt.Errorf("read information_schema.columns: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 	cols := map[columnKey]columnShape{}
 	for rows.Next() {
 		var t, c string

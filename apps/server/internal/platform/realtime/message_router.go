@@ -105,7 +105,7 @@ func (r *MessageRouter) UnregisterPlatform(platformID string) {
 	defer r.mutex.Unlock()
 
 	if adapter, exists := r.platforms[platformID]; exists {
-		adapter.Stop()
+		_ = adapter.Stop() // 注销路径 best-effort，失败仅影响该适配器收尾
 		delete(r.platforms, platformID)
 		logrus.Infof("Unregistered platform adapter: %s", platformID)
 	}

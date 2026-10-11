@@ -141,7 +141,7 @@ func TestS3ProviderOpenReturnsBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	data, _ := io.ReadAll(rc)
 	if string(data) != "data" {
 		t.Fatalf("unexpected body %q", string(data))

@@ -14,12 +14,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
+	mathrand "math/rand"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -145,8 +146,8 @@ var marshalResults = func(results []Result) ([]byte, error) {
 	return json.MarshalIndent(results, "", "  ")
 }
 
-// cryptoRead 是 WS 握手 key 的随机源 seam：默认 math/rand.Read（不返回
-// 错误），测试换失败实现以覆盖防御分支。
+// cryptoRead 是 WS 握手 key 的随机源 seam：默认 crypto/rand.Read，
+// 测试换失败实现以覆盖防御分支。
 var cryptoRead = rand.Read
 
 // buildUploadBody 是 multipart 上传体构造 seam：换失败实现以覆盖 uploadFile
@@ -239,7 +240,7 @@ func httpDo(client *http.Client, method, url, token, contentType, body string) (
 	if err != nil {
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, err
@@ -290,7 +291,7 @@ func runTickets(base, token string, profile loadProfile) Result {
 	hist := &latencyHistogram{}
 	start := time.Now()
 	runWorkers(profile.ticketsOps, profile.concurrency, func() {
-		reqID := fmt.Sprintf("perf-%d-%d", time.Now().UnixNano(), rand.Intn(1<<30))
+		reqID := fmt.Sprintf("perf-%d-%d", time.Now().UnixNano(), mathrand.Intn(1<<30))
 		// 写：创建工单。
 		body := fmt.Sprintf(`{"title":"perf ticket %s","description":"P2-8 baseline load","priority":"low","customer_id":%s}`, reqID, customerID)
 		t0 := time.Now()
@@ -445,7 +446,7 @@ func uploadFile(client *http.Client, url, token string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
@@ -579,7 +580,7 @@ func wsServerReported(base, token string, minExpected int) (int, error) {
 			} `json:"data"`
 		}
 		decodeErr := json.NewDecoder(resp.Body).Decode(&parsed)
-		resp.Body.Close()
+		_ = resp.Body.Close() // 压测路径 best-effort
 		if decodeErr != nil {
 			return 0, decodeErr
 		}
@@ -597,7 +598,7 @@ func wsServerReported(base, token string, minExpected int) (int, error) {
 
 type wsConn struct {
 	conn net.Conn
-	rand *rand.Rand
+	rand *mathrand.Rand
 }
 
 // dialWSFn 是阶梯建连用的拨号 seam（默认 dialWS）：测试注入预置的连接以
@@ -620,20 +621,20 @@ func dialWS(rawURL string) (*wsConn, error) {
 	// RFC 6455/gorilla 要求 Sec-WebSocket-Key 解码后恰好 16 字节。
 	var keyBytes [16]byte
 	if _, err := cryptoRead(keyBytes[:]); err != nil {
-		conn.Close()
+		_ = conn.Close() // 压测路径 best-effort
 		return nil, err
 	}
 	key := base64.StdEncoding.EncodeToString(keyBytes[:])
 	request := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", path, hostPort, key)
 	if _, err := conn.Write([]byte(request)); err != nil {
-		conn.Close()
+		_ = conn.Close() // 压测路径 best-effort
 		return nil, err
 	}
 	if err := readUpgradeResponse(conn, key); err != nil {
-		conn.Close()
+		_ = conn.Close() // 压测路径 best-effort
 		return nil, err
 	}
-	return &wsConn{conn: conn, rand: rand.New(rand.NewSource(time.Now().UnixNano()))}, nil
+	return &wsConn{conn: conn, rand: mathrand.New(mathrand.NewSource(time.Now().UnixNano()))}, nil
 }
 
 func readUpgradeResponse(conn net.Conn, key string) error {

@@ -43,7 +43,7 @@ func TestHandlerServiceAdapter_ApplySessionTransferSwallowsError(t *testing.T) {
 	adapter := NewHandlerServiceAdapter(module, logrus.New())
 
 	from := uint(1)
-	adapter.ApplySessionTransfer(nil, "sess-x", &from, 42)
+	adapter.ApplySessionTransfer(context.Background(), "sess-x", &from, 42)
 }
 
 func TestHandlerServiceAdapter_GetOnlineAgentMiss(t *testing.T) {

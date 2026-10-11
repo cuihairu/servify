@@ -570,7 +570,7 @@ func TestWebSocket_HandleWebSocketHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// invalid json is ignored
 	if err := conn.WriteMessage(websocket.TextMessage, []byte("not-json")); err != nil {

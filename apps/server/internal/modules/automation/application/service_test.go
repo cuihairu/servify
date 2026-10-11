@@ -354,12 +354,12 @@ func TestListRunsDefaultsAndClamps(t *testing.T) {
 		t.Fatalf("expected defaults page=1 size=20, got %+v", q)
 	}
 
-	svc.ListRuns(context.Background(), RunListQuery{Page: 2, PageSize: 500})
+	_, _, _ = svc.ListRuns(context.Background(), RunListQuery{Page: 2, PageSize: 500}) // 钳制经 repo.queries 断言
 	if q := repo.queries[1]; q.Page != 2 || q.PageSize != 100 {
 		t.Fatalf("expected clamp page=2 size=100, got %+v", q)
 	}
 
-	svc.ListRuns(context.Background(), RunListQuery{Page: -1, PageSize: -5})
+	_, _, _ = svc.ListRuns(context.Background(), RunListQuery{Page: -1, PageSize: -5}) // 钳制经 repo.queries 断言
 	if q := repo.queries[2]; q.Page != 1 || q.PageSize != 20 {
 		t.Fatalf("expected fallback page=1 size=20, got %+v", q)
 	}

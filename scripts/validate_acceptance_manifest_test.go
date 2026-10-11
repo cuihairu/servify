@@ -1377,28 +1377,8 @@ func TestValidateAcceptanceManifestScriptAcceptsValidSessionTransferManifest(t *
 		"to-human-unknown-session.txt":  "HTTP/1.1 500",
 	}
 	names := make([]string, 0, len(evidence))
-	for _, name := range []string{
-		"summary.txt",
-		"unauthenticated-waiting.txt",
-		"agents-online-list.txt",
-		"to-human-direct.txt",
-		"history-s1.txt",
-		"to-human-queued.txt",
-		"waiting-list.txt",
-		"to-human-duplicate.txt",
-		"process-queue.txt",
-		"waiting-list-after.txt",
-		"to-agent-offline-rejected.txt",
-		"to-agent-direct.txt",
-		"cancel-waiting.txt",
-		"cancel-waiting-again.txt",
-		"waiting-list-cancelled.txt",
-		"check-auto.txt",
-		"history-recent.txt",
-		"to-human-unknown-session.txt",
-	} {
-		names = append(names, name)
-	}
+	names = append(names,
+		"summary.txt", "unauthenticated-waiting.txt", "agents-online-list.txt", "to-human-direct.txt", "history-s1.txt", "to-human-queued.txt", "waiting-list.txt", "to-human-duplicate.txt", "process-queue.txt", "waiting-list-after.txt", "to-agent-offline-rejected.txt", "to-agent-direct.txt", "cancel-waiting.txt", "cancel-waiting-again.txt", "waiting-list-cancelled.txt", "check-auto.txt", "history-recent.txt", "to-human-unknown-session.txt")
 	evidence["manifest.json"] = fmt.Sprintf(`{
   "provider": "session-transfer",
   "mode": "runtime-transfer-chain",

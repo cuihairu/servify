@@ -145,7 +145,7 @@ func TestDeleteDocument_Success(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"Deleted successfully"}`))
+		_, _ = w.Write([]byte(`{"success":true,"message":"Deleted successfully"}`))
 	}))
 	defer server.Close()
 
@@ -160,7 +160,7 @@ func TestDeleteDocument_ServerRejection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"success":false,"error":{"code":"not_found","message":"document not found"}}`))
+		_, _ = w.Write([]byte(`{"success":false,"error":{"code":"not_found","message":"document not found"}}`))
 	}))
 	defer server.Close()
 
@@ -175,7 +175,7 @@ func TestDeleteDocument_ServerRejection(t *testing.T) {
 func TestDeleteDocument_UnsuccessfulResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":false,"message":"deletion is disabled"}`))
+		_, _ = w.Write([]byte(`{"success":false,"message":"deletion is disabled"}`))
 	}))
 	defer server.Close()
 

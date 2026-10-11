@@ -15,8 +15,6 @@ import (
 const (
 	// Stream key pattern: servify:events:{event_name}
 	eventStreamPattern = "servify:events:%s"
-	// Consumer group for reliable delivery
-	consumerGroup = "servify-workers"
 	// Pub/Sub channel for real-time notification
 	eventPubSubChannel = "servify:events:pubsub"
 	// Default stream max length
@@ -130,7 +128,7 @@ func (b *RedisBus) Publish(ctx context.Context, event Event) error {
 // subscribeLoop listens for event notifications and dispatches to handlers.
 func (b *RedisBus) subscribeLoop() {
 	pubsub := b.client.Subscribe(b.ctx, eventPubSubChannel)
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }() // 订阅循环收尾，关闭错误无从上报
 	b.awaitSubscriptionConfirmed(pubsub)
 
 	ch := pubsub.Channel()
@@ -347,7 +345,7 @@ func castToInt64(v interface{}) int64 {
 	case string:
 		// Try parsing as string
 		var i int64
-		fmt.Sscanf(val, "%d", &i)
+		_, _ = fmt.Sscanf(val, "%d", &i) // 解析失败回落 0
 		return i
 	default:
 		return 0

@@ -39,7 +39,7 @@ func TestBuildPostgresDSN(t *testing.T) {
 
 func TestAutoMigrateRequested(t *testing.T) {
 	orig := os.Getenv("SERVIFY_AUTO_MIGRATE")
-	defer os.Setenv("SERVIFY_AUTO_MIGRATE", orig)
+	defer func() { _ = os.Setenv("SERVIFY_AUTO_MIGRATE", orig) }() // 还原测试环境
 
 	cases := []struct {
 		value string
@@ -53,9 +53,9 @@ func TestAutoMigrateRequested(t *testing.T) {
 	}
 	for _, tt := range cases {
 		if tt.value == "" {
-			os.Unsetenv("SERVIFY_AUTO_MIGRATE")
+			_ = os.Unsetenv("SERVIFY_AUTO_MIGRATE")
 		} else {
-			os.Setenv("SERVIFY_AUTO_MIGRATE", tt.value)
+			_ = os.Setenv("SERVIFY_AUTO_MIGRATE", tt.value)
 		}
 		if got := AutoMigrateRequested(); got != tt.want {
 			t.Fatalf("AutoMigrateRequested(%q)=%v want %v", tt.value, got, tt.want)
@@ -83,7 +83,7 @@ func TestOpenDatabaseAppliesConnectionPoolSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("raw db: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	stats := sqlDB.Stats()
 	// database/sql only exposes MaxOpenConnections via DBStats; the
 	// idle/lifetime settings are applied unconditionally above and are not
@@ -131,7 +131,7 @@ func TestOpenDatabaseSupportsSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("db.DB() error = %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	if err := sqlDB.Ping(); err != nil {
 		t.Fatalf("Ping() error = %v", err)

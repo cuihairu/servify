@@ -50,7 +50,7 @@ func (e *Embedding) Scan(src any) error {
 // Value implements driver.Valuer. Empty vectors are written as NULL so they do
 // not produce an invalid "[]" literal or trip Postgres vector column checks.
 func (e Embedding) Value() (driver.Value, error) {
-	if len(e.Vector.Slice()) == 0 {
+	if len(e.Slice()) == 0 {
 		return nil, nil
 	}
 	return e.Vector.Value()

@@ -380,7 +380,7 @@ func normalizeRecoveryCode(code string) string {
 		return ""
 	}
 	for _, r := range code {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			return ""
 		}
 	}

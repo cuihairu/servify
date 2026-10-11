@@ -153,8 +153,10 @@ func TestConversationWorkspaceHandler_SendMessage(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(items))
 	}
-	if items[0].CreatedAt.After(items[1].CreatedAt) && items[0].CreatedAt.After(items[2].CreatedAt) {
-		// repository order is desc; verify latest content exists.
+	// repository order is desc: the newest message must not be older than
+	// the older ones.
+	if items[0].CreatedAt.Before(items[2].CreatedAt) {
+		t.Fatalf("expected desc order, got newest %v before %v", items[0].CreatedAt, items[2].CreatedAt)
 	}
 	found := false
 	for _, item := range items {

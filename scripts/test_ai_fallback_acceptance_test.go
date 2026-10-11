@@ -38,25 +38,25 @@ func TestAIFallbackAcceptanceScriptWritesEvidence(t *testing.T) {
 	servify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		switch {
-		case r.URL.Path == "/health":
+		switch r.URL.Path {
+		case "/health":
 			_, _ = w.Write([]byte(`{"status":"healthy"}`))
-		case r.URL.Path == "/api/v1/auth/register":
+		case "/api/v1/auth/register":
 			mu.Lock()
 			defer mu.Unlock()
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"token":"` + token + `","refresh_token":"ai-fallback-refresh","user":{"id":1,"role":"admin"}}`))
-		case r.URL.Path == "/api/v1/ai/status":
+		case "/api/v1/ai/status":
 			if !authorized(w, r) {
 				return
 			}
 			_, _ = w.Write([]byte(`{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider":"","knowledge_provider_enabled":false,"fallback_enabled":true}}`))
-		case r.URL.Path == "/api/v1/ai/query":
+		case "/api/v1/ai/query":
 			if !authorized(w, r) {
 				return
 			}
 			_, _ = w.Write([]byte(`{"success":true,"data":{"content":"您好！我是智能客服助手。","confidence":0.8,"source":"ai","strategy":"fallback","duration":"1ms"},"duration":"1ms"}`))
-		case r.URL.Path == "/api/v1/ai/metrics":
+		case "/api/v1/ai/metrics":
 			if !authorized(w, r) {
 				return
 			}

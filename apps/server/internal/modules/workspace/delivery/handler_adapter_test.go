@@ -11,8 +11,7 @@ import (
 )
 
 type adapterStubRepo struct {
-	overview *workspaceapp.WorkspaceOverview
-	err      error
+	err error
 }
 
 func (r *adapterStubRepo) CountActiveSessions(ctx context.Context) (int64, error) {

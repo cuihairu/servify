@@ -15,8 +15,6 @@ import (
 	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerapplication "servify/apps/server/internal/modules/customer/application"
-	gamificationcontract "servify/apps/server/internal/modules/gamification/contract"
-	gamificationdelivery "servify/apps/server/internal/modules/gamification/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	routingapplication "servify/apps/server/internal/modules/routing/application"
@@ -24,7 +22,6 @@ import (
 	satisfactiondelivery "servify/apps/server/internal/modules/satisfaction/delivery"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	sladelivery "servify/apps/server/internal/modules/sla/delivery"
-	suggestioncontract "servify/apps/server/internal/modules/suggestion/contract"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -45,7 +42,6 @@ type unitAgentService struct {
 	createErr  error
 	getErr     error
 	listErr    error
-	onlineErr  error
 	statusErr  error
 	revokeVer  int
 	revokeErr  error
@@ -464,34 +460,6 @@ func (s *unitAutomationService) BatchRun(ctx context.Context, req *automationdel
 		return nil, s.batchErr
 	}
 	return s.batch, nil
-}
-
-// ---- gamification ----
-
-type unitGamificationService struct {
-	resp *gamificationcontract.LeaderboardResponse
-	err  error
-}
-
-func (s *unitGamificationService) GetLeaderboard(ctx context.Context, req *gamificationdelivery.LeaderboardRequest) (*gamificationcontract.LeaderboardResponse, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.resp, nil
-}
-
-// ---- suggestion ----
-
-type unitSuggestionService struct {
-	resp *suggestioncontract.SuggestionResponse
-	err  error
-}
-
-func (s *unitSuggestionService) Suggest(ctx context.Context, req *suggestioncontract.SuggestionRequest) (*suggestioncontract.SuggestionResponse, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.resp, nil
 }
 
 // ---- satisfaction ----

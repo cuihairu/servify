@@ -38,16 +38,18 @@ func (r *GormRepository) GetDashboardStats(ctx context.Context) (*analyticsapp.D
 	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Where("status = ?", "online").Count(&stats.OnlineAgents)
 	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Where("status = ?", "busy").Count(&stats.BusyAgents)
 	applyEntityScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx).Where("status = ?", "active").Count(&stats.ActiveSessions)
-	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("AVG(avg_response_time)").Row().Scan(&stats.AvgResponseTime)
+	// 聚合列统一走 gorm Scan + COALESCE（见 GetRemoteAssistTicketStats 注
+	// 释）：Row().Scan 在空集/NULL 时报错，gorm Scan 归零不报错。
+	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("COALESCE(AVG(avg_response_time), 0)").Scan(&stats.AvgResponseTime)
 
 	var avgResolution float64
-	applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), ctx).Where("resolved_at IS NOT NULL").Select(avgResolutionExpr(r.db, "resolved_at", "created_at")).Row().Scan(&avgResolution)
+	applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), ctx).Where("resolved_at IS NOT NULL").Select("COALESCE(" + avgResolutionExpr(r.db, "resolved_at", "created_at") + ", 0)").Scan(&avgResolution)
 	stats.AvgResolutionTime = avgResolution
 
 	// Real satisfaction: average rating from customer_satisfactions
 	var avgSatisfaction float64
 	applyEntityScope(r.db.WithContext(ctx).Model(&models.CustomerSatisfaction{}), ctx).
-		Select("COALESCE(AVG(rating), 0)").Row().Scan(&avgSatisfaction)
+		Select("COALESCE(AVG(rating), 0)").Scan(&avgSatisfaction)
 	stats.CustomerSatisfaction = avgSatisfaction
 
 	var dailyStat models.DailyStats
@@ -159,7 +161,7 @@ func (r *GormRepository) GetTimeRangeStats(ctx context.Context, startDate, endDa
 // dayExpr 把时间列格式化为 UTC 日界的 YYYY-MM-DD 文本；pg 用 AT TIME ZONE
 // 固定 UTC 与 Truncate(24h) 口径一致，sqlite 直接 strftime。
 func dayExpr(db *gorm.DB, column string) string {
-	switch db.Dialector.Name() {
+	switch db.Name() {
 	case "sqlite":
 		return fmt.Sprintf("strftime('%%Y-%%m-%%d', %s)", column)
 	default:
@@ -290,8 +292,8 @@ func (r *GormRepository) UpdateDailyStats(ctx context.Context, date time.Time) e
 	dailyStats.TotalTickets = int(totalTickets)
 	dailyStats.ResolvedTickets = int(resolvedTickets)
 	var avgResponseTime, avgResolutionTime float64
-	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), statsCtx).Select("AVG(avg_response_time)").Row().Scan(&avgResponseTime)
-	applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), statsCtx).Where("resolved_at >= ? AND resolved_at < ? AND resolved_at IS NOT NULL", date, nextDay).Select(avgResolutionExpr(r.db, "resolved_at", "created_at")).Row().Scan(&avgResolutionTime)
+	applyEntityScope(r.db.WithContext(ctx).Model(&models.Agent{}), statsCtx).Select("COALESCE(AVG(avg_response_time), 0)").Scan(&avgResponseTime)
+	applyEntityScope(r.db.WithContext(ctx).Model(&models.Ticket{}), statsCtx).Where("resolved_at >= ? AND resolved_at < ? AND resolved_at IS NOT NULL", date, nextDay).Select("COALESCE(" + avgResolutionExpr(r.db, "resolved_at", "created_at") + ", 0)").Scan(&avgResolutionTime)
 	dailyStats.AvgResponseTime = int(avgResponseTime)
 	dailyStats.AvgResolutionTime = int(avgResolutionTime)
 
@@ -299,7 +301,7 @@ func (r *GormRepository) UpdateDailyStats(ctx context.Context, date time.Time) e
 	var avgSat float64
 	applyEntityScope(r.db.WithContext(ctx).Model(&models.CustomerSatisfaction{}), statsCtx).
 		Where("created_at >= ? AND created_at < ?", date, nextDay).
-		Select("COALESCE(AVG(rating), 0)").Row().Scan(&avgSat)
+		Select("COALESCE(AVG(rating), 0)").Scan(&avgSat)
 	dailyStats.CustomerSatisfaction = avgSat
 
 	if dailyStats.ID == 0 {
@@ -357,7 +359,7 @@ func avgResolutionExpr(db *gorm.DB, resolvedColumn, createdColumn string) string
 }
 
 func AvgDurationExpr(db *gorm.DB, endColumn, startColumn string) string {
-	switch db.Dialector.Name() {
+	switch db.Name() {
 	case "sqlite":
 		return fmt.Sprintf("((julianday(%s) - julianday(%s)) * 86400.0)", endColumn, startColumn)
 	default:

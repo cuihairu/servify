@@ -399,8 +399,3 @@ func TestAppWorkerStopErrorWrapping(t *testing.T) {
 		t.Fatalf("StopWorkers() error = %v, want wrapped worker failure", err)
 	}
 }
-
-func stubWorkerName(t *testing.T) string {
-	t.Helper()
-	return "worker-" + strings.ReplaceAll(t.Name(), "/", "-")
-}

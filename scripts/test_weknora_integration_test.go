@@ -68,9 +68,9 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"fallback-ok","strategy":"fallback"}}`))
 			}
 		case "/api/v1/ai/status":
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider_enabled":%t,"knowledge_provider":"weknora","knowledge_provider_healthy":%t}}`, knowledgeProviderEnabled, knowledgeProviderEnabled)))
+			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider_enabled":%t,"knowledge_provider":"weknora","knowledge_provider_healthy":%t}}`, knowledgeProviderEnabled, knowledgeProviderEnabled)
 		case "/api/v1/ai/metrics":
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"success":true,"data":{"query_count":3,"weknora_usage_count":2,"fallback_usage_count":%d}}`, fallbackUsageCount)))
+			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"query_count":3,"weknora_usage_count":2,"fallback_usage_count":%d}}`, fallbackUsageCount)
 		case "/api/v1/ai/knowledge-provider/disable":
 			knowledgeProviderEnabled = false
 			_, _ = w.Write([]byte(`{"success":true,"message":"knowledge provider disabled"}`))

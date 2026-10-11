@@ -253,7 +253,6 @@ func (s *stubRoutingRuntime) ReleaseWaitingClaim(ctx context.Context, sessionID 
 }
 
 type stubConversationRuntime struct {
-	mu      sync.Mutex
 	session *conversationdelivery.TransferSession
 	loads   atomic.Int64
 }

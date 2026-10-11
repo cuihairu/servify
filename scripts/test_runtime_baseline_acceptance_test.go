@@ -29,21 +29,21 @@ func TestRuntimeBaselineAcceptanceScriptWritesEvidence(t *testing.T) {
 	servify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		switch {
-		case r.URL.Path == "/health":
+		switch r.URL.Path {
+		case "/health":
 			_, _ = w.Write([]byte(`{"status":"healthy"}`))
-		case r.URL.Path == "/ready":
+		case "/ready":
 			_, _ = w.Write([]byte(`{"ready":true,"services":{"ai":"ready","database":"ready"}}`))
-		case r.URL.Path == "/metrics":
+		case "/metrics":
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 			_, _ = w.Write([]byte("# HELP servify_up servify up\n# TYPE servify_up gauge\nservify_up 1\n"))
-		case r.URL.Path == "/api/v1/auth/register":
+		case "/api/v1/auth/register":
 			mu.Lock()
 			defer mu.Unlock()
 			registers++
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"token":"` + token + `","refresh_token":"reg-refresh","user":{"id":1,"role":"admin"}}`))
-		case r.URL.Path == "/api/v1/messages/platforms":
+		case "/api/v1/messages/platforms":
 			if r.Header.Get("Authorization") != "Bearer "+token {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"invalid token"}`))

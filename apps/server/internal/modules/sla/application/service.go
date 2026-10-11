@@ -903,7 +903,7 @@ func (s *SLAService) getSLATrendData(ctx context.Context, days int) ([]SLACompli
 		}
 
 		// 计算合规率
-		var complianceRate float64 = 100.0
+		var complianceRate = 100.0
 		if totalTickets > 0 {
 			complianceRate = float64(totalTickets-violations) / float64(totalTickets) * 100
 		}

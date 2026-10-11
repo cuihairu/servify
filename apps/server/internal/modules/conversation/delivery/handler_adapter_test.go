@@ -127,6 +127,7 @@ func TestHandlerServiceAdapterGetConversationBranches(t *testing.T) {
 
 	// not found 且消息列表查询失败 → ErrConversationNotFound
 	repo = &scriptedConversationRepo{listErr: errors.New("list boom")}
+	handler = NewHandlerService(conversationapp.NewService(repo, nil))
 	if _, err := handler.GetConversation(context.Background(), "sess-x"); err != ErrConversationNotFound {
 		t.Fatalf("expected ErrConversationNotFound, got %v", err)
 	}

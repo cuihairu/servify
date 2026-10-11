@@ -162,7 +162,7 @@ func chainTail(tx *gorm.DB) (string, error) {
 	q := tx.Model(&models.AuditLog{}).
 		Where("entry_hash <> ''").
 		Order("id DESC").Limit(1).
-		Clauses(chainLockClauses(chainNeedsRowLock(tx.Dialector.Name()))...)
+		Clauses(chainLockClauses(chainNeedsRowLock(tx.Name()))...)
 	var hashes []string
 	if err := q.Pluck("entry_hash", &hashes).Error; err != nil {
 		return "", err

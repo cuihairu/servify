@@ -110,7 +110,7 @@ func (c *Client) doRequest(req *http.Request, result interface{}) error {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("http request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

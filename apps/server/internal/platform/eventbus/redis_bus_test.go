@@ -14,10 +14,10 @@ import (
 func TestRedisBusPublishPersistsToStream(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	event := BaseEvent{
 		EventID:          "evt-redis-1",
@@ -50,10 +50,10 @@ func TestRedisBusPublishPersistsToStream(t *testing.T) {
 func TestRedisBusSubscribeReceivesPublishedEvent(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	event := BaseEvent{
 		EventID:          "evt-redis-2",
@@ -91,10 +91,10 @@ func TestRedisBusSubscribeReceivesPublishedEvent(t *testing.T) {
 func TestRedisBusHealth(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	if err := bus.Health(context.Background()); err != nil {
 		t.Fatalf("health failed: %v", err)

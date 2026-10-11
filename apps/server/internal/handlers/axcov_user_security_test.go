@@ -51,18 +51,21 @@ func axcSecurityLogger() *logrus.Logger {
 	return logger
 }
 
-func axcFailQueriesWithDest(db *gorm.DB, dest any) {
+func axcFailQueriesWithDest(db *gorm.DB, dest any) error {
 	target := reflect.TypeOf(dest)
-	db.Callback().Query().Before("gorm:query").Register("axc:fail_dest_query", func(tx *gorm.DB) {
+	if err := db.Callback().Query().Before("gorm:query").Register("axc:fail_dest_query", func(tx *gorm.DB) {
 		if tx.Statement.Dest == nil || reflect.TypeOf(tx.Statement.Dest) != target {
 			return
 		}
 		_ = tx.AddError(errors.New("axc injected query failure"))
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
-func axcFailNthUserQuery(db *gorm.DB, n int) {
-	db.Callback().Query().Before("gorm:query").Register("axc:fail_nth_user_query", func(tx *gorm.DB) {
+func axcFailNthUserQuery(db *gorm.DB, n int) error {
+	if err := db.Callback().Query().Before("gorm:query").Register("axc:fail_nth_user_query", func(tx *gorm.DB) {
 		if _, ok := tx.Statement.Dest.(*models.User); !ok {
 			return
 		}
@@ -70,17 +73,23 @@ func axcFailNthUserQuery(db *gorm.DB, n int) {
 		if n == 0 {
 			_ = tx.AddError(errors.New("axc injected nth user query failure"))
 		}
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
-func axcFailUpdatesOnModel(db *gorm.DB, model any) {
+func axcFailUpdatesOnModel(db *gorm.DB, model any) error {
 	target := reflect.TypeOf(model)
-	db.Callback().Update().Before("gorm:update").Register("axc:fail_model_update", func(tx *gorm.DB) {
+	if err := db.Callback().Update().Before("gorm:update").Register("axc:fail_model_update", func(tx *gorm.DB) {
 		if tx.Statement.Model == nil || reflect.TypeOf(tx.Statement.Model) != target {
 			return
 		}
 		_ = tx.AddError(errors.New("axc injected update failure"))
-	})
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func axcClosedSecurityDB(t *testing.T) *gorm.DB {
@@ -269,7 +278,9 @@ func TestAxcUserSecurityRevokeTokens(t *testing.T) {
 		if err := db.Create(&models.User{ID: 111, Username: "axc-rv", Email: "axc-rv@example.com", Role: "agent", Status: "active", TokenVersion: 1}).Error; err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		axcFailUpdatesOnModel(db, &models.User{})
+		if err := axcFailUpdatesOnModel(db, &models.User{}); err != nil {
+			t.Fatalf("register model update callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodPost, "/api/security/users/111/revoke-tokens", ""); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -307,7 +318,9 @@ func TestAxcUserSecurityRevokeTokens(t *testing.T) {
 		if err := db.Create(&models.User{ID: 113, Username: "axc-rv3", Email: "axc-rv3@example.com", Role: "admin", Status: "active", TokenVersion: 0}).Error; err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		axcFailNthUserQuery(db, 3)
+		if err := axcFailNthUserQuery(db, 3); err != nil {
+			t.Fatalf("register nth user query callback: %v", err)
+		}
 		afterSet := false
 		r := gin.New()
 		r.Use(func(c *gin.Context) {
@@ -359,7 +372,9 @@ func TestAxcUserSecurityBatchRevokeTokens(t *testing.T) {
 		if err := db.Create(&models.User{ID: 122, Username: "axc-b2", Email: "axc-b2@example.com", Role: "agent", Status: "active"}).Error; err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		axcFailUpdatesOnModel(db, &models.User{})
+		if err := axcFailUpdatesOnModel(db, &models.User{}); err != nil {
+			t.Fatalf("register model update callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodPost, "/api/security/users/revoke-tokens", `{"user_ids":[122]}`); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -391,7 +406,9 @@ func TestAxcUserSecurityBatchRevokeTokens(t *testing.T) {
 		}).Error; err != nil {
 			t.Fatalf("seed users: %v", err)
 		}
-		axcFailNthUserQuery(db, 5)
+		if err := axcFailNthUserQuery(db, 5); err != nil {
+			t.Fatalf("register nth user query callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		w := axcSecurityDo(r, http.MethodPost, "/api/security/users/revoke-tokens", `{"user_ids":[125,126]}`)
 		if w.Code != http.StatusOK {
@@ -471,7 +488,9 @@ func TestAxcUserSecurityListUserSessions(t *testing.T) {
 		if err := db.Create(&models.User{ID: 141, Username: "axc-ls", Email: "axc-ls@example.com", Role: "admin", Status: "active"}).Error; err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
-		axcFailQueriesWithDest(db, &[]models.UserAuthSession{})
+		if err := axcFailQueriesWithDest(db, &[]models.UserAuthSession{}); err != nil {
+			t.Fatalf("register query dest callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodGet, "/api/security/users/141/sessions", ""); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -604,7 +623,9 @@ func TestAxcUserSecurityRevokeAllSessions(t *testing.T) {
 	t.Run("list sessions failure", func(t *testing.T) {
 		db := axcNewSecurityDB(t)
 		seed(t, db)
-		axcFailQueriesWithDest(db, &[]models.UserAuthSession{})
+		if err := axcFailQueriesWithDest(db, &[]models.UserAuthSession{}); err != nil {
+			t.Fatalf("register query dest callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodPost, "/api/security/users/161/sessions/revoke-all", ""); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -616,7 +637,9 @@ func TestAxcUserSecurityRevokeAllSessions(t *testing.T) {
 		if err := db.Create(&models.UserAuthSession{ID: "axc-sess-161", UserID: 161, Status: "active", TokenVersion: 1}).Error; err != nil {
 			t.Fatalf("seed session: %v", err)
 		}
-		axcFailUpdatesOnModel(db, &models.UserAuthSession{})
+		if err := axcFailUpdatesOnModel(db, &models.UserAuthSession{}); err != nil {
+			t.Fatalf("register session update callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodPost, "/api/security/users/161/sessions/revoke-all", ""); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
@@ -771,7 +794,9 @@ func TestAxcUserSecurityListRevokedTokens(t *testing.T) {
 	})
 	t.Run("list failure", func(t *testing.T) {
 		db := axcNewSecurityDB(t)
-		axcFailQueriesWithDest(db, &[]models.RevokedToken{})
+		if err := axcFailQueriesWithDest(db, &[]models.RevokedToken{}); err != nil {
+			t.Fatalf("register revoked token query callback: %v", err)
+		}
 		r := axcSecurityRouter(NewUserSecurityHandler(usersecurity.NewService(db, axcSecurityLogger()), axcSecurityLogger()))
 		if w := axcSecurityDo(r, http.MethodGet, "/api/security/tokens/revoked", ""); w.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())

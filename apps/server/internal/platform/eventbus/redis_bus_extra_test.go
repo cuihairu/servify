@@ -14,10 +14,10 @@ import (
 func TestNewRedisBusWithNilLogger(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, nil)
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	if bus.logger != logrus.StandardLogger() {
 		t.Fatal("expected nil logger to fall back to the standard logger")
@@ -32,10 +32,10 @@ func TestWaitUntilReadyReturnsFalseWhenContextExpires(t *testing.T) {
 		Addr:        "127.0.0.1:1",
 		DialTimeout: 50 * time.Millisecond,
 	})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
@@ -47,10 +47,10 @@ func TestWaitUntilReadyReturnsFalseWhenContextExpires(t *testing.T) {
 func TestRedisBusDispatchFromStreamReadError(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	received := make(chan struct{}, 1)
 	bus.Subscribe("ticket.readerr", HandlerFunc(func(ctx context.Context, e Event) error {
@@ -91,11 +91,11 @@ func (failPublishHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis
 func TestRedisBusPublishToleratesPubSubFailure(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	client.AddHook(failPublishHook{})
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	waitForSubscription(t, bus)
 
 	event := BaseEvent{EventID: "evt-pubsub-fail", EventName: "ticket.pubsubfail"}
@@ -126,7 +126,7 @@ func TestInMemoryBusPublishNilEvent(t *testing.T) {
 func TestRedisBusSubscribeLoopStopsOnChannelClose(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
 	waitForSubscription(t, bus)

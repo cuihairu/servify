@@ -705,7 +705,7 @@ func TestProviderChatStreamLineTooLong(t *testing.T) {
 
 func TestProviderChatStreamContextCancelledDuringTextDelta(t *testing.T) {
 	provider, pw, bodyClosed := newPipeStreamProvider()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -736,7 +736,7 @@ func TestProviderChatStreamContextCancelledDuringTextDelta(t *testing.T) {
 
 func TestProviderChatStreamContextCancelledDuringToolCallStop(t *testing.T) {
 	provider, pw, bodyClosed := newPipeStreamProvider()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -767,7 +767,7 @@ func TestProviderChatStreamContextCancelledDuringToolCallStop(t *testing.T) {
 
 func TestProviderChatStreamContextCancelledDuringMessageStop(t *testing.T) {
 	provider, pw, bodyClosed := newPipeStreamProvider()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

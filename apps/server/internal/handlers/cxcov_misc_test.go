@@ -157,7 +157,7 @@ func TestCxcEnhancedReadyVariants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	defer open.Close()
+	defer func() { _ = open.Close() }()
 	h4 := cxcHealthHandler(cxcHealthConfig(), readyAI, &unitDBPing{db: open}, nil)
 	r4 := gin.New()
 	r4.GET("/ready", h4.Ready)
@@ -248,7 +248,7 @@ func TestCxcCheckDatabaseBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	defer open.Close()
+	defer func() { _ = open.Close() }()
 	h4 := cxcHealthHandler(cxcHealthConfig(), nil, &unitDBPing{db: open}, nil)
 	resp4 := &HealthResponse{Services: map[string]ServiceInfo{}}
 	all4 := false
@@ -261,7 +261,7 @@ func TestCxcCheckDatabaseBranches(t *testing.T) {
 func TestCxcCheckRedisUnhealthy(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	mr.Close()
 
 	h := cxcHealthHandler(cxcHealthConfig(), nil, nil, client)
@@ -360,13 +360,13 @@ func TestCxcEnhancedHealthFullyConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	open, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	defer open.Close()
+	defer func() { _ = open.Close() }()
 
 	cfg := cxcHealthConfig()
 	cfg.Monitoring.HealthChecks.Database = true

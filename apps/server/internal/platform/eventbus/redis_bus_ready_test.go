@@ -97,10 +97,10 @@ func TestRedisBusPublishBlocksUntilSubscriptionConfirmed(t *testing.T) {
 func TestRedisBusPublishBeforeSubscriptionConfirmedStillDelivers(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 
 	event := BaseEvent{
 		EventID:          "evt-race-1",

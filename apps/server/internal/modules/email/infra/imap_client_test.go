@@ -158,7 +158,7 @@ func (s *fakeIMAPServer) address() string {
 func (s *fakeIMAPServer) clientConfig() config.EmailConfig {
 	host, portStr, _ := net.SplitHostPort(s.address())
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
 	return config.EmailConfig{
 		Host:       host,
 		Port:       port,
@@ -170,7 +170,7 @@ func (s *fakeIMAPServer) clientConfig() config.EmailConfig {
 }
 
 func (s *fakeIMAPServer) serve(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if !s.writeLine(conn, "* OK IMAP4rev1 ready") {
 		return
 	}

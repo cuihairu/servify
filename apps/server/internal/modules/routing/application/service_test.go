@@ -61,9 +61,7 @@ func (s *stubRoutingRepo) ListRecentAssignments(ctx context.Context, limit int) 
 		return nil, s.err
 	}
 	out := make([]domain.TransferRecord, 0, len(s.transferLog))
-	for _, item := range s.transferLog {
-		out = append(out, item)
-	}
+	out = append(out, s.transferLog...)
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}

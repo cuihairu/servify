@@ -41,7 +41,7 @@ func TestWebSocketAdapter_HandleWebSocketRequiresSessionID(t *testing.T) {
 
 	resp, err := http.Get(srv.URL + "/ws")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
@@ -59,7 +59,7 @@ func TestWebSocketAdapter_HandleWebSocketAndSendToSession(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?session_id=session-1"
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err, "handshake status %v", resp)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	require.Eventually(t, func() bool {
 		return adapter.ClientCount() == 1

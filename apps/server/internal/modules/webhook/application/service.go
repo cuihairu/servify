@@ -64,8 +64,6 @@ type Service struct {
 	logger    *logrus.Logger
 	deliverer Deliverer
 	now       func() time.Time
-
-	mu sync.Mutex
 }
 
 func NewService(repo Repository, logger *logrus.Logger) *Service {

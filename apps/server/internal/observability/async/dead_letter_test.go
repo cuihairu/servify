@@ -38,9 +38,9 @@ func TestInMemoryDeadLetterRecorder_Record(t *testing.T) {
 func TestInMemoryDeadLetterRecorder_FilterByType(t *testing.T) {
 	r := NewInMemoryDeadLetterRecorder(100)
 
-	r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "type_a", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "type_b", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "3", EventType: "type_a", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "type_a", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "type_b", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "3", EventType: "type_a", Error: "err"})
 
 	entries, _ := r.List(context.Background(), "type_a", 10)
 	if len(entries) != 2 {
@@ -50,8 +50,8 @@ func TestInMemoryDeadLetterRecorder_FilterByType(t *testing.T) {
 
 func TestInMemoryDeadLetterRecorder_Limit(t *testing.T) {
 	r := NewInMemoryDeadLetterRecorder(100)
-	r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "test", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "test", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "test", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "test", Error: "err"})
 
 	entries, _ := r.List(context.Background(), "", 1)
 	if len(entries) != 1 {

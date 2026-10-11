@@ -120,7 +120,7 @@ func TestShutdownStandaloneHTTPShutdownError(t *testing.T) {
 
 	err := shutdownStandalone(logger, &App{Logger: logger}, standaloneHTTPFixture())
 
-	require.EqualError(t, err, "Server forced to shutdown: shutdown boom")
+	require.EqualError(t, err, "server forced to shutdown: shutdown boom")
 	// HTTP 关停失败是收尾硬错误：提前返回，"Server exited" 不再输出。
 	assert.NotContains(t, buf.String(), "Server exited")
 }
@@ -202,7 +202,7 @@ func TestRunStandaloneEventBusDecorator(t *testing.T) {
 		},
 	})
 	// start-runtime 注入让编排快速失败，但 decorator 已在 BuildApp 后执行。
-	require.EqualError(t, err, "Failed to start runtime: injected start failure")
+	require.EqualError(t, err, "failed to start runtime: injected start failure")
 	assert.True(t, called)
 	assert.NotNil(t, got)
 }
@@ -217,7 +217,7 @@ func TestRunStandaloneTracingSetupWarns(t *testing.T) {
 	cfg.Monitoring.Tracing.Enabled = true
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{},
-		"Failed to start runtime: injected start failure")
+		"failed to start runtime: injected start failure")
 }
 
 // TestRunStandaloneAutoMigrateRequestedFlag 覆盖 SERVIFY_AUTO_MIGRATE 提示
@@ -229,7 +229,7 @@ func TestRunStandaloneAutoMigrateRequestedFlag(t *testing.T) {
 	cfg := standaloneRunnableConfig(t, 0)
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to start runtime: injected start failure")
+		"failed to start runtime: injected start failure")
 }
 
 // TestRunStandaloneAutoMigrateFailure 覆盖 AutoMigrate 失败分支：预置
@@ -253,7 +253,7 @@ func TestRunStandaloneAutoMigrateFailure(t *testing.T) {
 	cfg.Monitoring.Enabled = false
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to migrate database")
+		"failed to migrate database")
 }
 
 // standaloneRunnableConfig 返回 sqlite（env overrides）+ 指定端口的可运行
@@ -285,7 +285,7 @@ func runStandaloneExpectError(t *testing.T, cfg *config.Config, opts StandaloneO
 func TestRunStandaloneParseFailure(t *testing.T) {
 	runStandaloneExpectError(t, config.GetDefaultConfig(),
 		StandaloneOptions{StartupArgs: []string{"-port=not-a-number"}},
-		"Failed to parse startup options")
+		"failed to parse startup options")
 }
 
 func TestRunStandaloneBuildAppFailure(t *testing.T) {
@@ -293,25 +293,25 @@ func TestRunStandaloneBuildAppFailure(t *testing.T) {
 	cfg.Embedding.Provider = "tei"
 	cfg.Embedding.TEI.BaseURL = ""
 
-	runStandaloneExpectError(t, cfg, StandaloneOptions{}, "Failed to build app")
+	runStandaloneExpectError(t, cfg, StandaloneOptions{}, "failed to build app")
 }
 
 func TestRunStandaloneDatabaseFailure(t *testing.T) {
 	t.Setenv("DB_DRIVER", "sqlite")
 	t.Setenv("DB_DSN", filepath.Join("/dev/null", "not", "a", "db.sqlite"))
 
-	runStandaloneExpectError(t, config.GetDefaultConfig(), StandaloneOptions{}, "Failed to connect to database")
+	runStandaloneExpectError(t, config.GetDefaultConfig(), StandaloneOptions{}, "failed to connect to database")
 }
 
 // TestRunStandaloneVersionedMigrationBranch 借 seam 把 sqlite 场景推入
 // postgres-only 的 versioned 分支并注入 StartRuntime 失败：验证 case 日志与
-// "Failed to start runtime" 返回。
+// "failed to start runtime" 返回。
 func TestRunStandaloneVersionedMigrationBranch(t *testing.T) {
 	withFault(t, "versioned")
 	cfg := standaloneRunnableConfig(t, 0)
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to start runtime: injected runtime failure")
+		"failed to start runtime: injected runtime failure")
 }
 
 func TestRunStandaloneVersionedMigrationFailure(t *testing.T) {
@@ -319,7 +319,7 @@ func TestRunStandaloneVersionedMigrationFailure(t *testing.T) {
 	cfg := standaloneRunnableConfig(t, 0)
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to run database migrations: injected migration failure")
+		"failed to run database migrations: injected migration failure")
 }
 
 func TestRunStandaloneSkipMigrationBranch(t *testing.T) {
@@ -328,7 +328,7 @@ func TestRunStandaloneSkipMigrationBranch(t *testing.T) {
 	cfg := standaloneRunnableConfig(t, 0)
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to start runtime: injected start failure")
+		"failed to start runtime: injected start failure")
 }
 
 func TestRunStandaloneAutoMigrateBranch(t *testing.T) {
@@ -339,7 +339,7 @@ func TestRunStandaloneAutoMigrateBranch(t *testing.T) {
 	// sqlite 默认走 AutoMigrate：真实建表成功后推进到被注入失败的
 	// StartRuntime，同时证明 auto 分支执行。
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to start runtime: injected start failure")
+		"failed to start runtime: injected start failure")
 
 	db, err := gorm.Open(sqlite.Open(os.Getenv("DB_DSN")), &gorm.Config{})
 	require.NoError(t, err)
@@ -357,7 +357,7 @@ func TestRunStandaloneBuildRuntimeFailure(t *testing.T) {
 	cfg.WeKnora.Enabled = true
 	cfg.WeKnora.BaseURL = "http://127.0.0.1:1"
 
-	runStandaloneExpectError(t, cfg, StandaloneOptions{}, "Failed to build runtime")
+	runStandaloneExpectError(t, cfg, StandaloneOptions{}, "failed to build runtime")
 }
 
 func TestRunStandaloneWorkersFailure(t *testing.T) {
@@ -366,7 +366,7 @@ func TestRunStandaloneWorkersFailure(t *testing.T) {
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{
 		RegisterWorkers: func(*App, *config.Config, *gorm.DB, *appserver.Runtime) {},
-	}, "Failed to start workers: injected worker failure")
+	}, "failed to start workers: injected worker failure")
 }
 
 // TestRunStandaloneHappyPath 完整生命周期：sqlite 起服 → /health 200 →
@@ -384,7 +384,7 @@ func TestRunStandaloneHappyPath(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 60*time.Second, 200*time.Millisecond, "standalone server did not become healthy")
 
@@ -398,7 +398,7 @@ func TestRunStandaloneHappyPath(t *testing.T) {
 }
 
 // TestRunStandaloneHTTPShutdownFailure 覆盖尾段的 srv.Shutdown 失败分支：
-// seam 注入后 RunStandalone 以 "Server forced to shutdown" 返回。
+// seam 注入后 RunStandalone 以 "server forced to shutdown" 返回。
 func TestRunStandaloneHTTPShutdownFailure(t *testing.T) {
 	withFault(t, "shutdown-server")
 	port := standaloneFreePort(t)
@@ -413,14 +413,14 @@ func TestRunStandaloneHTTPShutdownFailure(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 60*time.Second, 200*time.Millisecond, "standalone server did not become healthy")
 
 	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
 	select {
 	case err := <-errCh:
-		require.ErrorContains(t, err, "Server forced to shutdown: injected server shutdown failure")
+		require.ErrorContains(t, err, "server forced to shutdown: injected server shutdown failure")
 	case <-time.After(60 * time.Second):
 		t.Fatal("RunStandalone did not return after SIGTERM")
 	}

@@ -131,7 +131,7 @@ func TestOutboundDispatch_AgentReplyOnEmailSession_Sends(t *testing.T) {
 	_, bus, sender, db := newOutboundTestEnv(t)
 	db.seedEmailSession(t, "sess-1", 11, "c11@example.com")
 
-	bus.Publish(context.Background(), agentMessageEvent("sess-1", "您好，问题已解决"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-1", "您好，问题已解决")) // 结果由 waitSent 断言
 	waitSent(t, sender, 1)
 
 	raw := sender.last()
@@ -153,17 +153,17 @@ func TestOutboundDispatch_NonAgentOrNonEmail_Skips(t *testing.T) {
 	db.seedSession(t, "sess-web", 12, "web")
 
 	// 访客消息：不出站
-	bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
+	_ = bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-email",
 		conversationapp.ConversationMessageDTO{ConversationID: "sess-email", Sender: "user", Content: "咨询"},
-	))
+	)) // 结果由"不出站"断言
 	// AI 回复：本期不外发
-	bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
+	_ = bus.Publish(context.Background(), conversationapp.NewConversationEvent(context.Background(),
 		conversationapp.ConversationMessageReceivedEventName, "sess-email",
 		conversationapp.ConversationMessageDTO{ConversationID: "sess-email", Sender: "ai", Content: "自动回复"},
-	))
+	)) // 结果由"不出站"断言
 	// email 坐席回复但会话是 web 渠道：不出站
-	bus.Publish(context.Background(), agentMessageEvent("sess-web", "web 回复"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-web", "web 回复"))
 
 	time.Sleep(200 * time.Millisecond)
 	if got := sender.count(); got != 0 {
@@ -175,7 +175,7 @@ func TestOutboundDispatch_MissingEmail_Skips(t *testing.T) {
 	_, bus, sender, db := newOutboundTestEnv(t)
 	db.seedEmailSession(t, "sess-noemail", 13, "")
 
-	bus.Publish(context.Background(), agentMessageEvent("sess-noemail", "回复"))
+	_ = bus.Publish(context.Background(), agentMessageEvent("sess-noemail", "回复"))
 	time.Sleep(200 * time.Millisecond)
 	if got := sender.count(); got != 0 {
 		t.Fatalf("expected no sends without email, got %d", got)

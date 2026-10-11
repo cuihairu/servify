@@ -49,7 +49,7 @@ func TestServerMainSchemaModeSkipLog(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}), "Automatic schema management disabled")
 
@@ -87,7 +87,7 @@ func TestServerMainAutoMigrateEscapeHatch(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}), "SERVIFY_AUTO_MIGRATE is set")
 
@@ -97,7 +97,7 @@ func TestServerMainAutoMigrateEscapeHatch(t *testing.T) {
 
 // TestServerMainForcedShutdownTimeout 覆盖优雅关停超时的强制退出分支：
 // 一个只发了部分 body 的请求让连接保持活动，30s 的 ShutdownContext 耗尽后
-// srv.Shutdown 必须以 "Server forced to shutdown" fatal 结束。
+// srv.Shutdown 必须以 "server forced to shutdown" fatal 结束。
 func TestServerMainForcedShutdownTimeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("forced shutdown waits out the 30s grace period")
@@ -128,7 +128,7 @@ func TestServerMainForcedShutdownTimeout(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 60*time.Second, 200*time.Millisecond, "server did not become healthy: %s", out.String())
 
@@ -136,7 +136,7 @@ func TestServerMainForcedShutdownTimeout(t *testing.T) {
 	// 会一直排空 body，该连接永远不进入 idle，Shutdown 只能等超时。
 	stalled, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
-	defer stalled.Close()
+	defer func() { _ = stalled.Close() }() // 停驻连接收尾
 	_, err = stalled.Write([]byte("POST /health HTTP/1.1\r\nHost: " + addr +
 		"\r\nContent-Type: text/plain\r\nContent-Length: 100\r\n\r\nonly-ten-bytes"))
 	require.NoError(t, err)
@@ -160,7 +160,7 @@ func TestServerMainForcedShutdownTimeout(t *testing.T) {
 	case <-time.After(90 * time.Second):
 		t.Fatalf("server did not exit after forced shutdown timeout: %s", out.String())
 	}
-	assert.Contains(t, out.String(), "Server forced to shutdown")
+	assert.Contains(t, out.String(), "server forced to shutdown")
 }
 
 // preMigrateSQLite 在父进程里用 bootstrap.AutoMigrate 预建完整 schema，

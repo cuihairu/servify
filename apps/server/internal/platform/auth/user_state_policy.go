@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ func NewUserStateTokenPolicy(db *gorm.DB) TokenPolicy {
 		}
 
 		var user models.User
-		if err := db.WithContext(ContextWithScope(nil, claims.TenantID, claims.WorkspaceID)).
+		if err := db.WithContext(ContextWithScope(context.Background(), claims.TenantID, claims.WorkspaceID)).
 			Select("id", "status", "token_valid_after", "token_version").
 			First(&user, claims.UserID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -51,7 +52,7 @@ func NewUserStateTokenPolicy(db *gorm.DB) TokenPolicy {
 		}
 
 		var session models.UserAuthSession
-		if err := db.WithContext(ContextWithScope(nil, claims.TenantID, claims.WorkspaceID)).
+		if err := db.WithContext(ContextWithScope(context.Background(), claims.TenantID, claims.WorkspaceID)).
 			Select("id", "user_id", "status", "token_version", "revoked_at").
 			First(&session, "id = ? AND user_id = ?", claims.SessionID, claims.UserID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -87,7 +88,7 @@ func NewRevokedTokenPolicy(db *gorm.DB) TokenPolicy {
 		}
 
 		var revoked models.RevokedToken
-		err := db.WithContext(ContextWithScope(nil, claims.TenantID, claims.WorkspaceID)).
+		err := db.WithContext(ContextWithScope(context.Background(), claims.TenantID, claims.WorkspaceID)).
 			Select("id", "jti", "expires_at", "revoked_at").
 			Where("jti = ?", claims.TokenID).
 			First(&revoked).Error

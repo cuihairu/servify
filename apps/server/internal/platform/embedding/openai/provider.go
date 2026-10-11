@@ -89,7 +89,7 @@ func (p *Provider) Embed(ctx context.Context, texts []string) ([][]float32, erro
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -152,7 +152,7 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("health check failed: status %d", resp.StatusCode)

@@ -64,7 +64,7 @@ func newStreamServer(t *testing.T, script []string, closeCode int) *streamServer
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		state := sessionUpdateReceived{}
 		for {

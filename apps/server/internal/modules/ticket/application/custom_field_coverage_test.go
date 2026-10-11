@@ -432,7 +432,7 @@ func TestCoveragePrepareCustomFieldMutationBranches(t *testing.T) {
 		t.Fatalf("expected clear-all mutation, got %+v %v", mutation, err)
 	}
 
-	mutation, err = PrepareCustomFieldMutation(fields, 1, map[string]interface{}{"env": "prod", "tier": "gold", "unknown": "x"}, nil)
+	_, err = PrepareCustomFieldMutation(fields, 1, map[string]interface{}{"env": "prod", "tier": "gold", "unknown": "x"}, nil)
 	if err == nil || err.Error() != "unknown custom field: unknown" {
 		t.Fatalf("expected unknown field error, got %v", err)
 	}

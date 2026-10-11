@@ -35,7 +35,7 @@ func doJSON(t *testing.T, method, url string, body io.Reader) (int, map[string]a
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 测试收尾
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read %s %s: %v", method, url, err)
@@ -159,7 +159,7 @@ func TestUploadSearchRoundTripAndIsolation(t *testing.T) {
 
 	// limit 截断：同库第二篇后 limit=1 只回 1 条。
 	uploadDoc(t, srv.URL, "kb-a", "扫描仪手册")
-	status, resp = post(t, srv.URL+"/api/v1/knowledge/search", `{"query":"手册","kb_id":"kb-a","limit":1}`)
+	_, resp = post(t, srv.URL+"/api/v1/knowledge/search", `{"query":"手册","kb_id":"kb-a","limit":1}`)
 	results, _ = resp["data"].(map[string]any)["results"].([]any)
 	if len(results) != 1 {
 		t.Fatalf("limit=1 应只回 1 条：%v", results)
@@ -173,7 +173,7 @@ func TestUploadValidationAndEcho(t *testing.T) {
 	if status != http.StatusBadRequest || resp["success"] != false {
 		t.Fatalf("非法 JSON 应 400+success=false，实际 %d：%v", status, resp)
 	}
-	status, resp = post(t, srv.URL+"/api/v1/knowledge/kb-a/documents", `{"content":"x"}`)
+	status, _ = post(t, srv.URL+"/api/v1/knowledge/kb-a/documents", `{"content":"x"}`)
 	if status != http.StatusBadRequest {
 		t.Fatalf("缺 title 应 400，实际 %d", status)
 	}

@@ -219,7 +219,7 @@ func uploadsLocalFileHandler(root string) gin.HandlerFunc {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		defer raw.Close()
+		defer func() { _ = raw.Close() }()
 		info, err := raw.Stat()
 		if err != nil || !info.Mode().IsRegular() {
 			c.Status(http.StatusNotFound)

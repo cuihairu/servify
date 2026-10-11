@@ -40,6 +40,6 @@ func TestPreferenceHandlerServiceAdapter(t *testing.T) {
 	})
 
 	t.Run("interface satisfied by adapter", func(t *testing.T) {
-		var _ PreferenceHandlerService = NewPreferenceHandlerService(nil)
+		var _ = NewPreferenceHandlerService(nil)
 	})
 }

@@ -329,7 +329,7 @@ func TestHealthCheck_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy","version":"1.0.0"}`))
+		_, _ = w.Write([]byte(`{"status":"healthy","version":"1.0.0"}`))
 	}))
 	defer server.Close()
 
@@ -348,7 +348,7 @@ func TestHealthCheck_Unhealthy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"unhealthy","version":"1.0.0"}`))
+		_, _ = w.Write([]byte(`{"status":"unhealthy","version":"1.0.0"}`))
 	}))
 	defer server.Close()
 
@@ -391,7 +391,7 @@ func TestSearchKnowledge_DefaultValues(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"results":[],"total":0}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"results":[],"total":0}}`))
 	}))
 	defer server.Close()
 

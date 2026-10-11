@@ -26,7 +26,7 @@ func NewLocalProvider(baseDir, urlBase string) *LocalProvider {
 	}
 }
 
-func (p *LocalProvider) Save(key string, r io.Reader, size int64) (*ObjectInfo, error) {
+func (p *LocalProvider) Save(key string, r io.Reader, size int64) (info *ObjectInfo, err error) {
 	fullPath := filepath.Join(p.baseDir, key)
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -37,7 +37,12 @@ func (p *LocalProvider) Save(key string, r io.Reader, size int64) (*ObjectInfo, 
 	if err != nil {
 		return nil, fmt.Errorf("create file %s: %w", fullPath, err)
 	}
-	defer f.Close()
+	defer func() {
+		// Close 的错误在写路径同样致命（缓冲未落盘），不得吞掉
+		if cerr := f.Close(); err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
 
 	written, err := io.Copy(f, r)
 	if err != nil {

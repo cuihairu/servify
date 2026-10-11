@@ -237,7 +237,7 @@ func TestPreferenceUpsertErrorAndRacePaths(t *testing.T) {
 	t.Run("create error passes through", func(t *testing.T) {
 		db := newPrefUnitTestDB(t)
 		if err := db.Callback().Create().After("gorm:create").Register("inject_create_error", func(tx *gorm.DB) {
-			tx.AddError(errors.New("create exploded"))
+			_ = tx.AddError(errors.New("create exploded"))
 		}); err != nil {
 			t.Fatalf("register callback: %v", err)
 		}

@@ -167,13 +167,7 @@ func parseCustomFieldValidation(validationJSON string) CustomFieldValidation {
 	if err := json.Unmarshal([]byte(validationJSON), &raw); err != nil {
 		return CustomFieldValidation{}
 	}
-	return CustomFieldValidation{
-		Min:       raw.Min,
-		Max:       raw.Max,
-		MinLength: raw.MinLength,
-		MaxLength: raw.MaxLength,
-		Regex:     raw.Regex,
-	}
+	return CustomFieldValidation(raw)
 }
 
 func parseCustomFieldCondition(showWhenJSON string) *CustomFieldCondition {
@@ -197,11 +191,7 @@ func parseCustomFieldCondition(showWhenJSON string) *CustomFieldCondition {
 func mapCustomFieldClauses(clauses []rawCustomFieldClause) []CustomFieldClause {
 	out := make([]CustomFieldClause, 0, len(clauses))
 	for _, clause := range clauses {
-		out = append(out, CustomFieldClause{
-			Field: clause.Field,
-			Op:    clause.Op,
-			Value: clause.Value,
-		})
+		out = append(out, CustomFieldClause(clause))
 	}
 	return out
 }

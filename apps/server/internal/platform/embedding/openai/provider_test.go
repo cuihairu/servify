@@ -180,7 +180,7 @@ func TestProvider_Embed_ReadResponseError(t *testing.T) {
 			t.Errorf("hijack: %v", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }() // 测试 mock 连接收尾
 		if _, err := buf.WriteString("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{\"data\":[{"); err != nil {
 			t.Errorf("write: %v", err)
 			return

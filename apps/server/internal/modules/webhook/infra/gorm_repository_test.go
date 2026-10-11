@@ -166,7 +166,7 @@ func TestListDeliveriesFilterAndPage(t *testing.T) {
 	if err != nil || total != 3 || len(items) != 2 {
 		t.Fatalf("filter: %v total=%d len=%d", err, total, len(items))
 	}
-	items, total, err = repo.ListDeliveries(ctx, application.DeliveryListQuery{EndpointID: 2, Page: 1, PageSize: 10})
+	_, total, err = repo.ListDeliveries(ctx, application.DeliveryListQuery{EndpointID: 2, Page: 1, PageSize: 10})
 	if err != nil || total != 1 {
 		t.Fatalf("endpoint filter: %v total=%d", err, total)
 	}

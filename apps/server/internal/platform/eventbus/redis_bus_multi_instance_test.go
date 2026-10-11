@@ -21,12 +21,12 @@ import (
 func TestRedisBusBroadcastsToEverySubscribingInstance(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	busA := NewRedisBus(client, logrus.New())
-	defer busA.Close()
+	defer func() { _ = busA.Close() }() // 测试收尾
 	busB := NewRedisBus(client, logrus.New())
-	defer busB.Close()
+	defer func() { _ = busB.Close() }() // 测试收尾
 
 	event := BaseEvent{
 		EventID:          "evt-multi-instance-1",

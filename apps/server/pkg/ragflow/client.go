@@ -87,7 +87,7 @@ func (c *Client) ListDocuments(ctx context.Context, datasetID, name string) ([]D
 	}
 	docs := make([]Document, 0, len(resp.Docs))
 	for _, doc := range resp.Docs {
-		docs = append(docs, Document{ID: doc.ID, Name: doc.Name, Run: doc.Run})
+		docs = append(docs, Document(doc))
 	}
 	return docs, nil
 }
@@ -166,7 +166,7 @@ func (c *Client) doRequest(req *http.Request, out any) error {
 	if err != nil {
 		return fmt.Errorf("send ragflow request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

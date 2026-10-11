@@ -159,7 +159,7 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return llm.HTTPError("openai", resp.StatusCode, string(body))
@@ -236,7 +236,7 @@ func (p *Provider) chatOnce(ctx context.Context, req llm.ChatRequest) (llm.ChatR
 			Cause:     err,
 		}
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -391,7 +391,7 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 			Cause:     err,
 		}
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 
 	if httpResp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(httpResp.Body)

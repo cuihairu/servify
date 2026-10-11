@@ -42,9 +42,9 @@ func TestInMemoryDeadLetterRecorder_ListEmpty(t *testing.T) {
 
 func TestInMemoryDeadLetterRecorder_ListFilteredStopsAtLimit(t *testing.T) {
 	r := NewInMemoryDeadLetterRecorder(100)
-	r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "type_a", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "type_b", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "3", EventType: "type_a", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "type_a", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "type_b", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "3", EventType: "type_a", Error: "err"})
 
 	entries, err := r.List(context.Background(), "type_a", 1)
 	if err != nil {
@@ -60,8 +60,8 @@ func TestInMemoryDeadLetterRecorder_ListFilteredStopsAtLimit(t *testing.T) {
 
 func TestInMemoryDeadLetterRecorder_ListNonPositiveLimit(t *testing.T) {
 	r := NewInMemoryDeadLetterRecorder(100)
-	r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "t", Error: "err"})
-	r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "t", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "1", EventType: "t", Error: "err"})
+	_ = r.Record(context.Background(), DeadLetterEntry{EventID: "2", EventType: "t", Error: "err"})
 
 	for _, limit := range []int{0, -7} {
 		entries, err := r.List(context.Background(), "", limit)

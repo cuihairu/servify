@@ -177,7 +177,7 @@ func TestExpandEnvVarsInConfigDefaultPathSucceeds(t *testing.T) {
 	if got == "" {
 		t.Fatal("expandEnvVarsInConfig() = empty, want expanded temp file path")
 	}
-	defer os.Remove(got)
+	defer func() { _ = os.Remove(got) }() // 测试清理
 	content, err := os.ReadFile(got)
 	if err != nil {
 		t.Fatalf("read expanded config: %v", err)

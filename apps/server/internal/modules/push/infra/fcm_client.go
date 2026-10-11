@@ -84,8 +84,9 @@ func parseRSAKey(pemStr string) (*rsa.PrivateKey, error) {
 	if block == nil {
 		return nil, errors.New("no PEM block")
 	}
-	switch key, err := x509.ParsePKCS8PrivateKey(block.Bytes); {
-	case err == nil:
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	switch err {
+	case nil:
 		if rsaKey, ok := key.(*rsa.PrivateKey); ok {
 			return rsaKey, nil
 		}
@@ -125,11 +126,11 @@ func (c *FCMClient) Send(ctx context.Context, platformToken, title, body string,
 	if err != nil {
 		return fmt.Errorf("fcm send: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("fcm send http %d: %s", resp.StatusCode, readErrBody(resp.Body))
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body) // 连接复用排空，失败无害
 	return nil
 }
 
@@ -154,7 +155,7 @@ func (c *FCMClient) getAccessToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fcm oauth: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("fcm oauth http %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))

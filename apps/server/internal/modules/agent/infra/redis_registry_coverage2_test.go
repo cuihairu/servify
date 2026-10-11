@@ -33,7 +33,7 @@ func newCoverageRedisRegistry(t *testing.T) (*RedisRegistry, *miniredis.Miniredi
 	registry := NewRedisRegistry(client, db, logger)
 	t.Cleanup(func() {
 		registry.cancel()
-		client.Close()
+		_ = client.Close() // 测试/清理 best-effort
 	})
 	return registry, mr, db, client
 }
@@ -360,7 +360,7 @@ func TestRedisRegistryHeartbeatLoopRefreshesTTL(t *testing.T) {
 func waitForRegistryPubsubDrain(t *testing.T, client *redis.Client) {
 	t.Helper()
 	pubsub := client.Subscribe(context.Background(), agentStatusChannel)
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }()
 	require.NoError(t, client.Publish(context.Background(), agentStatusChannel, "sentinel:0").Err())
 	msgCh := pubsub.Channel()
 	timeout := time.After(2 * time.Second)

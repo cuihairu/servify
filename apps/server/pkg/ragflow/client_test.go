@@ -168,7 +168,7 @@ func TestUploadDocumentMultipart(t *testing.T) {
 			t.Errorf("form file: %v", err)
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		if header.Filename != "manual.txt" {
 			t.Errorf("filename = %q", header.Filename)
 		}

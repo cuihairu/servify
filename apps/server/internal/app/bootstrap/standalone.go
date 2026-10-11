@@ -84,11 +84,11 @@ type StandaloneOptions struct {
 func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 	overrides, err := ResolveRuntimeOverrides(cfg, opts.StartupArgs, opts.StartupOutput)
 	if err != nil {
-		return fmt.Errorf("Failed to parse startup options: %w", err)
+		return fmt.Errorf("failed to parse startup options: %w", err)
 	}
 	app, err := BuildApp(cfg)
 	if err != nil {
-		return fmt.Errorf("Failed to build app: %w", err)
+		return fmt.Errorf("failed to build app: %w", err)
 	}
 	logger := app.Logger
 
@@ -109,7 +109,7 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 		Logger:     logger,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to connect to database: %w", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	app.DB = db
 
@@ -120,19 +120,19 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 		case SchemaModeVersioned:
 			logger.Info("Applying versioned database migrations...")
 			if err := runVersionedMigrations(db); err != nil {
-				return fmt.Errorf("Failed to run database migrations: %w", err)
+				return fmt.Errorf("failed to run database migrations: %w", err)
 			}
 		case SchemaModeAutoMigrate:
 			if AutoMigrateRequested() {
 				logger.Info("SERVIFY_AUTO_MIGRATE is set; running legacy GORM AutoMigrate instead of versioned migrations")
 			}
 			if err := AutoMigrate(db); err != nil {
-				return fmt.Errorf("Failed to migrate database: %w", err)
+				return fmt.Errorf("failed to migrate database: %w", err)
 			}
 			// V1.0 收敛 B2-4：sqlite/AutoMigrate 路径的 default scope 回填
 			// （postgres 走 versioned SQL 迁移 000017_scope_backfill）。
 			if counts, err := BackfillDefaultScope(db); err != nil {
-				return fmt.Errorf("Failed to backfill default scope: %w", err)
+				return fmt.Errorf("failed to backfill default scope: %w", err)
 			} else if touched := sumScopeBackfillCounts(counts); touched > 0 {
 				logger.Infof("Scope backfill touched %d rows across core business tables", touched)
 			}
@@ -141,16 +141,16 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 
 	runtime, err := app.BuildServerRuntime()
 	if err != nil {
-		return fmt.Errorf("Failed to build runtime: %w", err)
+		return fmt.Errorf("failed to build runtime: %w", err)
 	}
 	if err := startAppRuntime(app); err != nil {
-		return fmt.Errorf("Failed to start runtime: %w", err)
+		return fmt.Errorf("failed to start runtime: %w", err)
 	}
 
 	if opts.RegisterWorkers != nil {
 		opts.RegisterWorkers(app, cfg, db, runtime)
 		if err := startAppWorkers(app); err != nil {
-			return fmt.Errorf("Failed to start workers: %w", err)
+			return fmt.Errorf("failed to start workers: %w", err)
 		}
 	}
 
@@ -174,7 +174,7 @@ func shutdownStandalone(logger *logrus.Logger, app *App, srv *http.Server) error
 		logger.Errorf("Failed to shutdown cleanly: %v", err)
 	}
 	if err := shutdownHTTPServer(srv, ctx); err != nil {
-		return fmt.Errorf("Server forced to shutdown: %w", err)
+		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 	logger.Info("Server exited")
 	return nil

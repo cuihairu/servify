@@ -148,7 +148,7 @@ func TestSccFilterScopedConfigHistoryEntries(t *testing.T) {
 	if got := filterScopedConfigHistoryEntries(items, "update"); len(got) != 1 || got[0].ID != 1 {
 		t.Fatalf("expected operation match got %+v", got)
 	}
-	if got := filterScopedConfigHistoryEntries(items, "approve"); got != nil && len(got) != 0 {
+	if got := filterScopedConfigHistoryEntries(items, "approve"); len(got) != 0 {
 		t.Fatalf("expected no matches got %+v", got)
 	}
 }
@@ -691,7 +691,6 @@ func TestSccMetadataEdges(t *testing.T) {
 
 func TestSccListScopedConfigAuditLogsPagination(t *testing.T) {
 	db := newScopedConfigTestDB(t)
-	h := NewScopedConfigHandler(configscope.NewGormConfigStore(db))
 	var nilHandler *ScopedConfigHandler
 	if logs, err := nilHandler.listScopedConfigAuditLogs(context.Background(), auditplatform.ListQuery{}); logs != nil || err != nil {
 		t.Fatalf("expected nil result got %+v %v", logs, err)
@@ -701,7 +700,7 @@ func TestSccListScopedConfigAuditLogsPagination(t *testing.T) {
 		t.Fatalf("expected nil result got %+v %v", logs, err)
 	}
 	stub := &sccAuditStub{listErr: errors.New("scc list failed")}
-	h = NewScopedConfigHandler(configscope.NewGormConfigStore(db), stub)
+	h := NewScopedConfigHandler(configscope.NewGormConfigStore(db), stub)
 	if _, err := h.listScopedConfigAuditLogs(context.Background(), auditplatform.ListQuery{Action: "scoped_config.tenant.update"}); err == nil {
 		t.Fatalf("expected list error")
 	}

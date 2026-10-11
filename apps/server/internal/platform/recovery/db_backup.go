@@ -114,7 +114,7 @@ type DatabaseManifest struct {
 // 最后写 manifest.json。pg 方言不支持——生产备份走 pg_dump SOP。
 func BackupDatabase(db *gorm.DB, outDir string) (DatabaseManifest, error) {
 	// 方言检查先于连接获取：pg 备份走 pg_dump SOP，不应在误用时建立连接。
-	dialect := db.Dialector.Name()
+	dialect := db.Name()
 	if dialect != "sqlite" {
 		return DatabaseManifest{}, fmt.Errorf("recovery: dialect %q is not supported; use the pg_dump runbook in docs/backup-and-recovery.md", dialect)
 	}
@@ -165,7 +165,7 @@ func BackupDatabase(db *gorm.DB, outDir string) (DatabaseManifest, error) {
 // 的文件保持打开，供回写直接复用），再在单连接事务里清空并回写全部表，
 // 最后恢复 sqlite_sequence。返回恢复所用的 manifest 供调用方对账。
 func RestoreDatabase(db *gorm.DB, backupDir string) (DatabaseManifest, error) {
-	if dialect := db.Dialector.Name(); dialect != "sqlite" {
+	if dialect := db.Name(); dialect != "sqlite" {
 		return DatabaseManifest{}, fmt.Errorf("recovery: dialect %q is not supported; use the pg_restore runbook in docs/backup-and-recovery.md", dialect)
 	}
 	sqlDB, err := getSQLDB(db)
@@ -198,7 +198,7 @@ func RestoreDatabase(db *gorm.DB, backupDir string) (DatabaseManifest, error) {
 	if err != nil {
 		return DatabaseManifest{}, fmt.Errorf("recovery: grab connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // 清理路径 best-effort
 
 	tx, err := beginRestoreTx(ctx, conn)
 	if err != nil {
@@ -305,7 +305,7 @@ func listUserTables(sqlDB *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("recovery: list tables: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 
 	var tables []string
 	for rows.Next() {
@@ -335,7 +335,7 @@ func listSequences(sqlDB *sql.DB) ([]SequenceEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("recovery: read sqlite_sequence: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 
 	var sequences []SequenceEntry
 	for rows.Next() {
@@ -374,7 +374,7 @@ func restoreSequences(ctx context.Context, tx *sql.Tx, sequences []SequenceEntry
 	return nil
 }
 
-func dumpTable(sqlDB *sql.DB, outDir, table string) (TableEntry, error) {
+func dumpTable(sqlDB *sql.DB, outDir, table string) (entry TableEntry, err error) {
 	// 列名经 PRAGMA 取得、表名来自 sqlite_master，二者都不是用户输入；
 	// 标识符仍用双引号包裹，防御保留字与特殊字符。
 	columns, err := tableColumns(sqlDB, table)
@@ -390,17 +390,22 @@ func dumpTable(sqlDB *sql.DB, outDir, table string) (TableEntry, error) {
 	if err != nil {
 		return TableEntry{}, fmt.Errorf("recovery: read table %s: %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 
 	file := filepath.Join("tables", table+".jsonl")
-	entry := TableEntry{Name: table, Columns: columns, File: file}
+	entry = TableEntry{Name: table, Columns: columns, File: file}
 	hash := sha256.New()
 
 	out, err := os.Create(filepath.Join(outDir, file))
 	if err != nil {
 		return TableEntry{}, fmt.Errorf("recovery: create dump file: %w", err)
 	}
-	defer out.Close()
+	defer func() {
+		// 写路径 Close 错误不可吞（缓冲未落盘即归档不完整）
+		if cerr := out.Close(); err == nil && cerr != nil {
+			err = fmt.Errorf("recovery: close dump file: %w", cerr)
+		}
+	}()
 	writer := io.MultiWriter(out, hash)
 
 	encoder := json.NewEncoder(writer)
@@ -436,7 +441,7 @@ func tableColumns(sqlDB *sql.DB, table string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("recovery: inspect table %s: %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }() // 清理路径 best-effort
 
 	var columns []string
 	for rows.Next() {

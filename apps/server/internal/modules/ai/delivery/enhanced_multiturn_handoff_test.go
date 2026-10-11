@@ -10,7 +10,6 @@ import (
 	"servify/apps/server/internal/platform/knowledgeprovider"
 	kpmock "servify/apps/server/internal/platform/knowledgeprovider/mock"
 	llm "servify/apps/server/internal/platform/llm"
-	"servify/apps/server/internal/platform/llm/mock"
 	llmmock "servify/apps/server/internal/platform/llm/mock"
 )
 
@@ -255,7 +254,7 @@ func TestHandoffDisabledByDefault(t *testing.T) {
 func TestProcessQueryCarriesEnhancedExtras(t *testing.T) {
 	base := NewAIService("", "")
 	base.InitializeKnowledgeBase()
-	llmProvider := &mock.Provider{ChatResponse: llm.ChatResponse{Content: "answer"}}
+	llmProvider := &llmmock.Provider{ChatResponse: llm.ChatResponse{Content: "answer"}}
 	svc := NewOrchestratedEnhancedAIService(base, llmProvider, &kpmock.Provider{
 		Hits: []knowledgeprovider.KnowledgeHit{
 			{DocumentID: "doc-1", Title: "Billing", Content: "Billing details", Score: 0.91},

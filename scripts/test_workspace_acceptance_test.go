@@ -98,7 +98,7 @@ func TestWorkspaceAcceptanceScriptWritesEvidence(t *testing.T) {
 			registerCount++
 			nextUserID++
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"token":"reg-token","refresh_token":"reg-refresh","user":{"id":%d,"role":"agent"}}`, nextUserID)))
+			_, _ = fmt.Fprintf(w, `{"token":"reg-token","refresh_token":"reg-refresh","user":{"id":%d,"role":"agent"}}`, nextUserID)
 			return
 		case "/api/agents":
 			if !authorized(r) {
@@ -129,7 +129,7 @@ func TestWorkspaceAcceptanceScriptWritesEvidence(t *testing.T) {
 			if err != nil {
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }() // 测试收尾
 
 			key := r.Header.Get("Sec-WebSocket-Key")
 			accepter := sha1.New()

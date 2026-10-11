@@ -183,12 +183,12 @@ func TestCoverage2GormConfigStoreTenantSaveError(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := db.Callback().Update().Before("gorm:update").Register("coverage2:fail_update", func(tx *gorm.DB) {
-		tx.AddError(errors.New("injected update failure"))
+		_ = tx.AddError(errors.New("injected update failure"))
 	}); err != nil {
 		t.Fatalf("register update callback: %v", err)
 	}
 	if err := db.Callback().Create().Before("gorm:create").Register("coverage2:fail_create", func(tx *gorm.DB) {
-		tx.AddError(errors.New("injected create failure"))
+		_ = tx.AddError(errors.New("injected create failure"))
 	}); err != nil {
 		t.Fatalf("register create callback: %v", err)
 	}
@@ -333,12 +333,12 @@ func TestCoverage2GormConfigStoreWorkspaceSaveError(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := db.Callback().Update().Before("gorm:update").Register("coverage2:fail_ws_update", func(tx *gorm.DB) {
-		tx.AddError(errors.New("injected ws update failure"))
+		_ = tx.AddError(errors.New("injected ws update failure"))
 	}); err != nil {
 		t.Fatalf("register update callback: %v", err)
 	}
 	if err := db.Callback().Create().Before("gorm:create").Register("coverage2:fail_ws_create", func(tx *gorm.DB) {
-		tx.AddError(errors.New("injected ws create failure"))
+		_ = tx.AddError(errors.New("injected ws create failure"))
 	}); err != nil {
 		t.Fatalf("register create callback: %v", err)
 	}

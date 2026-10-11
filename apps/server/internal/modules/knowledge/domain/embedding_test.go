@@ -30,7 +30,7 @@ func TestEmbeddingScanEmptyVariants(t *testing.T) {
 			if err := e.Scan(tc.src); err != nil {
 				t.Fatalf("Scan(%v) error = %v", tc.src, err)
 			}
-			if got := e.Vector.Slice(); len(got) != 0 {
+			if got := e.Slice(); len(got) != 0 {
 				t.Fatalf("Scan(%v) left vector %v, want empty", tc.src, got)
 			}
 			// 空向量写库必须序列化为 NULL，而不是 "[]" 字面量
@@ -47,8 +47,8 @@ func TestEmbeddingScanEmptyVariants(t *testing.T) {
 
 func TestEmbeddingScanRoundTrip(t *testing.T) {
 	original := NewEmbedding([]float32{1.5, -2.25, 0})
-	if len(original.Vector.Slice()) != 3 {
-		t.Fatalf("NewEmbedding produced %v", original.Vector.Slice())
+	if len(original.Slice()) != 3 {
+		t.Fatalf("NewEmbedding produced %v", original.Slice())
 	}
 
 	val, err := original.Value()
@@ -64,8 +64,8 @@ func TestEmbeddingScanRoundTrip(t *testing.T) {
 	if err := restored.Scan(literal); err != nil {
 		t.Fatalf("Scan(%v) error = %v", literal, err)
 	}
-	if !reflect.DeepEqual(original.Vector.Slice(), restored.Vector.Slice()) {
-		t.Fatalf("round trip mismatch: %v vs %v", original.Vector.Slice(), restored.Vector.Slice())
+	if !reflect.DeepEqual(original.Slice(), restored.Slice()) {
+		t.Fatalf("round trip mismatch: %v vs %v", original.Slice(), restored.Slice())
 	}
 }
 
@@ -74,7 +74,7 @@ func TestEmbeddingScanBytesAndUnsupported(t *testing.T) {
 	if err := fromBytes.Scan([]byte("[3.5,4.5]")); err != nil {
 		t.Fatalf("Scan([]byte) error = %v", err)
 	}
-	if got := fromBytes.Vector.Slice(); len(got) != 2 || got[0] != 3.5 {
+	if got := fromBytes.Slice(); len(got) != 2 || got[0] != 3.5 {
 		t.Fatalf("Scan([]byte) = %v", got)
 	}
 

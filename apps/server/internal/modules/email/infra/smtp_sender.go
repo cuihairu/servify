@@ -82,7 +82,7 @@ func (s *GoSMTPSender) Send(ctx context.Context, from string, to []string, msg [
 		_ = conn.Close()
 		return fmt.Errorf("smtp handshake: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 清理路径 best-effort
 
 	if s.cfg.UseSTARTTLS {
 		if ok, _ := client.Extension("STARTTLS"); ok {

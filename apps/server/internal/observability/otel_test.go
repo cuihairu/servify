@@ -57,7 +57,7 @@ func TestSetupTracing_Enabled_DefaultValues(t *testing.T) {
 		return
 	}
 	if shutdown != nil {
-		shutdown(context.Background())
+		_ = shutdown(context.Background()) // 测试收尾
 	}
 }
 
@@ -83,7 +83,7 @@ func TestSetupTracing_InvalidSampleRatio(t *testing.T) {
 				return
 			}
 			if shutdown != nil {
-				shutdown(context.Background())
+				_ = shutdown(context.Background()) // 测试收尾
 			}
 		})
 	}
@@ -99,6 +99,6 @@ func TestSetupTracing_WithServiceName(t *testing.T) {
 		return
 	}
 	if shutdown != nil {
-		shutdown(context.Background())
+		_ = shutdown(context.Background()) // 测试收尾
 	}
 }

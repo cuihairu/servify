@@ -80,7 +80,7 @@ func (s *fakeSMTPServer) port() int {
 }
 
 func (s *fakeSMTPServer) serve(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if !s.reply(conn, s.greeting) {
 		return
 	}
@@ -450,12 +450,10 @@ func TestGoSMTPSenderDeadlineExceededWithoutResponse(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		_, _ = io.WriteString(conn, "220 silent fake\r\n")
 		// 之后不读取也不应答：EHLO/MAIL 等全部阻塞到 deadline
-		select {
-		case <-time.After(time.Minute):
-		}
+		<-time.After(time.Minute)
 	}()
 
 	sender := newLoopbackSMTPSender(ln.Addr().(*net.TCPAddr).Port, func(c *SMTPConfig) { c.Timeout = 400 * time.Millisecond })

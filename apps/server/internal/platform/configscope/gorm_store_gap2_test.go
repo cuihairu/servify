@@ -17,13 +17,13 @@ func stubYamlMarshalError(t *testing.T, err error) {
 	t.Cleanup(func() { yamlMarshal = previous })
 }
 
-var encodeErr = errors.New("injected marshal failure")
+var errEncode = errors.New("injected marshal failure")
 
 // TestEncodeConfigPropagatesMarshalError 覆盖 encodeConfig 的错误分支。
 func TestEncodeConfigPropagatesMarshalError(t *testing.T) {
-	stubYamlMarshalError(t, encodeErr)
+	stubYamlMarshalError(t, errEncode)
 
-	if _, err := encodeConfig(config.PortalConfig{}); !errors.Is(err, encodeErr) {
+	if _, err := encodeConfig(config.PortalConfig{}); !errors.Is(err, errEncode) {
 		t.Fatalf("encodeConfig() error = %v, want injected error", err)
 	}
 }
@@ -44,11 +44,11 @@ func TestUpsertTenantConfigEncodeErrorBranches(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stubYamlMarshalError(t, encodeErr)
+			stubYamlMarshalError(t, errEncode)
 			store := NewGormConfigStore(newCov3DB(t))
 
 			doc, err := store.UpsertTenantConfig(context.Background(), "tenant-enc-err", tc.payload)
-			if !errors.Is(err, encodeErr) {
+			if !errors.Is(err, errEncode) {
 				t.Fatalf("UpsertTenantConfig() error = %v, want injected error", err)
 			}
 			if doc != nil {
@@ -74,11 +74,11 @@ func TestUpsertWorkspaceConfigEncodeErrorBranches(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stubYamlMarshalError(t, encodeErr)
+			stubYamlMarshalError(t, errEncode)
 			store := NewGormConfigStore(newCov3DB(t))
 
 			doc, err := store.UpsertWorkspaceConfig(context.Background(), "tenant-enc-err", "ws-enc-err", tc.payload)
-			if !errors.Is(err, encodeErr) {
+			if !errors.Is(err, errEncode) {
 				t.Fatalf("UpsertWorkspaceConfig() error = %v, want injected error", err)
 			}
 			if doc != nil {

@@ -88,7 +88,7 @@ func TestAuthSessionAcceptanceScriptWritesEvidence(t *testing.T) {
 			for _, sess := range sessions {
 				items = append(items, fmt.Sprintf(`{"session_id":"%s","status":"%s","is_current":%t}`, sess.ID, sess.Status, sess.IsCurrent))
 			}
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"count":%d,"items":[%s]}`, len(sessions), strings.Join(items, ","))))
+			_, _ = fmt.Fprintf(w, `{"count":%d,"items":[%s]}`, len(sessions), strings.Join(items, ","))
 		case "/api/v1/auth/sessions/logout-others":
 			auth := r.Header.Get("Authorization")
 			if auth != "Bearer "+currentAccess {

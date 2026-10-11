@@ -48,8 +48,6 @@ func macroCreateReq(name, content string) *application.MacroCreateRequest {
 
 func stringPtr(s string) *string { return &s }
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestMacroModuleCreateListDelete(t *testing.T) {
 	db := newMacroTestDB(t)
 	svc := newMacroModuleService(db)

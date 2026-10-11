@@ -54,16 +54,16 @@ func TestTicketAcceptanceScriptWritesEvidence(t *testing.T) {
 	servify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		switch {
-		case r.URL.Path == "/health":
+		switch r.URL.Path {
+		case "/health":
 			_, _ = w.Write([]byte(`{"status":"healthy"}`))
 			return
-		case r.URL.Path == "/api/v1/auth/login":
+		case "/api/v1/auth/login":
 			mu.Lock()
 			defer mu.Unlock()
 			_, _ = w.Write([]byte(`{"token":"` + token + `","user":{"id":1,"role":"admin"}}`))
 			return
-		case r.URL.Path == "/api/v1/auth/register":
+		case "/api/v1/auth/register":
 			mu.Lock()
 			defer mu.Unlock()
 			registerCount++
@@ -72,9 +72,9 @@ func TestTicketAcceptanceScriptWritesEvidence(t *testing.T) {
 				customerID = nextUserID
 			}
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"token":"reg-token","refresh_token":"reg-refresh","user":{"id":%d,"role":"customer"}}`, nextUserID)))
+			_, _ = fmt.Fprintf(w, `{"token":"reg-token","refresh_token":"reg-refresh","user":{"id":%d,"role":"customer"}}`, nextUserID)
 			return
-		case r.URL.Path == "/api/agents":
+		case "/api/agents":
 			if !authorized(r) {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"invalid token"}`))
@@ -184,11 +184,11 @@ func TestTicketAcceptanceScriptWritesEvidence(t *testing.T) {
 				}
 				commentAdds++
 				w.WriteHeader(http.StatusCreated)
-				_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%d,"ticket_id":%d,"content":%q}`, 9000+commentAdds, id, req.Content)))
+				_, _ = fmt.Fprintf(w, `{"id":%d,"ticket_id":%d,"content":%q}`, 9000+commentAdds, id, req.Content)
 			case rest == "close" && r.Method == http.MethodPost:
 				tk.Status = "closed"
 				tk.ClosedAt = "2026-01-01T02:00:00Z"
-				_, _ = w.Write([]byte(fmt.Sprintf(`{"message":"Ticket closed successfully","ticket_id":%d}`, id)))
+				_, _ = fmt.Fprintf(w, `{"message":"Ticket closed successfully","ticket_id":%d}`, id)
 			default:
 				http.NotFound(w, r)
 			}

@@ -217,7 +217,7 @@ func TestVoiceChannelAdapterSessionShape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	if recognizer.opts.SourceLang != "" {
 		t.Fatalf("source lang = %q, want auto (empty)", recognizer.opts.SourceLang)
 	}
@@ -336,7 +336,7 @@ func TestVoiceChannelAdapterCaptionOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	recognizer.session.events <- asr.Event{Kind: asr.EventFinal, Seq: 1, Text: "嗨。"}
 	captions := waitVoiceCaptions(t, sink, 1)

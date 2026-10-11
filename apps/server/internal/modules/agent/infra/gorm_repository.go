@@ -211,10 +211,11 @@ func (r *GormRepository) GetStats(ctx context.Context, agentUserID *uint) (*agen
 	}
 	query.Count(&stats.Total)
 	var avgResponseTime float64
-	applyAgentScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("AVG(avg_response_time)").Row().Scan(&avgResponseTime)
+	// 聚合列走 gorm Scan + COALESCE：Row().Scan 在空集/NULL 时报错（同 analytics 口径）
+	applyAgentScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("COALESCE(AVG(avg_response_time), 0)").Scan(&avgResponseTime)
 	stats.AvgResponseTime = int64(avgResponseTime)
 	var avgRating float64
-	applyAgentScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("AVG(rating)").Row().Scan(&avgRating)
+	applyAgentScope(r.db.WithContext(ctx).Model(&models.Agent{}), ctx).Select("COALESCE(AVG(rating), 0)").Scan(&avgRating)
 	stats.AvgRating = avgRating
 	return stats, nil
 }

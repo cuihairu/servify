@@ -137,7 +137,7 @@ func TestEnhancedHealthHandler_Health_WithKnowledgeProviderCheck(t *testing.T) {
 func TestEnhancedHealthHandler_CheckRedisWithSharedClient(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	cfg := config.GetDefaultConfig()
 	cfg.Monitoring.HealthChecks.Redis = true

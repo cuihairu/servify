@@ -211,7 +211,7 @@ func TestVoiceHandshakeValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400 (hub=%p)", resp.StatusCode, hub)
 		}
@@ -222,7 +222,7 @@ func TestVoiceHandshakeValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status = %d, want 400", resp.StatusCode)
 		}
@@ -233,7 +233,7 @@ func TestVoiceHandshakeValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d, want 503", resp.StatusCode)
 		}
@@ -247,7 +247,7 @@ func TestVoiceHandshakeValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("status = %d, want 401", resp.StatusCode)
 		}
@@ -350,7 +350,7 @@ func TestVoiceChannelSpeakerParamPassed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitForStarts(t, runtime, 1)
 	if runtime.speakers[0] != "agent" {
@@ -469,7 +469,7 @@ func TestVoiceChannelUpgradeFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (missing upgrade headers)", resp.StatusCode)
 	}
@@ -596,7 +596,7 @@ func TestVoiceChannelWritePumpExitBranches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
-		defer conn2.Close()
+		defer func() { _ = conn2.Close() }()
 		client := &VoiceClient{
 			ID: "c-pingerr", SessionID: "s", Conn: conn2, Hub: NewVoiceHub(),
 			Send: make(chan WebSocketMessage), pingInterval: 10 * time.Millisecond,
@@ -655,7 +655,7 @@ func TestVoiceChannelPongRefreshesReadDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	select {
 	case <-built:

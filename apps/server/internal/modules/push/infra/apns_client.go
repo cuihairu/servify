@@ -96,11 +96,11 @@ func (c *APNsClient) Send(ctx context.Context, deviceToken, title, body string, 
 	if err != nil {
 		return fmt.Errorf("apns send: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("apns send http %d: %s", resp.StatusCode, readErrBody(resp.Body))
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body) // 连接复用排空，失败无害
 	return nil
 }
 

@@ -121,7 +121,7 @@ func (p *Provider) Synthesize(ctx context.Context, req tts.SynthesizeRequest) (t
 	if err != nil {
 		return tts.SynthesizeResponse{}, fmt.Errorf("tts openai: do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	payload, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return tts.SynthesizeResponse{}, fmt.Errorf("tts openai: read audio: %w", err)
@@ -145,7 +145,7 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("%w: health status %d: %s", tts.ErrUpstream, resp.StatusCode, trimErrorMessage(body))

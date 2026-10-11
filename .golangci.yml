@@ -1,0 +1,15 @@
+# golangci-lint v2 配置：显式钉住默认 linter 集（errcheck/govet/ineffassign/
+# staticcheck/unused），防上游默认漂移悄悄扩面。仓库侧不做任何 exclude——
+# 2026-10-11 已把 ./... 清零（182 处 errcheck 收敛：写路径 Close/Scan 错误
+# 上抛、泵循环与测试清理显式 best-effort），新增违例必须当场处置。
+version: "2"
+
+linters:
+  default: standard
+
+run:
+  timeout: 10m
+  # 与测试门（scripts/run-tests.sh 带 -tags integration）分析同一源码集：
+  # 否则 integration 标签下的测试文件对 unused 不可见，其包内 helper 会被误判
+  # 为死代码删掉、反过来击穿带标签的编译（customer/routing memdsn 踩实）。
+  build-tags: integration

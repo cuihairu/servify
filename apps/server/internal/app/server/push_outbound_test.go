@@ -145,7 +145,7 @@ func TestPushOutbound_DispatchesOfflineVisitorOnBothChannels(t *testing.T) {
 	seedPushVisitorSession(t, db, "sess-1")
 	presence.online["sess-1"] = false
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "你的问题已解决，请查收"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "你的问题已解决，请查收"))
 
 	waitPush(t, fcm, 1)
 	waitPush(t, apns, 1)
@@ -162,7 +162,7 @@ func TestPushOutbound_SuppressesOnlineVisitor(t *testing.T) {
 	seedPushVisitorSession(t, db, "sess-1")
 	presence.online["sess-1"] = true
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "在线时不应推送"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "在线时不应推送"))
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count()+apns.count() != 0 {
 		t.Fatalf("online suppression failed: fcm=%d apns=%d", fcm.count(), apns.count())
@@ -179,8 +179,8 @@ func TestPushOutbound_SkipsNonAgentAndEmptyContent(t *testing.T) {
 			ID: "m2", ConversationID: "sess-1", Sender: "visitor",
 			Kind: "text", Content: "访客消息", CreatedAt: time.Now(),
 		})
-	bus.Publish(context.Background(), visitor)
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "   ")) // 空 content
+	_ = bus.Publish(context.Background(), visitor)
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "   ")) // 空 content
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count()+apns.count() != 0 {
 		t.Fatal("non-agent/empty content must not dispatch")
@@ -192,8 +192,8 @@ func TestPushOutbound_DeduplicatesEvent(t *testing.T) {
 	seedPushVisitorSession(t, db, "sess-1")
 
 	evt := agentPushEvent("sess-1", "同一事件")
-	bus.Publish(context.Background(), evt)
-	bus.Publish(context.Background(), evt) // bus 重复投递
+	_ = bus.Publish(context.Background(), evt)
+	_ = bus.Publish(context.Background(), evt) // bus 重复投递
 	waitPush(t, fcm, 1)
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count() != 1 {
@@ -206,7 +206,7 @@ func TestPushOutbound_SkipsWithoutTokenRows(t *testing.T) {
 	seedPushVisitorSession(t, db, "sess-1")
 	db.Where("1 = 1").Delete(&models.PushToken{}) // 清掉注册行
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "无注册行"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "无注册行"))
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count()+apns.count() != 0 {
 		t.Fatal("no tokens must not dispatch")
@@ -219,7 +219,7 @@ func TestPushOutbound_SendFailureIsLoggedOnly(t *testing.T) {
 	presence.online["sess-1"] = false
 	fcm.failOn = "fcm-device-1"
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "通道失败仅记日志"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "通道失败仅记日志"))
 	waitPush(t, fcm, 1)
 	waitPush(t, apns, 1) // 另一通道不受影响
 }
@@ -232,7 +232,7 @@ func TestPushOutbound_UnknownPlatformRowSkipped(t *testing.T) {
 		t.Fatalf("corrupt platform: %v", err)
 	}
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "脏 platform 行跳过"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "脏 platform 行跳过"))
 	waitPush(t, apns, 1)
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count() != 0 {
@@ -269,7 +269,7 @@ func TestPushOutbound_NilChannelsRegisterIsNoOp(t *testing.T) {
 	d := NewPushOutboundDispatcher(db, &fakePresence{online: map[string]bool{}}, nil, nil, logrus.New())
 	bus := eventbus.NewInMemoryBus()
 	d.Register(bus) // 双通道 nil：不订阅，发布不炸
-	bus.Publish(context.Background(), agentPushEvent("sess-x", "no-op"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-x", "no-op"))
 }
 
 // ---- wirePushRuntime ----
@@ -362,7 +362,7 @@ func TestPushOutbound_TruncatesLongSummary(t *testing.T) {
 	seedPushVisitorSession(t, db, "sess-1")
 	presence.online["sess-1"] = false
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", strings.Repeat("长", 80)))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", strings.Repeat("长", 80)))
 
 	waitPush(t, fcm, 1)
 	if got := len(fcm.last().body); got != 120 {
@@ -379,7 +379,7 @@ func TestPushOutbound_SkipsBlankTokenRow(t *testing.T) {
 		t.Fatalf("blank token: %v", err)
 	}
 
-	bus.Publish(context.Background(), agentPushEvent("sess-1", "空白 token 行跳过"))
+	_ = bus.Publish(context.Background(), agentPushEvent("sess-1", "空白 token 行跳过"))
 	waitPush(t, apns, 1)
 	time.Sleep(100 * time.Millisecond)
 	if fcm.count() != 0 {

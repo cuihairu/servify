@@ -292,7 +292,7 @@ func buildCSV(headers []string, rows [][]string) ([]byte, error) {
 // buildXLSX 在内存中构建单工作表 Excel。
 func buildXLSX(headers []string, rows [][]string) ([]byte, error) {
 	f := excelize.NewFile()
-	defer f.Close()
+	defer func() { _ = f.Close() }() // Write 成功后仅释放句柄
 	sheet := "Sheet1"
 	if err := hookExportExcelizeSetSheetRow(f, sheet, "A1", &headers); err != nil {
 		return nil, err

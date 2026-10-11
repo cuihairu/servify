@@ -41,6 +41,6 @@ func TestCLIRunStartRuntimeFailure(t *testing.T) {
 	out, _ := cmd.CombinedOutput()
 	require.NotNil(t, cmd.ProcessState, "output: %s", out)
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
-	assert.Contains(t, string(out), "Failed to start runtime")
+	assert.Contains(t, string(out), "failed to start runtime")
 	assert.Contains(t, string(out), "injected start failure")
 }

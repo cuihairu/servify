@@ -213,7 +213,9 @@ fmt:
 # Run linter
 lint:
 	@echo "Running linter..."
-	cd apps/server && golangci-lint run ./...
+	# 仓库根口径：apps/server + scripts + infra/compose 同一 standard 集；
+	# 上限显式置 0（默认单 linter 截断 50 条会藏真问题）。
+	golangci-lint run --max-issues-per-linter 0 --max-same-issues 0 ./...
 
 # Update dependencies
 update-deps:

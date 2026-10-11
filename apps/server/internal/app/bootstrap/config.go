@@ -28,7 +28,7 @@ func LoadConfig(configPath string) (*config.Config, error) {
 	// This ensures ${DIFY_ENABLED} becomes "true"/"false" string before bool conversion
 	expandedPath := expandEnvVarsInConfig(configPath)
 	if expandedPath != "" {
-		defer os.Remove(expandedPath)
+		defer func() { _ = os.Remove(expandedPath) }() // 清理 best-effort
 		configPath = expandedPath
 	}
 
@@ -197,10 +197,14 @@ func expandEnvVarsInConfig(configPath string) string {
 	if err != nil {
 		return ""
 	}
-	defer tmpFile.Close()
-
 	if _, err := tmpFile.WriteString(expanded); err != nil {
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		return ""
+	}
+	// 写路径 Close 错误不可吞：半截配置文件不能当有效路径返回
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpFile.Name())
 		return ""
 	}
 

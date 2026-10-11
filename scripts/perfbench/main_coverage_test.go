@@ -195,7 +195,7 @@ func TestHTTPDoBodyReadError(t *testing.T) {
 	// 劫持连接回半截 chunked 响应再断开，驱动 io.ReadAll 错误分支。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, buf, _ := w.(http.Hijacker).Hijack()
-		defer conn.Close()
+		defer func() { _ = conn.Close() }() // 测试收尾
 		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nab")
 		_ = buf.Flush()
 	}))
@@ -519,7 +519,7 @@ func newFakeWS(t *testing.T, echo bool) *fakeWSServer {
 }
 
 func (s *fakeWSServer) serve(conn net.Conn, echo bool) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // 测试收尾
 	buf := make([]byte, 0, 1024)
 	b := make([]byte, 1)
 	for !bytes.HasSuffix(buf, []byte("\r\n\r\n")) {
@@ -680,7 +680,7 @@ func TestWriteFrameExtendedLengths(t *testing.T) {
 func TestReadFrameExtendedLengthsFromServer(t *testing.T) {
 	// 服务端按 126/127 扩展长度回帧，客户端 readFrame 要能解出。
 	l := startRawListener(t, func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }() // 测试收尾
 		buf := make([]byte, 0, 1024)
 		b := make([]byte, 1)
 		for !bytes.HasSuffix(buf, []byte("\r\n\r\n")) {
@@ -739,7 +739,7 @@ func TestDialWSErrorPaths(t *testing.T) {
 	}
 
 	// 握手响应连接即断（读错误）。
-	l3 := startRawListener(t, func(conn net.Conn) { conn.Close() })
+	l3 := startRawListener(t, func(conn net.Conn) { _ = conn.Close() })
 	if _, err := dialWS(fmt.Sprintf("ws://%s/x", l3.Addr())); err == nil || !strings.Contains(err.Error(), "read upgrade response") {
 		t.Fatalf("连接即断应报读错误：%v", err)
 	}

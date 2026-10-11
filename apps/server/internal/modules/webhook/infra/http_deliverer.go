@@ -67,7 +67,7 @@ func (d *HTTPDeliverer) Deliver(ctx context.Context, req application.DeliveryReq
 	if err != nil {
 		return application.DeliveryResult{Error: err.Error(), DurationMs: elapsedMs(d.now, start)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	// 丢弃响应体（限读防恶意大响应），保证连接可复用。
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
 	success := resp.StatusCode >= 200 && resp.StatusCode < 300

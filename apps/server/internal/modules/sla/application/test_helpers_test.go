@@ -37,7 +37,6 @@ func unitScopedContext(tenantID, workspaceID string) context.Context {
 	return platformauth.ContextWithScope(context.Background(), tenantID, workspaceID)
 }
 
-func timeNow() time.Time             { return time.Now() }
 func uintPtr(v uint) *uint           { return &v }
 func intPtr(v int) *int              { return &v }
 func boolPtr(v bool) *bool           { return &v }

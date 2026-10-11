@@ -43,5 +43,3 @@ func timeNow() time.Time { return time.Now() }
 func uintPtr(v uint) *uint { return &v }
 
 func timePtr(v time.Time) *time.Time { return &v }
-
-func intPtr(v int) *int { return &v }

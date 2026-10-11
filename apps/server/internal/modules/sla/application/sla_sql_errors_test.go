@@ -15,7 +15,6 @@ import (
 	"servify/apps/server/internal/models"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -27,11 +26,6 @@ func execTrigger(t *testing.T, db *gorm.DB, stmt string) {
 }
 
 // ---- insert-error branches via BEFORE INSERT triggers ----
-
-func bcryptHash(pw string) (string, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.MinCost)
-	return string(b), err
-}
 
 func failNthQuery(db *gorm.DB, n int32) {
 	var calls int32

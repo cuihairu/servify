@@ -168,7 +168,7 @@ func freePort(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("listen for free port: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }() // 测试收尾
 	_, port, _ := net.SplitHostPort(l.Addr().String())
 	return port
 }

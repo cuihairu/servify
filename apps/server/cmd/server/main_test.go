@@ -134,7 +134,7 @@ func TestServerMainHappyPath(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 60*time.Second, 200*time.Millisecond, "server did not become healthy: %s", out.String())
 
@@ -154,7 +154,7 @@ func TestServerMainHappyPath(t *testing.T) {
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	var count int64
 	require.NoError(t, db.Raw("SELECT count(*) FROM sqlite_master WHERE type='table' AND name = 'users'").Scan(&count).Error)
 	assert.EqualValues(t, 1, count)
@@ -191,7 +191,7 @@ func TestServerMainTracingSetupWarning(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}, 60*time.Second, 200*time.Millisecond, "server did not become healthy: %s", out.String())
 
@@ -225,7 +225,7 @@ func TestServerMainBadStartupFlagFailure(t *testing.T) {
 	cmd := runServerSubprocess(t, dir, "-port=not-a-number")
 	out, _ := cmd.CombinedOutput()
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode())
-	assert.Contains(t, string(out), "Failed to parse startup options")
+	assert.Contains(t, string(out), "failed to parse startup options")
 }
 
 func TestServerMainBuildAppFailure(t *testing.T) {
@@ -237,7 +237,7 @@ func TestServerMainBuildAppFailure(t *testing.T) {
 	cmd := runServerSubprocess(t, dir, "-db-driver=sqlite", "-dsn="+filepath.Join(dir, "x.db"))
 	out, _ := cmd.CombinedOutput()
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode())
-	assert.Contains(t, string(out), "Failed to build app")
+	assert.Contains(t, string(out), "failed to build app")
 }
 
 func TestServerMainDatabaseFailure(t *testing.T) {
@@ -249,7 +249,7 @@ func TestServerMainDatabaseFailure(t *testing.T) {
 	cmd := runServerSubprocess(t, dir, "-db-driver=sqlite", "-dsn="+badDSN)
 	out, _ := cmd.CombinedOutput()
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode())
-	assert.Contains(t, string(out), "Failed to connect to database")
+	assert.Contains(t, string(out), "failed to connect to database")
 }
 
 func TestServerMainMigrateFailure(t *testing.T) {
@@ -268,7 +268,7 @@ func TestServerMainMigrateFailure(t *testing.T) {
 	cmd := runServerSubprocess(t, dir, "-db-driver=sqlite", "-dsn="+dbPath)
 	out, _ := cmd.CombinedOutput()
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode())
-	assert.Contains(t, string(out), "Failed to migrate database")
+	assert.Contains(t, string(out), "failed to migrate database")
 }
 
 func TestServerMainBuildRuntimeFailure(t *testing.T) {
@@ -281,5 +281,5 @@ func TestServerMainBuildRuntimeFailure(t *testing.T) {
 	cmd := runServerSubprocess(t, dir, "-db-driver=sqlite", "-dsn="+filepath.Join(dir, "x.db"))
 	out, _ := cmd.CombinedOutput()
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode())
-	assert.Contains(t, string(out), "Failed to build runtime")
+	assert.Contains(t, string(out), "failed to build runtime")
 }

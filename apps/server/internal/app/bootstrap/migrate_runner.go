@@ -104,14 +104,14 @@ func RunMigrations(db *gorm.DB) error {
 		if err != nil {
 			return fmt.Errorf("migrations: open dedicated connection: %w", err)
 		}
-		defer dedicated.Close()
+		defer func() { _ = dedicated.Close() }() // 清理路径 best-effort
 		target = dedicated
 	}
 	driver, err := mgpostgres.WithInstance(target, &mgpostgres.Config{})
 	if err != nil {
 		return fmt.Errorf("migrations: build driver: %w", err)
 	}
-	defer driver.Close()
+	defer func() { _ = driver.Close() }() // 清理路径 best-effort
 
 	src, err := newMigrationsSource(migrationsFS, "migrations")
 	if err != nil {
@@ -130,10 +130,10 @@ func RunMigrations(db *gorm.DB) error {
 // postgresDSNFromDialector 从 gorm postgres dialector 提取原始 DSN；方言不
 // 匹配时返回空（调用方回退到直接使用传入的连接池）。
 func postgresDSNFromDialector(db *gorm.DB) string {
-	if db == nil || db.Config == nil || db.Config.Dialector == nil {
+	if db == nil || db.Config == nil || db.Dialector == nil {
 		return ""
 	}
-	if pg, ok := db.Config.Dialector.(*postgres.Dialector); ok {
+	if pg, ok := db.Dialector.(*postgres.Dialector); ok {
 		return pg.DSN
 	}
 	return ""

@@ -46,12 +46,12 @@ func TestRunStandaloneBackfillLogsTouchedRows(t *testing.T) {
 	cfg.Monitoring.Enabled = false
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to start runtime: injected start failure")
+		"failed to start runtime: injected start failure")
 }
 
 // TestRunStandaloneBackfillFailure 覆盖回填失败的 fatal 分支：tickets 上
 // 预挂 BEFORE UPDATE 触发器，回填 UPDATE 命中空 scope 行即触发 RAISE，
-// 编排以 "Failed to backfill default scope" 返回。
+// 编排以 "failed to backfill default scope" 返回。
 func TestRunStandaloneBackfillFailure(t *testing.T) {
 	dir := t.TempDir()
 	dsn := filepath.Join(dir, "backfill-fail.db")
@@ -68,5 +68,5 @@ func TestRunStandaloneBackfillFailure(t *testing.T) {
 	cfg.Monitoring.Enabled = false
 
 	runStandaloneExpectError(t, cfg, StandaloneOptions{Migrate: true},
-		"Failed to backfill default scope")
+		"failed to backfill default scope")
 }

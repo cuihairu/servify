@@ -62,7 +62,7 @@ func (p *HTTPSessionIPIntelligence) DescribeIP(ip string) sessionIPDescription {
 	if err != nil {
 		return sessionIPDescription{}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return sessionIPDescription{}
 	}

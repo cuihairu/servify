@@ -346,15 +346,15 @@ func newClientID() string {
 func (c *WebSocketClient) readPump() {
 	defer func() {
 		c.Hub.unregister <- c
-		c.Conn.Close()
+		_ = c.Conn.Close() // 泵收尾，双关由读循环兜底
 	}()
 
 	// WebRTC SDP payloads are routinely several KB, so the generic websocket
 	// ingress limit must be large enough to carry signaling messages.
 	c.Conn.SetReadLimit(64 * 1024)
-	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second)) // 泵循环 best-effort
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second)) // 泵循环 best-effort
 		return nil
 	})
 
@@ -400,15 +400,15 @@ func (c *WebSocketClient) writePump() {
 	ticker := time.NewTicker(interval)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		_ = c.Conn.Close() // 泵收尾，双关由读循环兜底
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) // 泵循环 best-effort
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -418,7 +418,7 @@ func (c *WebSocketClient) writePump() {
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) // 泵循环 best-effort
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

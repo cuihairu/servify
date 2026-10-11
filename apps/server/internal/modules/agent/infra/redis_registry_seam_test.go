@@ -46,7 +46,7 @@ func TestSyncLoopExitsWhenStatusChannelCloses(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		cancel()
-		client.Close()
+		_ = client.Close() // 测试/清理 best-effort
 	})
 
 	// 注入已关闭的状态通道：ctx 未取消时 select 的唯一就绪分支是

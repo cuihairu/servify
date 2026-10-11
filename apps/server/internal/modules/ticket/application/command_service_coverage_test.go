@@ -97,7 +97,6 @@ func (s *flakyCommandRepo) GetTicket(ctx context.Context, ticketID uint) (*domai
 }
 
 func strPtr(v string) *string { return &v }
-func uintPtrCmd(v uint) *uint { return &v }
 
 func TestCoverageCreateTicketErrorBranches(t *testing.T) {
 	ctx := context.Background()
@@ -172,8 +171,7 @@ func TestCoverageUpdateTicketBranches(t *testing.T) {
 	// same status -> regular update path, no status change record
 	repo = seed("open", nil)
 	same := "open"
-	dto, err := NewCommandService(repo).UpdateTicket(ctx, 1, UpdateTicketCommand{Status: &same, DueDate: &now})
-	if err != nil {
+	if _, err := NewCommandService(repo).UpdateTicket(ctx, 1, UpdateTicketCommand{Status: &same, DueDate: &now}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if repo.tickets[1].Description != "" || repo.tickets[1].DueDate == nil {
@@ -183,7 +181,7 @@ func TestCoverageUpdateTicketBranches(t *testing.T) {
 	// resolved transition -> UpdateTicketWithStatus + resolved_at
 	repo = seed("open", nil)
 	resolved := "resolved"
-	dto, err = NewCommandService(repo).UpdateTicket(ctx, 1, UpdateTicketCommand{Status: &resolved})
+	dto, err := NewCommandService(repo).UpdateTicket(ctx, 1, UpdateTicketCommand{Status: &resolved})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -412,11 +410,11 @@ func TestCoverageCloseTicketBranches(t *testing.T) {
 
 	repo := seed()
 	repo.closeCalls = 0
-	repo.stubCommandRepo.err = errors.New("close failed")
+	repo.err = errors.New("close failed")
 	if _, err := NewCommandService(repo).CloseTicket(ctx, 1, CloseTicketCommand{}); err == nil {
 		t.Fatal("expected close error")
 	}
-	repo.stubCommandRepo.err = nil
+	repo.err = nil
 
 	repo = seed()
 	svc := NewCommandServiceWithBus(repo, &stubEventBus{err: errors.New("bus down")})

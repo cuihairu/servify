@@ -250,9 +250,9 @@ func (c *VoiceClient) readPump() {
 	if readTimeout <= 0 {
 		readTimeout = 60 * time.Second
 	}
-	c.Conn.SetReadDeadline(time.Now().Add(readTimeout))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(readTimeout)) // 泵循环 best-effort
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(readTimeout))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(readTimeout)) // 泵循环 best-effort
 		return nil
 	})
 
@@ -287,7 +287,7 @@ func (c *VoiceClient) readPump() {
 			}
 			return
 		}
-		c.Conn.SetReadDeadline(time.Now().Add(readTimeout))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(readTimeout)) // 泵循环 best-effort
 		switch messageType {
 		case websocket.BinaryMessage:
 			if len(payload) == 0 {
@@ -324,13 +324,13 @@ func (c *VoiceClient) writePump() {
 	ticker := time.NewTicker(interval)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		_ = c.Conn.Close() // 泵收尾，双关由外层读循环兜底
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) // 泵循环 best-effort
 			if !ok {
 				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -340,7 +340,7 @@ func (c *VoiceClient) writePump() {
 				return
 			}
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second)) // 泵循环 best-effort
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

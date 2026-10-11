@@ -232,7 +232,7 @@ func TestStatisticsWorkerFirstRunTodayThenYesterday(t *testing.T) {
 	if len(seq) < 3 {
 		t.Fatalf("expected 3 RunDailyStatsUpdate calls, got %d", len(seq))
 	}
-	if seq[0].Sub(time.Now()).Abs() > time.Hour || seq[1].Sub(time.Now()).Abs() > time.Hour {
+	if time.Since(seq[0]).Abs() > time.Hour || time.Since(seq[1]).Abs() > time.Hour {
 		t.Fatalf("first run and next-run today step should both be today: %v / %v", seq[0], seq[1])
 	}
 	if !seq[2].Before(seq[1]) || seq[1].Sub(seq[2]) < 23*time.Hour {
@@ -304,7 +304,6 @@ type countingCleanupService struct {
 	calls  atomic.Int64
 	result int64
 	err    error
-	logger bool
 }
 
 func (c *countingCleanupService) Cleanup(ctx context.Context, now time.Time) (int64, error) {

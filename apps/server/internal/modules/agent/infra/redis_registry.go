@@ -84,8 +84,10 @@ func (r *RedisRegistry) GoOnline(profile agentdomain.AgentProfile) (agentapp.Age
 	// 3. Publish status change
 	r.publishStatusChange("online", profile.UserID)
 
-	// 4. Update local cache
-	r.localCache.GoOnline(profile)
+	// 4. Update local cache（镜像写入，失败仅告警）
+	if _, err := r.localCache.GoOnline(profile); err != nil {
+		r.logger.Warnf("local cache update failed: %v", err)
+	}
 
 	return dto, nil
 }
@@ -129,7 +131,9 @@ func (r *RedisRegistry) UpdateStatus(userID uint, status agentdomain.PresenceSta
 	if dto, ok := r.localCache.Get(userID); ok {
 		dto.Status = string(status)
 		dto.LastActivity = now
-		r.storeInRedis(userID, dto)
+		if err := r.storeInRedis(userID, dto); err != nil {
+			r.logger.Warnf("redis write failed: %v", err)
+		}
 	}
 
 	// 3. Update local cache
@@ -145,7 +149,9 @@ func (r *RedisRegistry) AssignSession(userID uint, session *models.Session) (age
 	}
 
 	// Sync to Redis
-	r.storeInRedis(userID, dto)
+	if err := r.storeInRedis(userID, dto); err != nil {
+		r.logger.Warnf("redis write failed: %v", err)
+	}
 	return dto, nil
 }
 
@@ -158,7 +164,9 @@ func (r *RedisRegistry) ReleaseSession(userID uint, sessionID string) (agentapp.
 	}
 
 	// Sync to Redis
-	r.storeInRedis(userID, dto)
+	if err := r.storeInRedis(userID, dto); err != nil {
+		r.logger.Warnf("redis write failed: %v", err)
+	}
 	return dto, true
 }
 
@@ -169,11 +177,15 @@ func (r *RedisRegistry) ApplyTransfer(sessionID string, fromAgentID *uint, toAge
 	// Sync both agents to Redis
 	if fromAgentID != nil {
 		if dto, ok := r.localCache.Get(*fromAgentID); ok {
-			r.storeInRedis(*fromAgentID, dto)
+			if err := r.storeInRedis(*fromAgentID, dto); err != nil {
+				r.logger.Warnf("redis write failed: %v", err)
+			}
 		}
 	}
 	if dto, ok := r.localCache.Get(toAgentID); ok {
-		r.storeInRedis(toAgentID, dto)
+		if err := r.storeInRedis(toAgentID, dto); err != nil {
+			r.logger.Warnf("redis write failed: %v", err)
+		}
 	}
 }
 
@@ -216,7 +228,7 @@ func (r *RedisRegistry) List() []agentapp.AgentRuntimeDTO {
 // syncLoop listens for status changes from other instances.
 func (r *RedisRegistry) syncLoop() {
 	pubsub := r.client.Subscribe(r.ctx, agentStatusChannel)
-	defer pubsub.Close()
+	defer func() { _ = pubsub.Close() }() // 订阅收尾，关闭错误无从上报
 
 	// 等待订阅确认：确认前发布的消息不会送达本实例。
 	if _, err := pubsub.Receive(r.ctx); err != nil {
@@ -259,7 +271,9 @@ func (r *RedisRegistry) syncFromRedis() {
 		}
 		if dto, err := r.getFromRedis(userID); err == nil {
 			r.mu.Lock()
-			r.localCache.GoOnline(dtoToProfile(*dto))
+			if _, lerr := r.localCache.GoOnline(dtoToProfile(*dto)); lerr != nil {
+				r.logger.Warnf("local cache sync failed: %v", lerr)
+			}
 			r.mu.Unlock()
 		}
 	}
@@ -283,7 +297,9 @@ func (r *RedisRegistry) handleStatusChange(payload string) {
 		if dto, err := r.getFromRedis(userID); err == nil {
 			// Update local cache without triggering another publish
 			r.mu.Lock()
-			r.localCache.GoOnline(dtoToProfile(*dto))
+			if _, lerr := r.localCache.GoOnline(dtoToProfile(*dto)); lerr != nil {
+				r.logger.Warnf("local cache sync failed: %v", lerr)
+			}
 			r.mu.Unlock()
 		}
 	case "offline":
@@ -374,7 +390,9 @@ func (r *RedisRegistry) removeFromRedis(userID uint) {
 	pipe := r.client.Pipeline()
 	pipe.Del(r.ctx, key)
 	pipe.SRem(r.ctx, agentSetKey, userID)
-	pipe.Exec(r.ctx)
+	if _, err := pipe.Exec(r.ctx); err != nil {
+		r.logger.Warnf("redis remove pipeline failed: %v", err)
+	}
 }
 
 func (r *RedisRegistry) getFromRedis(userID uint) (*agentapp.AgentRuntimeDTO, error) {

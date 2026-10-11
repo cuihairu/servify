@@ -51,9 +51,10 @@ func integrationQuery(ctx context.Context, db *gorm.DB, req *appintegrationapp.A
 		query = query.Where("LOWER(name) LIKE LOWER(?) OR LOWER(vendor) LIKE LOWER(?) OR LOWER(summary) LIKE LOWER(?)", term, term, term)
 	}
 	if len(req.Status) == 1 {
-		if req.Status[0] == "enabled" {
+		switch req.Status[0] {
+		case "enabled":
 			query = query.Where("enabled = ?", true)
-		} else if req.Status[0] == "disabled" {
+		case "disabled":
 			query = query.Where("enabled = ?", false)
 		}
 	}

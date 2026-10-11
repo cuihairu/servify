@@ -169,7 +169,7 @@ func TestGormConfigStoreRagFlowSectionRoundTrip(t *testing.T) {
 }
 
 func TestGormConfigStoreRagFlowEncodeError(t *testing.T) {
-	stubYamlMarshalError(t, encodeErr)
+	stubYamlMarshalError(t, errEncode)
 	store := NewGormConfigStore(openProviderTestDB(t))
 	ctx := context.Background()
 

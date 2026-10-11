@@ -382,7 +382,9 @@ func TestRunScanGivesUpAfterMaxAttempts(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		now = now.Add(601 * time.Second)
 		svc.SetNowFunc(func() time.Time { return now })
-		svc.RunScan(context.Background())
+		if _, err := svc.RunScan(context.Background()); err != nil {
+			t.Fatalf("run scan %d: %v", i, err)
+		}
 	}
 	review, _ := f.GetReviewBySession(context.Background(), "s-dead")
 	if review.AttemptCount != 2 {
@@ -406,7 +408,9 @@ func TestConfirmReviewLifecycle(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 	// 记录先打分（rules-only）
-	svc.RunScan(ctx)
+	if _, err := svc.RunScan(ctx); err != nil {
+		t.Fatalf("run scan: %v", err)
+	}
 	// 确认成功
 	score := 7.5
 	if err := svc.ConfirmReview(ctx, "s-confirm", ConfirmCommand{
@@ -433,7 +437,9 @@ func TestRescoreReviewForceGate(t *testing.T) {
 	svc := NewQualityService(f, nil, testConfig(), nil)
 	ctx := context.Background()
 
-	svc.RunScan(ctx) // rules-only → scored
+	if _, err := svc.RunScan(ctx); err != nil { // rules-only → scored
+		t.Fatalf("run scan: %v", err)
+	}
 	if err := svc.ConfirmReview(ctx, "s-rescore", ConfirmCommand{}); err != nil {
 		t.Fatalf("confirm: %v", err)
 	}

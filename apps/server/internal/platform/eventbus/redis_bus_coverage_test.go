@@ -97,10 +97,10 @@ type unserializableEvent struct {
 func TestRedisBusPublishNilEvent(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	if err := bus.Publish(context.Background(), nil); err != nil {
 		t.Fatalf("Publish(nil) error = %v", err)
@@ -110,10 +110,10 @@ func TestRedisBusPublishNilEvent(t *testing.T) {
 func TestRedisBusPublishUnserializableEvent(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	event := unserializableEvent{Ch: make(chan int)}
 	event.EventID = "evt-bad"
@@ -126,10 +126,10 @@ func TestRedisBusPublishUnserializableEvent(t *testing.T) {
 func TestRedisBusPublishStreamError(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	// SetError applies to every command: confirm the subscription before
 	// injecting it, otherwise Publish blocks on waitUntilReady forever
@@ -146,10 +146,10 @@ func TestRedisBusPublishStreamError(t *testing.T) {
 func TestRedisBusDispatchMessageInvalidData(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	handlerCalled := false
 	bus.Subscribe("ticket.invalid", HandlerFunc(func(ctx context.Context, e Event) error {
@@ -169,10 +169,10 @@ func TestRedisBusDispatchMessageInvalidData(t *testing.T) {
 func TestRedisBusDispatchMessageHandlerError(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	sent := make(chan struct{}, 2)
 	handlers := []Handler{
@@ -206,10 +206,10 @@ func TestRedisBusDispatchMessageHandlerError(t *testing.T) {
 func TestRedisBusDispatchFromStreamNoHandlers(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	// No handlers registered: dispatchFromStream should return early without error.
 	bus.dispatchFromStream(context.Background(), "servify:events:ticket.nohandler|1-1")
@@ -218,10 +218,10 @@ func TestRedisBusDispatchFromStreamNoHandlers(t *testing.T) {
 func TestRedisBusDispatchFromStreamMissingMessage(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	received := make(chan Event, 1)
 	bus.Subscribe("ticket.missing", HandlerFunc(func(ctx context.Context, e Event) error {
@@ -242,10 +242,10 @@ func TestRedisBusDispatchFromStreamMissingMessage(t *testing.T) {
 func TestRedisBusReadMessagesWithoutMessageID(t *testing.T) {
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() { _ = client.Close() }() // 测试收尾
 
 	bus := NewRedisBus(client, logrus.New())
-	defer bus.Close()
+	defer func() { _ = bus.Close() }() // 测试收尾
 
 	event := BaseEvent{EventID: "evt-fallback", EventName: "ticket.fallback"}
 	if err := bus.Publish(context.Background(), event); err != nil {

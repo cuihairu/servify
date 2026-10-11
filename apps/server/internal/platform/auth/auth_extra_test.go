@@ -19,7 +19,8 @@ import (
 func rawB64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 func TestContextScopeRoundTrip(t *testing.T) {
-	if TenantIDFromContext(nil) != "" || WorkspaceIDFromContext(nil) != "" {
+	var nilCtx context.Context
+	if TenantIDFromContext(nilCtx) != "" || WorkspaceIDFromContext(nilCtx) != "" {
 		t.Fatal("nil context should yield empty scope")
 	}
 	if TenantIDFromContext(context.Background()) != "" {

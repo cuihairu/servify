@@ -62,7 +62,7 @@ func (h *FileUploadHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请选择文件", "message": err.Error()})
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }() // 清理路径 best-effort
 
 	// Validate extension
 	ext := strings.ToLower(filepath.Ext(header.Filename))

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/platform/llm"
 	"servify/apps/server/internal/platform/llm/anthropic"
 	localllm "servify/apps/server/internal/platform/llm/local"
 	"servify/apps/server/internal/platform/llm/openai"
@@ -80,7 +79,7 @@ func TestResolveLLMRuntimeNilSafety(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveLLMRuntime(nil, nil) error = %v", err)
 	}
-	if _, ok := provider.(llm.LLMProvider); !ok || provider == nil {
+	if provider == nil {
 		t.Fatalf("provider = %v, want non-nil", provider)
 	}
 	if params.Model != "" {

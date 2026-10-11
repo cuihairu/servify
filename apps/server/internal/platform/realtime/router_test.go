@@ -198,7 +198,7 @@ func TestMessageRouter_Start_Stop(t *testing.T) {
 	// Start should not block (runs in background)
 	// We can't easily test the actual start without a real context
 	// So just test Stop doesn't panic
-	r.Stop()
+	_ = r.Stop() // 测试收尾，注册表状态由断言覆盖
 }
 
 func TestMessageRouter_BroadcastMessage(t *testing.T) {
@@ -217,7 +217,7 @@ func TestMessageRouter_BroadcastMessage(t *testing.T) {
 		Type:       MessageTypeText,
 		Timestamp:  time.Now(),
 	}
-	r.BroadcastMessage(msg)
+	_ = r.BroadcastMessage(msg) // 广播投递由订阅端断言
 }
 
 func TestMessageRouter_ensureSession(t *testing.T) {

@@ -1949,3 +1949,19 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 **验证**：gofmt/vet/build 全净；apps/server 全量（除 scripts）绿；telemetry 8 测试 PASS；force-shutdown 测试 30.7s 过。
 
 **剩余候选**：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板——Handoff 是副作用动作、与 PROTOCOL.md「转接仍由用户显式发起」契约相抵，模型侧无 customer_id 上下文）。
+
+## 附注（2026-10-11，golangci-lint 基线归零 + 门落 CI）
+
+**背景**：仓库此前没有 lint 门——Makefile 有 `lint` target 但 CI 从未跑，`golangci-lint run ./...` 存量 214 处违例（unused 24 + ineffassign 2 + staticcheck 48 + errcheck 140）。**默认单 linter 50 条上限把真实规模藏住了**（每次只显示前 50 条），一度误判「errcheck 剩 50」，加 `--max-issues-per-linter 0 --max-same-issues 0` 才量出真数。根因是 apps/server 级口径没盖到 `scripts/` 与 `infra/`，扩根口径后又多出 30 处。
+
+**落地**：
+- **unused / ineffassign 清空**：删一批死测试桩（memdsn_test ×3、新加 logger、空 service、boolPtr/uintPtr 等）+ `eventbus` 死常量 + `webhook Service.mu`；conversation 适配器一处真测试缺口补齐（handler 改由 scripted repo 重建，原断言打在未替换的 handler 上=假绿）。
+- **staticcheck 清空**：ST1005 生产错误串小写化（`standalone.go` 9 条 + 各 delivery 散点），连带把 `standalone_test.go` / `cmd/server` / `cmd/cli` 里断言旧大写文案的 16 处测试同步（首轮漏掉这批导致 16 用例红，已收敛）；QF/SA/ST 系列按建议修；QF1019 修一个真编译错（`&mock.Provider{` 裸类型→`&llmmock.Provider{`）。
+- **errcheck 182 清空**：写路径 Close 错误并入返回（`bootstrap/config.go` 展开配置、`recovery/db_backup.go dumpTable` 改命名返回值、`storage/local.go Save` 命名返回值）；`Row().Scan` 四处分（analytics ×3 + agent ×2 口径：`COALESCE(AVG(...),0)` + gorm `Scan`，与 `db_backup` 既有注释同口径，避免空集/NULL 变 500）；redis registry 本地缓存镜像写入失败改告警不阻断（主路径已落库）；泵循环/测试清理显式 best-effort 并带一句原因；axcov 三处 gorm callback 注册改返回错误→调用方 `t.Fatalf`（注册失败=注入失效=用例假绿）。
+- **perfbench 弃用收敛**：WS 握手随机源 `math/rand.Read`（Go 1.20 起弃用）换 `crypto/rand.Read`（与 seam 签名一致、确定性用途另留 mathrand 别名）。
+- **门**：仓库根 `.golangci.yml` 钉 `default: standard` + `run.timeout: 10m`，无 exclude（存量已清零，新增违例当场处置）；`make lint` 与 CI go-checks 的 `Lint` 步（`golangci/golangci-lint-action@v8` + `version: v2.14.0`，仓库根口径盖 apps/server + scripts + infra/compose）均显式传 0 上限防默认 cap 藏问题；golangci-lint 支持父目录解析配置，一处配置两个调用点通用。
+- 顺手补 `scripts/` 的 12 处 staticcheck（QF1002 标签 switch ×3 / QF1012 Fprintf ×6 / S1011 字面量 append）与 `infra/compose/weknora-mock` 2 处 ineffassign，使根口径跑 `./...` 同样归零。
+
+**验证**：`make lint` 0 issues；`gofmt`/`go vet`/`build` 全净；apps/server 全量（除 scripts）绿（首轮 16 处大写文案断言同步后）；`go test ./scripts/perfbench/` 与 scripts 结构守卫（manifest validator / modules-boundaries / docker-compose / acceptance evidence / CI -run 白名单）绿。CI 待 run。
+
+**剩余候选**：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板，见前批附注）；依赖上游/需外部凭据：真实模式 Dify/WeKnora 凭据（P1-1）、`CODECOV_TOKEN`。

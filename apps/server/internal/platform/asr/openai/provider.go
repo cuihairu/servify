@@ -174,7 +174,7 @@ func (p *Provider) NewSession(ctx context.Context, opts asr.SessionOptions) (asr
 			},
 		},
 	}
-	conn.SetWriteDeadline(time.Now().Add(p.timeout))
+	_ = conn.SetWriteDeadline(time.Now().Add(p.timeout)) // 后续写入会带超时失败，此处仅设时钟
 	if err := conn.WriteJSON(update); err != nil {
 		_ = conn.Close()
 		return nil, nil, fmt.Errorf("asr openai: send session update: %w", err)
@@ -202,7 +202,7 @@ func (p *Provider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // 读完即弃，关闭错误不影响响应语义
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("asr openai: health status %d", resp.StatusCode)
 	}
@@ -263,7 +263,7 @@ func (s *session) FeedAudio(chunk []byte) error {
 		Audio: base64.StdEncoding.EncodeToString(chunk),
 	}
 	s.writeMu.Lock()
-	s.conn.SetWriteDeadline(time.Now().Add(s.timeout))
+	_ = s.conn.SetWriteDeadline(time.Now().Add(s.timeout)) // 后续写入会带超时失败，此处仅设时钟
 	err := s.conn.WriteJSON(msg)
 	s.writeMu.Unlock()
 	if err != nil {

@@ -272,10 +272,7 @@ func TestRuntimeMaintenance_TickerCleansUp(t *testing.T) {
 
 	// 等 ≥3 轮 tick，覆盖 ticker 循环的回边。
 	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if len(repo.statusSnapshot()) >= 3 {
-			break
-		}
+	for len(repo.statusSnapshot()) < 3 {
 		if time.Now().After(deadline) {
 			cancel()
 			<-done

@@ -65,6 +65,18 @@ jobs:
         timeout-minutes: 2
         run: go -C apps/server vet ./...
 
+      # lint 门（2026-10-11 起基线为零）：errcheck/staticcheck 等 standard
+      # 集，仓库根口径（apps/server + scripts + infra/compose），build-tags
+      # 与测试门同口径（integration）。上限显式置 0（不设则单 linter 默认
+      # 截断 50 条，会藏真问题）。配置在仓库根 .golangci.yml，显式钉住
+      # default: standard 防上游默认漂移。
+      - name: Lint
+        timeout-minutes: 10
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.14.0
+          args: --max-issues-per-linter 0 --max-same-issues 0
+
       - name: Run unit tests with coverage
         timeout-minutes: 20
         env:
@@ -376,7 +388,7 @@ jobs:
         # 测试各真起一次真实服务（首个 make build 冷编译后续增量复用）。
         timeout-minutes: 20
         run: |
-          go test ./scripts -run "Test(WeKnoraMockProtocolSurface|Compose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts|Servify(HealthcheckProbeExistsInRuntimeImage|MountsLiveUnderImageWorkdir|RuntimeContractHoldsInEveryComposeFile))|WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|RagflowScript(WritesEvidence|RealModeRejectsLocalHost)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|LocalKnowledgeScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|WebhookAcceptanceScriptWritesEvidence|TranslationAcceptanceScriptWritesEvidence|ConversationLifecycleAcceptanceScriptWritesEvidence|RoutingScoringAcceptanceScriptWritesEvidence|VoicePstnAcceptanceScriptWritesEvidence|SecurityObservabilityBaselineChecksPassStrict|ReleaseReadinessCheckPasses|AcceptanceScriptEvidenceFamily|ModulesDoNot(ImportLegacyServices|UseMigratedTypeAliases)|MakefileDocsTargetMatchesGeneratedAssetsPipeline|MakefileWebsiteTargetsPointAtStaticSite|CIScriptChecksCoversEveryScriptsTest|CIScriptChecksWhitelistHasNoStaleEntries|AdminVoiceEntry(FramesMatchProtocolNine|WiringContract))$"
+          go test ./scripts -run "Test(WeKnoraMockProtocolSurface|Compose(HostPortsAreOverridableWithUnchangedDefaults|OverlaysDoNotRedeclareBasePorts|Servify(HealthcheckProbeExistsInRuntimeImage|MountsLiveUnderImageWorkdir|RuntimeContractHoldsInEveryComposeFile))|WeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)|DifyIntegrationScript(RealModeRejectsLocalHost|RealModeRejectsFallbackQuery|MockModeWritesEvidence|MockModePersistsFailureEvidence)|RagflowScript(WritesEvidence|RealModeRejectsLocalHost)|ValidateAcceptanceManifestScript.*|CheckAcceptanceEvidenceScript.*|BackupRestoreScriptWritesEvidence|PublicSurfaceScriptWritesEvidence|AuthAuditScriptWritesEvidence|RefreshReuseScriptWritesEvidence|ApprovalRollbackScriptWritesEvidence|SessionTransferScriptWritesEvidence|SatisfactionScriptWritesEvidence|CustomerAgentScriptWritesEvidence|StatisticsScriptWritesEvidence|MacroIntegrationCustomFieldScriptWritesEvidence|RemoteAssistScriptWritesEvidence|AutomationGamificationScriptWritesEvidence|PgvectorScriptWritesEvidence|LocalKnowledgeScriptWritesEvidence|SecurityAcceptanceScriptWritesEvidence|RuntimeBaselineAcceptanceScriptWritesEvidence|PerfBaselineScriptWritesEvidence|AIFallbackAcceptanceScriptWritesEvidence|SuggestionAcceptanceScriptWritesEvidence|AuthSessionAcceptanceScriptWritesEvidence|WorkspaceAcceptanceScriptWritesEvidence|TicketAcceptanceScriptWritesEvidence|WebhookAcceptanceScriptWritesEvidence|TranslationAcceptanceScriptWritesEvidence|ConversationLifecycleAcceptanceScriptWritesEvidence|RoutingScoringAcceptanceScriptWritesEvidence|VoicePstnAcceptanceScriptWritesEvidence|SecurityObservabilityBaselineChecksPassStrict|ReleaseReadinessCheckPasses|AcceptanceScriptEvidenceFamily|ModulesDoNot(ImportLegacyServices|UseMigratedTypeAliases)|MakefileDocsTargetMatchesGeneratedAssetsPipeline|MakefileWebsiteTargetsPointAtStaticSite|LintGate(ConfigPinsTestGateParity|FlagsUncappedEverywhere)|CILintStepPinsVersion|CIScriptChecksCoversEveryScriptsTest|CIScriptChecksWhitelistHasNoStaleEntries|AdminVoiceEntry(FramesMatchProtocolNine|WiringContract))$"
 
       - name: Test perfbench and weknora-mock packages
         # 全仓覆盖率收口刀：非 internal 的可测包（perfbench 负载引擎 +

@@ -38,12 +38,6 @@ func (s *stubIMAPClient) put(msg *emailinfra.MailMessage) {
 	s.messages[msg.UID] = msg
 }
 
-func (s *stubIMAPClient) setUIDValidity(v uint32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.uidValidity = v
-}
-
 func (s *stubIMAPClient) Select(ctx context.Context, mailbox string) (uint32, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

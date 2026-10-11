@@ -26,7 +26,7 @@ func TestProvider_Embed_Single(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -55,7 +55,7 @@ func TestProvider_Embed_Multiple(t *testing.T) {
 				make([]float32, 512),
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -83,7 +83,7 @@ func TestProvider_Embed_EmptyInput(t *testing.T) {
 func TestProvider_Embed_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 
@@ -147,7 +147,7 @@ func TestProvider_HealthCheck_Failure(t *testing.T) {
 
 func TestProvider_Embed_UnmarshalError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("not-json"))
+		_, _ = w.Write([]byte("not-json"))
 	}))
 	defer server.Close()
 
@@ -159,7 +159,7 @@ func TestProvider_Embed_UnmarshalError(t *testing.T) {
 
 func TestProvider_Embed_CountMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string][][]float32{
+		_ = json.NewEncoder(w).Encode(map[string][][]float32{
 			"embeddings": {make([]float32, 4)},
 		})
 	}))
@@ -184,7 +184,7 @@ func TestProvider_Embed_ConnectionRefused(t *testing.T) {
 
 func TestProvider_Embed_CanceledContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string][][]float32{"embeddings": {make([]float32, 4)}})
+		_ = json.NewEncoder(w).Encode(map[string][][]float32{"embeddings": {make([]float32, 4)}})
 	}))
 	defer server.Close()
 

@@ -31,7 +31,7 @@ func TestChat_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"response":"test response"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"response":"test response"}}`))
 	}))
 	defer server.Close()
 
@@ -68,7 +68,7 @@ func TestChat_WithMetadata(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"response":"test response with metadata"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"response":"test response with metadata"}}`))
 	}))
 	defer server.Close()
 
@@ -110,7 +110,7 @@ func TestSearchKnowledge_WithStrategy(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"results":[],"total":0}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"results":[],"total":0}}`))
 	}))
 	defer server.Close()
 
@@ -151,7 +151,7 @@ func TestUploadDocument_WithMetadata(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"success":true,"data":{"id":"doc-123","title":"Test Doc"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"doc-123","title":"Test Doc"}}`))
 	}))
 	defer server.Close()
 
@@ -192,7 +192,7 @@ func TestCreateKnowledgeBase_WithConfig(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"success":true,"data":{"id":"kb-123","name":"Test KB"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"kb-123","name":"Test KB"}}`))
 	}))
 	defer server.Close()
 
@@ -221,7 +221,7 @@ func TestGetKnowledgeBase_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"id":"kb-123","name":"Test KB","description":"Test"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"kb-123","name":"Test KB","description":"Test"}}`))
 	}))
 	defer server.Close()
 
@@ -256,7 +256,7 @@ func TestCreateSession_Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"success":true,"data":{"id":"session-456","user_id":"user-123"}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"session-456","user_id":"user-123"}}`))
 	}))
 	defer server.Close()
 
@@ -281,7 +281,7 @@ func TestChat_WithSources(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true,"data":{"response":"test response","sources":[{"title":"Source 1","content":"Content 1"}],"confidence":0.9}}`))
+		_, _ = w.Write([]byte(`{"success":true,"data":{"response":"test response","sources":[{"title":"Source 1","content":"Content 1"}],"confidence":0.9}}`))
 	}))
 	defer server.Close()
 

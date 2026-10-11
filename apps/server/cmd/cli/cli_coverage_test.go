@@ -4,23 +4,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-func newQuietLogger() *logrus.Logger {
-	logger := logrus.New()
-	logger.SetOutput(io.Discard)
-	return logger
-}
 
 func writeCLIConfig(t *testing.T, dir string, jwtSecret string) string {
 	t.Helper()
@@ -106,7 +98,7 @@ func executeCommandCapturingStdout(t *testing.T, cmd *cobra.Command, args ...str
 	}
 	rootCmd.SetArgs(rootArgs)
 	cmdErr := rootCmd.Execute()
-	w.Close()
+	_ = w.Close() // 测试收尾
 	os.Stdout = old
 	data := make([]byte, 0, 4096)
 	buf := make([]byte, 4096)

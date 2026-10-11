@@ -45,7 +45,7 @@ func TestServerMainVersionedMigrationBranch(t *testing.T) {
 	require.NotNil(t, cmd.ProcessState, "output: %s", out)
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
 	assert.Contains(t, out, "Applying versioned database migrations...")
-	assert.Contains(t, out, "Failed to start runtime: injected runtime failure")
+	assert.Contains(t, out, "failed to start runtime: injected runtime failure")
 }
 
 // TestServerMainVersionedMigrationFailure 覆盖 versioned 迁移失败的 fatal。
@@ -61,7 +61,7 @@ func TestServerMainVersionedMigrationFailure(t *testing.T) {
 	require.NotNil(t, cmd.ProcessState, "output: %s", out)
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
 	assert.Contains(t, out, "Applying versioned database migrations...")
-	assert.Contains(t, out, "Failed to run database migrations: injected migration failure")
+	assert.Contains(t, out, "failed to run database migrations: injected migration failure")
 }
 
 // TestServerMainStartWorkersFailure 覆盖 StartWorkers 的 fatal 分支。
@@ -76,7 +76,7 @@ func TestServerMainStartWorkersFailure(t *testing.T) {
 	)
 	require.NotNil(t, cmd.ProcessState, "output: %s", out)
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
-	assert.Contains(t, out, "Failed to start workers: injected worker failure")
+	assert.Contains(t, out, "failed to start workers: injected worker failure")
 }
 
 // TestServerMainShutdownErrorLogged 覆盖 app.Shutdown 失败时只记录错误、仍
@@ -107,7 +107,7 @@ func TestServerMainShutdownErrorLogged(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode == http.StatusOK
 	}), "Starting server")
 

@@ -38,7 +38,7 @@ func TestGenerateSecretDefaultHexEncoding(t *testing.T) {
 		t.Fatalf("expected 64-char hex secret, got %d chars", len(secret))
 	}
 	for _, c := range secret {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Fatalf("expected lowercase hex secret, got %q", secret)
 		}
 	}

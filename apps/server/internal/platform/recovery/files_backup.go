@@ -74,7 +74,7 @@ func BackupFiles(rootDir, archivePath string) (FilesManifest, error) {
 	if err != nil {
 		return FilesManifest{}, err
 	}
-	defer archive.Close()
+	defer func() { _ = archive.Close() }() // 成功路径已显式 Close 并上抛错误，此处兜中途失败
 
 	gzipWriter := gzip.NewWriter(archive)
 	tarWriter := tar.NewWriter(gzipWriter)
@@ -155,13 +155,13 @@ func RestoreFiles(archivePath string, manifest FilesManifest, destDir string) (F
 	if err != nil {
 		return FilesManifest{}, err
 	}
-	defer archive.Close()
+	defer func() { _ = archive.Close() }() // 清理路径 best-effort
 
 	gzipReader, err := gzip.NewReader(archive)
 	if err != nil {
 		return FilesManifest{}, err
 	}
-	defer gzipReader.Close()
+	defer func() { _ = gzipReader.Close() }() // 清理路径 best-effort
 
 	entries := make(map[string]FileEntry, len(manifest.Files))
 	for _, entry := range manifest.Files {
@@ -270,7 +270,7 @@ func hashFile(path string) (string, int64, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	defer raw.Close()
+	defer func() { _ = raw.Close() }() // 清理路径 best-effort
 
 	hash := sha256.New()
 	size, err := io.Copy(hash, raw)

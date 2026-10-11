@@ -93,10 +93,10 @@ func (s *Service) BatchTranslate(ctx context.Context, cmd BatchTranslateCommand)
 // 与输入对齐。任何解析失配表现为结果中存在空串（由调用方决定回退）。
 func (s *Service) batchViaSegments(ctx context.Context, texts []string, target string) ([]string, error) {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("待译内容共 %d 段，逐段翻译成 %s；输出时保持每个段标记行（<<<SEG n>>>）原样，段标记行之外不要输出任何内容。\n", len(texts), target))
+	fmt.Fprintf(&b, "待译内容共 %d 段，逐段翻译成 %s；输出时保持每个段标记行（<<<SEG n>>>）原样，段标记行之外不要输出任何内容。\n", len(texts), target)
 	b.WriteString("待译内容：\n")
 	for i, text := range texts {
-		b.WriteString(fmt.Sprintf("<<<SEG %d>>>\n%s\n", i+1, text))
+		fmt.Fprintf(&b, "<<<SEG %d>>>\n%s\n", i+1, text)
 	}
 	resp, err := s.llm.Chat(ctx, llm.ChatRequest{
 		Model:       s.params.Model,

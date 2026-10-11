@@ -230,15 +230,15 @@ func TestProcessCandidateRaceLost(t *testing.T) {
 	if n != 1 || err != nil {
 		t.Fatalf("race-lost candidate must count as processed: n=%d err=%v", n, err)
 	}
-	if len(f.fakeRepo.reviews) != 0 {
-		t.Fatalf("no review row must be written by the loser: %+v", f.fakeRepo.reviews)
+	if len(f.reviews) != 0 {
+		t.Fatalf("no review row must be written by the loser: %+v", f.reviews)
 	}
 }
 
 func TestRescoreMessageListingError(t *testing.T) {
 	f := &scriptedQualityRepo{fakeRepo: newFakeRepo(), messagesErr: errors.New("messages boom")}
 	now := time.Now()
-	f.fakeRepo.reviews["s-retry-err"] = &qualitydomain.QualityReview{
+	f.reviews["s-retry-err"] = &qualitydomain.QualityReview{
 		SessionID: "s-retry-err", Status: StatusFailed, AttemptCount: 1, NextRetryAt: &now,
 	}
 	svc := NewQualityService(f, goodScorer(), testConfig(), nil)
@@ -296,7 +296,9 @@ func TestSelectedBySample(t *testing.T) {
 	if got := selectedBySample("sess-x", 50); got != want {
 		t.Fatalf("selectedBySample(\"sess-x\", 50) = %v, want %v (deterministic fnv bucket)", got, want)
 	}
-	if selectedBySample("sess-x", 50) != selectedBySample("sess-x", 50) {
+	first := selectedBySample("sess-x", 50)
+	second := selectedBySample("sess-x", 50)
+	if first != second {
 		t.Fatal("sampling must be deterministic for the same session id")
 	}
 }

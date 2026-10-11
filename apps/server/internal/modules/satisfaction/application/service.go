@@ -705,7 +705,7 @@ func (s *SatisfactionService) GetSatisfactionStats(ctx context.Context, dateFrom
 	var trendData []SatisfactionTrend
 
 	// 根据日期范围决定分组粒度
-	var dateFormat string = "DATE(created_at)"
+	var dateFormat = "DATE(created_at)"
 
 	var trendResult []struct {
 		Date    string

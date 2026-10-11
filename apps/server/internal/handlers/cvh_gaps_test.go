@@ -90,7 +90,7 @@ func TestCvhAPIKeyGaps(t *testing.T) {
 // WebhookHandler 长尾分支
 // ---------------------------------------------------------------------------
 
-var cvhWebhookNotFound = errors.New("webhook endpoint not found")
+var errCvhWebhookNotFound = errors.New("webhook endpoint not found")
 
 type cvhWebhookService struct {
 	listErr    error
@@ -149,7 +149,7 @@ func TestCvhWebhookCreateErrors(t *testing.T) {
 		msg  string
 	}{
 		{"generic", errors.New("boom"), http.StatusBadRequest, "Failed to create webhook"},
-		{"not found", cvhWebhookNotFound, http.StatusNotFound, "Failed to create webhook"},
+		{"not found", errCvhWebhookNotFound, http.StatusNotFound, "Failed to create webhook"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestCvhWebhookUpdateErrors(t *testing.T) {
 		want int
 	}{
 		{"generic", errors.New("boom"), http.StatusBadRequest},
-		{"not found", cvhWebhookNotFound, http.StatusNotFound},
+		{"not found", errCvhWebhookNotFound, http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestCvhWebhookRotateSecretErrors(t *testing.T) {
 		want int
 	}{
 		{"generic", errors.New("boom"), http.StatusBadRequest},
-		{"not found", cvhWebhookNotFound, http.StatusNotFound},
+		{"not found", errCvhWebhookNotFound, http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestCvhWebhookTestEndpointErrors(t *testing.T) {
 		want int
 	}{
 		{"generic", errors.New("boom"), http.StatusBadRequest},
-		{"not found", cvhWebhookNotFound, http.StatusNotFound},
+		{"not found", errCvhWebhookNotFound, http.StatusNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

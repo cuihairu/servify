@@ -11,7 +11,7 @@ import (
 )
 
 // TestCLIRunBuildAppFailure 覆盖 run() 的 BuildApp fatal 分支：坏 embedding
-// 配置让 BuildApp 失败，子进程必须以 "Failed to build app" 退出。
+// 配置让 BuildApp 失败，子进程必须以 "failed to build app" 退出。
 func TestCLIRunBuildAppFailure(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCLIRunConfig(false, "127.0.0.1") +
@@ -28,5 +28,5 @@ func TestCLIRunBuildAppFailure(t *testing.T) {
 	out, _ := cmd.CombinedOutput()
 	require.NotNil(t, cmd.ProcessState, "subprocess must run, output: %s", out)
 	assert.EqualValues(t, 1, cmd.ProcessState.ExitCode(), "output: %s", out)
-	assert.Contains(t, string(out), "Failed to build app")
+	assert.Contains(t, string(out), "failed to build app")
 }

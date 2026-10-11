@@ -40,7 +40,7 @@ func TestWebSocket_ReadPumpCloseAndPong(t *testing.T) {
 		t.Fatalf("close frame: %v", err)
 	}
 	time.Sleep(200 * time.Millisecond)
-	conn.Close()
+	_ = conn.Close() // 测试/清理 best-effort
 }
 
 func TestWebSocket_WritePumpSendClosed(t *testing.T) {
@@ -58,7 +58,7 @@ func TestWebSocket_WritePumpSendClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// wait for registration
 	deadline := time.Now().Add(2 * time.Second)

@@ -101,7 +101,7 @@ func TestHandlerServiceAdapter_UsesEnhancedSurfaceWhenAvailable(t *testing.T) {
 		t.Fatalf("ProcessQuery() err=%v", err)
 	}
 	resp, ok := got.(*EnhancedAIResponse)
-	if !ok || resp.AIResponse.Content != "enhanced" {
+	if !ok || resp.Content != "enhanced" {
 		t.Fatalf("ProcessQuery() got=%T %+v", got, got)
 	}
 

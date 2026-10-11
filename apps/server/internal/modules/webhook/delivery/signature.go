@@ -17,7 +17,7 @@ import (
 func SignatureHeader(secret string, body []byte, at time.Time) string {
 	t := at.Unix()
 	mac := hmac.New(sha256.New, []byte(secret))
-	fmt.Fprintf(mac, "%d.", t)
+	_, _ = fmt.Fprintf(mac, "%d.", t) // hash.Hash 写入不会失败
 	mac.Write(body)
 	return fmt.Sprintf("t=%d,v1=%s", t, hex.EncodeToString(mac.Sum(nil)))
 }
@@ -33,7 +33,7 @@ func VerifySignature(secret string, body []byte, header string, now time.Time) b
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	fmt.Fprintf(mac, "%d.", t)
+	_, _ = fmt.Fprintf(mac, "%d.", t) // hash.Hash 写入不会失败
 	mac.Write(body)
 	return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(v1))
 }
