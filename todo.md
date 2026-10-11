@@ -1921,3 +1921,15 @@ python3 -c "import re; re.compile(open('.github/workflows/ci.yml').read().split(
 **验证**：元守卫双测试 PASS；TestMobileProbeAcceptanceScriptWritesEvidence 本地 PASS 202s。
 
 **剩余候选**（更新）：③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（`enhanced_service.go:178-181`——任何工具调用必报 "port is not configured"，`docs/implementation/13-ai-agent-loop.md:9-11` 已登记遗留；Handoff 是副作用动作、与 PROTOCOL.md「转接仍由用户显式发起」契约相抵，且模型侧无 customer_id 上下文、只读查询实际不可达——需产品拍板，不宜单方面接线）；④ EventTenantID 声明未填充（`eventbus/event.go:19`，生产 publish 零携带）；⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）。
+
+## 附注（2026-10-11，事件租户盖章收口）
+
+**背景**：`eventbus.BaseEvent.EventTenantID` 自声明起从未被填充——四个模块事件构造器（conversation/routing/voice/ticket）全部只填 ID/Name/OccurredAt/AggregateID，生产 publish 的 Redis 流头 `tenant_id` 字段恒为空串（`redis_bus.go:104` 是该字段唯一消费点，下游无读取方，故纯契约缺口而非功能回归）。
+
+**落地**（提交 904c399）：仓库租户传播通道本就是 auth ctx（infra 各 repo 以 `platformauth.TenantIDFromContext(ctx)` 落 tenant_id 列），事件边界是唯一漏盖章的口。四个事件构造器加 ctx 首参并盖章 `EventTenantID`（有租户 ctx 必填，系统 worker 无租户 ctx 留空——与该场景落库口径一致）；8 处生产调用点 + 25 处测试调用点同步（`context.Background()` 或在手的 ctx）；每模块新增一个盖章守卫测试（`events_tenant_test.go` ×4：有租户 ctx 必章、裸 ctx 必空）。
+
+**连带解一层级循环**：盖章使 `voice/application` → `platform/auth`，撞上存量循环边 `platform/auth` → `models` → `voice/infra`（legacy 类型别名）→ `voice/application`。`models.VoiceCall/VoiceRecording/VoiceTranscript` 三个别名全仓唯一引用方是 `bootstrap/migrate.go` 的 AutoMigrate——改为直引 `voiceinfra`，删别名与 models→voice/infra 边（models 包不再反向依赖模块 infra，层级回归正置）。
+
+**验证**：gofmt/vet/build 全净；apps/server 全量（除 scripts 验收家族）EXIT=0；四个守卫测试 PASS。CI 待 run。
+
+**剩余候选**（更新）：⑤ tenant_id/trace_id 日志透传未落地（`docs/implementation/12-operator-observability.md` O1 现状自述）；③ AI agent-loop 三工具 nil Ports + nil PermissionChecker（需产品拍板，见上批附注）。
