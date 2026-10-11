@@ -3,6 +3,7 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -762,6 +763,22 @@ func TestProviderChatStreamContextCancelledDuringToolCallStop(t *testing.T) {
 	_, toolCalls, _ := drainChunks(ch)
 	if len(toolCalls) != 0 {
 		t.Fatalf("stream emitted tool call after cancel: %+v", toolCalls)
+	}
+}
+
+func TestSendChunkAbortsWhenCancelledWhileBlocked(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := make(chan llm.ChatChunk) // unbuffered, no receiver
+
+	go func() {
+		time.Sleep(10 * time.Millisecond) // let sendChunk enter the blocking select first
+		cancel()
+	}()
+
+	err := sendChunk(ctx, ch, llm.ChatChunk{Done: true})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("sendChunk() error = %v, want context.Canceled", err)
 	}
 }
 

@@ -118,13 +118,26 @@ func (p *Provider) ChatStream(ctx context.Context, req llm.ChatRequest) (<-chan 
 			// （ai-response-delta 帧 = 原始错误 JSON 泄露面）。终末空增量
 			// Done 即流终止信号，调用方按无响应处理；真实错误只留服务端日志。
 			logrus.Errorf("anthropic stream failed: %v", err)
-			select {
-			case <-ctx.Done():
-			case ch <- llm.ChatChunk{Done: true}:
-			}
+			_ = sendChunk(ctx, ch, llm.ChatChunk{Done: true})
 		}
 	}()
 	return ch, nil
+}
+
+// sendChunk 投递一个流 chunk。发送前先查 ctx：取消后调用方可能正在并发
+// drain 通道，若仍补投（尤其终末 Done）会被当成正常完成，形成与取消的
+// 竞态。检查通过后再走可中断的 select，覆盖"检查之后才取消"的窗口，
+// 同时避免无人接收时 goroutine 永久阻塞。
+func sendChunk(ctx context.Context, ch chan<- llm.ChatChunk, chunk llm.ChatChunk) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ch <- chunk:
+		return nil
+	}
 }
 
 // Anthropic SSE stream event types.
@@ -291,10 +304,8 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 			switch evt.Delta.Type {
 			case "text_delta":
 				if evt.Delta.Text != "" {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case ch <- llm.ChatChunk{ContentDelta: evt.Delta.Text}:
+					if err := sendChunk(ctx, ch, llm.ChatChunk{ContentDelta: evt.Delta.Text}); err != nil {
+						return err
 					}
 				}
 			case "input_json_delta":
@@ -309,16 +320,14 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 				if strings.TrimSpace(pendingToolCall.args) != "" {
 					_ = json.Unmarshal([]byte(pendingToolCall.args), &args)
 				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case ch <- llm.ChatChunk{
+				if err := sendChunk(ctx, ch, llm.ChatChunk{
 					ToolCall: &llm.ToolCall{
 						ID:        pendingToolCall.id,
 						Name:      pendingToolCall.name,
 						Arguments: args,
 					},
-				}:
+				}); err != nil {
+					return err
 				}
 				pendingToolCall = nil
 			}
@@ -329,10 +338,8 @@ func (p *Provider) streamOnce(ctx context.Context, req llm.ChatRequest, ch chan<
 			_ = evt.Delta.StopSequence
 
 		case "message_stop":
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case ch <- llm.ChatChunk{Done: true}:
+			if err := sendChunk(ctx, ch, llm.ChatChunk{Done: true}); err != nil {
+				return err
 			}
 			return nil
 		}
