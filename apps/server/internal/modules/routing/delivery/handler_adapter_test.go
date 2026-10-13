@@ -165,6 +165,7 @@ type handlerConvStub struct {
 	// lockedAgent 锁行读到的库内 agent_id；非 nil 时优先于 session.AgentID，
 	// 用于模拟"预读与库内值不一致"的并发转派。
 	lockedAgent *uint
+	lockedErr   error
 	loadErr     error
 	loadHits    int
 
@@ -189,6 +190,9 @@ func (f *handlerConvStub) LoadTransferSession(ctx context.Context, sessionID str
 }
 
 func (f *handlerConvStub) LockedTransferAgentID(ctx context.Context, tx *gorm.DB, sessionID string) (*uint, error) {
+	if f.lockedErr != nil {
+		return nil, f.lockedErr
+	}
 	if f.lockedAgent != nil {
 		return f.lockedAgent, nil
 	}
@@ -618,6 +622,23 @@ func TestHandlerTransferSkipsLoadSyncWhenLockedAgentIsTarget(t *testing.T) {
 
 	assert.Equal(t, 0, fx.load.calls)
 	assert.Nil(t, fx.agents.appliedFrom)
+}
+
+// 事务内锁会话行失败：错误上抛（包装 lock transfer session），不静默跳过负载
+// 增减——静默会让并发转派重复扣减无人兜底。
+func TestHandlerTransferLockSessionError(t *testing.T) {
+	fx := newHandlerFixture(t, &conversationdelivery.TransferSession{
+		ID: "sess-lock-err", CustomerID: 5, Status: "active",
+	})
+	fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9, MaxConcurrent: 5}
+	fx.conv.lockedErr = errors.New("lock boom")
+
+	_, err := fx.svc.TransferToHuman(context.Background(), &routingcontract.TransferRequest{
+		SessionID: "sess-lock-err", Reason: "r", TargetSkills: []string{"billing"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lock transfer session")
+	assert.Equal(t, 0, fx.load.calls)
 }
 
 func TestHandlerExecuteTransferFailures(t *testing.T) {

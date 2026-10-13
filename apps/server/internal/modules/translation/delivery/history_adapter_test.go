@@ -77,4 +77,39 @@ func TestHistoryTranslateAdapter(t *testing.T) {
 			t.Fatalf("nil adapter: %v", err)
 		}
 	})
+
+	// TargetLang 只读偏好（不走翻译门面）：handler 先按语言键查持久化缓存，
+	// 命中即免 LLM 调用。translator 可空；prefs/自身 nil 降级不可用。
+	t.Run("target lang reads preference without facade", func(t *testing.T) {
+		translator := &rtTranslateStub{}
+		prefs := &rtPrefsStub{lang: "en"}
+		adapter := NewHistoryTranslateService(translator, prefs, ViewerRoleAgent)
+		got, err := adapter.TargetLang(ctx, "conv-1")
+		if err != nil || got != "en" {
+			t.Fatalf("target lang = %q %v, want en", got, err)
+		}
+		if prefs.lastViewer != ViewerRoleAgent {
+			t.Fatalf("prefs must see agent role, got %q", prefs.lastViewer)
+		}
+		if translator.calls.Load() != 0 {
+			t.Fatalf("facade must not be called, calls=%d", translator.calls.Load())
+		}
+		if got, err := adapter.TargetLang(ctx, "conv-1"); err != nil || got != "en" {
+			t.Fatalf("nil translator target lang = %q %v, want en", got, err)
+		}
+	})
+
+	t.Run("target lang nil surfaces degrade to unavailable", func(t *testing.T) {
+		if _, err := NewHistoryTranslateService(&rtTranslateStub{}, nil, ViewerRoleAgent).TargetLang(ctx, "c"); !errors.Is(err, ErrTranslationUnavailable) {
+			t.Fatalf("nil prefs: %v", err)
+		}
+		var nilAdapter *historyTranslateServiceAdapter
+		if _, err := nilAdapter.TargetLang(ctx, "c"); !errors.Is(err, ErrTranslationUnavailable) {
+			t.Fatalf("nil adapter: %v", err)
+		}
+		boom := errors.New("pref store down")
+		if _, err := NewHistoryTranslateService(&rtTranslateStub{}, &rtPrefsStub{err: boom}, ViewerRoleAgent).TargetLang(ctx, "c"); !errors.Is(err, boom) {
+			t.Fatalf("want raw pref error, got %v", err)
+		}
+	})
 }

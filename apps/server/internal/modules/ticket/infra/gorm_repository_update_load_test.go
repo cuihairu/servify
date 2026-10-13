@@ -166,3 +166,65 @@ func TestUpdateTicketModelSameAgentKeepsLoad(t *testing.T) {
 		t.Fatalf("agent 11 load = %d, want 1 (same-agent reassign is a no-op for load)", got)
 	}
 }
+
+// ticketAgentFromRaw 分支覆盖：nil 接口（updates 显式置 nil）与非 uint 类型
+// （调用方传入非法值）都归一为 nil（未指派哨兵）。
+func TestTicketAgentFromRawBranches(t *testing.T) {
+	if got := ticketAgentFromRaw(nil); got != nil {
+		t.Fatalf("nil raw = %v, want nil", got)
+	}
+	if got := ticketAgentFromRaw("11"); got != nil {
+		t.Fatalf("string raw = %v, want nil", got)
+	}
+	if got := ticketAgentFromRaw(11); got != nil {
+		t.Fatalf("int raw = %v, want nil", got)
+	}
+	if got := ticketAgentFromRaw(uint(11)); got == nil || *got != 11 {
+		t.Fatalf("uint raw = %v, want 11", got)
+	}
+	if got := ticketAgentFromRaw(uint(0)); got != nil {
+		t.Fatalf("zero raw = %v, want nil (sentinel)", got)
+	}
+	v := uint(7)
+	if got := ticketAgentFromRaw(&v); got == nil || *got != 7 {
+		t.Fatalf("ptr raw = %v, want 7", got)
+	}
+	z := uint(0)
+	if got := ticketAgentFromRaw(&z); got != nil {
+		t.Fatalf("zero ptr raw = %v, want nil (sentinel)", got)
+	}
+}
+
+// syncAgentLoadDelta 增减分支错误路径：库连接关闭后 UPDATE/UpdateColumn 均报错，
+// 错误原样上抛（负载同步不静默——失败即整体回滚）。
+func TestSyncAgentLoadDeltaErrors(t *testing.T) {
+	db := newTicketInfraTestDB(t)
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db handle: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	from, to := uint(11), uint(9)
+	if err := syncAgentLoadDelta(db, &from, &to); err == nil {
+		t.Fatal("decrement must error on closed db")
+	}
+	// 来源为空时跳过扣减，直接命中加 1 的错误分支。
+	if err := syncAgentLoadDelta(db, nil, &to); err == nil {
+		t.Fatal("increment must error on closed db")
+	}
+}
+
+// 事务内锁工单行失败（工单不存在）时错误上抛，不静默跳过负载同步。
+func TestUpdateTicketModelLockError(t *testing.T) {
+	db := newTicketInfraTestDB(t)
+	repo := NewGormRepository(db)
+
+	err := repo.UpdateTicketModelWithStatusAndCustomFields(context.Background(), 99999,
+		map[string]interface{}{"agent_id": uint(5)}, nil, false, nil, nil)
+	if err == nil {
+		t.Fatal("expected error locking non-existent ticket")
+	}
+}
