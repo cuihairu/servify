@@ -192,10 +192,12 @@ func TestLocalKnowledgeQAEndToEnd(t *testing.T) {
 	}
 
 	// 检索+问答：查询与文档强词面重叠，越过校准门；回答抽取自知识原文。
-	// sessionID 置空（单轮约定）：retriever 把 ConversationID 透传为
-	// SearchRequest.KnowledgeID，自建驱动（pgvector/local 同构）按
-	// workspace_id 过滤——非空会话 id 会把全局摄入的文档滤没，这是与
-	// pgvector 一致的既有语义（见 todo 会话语义缺口附注）。
+	// sessionID 置空（单轮约定）：retriever 不把 ConversationID 透传为
+	// SearchRequest.KnowledgeID——会话 id 不是知识命名空间 id，各 provider
+	// 同构地把该字段当知识库 id 用（pgvector/local 按 workspace_id、
+	// dify/ragflow 按 datasetID、weknora 按 KnowledgeBaseID），透传即恒空。
+	// KnowledgeID 留空让 provider 落回默认命名空间，租户隔离由 TenantID
+	// 承担（1f190df 收口，会话语义统一口径：会话维度不做知识库过滤）。
 	resp, err := enhanced.ProcessQueryEnhanced(ctx, "退款将在几个工作日内原路退回", "")
 	if err != nil {
 		t.Fatalf("ProcessQueryEnhanced: %v", err)
