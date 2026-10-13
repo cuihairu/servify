@@ -10,7 +10,7 @@
 
 **Open-source intelligent customer service system** — Web-first, AI first response, human takeover, full ticket lifecycle
 
-[![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
 [![codecov](https://codecov.io/gh/cuihairu/servify/graph/badge.svg)](https://codecov.io/gh/cuihairu/servify)
@@ -45,7 +45,7 @@ All convergence batches B0–B4 of the V1.0 overhaul passed their gates:
   "sub-capabilities of the 7 core modules"
 - Web-first with other surfaces reserved: the Web SDK is implemented, native Android/iOS SDKs landed with
   M1–M3, and voice and additional channels are frozen as extension boundaries
-- Follow-up evolution: the routing scoring engine, pre-close ticket interception, and more
+- Follow-up evolution: multi-factor routing scoring and pre-close ticket interception have landed; remaining work is thin-shell module documentation cleanup
 
 ---
 
@@ -80,7 +80,7 @@ The repository already has the real-time foundation for this capability chain, i
 ```text
 .
 |-- apps/
-|   |-- server/              # Go server
+|   |-- server/              # Go server (modular monolith; packages under internal/)
 |   |-- admin/               # Admin console (UmiJS + Ant Design Pro)
 |   |-- demo/                # Product demo site
 |   |-- demo-sdk/            # Prebuilt SDK artifacts and examples
@@ -88,7 +88,6 @@ The repository already has the real-time foundation for this capability chain, i
 |-- docs/
 |   `-- implementation/      # Topic-based implementation backlogs
 |-- infra/                   # Compose files, deployment helpers
-|-- internal/                # Shared internal packages
 `-- sdk/                     # SDK workspace (source)
 ```
 
@@ -327,14 +326,14 @@ flowchart TB
 Design constraints:
 
 - `sdk/packages/core` holds only cross-platform contracts, no browser UI logic
-- The Web SDK is implemented; the App SDKs (Android/iOS) have native implementations per `docs/mobile-sdk-design.md` (protocol contracts aligned with Web, runtime structure follows each platform's conventions); the API SDK remains directory and protocol design only
+- The Web SDK is implemented; the App SDKs (Android/iOS) have native implementations per `docs/mobile-sdk-design.md` (protocol contracts aligned with Web, runtime structure follows each platform's conventions); the API SDK (`sdk/packages/api-client`) is also implemented (request pipeline + contracts)
 - Channel integrations map uniformly onto `conversation` and `routing`; reaching into legacy services directly is not allowed
 
 ---
 
 ## SIP and Voice Extension
 
-The full voice protocol stack is not implemented yet, but the architecture explicitly reserves a `signaling + media` two-layer extension.
+The voice protocol stack is partially implemented (`voiceprotocol` registry, SIP / SIP-WS / PSTN provider adapters, `VoiceCoordinator`); the remaining media layer is still reserved as a `signaling + media` two-layer extension.
 
 ```mermaid
 flowchart LR
@@ -366,7 +365,7 @@ This means:
 
 ### Requirements
 
-- **Go** 1.25.0 (toolchain go1.25.7) - the project uses Go workspace mode
+- **Go** 1.26.0 - the project uses Go workspace mode
 - **PostgreSQL** 12+ or SQLite (development/testing)
 - **Node.js** 24+ (only needed for Web / admin / documentation tasks)
   - The admin console uses **pnpm** 10+ as its package manager
@@ -547,8 +546,9 @@ and release) has passed all gates. The earlier backlogs — runtime closure, ser
 migration, tenant/audit/security baseline, and observability — have all been cleared (history in
 [todo.md](./todo.md)).
 
-Follow-up evolution follows the "Evolution directions" section of the :
-the routing scoring engine (multi-factor), pre-close ticket interception rules, and the remaining thin-shell module documentation cleanup.
+Follow-up evolution: the routing scoring engine (multi-factor) and pre-close
+ticket interception rules have landed; the remaining item is thin-shell
+module documentation cleanup.
 
 ---
 

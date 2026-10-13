@@ -91,7 +91,7 @@
 | `total_tickets` | 当日工单数 | `IncrementTickets` |
 | `resolved_tickets` | 当日解决工单数 | `IncrementResolved` |
 | `ai_usage_count` | AI 使用次数 | `IncrementAIUsage` |
-| `knowledge_provider_usage_count` | 外部知识库 provider 使用次数 | `IncrementKnowledgeProvider` |
+| （无独立列） | 外部知识库 provider 使用次数：无独立 `daily_stats` 列，`IncrementKnowledgeProvider` 与 `IncrementWeKnora` 合并计入 `we_knora_usage_count`；`knowledge_provider_usage_count` 仅见于 `AIMetrics` 响应 JSON（`modules/ai/delivery/contract_types.go:39`），非本表字段 | `IncrementKnowledgeProvider` |
 | `we_knora_usage_count` | WeKnora 使用次数 | `IncrementWeKnora` |
 | `sla_violations` | SLA 违规次数 | `IncrementSLA` |
 

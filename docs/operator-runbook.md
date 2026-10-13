@@ -143,12 +143,13 @@ fly logs
 make release-check CONFIG=config.production.yml
 ```
 
-该命令会串行执行以下四项检查：
+该命令会串行执行以下五项检查：
 
 1. **Local Check** — 本地环境、仓库卫生、生成物一致性
 2. **Security Check** — 安全基线（JWT secret、CORS、限流、密钥注入）
 3. **Observability Check** — 可观测性基线（metrics、tracing、dashboard、alert、runbook）
 4. **Regression Tests** — 核心 Go 回归测试
+5. **Build Verification** — `make build` 构建验证与产物检查
 
 ### 3.1A Staging 演练口径
 
@@ -184,7 +185,7 @@ make observability-check CONFIG=config.production.yml
 make repo-hygiene
 
 # Go 回归测试
-go -C apps/server test ./cmd/cli ./internal/app/bootstrap
+go -C apps/server test ./cmd/cli ./internal/app/bootstrap ./internal/releasecheck
 ```
 
 ### 3.3 检查失败处理
@@ -414,7 +415,7 @@ readinessProbe:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
   interval: 30s
   timeout: 10s
   retries: 5
@@ -656,7 +657,7 @@ docker compose logs servify | grep "dead_letter"
 **处理方式**：
 - 瞬时错误：事件会被自动重试或进入死信队列
 - 持续错误：定位并修复 handler 代码，重新部署
-- 使用 replay 接口重新处理死信事件
+- 死信重放目前仅有内部实现（`internal/observability/async/replay.go`），未暴露 HTTP 接口；如需重放需走内部调用或新增接口
 
 ---
 
@@ -792,17 +793,18 @@ curl -X POST http://localhost:8080/api/customers/:id/revoke-tokens \
 
 ```bash
 # 查询审计日志（支持过滤）
-curl "http://localhost:8080/api/audit/logs?action=create&resource=ticket&limit=50" \
+curl "http://localhost:8080/api/audit/logs?action=create&resource_type=ticket&page=1&page_size=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # 支持的过滤参数
-# action      — 操作类型
-# resource    — 资源类型
-# principal   — 操作主体
-# actor       — 操作人
-# success     — 是否成功 (true/false)
-# start_date  — 开始时间
-# end_date    — 结束时间
+# action         — 操作类型
+# resource_type — 资源类型
+# resource_id   — 资源 ID
+# principal_kind — 操作主体类型
+# actor_user_id  — 操作人用户 ID
+# success        — 是否成功 (true/false)
+# page           — 页码（默认 1）
+# page_size      — 每页条数（默认 20）
 ```
 
 ### 13.3 速率限制调整
@@ -815,18 +817,22 @@ security:
     enabled: true
     requests_per_minute: 300
     burst: 50
-    # 路径级限流
+    # 路径级限流（每条路径需显式 enabled: true 才生效）
     paths:
-      - prefix: "/api/v1/ai/"
-        requests_per_minute: 60
+      - enabled: true
+        prefix: "/api/v1/ai/query"
+        requests_per_minute: 30
         burst: 10
-      - prefix: "/public/"
+      - enabled: true
+        prefix: "/public/"
         requests_per_minute: 120
-        burst: 20
-      - prefix: "/public/kb/"
+        burst: 30
+      - enabled: true
+        prefix: "/public/kb/"
         requests_per_minute: 60
         burst: 15
-      - prefix: "/public/csat/"
+      - enabled: true
+        prefix: "/public/csat/"
         requests_per_minute: 30
         burst: 10
 ```

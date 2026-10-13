@@ -296,7 +296,7 @@
 
 ## 当前缺口
 
-- 当前代码仍只有 system 级 `Config` 结构，没有统一的 `TenantConfig` / `WorkspaceConfig`
+- `TenantConfig` / `WorkspaceConfig` 已存在（`internal/models/models.go`），并已接入 public portal 读取链路（见上）；后续可在此基础上扩展更细的 `AIConfigOverride` / `RoutingPolicyConfig`
 - Viper + `config.yml` 仍承载了部分未来应下沉到 tenant/workspace 的业务默认值
 - `portal` 仍是 system 级配置，尚未 tenant/workspace 化
 - AI / knowledge / routing 的 tenant/workspace override 目前规则已定义，但尚未统一实现

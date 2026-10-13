@@ -28,7 +28,7 @@ knowledge:
     search:
       top_k: 5           # 返回结果数量
       threshold: 0.7     # 相似度阈值
-      strategy: cosine    # 搜索策略: cosine（默认）, euclidean
+      strategy: semantic    # 搜索策略: semantic（默认）, cosine, euclidean
     indexing:
       chunk_size: 1000       # 文档分块大小（字符数）
       chunk_overlap: 200     # 分块重叠大小
@@ -98,12 +98,11 @@ embedding:
 
 ### 搜索策略 (Strategy)
 
-- `cosine`: 余弦相似度，适合大多数文本搜索场景（默认值）
+- `semantic`: 默认值（`config.yml` 默认口径），查询期归一为 cosine 余弦排序
+- `cosine`: 余弦相似度，适合大多数文本搜索场景
 - `euclidean`: 欧几里得距离，适合需要精确距离计算的场景
 
-> 仅以上两个合法值：pgvector 检索按 strategy 分派 SQL 排序，其余取值
-> （如历史文档出现过的 `hybrid`）会在查询期报
-> `unsupported search strategy`。
+> `semantic` 与 `hybrid` 在查询期归一为 cosine（`normalizeSearchStrategy`），`cosine`/`euclidean` 直接分派 SQL 排序；其余取值报 `unsupported search strategy`。
 
 ### 分块配置 (Indexing)
 

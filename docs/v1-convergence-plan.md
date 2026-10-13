@@ -106,7 +106,7 @@ Remote Assist（对话内协助入口维持）、Voice/SIP、多渠道、Mobile�
 | 域 | 表（现状→目标） | 说明 |
 | --- | --- | --- |
 | conversation | `sessions`、`messages`（`models.go` 内集中定义）→ + `conversation_participants`（独立表，现为 Session 内嵌或外键）、`channel_bindings`、**`conversation_events`（新增）** | `conversation_events` 是 Service Timeline 的落库源：`{conversation_id, event_type, actor, payload, occurred_at, tenant_id, workspace_id}` |
-| ticket | `tickets`、`ticket_comments`、`ticket_files`、`ticket_statuses`、`ticket_custom_field_values`（`models.go`）+ **`tickets.conversation_id`** | 关单评价（satisfaction）以 ticket 为锚 |
+| ticket | `tickets`、`ticket_comments`、`ticket_files`、`ticket_statuses`、`ticket_custom_field_values`（`models.go`）+ **`tickets.conversation_id`（未实现：模型与迁移均无此列，现用 `session_id`，`models.go:138`）** | 关单评价（satisfaction）以 ticket 为锚 |
 | customer | `customers`（`models.go`）+ Profile 读模型视图（标签、历史、Ticket 汇） | — |
 | agent | `agents`（`models.go`）+ `agent_status`/负载快照表（新增或并入） | 供 routing 评分与工作台查询 |
 | routing | `transfer_records`、`waiting_records`（`models.go`）+ **`routing_assignments`（持久化）** + `queue_entries`（现内存态→补初始持久化可选） | 打分因子落表（skills/language/priority/tier 来自对侧表） |
@@ -214,7 +214,7 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 
 ### 7.1 关系写死
 
-- `tickets.conversation_id` 显式化；迁移回填历史数据（`conversation_id` 可空=遗留，新数据必填）。
+- `tickets.conversation_id` 显式化；迁移回填历史数据（`conversation_id` 可空=遗留，新数据必填）。**未实现**：`models.go` Ticket 结构体与全部迁移均无 `conversation_id` 列，现以 `session_id`（`models.go:138`）关联会话，此项仍为计划中。
 - 生命周期锚定在会话：Conversation 关闭时未完结工作必须要求先建单或明确降级（关闭前拦截规则，P1 内）。
 - `sla`、`satisfaction`、`custom_field` 语义归属 Ticket 子能力（§1.2），代码位置不动但 README/文档不再单独叙事。
 
@@ -250,7 +250,7 @@ Conversation = 一次服务过程；Ticket = 后续工作项
 
 ### 9.3 Security（补齐两件事，其余维护现状）
 
-1. **文档修正**：`README.md:220` 安全表改为已实现口径（refresh/sessions/logout-current/2FA 已落地，本次复查证据 `router_auth.go:55,65-72`）；
+1. **文档修正**：`README.md:238` 安全表改为已实现口径（refresh/sessions/logout-current/2FA 已落地，本次复查证据 `router_auth.go:55,65-72`）；
 2. **Customer Data Boundary（P2 内）**：PII 清单（姓名/邮箱/电话/聊天记录/附件/订单字段索引）、`audit_logs` 扩展数据保留策略字段、新增「数据导出」与「数据删除（含关联擦除）」管理面、保留期配置化。
 
 ### 9.4 Tenant/Workspace

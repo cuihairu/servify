@@ -24,11 +24,11 @@
 
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
-| 发起（管理面） | 已实现 | `POST /api/remote-assist/sessions`（`apps/server/internal/handlers/assist_handler.go:44`）创建 active 记录；管理端 `handleStartRemoteAssist`（`apps/admin/src/pages/Conversation/index.tsx:351`）REST 落记录后开独立信令 WS |
-| 发起（访客面） | 已实现 | SDK `startRemoteAssist`（`sdk/packages/core/src/sdk.ts:317`）：建 PC + DataChannel + 屏幕采集 + 录制 |
+| 发起（管理面） | 已实现 | `POST /api/remote-assist/sessions`（`apps/server/internal/handlers/assist_handler.go:44`）创建 active 记录；管理端 `handleStartRemoteAssist`（`apps/admin/src/pages/Conversation/index.tsx:645`）REST 落记录后开独立信令 WS |
+| 发起（访客面） | 已实现 | SDK `startRemoteAssist`（`sdk/packages/core/src/sdk.ts:318`）：建 PC + DataChannel + 屏幕采集 + 录制 |
 | 结束 | 已实现 | `POST /api/remote-assist/sessions/:id/end`（`assist_handler.go:84`，重复结束 409）；录制元数据可随结束落库 |
-| 接受/加入 | 部分实现 | 坐席经同 session WS + `RTCPeerConnection` 加入（`index.tsx:399-501`）；**无"邀请→接受/拒绝"握手**，访客端由宿主页面自行调用 `startRemoteAssist`，不知道协助已发起 |
-| 邀请 ID 传递 | 未实现（端到端） | 坐席经 DataChannel 发 `{type:'assist-session', assist_id}`（`index.tsx:405-412`）；服务端 `OnDataChannel` 收到后按 WS `data-channel-message` 帧广播（`apps/server/internal/platform/realtime/webrtc_service.go:173`）；但访客 SDK **只在自己 DataChannel 的 onmessage 上监听**（`sdk.ts:341`），WS 层该帧无人消费，assist_id 实际传不到访客端 |
+| 接受/加入 | 部分实现 | 坐席经同 session WS + `RTCPeerConnection` 加入（`index.tsx:690-797`）；**无"邀请→接受/拒绝"握手**，访客端由宿主页面自行调用 `startRemoteAssist`，不知道协助已发起 |
+| 邀请 ID 传递 | 未实现（端到端） | 坐席经 DataChannel 发 `{type:'assist-session', assist_id}`（`index.tsx:704`）；服务端 `OnDataChannel` 收到后按 WS `data-channel-message` 帧广播（`apps/server/internal/platform/realtime/webrtc_service.go:188`）；但访客 SDK **只在自己 DataChannel 的 onmessage 上监听**（`sdk.ts:342`），WS 层该帧无人消费，assist_id 实际传不到访客端 |
 
 ### 2. 权限与对方同意：已实现（最小可跑链路，UI 通知面依赖 RA-10）
 
@@ -43,18 +43,18 @@
 
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
-| 访客屏幕采集 | 已实现 | `getDisplayMedia` + `addTrack`（`sdk.ts:372-381`）；无采集能力时显式报错 |
-| 坐席视频占位 | 已实现 | `remoteAssistVideoRef` + `peer.ontrack` 挂 srcObject（`index.tsx:444-454`），offer 带 `offerToReceiveAudio/Video`（`index.tsx:495-498`） |
-| 媒体链路（服务端桥接） | 未实现 | 信令为**服务端终结模式**：`HandleOffer` 每次新建服务端 PC 应答（`webrtc_service.go:209-235`），访客与坐席各连服务端一条 PC，两条 PC 之间**无媒体转发**，`webrtc_service.go` 全文件无 `OnTrack`/`AddTrack`/`NewTrackLocal*`，坐席端 `ontrack` 实际不会触发，**端到端画面不通** |
-| DataChannel 透传 | 部分实现 | 服务端 `OnDataChannel` 收文本后按 `data-channel-message` 广播回同 session（`webrtc_service.go:173-197`）、`SendDataChannelMessage` 可下行（`webrtc_service.go:339-355`）；仅纯文本 `SendText`，无二进制，且见上文"访客端不消费 WS 帧"断点 |
-| 远程控制（鼠标/键盘） | 未实现 | 全仓（Go + apps/admin + sdk）无 co-browsing / 输入事件转发代码；标注（rect/freehand/arrow）是**录制回放批注**（`domain/models.go:34`），不是实时屏幕标注 |
+| 访客屏幕采集 | 已实现 | `getDisplayMedia`（`sdk.ts:987-996`）+ `addTrack`（`sdk.ts:374-384`）；无采集能力时显式报错 |
+| 坐席视频占位 | 已实现 | `remoteAssistVideoRef` + `peer.ontrack` 挂 srcObject（`index.tsx:738-746`），offer 带 `offerToReceiveAudio/Video`（`index.tsx:796-797`） |
+| 媒体链路（服务端桥接） | 未实现 | 信令为**服务端终结模式**：`HandleOffer` 每次新建服务端 PC 应答（`webrtc_service.go:254`），访客与坐席各连服务端一条 PC，两条 PC 之间**无媒体转发**，`webrtc_service.go` 全文件无 `OnTrack`/`AddTrack`/`NewTrackLocal*`，坐席端 `ontrack` 实际不会触发，**端到端画面不通** |
+| DataChannel 透传 | 部分实现 | 服务端 `OnDataChannel` 收文本后按 `data-channel-message` 广播回同 session（`webrtc_service.go:188-207`）、`SendDataChannelMessage` 可下行（`webrtc_service.go:387`）；仅纯文本 `SendText`，无二进制，且见上文"访客端不消费 WS 帧"断点 |
+| 远程控制（鼠标/键盘） | 未实现 | 全仓（Go + apps/admin + sdk）无 co-browsing / 输入事件转发代码；标注（rect/freehand/arrow）是**录制回放批注**（`domain/models.go:38`），不是实时屏幕标注 |
 | WebRTC 连接观测 | 已实现 | `GET /api/v1/webrtc/stats`、`/api/v1/webrtc/connections`、`/api/v1/rtc/ice-servers`（`apps/server/internal/app/server/router_realtime.go:51-54`）；连接状态变化经 `webrtc-state-change` 帧下发 |
 
 ### 4. 文件传输：已实现（一次性上传形态）
 
-- `POST /api/v1/upload`（`apps/server/internal/handlers/upload_handler.go:50-89`）：单请求 multipart、默认 32MB 上限（`router_auth.go:127`）、扩展名白名单、本地/S3 双 provider（S3 模式经现签 URL 302）。
-- SDK `uploadFile` 走同一端点，URL 附在消息里（`sdk/packages/core/src/sdk.ts:510`）。
-- 协助录制文件同链路上传，元数据经 `POST /api/v1/remote-assist/:id/recording` 回写（`assist_recording_handler.go:42`）。
+- `POST /api/v1/upload`（`apps/server/internal/handlers/upload_handler.go:55-90`）：单请求 multipart、默认 32MB 上限（`router_auth.go:127`）、扩展名白名单、本地/S3 双 provider（S3 模式经现签 URL 302）。
+- SDK `uploadFile` 走同一端点，URL 附在消息里（`sdk/packages/core/src/sdk.ts:544`）。
+- 协助录制文件同链路上传，元数据经 `POST /api/v1/remote-assist/:id/recording` 回写（`assist_recording_handler.go:44`）。
 - 边界：**无 WS 流式/分片/断点续传**，大文件受 32MB 上限约束；对客服场景够用，登记为已知边界而非缺口。
 
 ### 5. 断线重连与会话恢复：部分实现
@@ -64,7 +64,7 @@
 | WS 自动重连 | 已实现 | SDK 指数退避：默认 5 次、1s 起、2 倍、封顶 30s（`sdk/packages/core/src/contracts/reconnect.ts:8-13`），手动关闭不重连 |
 | 消息补拉 | 已实现 | 重连后 `reconcileMissedMessages` 按 lastMessageId 游标分页补拉去重（`sdk.ts:686 起`）；服务端 `ListAfter`（`router_realtime.go:35`） |
 | 协助记录恢复 | 已实现 | 协助会话/标注/录制元数据全落库，进程重启不丢（`infra/gorm_repository.go`） |
-| WebRTC 恢复 | 部分实现（服务端半边本轮修复） | 服务端 `HandleOffer` 前回收同 session 终态旧 PC（`webrtc_service.go` `closeTerminalConnections`，仅 disconnected/failed/closed，存活 PC 不动）；SDK 侧 WS 重连仍不触发 PC 重建/重协商（`sdk.ts:154` 仅透传事件）；hub unregister 不清理 rtc 连接（`websocket_hub.go:246-253`） |
+| WebRTC 恢复 | 部分实现（服务端半边本轮修复） | 服务端 `HandleOffer` 前回收同 session 终态旧 PC（`webrtc_service.go` `closeTerminalConnections`，仅 disconnected/failed/closed，存活 PC 不动）；SDK 侧 WS 重连仍不触发 PC 重建/重协商（`sdk.ts:154` 仅透传事件）；hub unregister 不清理 rtc 连接（`websocket_hub.go:266-273`） |
 
 ### 6. 并发会话：部分实现
 
@@ -72,13 +72,13 @@
 | --- | --- | --- |
 | 多客服会话并行 | 已实现 | 会话模型与 WS hub 按 session_id 广播天然支持多会话并行；协助记录按 conversation_session_id 关联 |
 | 单会话单活跃协助 | 已实现（本轮修复） | `StartSession` 先查同会话 active 记录，命中返回 `ErrAssistSessionActive`（HTTP 409，`application/service.go`）；结束后可重新发起 |
-| 同 session 双端 PC 歧义 | 未实现（缺口） | 服务端 connections 以 connectionID 为键（`webrtc_service.go:24,200`），`getConnectionBySessionID` 遍历 map 取**首个命中**（`webrtc_service.go:294-305`），访客与坐席对同一 sessionID 各建一条 PC 后，ICE candidate / answer 路由到哪条不确定（map 遍历序随机） |
+| 同 session 双端 PC 歧义 | 未实现（缺口） | 服务端 connections 以 connectionID 为键（`webrtc_service.go:24`），`getConnectionBySessionID` 遍历 map 取**首个命中**（`webrtc_service.go:342`），访客与坐席对同一 sessionID 各建一条 PC 后，ICE candidate / answer 路由到哪条不确定（map 遍历序随机） |
 
 ### 7. 审计日志：已实现
 
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
-| 管理面审计 | 已实现 | 协助管理路由挂在 `AuditMiddleware` 下（`router_management.go:18`），写操作按路由推断 action/resource 落库（`apps/server/internal/platform/audit/gin_middleware.go:31-67`） |
+| 管理面审计 | 已实现 | 协助管理路由挂在 `AuditMiddleware` 下（`router_management.go:19`），写操作按路由推断 action/resource 落库（`apps/server/internal/platform/audit/gin_middleware.go:31-67`） |
 | 访客面审计 | 已实现（本轮修复） | recording/consent 两条访客路由挂 `AuthMiddleware + AuditMiddleware`（`router_auth.go`），录制回写与同意表态均留痕 |
 | 聚合报表 | 已实现 | `GetRemoteAssistTicketStats`（`apps/server/internal/modules/analytics/infra/gorm_repository.go`）已接入统计面（空集 COALESCE 归零，无工单环境不 500） |
 
@@ -87,7 +87,7 @@
 | 子能力 | 判定 | 证据 |
 | --- | --- | --- |
 | 管理面鉴权链 | 已实现 | 见第 2 行管理面 RBAC；audit 组有独立 audit 权限查看留痕 |
-| TURN/STUN | 已实现 | coturn 独立部署 + 时间限 HMAC 短时凭据（`apps/server/internal/platform/iceturn/iceturn.go:74-89`），配置双层 gate（`config.go:750-758`）；ICE 配置经 WS `webrtc-ice-config`（`websocket_hub.go:230-244`）与 REST `GET /api/v1/rtc/ice-servers` 双通道下发；交付资产 `infra/compose/docker-compose.coturn.yml` |
+| TURN/STUN | 已实现 | coturn 独立部署 + 时间限 HMAC 短时凭据（`apps/server/internal/platform/iceturn/iceturn.go:65-77`），配置双层 gate（`config.go:828-834` 告警 + `iceturn.go:37-43` Validate 拒绝）；ICE 配置经 WS `webrtc-ice-config`（`websocket_hub.go:250-254`）与 REST `GET /api/v1/rtc/ice-servers` 双通道下发；交付资产 `infra/compose/docker-compose.coturn.yml` |
 | 坐席端 ICE | 已实现（本轮修复） | 管理端消费服务端下发：WS `webrtc-ice-config` 推送缓存 → REST `GET /api/v1/rtc/ice-servers` 回退（`services/remoteAssist.ts` `getIceServers`），两者皆空才退公网 STUN，与访客 SDK（`sdk.ts` `resolveServerIceServers`）同口径，严格网络下由服务端 TURN 兜住 |
 | 数据面租户隔离 | 已实现（本轮修复） | 见第 2 行"租户/工作区隔离" |
 

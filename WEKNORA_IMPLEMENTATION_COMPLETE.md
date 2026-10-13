@@ -17,7 +17,7 @@
 - **健康监控**: 实时服务状态检查
 
 ### 2. AI 智能功能
-- **混合检索策略**: BM25 + 向量搜索 + 知识图谱
+- **混合检索策略**: BM25 + 向量搜索 + 知识图谱（WeKnora 服务侧能力，servify 仅透传 `strategy` 字符串，不做本地检索分派）
 - **自动降级**: WeKnora 故障时切换到传统知识库
 - **置信度计算**: 基于检索质量的动态置信度
 - **知识库同步**: 从传统知识库到 WeKnora 的数据迁移
@@ -180,6 +180,8 @@ curl http://localhost:8080/api/v1/ai/metrics
 ./scripts/test-weknora-integration.sh
 
 # 知识库管理测试
+# 注：manage-knowledge-base.sh 未入库（仓库内不存在该文件），由 init-knowledge-base.sh 运行时生成
+#     （见 scripts/init-knowledge-base.sh:288 生成、:335 授权），下列命令需先跑 init-knowledge-base.sh。
 ./scripts/manage-knowledge-base.sh search "远程协助"
 ./scripts/manage-knowledge-base.sh list
 ./scripts/manage-knowledge-base.sh stats

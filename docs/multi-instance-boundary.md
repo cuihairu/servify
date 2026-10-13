@@ -27,8 +27,7 @@
   原由 integration 测试锁定
   （`services/agent_service_redis_integration_test.go`）；该测试已随
   P3-2 `internal/services` 移除而删除，当前无等价锚，补测为待办。
-- 前提：所有实例必须连**同一个 Redis**（`BuildAgentServiceAssembly`
-  注入的共享 client）。
+- 前提：所有实例必须连**同一个 Redis**（`BuildRuntime` 注入的共享 client）。
 
 ### 2. WebSocket / WebRTC 实时路由 —— 单实例硬约束 ❌
 
@@ -50,8 +49,8 @@ Redis provider（`eventbus/redis_bus.go`）的投递模型：
 - 每个实例的 `subscribeLoop` 都订阅通知频道，收到通知后各自从 stream
   读取并调用**本地** handlers。
 - **语义是广播，不是竞争消费**：N 个实例 → 每条事件被每个实例的
-  订阅方各处理一次（N 倍副作用）。代码中的 `consumerGroup` 常量
-  尚未启用 consumer group。
+  订阅方各处理一次（N 倍副作用）。代码中无 `consumerGroup` 常量，也未
+  调用 XREADGROUP。
 - 消费不保证送达：通知丢失（实例正好在重连 pub/sub）时该实例跳过
   这条事件，没有 pending/ACK/重放机制。stream 里的记录仍可用于
   排障，但不会被自动重新分发。

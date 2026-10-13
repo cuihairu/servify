@@ -48,12 +48,12 @@
   - 当前已补显式 `tenant_id` / `workspace_id`
   - `customer` 仓储通过扩展表 join 收口用户读取、列表、统计与活动查询
   - `GetCustomerActivity` 现已补 integration test，确认 recent sessions / tickets / messages 三条聚合链路都会按请求 scope 过滤，不会把同一 customer_id 在其它 workspace 下的历史数据带回当前上下文
-  - 兼容层 `CustomerService.GetCustomerStats` 现已补 scoped 回归测试，并修正 legacy 统计查询中 `users/customers` join 下未限定表前缀的 `created_at` 条件，避免 scoped 客户统计在多表聚合时出现歧义列错误
+  - 统计入口 `CustomerHandler.GetCustomerStats` 现已补 scoped 回归测试，并修正 legacy 统计查询中 `users/customers` join 下未限定表前缀的 `created_at` 条件，避免 scoped 客户统计在多表聚合时出现歧义列错误
 
 - `Agent`
   - 当前已补显式 `tenant_id` / `workspace_id`
   - `agent` 仓储与 transfer runtime load 同步路径已按上下文过滤
-  - 兼容层 `AgentService.GetAgentStats` 现已补 scoped 回归测试，确认 legacy 统计入口不会跨 workspace 混入其它 agent 主数据
+  - 统计入口 `AgentHandler.GetAgentStats` 现已补 scoped 回归测试，确认 legacy 统计入口不会跨 workspace 混入其它 agent 主数据
 
 - `KnowledgeDoc`
   - 当前 provider 层支持 `tenant_id`

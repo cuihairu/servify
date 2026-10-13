@@ -82,12 +82,11 @@ CI 本身没有部署 job；发布面为手动 `release.yml`（`workflow_dispatc
 
 - 不再要求维护额外 runner 主机，减少运维成本
 - CI 改为显式失败，不再通过 `make test` 中的吞错逻辑掩盖问题
-- 将 Go、SDK、worker、integration 拆成独立 job，便于定位失败点
+- 将 Go、SDK、integration 拆成独立 job，便于定位失败点
 - CI 只做检查与验证，不承担部署；发布走手动 release workflow
 
 ## 后续可继续补的检查
 
-- `golangci-lint`
 - Mermaid 最小渲染冒烟检查
 - OpenAPI/contract drift check
 - 更细粒度的 integration matrix

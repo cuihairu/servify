@@ -10,7 +10,7 @@
 
 **开源智能客服系统** — Web 优先，AI 首答，人工接管，工单全流程
 
-[![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
 [![codecov](https://codecov.io/gh/cuihairu/servify/graph/badge.svg)](https://codecov.io/gh/cuihairu/servify)
@@ -45,8 +45,7 @@ V1.0 收敛改造 B0–B4 批次全部过闸：
   叙事收口
 - Web 优先、多端预留：Web SDK 已实现，Android/iOS 原生 SDK 已随
   M1–M3 落地，语音与多渠道冻结为扩展边界
-- 后续演进：Routing 打分引擎、Ticket 关闭前拦截等（见发布说明
-  「演进方向」）
+- 后续演进：Routing 打分引擎与 Ticket 关闭前拦截已落地，剩余为薄壳模块文档面收口
 
 ---
 
@@ -81,7 +80,7 @@ Servify 当前更适合这样理解：
 ```text
 .
 |-- apps/
-|   |-- server/              # Go 服务端
+|   |-- server/              # Go 服务端（模块化单体，包在 internal/ 下）
 |   |-- admin/               # Admin 管理面板（UmiJS + Ant Design Pro）
 |   |-- demo/                # 产品演示站点
 |   |-- demo-sdk/            # SDK 预构建产物与示例
@@ -89,7 +88,6 @@ Servify 当前更适合这样理解：
 |-- docs/
 |   `-- implementation/      # 分主题实施 backlog
 |-- infra/                   # compose、部署辅助
-|-- internal/                # 共用内部包
 `-- sdk/                     # SDK 工作区（源码）
 ```
 
@@ -328,14 +326,14 @@ flowchart TB
 设计约束：
 
 - `sdk/packages/core` 只放跨端 contract，不放浏览器 UI 逻辑
-- Web SDK 已实现；App SDK（Android/iOS）已按 `docs/mobile-sdk-design.md` 落地原生实现（协议契约与 Web 对齐，运行时结构按各平台惯例）；API SDK 仍只保留目录和协议设计
+- Web SDK 已实现；App SDK（Android/iOS）已按 `docs/mobile-sdk-design.md` 落地原生实现（协议契约与 Web 对齐，运行时结构按各平台惯例）；API SDK（`sdk/packages/api-client`）亦已实现（请求 pipeline + contracts）
 - 渠道接入统一映射到 `conversation` 和 `routing`，不允许直接穿透到旧 service
 
 ---
 
 ## SIP 与语音扩展
 
-当前还没有完整实现全套语音协议栈，但架构上已经明确预留 `signaling + media` 两层扩展。
+语音协议栈已部分落地（`voiceprotocol` 注册表、SIP / SIP-WS / PSTN provider、`VoiceCoordinator`），剩余媒体层仍按 `signaling + media` 两层扩展预留。
 
 ```mermaid
 flowchart LR
@@ -367,7 +365,7 @@ flowchart LR
 
 ### 环境要求
 
-- **Go** 1.25.0（toolchain go1.25.7）- 项目使用 Go workspace 模式
+- **Go** 1.26.0 - 项目使用 Go workspace 模式
 - **PostgreSQL** 12+ 或 SQLite（开发/测试）
 - **Node.js** 24+（仅 Web/管理端/文档相关任务需要）
   - 管理端使用 **pnpm** 10+ 作为包管理器
@@ -548,9 +546,8 @@ Routing 事件统一/PII 保留 → B3 Knowledge 产品化/AI 反馈回传 → B
 迁移、租户/审计/安全基线、可观测性各阶段 backlog 均已清零（历史记录见
 [todo.md](./todo.md)）。
 
-后续演进按 「演进方向」：
-Routing 打分引擎（多因子）、Ticket 关闭前拦截规则、薄壳模块文档面收口
-剩余项。
+后续演进：Routing 打分引擎（多因子）与 Ticket 关闭前拦截规则已落地，
+剩余项为薄壳模块文档面收口。
 
 ---
 

@@ -24,7 +24,7 @@
 
 - `internal/observability/telemetry/names.go` — 全量指标名、标签名、span 名、日志字段常量
 - `internal/observability/telemetry/request_id.go` — Gin RequestID 中间件，自动生成 UUID 并注入上下文（含 `FieldRequestID` 日志字段）
-- 上下文传播现状：request_id 传播已落地（request_id.go + `internal/app/server/middleware.go` 挂 RequestID 中间件，先于 gin.Logger() 执行）；session_id 落日志由 gin 中间件注入（`internal/app/server/gin_middleware.go`）
+- 上下文传播现状：request_id 传播已落地（request_id.go + `internal/app/server/middleware.go` 挂 RequestID 中间件，先于 gin.Logger() 执行）；session_id 落日志由 gin 中间件注入（`internal/platform/auth/gin_middleware.go:102-103`）
 - tenant_id / trace_id 透传已落地（2026-10-11）：`telemetry/logfields.go` — `FieldsFromContext` 汇集 request_id（RequestIDMiddleware 注入 gin ctx）/ tenant_id（auth 中间件盖进 request ctx，与仓储写入同源）/ trace_id（OTel span 优先，缺失时回退上游透传的 X-Trace-ID 头，RequestIDMiddleware 负责接住）；`AccessLogger` 替代 gin.Logger，访问日志走 logrus 标准出口（与 InitLogger 的 JSON/text 格式、输出目标合一）并携带全部透传字段 + method/path/status/latency_ms/client_ip
 
 ## O2 core-service-level-indicators

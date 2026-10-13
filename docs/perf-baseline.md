@@ -17,7 +17,7 @@ servify 的第一版容量基线：回答"这个服务到底能承受多少负�
 ## 工具链
 
 - `scripts/perfbench`（Go 标准库实现，零三方压测依赖）：四场景负载器 + 手写 WebSocket 客户端（RFC 6455 握手与帧编解码）。
-- `scripts/test-perf-baseline.sh`：编排脚本——构建 → mock LLM → 派生压测配置（`perfbench -gen-config`，yaml Node API 保留生产配置注释与占位符）→ sqlite 起服 → 401 负例 → admin → 四场景 → 结果校验 → manifest 写入。
+- `scripts/test-perf-baseline.sh`：编排脚本——构建 → mock LLM → 派生压测配置（`perfbench -gen-config-src <源配置> -gen-config-dst <输出路径>`，yaml Node API 保留生产配置注释与占位符）→ sqlite 起服 → 401 负例 → admin → 四场景 → 结果校验 → manifest 写入。
 - 两档规模：`smoke`（CI 驱动测试秒级）与 `full`（容量基线）。
 
 ```bash

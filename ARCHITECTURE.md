@@ -234,8 +234,8 @@ Responsibilities:
 
 Rules:
 
-- only the web SDK is implemented in the current phase
-- API client SDK and app/mobile SDK are planned and must be reserved in structure and contracts
+- the web SDK is the primary implementation; the Android/iOS native SDKs and the `api-client` / `app-core` packages also have implementations
+- future SDK shapes must still be reserved in structure and contracts
 - framework bindings must depend on shared core SDK packages, not reimplement protocol logic
 
 ## 6. Bounded Contexts
@@ -291,7 +291,7 @@ Customer（客户中心）
          ├── AI interaction         （ai 模块，经 QueryOrchestrator）
          ├── Agent interaction      （agent 模块：接管/协作/转接）
          ├── Routing                （routing 模块：排队/评分/分配/转接）
-         └── Ticket                 （ticket 模块：后续工作项，持有 conversation_id）
+         └── Ticket                 （ticket 模块：后续工作项，持有 session_id）
 ```
 
 - Conversation 是「服务过程」的中心，Customer 是「客户」的中心；两者都是上游概念，**ticket 不得取代 conversation 的核心地位**。
@@ -322,7 +322,7 @@ Owns:
 
 **从属关系声明（V1.0 收敛起写死）：** Ticket 是 Conversation 派生的**后续工作项**，不是与 Conversation 平级的中心对象：
 
-- 新建工单必须携带 `conversation_id`（历史数据迁移回填，新数据必填）。
+- 新建工单必须携带 `conversation_id`（历史数据迁移回填，新数据必填）——**未实现**：当前 `Ticket` 只有可空 `SessionID *string`（`internal/models/models.go:138`、`modules/ticket/domain/entities.go:11`），无 `conversation_id` 字段与必填约束。
 - Conversation 关闭时未完结的工作必须先建单或显式降级（关闭前拦截规则）。
 - `sla`、`satisfaction`、`custom_field` 的语义归属 Ticket 子能力；`ticket.*` 域事件同时投影进 `conversation_events`，保证客户视角 Timeline 完整。
 
@@ -383,7 +383,7 @@ Owns:
 - auth/session bootstrap rules
 - framework bindings
 
-The SDK context exists independently from the current web implementation. The first implementation remains web-only, but the architecture must reserve:
+The SDK context exists independently from the current web implementation. The web SDK is the primary implementation today, but the architecture must reserve:
 
 - web sdk
 - server-side api client sdk
@@ -394,6 +394,8 @@ The SDK context exists independently from the current web implementation. The fi
 The core system must not depend on any single protocol. All inbound channel traffic should be normalized into platform events.
 
 ### 7.1 Unified Inbound Event
+
+**未实现**：`ChannelType` 类型与下列常量在 `apps/server/internal` 中不存在；当前统一入站事件是 `platform/channel/types.go` 的 `InboundEvent`（`Channel string` + `Kind EventKind`）。
 
 ```go
 type ChannelType string
@@ -443,7 +445,9 @@ Planned SDK families:
 
 Current implementation scope:
 
-- only `web sdk`
+- `web sdk` (primary)
+- Android / iOS native SDKs
+- `api-client`, `app-core`
 
 ### 8.2 SDK Layering
 
@@ -514,10 +518,10 @@ Current phase:
   accepted; SwiftPM / XCFramework distribution, protocol contracts aligned
   with the web SDK)
 
-Reserved but not implemented yet:
+Also implemented:
 
-- `api-client`
-- `app-core`
+- `api-client` (request pipeline + contracts)
+- `app-core` (runtime + contracts)
 
 ### 8.6 SDK Contracts
 
@@ -530,7 +534,7 @@ The shared SDK contracts should support:
 - auth token refresh
 - feature capability negotiation
 
-Example capability model:
+Example capability model (implemented on the TypeScript side as `CapabilitySet` in `sdk/packages/core/src/contracts/capability.ts`; there is no Go-side `Capability` type yet):
 
 ```go
 type Capability string
@@ -562,14 +566,16 @@ Key entities:
 
 ### 8.3 Core Voice Events
 
-- `call_started`
-- `call_ringing`
-- `call_answered`
-- `call_transferred`
-- `call_ended`
-- `recording_ready`
-- `transcript_ready`
-- `dtmf_received`
+- `call.started`
+- `call.held`
+- `call.resumed`
+- `call.transferred`
+- `call.ended`
+- `recording.started`
+- `recording.stopped`
+- `transcript.appended`
+
+Dot-separated naming, matching `modules/voice/application/events.go`; `call.ringing` / `call.answered` / `dtmf.received` are not implemented yet.
 
 ### 8.4 SIP Integration Flow
 
@@ -616,12 +622,13 @@ type LLMProvider interface {
 
 ### 9.3 Provider Implementations
 
-Planned implementations:
+Implementations:
 
 - `knowledgeprovider/weknora`
 - `knowledgeprovider/dify`
 - `knowledgeprovider/ragflow`
-- `knowledgeprovider/localpgvector`
+- `knowledgeprovider/pgvector`
+- `knowledgeprovider/local`
 
 The AI module only depends on the interfaces, not the provider DTOs.
 
@@ -629,7 +636,7 @@ LLM 侧的构造统一收口在 `internal/platform/llm/factory`：`ai.provider` 
 
 首答质量三件套已接入编排主链路：多轮上下文经 `SessionHistoryLoader` 窄接口拉取会话近期消息（AI 模块不反向依赖 conversation，conversation 适配器按形状实现）；引用来源与产生方式（`sources`/`strategy`）随 REST 响应与 WS `ai-response` 帧透出；`ai.handoff` 置信门在首答 confidence 低于阈值时只产出 `next_action=handoff` 建议元数据（不改写答案、不执行转接，转接仍由用户显式发起或关键词触发）。
 
-坐席 AI 辅助（AgentCopilot）与首答共用同一 LLM provider、出站参数与会话历史口径：`POST /api/v1/ai/copilot` 单端点按 `action` 分发三类"点一下就能用"的能力——`suggest_reply`（基于会话近期历史起草下一条回复）、`rewrite`（按语气改写坐席草稿，事实与承诺不变）、`session_summary`（三段式会话摘要）。历史类动作用与首答相同的 `SessionHistoryLoader` 读取口，但采用"明确失败"语义：会话无可读消息或历史加载失败时返回 4xx，不静默降级、不凭空编造上下文；LLM provider 未装配时端点降级 503。权限走 workspace 资源组（`RequireResourcePermission("workspace")`，POST → `workspace.write`），坐席角色模板已含写权限。当前为启动期全局装配，不跟随租户/工作区作用域模型覆盖。
+坐席 AI 辅助（AgentCopilot）与首答共用同一 LLM provider、出站参数与会话历史口径：`POST /api/v1/ai/copilot` 单端点按 `action` 分发三类"点一下就能用"的能力——`suggest_reply`（基于会话近期历史起草下一条回复）、`rewrite`（按语气改写坐席草稿，事实与承诺不变）、`session_summary`（三段式会话摘要）。历史类动作用与首答相同的 `SessionHistoryLoader` 读取口，但采用"明确失败"语义：会话无可读消息或历史加载失败时返回 4xx，不静默降级、不凭空编造上下文；LLM provider 未装配时端点降级 503。权限走 realtime 管理面组（`router_realtime.go` 的 `managementV1`：`AuthMiddleware` + `EnforceRequestScope` + `RequirePrincipalKinds("agent", "admin", "service")`），未挂 `RequireResourcePermission("workspace")`（该资源组在 `router_management.go` 用于 workspace 管理路由）。当前为启动期全局装配，不跟随租户/工作区作用域模型覆盖。
 
 首答流式输出复用 WS 既有 `text-message` 入站链路：编排层 `HandleStream` 与非流式 `Handle` 共享同一条前置流水线（策略钩子、护栏、检索、prompt、审计）与 finalize 口径，模型侧经 provider `ChatStream` 增量产出（含 agent 工具循环——分片中出现的完整工具调用照常执行，最终内容为全部分片拼接）。delivery 层 `ProcessQueryStream` 在终末事件做与非流式一致的 finalize（引用来源、产生方式、置信门），WS hub 以可选能力接口协商流式：支持则先推 `ai-response-delta` 增量帧（`{content_delta, done}`），完成时补终末 delta（`done=true`）再发完整 `ai-response` 终帧（帧契约向后兼容，不识别增量的客户端仍只消费终帧）；能力缺失或流启动即失败整体回退非流式单发；增量已推送后流失败则只补终末 delta、不再发 ai-response 也不回退（避免文本重复），与既有失败路径一致。
 

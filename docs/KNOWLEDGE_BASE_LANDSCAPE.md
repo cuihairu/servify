@@ -15,7 +15,7 @@
 | `HealthCheck` | 可用性探测（启动期 require/降级判断依据） |
 | `RebuildIndex`（可选扩展） | 索引重建 |
 
-现有四个 driver：
+现有七个 driver 实现（`apps/server/internal/platform/knowledgeprovider/` 下）：
 
 | Driver | 适配对象 | 定位评估 |
 | --- | --- | --- |
@@ -23,8 +23,11 @@
 | `weknorakp` | WeKnora（腾讯开源知识库） | **正统知识库**，主推方向之一，见 `WEKNORA_INTEGRATION.md` |
 | `pgvector` | 进程内 pgvector（DB + embedding 直配） | 轻量自托管默认路径，无外部依赖 |
 | `difykp` | Dify dataset API | **定位不严谨**：Dify 是编排平台，dataset 是附属功能。作为兼容路径保留，不宜作为知识库主推 |
+| `local` | 进程内本地知识引擎（本地嵌入器 + 余弦） | 零外部依赖离线链路，经 `knowledge.provider=local` 显式声明启用（非测试桩，有独立 `local-knowledge` 验收） |
+| `memory` | 进程内内存实现 | 完整实现契约、但未接入生产装配，仅 provider 切换测试与验收脚本引用 |
+| `mock` | 可控 mock 实现（可注入 search/delete/health 错误） | 仅测试引用，用于契约回归与 mock 验收对端 |
 
-选择链由启动/请求级共用的 `selectKnowledgeSource` 门面收敛（刀 23 + RAGFlow 立项刀）：ragflow（健康检查、可降级）→ dify（健康检查、可降级）→ weknora（健康检查）→ pgvector 直配。新增 driver 只需实现契约并接入该门面，选择优先级与装配为既有代码路径。RAGFlow 健康检查失败时的 require 语义：仅当 dify、weknora 均未启用时立即失败，否则沿链降级。
+选择链由启动/请求级共用的 `selectKnowledgeSource` 门面收敛（刀 23 + RAGFlow 立项刀）：ragflow（健康检查、可降级）→ dify（健康检查、可降级）→ weknora（健康检查）。**pgvector / local 不在选择链内**：二者是全局声明（`knowledge.provider=pgvector|local`）+ 进程内 driver，由 `BuildAIAssembly` 与请求级 `ai_scoped_handler` 的直通分支在选择链之前处理（`knowledge_source.go:60-62` 明确「pgvector 不进此函数：它是全局声明 + 进程内 driver，由调用方直通启动装配的实例」）。新增外部 driver 只需实现契约并接入该门面，选择优先级与装配为既有代码路径。RAGFlow 健康检查失败时的 require 语义：仅当 dify、weknora 均未启用时立即失败，否则沿链降级。
 
 ## 2. 选型维度
 
@@ -42,7 +45,7 @@
 
 ### 3.1 RAGFlow（InfiniFlow）——已立项（首选候选兑现）
 
-- **状态**：driver 已落地（`ragflowkp`），版本锚定 v0.27.x；选择链最高优先（ragflow → dify → weknora → pgvector 直配），租户/工作区作用域全量对齐 dify/weknora
+- **状态**：driver 已落地（`ragflowkp`），版本锚定 v0.27.x；选择链最高优先（ragflow → dify → weknora；pgvector 直配不在选择链内，为 `knowledge.provider=pgvector` 全局声明直通），租户/工作区作用域全量对齐 dify/weknora
 - **定位**：开源企业级 RAG 引擎，GitHub 18k+ star，以 DeepDoc 深度文档理解（复杂 PDF/表格/版式解析）与检索精度著称
 - **API**：RESTful API 完整（知识库创建、文档上传、检索等，API Key 认证），契约四操作可一一映射
 - **部署**：Docker Compose 自托管，契合私有化交付

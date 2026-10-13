@@ -63,7 +63,7 @@
 
 | 组件 | 版本 | 说明 |
 |------|------|------|
-| Go | 1.25.0 (toolchain go1.25.7) | 服务端编译 |
+| Go | 1.26.0 | 服务端编译 |
 | Node.js | 24+ | SDK 构建、管理端、网站 |
 | pnpm | 10+ | 管理端包管理器 |
 | Docker | 24+ | 容器化部署（可选） |
@@ -119,7 +119,7 @@ cp config.yml config.local.yml
 
 **数据库选项：**
 
-- **开发/测试**：默认配置支持 SQLite 回退（`DB_DRIVER=sqlite`），无需本地 PostgreSQL
+- **开发/测试**：默认使用 PostgreSQL；需无本地 PostgreSQL 的开发/测试场景时，可通过 `DB_DRIVER=sqlite` 显式启用 SQLite
 - **生产**：必须使用 PostgreSQL
 
 ### 3.4 运行服务
@@ -212,7 +212,7 @@ export OPENAI_API_KEY=your-openai-api-key
 docker compose -f infra/compose/docker-compose.observability.yml up -d
 ```
 
-配置 Servify 连接 OTel（在 `config.yml` 中）：
+配置 Servify 连接 OTel（参考 `config.production.secure.example.yml` 中的 `monitoring` 段；默认 `config.yml` 未包含该段）：
 
 ```yaml
 monitoring:
@@ -254,7 +254,7 @@ docker build -t servify:v0.1.0 -t servify:latest .
 ```
 
 镜像特点：
-- 基于 `golang:1.25-alpine` 编译，`alpine` 运行
+- 基于 `golang:1.26-alpine` 编译，`alpine` 运行
 - 静态编译（`CGO_ENABLED=0`），无外部依赖
 - 镜像大小约 20-30 MB
 
@@ -479,7 +479,7 @@ scrape_configs:
 
 ### 6.3 OpenTelemetry 追踪
 
-在 `config.yml` 中启用：
+在 `config.production.secure.example.yml` 中启用（默认 `config.yml` 未包含 `monitoring` 段）：
 
 ```yaml
 monitoring:
@@ -529,7 +529,7 @@ monitoring:
 | `DIFY_DATASET_ID` | Dify dataset ID |
 | `WEKNORA_API_KEY` | WeKnora compatibility 知识库 API Key |
 | `WEKNORA_TENANT_ID` | WeKnora compatibility 租户 ID |
-| `REDIS_PASSWORD` | Redis 密码（生产建议启用） |
+| `REDIS_PASSWORD` | Redis 密码（生产建议启用；仅配置文件 `redis.password` 字段，未提供环境变量绑定） |
 
 ### 7.3 生产配置安全清单
 
@@ -565,7 +565,7 @@ make observability-check CONFIG=config.yml
 make release-check CONFIG=config.yml
 ```
 
-该入口会串行执行 `local-check`、`security-check`、`observability-check` 和聚焦的 Go 回归测试。
+该入口会串行执行 `local-check`、`security-check`、`observability-check`、聚焦的 Go 回归测试和构建验证（`make build`）。
 
 ### 7.4 Docker Secrets 方式
 
@@ -611,7 +611,7 @@ fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/health"]
   interval: 30s
   timeout: 10s
   retries: 5
@@ -671,7 +671,7 @@ redis-cli ping
 Servify 首次启动走 GORM AutoMigrate 自动建表；版本化迁移文件在 `apps/server/internal/app/bootstrap/migrations/`，如需手动执行：
 
 ```bash
-# 标准入口（见 Makefile:107）
+# 标准入口（见 Makefile:106）
 make migrate
 ```
 

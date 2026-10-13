@@ -27,7 +27,7 @@
 
 | 层 | 现状 |
 |---|---|
-| 后端 | Go 1.25，Gin + GORM + Postgres(pgvector) + Redis + gorilla/WS + pion/WebRTC；**modular monolith**，正从 `handlers→services→models` 收口到 `modules/*/{domain,application,infra,delivery}` |
+| 后端 | Go 1.26，Gin + GORM + Postgres(pgvector) + Redis + gorilla/WS + pion/WebRTC；**modular monolith**，正从 `handlers→services→models` 收口到 `modules/*/{domain,application,infra,delivery}` |
 | 平台抽象 | 16 个 platform 包：llm / embedding / knowledgeprovider / aiprovider / realtime / sip …（Ports & Adapters，做得相当干净） |
 | AI 编排 | `modules/ai/application`：QueryOrchestrator + Retriever + PromptBuilder + Guardrails + ToolRegistry/Executor + policy/guardrails/metrics |
 | 前端管理台 | UmiJS Max + Ant Design Pro（pnpm） |

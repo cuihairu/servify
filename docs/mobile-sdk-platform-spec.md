@@ -35,7 +35,7 @@
 |---|---|---|
 | 语言/UI | Kotlin + Jetpack Compose（D3 已定） | 状态驱动渲染与会话页同构 |
 | Kotlin/工具链 | Kotlin 2.x + JDK 17 构建、compileSdk 35 | Compose 2.x 要求；compileSdk 取当前 stable 供 SDK 编译，运行时行为仍由 minSdk 24 兜底（SDK 编译目标高不抬高接入方运行要求） |
-| 交付形态 | 单 AAR、内部多包（`protocol`/`core`/`ui`），`api` 面只有门面 | 多 AAR 会把内部分层泄漏成接入方的依赖管理负担；单 AAR + internal 分层让重构自由保留 |
+| 交付形态 | 单 AAR、内部多包（`connect`/`model`/`ui`），`api` 面只有门面 | 多 AAR 会把内部分层泄漏成接入方的依赖管理负担；单 AAR + internal 分层让重构自由保留 |
 | 并发模型 | 门面持有应用级 `SupervisorJob` + 内部 `CoroutineScope`；状态暴露 `StateFlow`、事件流 `SharedFlow`；公开挂起函数 | Supervisor 隔离单点失败不拖垮作用域；StateFlow 给 UI 收敛重放语义；接入方不接触任何协程作用域创建 |
 | 持久化 | 快照（sessionId/lastMessageId/savedAt）走 DataStore Preferences；访客 token 走 EncryptedSharedPreferences | 快照无敏感字段用轻量存储即可；token 必须进系统加密存储（D6 安全基线） |
 | 网络 | OkHttp 4.x（`api` 依赖，随宿主去重，D9 白名单） | WSS + 协议层保活 `pingInterval` 一处配置（PROTOCOL.md §2 移动端口径） |
@@ -48,8 +48,8 @@
 
 | 项 | 决策 | 为什么 |
 |---|---|---|
-| 语言/UI | Swift + SwiftUI（D4 已定），Swift tools 5.9 | 与 Android 同构的状态驱动；5.9 是 Xcode 15 起的 stable tools 线 |
-| 交付形态 | XCFramework + SPM binary target（D4 已定）；源码工程用 SPM 多 target（`ServifyProtocol`/`ServifyCore`/`ServifyUI`），打包时合并 | 同 Android：发布面收敛为一个产物，源码期分层保重构自由 |
+| 语言/UI | Swift + SwiftUI（D4 已定），Swift tools 5.10 | 与 Android 同构的状态驱动；5.10 是 Xcode 15.3 起的 stable tools 线 |
+| 交付形态 | XCFramework + SPM binary target（D4 已定）；源码工程用 SPM 单 target（`ServifyKit`） | 同 Android：发布面收敛为一个产物，源码期分层保重构自由 |
 | 并发模型 | structured concurrency；状态类 `@MainActor`；事件暴露 `AsyncStream`；公开方法 `async` | 与 Kotlin 侧 StateFlow/挂起函数一一映射（D6 跨端同名同义）；`@MainActor` 收敛 UI 状态写竞争 |
 | 持久化 | token 走 Keychain（kSecClassGenericPassword）；快照走 Application Support 下 JSON 文件（无敏感字段） | 对齐 D6 安全基线；避免为快照引入 Keychain 复杂度 |
 | 网络 | `URLSessionWebSocketTask` + `sendPing` 保活（PROTOCOL.md §2） | 零三方依赖（D4/D9） |

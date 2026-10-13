@@ -36,7 +36,7 @@
 ## 当前落库与过滤现状（2026-10-08 按现码核验）
 
 - 核心业务表已普遍带显式 tenant / workspace 列
-  - `Session`（`models/models.go:238-239`）、`Ticket`（:132-133）、`Message`（:263-264）、`Customer`（:89-90）、`Agent`（:108-109）等 16+ 模型均带 `TenantID` + `WorkspaceID` 复合索引（`idx_sessions_scope` 等）
+  - `Session`（`models/models.go:237-238`）、`Ticket`（:131-132）、`Message`（:262-263）、`Customer`（:88-89）、`Agent`（:107-108）等 16+ 模型均带 `TenantID` + `WorkspaceID` 复合索引（`idx_sessions_scope` 等）
   - 数据库层边界已建立，不再只依赖调用约定
   - **残余空白：`User` 表无租户列**（用户主体按设计全局唯一，跨租户登录）
 
@@ -51,7 +51,7 @@
   - `DailyStats` 仍是 system 级 read model（`models.go` 内无 scope 字段，与 `current-architecture.md` 口径一致）
 
 - customer 主数据已带租户列
-  - `models/models.go:89-90`，create 链路的 scope 入口规则（workspace 不脱离 tenant、global 仅 internal）继续有效
+  - `models/models.go:88-89`，create 链路的 scope 入口规则（workspace 不脱离 tenant、global 仅 internal）继续有效
 
 ## 当前可回答的问题
 
