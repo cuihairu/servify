@@ -264,14 +264,30 @@ func (s *HandlerServiceAdapter) executeTransfer(ctx context.Context, session *co
 
 	var pendingEvents []eventbus.Event
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// fromAgentID 此前是事务外预读；并发转派同一会话时两流都按同一
+		// stale 值减 1，坐席负载重复扣减。锁会话行取库内 agent_id 为准。
+		lockedAgentID, err := s.lockTransferAgentID(ctx, tx, session.ID)
+		if err != nil {
+			return fmt.Errorf("lock transfer session: %w", err)
+		}
+		// 并发转派已把会话指给目标客服：本流不再增减负载——SyncTransferLoad
+		// 对 toAgentID 恒加 1，仅传 nil 来源仍会重复加。
+		loadChanged := true
+		if lockedAgentID != nil && *lockedAgentID == targetAgentID {
+			lockedAgentID = nil
+			loadChanged = false
+		}
+		fromAgentID = lockedAgentID
 		if err := s.syncTransferSession(ctx, tx, session, targetAgentID); err != nil {
 			return fmt.Errorf("update session: %w", err)
 		}
 		if err := s.syncTransferTicket(ctx, tx, session, targetAgentID, transferAt); err != nil {
 			return fmt.Errorf("update ticket: %w", err)
 		}
-		if err := s.syncTransferAgentLoad(ctx, tx, fromAgentID, targetAgentID); err != nil {
-			return fmt.Errorf("sync agent load: %w", err)
+		if loadChanged {
+			if err := s.syncTransferAgentLoad(ctx, tx, fromAgentID, targetAgentID); err != nil {
+				return fmt.Errorf("sync agent load: %w", err)
+			}
 		}
 		if err := s.appendTransferSystemMessage(ctx, tx, session.ID, targetAgentID, transferMessageContent, transferAt); err != nil {
 			return fmt.Errorf("create transfer message: %w", err)
@@ -537,6 +553,11 @@ func (s *HandlerServiceAdapter) syncTransferTicket(ctx context.Context, tx *gorm
 
 func (s *HandlerServiceAdapter) syncTransferAgentLoad(ctx context.Context, tx *gorm.DB, fromAgentID *uint, targetAgentID uint) error {
 	return s.agents.SyncTransferLoad(ctx, tx, fromAgentID, targetAgentID)
+}
+
+// lockTransferAgentID 事务内锁会话行读库内 agent_id（坐席负载增减的依据）。
+func (s *HandlerServiceAdapter) lockTransferAgentID(ctx context.Context, tx *gorm.DB, sessionID string) (*uint, error) {
+	return s.conversation.LockedTransferAgentID(ctx, tx, sessionID)
 }
 
 func (s *HandlerServiceAdapter) appendTransferSystemMessage(ctx context.Context, tx *gorm.DB, sessionID string, targetAgentID uint, content string, createdAt time.Time) error {

@@ -14,6 +14,16 @@ import (
 // （delivery 契约包不定义同形结构，handlers 只引 delivery 面类型）。
 type TranslationEntry = application.MessageTranslationEntry
 
+// TranslationCacheKey = application.MessageTranslationsKey 的 delivery 面别名
+// （messages.metadata 里的保留键，值为按语言键的 JSON 串）。
+const TranslationCacheKey = application.MessageTranslationsKey
+
+// DecodeTranslationCache 解析 messages.metadata 保留键 translations 的按语言
+// 译文表；空串/坏 JSON 一律返回 nil（译文是增强能力，静默降级）。
+func DecodeTranslationCache(raw string) map[string]string {
+	return application.DecodeMessageTranslations(raw)
+}
+
 // TranslationPersistence 会话消息译文持久化窄契约：入参为零条时实现
 // 须返回 nil（空批不触库）。
 type TranslationPersistence interface {

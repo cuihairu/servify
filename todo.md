@@ -8,7 +8,7 @@
 - [ ] CODECOV_TOKEN：用户侧 `gh secret set CODECOV_TOKEN -R cuihairu/servify` 后对 CI 手动 re-run 首传
 - [ ] 移动端语音消费：Android/iOS 语音上行与字幕渲染（按产品节奏）
 - [ ] Phase 3 语音：WebRTC 音轨下发、端到端语音评估、租户级配额限流（依赖 RA-7 SFU-lite）
-- [ ] 生产侧派单竞态收口遗留：通用 UpdateTicket 改派 agent_id 不调坐席负载（PUT 更新可改派，current_load 不增不减）；transfer 流负载增减以会话预读 fromAgentID 为准（会话行未锁，并发转派同会话可重复减 1）——两处与 ticket 行锁修复会双重计数，需单独设计
+- [x] 生产侧派单竞态收口遗留：通用 UpdateTicket 改派 agent_id 不调坐席负载（PUT 更新可改派，current_load 不增不减）；transfer 流负载增减以会话预读 fromAgentID 为准（会话行未锁，并发转派同会话可重复减 1）——两处与 ticket 行锁修复会双重计数，需单独设计。UpdateTicketModelWithStatusAndCustomFields 事务内锁工单行按库内 agent_id 算增减（哨兵 0→NULL 同 Unassign 口径，6 项 integration 回归红转绿）；transfer 锁会话行读库内 agent_id 为准（RuntimeAdapter.LockedTransferAgentID，postgres/mysql 加 FOR UPDATE），并发转派已指给目标客服时跳过负载增减（SyncTransferLoad 恒加目标，仅传 nil 来源仍会重复加）。另修 item #10 两处 CI 回归：handlers 直引 conversation/application 改走 delivery 窄契约（DecodeTranslationCache/TranslationCacheKey），swagger 生成物重跑入库（docs.go/swagger.json/swagger.yaml 13 行）
 - [ ] braces@3.0.3 与 sprintf-js@1.0.3 升级：npm 上游无修复版，等上游发版
 - [ ] 知识库选型决策：RAGFlow 立项口径、选择链优先级、新客户默认口径（待产品确认）
 - [ ] MetricsAggregator Snapshot 读取出口（待产品/运维口径）

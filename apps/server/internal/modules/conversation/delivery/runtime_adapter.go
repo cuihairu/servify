@@ -12,6 +12,7 @@ import (
 	"servify/apps/server/internal/platform/eventbus"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type RuntimeAdapter struct {
@@ -51,6 +52,32 @@ func (a *RuntimeAdapter) LoadTransferSession(ctx context.Context, sessionID stri
 		UserName:     model.User.Name,
 		UserUsername: model.User.Username,
 	}, nil
+}
+
+func (a *RuntimeAdapter) LockedTransferAgentID(ctx context.Context, tx *gorm.DB, sessionID string) (*uint, error) {
+	if tx == nil {
+		return nil, gorm.ErrInvalidDB
+	}
+	if sessionID == "" {
+		return nil, nil
+	}
+	query := tx.WithContext(ctx).Model(&models.Session{}).Select("agent_id")
+	if tenantID := platformauth.TenantIDFromContext(ctx); tenantID != "" {
+		query = query.Where("tenant_id = ?", tenantID)
+	}
+	if workspaceID := platformauth.WorkspaceIDFromContext(ctx); workspaceID != "" {
+		query = query.Where("workspace_id = ?", workspaceID)
+	}
+	if dialector := tx.Name(); dialector == "postgres" || dialector == "mysql" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var row struct {
+		AgentID *uint `gorm:"column:agent_id"`
+	}
+	if err := query.Where("id = ?", sessionID).Take(&row).Error; err != nil {
+		return nil, err
+	}
+	return row.AgentID, nil
 }
 
 func (a *RuntimeAdapter) SyncTransferAssignment(ctx context.Context, tx *gorm.DB, sessionID string, customerID uint, agentID uint) error {

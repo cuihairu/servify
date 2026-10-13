@@ -8525,6 +8525,10 @@
                 "id": {
                     "type": "integer"
                 },
+                "metadata": {
+                    "description": "Metadata 消息级扩展（JSON 文本列）：保留键 translations 存按语言键的\n历史译文缓存（跨页免重译，docs/realtime-translation-design.md §1.5）。",
+                    "type": "string"
+                },
                 "sender": {
                     "description": "user, ai, agent",
                     "type": "string"

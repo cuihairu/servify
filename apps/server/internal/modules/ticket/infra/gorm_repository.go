@@ -41,6 +41,47 @@ func ticketAgentIDWithLock(tx *gorm.DB, ctx context.Context, ticketID uint) (*ui
 	return row.AgentID, nil
 }
 
+// ticketAgentFromRaw 归一化 updates map / 库值里的 agent_id：nil 与 unassign
+// 哨兵 0 都归一为 nil（未指派），指针值原样返回。
+func ticketAgentFromRaw(v interface{}) *uint {
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case uint:
+		if x == 0 {
+			return nil
+		}
+		return &x
+	case *uint:
+		if x == nil || *x == 0 {
+			return nil
+		}
+		return x
+	default:
+		return nil
+	}
+}
+
+// syncAgentLoadDelta 按锁定库值算坐席负载增减：来源与目标不同则来源减 1
+// （不低于 0），目标非空则加 1。两个参数皆 nil 表示未改派，是无操作。
+func syncAgentLoadDelta(tx *gorm.DB, fromAgentID *uint, toAgentID *uint) error {
+	if fromAgentID != nil && (toAgentID == nil || *fromAgentID != *toAgentID) {
+		if err := tx.Exec(
+			`UPDATE agents SET current_load = CASE WHEN current_load > 0 THEN current_load - 1 ELSE 0 END WHERE user_id = ?`,
+			*fromAgentID,
+		).Error; err != nil {
+			return err
+		}
+	}
+	if toAgentID != nil && (fromAgentID == nil || *toAgentID != *fromAgentID) {
+		if err := tx.Model(&models.Agent{}).Where("user_id = ?", *toAgentID).
+			UpdateColumn("current_load", gorm.Expr("current_load + 1")).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *GormRepository) GetTicketByID(ctx context.Context, ticketID uint) (*domain.TicketDetails, error) {
 	ticket, err := r.LoadTicketModelByID(ctx, ticketID)
 	if err != nil {
@@ -297,6 +338,25 @@ func (r *GormRepository) UpdateTicketModelWithStatusAndCustomFields(
 	upserts []models.TicketCustomFieldValue,
 ) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 改派要同步坐席负载，且必须按事务内锁定的库内 agent_id 算增减——
+		// 调用方事务外预读的工单可能已被并发流转，按 stale 值各减会漂移
+		// current_load（AssignTicketModel 同一口径）。
+		var fromAgentID, toAgentID *uint
+		if raw, ok := updates["agent_id"]; ok {
+			target := ticketAgentFromRaw(raw)
+			if target == nil {
+				updates["agent_id"] = nil // unassign 哨兵 0 → NULL，与 UnassignTicketModel 一致
+			}
+			locked, err := ticketAgentIDWithLock(tx, ctx, ticketID)
+			if err != nil {
+				return err
+			}
+			if target == nil || locked == nil || *locked != *target {
+				fromAgentID = ticketAgentFromRaw(locked)
+				toAgentID = target
+			}
+		}
+
 		if len(updates) > 0 {
 			if err := applyTicketScope(tx.Model(&models.Ticket{}), ctx).Where("id = ?", ticketID).Updates(updates).Error; err != nil {
 				return err
@@ -335,7 +395,7 @@ func (r *GormRepository) UpdateTicketModelWithStatusAndCustomFields(
 				return err
 			}
 		}
-		return nil
+		return syncAgentLoadDelta(tx, fromAgentID, toAgentID)
 	})
 }
 

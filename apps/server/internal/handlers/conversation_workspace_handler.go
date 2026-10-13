@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -178,7 +177,7 @@ func (h *ConversationWorkspaceHandler) annotateHistory(ctx context.Context, sess
 		if item.Metadata["translation"] != "" {
 			continue
 		}
-		if cached := conversationapp.DecodeMessageTranslations(item.Metadata[conversationapp.MessageTranslationsKey])[targetLang]; cached != "" {
+		if cached := conversationdelivery.DecodeTranslationCache(item.Metadata[conversationdelivery.TranslationCacheKey])[targetLang]; cached != "" {
 			annotateTranslation(item, cached, targetLang)
 			continue
 		}

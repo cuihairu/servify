@@ -162,8 +162,11 @@ func (f *handlerNotifierStub) SendToSession(sessionID string, message Notificati
 type handlerConvStub struct {
 	session  *conversationdelivery.TransferSession
 	sessions map[string]*conversationdelivery.TransferSession
-	loadErr  error
-	loadHits int
+	// lockedAgent 锁行读到的库内 agent_id；非 nil 时优先于 session.AgentID，
+	// 用于模拟"预读与库内值不一致"的并发转派。
+	lockedAgent *uint
+	loadErr     error
+	loadHits    int
 
 	syncErr   error
 	syncCalls []string
@@ -183,6 +186,21 @@ func (f *handlerConvStub) LoadTransferSession(ctx context.Context, sessionID str
 		return s, nil
 	}
 	return f.session, nil
+}
+
+func (f *handlerConvStub) LockedTransferAgentID(ctx context.Context, tx *gorm.DB, sessionID string) (*uint, error) {
+	if f.lockedAgent != nil {
+		return f.lockedAgent, nil
+	}
+	if f.session != nil {
+		return f.session.AgentID, nil
+	}
+	if f.sessions != nil {
+		if item, ok := f.sessions[sessionID]; ok {
+			return item.AgentID, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 func (f *handlerConvStub) SyncTransferAssignment(ctx context.Context, tx *gorm.DB, sessionID string, customerID uint, agentID uint) error {
@@ -548,6 +566,58 @@ func TestHandlerTransferToAgentFlows(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "无法生成会话摘要", result.Summary)
 	})
+}
+
+// 转派负载竞态回归（todo「生产侧派单竞态收口遗留」第二刀）：会话 agent_id 是
+// 事务外预读，并发转派同一会话时两流都按同一 stale 值各减一次坐席负载。
+// 修复口径：事务内锁会话行取库内 agent_id 作为负载增减来源。
+func TestHandlerTransferLoadSyncUsesLockedAgentID(t *testing.T) {
+	ticketID := uint(77)
+	fx := newHandlerFixture(t, &conversationdelivery.TransferSession{
+		ID: "sess-1", CustomerID: 5, Status: "active", UserUsername: "alice", TicketID: &ticketID,
+	})
+	fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9, MaxConcurrent: 5, CurrentLoad: 1}
+	seedHandlerMessages(t, fx.db, "sess-1", 3)
+
+	// 预读时本会话未指派（AgentID=nil），锁行时库内已是 11：两流并发转派，
+	// 本流按锁定库值 11 减 1，不能按 stale 预读跳过。
+	locked := uint(11)
+	fx.conv.lockedAgent = &locked
+
+	result, err := fx.svc.TransferToHuman(context.Background(), &routingcontract.TransferRequest{
+		SessionID: "sess-1", Reason: "need_help", Notes: "vip", TargetSkills: []string{"billing"}, Priority: "high",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.Success)
+
+	require.Equal(t, 1, fx.load.calls)
+	require.NotNil(t, fx.load.from)
+	assert.Equal(t, uint(11), *fx.load.from)
+	assert.Equal(t, uint(9), fx.load.to)
+	assert.NotNil(t, fx.agents.appliedFrom)
+	assert.Equal(t, uint(11), *fx.agents.appliedFrom)
+}
+
+// 并发转派已把会话指给目标客服时（锁行库值与目标相同），不再增减负载——
+// 否则对同一坐席先减后加造成漂移。
+func TestHandlerTransferSkipsLoadSyncWhenLockedAgentIsTarget(t *testing.T) {
+	ticketID := uint(77)
+	fx := newHandlerFixture(t, &conversationdelivery.TransferSession{
+		ID: "sess-1", CustomerID: 5, Status: "active", UserUsername: "alice", TicketID: &ticketID,
+	})
+	fx.agents.findAgent = &agentdelivery.AgentInfo{UserID: 9, MaxConcurrent: 5, CurrentLoad: 1}
+	seedHandlerMessages(t, fx.db, "sess-1", 3)
+
+	locked := uint(9)
+	fx.conv.lockedAgent = &locked
+
+	_, err := fx.svc.TransferToHuman(context.Background(), &routingcontract.TransferRequest{
+		SessionID: "sess-1", Reason: "need_help", Notes: "vip", TargetSkills: []string{"billing"}, Priority: "high",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, fx.load.calls)
+	assert.Nil(t, fx.agents.appliedFrom)
 }
 
 func TestHandlerExecuteTransferFailures(t *testing.T) {

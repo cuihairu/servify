@@ -262,6 +262,13 @@ func (s *stubConversationRuntime) LoadTransferSession(ctx context.Context, sessi
 	return s.session, nil
 }
 
+func (s *stubConversationRuntime) LockedTransferAgentID(ctx context.Context, tx *gorm.DB, sessionID string) (*uint, error) {
+	if s.session == nil {
+		return nil, nil
+	}
+	return s.session.AgentID, nil
+}
+
 func (s *stubConversationRuntime) SyncTransferAssignment(ctx context.Context, tx *gorm.DB, sessionID string, customerID uint, agentID uint) error {
 	return nil
 }
