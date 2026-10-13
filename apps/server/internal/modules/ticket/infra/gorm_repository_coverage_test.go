@@ -796,10 +796,11 @@ func TestTicketCovUnassignTicket(t *testing.T) {
 func TestTicketCovUnassignTicketModelErrors(t *testing.T) {
 	ctx := ticketCovScopeCtx("t1", "w1")
 
-	// agent load update fails
+	// agent load update fails（库值驱动：工单须先带 agent，负载更新才触碰 agents 表）
 	db := newTicketCovTestDB(t)
 	repo := NewGormRepository(db)
 	seedTicketCovTicket(t, db, 10, "T", "t1", "w1")
+	require.NoError(t, db.Model(&models.Ticket{}).Where("id = ?", 10).Update("agent_id", 4).Error)
 	require.NoError(t, db.Migrator().DropTable("agents"))
 	err := repo.UnassignTicketModel(ctx, 10, 4, "assigned", "open", 1, "r")
 	require.Error(t, err)
@@ -864,10 +865,11 @@ func TestTicketCovCloseTicketErrors(t *testing.T) {
 	err := repo.CloseTicket(ctx, &domain.Ticket{ID: 10, Status: "closed", UpdatedAt: time.Now()}, "resolved", 1, "r")
 	require.Error(t, err)
 
-	// agent load update fails
+	// agent load update fails（库值驱动：工单须先带 agent，负载更新才触碰 agents 表）
 	db2 := newTicketCovTestDB(t)
 	repo2 := NewGormRepository(db2)
 	seedTicketCovTicket(t, db2, 10, "T", "t1", "w1")
+	require.NoError(t, db2.Model(&models.Ticket{}).Where("id = ?", 10).Update("agent_id", 4).Error)
 	require.NoError(t, db2.Migrator().DropTable("agents"))
 	agentID := uint(4)
 	err = repo2.CloseTicket(ctx, &domain.Ticket{ID: 10, CustomerID: 1, Status: "closed", AgentID: &agentID, UpdatedAt: time.Now()}, "resolved", 1, "r")

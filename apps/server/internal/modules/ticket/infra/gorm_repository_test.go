@@ -1,5 +1,5 @@
-//go:build integration && sqlite_integration
-// +build integration,sqlite_integration
+//go:build integration
+// +build integration
 
 package infra
 

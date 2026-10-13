@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/ticket/application"
@@ -20,6 +21,24 @@ type GormRepository struct {
 
 func NewGormRepository(db *gorm.DB) *GormRepository {
 	return &GormRepository{db: db}
+}
+
+// ticketAgentIDWithLock 事务内锁定工单行（postgres/mysql 加 FOR UPDATE 串行化
+// 并发派单；sqlite 无该语法，依赖单写者语义），返回库内 agent_id。
+// 派单/取消/关闭路径的负载增减一律以该库内值为准——调用方事务外的预读
+// 在并发下可能 stale，按它增减会漂移坐席 current_load。行不存在报 ErrRecordNotFound。
+func ticketAgentIDWithLock(tx *gorm.DB, ctx context.Context, ticketID uint) (*uint, error) {
+	q := applyTicketScope(tx.Model(&models.Ticket{}), ctx).Where("id = ?", ticketID)
+	if dialector := tx.Name(); dialector == "postgres" || dialector == "mysql" {
+		q = q.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	var row struct {
+		AgentID *uint `gorm:"column:agent_id"`
+	}
+	if err := q.Take(&row).Error; err != nil {
+		return nil, err
+	}
+	return row.AgentID, nil
 }
 
 func (r *GormRepository) GetTicketByID(ctx context.Context, ticketID uint) (*domain.TicketDetails, error) {
@@ -348,6 +367,12 @@ func (r *GormRepository) UnassignTicket(
 
 func (r *GormRepository) CloseTicket(ctx context.Context, ticket *domain.Ticket, fromStatus string, userID uint, reason string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 先锁工单行；ticket.AgentID 是事务外的预读，减 1 以库值为准。
+		currentAgentID, err := ticketAgentIDWithLock(tx, ctx, ticket.ID)
+		if err != nil {
+			return err
+		}
+
 		updates := map[string]interface{}{
 			"status":     ticket.Status,
 			"closed_at":  ticket.ClosedAt,
@@ -357,10 +382,10 @@ func (r *GormRepository) CloseTicket(ctx context.Context, ticket *domain.Ticket,
 			return err
 		}
 
-		if ticket.AgentID != nil {
+		if currentAgentID != nil {
 			if err := tx.Exec(
 				`UPDATE agents SET current_load = CASE WHEN current_load > 0 THEN current_load - 1 ELSE 0 END WHERE user_id = ?`,
-				*ticket.AgentID,
+				*currentAgentID,
 			).Error; err != nil {
 				return err
 			}
@@ -445,10 +470,16 @@ func (r *GormRepository) AssignTicketModel(
 	reason string,
 ) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if previousAgentID != nil {
+		// previousAgentID 是调用方事务外的预读，并发下可能 stale；减 1 一律
+		// 按锁定行内的库值执行，避免两流按同一 stale 值各减/漏减。
+		currentAgentID, err := ticketAgentIDWithLock(tx, ctx, ticketID)
+		if err != nil {
+			return err
+		}
+		if currentAgentID != nil && *currentAgentID != agentID {
 			if err := tx.Exec(
 				`UPDATE agents SET current_load = CASE WHEN current_load > 0 THEN current_load - 1 ELSE 0 END WHERE user_id = ?`,
-				*previousAgentID,
+				*currentAgentID,
 			).Error; err != nil {
 				return err
 			}
@@ -467,8 +498,10 @@ func (r *GormRepository) AssignTicketModel(
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-		if err := tx.Model(&models.Agent{}).Where("user_id = ?", agentID).UpdateColumn("current_load", gorm.Expr("current_load + 1")).Error; err != nil {
-			return err
+		if currentAgentID == nil || *currentAgentID != agentID {
+			if err := tx.Model(&models.Agent{}).Where("user_id = ?", agentID).UpdateColumn("current_load", gorm.Expr("current_load + 1")).Error; err != nil {
+				return err
+			}
 		}
 
 		change := models.TicketStatus{
@@ -492,11 +525,19 @@ func (r *GormRepository) UnassignTicketModel(
 	reason string,
 ) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(
-			`UPDATE agents SET current_load = CASE WHEN current_load > 0 THEN current_load - 1 ELSE 0 END WHERE user_id = ?`,
-			agentID,
-		).Error; err != nil {
+		// agentID 参数是调用方事务外的预读（可能与库值不一致）；减 1 按锁定
+		// 行内的库值执行——工单已被并发流转走时不再对 stale 坐席重复减 1。
+		currentAgentID, err := ticketAgentIDWithLock(tx, ctx, ticketID)
+		if err != nil {
 			return err
+		}
+		if currentAgentID != nil {
+			if err := tx.Exec(
+				`UPDATE agents SET current_load = CASE WHEN current_load > 0 THEN current_load - 1 ELSE 0 END WHERE user_id = ?`,
+				*currentAgentID,
+			).Error; err != nil {
+				return err
+			}
 		}
 
 		updates := map[string]interface{}{
