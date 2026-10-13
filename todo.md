@@ -8,7 +8,7 @@
 - [ ] CODECOV_TOKEN：用户侧 `gh secret set CODECOV_TOKEN -R cuihairu/servify` 后对 CI 手动 re-run 首传
 - [ ] 移动端语音消费：Android/iOS 语音上行与字幕渲染（按产品节奏）
 - [ ] Phase 3 语音：WebRTC 音轨下发、端到端语音评估、租户级配额限流（依赖 RA-7 SFU-lite）
-- [ ] 生产侧派单竞态：并发显式派单与自动派单都从 nil 读 agent_id，坐席负载计数漂移，需事务内先锁工单行再以库内值增减
+- [ ] 生产侧派单竞态收口遗留：通用 UpdateTicket 改派 agent_id 不调坐席负载（PUT 更新可改派，current_load 不增不减）；transfer 流负载增减以会话预读 fromAgentID 为准（会话行未锁，并发转派同会话可重复减 1）——两处与 ticket 行锁修复会双重计数，需单独设计
 - [ ] braces@3.0.3 与 sprintf-js@1.0.3 升级：npm 上游无修复版，等上游发版
 - [ ] 知识库选型决策：RAGFlow 立项口径、选择链优先级、新客户默认口径（待产品确认）
 - [ ] MetricsAggregator Snapshot 读取出口（待产品/运维口径）
@@ -86,6 +86,7 @@
 - [x] golangci-lint 基线归零与门落 CI（存量 214 处清零、.golangci.yml 钉 standard、config verify 口径守卫）— 存量 214 违例 → 0，make lint 0 issues，门坑清单入记
 - [x] 覆盖率门口径对齐（run-tests 默认目标 20% → 100%、聚合灰区基线补齐、本地口径与 CI 双向守卫）— TestCoverageGateTargetMatchesCIPin 绿，未覆盖语句归零
 - [x] ticket handler 测试与异步自动派单竞态修复（种子 agent 改 busy）— ca54704，20 连跑绿
+- [x] 生产侧派单竞态收口（assign/unassign/close 三路径事务内锁工单行，负载增减以库内 agent_id 为准；恢复被 lint 误删的 memdsn helper、双 tag 测试文件进标准门禁）— 92f867b，4 竞态回归测试红转绿，全量 4033 测试 0 失败，覆盖率 100.0%，lint 0 issues
 - [x] 流式错误文本泄露收口（provider 失败分支不再进 ContentDelta、转人工失败帧固定文案）— c222ee7，llm 四包 + ai + realtime 绿
 - [x] Web SDK 独立文档（8 节 API 与配置全表、data-* 19 项权威单一化、导航登记）— 0c4a1ee，docs build 绿
 - [x] 文档-代码一致性审计（三类分桶、逐条 file:line 取证、审计表落库）— 见 docs/审计-文档一致性.md
