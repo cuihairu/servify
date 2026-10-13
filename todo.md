@@ -12,7 +12,7 @@
 - [ ] braces@3.0.3 与 sprintf-js@1.0.3 升级：npm 上游无修复版，等上游发版
 - [ ] 知识库选型决策：RAGFlow 立项口径、选择链优先级、新客户默认口径（待产品确认）
 - [ ] MetricsAggregator Snapshot 读取出口（待产品/运维口径）
-- [ ] 远程协助 RA-8 SDK 半边
+- [x] 远程协助 RA-8 SDK 半边 — e2d6397：SDK 记录 offer 载荷与协商状态（`lastRemoteAssistOffer`/`remoteAssistState`），WS connected 且 PC 存活、offered/connecting 态时重发同一 offer（PC 跨重连保留、协商终态清引用防重复，服务端幂等应答+终态旧 PC 回收收口）；sdk.test.ts 新增 RA-8 五例（待答重发/answer 丢失重发/已连不重发/结束后不重发/无会话不重发）全绿，demo-sdk bundle 重跑入库 e31846d
 - [x] 会话消息译文持久化：Message 增 metadata 列（成本治理随 Phase 3 配额）— messages.metadata 列（000023，列级守卫钉住）+ 保留键 translations 按语言编解码（先到先得）+ 历史加载命中缓存免 LLM + 现译现写（失败静默）；响应键仍不落库。go test ./internal/... 全绿（含 -tags integration 4→7 项 infra 回归 + 6 子测试 handler 回归），go vet/gofmt 干净
 - [x] retriever 会话语义统一：非空 session_id 查询滤掉全局摄入文档（pgvector 同构既有语义）——口径已定：会话 id 不是知识命名空间 id，KnowledgeID 留空由 provider 落回默认命名空间（1f190df 收口，全 provider 同构验证：pgvector/local 按 workspace_id、dify/ragflow 按 datasetID、weknora 按 KnowledgeBaseID，透传会话 id 即恒空）；租户维度检索为正解。会话级检索需会话级摄入（未立项，随会话知识库刀）；残留：ai_runtime_local_test.go 旧注释曾把修复前行为当现状，已随本轮纠正
 - [ ] AI agent-loop 三工具接线：CustomerLookup / TicketLookup / Handoff 现传 nil Ports，调用即报 port is not configured（2026-10-11 拍板保持死路，等用户明令）

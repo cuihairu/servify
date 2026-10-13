@@ -1,6 +1,6 @@
 # 远程协助能力矩阵与缺口清单
 
-> 盘点时间：2026-09-25（2026-09-26 更新：RA-1..RA-4 修复与 RA-8 服务端半边已落地，判定同步刷新）。本文是远程协助功能的**当前真实状态源**，取代
+> 盘点时间：2026-09-25（2026-09-26 更新：RA-1..RA-4 修复与 RA-8 服务端半边已落地，判定同步刷新；2026-10-14 更新：RA-8 SDK 半边（WS 重连后重发 offer）已落地，WebRTC 恢复条目改为已实现）。本文是远程协助功能的**当前真实状态源**，取代
 > [remote-assistance-current-state.md](./remote-assistance-current-state.md)
 > （2026-04 旧盘点）作为事实基准；产品方向与 V1 定位见
 > [remote-assistance.md](./remote-assistance.md)、最小链路见
@@ -14,7 +14,7 @@
 
 - 协助**记录面**（发起/结束/列表/详情/标注/录制元数据）已实现并有真实运行验收；
 - 协助**实时面**两端骨架已备（访客 SDK 采集、管理端 video 占位、WS 信令帧、TURN 交付），但**服务端不做媒体桥接**，坐席实际收不到访客画面，屏幕共享端到端未打通；
-- **对方同意（consent）**最小可跑链路已实现（访客端点 + declined 终态 + 录制回写阻断）；**远程控制**未实现；**WebRTC 断线恢复**服务端半边已落地（重发 offer 前回收终态旧 PC），SDK 重协商未做；
+- **对方同意（consent）**最小可跑链路已实现（访客端点 + declined 终态 + 录制回写阻断）；**远程控制**未实现；**WebRTC 断线恢复**已落地（服务端重发 offer 前回收终态旧 PC + SDK 在 WS 重连后重发未完成的 offer）；
 - 租户/工作区隔离与单活跃约束已修复（RA-1/2，见"本轮修复记录"）；
 - 同一 sessionID 的两条服务端 PeerConnection 查找仍有歧义（RA-5，随 RA-7 定协议）。
 
@@ -64,7 +64,7 @@
 | WS 自动重连 | 已实现 | SDK 指数退避：默认 5 次、1s 起、2 倍、封顶 30s（`sdk/packages/core/src/contracts/reconnect.ts:8-13`），手动关闭不重连 |
 | 消息补拉 | 已实现 | 重连后 `reconcileMissedMessages` 按 lastMessageId 游标分页补拉去重（`sdk.ts:686 起`）；服务端 `ListAfter`（`router_realtime.go:35`） |
 | 协助记录恢复 | 已实现 | 协助会话/标注/录制元数据全落库，进程重启不丢（`infra/gorm_repository.go`） |
-| WebRTC 恢复 | 部分实现（服务端半边本轮修复） | 服务端 `HandleOffer` 前回收同 session 终态旧 PC（`webrtc_service.go` `closeTerminalConnections`，仅 disconnected/failed/closed，存活 PC 不动）；SDK 侧 WS 重连仍不触发 PC 重建/重协商（`sdk.ts:154` 仅透传事件）；hub unregister 不清理 rtc 连接（`websocket_hub.go:266-273`） |
+| WebRTC 恢复 | 已实现（RA-8 两端齐备，单测覆盖；双端真实链路验收随 RA-7 补） | 服务端 `HandleOffer` 前回收同 session 终态旧 PC（`webrtc_service.go` `closeTerminalConnections`，仅 disconnected/failed/closed，存活 PC 不动）；SDK 侧 WS `connected` 时若 PC 存活且 offer 尚未完成协商（offered/connecting 态）则重发同一 offer（`sdk.ts` `resendRemoteAssistOfferIfNeeded`，协商进入终态清引用防重复发送；PC 跨 WS 重连保留，媒体不依赖 WS）；残留：hub unregister 不清理 rtc 连接（`websocket_hub.go:266-273`），随 RA-5/RA-7 信令协议收口 |
 
 ### 6. 并发会话：部分实现
 
@@ -104,14 +104,14 @@
 | RA-5 | 同 session 双端 PC 查找歧义（信令帧无对端标识，需协议扩展） | P2 | 正确性/协议 | 设计登记，随 RA-7 一并定协议 |
 | RA-6 | 坐席端 ICE 硬编码（消费 webrtc-ice-config 下发） | P2 | 可用性 | 本轮修复（管理端） |
 | RA-7 | 屏幕共享媒体桥接（服务端 track 转发 SFU-lite，或信令改 peer 中继） | P2 | 实时面大件 | 设计登记，见下节 |
-| RA-8 | WebRTC 断线恢复（重连后重协商 + 服务端旧 PC 清理） | P3 | 实时面大件 | 服务端半边本轮修复（终态旧 PC 回收）；SDK 重协商待做 |
+| RA-8 | WebRTC 断线恢复（重连后重协商 + 服务端旧 PC 清理） | P3 | 实时面大件 | 已落地（服务端终态旧 PC 回收 + SDK 断线重发 offer） |
 | RA-9 | 远程控制（输入事件经 DataChannel 中继 + 访客端授权开关） | P3 | 实时面大件 | 设计登记 |
 | RA-10 | 邀请握手端到端（WS assist-invite 帧或修复 data-channel-message 消费） | P2 | 协议 | 随 RA-7 一并定 |
 
 ### RA-7/8/9/10 的实现方向（不在本轮）
 
 - **媒体桥接（RA-7）**：两条路线。A）服务端 SFU-lite，访客 PC 上 `OnTrack` 收 RTP，经 `webrtc.NewTrackLocalStaticRTP` 重建 track 挂到坐席 PC（pion 支持纯转发，无需编解码）；B）信令改 peer 中继，hub 把 offer/answer/candidate 在同 session 的客户端间转发，服务端退出媒体路径（与现有 voice 服务端终结模式冲突，需按用途分流）。路线 A 不动客户端、与 voice 共存，倾向 A。
-- **断线恢复（RA-8）**：~~服务端 `HandleOffer` 前先关同 session 旧 PC~~（已完成，见修复记录；只回收终态 PC，RA-5 歧义下的存活 PC 不动）；剩余：SDK 在 WS reconnecting 时保留 PC、connected 后重发 offer。
+- **断线恢复（RA-8）**：已完成（两端齐备）。服务端 `HandleOffer` 前先关同 session 终态旧 PC（只回收终态 PC，RA-5 歧义下的存活 PC 不动）；SDK 在 WS `connected` 后重发未完成的同一 offer——PC 跨 WS 重连保留（媒体不依赖 WS，丢的只是 `webrtc-offer` 信令帧），协商中途新造 offer 违反信令态机，故重发原 offer，服务端幂等应答。
 - **远程控制（RA-9）**：访客端开关（默认关）+ DataChannel JSON 事件（pointer/scroll/key）+ 访客端合成派发，consent 必须为 granted 才允许开启（与 RA-4 衔接）。
 - **邀请握手（RA-10）**：新增 WS 下行帧 `assist-invite {assist_id}`（复用 session 广播），访客 SDK 据此弹同意 UI，与 RA-4 的 consent 端点收口；帧契约需同步 `sdk/PROTOCOL.md` 与 fixtures。
 
@@ -126,7 +126,12 @@ RA-1..RA-4、RA-6 与 RA-8 服务端半边已按"服务端可测先行"落地（
 - **RA-8 服务端半边（终态旧 PC 回收）**：`WebRTCService.HandleOffer` 前先 `closeTerminalConnections(sessionID)`，回收同 session 处于 disconnected/failed/closed 的旧 PC（含 voice EndCall），再新建应答（`platform/realtime/webrtc_service.go`）。**刻意只回收终态**：访客与坐席双端各持一条存活 PC 的现状拓扑（RA-5 歧义）下，按 session 全量回收会误伤对端连接；存活 PC 留待 RA-7 信令协议加对端标识后收口。
 - **RA-6 坐席端 ICE 消费下发**：管理端建 PC 前按"服务端下发优先"解析 ICE（`apps/admin/src/pages/Conversation/index.tsx` `resolveRemoteAssistIceServers`）：WS `webrtc-ice-config` 推送缓存 → REST `GET /api/v1/rtc/ice-servers` 回退 → 公网 STUN 最后兜底，与访客 SDK 同口径。TURN 凭据短时有效，缓存跨尝试复用、过期由下次 REST 回退自然刷新。
 - 测试：application 层 `RespondConsent` 全分支（归属/幂等/冲突/落库）、`StartSession` 单活跃与 scope 注入；infra 层跨租户隔离、标注守卫、consent 生命周期；handlers 层 consent 端点与 409 映射；realtime 层 re-offer 回收（存活存活/终态回收/voice EndCall、nil voice、close 报错仍移除、他 session 不波及），包覆盖率维持 100%。
-- 尚未接线（登记）：坐席发起后通知访客弹同意 UI 依赖 RA-10 邀请帧；RA-8 剩余的 SDK 重协商半边（WS reconnecting 保 PC、connected 后重发 offer）；declined 会话的 WS/RTC 侧清理依赖 RA-7/8 协议工作。
+- 尚未接线（登记）：坐席发起后通知访客弹同意 UI 依赖 RA-10 邀请帧；declined 会话的 WS/RTC 侧清理依赖 RA-5/RA-7 信令协议（会话终态的对端清理需明确对端标识）。
+
+## RA-8 SDK 半边收口（2026-10-14）
+
+- **WS 重连后重发未完成的 offer**：SDK 在 `startRemoteAssist` 记录本次 offer 载荷与协商状态（`sdk/packages/core/src/sdk.ts` `lastRemoteAssistOffer`/`remoteAssistState`）；WS `connected` 事件上若 PC 存活、offer 尚未完成协商（`offered`/`connecting` 态）且连接可用，重发**同一** offer（`resendRemoteAssistOfferIfNeeded`）。理由：RTCPeerConnection 跨 WS 重连存活（媒体不依赖 WS，只有 `webrtc-offer` 帧会丢），协商中途新造 offer 违反信令态机；服务端 `HandleOffer` 幂等应答且先回收终态旧 PC，重复 offer 无副作用。协商进入 `connected`/`ended`/`failed` 即清 offer 引用，连接成功后不会重复发送。
+- 测试：`sdk/packages/core/src/sdk.test.ts` 新增 RA-8 describe 五例（等待应答期间重连重发 / answer 中途丢失重发 / 已连接不重发 / `endRemoteAssist` 后不重发 / 无活跃会话不重发）；`apps/demo-sdk` 两个 bundle 随 SDK 构建重跑入库。
 
 ## 与验收证据的关系
 
