@@ -257,13 +257,7 @@ JWT_SECRET=<…> docker compose -f docker-compose.yml -f docker-compose.weknora.
 
 ### 7.4 `data-*` 自动初始化全表
 
-`<script src="…/widget.js" data-servify-widget …>`（JSON 类属性值为 JSON 字符串）：
-
-`data-base-url` `data-session-id` `data-access-token` `data-icon` `data-icon-image`
-`data-icon-url` `data-color`（`data-primary-color` 别名） `data-border-radius`
-`data-position` `data-size` `data-theme` `data-theme-light` `data-theme-dark`
-`data-theme-tokens` `data-theme-from-color` `data-theme-url`
-`data-brand-name` `data-brand-logo` `data-brand-welcome`
+`<script src="…/widget.js" data-servify-widget …>` 的 `data-*` 配置全表（19 项，JSON 类属性值为 JSON 字符串）见 [Web SDK 文档](./web-sdk.md#_4-widget-data-配置全表)，该处为唯一权威。
 
 ### 7.5 两风格示例
 

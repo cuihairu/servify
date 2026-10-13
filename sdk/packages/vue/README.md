@@ -1,5 +1,8 @@
 # @servify/vue
 
+完整文档 → [docs/web-sdk.md](../../docs/web-sdk.md)
+
+
 Vue surface for the Servify Web SDK.
 
 ## Usage

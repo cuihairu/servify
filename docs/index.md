@@ -80,6 +80,7 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 
 ### 嵌入与接入
 
+- [Web SDK](/web-sdk)（core / react / vue / vanilla API 与配置全表）
 - [Web 嵌入集成指南](/embedding-guide)（网站客服组件、会话互认、工单上下文、事件回调、主题全表）
 - [移动端 SDK 接入](/mobile-sdk-integration)
 - [语音实时翻译](/realtime-translation-design)

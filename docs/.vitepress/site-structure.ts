@@ -35,6 +35,7 @@ const startPages = [
 ];
 
 const integratePages = [
+  '/web-sdk',
   '/embedding-guide',
   '/mobile-sdk-integration',
   '/realtime-translation-design',
@@ -114,6 +115,7 @@ const archivePages = [
 export const docsNav = [
   { text: '首页', link: '/' },
   { text: '产品', link: '/v1-product-scope' },
+  { text: 'Web SDK', link: '/web-sdk' },
   { text: 'Web 嵌入', link: '/embedding-guide' },
   { text: '坐席工作台', link: '/agent-workspace' },
   { text: '部署', link: '/deployment' },
