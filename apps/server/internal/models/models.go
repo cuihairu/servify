@@ -258,15 +258,18 @@ type Session struct {
 
 // 消息模型（更新）
 type Message struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	TenantID    string    `gorm:"index:idx_messages_scope" json:"tenant_id"`
-	WorkspaceID string    `gorm:"index:idx_messages_scope" json:"workspace_id"`
-	SessionID   string    `gorm:"index" json:"session_id"`
-	UserID      uint      `gorm:"index" json:"user_id"`
-	Content     string    `gorm:"type:text" json:"content"`
-	Type        string    `json:"type"`   // text, image, file, system
-	Sender      string    `json:"sender"` // user, ai, agent
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	TenantID    string `gorm:"index:idx_messages_scope" json:"tenant_id"`
+	WorkspaceID string `gorm:"index:idx_messages_scope" json:"workspace_id"`
+	SessionID   string `gorm:"index" json:"session_id"`
+	UserID      uint   `gorm:"index" json:"user_id"`
+	Content     string `gorm:"type:text" json:"content"`
+	Type        string `json:"type"`   // text, image, file, system
+	Sender      string `json:"sender"` // user, ai, agent
+	// Metadata 消息级扩展（JSON 文本列）：保留键 translations 存按语言键的
+	// 历史译文缓存（跨页免重译，docs/realtime-translation-design.md §1.5）。
+	Metadata  string    `gorm:"type:text" json:"metadata"`
+	CreatedAt time.Time `json:"created_at"`
 
 	Session Session `gorm:"foreignKey:SessionID" json:"session,omitempty"`
 	User    User    `gorm:"foreignKey:UserID" json:"user,omitempty"`

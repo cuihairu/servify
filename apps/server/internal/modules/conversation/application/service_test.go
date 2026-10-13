@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -12,10 +13,11 @@ import (
 )
 
 type stubConversationRepo struct {
-	conversations map[string]*domain.Conversation
-	messages      map[string][]domain.ConversationMessage
-	sessions      []domain.Conversation
-	err           error
+	conversations     map[string]*domain.Conversation
+	messages          map[string][]domain.ConversationMessage
+	sessions          []domain.Conversation
+	savedTranslations []MessageTranslationEntry
+	err               error
 }
 
 func (s *stubConversationRepo) CreateConversation(ctx context.Context, conversation *domain.Conversation) error {
@@ -116,6 +118,11 @@ func (s *stubConversationRepo) MarkVisitorRead(ctx context.Context, conversation
 
 func (s *stubConversationRepo) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {
 	return 0, "0", s.err
+}
+
+func (s *stubConversationRepo) SaveMessageTranslations(ctx context.Context, entries []MessageTranslationEntry) error {
+	s.savedTranslations = append(s.savedTranslations, entries...)
+	return s.err
 }
 
 type stubConversationPublisher struct {
@@ -252,6 +259,35 @@ func TestServiceListRecentMessages(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].ID != "1" {
 		t.Fatalf("unexpected messages: %+v", got)
+	}
+}
+
+// TestServiceSaveTranslations 锚定历史译文持久化的服务面透传语义：
+// 空批不触仓储，非空批整组透传，仓储错误原样上抛（由调用方静默兜底）。
+func TestServiceSaveTranslations(t *testing.T) {
+	repo := &stubConversationRepo{}
+	svc := NewService(repo, nil)
+
+	if err := svc.SaveTranslations(context.Background(), nil); err != nil {
+		t.Fatalf("empty batch must be a no-op, got %v", err)
+	}
+	if len(repo.savedTranslations) != 0 {
+		t.Fatalf("empty batch must not touch the repo, got %+v", repo.savedTranslations)
+	}
+
+	entries := []MessageTranslationEntry{
+		{ConversationID: "conv-1", MessageID: "1", Lang: "en", Text: "hello"},
+		{ConversationID: "conv-1", MessageID: "2", Lang: "en", Text: "world"},
+	}
+	if err := svc.SaveTranslations(context.Background(), entries); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(repo.savedTranslations) != 2 || repo.savedTranslations[1].Text != "world" {
+		t.Fatalf("entries must pass through unchanged, got %+v", repo.savedTranslations)
+	}
+
+	if err := NewService(&stubConversationRepo{err: errors.New("repo boom")}, nil).SaveTranslations(context.Background(), entries); err == nil {
+		t.Fatal("repo error must propagate")
 	}
 }
 

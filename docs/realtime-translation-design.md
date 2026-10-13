@@ -183,23 +183,31 @@ agent 读向偏好时，把页内**访客侧**（sender ≠ agent）未带译文
 ```
 ListMessages 加载 + 时间序整理
   └─ annotateHistory（同步，响应前）
+       ├─ HistoryTranslateService.TargetLang（agent 读向）：无偏好 → 静默原样返回
        ├─ 过滤：sender == agent / 空内容 / 已带 translation 键 → 跳过
-       ├─ HistoryTranslateService（agent 读向）：无偏好 → 静默原样返回
-       ├─ application.BatchTranslate：多段合并单次 LLM 调用
-       │    （编号分段协议 <<<SEG n>>>，标记序列必须恰好 1..N，
-       │      失配/注入扰动 → 自动退回逐条 Translate，fail fast 上抛）
-       └─ 译文只写响应 DTO，不回写存储；任何失败静默（历史加载不受影响）
+       ├─ 按语言键查 messages.metadata 的 translations 缓存 → 命中即盖章
+       │    响应键、不触 LLM（重翻页免重译）
+       ├─ 未命中段合并一次批量翻译：application.BatchTranslate 多段合并单次
+       │    LLM 调用（编号分段协议 <<<SEG n>>>，标记序列必须恰好 1..N，
+       │    失配/注入扰动 → 自动退回逐条 Translate，fail fast 上抛）
+       └─ 译文写响应 DTO 并按语言键持久化；任何失败静默（历史加载不受影响）
 ```
 
 口径要点：
 
-- **只写响应不落库**：偏好随时可改，译文落库会造成语言陈旧与回滚困难；
-  代价是每次翻页都重新翻译（成本治理见 §3.2 Phase 3 配额）。
+- **按语言键落库**：会话消息存储有 `metadata` 列（JSON 文本，迁移
+  `000023`），保留键 `translations` 存「语言 → 译文」表；批量译文按
+  读向语言键写入。**偏好随时可改不构成语言陈旧**——每个语言键写入即
+  不可变（源内容发后不可改），切语言只是查不到对应键、现译现写，旧键
+  不动，无需回滚。代价是每新增一个语言读一遍全量历史（成本治理见
+  §3.2 Phase 3 配额）。
+- **响应键仍不落库**：§4.4 的 `translation`/`translation_lang` 只写响应
+  DTO——访客补拉不应携带坐席读向的译文，语言读向由服务端按认证主体推导。
+  持久化的只是按语言键的中性缓存表，不编码读向归属。
+- **持久化失败静默**：译文持久化是增强能力，存储失败不影响本次响应
+  标注；下次翻页未命中会再译再写（幂等，同语言键先到先得）。
 - **批量退路保底**：分段协议失配（模型漏段/乱序/空段/正文注入段标记）时
   整批退回逐条 `Translate`，行为不差于单条链路；provider 错误 fail fast。
-- **已知边界**：会话消息存储（`models.Message`）暂无 metadata 列——访客
-  补拉 DTO 的 metadata 字段走另一条装配路径，工作台历史标注为响应级、
-  不持久化；存储列与跨页缓存留后续刀。
 - **段数上限**：单批 ≤ `MaxBatchTexts`（20），超限返回哨兵错误
   `ErrTranslationBatchTooLarge`；历史分页 ≤ 200 由调用方分批。
 
@@ -215,7 +223,7 @@ core SDK（访客侧，实时）
 
 管理端工作台（坐席侧，实时 + 历史）
   └─ 顶部语言下拉 → GET/PUT/DELETE 偏好端点（管理端主体落 agent 读向）
-       └─ 切语言后重拉历史（译文只写响应不落库，必须重拉才生效）
+       └─ 切语言后重拉历史（响应键按请求读向现算，必须重拉才生效）
   └─ 访客消息按 metadata.translation 并排展示译文 + translation_lang 标签
        └─ 无译文键 → 只显示原文（翻译是增强，不是替代）
 ```
@@ -292,8 +300,11 @@ core SDK（访客侧，实时）
 ## 4. 隐私与安全
 
 1. **数据最小化**：语音 pipeline 只保留 final 文本与译文（partial 即弃）；
-   译文/原文默认不落库（字幕是会态数据）；聊天翻译无服务端存储（Phase 0
-   已实现为无状态）。录音/回放仅当用户显式同意（对齐远程协助 RA-4 consent）。
+   译文/原文默认不落库（字幕是会态数据）。聊天翻译：实时帧链路仍无状态；
+   工作台历史标注会把译文按语言键写入 `messages.metadata`（保留键
+   `translations`，§1.5），即**访客原文的译文会随历史持久化**——租户
+   数据本就存在自有库内（与原文同表），但保留键表可在租户侧清理策略中
+   单独回收。录音/回放仅当用户显式同意（对齐远程协助 RA-4 consent）。
 2. **传输**：全链路 TLS（客户端→服务端已有）；ASR/TTS 出站仅经服务端，
    密钥不落客户端；provider 域名与 key 走 `ai.*` 既有配置面与租户覆盖。
 3. **提示注入**：待译文本视为数据不视为指令——system 明确"只输出译文"；
@@ -330,7 +341,8 @@ core SDK（访客侧，实时）
 | **Phase 1 刀一（已落地）** | 会话语言偏好存储 + 管理面 REST 面（`translation/infra` GORM 仓储、pg 迁移 000015、`GET/PUT/DELETE /api/v1/translation/preferences/:session_id`）；见 §1.3 | 无新增依赖 |
 | **Phase 1 刀二（服务端半边已落地）** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
 | **Phase 1 刀三（已落地）** | 偏好表 viewer 角色维度（迁移 000016，`(session_id, viewer_role)` 复合唯一）+ 双面单一注册点（end_user 经会话绑定校验读写 visitor 读向）+ 坐席 → 访客方向自动翻译（`SendMessage` 发送口异步旁路） | 刀二 |
-| **Phase 1 收尾（已落地）** | 历史消息批量子段翻译：工作台历史分页按 agent 读向批量翻译访客消息，译文以 §4.4 metadata 保留键附在响应 DTO（不落库）；见 §1.5 | 刀三 |
+| **Phase 1 收尾（已落地）** | 历史消息批量子段翻译：工作台历史分页按 agent 读向批量翻译访客消息，译文以 §4.4 metadata 保留键附在响应 DTO（响应键不落库）；见 §1.5 | 刀三 |
+| **Phase 1 跨页缓存（已落地）** | 历史译文持久化：`messages.metadata` JSON 列（pg 迁移 000023），保留键 `translations` 按语言键缓存批量译文——重翻页命中即免 LLM，未命中现译现写；§4.4 响应键仍只写响应（访客补拉不携带坐席读向译文）；见 §1.5 | 收尾（已就绪） |
 | **Phase 1 消费半边（已落地）** | core SDK 消费 `message-translated` 帧（`WSMessage` 联合成员 + 同名事件 + `MessageTranslation` 载荷，见 §4.5）；管理端工作台消费历史 metadata 译文并提供坐席读向语言下拉（读写偏好端点）——见 §1.6 | 刀二/刀三/收尾的服务端面（均已就绪） |
 | **Phase 2 刀一（已落地）** | ASR/TTS provider 抽象与配置面：`platform/asr`（流式会话 + 事件通道契约，VAD/partial/final 事件种种类对齐 §2.2 分句策略）+ `platform/tts`（逐句整段合成契约）+ 各自 mock 与 factory（llm 同款收口：唯一构造入口、mock 不进 switch）+ `ai.asr.*`/`ai.tts.*` 配置面（provider 空 = 未启用，装配层跳过接线） | 无新增依赖（契约 + mock 零网络） |
 | **Phase 2 刀二 provider 面（已落地）** | OpenAI 兼容口优先（§3.1）：`platform/asr/openai`（实时转写 WS 协议 `/v1/realtime?intent=transcription`：服务端 VAD 尾点静音 500ms 对齐 §2.2、pcm16 24kHz 单声道、协议事件 → 契约事件映射、server error/读断 → `EventError` 会话破损）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 供 §3.2 预算熔断识别）；两者 `base_url` 可指向兼容网关（ws URL 由 https→wss 推导），进入 factory switch（`ai.asr.provider=openai`）。语音管线（final → 分句翻译 → 字幕帧 → TTS 消费）是刀二b | 无新增依赖（gorilla/websocket 已在依赖树） |

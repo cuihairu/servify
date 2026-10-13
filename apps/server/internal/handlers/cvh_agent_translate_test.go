@@ -71,8 +71,13 @@ type historyTranslatorStub struct {
 	gotSession string
 	gotTexts   []string
 	texts      []string
-	lang       string
+	lang       string // 批量结果盖章语言（"" 表示无偏好：TargetLang 返回空串）
+	targetErr  error
 	err        error
+}
+
+func (h *historyTranslatorStub) TargetLang(_ context.Context, _ string) (string, error) {
+	return h.lang, h.targetErr
 }
 
 func (h *historyTranslatorStub) TranslateHistory(_ context.Context, sessionID string, texts []string) (*translationdelivery.HistoryTranslation, error) {
@@ -152,7 +157,7 @@ func TestListMessagesHistoryAnnotation(t *testing.T) {
 	})
 
 	t.Run("translation failure leaves response untouched", func(t *testing.T) {
-		history := &historyTranslatorStub{err: translationdelivery.ErrTranslationUnavailable}
+		history := &historyTranslatorStub{lang: "en", err: translationdelivery.ErrTranslationUnavailable}
 		handler := NewConversationWorkspaceHandler(conversationdelivery.NewHandlerService(seedConversation(t, newConversationWorkspaceTestDB(t))), nil, nil).
 			WithHistoryTranslator(history)
 		for _, item := range listMessages(t, handler) {

@@ -65,15 +65,17 @@ type Dependencies struct {
 	// 为 nil = 路由不注册）。
 	VoiceTranslationRuntime translationdelivery.VoiceStreamStarter
 	// VoiceHub 语音通道 hub（与 VoiceTranslationRuntime 同装配期实例）。
-	VoiceHub                 *realtimeplatform.VoiceHub
-	RealtimeGateway          realtimeplatform.RealtimeGateway
-	RTCGateway               realtimeplatform.RTCGateway
-	RTCIceSource             realtimeplatform.ICEConfigSource
-	MessageRouter            realtimeplatform.MessageRouterRuntime
-	VoiceCoordinator         *voicedelivery.Coordinator
-	VoiceProtocolRegistry    *voiceprotocol.Registry
-	CustomerHandlerService   customerdelivery.HandlerService
-	ConversationHandler      conversationdelivery.HandlerService
+	VoiceHub               *realtimeplatform.VoiceHub
+	RealtimeGateway        realtimeplatform.RealtimeGateway
+	RTCGateway             realtimeplatform.RTCGateway
+	RTCIceSource           realtimeplatform.ICEConfigSource
+	MessageRouter          realtimeplatform.MessageRouterRuntime
+	VoiceCoordinator       *voicedelivery.Coordinator
+	VoiceProtocolRegistry  *voiceprotocol.Registry
+	CustomerHandlerService customerdelivery.HandlerService
+	ConversationHandler    conversationdelivery.HandlerService
+	// TranslationStore 历史译文持久化（跨页缓存刀，同 runtime 同名字段）。
+	TranslationStore         conversationdelivery.TranslationPersistence
 	AgentHandlerService      agentdelivery.HandlerService
 	AgentGroupService        agentdelivery.AgentGroupService
 	TicketHandlerService     ticketdelivery.HandlerService

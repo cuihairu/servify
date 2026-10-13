@@ -67,6 +67,10 @@ func (s *stubConversationRepo) AppendMessage(ctx context.Context, message *conve
 	return nil
 }
 
+func (s *stubConversationRepo) SaveMessageTranslations(ctx context.Context, entries []conversationapp.MessageTranslationEntry) error {
+	return nil
+}
+
 func (s *stubConversationRepo) ListRecentMessages(ctx context.Context, conversationID string, limit int) ([]conversationdomain.ConversationMessage, error) {
 	items := s.messages[conversationID]
 	if len(items) > limit {

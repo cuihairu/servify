@@ -23,10 +23,16 @@ type scriptedConversationRepo struct {
 	appendErr     error
 	listErr       error
 	listBeforeErr error
+
+	saveTranslationsErr error
 }
 
 func (s *scriptedConversationRepo) ListSessions(ctx context.Context, query conversationapp.OpenSessionListQuery) ([]conversationdomain.Conversation, int64, error) {
 	return nil, 0, nil
+}
+
+func (s *scriptedConversationRepo) SaveMessageTranslations(ctx context.Context, entries []conversationapp.MessageTranslationEntry) error {
+	return s.saveTranslationsErr
 }
 
 func (s *scriptedConversationRepo) MarkVisitorRead(ctx context.Context, conversationID, messageID string) error {

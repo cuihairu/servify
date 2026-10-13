@@ -22,7 +22,7 @@ Servify 的恢复口径按部署形态分两轨：
 注释即该教义），失败迁移不走反向 SQL，而是把数据库恢复到迁移前
 的备份点。该口径的 postgres 可执行证据在 CI Integration job 的
 "Backup & restore drill (pg_dump/pg_restore)" 步骤：DROP 整库 →
-重建 → `pg_restore` → 迁移链头部版本的水位（当前 `22|f`；CI 动态
+重建 → `pg_restore` → 迁移链头部版本的水位（当前 `23|f`；CI 动态
 对账链头，不硬编码）随备份回来。
 
 ## 备份对象与清单格式
@@ -138,6 +138,6 @@ schema，服务启动会按迁移 Runner 正常补跑其后的版本——这同
 - **postgres 演练**：CI Integration job（pgvector/pgvector:pg15）
   播种 → `pg_dump -Fc` → 删光 users → `DROP DATABASE WITH (FORCE)`
   → 重建 → `pg_restore` → 校验 `schema_migrations` 等于迁移链头部
-  版本（当前 `22|f`，CI 动态取链头对账、不硬编码）与行数
+  版本（当前 `23|f`，CI 动态取链头对账、不硬编码）与行数
   回到备份时刻。
 - 两轨任一失败 CI 即红：恢复链路不是文档承诺，是门禁约束。

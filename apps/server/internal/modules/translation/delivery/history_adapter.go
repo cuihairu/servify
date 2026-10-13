@@ -18,9 +18,12 @@ type HistoryTranslation struct {
 }
 
 // HistoryTranslateService 历史消息批量翻译契约：把工作台一页历史里的待译
-// 文本批量译成该会话绑定读向的偏好语言。会话无偏好返回 (nil, nil)（静默
-// 跳过）；provider 未配置返回 ErrTranslationUnavailable。
+// 文本批量译成该会话绑定读向的偏好语言。TranslateHistory：会话无偏好
+// 返回 (nil, nil)（静默跳过）；provider 未配置返回 ErrTranslationUnavailable。
 type HistoryTranslateService interface {
+	// TargetLang 返回该会话绑定读向的偏好语言（无偏好为空串，静默跳过）：
+	// 调用方先按语言键查持久化译文缓存，命中即免 LLM 调用。
+	TargetLang(ctx context.Context, sessionID string) (string, error)
 	TranslateHistory(ctx context.Context, sessionID string, texts []string) (*HistoryTranslation, error)
 }
 
@@ -36,6 +39,14 @@ type historyTranslateServiceAdapter struct {
 // 的偏好读向；工作台历史面用 agent 读向）。
 func NewHistoryTranslateService(translator TranslateInvoker, prefs SessionPreferenceReader, viewer string) HistoryTranslateService {
 	return &historyTranslateServiceAdapter{translator: translator, prefs: prefs, viewer: viewer}
+}
+
+// TargetLang 见 HistoryTranslateService 契约：只读偏好，不触翻译门面。
+func (a *historyTranslateServiceAdapter) TargetLang(ctx context.Context, sessionID string) (string, error) {
+	if a == nil || a.prefs == nil {
+		return "", ErrTranslationUnavailable
+	}
+	return a.prefs.GetSessionLanguage(ctx, sessionID, a.viewer)
 }
 
 // TranslateHistory 见 HistoryTranslateService 契约。

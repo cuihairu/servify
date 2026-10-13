@@ -26,6 +26,8 @@ type scriptedRepo struct {
 	markReadErr    error
 	unreadCountErr error
 
+	saveTranslationsErr error
+
 	listAfterLimit  int
 	listAfterCursor string
 
@@ -113,6 +115,10 @@ func (s *scriptedRepo) ListMessagesBefore(ctx context.Context, conversationID st
 
 func (s *scriptedRepo) MarkVisitorRead(ctx context.Context, conversationID, messageID string) error {
 	return s.markReadErr
+}
+
+func (s *scriptedRepo) SaveMessageTranslations(ctx context.Context, entries []MessageTranslationEntry) error {
+	return s.saveTranslationsErr
 }
 
 func (s *scriptedRepo) VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error) {

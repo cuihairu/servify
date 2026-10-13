@@ -157,6 +157,16 @@ func (s *Service) ListMessagesAfter(ctx context.Context, conversationID string, 
 	return out, nil
 }
 
+// SaveTranslations 持久化历史标注译文（跨页缓存按语言键写入
+// messages.metadata，保留键契约见 message_translations.go）：透传仓储，
+// 存储失败上抛由调用方静默兜底——翻译是增强能力，不得影响历史加载。
+func (s *Service) SaveTranslations(ctx context.Context, entries []MessageTranslationEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	return s.repo.SaveMessageTranslations(ctx, entries)
+}
+
 // MarkVisitorRead 推进访客已读游标（§10 #3）：透传仓储游标语义（消息必须
 // 存在于该会话、游标只前进），入参守卫与本文件其他访客面方法一致。
 func (s *Service) MarkVisitorRead(ctx context.Context, conversationID string, messageID string) error {

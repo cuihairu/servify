@@ -180,6 +180,10 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 		AttachBusinessMetrics(rt.BusinessMetrics).
 		AttachOpenTicketChecker(ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB)))
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
+	// 跨页缓存刀：conversation app service 结构化满足译文持久化窄契约
+	// （同 aiAssembly.Translation 满足 TranslateInvoker 的零适配口径），
+	// 工作台历史标注把批量译文按语言键写入 messages.metadata。
+	rt.TranslationStore = conversationService
 	historyAdapter := conversationdelivery.NewWebSocketMessageAdapter(conversationService)
 	wsHub.SetConversationMessageWriter(historyAdapter)
 	// 开放平台：X-API-Key 只读会话面复用同一 conversation service。

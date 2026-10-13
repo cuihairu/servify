@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -375,6 +376,7 @@ func mapMessage(model models.Message) domain.ConversationMessage {
 		Sender:         mapMessageSender(model.Sender),
 		Kind:           mapMessageKind(model.Type),
 		Content:        model.Content,
+		Metadata:       decodeMessageMetadata(model.Metadata),
 		CreatedAt:      model.CreatedAt,
 	}
 }
@@ -385,12 +387,71 @@ func mapMessageModel(message domain.ConversationMessage) models.Message {
 		Content:   message.Content,
 		Type:      mapMessageKindToModel(message.Kind),
 		Sender:    mapParticipantRoleToSender(message.Sender),
+		Metadata:  encodeMessageMetadata(message.Metadata),
 		CreatedAt: message.CreatedAt,
 	}
 	if userID := resolveMessageUserID(message); userID != 0 {
 		model.UserID = userID
 	}
 	return model
+}
+
+// decodeMessageMetadata 解析 messages.metadata JSON 文本列为字符串键值；
+// 空串/坏 JSON 一律视为无 metadata（增强能力，静默降级）。译文缓存保留键
+// 的读改写走 application.MergeMessageTranslations，本函数只负责列到
+// 领域映射的通用往返。
+func decodeMessageMetadata(raw string) map[string]string {
+	if raw == "" {
+		return nil
+	}
+	decoded := map[string]string{}
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return nil
+	}
+	return decoded
+}
+
+// encodeMessageMetadata 序列化字符串键值到 messages.metadata 列；空表
+// 落空串（不写 "{}"，列保持「无扩展」的朴素形态）。
+func encodeMessageMetadata(meta map[string]string) string {
+	if len(meta) == 0 {
+		return ""
+	}
+	encoded, err := json.Marshal(meta)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
+}
+
+// SaveMessageTranslations 逐条持久化历史译文到消息 metadata（保留键
+// 契约见 application/message_translations.go）：同语言键已存在保留旧值；
+// 非数字消息 ID、空语言、空译文契约性跳过；跨会话/已删除消息静默跳过
+// （历史加载主链路不受影响）；DB 错误上抛。
+func (r *GormRepository) SaveMessageTranslations(ctx context.Context, entries []conversationapp.MessageTranslationEntry) error {
+	for _, entry := range entries {
+		id, err := strconv.ParseUint(strings.TrimSpace(entry.MessageID), 10, 64)
+		if err != nil || id == 0 || strings.TrimSpace(entry.Lang) == "" || strings.TrimSpace(entry.Text) == "" {
+			continue
+		}
+		lang, text := strings.TrimSpace(entry.Lang), entry.Text
+		q := applyConversationScope(r.db.WithContext(ctx).Model(&models.Message{}), ctx).
+			Where("id = ? AND session_id = ?", id, entry.ConversationID)
+		var model models.Message
+		if err := q.Take(&model).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			return err
+		}
+		merged := conversationapp.MergeMessageTranslations(decodeMessageMetadata(model.Metadata), lang, text)
+		if err := applyConversationScope(r.db.WithContext(ctx).Model(&models.Message{}), ctx).
+			Where("id = ? AND session_id = ?", id, entry.ConversationID).
+			UpdateColumn("metadata", encodeMessageMetadata(merged)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func mapSessionStatusToConversationStatus(status string) domain.ConversationStatus {

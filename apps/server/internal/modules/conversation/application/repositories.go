@@ -6,6 +6,15 @@ import (
 	"servify/apps/server/internal/modules/conversation/domain"
 )
 
+// MessageTranslationEntry 单条历史译文持久化入参（跨页缓存按语言键写入
+// messages.metadata，见 message_translations.go 保留键契约）。
+type MessageTranslationEntry struct {
+	ConversationID string
+	MessageID      string
+	Lang           string
+	Text           string
+}
+
 type ConversationRepository interface {
 	CreateConversation(ctx context.Context, conversation *domain.Conversation) error
 	GetConversation(ctx context.Context, conversationID string) (*domain.Conversation, error)
@@ -25,6 +34,10 @@ type ConversationRepository interface {
 	VisitorUnreadCount(ctx context.Context, conversationID string) (int64, string, error)
 	// ListSessions 开放 API 只读分页查询（沿用请求作用域的租户/工作区过滤）。
 	ListSessions(ctx context.Context, query OpenSessionListQuery) ([]domain.Conversation, int64, error)
+	// SaveMessageTranslations 逐条写入消息 metadata 的按语言译文缓存
+	// （历史标注的持久化面，保留键契约见 message_translations.go）：
+	// 跨会话/已删除消息静默跳过，DB 错误上抛。
+	SaveMessageTranslations(ctx context.Context, entries []MessageTranslationEntry) error
 }
 
 // OpenSessionListQuery 开放 API 会话列表查询参数。

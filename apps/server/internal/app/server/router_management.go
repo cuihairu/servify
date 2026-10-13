@@ -48,6 +48,7 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	handlers.RegisterWorkspaceRoutes(workspaceAPI, handlers.NewWorkspaceHandler(deps.WorkspaceService))
 	handlers.RegisterConversationWorkspaceRoutes(workspaceAPI, handlers.NewConversationWorkspaceHandler(deps.ConversationHandler, deps.RealtimeGateway, deps.RealtimeVisitorTranslateService).
 		WithHistoryTranslator(deps.HistoryTranslateService).
+		WithTranslationStore(deps.TranslationStore).
 		WithTimeline(deps.ConversationTimeline))
 
 	macrosAPI := api.Group("/")

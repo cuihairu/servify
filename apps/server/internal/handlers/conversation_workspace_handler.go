@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -28,6 +29,7 @@ type ConversationWorkspaceHandler struct {
 	translator        translationdelivery.RealtimeTranslateService
 	historyTranslator translationdelivery.HistoryTranslateService
 	timeline          ConversationTimelineReader
+	translationStore  conversationdelivery.TranslationPersistence
 }
 
 // NewConversationWorkspaceHandler 创建会话工作台处理器；translator 为可选
@@ -49,6 +51,14 @@ func (h *ConversationWorkspaceHandler) WithHistoryTranslator(t translationdelive
 // conversation_events 投影流水；未注入时端点 503 兜底）。
 func (h *ConversationWorkspaceHandler) WithTimeline(t ConversationTimelineReader) *ConversationWorkspaceHandler {
 	h.timeline = t
+	return h
+}
+
+// WithTranslationStore 注入历史译文持久化面（跨页缓存刀：批量译文按语言
+// 键写入 messages.metadata，重翻页命中缓存免重译；未注入时标注仍工作，
+// 只是不落库）。
+func (h *ConversationWorkspaceHandler) WithTranslationStore(t conversationdelivery.TranslationPersistence) *ConversationWorkspaceHandler {
+	h.translationStore = t
 	return h
 }
 
@@ -141,22 +151,35 @@ func (h *ConversationWorkspaceHandler) ListMessages(c *gin.Context) {
 	})
 }
 
-// annotateHistory 批量标注历史消息译文（Phase 1 收尾，§4.4 metadata 保留
-// 键）：只标访客侧（sender != "agent"）且尚未带译文的非空消息；批量翻译
-// 是增强能力——服务未注入、会话无偏好、provider 未配置、批量失败（含存储
-// 错误）一律静默返回原列表，不影响历史加载主链路；译文只写响应 DTO，
-// 不回写存储。
+// annotateHistory 批量标注历史消息译文（Phase 1 收尾 + 跨页缓存刀，§4.4
+// metadata 保留键）：只标访客侧（sender != "agent"）且尚未带译文的非空
+// 消息。先按读向语言查消息 metadata 里的持久化缓存（translations 保留键，
+// 按语言键不可变——偏好随时可改不构成语言陈旧），命中直接盖章响应键、
+// 不再调 LLM；未命中的合并一次批量翻译，译文写响应 DTO 并持久化（重翻页
+// 免重译）。批量翻译与持久化都是增强能力——服务未注入、会话无偏好、
+// provider 未配置、批量失败（含存储错误）一律静默返回原列表，不影响
+// 历史加载主链路；响应键 translation/translation_lang 只写响应不落库
+// （访客补拉不携带坐席读向译文），库内只存按语言键的缓存表。
 func (h *ConversationWorkspaceHandler) annotateHistory(ctx context.Context, sessionID string, items []conversationdelivery.ConversationMessageDTO) {
 	if h.historyTranslator == nil || len(items) == 0 {
 		return
 	}
+	targetLang, err := h.historyTranslator.TargetLang(ctx, sessionID)
+	if err != nil || strings.TrimSpace(targetLang) == "" {
+		return
+	}
 	indexes := make([]int, 0, len(items))
 	texts := make([]string, 0, len(items))
-	for i, item := range items {
+	for i := range items {
+		item := &items[i]
 		if item.Sender == "agent" || strings.TrimSpace(item.Content) == "" {
 			continue
 		}
 		if item.Metadata["translation"] != "" {
+			continue
+		}
+		if cached := conversationapp.DecodeMessageTranslations(item.Metadata[conversationapp.MessageTranslationsKey])[targetLang]; cached != "" {
+			annotateTranslation(item, cached, targetLang)
 			continue
 		}
 		indexes = append(indexes, i)
@@ -169,16 +192,33 @@ func (h *ConversationWorkspaceHandler) annotateHistory(ctx context.Context, sess
 	if err != nil || translated == nil {
 		return
 	}
+	entries := make([]conversationdelivery.TranslationEntry, 0, len(indexes))
 	for j, i := range indexes {
 		if j >= len(translated.Texts) || translated.Texts[j] == "" {
 			continue
 		}
-		if items[i].Metadata == nil {
-			items[i].Metadata = map[string]string{}
-		}
-		items[i].Metadata["translation"] = translated.Texts[j]
-		items[i].Metadata["translation_lang"] = translated.TargetLang
+		annotateTranslation(&items[i], translated.Texts[j], translated.TargetLang)
+		entries = append(entries, conversationdelivery.TranslationEntry{
+			ConversationID: sessionID,
+			MessageID:      items[i].ID,
+			Lang:           translated.TargetLang,
+			Text:           translated.Texts[j],
+		})
 	}
+	// 持久化跨页缓存：存储失败静默（不影响本次响应与后续重试语义——
+	// 下次翻页未命中会再译再写）。
+	if h.translationStore != nil && len(entries) > 0 {
+		_ = h.translationStore.SaveTranslations(ctx, entries)
+	}
+}
+
+// annotateTranslation 盖章 §4.4 metadata 保留键（响应面不落库）。
+func annotateTranslation(item *conversationdelivery.ConversationMessageDTO, text, lang string) {
+	if item.Metadata == nil {
+		item.Metadata = map[string]string{}
+	}
+	item.Metadata["translation"] = text
+	item.Metadata["translation_lang"] = lang
 }
 
 func (h *ConversationWorkspaceHandler) SendMessage(c *gin.Context) {

@@ -76,14 +76,17 @@ type Runtime struct {
 	HistoryTranslateService translationdelivery.HistoryTranslateService
 	// VoiceTranslationRuntime 语音翻译通道（Phase 2 刀二b-2；ai.asr 未配置
 	// 为 nil = 通道与路由都不装配）。
-	VoiceTranslationRuntime  translationdelivery.VoiceStreamStarter
-	wsRuntime                websocketRunner
-	voiceHub                 *realtimeplatform.VoiceHub
-	RealtimeGateway          realtimeplatform.RealtimeGateway
-	RTCGateway               realtimeplatform.RTCGateway
-	RTCIceSource             realtimeplatform.ICEConfigSource
-	MessageRouter            realtimeplatform.MessageRouterRuntime
-	ConversationHandler      conversationdelivery.HandlerService
+	VoiceTranslationRuntime translationdelivery.VoiceStreamStarter
+	wsRuntime               websocketRunner
+	voiceHub                *realtimeplatform.VoiceHub
+	RealtimeGateway         realtimeplatform.RealtimeGateway
+	RTCGateway              realtimeplatform.RTCGateway
+	RTCIceSource            realtimeplatform.ICEConfigSource
+	MessageRouter           realtimeplatform.MessageRouterRuntime
+	ConversationHandler     conversationdelivery.HandlerService
+	// TranslationStore 历史译文持久化（跨页缓存刀：工作台历史标注把译文
+	// 按语言键写入 messages.metadata，重翻页免重译）。
+	TranslationStore         conversationdelivery.TranslationPersistence
 	VoiceCoordinator         *voicedelivery.Coordinator
 	VoiceProtocolRegistry    *voiceprotocol.Registry
 	CustomerHandlerService   customerdelivery.HandlerService
@@ -294,6 +297,7 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		RTCIceSource:                        rt.RTCIceSource,
 		MessageRouter:                       rt.MessageRouter,
 		ConversationHandler:                 rt.ConversationHandler,
+		TranslationStore:                    rt.TranslationStore,
 		VoiceCoordinator:                    rt.VoiceCoordinator,
 		VoiceProtocolRegistry:               rt.VoiceProtocolRegistry,
 		CustomerHandlerService:              rt.CustomerHandlerService,
