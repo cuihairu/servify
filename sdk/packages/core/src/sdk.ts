@@ -51,6 +51,11 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   private sessionVisible = false;
   private unreadCountValue = 0;
   private remoteAssistPeer: RTCPeerConnection | null = null;
+  // RA-8 SDK 半边：断线窗口内未决的 offer（协商中：offered/connecting）。WS 重连
+  // 完成后按原 offer 重发——answer 与候选可能在断线窗口丢失，重发让服务端重新
+  // 应答续上协商；已连通（connected）或终态不再重发。
+  private lastRemoteAssistOffer: ServifyRTCSessionDescriptionInit | null = null;
+  private remoteAssistState: RemoteAssistState = 'idle';
   // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取）。
   private serverIceServers: ServifyRTCIceServer[] | null = null;
   private remoteAssistStream: MediaStream | null = null;
@@ -146,10 +151,7 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
 
     // 转发 WebSocket 事件
     this.ws.on('connected', () => {
-      this.emit('connected');
-      // D7 流程 3：连接成功即对账断连窗口（首连也拉——固定 sessionId 接入时
-      // 回放会话既有历史；新 session 404/空页静默）。异步不阻塞帧消费。
-      void this.reconcileMissedMessages();
+      this.onWebSocketConnected();
     });
     this.ws.on('disconnected', (reason) => this.emit('disconnected', reason));
     this.ws.on('reconnecting', (attempt) => this.emit('reconnecting', attempt));
@@ -169,6 +171,30 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
     this.ws.on('error', (error) => this.emit('error', error));
 
     await this.ws.connect();
+  }
+
+  // WS 连上（首连与重连同一路径）：转发 connected、对账断连窗口消息、
+  // 补发未决 WebRTC offer（RA-8 SDK 半边）。
+  private async onWebSocketConnected(): Promise<void> {
+    this.emit('connected');
+    // D7 流程 3：连接成功即对账断连窗口（首连也拉——固定 sessionId 接入时
+    // 回放会话既有历史；新 session 404/空页静默）。异步不阻塞帧消费。
+    void this.reconcileMissedMessages();
+    await this.resendRemoteAssistOfferIfNeeded();
+  }
+
+  // RA-8：协商中（offered/connecting）的 offer 在断线窗口可能丢——服务端没收到
+  // 原 offer，或 answer/候选在断线窗口丢失。重连后按原 offer 重发，服务端重新
+  // 应答即续上协商；PC 本身跨重连保留，媒体面不依赖 WS，已连通无需重发。
+  // 幂等：服务端 HandleOffer 前回收同会话终态旧 PC（RA-8 服务端半边）。
+  private async resendRemoteAssistOfferIfNeeded(): Promise<void> {
+    if (!this.remoteAssistPeer || !this.lastRemoteAssistOffer || !this.ws?.isConnected()) {
+      return;
+    }
+    if (this.remoteAssistState !== 'offered' && this.remoteAssistState !== 'connecting') {
+      return;
+    }
+    await this.ws.send({ type: 'webrtc-offer', data: this.lastRemoteAssistOffer });
   }
 
   // 断开连接
@@ -390,9 +416,13 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
       throw new Error('Failed to create local WebRTC description');
     }
 
+    const offerPayload = localDescription.toJSON();
+    // RA-8 SDK 半边：留原 offer 供断线重连后重发（answer 在断线窗口丢失时
+    // 服务端重新应答即续上）。
+    this.lastRemoteAssistOffer = offerPayload;
     await this.ws.send({
       type: 'webrtc-offer',
-      data: localDescription.toJSON(),
+      data: offerPayload,
     });
     this.emit('webrtc:offer', localDescription.toJSON());
     this.updateRemoteAssistState('offered');
@@ -1000,6 +1030,11 @@ export class ServifySDK extends EventEmitter<ServifyEventMap> implements ClientS
   }
 
   private updateRemoteAssistState(state: RemoteAssistState): void {
+    this.remoteAssistState = state;
+    // 协商终结（已连通/已结束/失败）：不再需要断线重发的 offer。
+    if (state === 'connected' || state === 'ended' || state === 'failed') {
+      this.lastRemoteAssistOffer = null;
+    }
     this.emit('webrtc:state', state);
   }
 

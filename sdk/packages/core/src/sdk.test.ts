@@ -40,6 +40,8 @@ class FakeRTCPeerConnection {
 
   async setLocalDescription(): Promise<void> {}
 
+  async setRemoteDescription(): Promise<void> {}
+
   close(): void {}
 }
 
@@ -276,6 +278,101 @@ describe('ServifySDK remote assist recording', () => {
     expect(recordingStates).toEqual(['recording', 'saving', 'saved']);
     expect(requests).toHaveLength(2);
     expect(requests[1].url).toContain('/api/v1/remote-assist/7/recording');
+  });
+});
+
+describe('ServifySDK remote assist reconnect (RA-8)', () => {
+  let send: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    installFetchMocks();
+    vi.stubGlobal('RTCPeerConnection', FakeRTCPeerConnection);
+    FakeRTCPeerConnection.instances = [];
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function createSessionSDK(): ServifySDK {
+    const sdk = new ServifySDK({
+      apiUrl: 'http://localhost:8080',
+      autoConnect: false,
+      customerId: '1',
+      // 断线重发只关心 offer 生命周期，不触捕获链
+      remoteAssist: { captureScreen: false, record: false, iceServers: [] },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (sdk as AnyRecord).ws = { isConnected: () => true, send: vi.fn(async () => undefined) };
+    send = (sdk as AnyRecord).ws.send as ReturnType<typeof vi.fn>;
+    return sdk;
+  }
+
+  // fake ws 不产生事件：直接调私有入口模拟 WS 重连完成。
+  async function reconnect(sdk: ServifySDK): Promise<void> {
+    await (sdk as AnyRecord).onWebSocketConnected();
+    // reconcileMissedMessages 是 fire-and-forget，等微任务排空
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('re-sends the pending offer after reconnect while awaiting an answer', async () => {
+    const sdk = createSessionSDK();
+    await sdk.startRemoteAssist();
+    send.mockClear();
+
+    await reconnect(sdk);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      type: 'webrtc-offer',
+      data: { type: 'offer', sdp: 'v=0' },
+    });
+  });
+
+  it('re-sends the offer when the answer was lost mid-negotiation', async () => {
+    const sdk = createSessionSDK();
+    await sdk.startRemoteAssist();
+    await sdk.acceptRemoteAnswer({ type: 'answer', sdp: 'v=0' });
+    send.mockClear();
+
+    await reconnect(sdk);
+
+    expect(send).toHaveBeenCalledWith({
+      type: 'webrtc-offer',
+      data: { type: 'offer', sdp: 'v=0' },
+    });
+  });
+
+  it('does not re-offer once the peer connected', async () => {
+    const sdk = createSessionSDK();
+    await sdk.startRemoteAssist();
+    const peer = FakeRTCPeerConnection.instances[0];
+    (peer as AnyRecord).connectionState = 'connected';
+    (peer.onconnectionstatechange as () => void)();
+    send.mockClear();
+
+    await reconnect(sdk);
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('does not re-offer after the session ended', async () => {
+    const sdk = createSessionSDK();
+    await sdk.startRemoteAssist();
+    await sdk.endRemoteAssist();
+    send.mockClear();
+
+    await reconnect(sdk);
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('does not re-offer when no assist session is in flight', async () => {
+    const sdk = createSessionSDK();
+
+    await reconnect(sdk);
+
+    expect(send).not.toHaveBeenCalled();
   });
 });
 
