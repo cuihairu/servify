@@ -390,3 +390,31 @@ func TestSLA_RepoQueryErrorBranches(t *testing.T) {
 		t.Fatal("expected tier stats scan error")
 	}
 }
+
+// TestSLA_FindConfigByPriorityTierActiveNoMatch 覆盖「表在但无匹配行」：契约
+// （application/repositories.go:34）是 (nil, nil) 而非错误，与上条丢表错误分支
+// 构成同一函数的两极。
+func TestSLA_FindConfigByPriorityTierActiveNoMatch(t *testing.T) {
+	db := newSLAErrorDB(t)
+	repo := NewGormRepository(db)
+
+	got, err := repo.FindConfigByPriorityTierActive(context.Background(), "high", "vip")
+	if err != nil {
+		t.Fatalf("no-match must not be an error, got %v", err)
+	}
+	if got != nil {
+		t.Fatalf("no-match must yield nil config, got %+v", got)
+	}
+
+	// 有行但 priority/tier/active 不匹配：同样 (nil, nil)。
+	if err := db.Create(&models.SLAConfig{
+		Name: "A", Priority: "low", CustomerTier: "vip", Active: true,
+		FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
+	}).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	got, err = repo.FindConfigByPriorityTierActive(context.Background(), "high", "vip")
+	if err != nil || got != nil {
+		t.Fatalf("mismatched row must yield (nil, nil), got (%+v, %v)", got, err)
+	}
+}
