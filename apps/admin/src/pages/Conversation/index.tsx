@@ -175,6 +175,22 @@ function buildRemoteAssistWebSocketURL(sessionId: string) {
   return `${protocol}//${window.location.host}/api/v1/ws?session_id=${encodeURIComponent(sessionId)}`;
 }
 
+// 应答服务端重协商 offer（RA-7 媒体桥接：服务端把访客发布轨重建后挂到本端
+// PC，主动推 offer）。失败仅记日志，不视作协助会话失败——屏幕共享主链路可
+// 能已建立，重协商可以在下一次补投时重试。
+async function answerRemoteAssistRenegotiation(peer: RTCPeerConnection, socket: WebSocket, offer: RTCSessionDescriptionInit) {
+  try {
+    await peer.setRemoteDescription(offer);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'webrtc-answer', data: answer }));
+    }
+  } catch (error) {
+    console.warn('应答服务端重协商 offer 失败:', error);
+  }
+}
+
 const ConversationPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const preselectedId = useQueryParam('id');
@@ -211,6 +227,9 @@ const ConversationPage: React.FC = () => {
   const remoteAssistPeerRef = useRef<RTCPeerConnection | null>(null);
   const remoteAssistSocketRef = useRef<WebSocket | null>(null);
   const remoteAssistStreamRef = useRef<MediaStream | null>(null);
+  // 排队中的服务端重协商 offer：本端尚未稳态（answer 在途）时先存下，稳态后
+  // 补应用，避免 glare 丢掉桥接轨的 offer。
+  const remoteAssistPendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
   // 最近一次服务端下发的 ICE 配置（WS webrtc-ice-config 推送或 REST 回退拉取，
   // RA-6）：跨协助尝试缓存，TURN 凭据过期由下次 REST 回退自然刷新。
   const remoteAssistIceServersRef = useRef<RTCIceServerEntry[] | null>(null);
@@ -476,6 +495,7 @@ const ConversationPage: React.FC = () => {
       peer.onicecandidate = null;
       peer.onconnectionstatechange = null;
       peer.ontrack = null;
+      peer.onsignalingstatechange = null;
       peer.close();
       remoteAssistPeerRef.current = null;
     }
@@ -736,14 +756,21 @@ const ConversationPage: React.FC = () => {
           };
 
           peer.ontrack = (event) => {
-            const [stream] = event.streams;
-            if (!stream) {
-              return;
-            }
+            // 服务端桥接轨（转发轨）不带 MediaStream，兜底用 track 直接组流
+            const stream = event.streams[0] ?? new MediaStream([event.track]);
             remoteAssistStreamRef.current = stream;
             setRemoteAssistHasStream(true);
             if (remoteAssistVideoRef.current) {
               remoteAssistVideoRef.current.srcObject = stream;
+            }
+          };
+
+          // 稳态后排空在途重协商 offer（glare：answer 未落地时服务端 offer 已到）
+          peer.onsignalingstatechange = () => {
+            const pending = remoteAssistPendingOfferRef.current;
+            if (peer.signalingState === 'stable' && pending && socket.readyState === WebSocket.OPEN) {
+              remoteAssistPendingOfferRef.current = null;
+              void answerRemoteAssistRenegotiation(peer, socket, pending);
             }
           };
 
@@ -763,6 +790,17 @@ const ConversationPage: React.FC = () => {
               if (payload.type === 'webrtc-answer' && payload.data) {
                 await peer.setRemoteDescription(payload.data);
                 setRemoteAssistState('connecting');
+                return;
+              }
+
+              if (payload.type === 'webrtc-offer' && payload.data) {
+                // 服务端重协商：桥接加轨后主动推 offer，本端在同一条 PC 上应答；
+                // 未稳态先排队（onsignalingstatechange 稳态后补应用）
+                if (peer.signalingState !== 'stable') {
+                  remoteAssistPendingOfferRef.current = payload.data as RTCSessionDescriptionInit;
+                  return;
+                }
+                await answerRemoteAssistRenegotiation(peer, socket, payload.data as RTCSessionDescriptionInit);
                 return;
               }
 
