@@ -18,6 +18,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	slainfra "servify/apps/server/internal/modules/sla/infra"
 )
 
 func newTestDBForSLA(t *testing.T) *gorm.DB {
@@ -46,7 +47,7 @@ func TestSLAHandler_Create_And_List(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -123,7 +124,7 @@ func TestSLAHandler_GetSLAConfigByPriority_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -145,7 +146,7 @@ func TestSLAHandler_GetSLAConfigByPriority_Success(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -177,7 +178,7 @@ func TestSLAHandler_ListSLAViolations_Empty(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -199,7 +200,7 @@ func TestSLAHandler_ResolveSLAViolation_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -221,7 +222,7 @@ func TestSLAHandler_ResolveSLAViolation_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -243,7 +244,7 @@ func TestSLAHandler_GetSLAStats(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	svc := slapp.NewService(db, logger)
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logger)
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -262,7 +263,7 @@ func TestSLAHandler_CreateSLAConfig_InvalidTimeLogic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newTestDBForSLA(t)
-	svc := slapp.NewService(db, logrus.New())
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logrus.New())
 	h := NewSLAHandler(svc, nil)
 
 	r := gin.New()
@@ -293,7 +294,7 @@ func TestSLAHandler_UpdateSLAConfig_Conflict(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := newTestDBForSLA(t)
-	svc := slapp.NewService(db, logrus.New())
+	svc := slapp.NewService(slainfra.NewGormRepository(db), logrus.New())
 	h := NewSLAHandler(svc, nil)
 
 	now := models.SLAConfig{

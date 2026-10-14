@@ -1,4 +1,4 @@
-package application
+package infra
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	automationinfra "servify/apps/server/internal/modules/automation/infra"
+	slapp "servify/apps/server/internal/modules/sla/application"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -22,23 +23,24 @@ func newSLAUnitTestDB(t *testing.T) *gorm.DB {
 	)
 }
 
-func newSLAUnitTestService(t *testing.T) *SLAService {
+func newSLAUnitTestService(t *testing.T) (*slapp.SLAService, *gorm.DB) {
 	t.Helper()
-	return NewService(newSLAUnitTestDB(t), logrus.New())
+	db := newSLAUnitTestDB(t)
+	return slapp.NewService(NewGormRepository(db), logrus.New()), db
 }
 
 func TestSLAUnit_CreateConfigValidation(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	ctx := context.Background()
 
-	valid := SLAConfigCreateRequest{Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30}
+	valid := slapp.SLAConfigCreateRequest{Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30}
 	cases := []struct {
 		name string
-		mut  func(*SLAConfigCreateRequest)
+		mut  func(*slapp.SLAConfigCreateRequest)
 	}{
-		{"invalid priority", func(r *SLAConfigCreateRequest) { r.Priority = "critical" }},
-		{"first>=resolution", func(r *SLAConfigCreateRequest) { r.FirstResponseTime = 60; r.ResolutionTime = 60 }},
-		{"escalation>=resolution", func(r *SLAConfigCreateRequest) { r.EscalationTime = 60 }},
+		{"invalid priority", func(r *slapp.SLAConfigCreateRequest) { r.Priority = "critical" }},
+		{"first>=resolution", func(r *slapp.SLAConfigCreateRequest) { r.FirstResponseTime = 60; r.ResolutionTime = 60 }},
+		{"escalation>=resolution", func(r *slapp.SLAConfigCreateRequest) { r.EscalationTime = 60 }},
 	}
 	for _, tc := range cases {
 		req := valid
@@ -62,7 +64,7 @@ func TestSLAUnit_CreateConfigValidation(t *testing.T) {
 	}
 
 	// tier + warning clamping
-	tierReq := SLAConfigCreateRequest{
+	tierReq := slapp.SLAConfigCreateRequest{
 		Name: "VIP", Priority: "high", CustomerTier: "  VIP ",
 		WarningThreshold: intPtr(120), FirstResponseTime: 1, ResolutionTime: 60, EscalationTime: 30,
 		Active: boolPtr(false), Tags: []string{" a ", "", "b"}, BusinessHoursOnly: true,
@@ -76,11 +78,11 @@ func TestSLAUnit_CreateConfigValidation(t *testing.T) {
 	}
 	// Active=false is overridden by the gorm default:true column on insert;
 	// flip it explicitly to verify the stored value round-trips.
-	if err := svc.db.Model(&models.SLAConfig{}).Where("id = ?", tierCfg.ID).Update("active", false).Error; err != nil {
+	if err := db.Model(&models.SLAConfig{}).Where("id = ?", tierCfg.ID).Update("active", false).Error; err != nil {
 		t.Fatalf("deactivate tier cfg: %v", err)
 	}
 	var reloaded models.SLAConfig
-	if err := svc.db.First(&reloaded, tierCfg.ID).Error; err != nil {
+	if err := db.First(&reloaded, tierCfg.ID).Error; err != nil {
 		t.Fatalf("reload tier cfg: %v", err)
 	}
 	if reloaded.Active {
@@ -88,7 +90,7 @@ func TestSLAUnit_CreateConfigValidation(t *testing.T) {
 	}
 
 	// warning lower bound
-	lowReq := SLAConfigCreateRequest{
+	lowReq := slapp.SLAConfigCreateRequest{
 		Name: "LowWarn", Priority: "urgent", WarningThreshold: intPtr(10),
 		FirstResponseTime: 1, ResolutionTime: 60, EscalationTime: 30,
 	}
@@ -103,10 +105,10 @@ func TestSLAUnit_CreateConfigValidation(t *testing.T) {
 }
 
 func TestSLAUnit_GetAndListConfigs(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, _ := newSLAUnitTestService(t)
 	ctx := unitScopedContext("t1", "w1")
 
-	created, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	created, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
@@ -121,7 +123,7 @@ func TestSLAUnit_GetAndListConfigs(t *testing.T) {
 		t.Fatal("expected not found error")
 	}
 
-	_, _, err = svc.ListSLAConfigs(ctx, &SLAConfigListRequest{
+	_, _, err = svc.ListSLAConfigs(ctx, &slapp.SLAConfigListRequest{
 		Page: 1, PageSize: 10,
 		Priority:     []string{"high"},
 		CustomerTier: []string{"vip"},
@@ -132,43 +134,43 @@ func TestSLAUnit_GetAndListConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListSLAConfigs: %v", err)
 	}
-	_, _, err = svc.ListSLAConfigs(ctx, &SLAConfigListRequest{SortBy: "", SortOrder: "bogus"})
+	_, _, err = svc.ListSLAConfigs(ctx, &slapp.SLAConfigListRequest{SortBy: "", SortOrder: "bogus"})
 	if err != nil {
 		t.Fatalf("ListSLAConfigs defaults: %v", err)
 	}
 }
 
 func TestSLAUnit_UpdateConfig(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, _ := newSLAUnitTestService(t)
 	ctx := context.Background()
 
-	created, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	created, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "normal", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	if _, err := svc.UpdateSLAConfig(ctx, 999, &SLAConfigUpdateRequest{}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, 999, &slapp.SLAConfigUpdateRequest{}); err == nil {
 		t.Fatal("expected not found on update")
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{Priority: stringPtr("critical")}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{Priority: stringPtr("critical")}); err == nil {
 		t.Fatal("expected invalid priority error")
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{FirstResponseTime: intPtr(0)}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{FirstResponseTime: intPtr(0)}); err == nil {
 		t.Fatal("expected first response validation error")
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{ResolutionTime: intPtr(0)}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{ResolutionTime: intPtr(0)}); err == nil {
 		t.Fatal("expected resolution validation error")
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{EscalationTime: intPtr(0)}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{EscalationTime: intPtr(0)}); err == nil {
 		t.Fatal("expected escalation validation error")
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{EscalationTime: intPtr(70)}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{EscalationTime: intPtr(70)}); err == nil {
 		t.Fatal("expected escalation<resolution error")
 	}
 
-	updated, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{
+	updated, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{
 		Name:              stringPtr("B"),
 		Priority:          stringPtr("high"),
 		CustomerTier:      stringPtr(" VIP "),
@@ -186,31 +188,31 @@ func TestSLAUnit_UpdateConfig(t *testing.T) {
 	}
 
 	// first>=resolution via combination
-	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &SLAConfigUpdateRequest{FirstResponseTime: intPtr(70)}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, created.ID, &slapp.SLAConfigUpdateRequest{FirstResponseTime: intPtr(70)}); err == nil {
 		t.Fatal("expected combined time validation error")
 	}
 
 	// conflict with same priority+tier on a second config
-	other, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	other, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "C", Priority: "low", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create C: %v", err)
 	}
-	if _, err := svc.UpdateSLAConfig(ctx, other.ID, &SLAConfigUpdateRequest{Priority: stringPtr("high")}); err == nil {
+	if _, err := svc.UpdateSLAConfig(ctx, other.ID, &slapp.SLAConfigUpdateRequest{Priority: stringPtr("high")}); err == nil {
 		t.Fatal("expected priority conflict on update")
 	}
 	// updating without priority change still checks uniqueness against itself (no conflict)
-	if _, err := svc.UpdateSLAConfig(ctx, other.ID, &SLAConfigUpdateRequest{Name: stringPtr("C2")}); err != nil {
+	if _, err := svc.UpdateSLAConfig(ctx, other.ID, &slapp.SLAConfigUpdateRequest{Name: stringPtr("C2")}); err != nil {
 		t.Fatalf("self update should not conflict: %v", err)
 	}
 }
 
 func TestSLAUnit_DeleteConfig(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	ctx := context.Background()
 
-	created, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	created, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
@@ -224,7 +226,7 @@ func TestSLAUnit_DeleteConfig(t *testing.T) {
 	}
 
 	// with associated violation -> cannot delete
-	cfg2, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	cfg2, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "B", Priority: "urgent", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
@@ -234,7 +236,7 @@ func TestSLAUnit_DeleteConfig(t *testing.T) {
 		TicketID: cfg2.ID, SLAConfigID: cfg2.ID, ViolationType: "first_response",
 		Deadline: time.Now(), ViolatedAt: time.Now(), CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	if err := svc.db.Create(violation).Error; err != nil {
+	if err := db.Create(violation).Error; err != nil {
 		t.Fatalf("seed violation: %v", err)
 	}
 	if err := svc.DeleteSLAConfig(ctx, cfg2.ID); err == nil {
@@ -243,34 +245,34 @@ func TestSLAUnit_DeleteConfig(t *testing.T) {
 }
 
 func TestSLAUnit_GetConfigByPriority(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	ctx := context.Background()
 
 	if cfg, err := svc.GetSLAConfigByPriority(ctx, "high", ""); err != nil || cfg != nil {
 		t.Fatalf("expected nil config, got %v %v", cfg, err)
 	}
 
-	base, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	base, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "Base", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create base: %v", err)
 	}
-	vip, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	vip, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "VIP", Priority: "high", CustomerTier: "vip",
 		FirstResponseTime: 1, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create vip: %v", err)
 	}
-	inactive, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	inactive, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "Inactive", Priority: "urgent", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: boolPtr(false),
 	})
 	if err != nil {
 		t.Fatalf("create inactive: %v", err)
 	}
-	if err := svc.db.Model(&models.SLAConfig{}).Where("id = ?", inactive.ID).Update("active", false).Error; err != nil {
+	if err := db.Model(&models.SLAConfig{}).Where("id = ?", inactive.ID).Update("active", false).Error; err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
 
@@ -286,7 +288,7 @@ func TestSLAUnit_GetConfigByPriority(t *testing.T) {
 }
 
 func TestSLAUnit_CheckViolation(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 
 	if _, err := svc.CheckSLAViolation(context.Background(), nil); err == nil {
@@ -297,7 +299,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 		Name: "High", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(cfg).Error; err != nil {
+	if err := db.Create(cfg).Error; err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
 
@@ -308,7 +310,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 
 	// no SLA config for priority
 	noCfgTicket := &models.Ticket{Title: "X", Priority: "low", Status: "open", CreatedAt: now, UpdatedAt: now}
-	if err := svc.db.Create(noCfgTicket).Error; err != nil {
+	if err := db.Create(noCfgTicket).Error; err != nil {
 		t.Fatalf("seed noCfg ticket: %v", err)
 	}
 	if v, err := svc.CheckSLAViolation(context.Background(), noCfgTicket); err != nil || v != nil {
@@ -317,7 +319,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 
 	// within deadline -> no violation
 	fresh := &models.Ticket{Title: "Fresh", Priority: "high", Status: "open", CreatedAt: now, UpdatedAt: now}
-	if err := svc.db.Create(fresh).Error; err != nil {
+	if err := db.Create(fresh).Error; err != nil {
 		t.Fatalf("seed fresh: %v", err)
 	}
 	if v, err := svc.CheckSLAViolation(context.Background(), fresh); err != nil || v != nil {
@@ -326,7 +328,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 
 	// first response violation
 	late := &models.Ticket{Title: "Late", Priority: "high", Status: "open", CreatedAt: now.Add(-10 * time.Minute), UpdatedAt: now}
-	if err := svc.db.Create(late).Error; err != nil {
+	if err := db.Create(late).Error; err != nil {
 		t.Fatalf("seed late: %v", err)
 	}
 	violation, err := svc.CheckSLAViolation(context.Background(), late)
@@ -354,7 +356,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 		Title: "ResLate", Priority: "high", Status: "assigned", AgentID: uintPtr(7),
 		CreatedAt: now.Add(-3 * time.Hour), UpdatedAt: now,
 	}
-	if err := svc.db.Create(resolvedLate).Error; err != nil {
+	if err := db.Create(resolvedLate).Error; err != nil {
 		t.Fatalf("seed resolvedLate: %v", err)
 	}
 	resViolation, err := svc.CheckSLAViolation(context.Background(), resolvedLate)
@@ -370,7 +372,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 		Title: "Closed", Priority: "high", Status: "closed", AgentID: uintPtr(7),
 		CreatedAt: now.Add(-3 * time.Hour), UpdatedAt: now,
 	}
-	if err := svc.db.Create(closedLate).Error; err != nil {
+	if err := db.Create(closedLate).Error; err != nil {
 		t.Fatalf("seed closed: %v", err)
 	}
 	if v, err := svc.CheckSLAViolation(context.Background(), closedLate); err != nil || v != nil {
@@ -379,7 +381,7 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 
 	// zero created_at falls back to now (no violation)
 	zeroCreated := &models.Ticket{Title: "Zero", Priority: "high", Status: "open"}
-	if err := svc.db.Create(zeroCreated).Error; err != nil {
+	if err := db.Create(zeroCreated).Error; err != nil {
 		t.Fatalf("seed zero: %v", err)
 	}
 	if v, err := svc.CheckSLAViolation(context.Background(), zeroCreated); err != nil || v != nil {
@@ -388,10 +390,10 @@ func TestSLAUnit_CheckViolation(t *testing.T) {
 }
 
 func TestSLAUnit_CheckViolation_CustomerTierLookup(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 
-	if err := svc.db.AutoMigrate(&models.User{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}); err != nil {
 		t.Fatalf("migrate users: %v", err)
 	}
 
@@ -400,15 +402,15 @@ func TestSLAUnit_CheckViolation_CustomerTierLookup(t *testing.T) {
 		FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(vipCfg).Error; err != nil {
+	if err := db.Create(vipCfg).Error; err != nil {
 		t.Fatalf("seed vip config: %v", err)
 	}
 
 	customer := &models.User{Username: "vip-cust", Email: "vip@x.com", Role: "customer"}
-	if err := svc.db.Create(customer).Error; err != nil {
+	if err := db.Create(customer).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	if err := svc.db.Create(&models.Customer{UserID: customer.ID, Priority: "VIP"}).Error; err != nil {
+	if err := db.Create(&models.Customer{UserID: customer.ID, Priority: "VIP"}).Error; err != nil {
 		t.Fatalf("seed customer: %v", err)
 	}
 
@@ -416,7 +418,7 @@ func TestSLAUnit_CheckViolation_CustomerTierLookup(t *testing.T) {
 		Title: "VIP ticket", Priority: "high", Status: "open", CustomerID: customer.ID,
 		CreatedAt: now.Add(-10 * time.Minute), UpdatedAt: now,
 	}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 
@@ -430,7 +432,7 @@ func TestSLAUnit_CheckViolation_CustomerTierLookup(t *testing.T) {
 }
 
 func TestSLAUnit_CreateSLAViolationValidation(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 
 	if err := svc.CreateSLAViolation(context.Background(), nil); err == nil {
@@ -438,14 +440,14 @@ func TestSLAUnit_CreateSLAViolationValidation(t *testing.T) {
 	}
 
 	ticket := &models.Ticket{Title: "T", Priority: "high", Status: "open", CreatedAt: now, UpdatedAt: now}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 	cfg := &models.SLAConfig{
 		Name: "Cfg", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(cfg).Error; err != nil {
+	if err := db.Create(cfg).Error; err != nil {
 		t.Fatalf("seed cfg: %v", err)
 	}
 
@@ -468,7 +470,7 @@ func TestSLAUnit_CreateSLAViolationValidation(t *testing.T) {
 }
 
 func TestSLAUnit_ListResolveViolations(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 	ctx := unitScopedContext("t1", "w1")
 
@@ -476,7 +478,7 @@ func TestSLAUnit_ListResolveViolations(t *testing.T) {
 		Title: "T", Priority: "high", Status: "open", TenantID: "t1", WorkspaceID: "w1",
 		CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now,
 	}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 	cfg := &models.SLAConfig{
@@ -484,7 +486,7 @@ func TestSLAUnit_ListResolveViolations(t *testing.T) {
 		FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(cfg).Error; err != nil {
+	if err := db.Create(cfg).Error; err != nil {
 		t.Fatalf("seed cfg: %v", err)
 	}
 
@@ -492,7 +494,7 @@ func TestSLAUnit_ListResolveViolations(t *testing.T) {
 		t.Fatal("expected resolve not found error")
 	}
 
-	violations, total, err := svc.ListSLAViolations(ctx, &SLAViolationListRequest{
+	violations, total, err := svc.ListSLAViolations(ctx, &slapp.SLAViolationListRequest{
 		Page: 1, PageSize: 10,
 		TicketID:      uintPtr(ticket.ID),
 		SLAConfigID:   uintPtr(cfg.ID),
@@ -509,7 +511,7 @@ func TestSLAUnit_ListResolveViolations(t *testing.T) {
 	if total != 0 || len(violations) != 0 {
 		t.Fatalf("expected empty list, got %d", total)
 	}
-	if _, _, err := svc.ListSLAViolations(ctx, &SLAViolationListRequest{SortBy: "", SortOrder: "bogus"}); err != nil {
+	if _, _, err := svc.ListSLAViolations(ctx, &slapp.SLAViolationListRequest{SortBy: "", SortOrder: "bogus"}); err != nil {
 		t.Fatalf("ListSLAViolations defaults: %v", err)
 	}
 
@@ -537,7 +539,7 @@ func TestSLAUnit_ListResolveViolations(t *testing.T) {
 }
 
 func TestSLAUnit_GetStats(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 	ctx := unitScopedContext("t1", "w1")
 
@@ -545,7 +547,7 @@ func TestSLAUnit_GetStats(t *testing.T) {
 		Title: "T", Priority: "high", Status: "open", TenantID: "t1", WorkspaceID: "w1",
 		CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now,
 	}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 	cfg := &models.SLAConfig{
@@ -553,7 +555,7 @@ func TestSLAUnit_GetStats(t *testing.T) {
 		FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(cfg).Error; err != nil {
+	if err := db.Create(cfg).Error; err != nil {
 		t.Fatalf("seed cfg: %v", err)
 	}
 	vipCfg := &models.SLAConfig{
@@ -561,14 +563,14 @@ func TestSLAUnit_GetStats(t *testing.T) {
 		FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(vipCfg).Error; err != nil {
+	if err := db.Create(vipCfg).Error; err != nil {
 		t.Fatalf("seed vip cfg: %v", err)
 	}
 	if _, err := svc.CheckSLAViolation(ctx, ticket); err != nil {
 		t.Fatalf("CheckSLAViolation: %v", err)
 	}
 	// seed a tier-specific violation directly for tier aggregation coverage
-	if err := svc.db.Create(&models.SLAViolation{
+	if err := db.Create(&models.SLAViolation{
 		TenantID: "t1", WorkspaceID: "w1", TicketID: ticket.ID, SLAConfigID: vipCfg.ID,
 		ViolationType: "resolution", Deadline: now, ViolatedAt: now, CreatedAt: now, UpdatedAt: now,
 	}).Error; err != nil {
@@ -587,7 +589,7 @@ func TestSLAUnit_GetStats(t *testing.T) {
 	}
 
 	// unscoped stats: compliance 100 when no tickets
-	unscoped := newSLAUnitTestService(t)
+	unscoped, _ := newSLAUnitTestService(t)
 	emptyStats, err := unscoped.GetSLAStats(context.Background())
 	if err != nil {
 		t.Fatalf("unscoped GetSLAStats: %v", err)
@@ -598,17 +600,17 @@ func TestSLAUnit_GetStats(t *testing.T) {
 }
 
 func TestSLAUnit_MonitorOnce(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	now := time.Now()
 
 	ticket := &models.Ticket{
 		Title: "T", Priority: "low", Status: "closed", CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 
-	if err := svc.monitorSLAViolations(context.Background()); err != nil {
+	if err := svc.RunMonitorOnce(context.Background()); err != nil {
 		t.Fatalf("monitorSLAViolations: %v", err)
 	}
 
@@ -618,29 +620,8 @@ func TestSLAUnit_MonitorOnce(t *testing.T) {
 	}
 }
 
-func TestSLAUnit_Helpers(t *testing.T) {
-	if joinTags(nil) != "" || joinTags([]string{" ", ""}) != "" {
-		t.Fatal("joinTags empty handling")
-	}
-	if got := joinTags([]string{" a ", "b"}); got != "a,b" {
-		t.Fatalf("joinTags = %q", got)
-	}
-	if normalizeTier("  VIP ") != "vip" {
-		t.Fatal("normalizeTier")
-	}
-	if defaultWarning(nil) != 80 || defaultWarning(intPtr(40)) != 50 || defaultWarning(intPtr(90)) != 90 {
-		t.Fatal("defaultWarning")
-	}
-
-	ctx := slaRecordScopeContext(context.Background(), "r-t", "r-w")
-	if tenant, ws := tenantAndWorkspace(ctx); tenant != "r-t" || ws != "r-w" {
-		t.Fatalf("record scope fallback: %q/%q", tenant, ws)
-	}
-	scoped := slaRecordScopeContext(unitScopedContext("c-t", "c-w"), "r-t", "r-w")
-	if tenant, ws := tenantAndWorkspace(scoped); tenant != "c-t" || ws != "c-w" {
-		t.Fatalf("record scope keeps context: %q/%q", tenant, ws)
-	}
-
+// TestSLAPreloads 关联预加载链可构造（纯函数段见 application/sla_helpers_test.go）。
+func TestSLAPreloads(t *testing.T) {
 	db := newSLAUnitTestDB(t)
 	if scopeAwareSLAViolationPreloads(db.Session(&gorm.Session{}), context.Background()) == nil {
 		t.Fatal("expected preloads chain")
@@ -648,7 +629,7 @@ func TestSLAUnit_Helpers(t *testing.T) {
 }
 
 func TestSLAUnit_SetAutomationModule(t *testing.T) {
-	svc := newSLAUnitTestService(t)
+	svc, db := newSLAUnitTestService(t)
 	automationDB := newSLATestDB(t,
 		&automationdomain.AutomationTrigger{}, &automationdomain.AutomationRun{},
 		&models.Ticket{}, &models.TicketComment{},
@@ -660,14 +641,14 @@ func TestSLAUnit_SetAutomationModule(t *testing.T) {
 		Name: "Cfg", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := svc.db.Create(cfg).Error; err != nil {
+	if err := db.Create(cfg).Error; err != nil {
 		t.Fatalf("seed cfg: %v", err)
 	}
 	ticket := &models.Ticket{
 		Title: "T", Priority: "high", Status: "open",
 		CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now,
 	}
-	if err := svc.db.Create(ticket).Error; err != nil {
+	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
 	}
 	if _, err := svc.CheckSLAViolation(context.Background(), ticket); err != nil {
@@ -676,7 +657,7 @@ func TestSLAUnit_SetAutomationModule(t *testing.T) {
 }
 
 func TestSLAUnit_NewServiceNilLogger(t *testing.T) {
-	if NewService(newSLAUnitTestDB(t), nil) == nil {
+	if slapp.NewService(NewGormRepository(newSLAUnitTestDB(t)), nil) == nil {
 		t.Fatal("expected non-nil service with nil logger fallback")
 	}
 }

@@ -18,6 +18,7 @@
 - [ ] AI agent-loop 三工具接线：CustomerLookup / TicketLookup / Handoff 现传 nil Ports，调用即报 port is not configured（2026-10-11 拍板保持死路，等用户明令）
 - [ ] modules 非 infra 层 GORM 写归属下沉 infra（约 70 文件，大重构）
   - [x] satisfaction（50 操作，新建 infra 层）：application 定 Repository 端口 + 7 个哨兵错误（文案与原 inline 串逐字一致，handlers 按字符串映射不变），infra/gorm_repository.go 逐字承接 SQL 并把 ErrRecordNotFound 映射哨兵；service.go 由 843 行 db 直调瘦为端口调用、零 gorm 导入；7 个 db 型测试文件 git mv 至 infra，应用层补 31 方法 stubRepo + 15 个纯端口单测恢复包内覆盖率归属，infra 补丢 customers 表用例收口客户查询原始错误分支；boundary rules 的 assembly 锚点由 pin 构造参数放宽为 pin 构造名。覆盖率回 100.0%，全量绿
+  - [x] sla（32 操作，新建 infra 层）：application 定 Repository 端口 + 3 个哨兵错误，infra/gorm_repository.go 逐字承接 SQL（count/find 拆分保住「failed to count/list」双文案断言、PageSize>0 分页闸、byTier/trend 查询失败静默分支原样）；service.go 零 gorm 导入，CreateSLAViolation 的小写「sla config not found」与哨兵大小写差异保留；7 个 db 型测试文件 git mv 至 infra（monitorSLAViolations/getSLATrendData 改走导出 RunMonitorOnce 或移回应用层 stub 测试），应用层补 32 方法 stubRepo 分支单测（含 automation 分支嵌入接口 noop repo）恢复覆盖率归属；runtime_assembly 经 slainfra.NewGormRepository 装配，boundary 锚点同 satisfaction 放宽。sla 单测+integration 绿、handlers SLA integration 绿、worker 绿、全量 100.0%
 - [ ] models 侧过渡别名最终删除（15 类型别名 + 4 投递状态常量 + NewEmbedding 转发，随 bootstrap/migrate、handlers swag、platform provider 各自迁移）
 
 ## 已定口径

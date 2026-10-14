@@ -1,4 +1,4 @@
-package application
+package infra
 
 // SLA 落库错误分支：丢表、trigger 注入、顺序查询失败（自 services
 // error_paths/more_branches/sequential_errors/trigger_error_paths 单测的
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	slapp "servify/apps/server/internal/modules/sla/application"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -65,9 +66,9 @@ func TestSLAService_MoreBranches(t *testing.T) {
 
 	// config insert error
 	db := newSLAErrorDB(t)
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	execTrigger(t, db, "CREATE TRIGGER blk_cfg BEFORE INSERT ON sla_configs BEGIN SELECT RAISE(ABORT, 'insert blocked'); END;")
-	if _, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	if _, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	}); err == nil {
 		t.Fatal("expected config insert error")
@@ -75,35 +76,35 @@ func TestSLAService_MoreBranches(t *testing.T) {
 
 	// priority-change conflict and combined priority+tier conflict
 	db2 := newSLAErrorDB(t)
-	svc2 := NewService(db2, logrus.New())
-	if _, err := svc2.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	svc2 := slapp.NewService(NewGormRepository(db2), logrus.New())
+	if _, err := svc2.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", CustomerTier: "vip",
 		FirstResponseTime: 1, ResolutionTime: 60, EscalationTime: 30,
 	}); err != nil {
 		t.Fatalf("create A: %v", err)
 	}
-	b, err := svc2.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	b, err := svc2.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "B", Priority: "high", FirstResponseTime: 2, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create B: %v", err)
 	}
 	// B (tier '') -> tier vip: combined conflict on priority+tier
-	if _, err := svc2.UpdateSLAConfig(ctx, b.ID, &SLAConfigUpdateRequest{CustomerTier: stringPtr("vip")}); err == nil {
+	if _, err := svc2.UpdateSLAConfig(ctx, b.ID, &slapp.SLAConfigUpdateRequest{CustomerTier: stringPtr("vip")}); err == nil {
 		t.Fatal("expected combined priority+tier conflict")
 	}
 	// low -> high conflicts with existing high config
-	c, err := svc2.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	c, err := svc2.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "C", Priority: "low", FirstResponseTime: 2, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create C: %v", err)
 	}
-	if _, err := svc2.UpdateSLAConfig(ctx, c.ID, &SLAConfigUpdateRequest{Priority: stringPtr("high")}); err == nil {
+	if _, err := svc2.UpdateSLAConfig(ctx, c.ID, &slapp.SLAConfigUpdateRequest{Priority: stringPtr("high")}); err == nil {
 		t.Fatal("expected priority conflict")
 	}
 	// resolution + valid escalation assignments
-	updated, err := svc2.UpdateSLAConfig(ctx, c.ID, &SLAConfigUpdateRequest{
+	updated, err := svc2.UpdateSLAConfig(ctx, c.ID, &slapp.SLAConfigUpdateRequest{
 		ResolutionTime: intPtr(90),
 		EscalationTime: intPtr(45),
 	})
@@ -116,7 +117,7 @@ func TestSLAService_MoreBranches(t *testing.T) {
 
 	// monitor loop with per-ticket error (violations table dropped mid-flow)
 	db3 := newSLAErrorDB(t)
-	svc3 := NewService(db3, logrus.New())
+	svc3 := slapp.NewService(NewGormRepository(db3), logrus.New())
 	now := time.Now()
 	cfg := &models.SLAConfig{
 		Name: "C", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
@@ -132,7 +133,7 @@ func TestSLAService_MoreBranches(t *testing.T) {
 	if err := db3.Migrator().DropTable("sla_violations"); err != nil {
 		t.Fatalf("drop violations: %v", err)
 	}
-	if err := svc3.monitorSLAViolations(ctx); err != nil {
+	if err := svc3.RunMonitorOnce(ctx); err != nil {
 		t.Fatalf("monitor with ticket errors: %v", err)
 	}
 }
@@ -151,7 +152,7 @@ func TestSLA_GetStats_SequentialErrors(t *testing.T) {
 		db := newSLAErrorDB(t)
 		seedSLAStatsData(t, db)
 		failNthQuery(db, tc.n)
-		svc := NewService(db, logrus.New())
+		svc := slapp.NewService(NewGormRepository(db), logrus.New())
 		_, err := svc.GetSLAStats(context.Background())
 		if err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
 			t.Fatalf("n=%d: expected %q, got %v", tc.n, tc.wantSubstr, err)
@@ -162,7 +163,7 @@ func TestSLA_GetStats_SequentialErrors(t *testing.T) {
 	db := newSLAErrorDB(t)
 	seedSLAStatsData(t, db)
 	failNthQuery(db, 9)
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	stats, err := svc.GetSLAStats(context.Background())
 	if err != nil {
 		t.Fatalf("trend failure should not propagate: %v", err)
@@ -177,16 +178,16 @@ func TestSLA_ListFindErrors(t *testing.T) {
 
 	db := newSLAErrorDB(t)
 	failNthQuery(db, 2)
-	svc := NewService(db, logrus.New())
-	if _, _, err := svc.ListSLAConfigs(ctx, &SLAConfigListRequest{Page: 1, PageSize: 10}); err == nil ||
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
+	if _, _, err := svc.ListSLAConfigs(ctx, &slapp.SLAConfigListRequest{Page: 1, PageSize: 10}); err == nil ||
 		!strings.Contains(err.Error(), "failed to list SLA configs") {
 		t.Fatalf("config find error: %v", err)
 	}
 
 	db2 := newSLAErrorDB(t)
 	failNthQuery(db2, 2)
-	svc2 := NewService(db2, logrus.New())
-	if _, _, err := svc2.ListSLAViolations(ctx, &SLAViolationListRequest{Page: 1, PageSize: 10}); err == nil ||
+	svc2 := slapp.NewService(NewGormRepository(db2), logrus.New())
+	if _, _, err := svc2.ListSLAViolations(ctx, &slapp.SLAViolationListRequest{Page: 1, PageSize: 10}); err == nil ||
 		!strings.Contains(err.Error(), "failed to list SLA violations") {
 		t.Fatalf("violation find error: %v", err)
 	}
@@ -198,45 +199,45 @@ func TestSLA_UpdateConfigCheckErrors(t *testing.T) {
 
 	// priority-change path: priority check (#2) fails
 	db := newSLAErrorDB(t)
-	svc := NewService(db, logrus.New())
-	cfg, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
+	cfg, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	failNthQuery(db, 2)
-	if _, err := svc.UpdateSLAConfig(ctx, cfg.ID, &SLAConfigUpdateRequest{Priority: stringPtr("low")}); err == nil ||
+	if _, err := svc.UpdateSLAConfig(ctx, cfg.ID, &slapp.SLAConfigUpdateRequest{Priority: stringPtr("low")}); err == nil ||
 		!strings.Contains(err.Error(), "failed to check existing config") {
 		t.Fatalf("priority check error: %v", err)
 	}
 
 	// priority-change path: combined check (#3) fails
 	db2 := newSLAErrorDB(t)
-	svc2 := NewService(db2, logrus.New())
-	cfg2, err := svc2.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	svc2 := slapp.NewService(NewGormRepository(db2), logrus.New())
+	cfg2, err := svc2.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "B", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create B: %v", err)
 	}
 	failNthQuery(db2, 3)
-	if _, err := svc2.UpdateSLAConfig(ctx, cfg2.ID, &SLAConfigUpdateRequest{Priority: stringPtr("low")}); err == nil ||
+	if _, err := svc2.UpdateSLAConfig(ctx, cfg2.ID, &slapp.SLAConfigUpdateRequest{Priority: stringPtr("low")}); err == nil ||
 		!strings.Contains(err.Error(), "failed to check existing config") {
 		t.Fatalf("combined check error (priority change): %v", err)
 	}
 
 	// no priority change: combined check (#2) fails
 	db3 := newSLAErrorDB(t)
-	svc3 := NewService(db3, logrus.New())
-	cfg3, err := svc3.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	svc3 := slapp.NewService(NewGormRepository(db3), logrus.New())
+	cfg3, err := svc3.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "C", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("create C: %v", err)
 	}
 	failNthQuery(db3, 2)
-	if _, err := svc3.UpdateSLAConfig(ctx, cfg3.ID, &SLAConfigUpdateRequest{Name: stringPtr("C2")}); err == nil ||
+	if _, err := svc3.UpdateSLAConfig(ctx, cfg3.ID, &slapp.SLAConfigUpdateRequest{Name: stringPtr("C2")}); err == nil ||
 		!strings.Contains(err.Error(), "failed to check existing config") {
 		t.Fatalf("combined check error: %v", err)
 	}
@@ -246,7 +247,7 @@ func TestSLA_UpdateConfigCheckErrors(t *testing.T) {
 func TestSLA_CheckViolationReloadError(t *testing.T) {
 	db := newSLAErrorDB(t)
 	now := time.Now()
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	ctx := context.Background()
 
 	if err := db.Create(&models.SLAConfig{
@@ -273,7 +274,7 @@ func TestSLA_InsertTriggerErrors(t *testing.T) {
 
 	// CheckSLAViolation: violation insert fails
 	db := newSLAErrorDB(t)
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	cfg := &models.SLAConfig{
 		Name: "C", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 		Active: true, CreatedAt: now, UpdatedAt: now,
@@ -292,7 +293,7 @@ func TestSLA_InsertTriggerErrors(t *testing.T) {
 
 	// CreateSLAViolation: insert fails after validations
 	db2 := newSLAErrorDB(t)
-	svc2 := NewService(db2, logrus.New())
+	svc2 := slapp.NewService(NewGormRepository(db2), logrus.New())
 	ticket := &models.Ticket{Title: "T", CreatedAt: now, UpdatedAt: now}
 	if err := db2.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -315,7 +316,7 @@ func TestSLA_InsertTriggerErrors(t *testing.T) {
 
 func TestSLA_ResolveTicketNonNotFound(t *testing.T) {
 	db := newSLAErrorDB(t)
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -328,17 +329,17 @@ func TestSLA_ResolveTicketNonNotFound(t *testing.T) {
 
 func TestSLA_UpdateConfigSaveTriggerError(t *testing.T) {
 	db := newSLAErrorDB(t)
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 	ctx := context.Background()
 
-	cfg, err := svc.CreateSLAConfig(ctx, &SLAConfigCreateRequest{
+	cfg, err := svc.CreateSLAConfig(ctx, &slapp.SLAConfigCreateRequest{
 		Name: "A", Priority: "high", FirstResponseTime: 5, ResolutionTime: 60, EscalationTime: 30,
 	})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	execTrigger(t, db, "CREATE TRIGGER blk_cfg_upd BEFORE UPDATE ON sla_configs BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
-	if _, err := svc.UpdateSLAConfig(ctx, cfg.ID, &SLAConfigUpdateRequest{Name: stringPtr("B")}); err == nil ||
+	if _, err := svc.UpdateSLAConfig(ctx, cfg.ID, &slapp.SLAConfigUpdateRequest{Name: stringPtr("B")}); err == nil ||
 		!strings.Contains(err.Error(), "failed to update SLA config") {
 		t.Fatalf("expected save error, got %v", err)
 	}

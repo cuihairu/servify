@@ -1,7 +1,8 @@
-package application
+package infra
 
 import (
 	"context"
+	slapp "servify/apps/server/internal/modules/sla/application"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -14,7 +15,7 @@ func TestRunMonitorOnceError(t *testing.T) {
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
-	svc := NewService(db, logrus.New())
+	svc := slapp.NewService(NewGormRepository(db), logrus.New())
 
 	if err := svc.RunMonitorOnce(context.Background()); err == nil {
 		t.Fatal("want error when tickets table is missing")

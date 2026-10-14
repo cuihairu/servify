@@ -54,6 +54,7 @@ import (
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	shiftinfra "servify/apps/server/internal/modules/shift/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	slainfra "servify/apps/server/internal/modules/sla/infra"
 	suggestionapp "servify/apps/server/internal/modules/suggestion/application"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	suggestioninfra "servify/apps/server/internal/modules/suggestion/infra"
@@ -402,7 +403,7 @@ func newAgentRegistry(db *gorm.DB, redisClient *redis.Client, logger *logrus.Log
 }
 
 func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
-	slaService := slapp.NewService(rt.DB, rt.Logger)
+	slaService := slapp.NewService(slainfra.NewGormRepository(rt.DB), rt.Logger)
 	rt.SLAService = slaService
 	rt.slaService = slaService
 

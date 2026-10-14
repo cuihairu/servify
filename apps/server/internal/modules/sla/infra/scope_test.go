@@ -1,4 +1,4 @@
-package application
+package infra
 
 // scope 过滤行为对账（自 services TestScopeHelpers 迁入，覆盖本包复刻的
 // tenantAndWorkspace/applyScopeFilter 与 services 原件同语义）。

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,25 +15,24 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"gorm.io/gorm"
 )
 
 // SLAService SLA配置和监控服务
 type SLAService struct {
-	db               *gorm.DB
+	repo             Repository
 	logger           *logrus.Logger
 	tracer           trace.Tracer
 	automationModule *automationapp.Service
 }
 
-// NewSLAService 创建SLA服务
-func NewService(db *gorm.DB, logger *logrus.Logger) *SLAService {
+// NewService 创建SLA服务
+func NewService(repo Repository, logger *logrus.Logger) *SLAService {
 	if logger == nil {
 		logger = logrus.New()
 	}
 
 	return &SLAService{
-		db:     db,
+		repo:   repo,
 		logger: logger,
 		tracer: otel.Tracer("servify.sla"),
 	}
@@ -155,11 +155,10 @@ func (s *SLAService) CreateSLAConfig(ctx context.Context, req *SLAConfigCreateRe
 	warning := defaultWarning(req.WarningThreshold)
 
 	// 检查相同优先级 + 客户级别是否已有配置
-	var existingConfig models.SLAConfig
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).Where("priority = ? AND customer_tier = ?", req.Priority, tier).First(&existingConfig).Error; err == nil {
-		return nil, fmt.Errorf("SLA config for priority '%s' and tier '%s' already exists", req.Priority, tier)
-	} else if err != gorm.ErrRecordNotFound {
+	if existingConfig, err := s.repo.FindConfigByPriorityTier(ctx, req.Priority, tier); err != nil {
 		return nil, fmt.Errorf("failed to check existing config: %w", err)
+	} else if existingConfig != nil {
+		return nil, fmt.Errorf("SLA config for priority '%s' and tier '%s' already exists", req.Priority, tier)
 	}
 
 	// 设置默认值
@@ -187,7 +186,7 @@ func (s *SLAService) CreateSLAConfig(ctx context.Context, req *SLAConfigCreateRe
 		UpdatedAt:         time.Now(),
 	}
 
-	if err := s.db.WithContext(ctx).Create(config).Error; err != nil {
+	if err := s.repo.CreateConfig(ctx, config); err != nil {
 		span.RecordError(err)
 		s.logger.Errorf("Failed to create SLA config: %v", err)
 		return nil, fmt.Errorf("failed to create SLA config: %w", err)
@@ -206,16 +205,16 @@ func (s *SLAService) GetSLAConfig(ctx context.Context, id uint) (*models.SLAConf
 
 	span.SetAttributes(attribute.Int64("sla.config.id", int64(id)))
 
-	var config models.SLAConfig
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&config, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("SLA config not found")
+	config, err := s.repo.GetConfigScoped(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrSLAConfigNotFound) {
+			return nil, ErrSLAConfigNotFound
 		}
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get SLA config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 // ListSLAConfigs 获取SLA配置列表
@@ -223,45 +222,14 @@ func (s *SLAService) ListSLAConfigs(ctx context.Context, req *SLAConfigListReque
 	ctx, span := s.tracer.Start(ctx, "sla.list_configs")
 	defer span.End()
 
-	query := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAConfig{}), ctx)
-
-	// 应用筛选
-	if len(req.Priority) > 0 {
-		query = query.Where("priority IN ?", req.Priority)
-	}
-	if len(req.CustomerTier) > 0 {
-		query = query.Where("(customer_tier = '' OR customer_tier IN ?)", req.CustomerTier)
-	}
-	if req.Active != nil {
-		query = query.Where("active = ?", *req.Active)
-	}
-
-	// 获取总数
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	total, err := s.repo.CountConfigsFiltered(ctx, req)
+	if err != nil {
 		span.RecordError(err)
 		return nil, 0, fmt.Errorf("failed to count SLA configs: %w", err)
 	}
 
-	// 应用排序
-	sortField := req.SortBy
-	if sortField == "" {
-		sortField = "created_at"
-	}
-	sortOrder := req.SortOrder
-	if sortOrder != "asc" && sortOrder != "desc" {
-		sortOrder = "desc"
-	}
-	query = query.Order(fmt.Sprintf("%s %s", sortField, sortOrder))
-
-	// 应用分页
-	if req.PageSize > 0 {
-		offset := (req.Page - 1) * req.PageSize
-		query = query.Offset(offset).Limit(req.PageSize)
-	}
-
-	var configs []models.SLAConfig
-	if err := query.Find(&configs).Error; err != nil {
+	configs, err := s.repo.ListConfigs(ctx, req)
+	if err != nil {
 		span.RecordError(err)
 		return nil, 0, fmt.Errorf("failed to list SLA configs: %w", err)
 	}
@@ -277,10 +245,10 @@ func (s *SLAService) UpdateSLAConfig(ctx context.Context, id uint, req *SLAConfi
 
 	span.SetAttributes(attribute.Int64("sla.config.id", int64(id)))
 
-	var config models.SLAConfig
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&config, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("SLA config not found")
+	config, err := s.repo.GetConfigScoped(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrSLAConfigNotFound) {
+			return nil, ErrSLAConfigNotFound
 		}
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to find SLA config: %w", err)
@@ -299,11 +267,12 @@ func (s *SLAService) UpdateSLAConfig(ctx context.Context, id uint, req *SLAConfi
 
 		// 检查是否有其他配置使用这个优先级
 		if *req.Priority != config.Priority {
-			var existingConfig models.SLAConfig
-			if err := applyScopeFilter(s.db.WithContext(ctx), ctx).Where("priority = ? AND id != ?", *req.Priority, id).First(&existingConfig).Error; err == nil {
-				return nil, fmt.Errorf("SLA config for priority '%s' already exists", *req.Priority)
-			} else if err != gorm.ErrRecordNotFound {
+			existingConfig, err := s.repo.FindConfigByPriorityExceptID(ctx, *req.Priority, id)
+			if err != nil {
 				return nil, fmt.Errorf("failed to check existing config: %w", err)
+			}
+			if existingConfig != nil {
+				return nil, fmt.Errorf("SLA config for priority '%s' already exists", *req.Priority)
 			}
 		}
 		config.Priority = *req.Priority
@@ -351,25 +320,24 @@ func (s *SLAService) UpdateSLAConfig(ctx context.Context, id uint, req *SLAConfi
 	}
 
 	// 组合唯一性：优先级 + 客户级别
-	var conflict models.SLAConfig
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).
-		Where("priority = ? AND customer_tier = ? AND id != ?", config.Priority, config.CustomerTier, id).
-		First(&conflict).Error; err == nil {
-		return nil, fmt.Errorf("SLA config for priority '%s' and tier '%s' already exists", config.Priority, config.CustomerTier)
-	} else if err != nil && err != gorm.ErrRecordNotFound {
+	conflict, err := s.repo.FindConfigByPriorityTierExceptID(ctx, config.Priority, config.CustomerTier, id)
+	if err != nil {
 		return nil, fmt.Errorf("failed to check existing config: %w", err)
+	}
+	if conflict != nil {
+		return nil, fmt.Errorf("SLA config for priority '%s' and tier '%s' already exists", config.Priority, config.CustomerTier)
 	}
 
 	config.UpdatedAt = time.Now()
 
-	if err := s.db.WithContext(ctx).Save(&config).Error; err != nil {
+	if err := s.repo.SaveConfig(ctx, config); err != nil {
 		span.RecordError(err)
 		s.logger.Errorf("Failed to update SLA config: %v", err)
 		return nil, fmt.Errorf("failed to update SLA config: %w", err)
 	}
 
 	s.logger.Infof("Updated SLA config: id=%d, name=%s", id, config.Name)
-	return &config, nil
+	return config, nil
 }
 
 // DeleteSLAConfig 删除SLA配置
@@ -380,8 +348,8 @@ func (s *SLAService) DeleteSLAConfig(ctx context.Context, id uint) error {
 	span.SetAttributes(attribute.Int64("sla.config.id", int64(id)))
 
 	// 检查是否有关联的违约记录
-	var violationCount int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).Where("sla_config_id = ?", id).Count(&violationCount).Error; err != nil {
+	violationCount, err := s.repo.CountViolationsByConfig(ctx, id)
+	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("failed to check SLA violations: %w", err)
 	}
@@ -390,13 +358,13 @@ func (s *SLAService) DeleteSLAConfig(ctx context.Context, id uint) error {
 		return fmt.Errorf("cannot delete SLA config: it has %d associated violations", violationCount)
 	}
 
-	result := applyScopeFilter(s.db.WithContext(ctx), ctx).Delete(&models.SLAConfig{}, id)
-	if result.Error != nil {
-		span.RecordError(result.Error)
-		return fmt.Errorf("failed to delete SLA config: %w", result.Error)
+	rows, err := s.repo.DeleteConfig(ctx, id)
+	if err != nil {
+		span.RecordError(err)
+		return fmt.Errorf("failed to delete SLA config: %w", err)
 	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("SLA config not found")
+	if rows == 0 {
+		return ErrSLAConfigNotFound
 	}
 
 	s.logger.Infof("Deleted SLA config: id=%d", id)
@@ -416,30 +384,28 @@ func (s *SLAService) GetSLAConfigByPriority(ctx context.Context, priority string
 	tier := normalizeTier(customerTier)
 
 	// 优先匹配特定客户级别
-	var config models.SLAConfig
 	if tier != "" {
-		if err := applyScopeFilter(s.db.WithContext(ctx), ctx).
-			Where("priority = ? AND customer_tier = ? AND active = true", priority, tier).
-			First(&config).Error; err == nil {
-			return &config, nil
-		} else if err != gorm.ErrRecordNotFound {
+		config, err := s.repo.FindConfigByPriorityTierActive(ctx, priority, tier)
+		if err != nil {
 			span.RecordError(err)
 			return nil, fmt.Errorf("failed to get SLA config by priority and tier: %w", err)
+		}
+		if config != nil {
+			return config, nil
 		}
 	}
 
 	// 回退默认配置（未指定客户级别）
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).
-		Where("priority = ? AND (customer_tier = '' OR customer_tier IS NULL) AND active = true", priority).
-		First(&config).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil // 未找到配置
-		}
+	config, err := s.repo.FindDefaultConfigByPriorityActive(ctx, priority)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get SLA config by priority: %w", err)
 	}
+	if config == nil {
+		return nil, nil // 未找到配置
+	}
 
-	return &config, nil
+	return config, nil
 }
 
 // CheckSLAViolation 检查工单是否违反SLA
@@ -457,10 +423,10 @@ func (s *SLAService) CheckSLAViolation(ctx context.Context, ticket *models.Ticke
 	)
 
 	scopeCtx := slaRecordScopeContext(ctx, ticket.TenantID, ticket.WorkspaceID)
-	var scopedTicket models.Ticket
-	if err := applyScopeFilter(s.db.WithContext(ctx), scopeCtx).First(&scopedTicket, ticket.ID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("ticket not found")
+	scopedTicket, err := s.repo.GetTicketScoped(scopeCtx, ticket.ID)
+	if err != nil {
+		if errors.Is(err, ErrTicketNotFound) {
+			return nil, ErrTicketNotFound
 		}
 		return nil, fmt.Errorf("failed to validate ticket scope: %w", err)
 	}
@@ -479,33 +445,30 @@ func (s *SLAService) CheckSLAViolation(ctx context.Context, ticket *models.Ticke
 	}
 
 	now := time.Now()
-	violation := s.detectViolation(&scopedTicket, slaConfig, now)
+	violation := s.detectViolation(scopedTicket, slaConfig, now)
 	if violation == nil {
 		return nil, nil // 没有违约
 	}
 
 	// 检查同类型的违约是否已经存在
-	var existingViolation models.SLAViolation
-	if err := applyScopeFilter(scopeAwareSLAViolationPreloads(s.db.WithContext(ctx), scopeCtx), scopeCtx).Where(
-		"ticket_id = ? AND sla_config_id = ? AND violation_type = ?",
-		scopedTicket.ID, slaConfig.ID, violation.ViolationType,
-	).First(&existingViolation).Error; err == nil {
-		return &existingViolation, nil // 已存在相同类型的违约记录
-	} else if err != gorm.ErrRecordNotFound {
+	existingViolation, err := s.repo.FindViolationByTicketConfigType(scopeCtx, scopedTicket.ID, slaConfig.ID, violation.ViolationType)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to check existing violation: %w", err)
 	}
+	if existingViolation != nil {
+		return existingViolation, nil // 已存在相同类型的违约记录
+	}
 
 	// 创建违约记录
-	if err := s.db.WithContext(ctx).Create(violation).Error; err != nil {
+	if err := s.repo.CreateViolation(ctx, violation); err != nil {
 		span.RecordError(err)
 		s.logger.Errorf("Failed to create SLA violation: %v", err)
 		return nil, fmt.Errorf("failed to create SLA violation: %w", err)
 	}
 
-	var createdViolation models.SLAViolation
-	if err := applyScopeFilter(scopeAwareSLAViolationPreloads(s.db.WithContext(ctx), scopeCtx), scopeCtx).
-		First(&createdViolation, violation.ID).Error; err != nil {
+	createdViolation, err := s.repo.GetViolationScoped(scopeCtx, violation.ID)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to load created SLA violation: %w", err)
 	}
@@ -522,7 +485,7 @@ func (s *SLAService) CheckSLAViolation(ctx context.Context, ticket *models.Ticke
 		})
 	}
 
-	return &createdViolation, nil
+	return createdViolation, nil
 }
 
 // detectViolation 检测具体的违约类型
@@ -586,16 +549,15 @@ func (s *SLAService) CreateSLAViolation(ctx context.Context, violation *models.S
 	)
 
 	scopeCtx := slaRecordScopeContext(ctx, violation.TenantID, violation.WorkspaceID)
-	var ticket models.Ticket
-	if err := applyScopeFilter(s.db.WithContext(ctx), scopeCtx).First(&ticket, violation.TicketID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("ticket not found")
+	ticket, err := s.repo.GetTicketScoped(scopeCtx, violation.TicketID)
+	if err != nil {
+		if errors.Is(err, ErrTicketNotFound) {
+			return ErrTicketNotFound
 		}
 		return fmt.Errorf("failed to validate violation ticket: %w", err)
 	}
-	var config models.SLAConfig
-	if err := applyScopeFilter(s.db.WithContext(ctx), scopeCtx).First(&config, violation.SLAConfigID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	if _, err := s.repo.GetConfigScoped(scopeCtx, violation.SLAConfigID); err != nil {
+		if errors.Is(err, ErrSLAConfigNotFound) {
 			return fmt.Errorf("sla config not found")
 		}
 		return fmt.Errorf("failed to validate violation config: %w", err)
@@ -607,7 +569,7 @@ func (s *SLAService) CreateSLAViolation(ctx context.Context, violation *models.S
 	violation.TenantID = ticket.TenantID
 	violation.WorkspaceID = ticket.WorkspaceID
 
-	if err := s.db.WithContext(ctx).Create(violation).Error; err != nil {
+	if err := s.repo.CreateViolation(ctx, violation); err != nil {
 		span.RecordError(err)
 		s.logger.Errorf("Failed to create SLA violation: %v", err)
 		return fmt.Errorf("failed to create SLA violation: %w", err)
@@ -622,54 +584,14 @@ func (s *SLAService) ListSLAViolations(ctx context.Context, req *SLAViolationLis
 	ctx, span := s.tracer.Start(ctx, "sla.list_violations")
 	defer span.End()
 
-	query := applyScopeFilter(scopeAwareSLAViolationPreloads(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx), ctx)
-
-	// 应用筛选
-	if req.TicketID != nil {
-		query = query.Where("ticket_id = ?", *req.TicketID)
-	}
-	if req.SLAConfigID != nil {
-		query = query.Where("sla_config_id = ?", *req.SLAConfigID)
-	}
-	if len(req.ViolationType) > 0 {
-		query = query.Where("violation_type IN ?", req.ViolationType)
-	}
-	if req.Resolved != nil {
-		query = query.Where("resolved = ?", *req.Resolved)
-	}
-	if req.DateFrom != nil {
-		query = query.Where("violated_at >= ?", *req.DateFrom)
-	}
-	if req.DateTo != nil {
-		query = query.Where("violated_at <= ?", *req.DateTo)
-	}
-
-	// 获取总数
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	total, err := s.repo.CountViolationsFiltered(ctx, req)
+	if err != nil {
 		span.RecordError(err)
 		return nil, 0, fmt.Errorf("failed to count SLA violations: %w", err)
 	}
 
-	// 应用排序
-	sortField := req.SortBy
-	if sortField == "" {
-		sortField = "created_at"
-	}
-	sortOrder := req.SortOrder
-	if sortOrder != "asc" && sortOrder != "desc" {
-		sortOrder = "desc"
-	}
-	query = query.Order(fmt.Sprintf("%s %s", sortField, sortOrder))
-
-	// 应用分页
-	if req.PageSize > 0 {
-		offset := (req.Page - 1) * req.PageSize
-		query = query.Offset(offset).Limit(req.PageSize)
-	}
-
-	var violations []models.SLAViolation
-	if err := query.Find(&violations).Error; err != nil {
+	violations, err := s.repo.ListViolations(ctx, req)
+	if err != nil {
 		span.RecordError(err)
 		return nil, 0, fmt.Errorf("failed to list SLA violations: %w", err)
 	}
@@ -685,18 +607,13 @@ func (s *SLAService) ResolveSLAViolation(ctx context.Context, id uint) error {
 
 	span.SetAttributes(attribute.Int64("sla.violation.id", int64(id)))
 
-	result := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).Where("id = ?", id).Updates(map[string]interface{}{
-		"resolved":    true,
-		"resolved_at": time.Now(),
-		"updated_at":  time.Now(),
-	})
-
-	if result.Error != nil {
-		span.RecordError(result.Error)
-		return fmt.Errorf("failed to resolve SLA violation: %w", result.Error)
+	rows, err := s.repo.ResolveViolation(ctx, id)
+	if err != nil {
+		span.RecordError(err)
+		return fmt.Errorf("failed to resolve SLA violation: %w", err)
 	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("SLA violation not found")
+	if rows == 0 {
+		return ErrSLAViolationNotFound
 	}
 
 	s.logger.Infof("Resolved SLA violation: id=%d", id)
@@ -708,36 +625,23 @@ func (s *SLAService) ResolveViolationsByTicket(ctx context.Context, ticketID uin
 	ctx, span := s.tracer.Start(ctx, "sla.resolve_ticket_violations")
 	defer span.End()
 
-	var ticket models.Ticket
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).First(&ticket, ticketID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("ticket not found")
+	if _, err := s.repo.GetTicketScoped(ctx, ticketID); err != nil {
+		if errors.Is(err, ErrTicketNotFound) {
+			return ErrTicketNotFound
 		}
 		span.RecordError(err)
 		return fmt.Errorf("failed to validate ticket: %w", err)
 	}
 
-	query := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).
-		Where("ticket_id = ? AND resolved = false", ticketID)
-	if len(violationTypes) > 0 {
-		query = query.Where("violation_type IN ?", violationTypes)
-	}
-
-	now := time.Now()
-	result := query.Updates(map[string]interface{}{
-		"resolved":    true,
-		"resolved_at": now,
-		"updated_at":  now,
-	})
-
-	if result.Error != nil {
-		span.RecordError(result.Error)
-		return fmt.Errorf("failed to resolve SLA violations: %w", result.Error)
+	rows, err := s.repo.ResolveViolationsByTicket(ctx, ticketID, violationTypes)
+	if err != nil {
+		span.RecordError(err)
+		return fmt.Errorf("failed to resolve SLA violations: %w", err)
 	}
 
 	span.SetAttributes(
 		attribute.Int64("sla.violation.ticket_id", int64(ticketID)),
-		attribute.Int64("sla.violation.rows", result.RowsAffected),
+		attribute.Int64("sla.violation.rows", rows),
 	)
 	return nil
 }
@@ -755,102 +659,65 @@ func (s *SLAService) GetSLAStats(ctx context.Context) (*SLAStatsResponse, error)
 	}
 
 	// 统计SLA配置数量
-	var totalConfigs int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAConfig{}), ctx).Count(&totalConfigs).Error; err != nil {
+	totalConfigs, err := s.repo.CountConfigs(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to count SLA configs: %w", err)
 	}
 	stats.TotalConfigs = int(totalConfigs)
 
-	var activeConfigs int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAConfig{}), ctx).Where("active = true").Count(&activeConfigs).Error; err != nil {
+	activeConfigs, err := s.repo.CountActiveConfigs(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to count active SLA configs: %w", err)
 	}
 	stats.ActiveConfigs = int(activeConfigs)
 
 	// 统计违约数量
-	var totalViolations int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).Count(&totalViolations).Error; err != nil {
+	totalViolations, err := s.repo.CountViolations(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to count total violations: %w", err)
 	}
 	stats.TotalViolations = int(totalViolations)
 
-	var unresolvedViolations int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).Where("resolved = false").Count(&unresolvedViolations).Error; err != nil {
+	unresolvedViolations, err := s.repo.CountUnresolvedViolations(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to count unresolved violations: %w", err)
 	}
 	stats.UnresolvedViolations = int(unresolvedViolations)
 
 	// 按类型统计违约
-	var violationTypeStats []struct {
-		ViolationType string `json:"violation_type"`
-		Count         int    `json:"count"`
-	}
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).
-		Select("violation_type, COUNT(*) as count").
-		Group("violation_type").
-		Scan(&violationTypeStats).Error; err != nil {
+	byType, err := s.repo.ViolationsByType(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get violation type stats: %w", err)
 	}
-
-	for _, stat := range violationTypeStats {
-		stats.ViolationsByType[stat.ViolationType] = stat.Count
+	for typ, count := range byType {
+		stats.ViolationsByType[typ] = count
 	}
 
 	// 按优先级统计违约（通过SLA配置关联）
-	var violationPriorityStats []struct {
-		Priority string `json:"priority"`
-		Count    int    `json:"count"`
-	}
-	violationStatsQuery := s.db.WithContext(ctx).Table("sla_violations").
-		Select("sla_configs.priority, COUNT(*) as count").
-		Joins("JOIN sla_configs ON sla_violations.sla_config_id = sla_configs.id AND sla_configs.tenant_id = sla_violations.tenant_id AND sla_configs.workspace_id = sla_violations.workspace_id")
-	if tenantID, workspaceID := tenantAndWorkspace(ctx); tenantID != "" || workspaceID != "" {
-		if tenantID != "" {
-			violationStatsQuery = violationStatsQuery.Where("sla_violations.tenant_id = ?", tenantID)
-		}
-		if workspaceID != "" {
-			violationStatsQuery = violationStatsQuery.Where("sla_violations.workspace_id = ?", workspaceID)
-		}
-	}
-	if err := violationStatsQuery.Group("sla_configs.priority").Scan(&violationPriorityStats).Error; err != nil {
+	byPriority, err := s.repo.ViolationsByPriority(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get violation priority stats: %w", err)
 	}
-
-	for _, stat := range violationPriorityStats {
-		stats.ViolationsByPriority[stat.Priority] = stat.Count
+	for priority, count := range byPriority {
+		stats.ViolationsByPriority[priority] = count
 	}
 
-	// 按客户级别统计违约
-	var violationTierStats []struct {
-		Tier  string `json:"customer_tier"`
-		Count int    `json:"count"`
-	}
-	violationTierQuery := s.db.WithContext(ctx).Table("sla_violations").
-		Select("COALESCE(sla_configs.customer_tier, '') as customer_tier, COUNT(*) as count").
-		Joins("JOIN sla_configs ON sla_violations.sla_config_id = sla_configs.id AND sla_configs.tenant_id = sla_violations.tenant_id AND sla_configs.workspace_id = sla_violations.workspace_id")
-	if tenantID, workspaceID := tenantAndWorkspace(ctx); tenantID != "" || workspaceID != "" {
-		if tenantID != "" {
-			violationTierQuery = violationTierQuery.Where("sla_violations.tenant_id = ?", tenantID)
-		}
-		if workspaceID != "" {
-			violationTierQuery = violationTierQuery.Where("sla_violations.workspace_id = ?", workspaceID)
-		}
-	}
-	if err := violationTierQuery.Group("sla_configs.customer_tier").Scan(&violationTierStats).Error; err == nil {
-		for _, stat := range violationTierStats {
-			stats.ViolationsByTier[stat.Tier] = stat.Count
+	// 按客户级别统计违约（查询失败沿用旧行为：静默跳过）
+	if byTier, err := s.repo.ViolationsByTier(ctx); err == nil {
+		for tier, count := range byTier {
+			stats.ViolationsByTier[tier] = count
 		}
 	}
 
 	// 计算合规率
-	var totalTickets int64
-	if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.Ticket{}), ctx).Count(&totalTickets).Error; err != nil {
+	totalTickets, err := s.repo.CountTickets(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to count total tickets: %w", err)
 	}
@@ -880,30 +747,26 @@ func (s *SLAService) GetSLAStats(ctx context.Context) (*SLAStatsResponse, error)
 
 // getSLATrendData 获取SLA合规趋势数据
 func (s *SLAService) getSLATrendData(ctx context.Context, days int) ([]SLAComplianceTrend, error) {
-	var trendData []SLAComplianceTrend
+	trendData := make([]SLAComplianceTrend, 0, days)
 
 	for i := days - 1; i >= 0; i-- {
 		date := time.Now().AddDate(0, 0, -i)
 		dateStr := date.Format("2006-01-02")
 
 		// 统计当天创建的工单数
-		var totalTickets int64
-		if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.Ticket{}), ctx).
-			Where("DATE(created_at) = ?", dateStr).
-			Count(&totalTickets).Error; err != nil {
+		totalTickets, err := s.repo.CountTicketsByDate(ctx, dateStr)
+		if err != nil {
 			return nil, fmt.Errorf("failed to count tickets for date %s: %w", dateStr, err)
 		}
 
 		// 统计当天的违约数
-		var violations int64
-		if err := applyScopeFilter(s.db.WithContext(ctx).Model(&models.SLAViolation{}), ctx).
-			Where("DATE(violated_at) = ?", dateStr).
-			Count(&violations).Error; err != nil {
+		violations, err := s.repo.CountViolationsByDate(ctx, dateStr)
+		if err != nil {
 			return nil, fmt.Errorf("failed to count violations for date %s: %w", dateStr, err)
 		}
 
 		// 计算合规率
-		var complianceRate = 100.0
+		complianceRate := 100.0
 		if totalTickets > 0 {
 			complianceRate = float64(totalTickets-violations) / float64(totalTickets) * 100
 		}
@@ -965,26 +828,16 @@ func slaRecordScopeContext(ctx context.Context, tenantID, workspaceID string) co
 	return platformauth.ContextWithScope(ctx, currentTenant, currentWorkspace)
 }
 
-func scopeAwareSLAViolationPreloads(db *gorm.DB, ctx context.Context) *gorm.DB {
-	return db.
-		Preload("Ticket", func(tx *gorm.DB) *gorm.DB {
-			return applyScopeFilter(tx, ctx)
-		}).
-		Preload("SLAConfig", func(tx *gorm.DB) *gorm.DB {
-			return applyScopeFilter(tx, ctx)
-		})
-}
-
 // resolveCustomerTier 根据工单的客户ID提取客户等级（复用客户优先级字段）
 func (s *SLAService) resolveCustomerTier(ctx context.Context, customerUserID uint) string {
 	if customerUserID == 0 {
 		return ""
 	}
-	var customer models.Customer
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).Where("user_id = ?", customerUserID).First(&customer).Error; err != nil {
+	priority, err := s.repo.GetCustomerPriorityScoped(ctx, customerUserID)
+	if err != nil {
 		return ""
 	}
-	return normalizeTier(customer.Priority)
+	return normalizeTier(priority)
 }
 
 // RunMonitorOnce 执行一轮 SLA 违约扫描并返回错误（周期循环由 app/worker 驱动）。
@@ -998,8 +851,8 @@ func (s *SLAService) monitorSLAViolations(ctx context.Context) error {
 	defer span.End()
 
 	// 获取所有未关闭的工单
-	var tickets []models.Ticket
-	if err := applyScopeFilter(s.db.WithContext(ctx), ctx).Where("status NOT IN ?", []string{"resolved", "closed"}).Find(&tickets).Error; err != nil {
+	tickets, err := s.repo.ListActiveTickets(ctx)
+	if err != nil {
 		span.RecordError(err)
 		return fmt.Errorf("failed to get active tickets: %w", err)
 	}

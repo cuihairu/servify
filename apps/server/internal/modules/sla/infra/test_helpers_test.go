@@ -1,4 +1,4 @@
-package application
+package infra
 
 // 测试 helper 复刻（services 侧同名 helper 不跨包引用；指针/上下文 helper
 // 与 satisfaction/application 的 test_helpers_test.go 同源）。

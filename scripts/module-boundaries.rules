@@ -169,7 +169,7 @@ forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSatisfac
 forbid|apps/server/internal/app/server/runtime.go|services\.SatisfactionService|Runtime must not reference the legacy satisfaction service.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SatisfactionService|Runtime assembly must not reference the legacy satisfaction service.
 forbid|apps/server/internal/app/worker/jobs.go|services\.SatisfactionService|Worker deps must consume satisfaction via the module processor contract.
-require|apps/server/internal/app/server/runtime_assembly.go|slaService[[:space:]]*:=[[:space:]]*slapp\.NewService\(rt\.DB, rt\.Logger\)|SLA assembly must construct the single module instance.
+require|apps/server/internal/app/server/runtime_assembly.go|slaService[[:space:]]*:=[[:space:]]*slapp\.NewService\(|SLA assembly must construct the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSLAService|Runtime assembly must not construct the legacy SLA service.
 forbid|apps/server/internal/app/server/runtime.go|services\.SLAService|Runtime must not reference the legacy SLA service.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SLAService|Runtime assembly must not reference the legacy SLA service.
