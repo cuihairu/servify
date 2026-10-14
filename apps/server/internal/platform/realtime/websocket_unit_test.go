@@ -55,7 +55,7 @@ type unitRTCService struct {
 	candErr   error
 }
 
-func (s *unitRTCService) HandleOffer(sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+func (s *unitRTCService) HandleOffer(ownerClientID string, sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	s.offer = offer
 	if s.offerErr != nil {
 		return nil, s.offerErr
@@ -63,11 +63,11 @@ func (s *unitRTCService) HandleOffer(sessionID string, offer webrtc.SessionDescr
 	return &webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: "answer-sdp"}, nil
 }
 
-func (s *unitRTCService) HandleAnswer(sessionID string, answer webrtc.SessionDescription) error {
+func (s *unitRTCService) HandleAnswer(ownerClientID string, sessionID string, answer webrtc.SessionDescription) error {
 	return s.answerErr
 }
 
-func (s *unitRTCService) HandleICECandidate(sessionID string, candidate webrtc.ICECandidateInit) error {
+func (s *unitRTCService) HandleICECandidate(ownerClientID string, sessionID string, candidate webrtc.ICECandidateInit) error {
 	return s.candErr
 }
 

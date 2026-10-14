@@ -13,10 +13,19 @@ var (
 	hookPeerConnectionCreateAnswer = func(pc *webrtc.PeerConnection, options *webrtc.AnswerOptions) (webrtc.SessionDescription, error) {
 		return pc.CreateAnswer(options)
 	}
+	hookPeerConnectionCreateOffer = func(pc *webrtc.PeerConnection, options *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
+		return pc.CreateOffer(options)
+	}
 	hookPeerConnectionSetLocalDescription = func(pc *webrtc.PeerConnection, desc webrtc.SessionDescription) error {
 		return pc.SetLocalDescription(desc)
 	}
 	hookPeerConnectionClose = func(pc *webrtc.PeerConnection) error {
 		return pc.Close()
+	}
+	// hookNewTrackLocalStaticRTP 是媒体桥接的本地轨构造缝线：codec 能力非法
+	// 等形态在真实链路里由发布端 SDP 决定，无法稳定构造，注入错误以覆盖
+	// 转发分支的失败处理。
+	hookNewTrackLocalStaticRTP = func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
+		return webrtc.NewTrackLocalStaticRTP(codec, id, streamID)
 	}
 )

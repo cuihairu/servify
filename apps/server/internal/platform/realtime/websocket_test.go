@@ -65,20 +65,20 @@ type stubRTCService struct {
 	candidate          webrtc.ICECandidateInit
 }
 
-func (s *stubRTCService) HandleOffer(sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
+func (s *stubRTCService) HandleOffer(ownerClientID string, sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
 	s.offerSessionID = sessionID
 	s.offer = offer
 	answer := &webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: "stub-answer"}
 	return answer, nil
 }
 
-func (s *stubRTCService) HandleAnswer(sessionID string, answer webrtc.SessionDescription) error {
+func (s *stubRTCService) HandleAnswer(ownerClientID string, sessionID string, answer webrtc.SessionDescription) error {
 	s.answerSessionID = sessionID
 	s.answer = answer
 	return nil
 }
 
-func (s *stubRTCService) HandleICECandidate(sessionID string, candidate webrtc.ICECandidateInit) error {
+func (s *stubRTCService) HandleICECandidate(ownerClientID string, sessionID string, candidate webrtc.ICECandidateInit) error {
 	s.candidateSessionID = sessionID
 	s.candidate = candidate
 	return nil

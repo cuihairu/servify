@@ -175,7 +175,7 @@ func TestWebRTC_LoopbackDataChannel(t *testing.T) {
 		t.Fatalf("local: %v", err)
 	}
 
-	answer, err := s.HandleOffer("sess-loop", *peer.LocalDescription())
+	answer, err := s.HandleOffer("", "sess-loop", *peer.LocalDescription())
 	if err != nil {
 		t.Fatalf("HandleOffer: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestWebRTC_LoopbackDataChannel(t *testing.T) {
 		if c == nil {
 			return
 		}
-		_ = s.HandleICECandidate("sess-loop", c.ToJSON())
+		_ = s.HandleICECandidate("", "sess-loop", c.ToJSON())
 	})
 
 	// forward service-side candidates to the peer

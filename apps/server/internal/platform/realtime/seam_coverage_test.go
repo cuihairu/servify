@@ -50,7 +50,7 @@ func TestHSSeamsWebRTCHandleOfferErrors(t *testing.T) {
 		hscovSetSeam(t, &hookPeerConnectionCreateAnswer, func(*webrtc.PeerConnection, *webrtc.AnswerOptions) (webrtc.SessionDescription, error) {
 			return webrtc.SessionDescription{}, errors.New("boom: answer")
 		})
-		if _, err := s.HandleOffer("sess-answer-err", offer); err == nil || !strings.Contains(err.Error(), "failed to create answer") {
+		if _, err := s.HandleOffer("", "sess-answer-err", offer); err == nil || !strings.Contains(err.Error(), "failed to create answer") {
 			t.Fatalf("expected create answer error, got %v", err)
 		}
 	})
@@ -59,7 +59,7 @@ func TestHSSeamsWebRTCHandleOfferErrors(t *testing.T) {
 		hscovSetSeam(t, &hookPeerConnectionSetLocalDescription, func(*webrtc.PeerConnection, webrtc.SessionDescription) error {
 			return errors.New("boom: set local")
 		})
-		if _, err := s.HandleOffer("sess-local-err", offer); err == nil || !strings.Contains(err.Error(), "failed to set local description") {
+		if _, err := s.HandleOffer("", "sess-local-err", offer); err == nil || !strings.Contains(err.Error(), "failed to set local description") {
 			t.Fatalf("expected set local description error, got %v", err)
 		}
 	})

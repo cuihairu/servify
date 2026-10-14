@@ -59,7 +59,7 @@ func TestWebRTC_HandleOfferReclaimsTerminalConnections(t *testing.T) {
 	}
 	stale.SetStatus("failed")
 
-	if _, err := s.HandleOffer("sess-reoffer", offer); err != nil {
+	if _, err := s.HandleOffer("", "sess-reoffer", offer); err != nil {
 		t.Fatalf("HandleOffer: %v", err)
 	}
 

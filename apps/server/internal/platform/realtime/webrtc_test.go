@@ -12,10 +12,10 @@ func TestWebRTCService_NoConnectionErrors(t *testing.T) {
 	if _, err := s.GetConnectionStats("nope"); err == nil {
 		t.Fatalf("expected error for missing connection stats")
 	}
-	if err := s.HandleAnswer("nope", webrtc.SessionDescription{}); err == nil {
+	if err := s.HandleAnswer("", "nope", webrtc.SessionDescription{}); err == nil {
 		t.Fatalf("expected error for missing connection answer")
 	}
-	if err := s.HandleICECandidate("nope", webrtc.ICECandidateInit{}); err == nil {
+	if err := s.HandleICECandidate("", "nope", webrtc.ICECandidateInit{}); err == nil {
 		t.Fatalf("expected error for missing connection candidate")
 	}
 	if err := s.SendDataChannelMessage("nope", "hi"); err == nil {

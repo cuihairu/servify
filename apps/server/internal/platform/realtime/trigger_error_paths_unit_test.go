@@ -39,14 +39,14 @@ func TestWebRTC_HandleAnswerStateError(t *testing.T) {
 		// SDP may lack ice-ufrag; the goal is only to produce some answer payload
 		answer, aerr := peer.CreateAnswer(nil)
 		if aerr == nil {
-			if err := s.HandleAnswer("sess-state", answer); err == nil {
+			if err := s.HandleAnswer("", "sess-state", answer); err == nil {
 				t.Fatal("expected invalid state transition error")
 			}
 			return
 		}
 	}
 	// fallback: craft a syntactically valid answer that still violates the state machine
-	if err := s.HandleAnswer("sess-state", webrtc.SessionDescription{
+	if err := s.HandleAnswer("", "sess-state", webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer, SDP: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n",
 	}); err == nil {
 		t.Fatal("expected SetRemoteDescription error on fresh connection")
@@ -60,7 +60,7 @@ func TestWebRTC_HandleICECandidateWithoutRemote(t *testing.T) {
 	}
 	defer s.CloseConnection("sess-ice") //nolint:errcheck
 
-	err := s.HandleICECandidate("sess-ice", webrtc.ICECandidateInit{
+	err := s.HandleICECandidate("", "sess-ice", webrtc.ICECandidateInit{
 		Candidate: "candidate:1 1 UDP 2130706431 192.168.1.1 5000 typ host",
 	})
 	if err == nil {

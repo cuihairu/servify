@@ -35,7 +35,7 @@ func TestWebRTC_HandleOfferCreateError(t *testing.T) {
 	hub := NewWebSocketHub()
 	go hub.Run()
 	s := NewWebRTCService(iceturn.ICEConfig{}, hub) // invalid STUN config
-	if _, err := s.HandleOffer("sess", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0"}); err == nil {
+	if _, err := s.HandleOffer("", "sess", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0"}); err == nil {
 		t.Fatal("expected peer connection creation error")
 	}
 }

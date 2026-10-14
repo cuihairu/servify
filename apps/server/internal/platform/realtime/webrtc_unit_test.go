@@ -108,7 +108,7 @@ func TestWebRTC_HandleOfferCreatePeerConnectionError(t *testing.T) {
 	go hub.Run()
 	// 非法 ICE URL 使 CreatePeerConnection 失败，HandleOffer 应原样上抛。
 	s := NewWebRTCService(iceturn.ICEConfig{STUNServers: []string{"://not-a-valid-ice-url"}}, hub)
-	if _, err := s.HandleOffer("sess", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0"}); err == nil {
+	if _, err := s.HandleOffer("", "sess", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "v=0"}); err == nil {
 		t.Fatal("expected HandleOffer to surface CreatePeerConnection error")
 	}
 }
@@ -175,14 +175,14 @@ func TestWebRTC_FullSignalingFlow(t *testing.T) {
 		t.Fatalf("CreateAnswer: %v", err)
 	}
 
-	if err := s.HandleAnswer("sess-full", answer); err != nil {
+	if err := s.HandleAnswer("", "sess-full", answer); err != nil {
 		t.Fatalf("HandleAnswer: %v", err)
 	}
 	if len(voice.answered) != 1 {
 		t.Fatalf("expected AnswerCall, got %+v", voice.answered)
 	}
 
-	if err := s.HandleICECandidate("sess-full", webrtc.ICECandidateInit{
+	if err := s.HandleICECandidate("", "sess-full", webrtc.ICECandidateInit{
 		Candidate: "candidate:1 1 UDP 2130706431 192.168.1.1 5000 typ host",
 	}); err != nil {
 		t.Fatalf("HandleICECandidate: %v", err)
@@ -227,7 +227,7 @@ func TestWebRTC_HandleOfferGeneratesAnswer(t *testing.T) {
 		t.Fatalf("SetLocalDescription: %v", err)
 	}
 
-	answer, err := s.HandleOffer("sess-offer", offer)
+	answer, err := s.HandleOffer("", "sess-offer", offer)
 	if err != nil {
 		t.Fatalf("HandleOffer: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestWebRTC_HandleOfferGeneratesAnswer(t *testing.T) {
 	}
 
 	// invalid remote description triggers the SetRemoteDescription error path
-	if _, err := s.HandleOffer("sess-bad", webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: "junk"}); err == nil {
+	if _, err := s.HandleOffer("", "sess-bad", webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: "junk"}); err == nil {
 		t.Fatal("expected SetRemoteDescription error")
 	}
 
@@ -247,10 +247,10 @@ func TestWebRTC_HandleOfferGeneratesAnswer(t *testing.T) {
 
 func TestWebRTC_HandleAnswerAndCandidateMissingConn(t *testing.T) {
 	s, _ := newUnitWebRTCService(t)
-	if err := s.HandleAnswer("missing", webrtc.SessionDescription{}); err == nil {
+	if err := s.HandleAnswer("", "missing", webrtc.SessionDescription{}); err == nil {
 		t.Fatal("expected missing connection error")
 	}
-	if err := s.HandleICECandidate("missing", webrtc.ICECandidateInit{}); err == nil {
+	if err := s.HandleICECandidate("", "missing", webrtc.ICECandidateInit{}); err == nil {
 		t.Fatal("expected missing connection error")
 	}
 	if _, err := s.GetConnectionStats("missing"); err == nil {

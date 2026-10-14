@@ -40,9 +40,9 @@ type websocketAIStreamer interface {
 }
 
 type websocketRTCService interface {
-	HandleOffer(sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error)
-	HandleAnswer(sessionID string, answer webrtc.SessionDescription) error
-	HandleICECandidate(sessionID string, candidate webrtc.ICECandidateInit) error
+	HandleOffer(ownerClientID string, sessionID string, offer webrtc.SessionDescription) (*webrtc.SessionDescription, error)
+	HandleAnswer(ownerClientID string, sessionID string, answer webrtc.SessionDescription) error
+	HandleICECandidate(ownerClientID string, sessionID string, candidate webrtc.ICECandidateInit) error
 }
 
 // iceConfigProvider 是 rtcService 的可选能力：客户端注册时下发一次 ICE 配置
@@ -503,7 +503,7 @@ func (c *WebSocketClient) handleWebRTCOffer(message WebSocketMessage) {
 			logrus.Errorf("Failed to decode WebRTC offer: %v", err)
 			return
 		}
-		answer, err := rtc.HandleOffer(c.SessionID, offer)
+		answer, err := rtc.HandleOffer(c.ID, c.SessionID, offer)
 		if err != nil {
 			logrus.Errorf("Failed to handle WebRTC offer: %v", err)
 			return
@@ -533,7 +533,7 @@ func (c *WebSocketClient) handleWebRTCAnswer(message WebSocketMessage) {
 		logrus.Errorf("Failed to decode WebRTC answer: %v", err)
 		return
 	}
-	if err := rtc.HandleAnswer(c.SessionID, answer); err != nil {
+	if err := rtc.HandleAnswer(c.ID, c.SessionID, answer); err != nil {
 		logrus.Errorf("Failed to handle WebRTC answer: %v", err)
 	}
 }
@@ -551,7 +551,7 @@ func (c *WebSocketClient) handleWebRTCCandidate(message WebSocketMessage) {
 		logrus.Errorf("Failed to decode ICE candidate: %v", err)
 		return
 	}
-	if err := rtc.HandleICECandidate(c.SessionID, candidate); err != nil {
+	if err := rtc.HandleICECandidate(c.ID, c.SessionID, candidate); err != nil {
 		logrus.Errorf("Failed to handle ICE candidate: %v", err)
 	}
 }
@@ -562,6 +562,25 @@ func (h *WebSocketHub) SendToSession(sessionID string, message WebSocketMessage)
 		Data:      message.Data,
 		SessionID: sessionID,
 		Timestamp: time.Now(),
+	}
+}
+
+// SendToClient 定向下发给单个 WS 连接（不经会话广播）：同一会话可能有访客/
+// 坐席两条 PC，广播会把信令帧发给无关对端。连接已注销或发送队列满时静默
+// 丢弃，不阻塞调用方。与 Run 的广播/注销同持 h.mutex，发送不会撞上已关闭
+// 的 Send 通道。
+func (h *WebSocketHub) SendToClient(clientID string, message WebSocketMessage) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	client, ok := h.clients[clientID]
+	if !ok {
+		return
+	}
+	select {
+	case client.Send <- message:
+	default:
+		logrus.Warnf("Drop message for client %s: send queue full", clientID)
 	}
 }
 
