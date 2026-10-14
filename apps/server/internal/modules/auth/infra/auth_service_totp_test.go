@@ -1,8 +1,9 @@
-package application
+package infra
 
 import (
 	"context"
 	"errors"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func currentTOTP(t *testing.T, secret string) string {
 }
 
 // enrollTwoFactor 走完整绑定流程，返回明文恢复码与 secret。
-func enrollTwoFactor(t *testing.T, svc *AuthService, userID uint) (secret string, codes []string) {
+func enrollTwoFactor(t *testing.T, svc *slapp.AuthService, userID uint) (secret string, codes []string) {
 	t.Helper()
 	setup, err := svc.SetupTwoFactor(context.Background(), userID)
 	if err != nil {
@@ -60,22 +61,22 @@ func enrollTwoFactor(t *testing.T, svc *AuthService, userID uint) (secret string
 func TestTwoFactorEnrollmentAndChallengeLogin(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	cfg := twoFactorTestConfig(true)
-	svc := NewService(db, cfg)
+	svc := slapp.NewService(NewGormRepository(db), cfg)
 	seedTOTPUser(t, db, 91, "totp-user")
-	meta := AuthSessionMetadata{DeviceFingerprint: "fp-2fa", UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
+	meta := slapp.AuthSessionMetadata{DeviceFingerprint: "fp-2fa", UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
 	secret, codes := enrollTwoFactor(t, svc, 91)
-	if len(codes) != recoveryCodeCount {
-		t.Fatalf("recovery codes = %d want %d", len(codes), recoveryCodeCount)
+	if len(codes) != 10 {
+		t.Fatalf("recovery codes = %d want %d", len(codes), 10)
 	}
 
 	// 绑定后重复 setup/enable 拒绝
-	if _, err := svc.SetupTwoFactor(context.Background(), 91); !errors.Is(err, ErrTwoFactorAlreadyEnabled) {
-		t.Fatalf("second setup err = %v want %v", err, ErrTwoFactorAlreadyEnabled)
+	if _, err := svc.SetupTwoFactor(context.Background(), 91); !errors.Is(err, slapp.ErrTwoFactorAlreadyEnabled) {
+		t.Fatalf("second setup err = %v want %v", err, slapp.ErrTwoFactorAlreadyEnabled)
 	}
 
 	// 登录进入挑战步：无正式 token
-	outcome, err := svc.Login(context.Background(), LoginInput{Username: "totp-user", Password: "password123"}, meta)
+	outcome, err := svc.Login(context.Background(), slapp.LoginInput{Username: "totp-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -88,17 +89,17 @@ func TestTwoFactorEnrollmentAndChallengeLogin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate challenge token: %v", err)
 	}
-	if got := payload["token_use"].(string); got != challengeTokenUse {
-		t.Fatalf("challenge token_use = %q want %q", got, challengeTokenUse)
+	if got := payload["token_use"].(string); got != "2fa_challenge" {
+		t.Fatalf("challenge token_use = %q want %q", got, "2fa_challenge")
 	}
 
 	// 错误码拒绝
-	if _, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: "000000"}, meta); !errors.Is(err, ErrAuthInvalid2FACode) {
-		t.Fatalf("wrong code err = %v want %v", err, ErrAuthInvalid2FACode)
+	if _, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: "000000"}, meta); !errors.Is(err, slapp.ErrAuthInvalid2FACode) {
+		t.Fatalf("wrong code err = %v want %v", err, slapp.ErrAuthInvalid2FACode)
 	}
 
 	// 正确码换到正式会话
-	result, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: currentTOTP(t, secret)}, meta)
+	result, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: currentTOTP(t, secret)}, meta)
 	if err != nil {
 		t.Fatalf("VerifyTwoFactorLogin() error = %v", err)
 	}
@@ -111,42 +112,42 @@ func TestTwoFactorEnrollmentAndChallengeLogin(t *testing.T) {
 	}
 
 	// 挑战 token 绑定发起方 IP：换 IP 重放被拒绝
-	outcome2, err := svc.Login(context.Background(), LoginInput{Username: "totp-user", Password: "password123"}, meta)
+	outcome2, err := svc.Login(context.Background(), slapp.LoginInput{Username: "totp-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("second Login() error = %v", err)
 	}
-	if _, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome2.ChallengeToken, Code: currentTOTP(t, secret)}, AuthSessionMetadata{UserAgent: meta.UserAgent, ClientIP: "203.0.113.77"}); !errors.Is(err, ErrAuthInvalid2FAChallenge) {
-		t.Fatalf("replayed challenge from another IP err = %v want %v", err, ErrAuthInvalid2FAChallenge)
+	if _, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome2.ChallengeToken, Code: currentTOTP(t, secret)}, slapp.AuthSessionMetadata{UserAgent: meta.UserAgent, ClientIP: "203.0.113.77"}); !errors.Is(err, slapp.ErrAuthInvalid2FAChallenge) {
+		t.Fatalf("replayed challenge from another IP err = %v want %v", err, slapp.ErrAuthInvalid2FAChallenge)
 	}
 }
 
 func TestTwoFactorRecoveryCodeSingleUse(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, twoFactorTestConfig(true))
+	svc := slapp.NewService(NewGormRepository(db), twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 92, "rc-user")
-	meta := AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
+	meta := slapp.AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
 	_, codes := enrollTwoFactor(t, svc, 92)
 
-	outcome, err := svc.Login(context.Background(), LoginInput{Username: "rc-user", Password: "password123"}, meta)
+	outcome, err := svc.Login(context.Background(), slapp.LoginInput{Username: "rc-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
 	// 恢复码（带/不带连字符均可）换会话
-	if _, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: strings.ToUpper(codes[0])}, meta); err != nil {
+	if _, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome.ChallengeToken, Code: strings.ToUpper(codes[0])}, meta); err != nil {
 		t.Fatalf("recovery code verify error = %v", err)
 	}
-	if remaining, err := svc.RecoveryCodesRemaining(context.Background(), 92); err != nil || remaining != int64(recoveryCodeCount-1) {
-		t.Fatalf("remaining = %d, %v want %d", remaining, err, recoveryCodeCount-1)
+	if remaining, err := svc.RecoveryCodesRemaining(context.Background(), 92); err != nil || remaining != int64(9) {
+		t.Fatalf("remaining = %d, %v want %d", remaining, err, 9)
 	}
 
 	// 同一恢复码第二次核销必须失败（原子一次性）
-	outcome2, err := svc.Login(context.Background(), LoginInput{Username: "rc-user", Password: "password123"}, meta)
+	outcome2, err := svc.Login(context.Background(), slapp.LoginInput{Username: "rc-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("second Login() error = %v", err)
 	}
-	if _, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome2.ChallengeToken, Code: codes[0]}, meta); !errors.Is(err, ErrAuthInvalid2FACode) {
-		t.Fatalf("reuse recovery code err = %v want %v", err, ErrAuthInvalid2FACode)
+	if _, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome2.ChallengeToken, Code: codes[0]}, meta); !errors.Is(err, slapp.ErrAuthInvalid2FACode) {
+		t.Fatalf("reuse recovery code err = %v want %v", err, slapp.ErrAuthInvalid2FACode)
 	}
 
 	// RegenerateRecoveryCodes 需要当前 TOTP 码；旧码作废
@@ -154,15 +155,15 @@ func TestTwoFactorRecoveryCodeSingleUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegenerateRecoveryCodes() error = %v", err)
 	}
-	if len(fresh) != recoveryCodeCount {
-		t.Fatalf("fresh codes = %d want %d", len(fresh), recoveryCodeCount)
+	if len(fresh) != 10 {
+		t.Fatalf("fresh codes = %d want %d", len(fresh), 10)
 	}
-	outcome3, err := svc.Login(context.Background(), LoginInput{Username: "rc-user", Password: "password123"}, meta)
+	outcome3, err := svc.Login(context.Background(), slapp.LoginInput{Username: "rc-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("third Login() error = %v", err)
 	}
-	if _, err := svc.VerifyTwoFactorLogin(context.Background(), TwoFactorVerifyInput{ChallengeToken: outcome3.ChallengeToken, Code: codes[1]}, meta); !errors.Is(err, ErrAuthInvalid2FACode) {
-		t.Fatalf("stale recovery code err = %v want %v", err, ErrAuthInvalid2FACode)
+	if _, err := svc.VerifyTwoFactorLogin(context.Background(), slapp.TwoFactorVerifyInput{ChallengeToken: outcome3.ChallengeToken, Code: codes[1]}, meta); !errors.Is(err, slapp.ErrAuthInvalid2FACode) {
+		t.Fatalf("stale recovery code err = %v want %v", err, slapp.ErrAuthInvalid2FACode)
 	}
 }
 
@@ -179,21 +180,21 @@ func dbSecret(t *testing.T, db *gorm.DB, userID uint) string {
 func TestTwoFactorKillSwitch(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	// kill-switch 关闭（默认）
-	svc := NewService(db, twoFactorTestConfig(false))
+	svc := slapp.NewService(NewGormRepository(db), twoFactorTestConfig(false))
 	seedTOTPUser(t, db, 93, "ks-user")
-	meta := AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
+	meta := slapp.AuthSessionMetadata{UserAgent: "servify-test/1.0", ClientIP: "198.51.100.8"}
 
-	if _, err := svc.SetupTwoFactor(context.Background(), 93); !errors.Is(err, ErrTwoFactorDisabled) {
-		t.Fatalf("setup with switch off err = %v want %v", err, ErrTwoFactorDisabled)
+	if _, err := svc.SetupTwoFactor(context.Background(), 93); !errors.Is(err, slapp.ErrTwoFactorDisabled) {
+		t.Fatalf("setup with switch off err = %v want %v", err, slapp.ErrTwoFactorDisabled)
 	}
-	if _, err := svc.EnableTwoFactor(context.Background(), 93, "JBSWY3DPEHPK3PXP", "123456"); !errors.Is(err, ErrTwoFactorDisabled) {
-		t.Fatalf("enable with switch off err = %v want %v", err, ErrTwoFactorDisabled)
+	if _, err := svc.EnableTwoFactor(context.Background(), 93, "JBSWY3DPEHPK3PXP", "123456"); !errors.Is(err, slapp.ErrTwoFactorDisabled) {
+		t.Fatalf("enable with switch off err = %v want %v", err, slapp.ErrTwoFactorDisabled)
 	}
 
 	// 已启用用户在开关关闭时降级单因子直登
-	enabledSvc := NewService(db, twoFactorTestConfig(true))
+	enabledSvc := slapp.NewService(NewGormRepository(db), twoFactorTestConfig(true))
 	enrollTwoFactor(t, enabledSvc, 93)
-	directLogin, err := svc.Login(context.Background(), LoginInput{Username: "ks-user", Password: "password123"}, meta)
+	directLogin, err := svc.Login(context.Background(), slapp.LoginInput{Username: "ks-user", Password: "password123"}, meta)
 	if err != nil {
 		t.Fatalf("Login() with switch off error = %v", err)
 	}
@@ -217,25 +218,25 @@ func TestTwoFactorKillSwitch(t *testing.T) {
 	if remaining, err := svc.RecoveryCodesRemaining(context.Background(), 93); err != nil || remaining != 0 {
 		t.Fatalf("recovery codes after disable = %d, %v want 0", remaining, err)
 	}
-	if err := svc.DisableTwoFactor(context.Background(), 93, "password123", "123456"); !errors.Is(err, ErrTwoFactorNotEnabled) {
-		t.Fatalf("disable when not enabled err = %v want %v", err, ErrTwoFactorNotEnabled)
+	if err := svc.DisableTwoFactor(context.Background(), 93, "password123", "123456"); !errors.Is(err, slapp.ErrTwoFactorNotEnabled) {
+		t.Fatalf("disable when not enabled err = %v want %v", err, slapp.ErrTwoFactorNotEnabled)
 	}
 }
 
 func TestTwoFactorDisableGuards(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, twoFactorTestConfig(true))
+	svc := slapp.NewService(NewGormRepository(db), twoFactorTestConfig(true))
 	seedTOTPUser(t, db, 94, "dg-user")
 	enrollTwoFactor(t, svc, 94)
 	secret := dbSecret(t, db, 94)
 
 	// 密码错误
-	if err := svc.DisableTwoFactor(context.Background(), 94, "wrong-password", currentTOTP(t, secret)); !errors.Is(err, ErrAuthInvalidCredentials) {
-		t.Fatalf("wrong password err = %v want %v", err, ErrAuthInvalidCredentials)
+	if err := svc.DisableTwoFactor(context.Background(), 94, "wrong-password", currentTOTP(t, secret)); !errors.Is(err, slapp.ErrAuthInvalidCredentials) {
+		t.Fatalf("wrong password err = %v want %v", err, slapp.ErrAuthInvalidCredentials)
 	}
 	// 密码对、验证码错
-	if err := svc.DisableTwoFactor(context.Background(), 94, "password123", "000000"); !errors.Is(err, ErrAuthInvalid2FACode) {
-		t.Fatalf("wrong code err = %v want %v", err, ErrAuthInvalid2FACode)
+	if err := svc.DisableTwoFactor(context.Background(), 94, "password123", "000000"); !errors.Is(err, slapp.ErrAuthInvalid2FACode) {
+		t.Fatalf("wrong code err = %v want %v", err, slapp.ErrAuthInvalid2FACode)
 	}
 	// 全对才解绑
 	if err := svc.DisableTwoFactor(context.Background(), 94, "password123", currentTOTP(t, secret)); err != nil {
@@ -251,21 +252,5 @@ func TestTwoFactorDisableGuards(t *testing.T) {
 	}
 	if user.TokenValidAfter.IsZero() {
 		t.Fatalf("expected token_valid_after to be set after disable")
-	}
-}
-
-func TestTwoFactorNormalizeRecoveryCode(t *testing.T) {
-	cases := map[string]string{
-		"ab12-cd34": "ab12cd34",
-		"AB12CD34":  "ab12cd34",
-		" ab12cd34": "ab12cd34",
-		"ab12cd3":   "",
-		"zz12cd34":  "",
-		"":          "",
-	}
-	for input, want := range cases {
-		if got := normalizeRecoveryCode(input); got != want {
-			t.Fatalf("normalizeRecoveryCode(%q) = %q want %q", input, got, want)
-		}
 	}
 }

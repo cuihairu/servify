@@ -3,6 +3,13 @@ package application
 import "errors"
 
 var (
+	// ErrAuthInvalidDB 对应原 gorm.ErrInvalidDB 语义（nil 仓储/nil 服务保护），
+	// 文案保持 "invalid db"；仅应用层单测断言，handlers 不感知。
+	ErrAuthInvalidDB = errors.New("invalid db")
+	// ErrAuthUserNotFound 端口查不到用户的统一哨兵（映射原 gorm.ErrRecordNotFound
+	// 的语义，应用层不再引用 gorm）。
+	ErrAuthUserNotFound = errors.New("auth user not found")
+
 	ErrInvalidAuthInput        = errors.New("invalid auth input")
 	ErrAuthUserAlreadyExists   = errors.New("auth user already exists")
 	ErrAuthInvalidCredentials  = errors.New("invalid auth credentials")

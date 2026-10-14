@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"servify/apps/server/internal/models"
-
-	"gorm.io/gorm"
 )
 
 // OIDCIdentity carries the verified IdP claims the local login decides on.
@@ -32,8 +30,8 @@ type OIDCIdentity struct {
 // standard session pipeline, so refresh rotation and revocation policies
 // apply unchanged.
 func (s *AuthService) LoginWithOIDC(ctx context.Context, identity OIDCIdentity, meta AuthSessionMetadata) (*AuthResult, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	oidcCfg := s.config.OIDC
 
@@ -48,23 +46,21 @@ func (s *AuthService) LoginWithOIDC(ctx context.Context, identity OIDCIdentity, 
 		return nil, ErrOIDCDomainNotAllowed
 	}
 
-	var user models.User
-	err := s.db.WithContext(ctx).Where("LOWER(email) = ?", email).First(&user).Error
+	user, err := s.repo.GetUserByEmailLower(ctx, email)
 	switch {
 	case err == nil:
 		if strings.TrimSpace(user.Status) == "banned" {
 			return nil, ErrAuthUserDisabled
 		}
 		// 本地角色不随 IdP 变更，防权限漂移。
-	case errors.Is(err, gorm.ErrRecordNotFound):
+	case errors.Is(err, ErrAuthUserNotFound):
 		if !oidcCfg.AutoProvision {
 			return nil, ErrOIDCAutoProvisionDisabled
 		}
-		created, createErr := s.provisionOIDCUser(ctx, identity, oidcCfg.DefaultRole)
-		if createErr != nil {
-			return nil, createErr
+		user, err = s.provisionOIDCUser(ctx, identity, oidcCfg.DefaultRole)
+		if err != nil {
+			return nil, err
 		}
-		user = *created
 	default:
 		return nil, err
 	}
@@ -73,7 +69,7 @@ func (s *AuthService) LoginWithOIDC(ctx context.Context, identity OIDCIdentity, 
 	if err != nil {
 		return nil, err
 	}
-	return s.buildAuthResult(ctx, &user, session)
+	return s.buildAuthResult(ctx, user, session)
 }
 
 // provisionOIDCUser creates the local account for a first-time IdP identity.
@@ -94,14 +90,11 @@ func (s *AuthService) provisionOIDCUser(ctx context.Context, identity OIDCIdenti
 		Role:     mapOIDCRole(identity.Roles, s.config.OIDC.RoleMapping, defaultRole),
 		Status:   "active",
 	}
-	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+	if err := s.repo.CreateUser(ctx, user); err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			// 并发首次登录等场景：唯一键冲突时回落到查询既有用户。
-			var existing models.User
-			if lookupErr := s.db.WithContext(ctx).
-				Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(identity.Email))).
-				First(&existing).Error; lookupErr == nil {
-				return &existing, nil
+			if existing, lookupErr := s.repo.GetUserByEmailLower(ctx, strings.ToLower(strings.TrimSpace(identity.Email))); lookupErr == nil {
+				return existing, nil
 			}
 		}
 		return nil, err
@@ -162,7 +155,7 @@ func oidcEmailAllowed(allowed []string, email string) bool {
 
 func randomHex(n int) (string, error) {
 	buf := make([]byte, n)
-	if _, err := hookRandRead(buf); err != nil {
+	if _, err := HookRandRead(buf); err != nil {
 		return "", fmt.Errorf("generate random: %w", err)
 	}
 	return hex.EncodeToString(buf), nil

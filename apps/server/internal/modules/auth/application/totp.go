@@ -17,7 +17,6 @@ import (
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 // TOTP 两步验证子服务：绑定/解绑/恢复码 + 登录挑战步。
@@ -77,8 +76,8 @@ type LoginOutcome struct {
 
 // SetupTwoFactor 生成绑定用 secret 与 otpauth URI（不落库）。
 func (s *AuthService) SetupTwoFactor(ctx context.Context, userID uint) (*TwoFactorSetup, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	if err := s.requireTwoFactorEnabled(); err != nil {
 		return nil, err
@@ -110,8 +109,8 @@ func (s *AuthService) SetupTwoFactor(ctx context.Context, userID uint) (*TwoFact
 // EnableTwoFactor 验证 code 证明持有 secret 后写入绑定，并生成一批恢复码。
 // 返回的明文恢复码只出现这一次；同时推进 TokenValidAfter 使既有 refresh token 失效。
 func (s *AuthService) EnableTwoFactor(ctx context.Context, userID uint, secret, code string) ([]string, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	if err := s.requireTwoFactorEnabled(); err != nil {
 		return nil, err
@@ -130,17 +129,12 @@ func (s *AuthService) EnableTwoFactor(ctx context.Context, userID uint, secret, 
 	if user.TotpEnabled {
 		return nil, ErrTwoFactorAlreadyEnabled
 	}
-	codes, hashes, err := generateRecoveryCodes(recoveryCodeCount)
+	codes, hashes, err := GenerateRecoveryCodes(recoveryCodeCount)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-		"totp_secret":       secret,
-		"totp_enabled":      true,
-		"totp_enabled_at":   now,
-		"token_valid_after": now,
-	}).Error; err != nil {
+	if err := s.repo.EnableUserTwoFactor(ctx, userID, secret, now); err != nil {
 		return nil, err
 	}
 	if err := s.replaceRecoveryCodes(ctx, userID, hashes); err != nil {
@@ -153,8 +147,8 @@ func (s *AuthService) EnableTwoFactor(ctx context.Context, userID uint, secret, 
 // 再用当前 TOTP 码或一个未用恢复码证明是本人操作；解绑后删除全部恢复码并踢会话。
 // 不受 kill-switch 限制——运营关闭开关后用户仍可解除绑定。
 func (s *AuthService) DisableTwoFactor(ctx context.Context, userID uint, password, code string) error {
-	if s == nil || s.db == nil {
-		return gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return ErrAuthInvalidDB
 	}
 	user, err := s.GetCurrentUser(ctx, userID)
 	if err != nil {
@@ -172,21 +166,16 @@ func (s *AuthService) DisableTwoFactor(ctx context.Context, userID uint, passwor
 		return ErrAuthInvalid2FACode
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-		"totp_secret":       "",
-		"totp_enabled":      false,
-		"totp_enabled_at":   nil,
-		"token_valid_after": now,
-	}).Error; err != nil {
+	if err := s.repo.DisableUserTwoFactor(ctx, userID, now); err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Where("user_id = ?", userID).Delete(&models.UserRecoveryCode{}).Error
+	return s.repo.DeleteRecoveryCodesByUser(ctx, userID)
 }
 
 // RegenerateRecoveryCodes 以当前 TOTP 码为凭据重发一批恢复码（旧的作废）。
 func (s *AuthService) RegenerateRecoveryCodes(ctx context.Context, userID uint, code string) ([]string, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	user, err := s.GetCurrentUser(ctx, userID)
 	if err != nil {
@@ -198,7 +187,7 @@ func (s *AuthService) RegenerateRecoveryCodes(ctx context.Context, userID uint, 
 	if !s.verifyTwoFactorCode(user.TotpSecret, code) {
 		return nil, ErrAuthInvalid2FACode
 	}
-	codes, hashes, err := generateRecoveryCodes(recoveryCodeCount)
+	codes, hashes, err := GenerateRecoveryCodes(recoveryCodeCount)
 	if err != nil {
 		return nil, err
 	}
@@ -210,20 +199,17 @@ func (s *AuthService) RegenerateRecoveryCodes(ctx context.Context, userID uint, 
 
 // RecoveryCodesRemaining 返回尚未核销的恢复码数量（码本身不可回读）。
 func (s *AuthService) RecoveryCodesRemaining(ctx context.Context, userID uint) (int64, error) {
-	if s == nil || s.db == nil {
-		return 0, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return 0, ErrAuthInvalidDB
 	}
-	var count int64
-	err := s.db.WithContext(ctx).Model(&models.UserRecoveryCode{}).
-		Where("user_id = ? AND used_at IS NULL", userID).Count(&count).Error
-	return count, err
+	return s.repo.CountUnusedRecoveryCodes(ctx, userID)
 }
 
 // VerifyTwoFactorLogin 完成挑战步：验证挑战 JWT（签名/用途/指纹）与第二因子
 // （TOTP 码或恢复码），通过后创建会话并签发正式 token。
 func (s *AuthService) VerifyTwoFactorLogin(ctx context.Context, req TwoFactorVerifyInput, meta AuthSessionMetadata) (*AuthResult, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	userID, err := s.validateChallengeToken(req.ChallengeToken, meta)
 	if err != nil {
@@ -253,7 +239,7 @@ func (s *AuthService) VerifyTwoFactorLogin(ctx context.Context, req TwoFactorVer
 func (s *AuthService) createChallengeToken(user *models.User, meta AuthSessionMetadata) (string, int, error) {
 	ttl := s.challengeTTL()
 	now := time.Now()
-	token, err := hookCreateHS256JWT(map[string]interface{}{
+	token, err := HookCreateHS256JWT(map[string]interface{}{
 		"iat":       now.Unix(),
 		"sub":       user.ID,
 		"jti":       newAuthTokenID(),
@@ -315,24 +301,12 @@ func (s *AuthService) consumeRecoveryCode(ctx context.Context, userID uint, code
 		return false
 	}
 	sum := sha256.Sum256([]byte(normalized))
-	result := s.db.WithContext(ctx).Model(&models.UserRecoveryCode{}).
-		Where("user_id = ? AND code_hash = ? AND used_at IS NULL", userID, hex.EncodeToString(sum[:])).
-		Update("used_at", time.Now())
-	return result.Error == nil && result.RowsAffected > 0
+	rows, err := s.repo.UseRecoveryCode(ctx, userID, hex.EncodeToString(sum[:]))
+	return err == nil && rows > 0
 }
 
 func (s *AuthService) replaceRecoveryCodes(ctx context.Context, userID uint, hashes []string) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", userID).Delete(&models.UserRecoveryCode{}).Error; err != nil {
-			return err
-		}
-		now := time.Now()
-		rows := make([]models.UserRecoveryCode, 0, len(hashes))
-		for _, h := range hashes {
-			rows = append(rows, models.UserRecoveryCode{UserID: userID, CodeHash: h, CreatedAt: now})
-		}
-		return tx.Create(&rows).Error
-	})
+	return s.repo.ReplaceRecoveryCodes(ctx, userID, hashes, time.Now())
 }
 
 func (s *AuthService) requireTwoFactorEnabled() error {
@@ -387,14 +361,14 @@ func normalizeRecoveryCode(code string) string {
 	return code
 }
 
-// generateRecoveryCodes 生成 `xxxx-xxxx` 展示形式的一次性恢复码；
+// GenerateRecoveryCodes 生成 `xxxx-xxxx` 展示形式的一次性恢复码；
 // 返回明文（仅此一次，服务端不留底）与 sha256 哈希（落库）。
-func generateRecoveryCodes(n int) ([]string, []string, error) {
+func GenerateRecoveryCodes(n int) ([]string, []string, error) {
 	codes := make([]string, 0, n)
 	hashes := make([]string, 0, n)
 	for i := 0; i < n; i++ {
 		var buf [4]byte
-		if _, err := hookRandRead(buf[:]); err != nil {
+		if _, err := HookRandRead(buf[:]); err != nil {
 			return nil, nil, fmt.Errorf("generate recovery code: %w", err)
 		}
 		raw := hex.EncodeToString(buf[:])

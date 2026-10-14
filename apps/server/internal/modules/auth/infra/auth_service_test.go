@@ -1,8 +1,9 @@
-package application
+package infra
 
 import (
 	"context"
 	"errors"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"testing"
 	"time"
 
@@ -55,12 +56,12 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 
-	loginResult, err := svc.Login(context.Background(), LoginInput{
+	loginResult, err := svc.Login(context.Background(), slapp.LoginInput{
 		Username: "auth-user",
 		Password: "password123",
-	}, AuthSessionMetadata{
+	}, slapp.AuthSessionMetadata{
 		DeviceFingerprint: "fp-login-1",
 		UserAgent:         "servify-test/1.0",
 		ClientIP:          "198.51.100.8",
@@ -109,7 +110,7 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("refresh session_token_version = %d want 0", got)
 	}
 
-	refreshResult, err := svc.RefreshToken(context.Background(), result.RefreshToken, AuthSessionMetadata{
+	refreshResult, err := svc.RefreshToken(context.Background(), result.RefreshToken, slapp.AuthSessionMetadata{
 		DeviceFingerprint: "fp-refresh-1",
 		UserAgent:         "servify-test/2.0",
 		ClientIP:          "198.51.100.9",
@@ -159,8 +160,8 @@ func TestAuthServiceLoginAndRefreshRotateSession(t *testing.T) {
 		t.Fatalf("expected last_seen_at to be set")
 	}
 
-	if _, err := svc.RefreshToken(context.Background(), result.RefreshToken, AuthSessionMetadata{}); !errors.Is(err, ErrAuthInvalidRefreshToken) {
-		t.Fatalf("reusing old refresh token err = %v want %v", err, ErrAuthInvalidRefreshToken)
+	if _, err := svc.RefreshToken(context.Background(), result.RefreshToken, slapp.AuthSessionMetadata{}); !errors.Is(err, slapp.ErrAuthInvalidRefreshToken) {
+		t.Fatalf("reusing old refresh token err = %v want %v", err, slapp.ErrAuthInvalidRefreshToken)
 	}
 }
 
@@ -185,7 +186,7 @@ func TestAuthServiceSelfManageSessions(t *testing.T) {
 		t.Fatalf("seed sessions: %v", err)
 	}
 
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 
 	sessions, err := svc.ListAuthSessions(context.Background(), 88)
 	if err != nil {

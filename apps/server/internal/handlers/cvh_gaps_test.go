@@ -18,6 +18,7 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	authapp "servify/apps/server/internal/modules/auth/application"
 	authdelivery "servify/apps/server/internal/modules/auth/delivery"
+	authinfra "servify/apps/server/internal/modules/auth/infra"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/webhook/delivery"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
@@ -468,7 +469,7 @@ func TestCvhOIDCCallbackFlowCookieGaps(t *testing.T) {
 				TokenURL: "http://127.0.0.1:1/token", // 无监听端口 → 交换必败
 			},
 		}, nil)
-		authSvc := authapp.NewService(newOIDCHandlerTestDB(t), cfg)
+		authSvc := authapp.NewService(authinfra.NewGormRepository(newOIDCHandlerTestDB(t)), cfg)
 		h := NewOIDCHandler(provider, cfg.OIDC, authSvc, "dev")
 
 		cookie := oidcFlowCookieFor(t, "st-x", "n-x", "v-x")

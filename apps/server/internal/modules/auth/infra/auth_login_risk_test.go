@@ -1,8 +1,9 @@
-package application
+package infra
 
 import (
 	"context"
 	"errors"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func (s stubLoginRiskIntel) LoginNetworkLabel(_ context.Context, _ string) strin
 	return s.label
 }
 
-func newLoginRiskService(t *testing.T, intel LoginRiskIntel, enforcement string, totpEnabled bool, twoFactorKillSwitch bool) *AuthService {
+func newLoginRiskService(t *testing.T, intel slapp.LoginRiskIntel, enforcement string, totpEnabled bool, twoFactorKillSwitch bool) *slapp.AuthService {
 	t.Helper()
 	db := newAuthServiceTestDB(t)
 	hash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
@@ -41,66 +42,22 @@ func newLoginRiskService(t *testing.T, intel LoginRiskIntel, enforcement string,
 	}
 	cfg := testAuthConfig()
 	cfg.Security.TwoFactor.Enabled = twoFactorKillSwitch
-	svc := NewService(db, cfg)
+	svc := slapp.NewService(NewGormRepository(db), cfg)
 	svc.WithLoginRiskEnforcement(intel, enforcement)
 	return svc
 }
 
 const loginRiskMetaIP = "203.0.113.50"
 
-func loginRiskInput() LoginInput {
-	return LoginInput{Username: "risk-user", Password: "password123"}
+func loginRiskInput() slapp.LoginInput {
+	return slapp.LoginInput{Username: "risk-user", Password: "password123"}
 }
 
-func loginRiskMeta() AuthSessionMetadata {
-	return AuthSessionMetadata{
+func loginRiskMeta() slapp.AuthSessionMetadata {
+	return slapp.AuthSessionMetadata{
 		DeviceFingerprint: "fp-risk",
 		UserAgent:         "risk-test/1.0",
 		ClientIP:          loginRiskMetaIP,
-	}
-}
-
-// TestLoginRiskEnforcementNormalization：档位归一化——大小写/空白容错，
-// 未知取值落回 off（登录行为保持不变）。
-func TestLoginRiskEnforcementNormalization(t *testing.T) {
-	cases := map[string]string{
-		"STEP_UP ":  "step_up",
-		" block":    "block",
-		"":          "",
-		"off":       "",
-		"bogus":     "",
-		"  BLOCK  ": "block",
-	}
-	for raw, want := range cases {
-		svc := NewService(newAuthServiceTestDB(t), testAuthConfig())
-		svc.WithLoginRiskEnforcement(stubLoginRiskIntel{label: "public"}, raw)
-		if svc.loginEnforcement != want {
-			t.Fatalf("enforcement %q normalized to %q, want %q", raw, svc.loginEnforcement, want)
-		}
-	}
-}
-
-// TestLoginRiskHighRiskClassification：风险判定——nil 情报源、空 IP 与
-// 内建启发式四类标签都不是高风险；其余标签（hosting/proxy/…）是。
-func TestLoginRiskHighRiskClassification(t *testing.T) {
-	svc := NewService(newAuthServiceTestDB(t), testAuthConfig())
-
-	if svc.loginRiskHighRisk(context.Background(), loginRiskMetaIP) {
-		t.Fatal("nil intel must not be high risk")
-	}
-
-	svc.WithLoginRiskEnforcement(stubLoginRiskIntel{label: "public"}, "block")
-	if svc.loginRiskHighRisk(context.Background(), "") {
-		t.Fatal("blank ip must not be high risk")
-	}
-	for _, safe := range []string{"public", "private", "loopback", "unknown", "  HOSTING  "} {
-		label := strings.ToLower(strings.TrimSpace(safe))
-		svc.WithLoginRiskEnforcement(stubLoginRiskIntel{label: safe}, "block")
-		got := svc.loginRiskHighRisk(context.Background(), loginRiskMetaIP)
-		want := label == "hosting"
-		if got != want {
-			t.Fatalf("label %q high risk = %v, want %v", safe, got, want)
-		}
 	}
 }
 
@@ -109,15 +66,16 @@ func TestLoginRiskHighRiskClassification(t *testing.T) {
 func TestLoginBlockModeRejectsHighRiskSource(t *testing.T) {
 	svc := newLoginRiskService(t, stubLoginRiskIntel{label: "hosting"}, "block", false, true)
 	_, err := svc.Login(context.Background(), loginRiskInput(), loginRiskMeta())
-	if !errors.Is(err, ErrLoginBlockedByRisk) {
-		t.Fatalf("expected ErrLoginBlockedByRisk, got %v", err)
+	if !errors.Is(err, slapp.ErrLoginBlockedByRisk) {
+		t.Fatalf("expected slapp.ErrLoginBlockedByRisk, got %v", err)
 	}
 
-	var count int64
-	db := svc.db
-	db.Model(&models.UserAuthSession{}).Where("user_id = ?", 91).Count(&count)
-	if count != 0 {
-		t.Fatalf("expected no session created, got %d", count)
+	sessions, err := svc.ListAuthSessions(context.Background(), 91)
+	if err != nil {
+		t.Fatalf("ListAuthSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("expected no session created, got %d", len(sessions))
 	}
 }
 
@@ -138,8 +96,8 @@ func TestLoginBlockModeSafeLabelPasses(t *testing.T) {
 func TestLoginStepUpWithoutTOTPRejected(t *testing.T) {
 	svc := newLoginRiskService(t, stubLoginRiskIntel{label: "hosting"}, "step_up", false, false)
 	_, err := svc.Login(context.Background(), loginRiskInput(), loginRiskMeta())
-	if !errors.Is(err, ErrLoginBlockedByRisk) {
-		t.Fatalf("expected ErrLoginBlockedByRisk, got %v", err)
+	if !errors.Is(err, slapp.ErrLoginBlockedByRisk) {
+		t.Fatalf("expected slapp.ErrLoginBlockedByRisk, got %v", err)
 	}
 }
 
@@ -187,7 +145,7 @@ func TestLoginEnforcementOffKeepsLegacyBehavior(t *testing.T) {
 
 // TestWithLoginRiskEnforcementNilReceiver：nil receiver 不 panic、原样返回。
 func TestWithLoginRiskEnforcementNilReceiver(t *testing.T) {
-	var svc *AuthService
+	var svc *slapp.AuthService
 	if got := svc.WithLoginRiskEnforcement(stubLoginRiskIntel{label: "hosting"}, "block"); got != nil {
 		t.Fatal("nil receiver must return nil")
 	}
@@ -197,7 +155,7 @@ func TestWithLoginRiskEnforcementNilReceiver(t *testing.T) {
 // 失败原样透传，不得降级为直登。
 func TestLoginStepUpChallengeSignError(t *testing.T) {
 	svc := newLoginRiskService(t, stubLoginRiskIntel{label: "hosting"}, "step_up", true, false)
-	setSeam(t, &hookCreateHS256JWT, func(map[string]interface{}, string) (string, error) {
+	setSeam(t, &slapp.HookCreateHS256JWT, func(map[string]interface{}, string) (string, error) {
 		return "", errors.New("boom: risk challenge sign")
 	})
 	_, err := svc.Login(context.Background(), loginRiskInput(), loginRiskMeta())

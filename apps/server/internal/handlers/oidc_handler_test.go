@@ -18,6 +18,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	authapp "servify/apps/server/internal/modules/auth/application"
+	authinfra "servify/apps/server/internal/modules/auth/infra"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 )
 
@@ -92,7 +93,7 @@ func newOIDCHandler(t *testing.T, mutate func(*config.OIDCConfig, *stubOIDCVerif
 			TokenURL: tokenSrv.URL + "/token",
 		},
 	}, nil)
-	authSvc := authapp.NewService(newOIDCHandlerTestDB(t), cfg)
+	authSvc := authapp.NewService(authinfra.NewGormRepository(newOIDCHandlerTestDB(t)), cfg)
 	return NewOIDCHandler(provider, cfg.OIDC, authSvc, cfg.Server.Environment), cfg
 }
 

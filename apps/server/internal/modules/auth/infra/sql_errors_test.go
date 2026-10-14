@@ -1,4 +1,4 @@
-package application
+package infra
 
 // auth 落库错误分支：trigger 注入、顺序查询失败（自 services
 // more_branches/sequential_errors/trigger_error_paths 单测的 auth 段下沉）。
@@ -6,6 +6,7 @@ package application
 import (
 	"context"
 	"errors"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -41,30 +42,30 @@ func authFailNthQuery(db *gorm.DB, n int32) {
 }
 
 func TestAuthService_RegisterInsertTrigger(t *testing.T) {
-	// dup-flavoured insert error maps to ErrAuthUserAlreadyExists
+	// dup-flavoured insert error maps to slapp.ErrAuthUserAlreadyExists
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 	authExecTrigger(t, db, "CREATE TRIGGER blk_u1 BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT, 'unique violation simulation'); END;")
-	if _, err := svc.Register(context.Background(), RegisterInput{
+	if _, err := svc.Register(context.Background(), slapp.RegisterInput{
 		Username: "u", Email: "u@x.com", Password: "pw123456",
-	}, AuthSessionMetadata{}); err != ErrAuthUserAlreadyExists {
+	}, slapp.AuthSessionMetadata{}); err != slapp.ErrAuthUserAlreadyExists {
 		t.Fatalf("expected duplicate-style error, got %v", err)
 	}
 
 	// plain insert error surfaces as-is
 	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc2 := NewService(db2, testAuthConfig())
+	svc2 := slapp.NewService(NewGormRepository(db2), testAuthConfig())
 	authExecTrigger(t, db2, "CREATE TRIGGER blk_u2 BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT, 'blocked'); END;")
-	if _, err := svc2.Register(context.Background(), RegisterInput{
+	if _, err := svc2.Register(context.Background(), slapp.RegisterInput{
 		Username: "u", Email: "u@x.com", Password: "pw123456",
-	}, AuthSessionMetadata{}); err == nil || err == ErrAuthUserAlreadyExists {
+	}, slapp.AuthSessionMetadata{}); err == nil || err == slapp.ErrAuthUserAlreadyExists {
 		t.Fatalf("expected plain insert error, got %v", err)
 	}
 }
 
 func TestAuthService_RevokeOtherTriggerError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 	now := time.Now().UTC()
 	if err := db.Create(&models.User{ID: 81, Username: "u81", Email: "u81@x.com", Password: "x", Status: "active"}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
@@ -81,7 +82,7 @@ func TestAuthService_RevokeOtherTriggerError(t *testing.T) {
 func TestAuthService_RotateTriggerError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
 	cfg := testAuthConfig()
-	svc := NewService(db, cfg)
+	svc := slapp.NewService(NewGormRepository(db), cfg)
 
 	hash, err := authBcryptHash("pw123456")
 	if err != nil {
@@ -97,7 +98,7 @@ func TestAuthService_RotateTriggerError(t *testing.T) {
 	}
 	authExecTrigger(t, db, "CREATE TRIGGER blk_sess BEFORE UPDATE ON user_auth_sessions BEGIN SELECT RAISE(ABORT, 'update blocked'); END;")
 
-	tok, err := createHS256JWT(map[string]interface{}{
+	tok, err := slapp.HookCreateHS256JWT(map[string]interface{}{
 		"token_use": "refresh", "user_id": float64(71), "session_id": "sess-71",
 		"session_token_version": float64(0), "token_version": float64(0),
 		"iat": float64(time.Now().Unix()),
@@ -105,7 +106,7 @@ func TestAuthService_RotateTriggerError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("token: %v", err)
 	}
-	if _, err := svc.RefreshToken(context.Background(), tok, AuthSessionMetadata{}); err != ErrAuthInvalidRefreshToken {
+	if _, err := svc.RefreshToken(context.Background(), tok, slapp.AuthSessionMetadata{}); err != slapp.ErrAuthInvalidRefreshToken {
 		t.Fatalf("expected rotate update failure, got %v", err)
 	}
 }
@@ -116,7 +117,7 @@ func TestAuthService_SequentialErrors(t *testing.T) {
 
 	// RevokeCurrentSession: reload after update fails
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 	if err := db.Create(&models.User{ID: 91, Username: "u91", Email: "u91@x.com", Password: "x", Status: "active"}).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
@@ -131,7 +132,7 @@ func TestAuthService_SequentialErrors(t *testing.T) {
 	// RefreshToken: rotate reload fails (3rd query: user lookup, session load, reload)
 	db2 := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
 	cfg := testAuthConfig()
-	svc2 := NewService(db2, cfg)
+	svc2 := slapp.NewService(NewGormRepository(db2), cfg)
 	hash, err := authBcryptHash("pw123456")
 	if err != nil {
 		t.Fatalf("hash: %v", err)
@@ -145,7 +146,7 @@ func TestAuthService_SequentialErrors(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 	authFailNthQuery(db2, 3)
-	tok, err := createHS256JWT(map[string]interface{}{
+	tok, err := slapp.HookCreateHS256JWT(map[string]interface{}{
 		"token_use": "refresh", "user_id": float64(92), "session_id": "s92",
 		"session_token_version": float64(0), "token_version": float64(0),
 		"iat": float64(time.Now().Unix()),
@@ -153,7 +154,7 @@ func TestAuthService_SequentialErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("token: %v", err)
 	}
-	if _, err := svc2.RefreshToken(ctx, tok, AuthSessionMetadata{}); err != ErrAuthInvalidRefreshToken {
+	if _, err := svc2.RefreshToken(ctx, tok, slapp.AuthSessionMetadata{}); err != slapp.ErrAuthInvalidRefreshToken {
 		t.Fatalf("expected rotate reload failure, got %v", err)
 	}
 }

@@ -1,8 +1,9 @@
-package application
+package infra
 
 import (
 	"context"
 	"errors"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"strings"
 	"testing"
 
@@ -14,24 +15,24 @@ import (
 
 // TestLoginWithOIDCGuards 覆盖入口的 nil-db 与 subject 校验分支。
 func TestLoginWithOIDCGuards(t *testing.T) {
-	nilSvc := &AuthService{}
-	if _, err := nilSvc.LoginWithOIDC(context.Background(), OIDCIdentity{}, AuthSessionMetadata{}); !errors.Is(err, gorm.ErrInvalidDB) {
-		t.Fatalf("nil db err = %v, want %v", err, gorm.ErrInvalidDB)
+	nilSvc := &slapp.AuthService{}
+	if _, err := nilSvc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{}, slapp.AuthSessionMetadata{}); !errors.Is(err, slapp.ErrAuthInvalidDB) {
+		t.Fatalf("nil db err = %v, want %v", err, slapp.ErrAuthInvalidDB)
 	}
 
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(nil))
-	if _, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(nil))
+	if _, err := svc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{
 		Email: "a@x.com", EmailVerified: true, Subject: "",
-	}, AuthSessionMetadata{}); !errors.Is(err, ErrInvalidAuthInput) {
-		t.Fatalf("empty subject err = %v, want %v", err, ErrInvalidAuthInput)
+	}, slapp.AuthSessionMetadata{}); !errors.Is(err, slapp.ErrInvalidAuthInput) {
+		t.Fatalf("empty subject err = %v, want %v", err, slapp.ErrInvalidAuthInput)
 	}
 }
 
 // TestLoginWithOIDCProvisionCreateError 覆盖首次登录建号失败透传。
 func TestLoginWithOIDCProvisionCreateError(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 	if err := db.Callback().Create().Before("gorm:create").Register("test:fail_user_create", func(tx *gorm.DB) {
 		if tx.Statement != nil && tx.Statement.Table == "users" {
 			_ = tx.AddError(errors.New("boom user create"))
@@ -40,9 +41,9 @@ func TestLoginWithOIDCProvisionCreateError(t *testing.T) {
 		t.Fatalf("register callback: %v", err)
 	}
 
-	_, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
+	_, err := svc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{
 		Subject: "sub-1", Email: "new@x.com", EmailVerified: true, Name: "New",
-	}, AuthSessionMetadata{})
+	}, slapp.AuthSessionMetadata{})
 	if err == nil || !strings.Contains(err.Error(), "boom user create") {
 		t.Fatalf("err = %v, want provision create failure", err)
 	}
@@ -51,7 +52,7 @@ func TestLoginWithOIDCProvisionCreateError(t *testing.T) {
 // TestLoginWithOIDCProvisionDuplicateFallback 覆盖并发首登下唯一键冲突回落查询的路径。
 func TestLoginWithOIDCProvisionDuplicateFallback(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
 	existing := &models.User{ID: 71, Username: "ssouser", Email: "dup@x.com", Password: "x", Status: "active", Role: "agent"}
 	if err := db.Create(existing).Error; err != nil {
@@ -77,9 +78,9 @@ func TestLoginWithOIDCProvisionDuplicateFallback(t *testing.T) {
 		t.Fatalf("register create callback: %v", err)
 	}
 
-	result, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
+	result, err := svc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{
 		Subject: "sub-dup", Email: "dup@x.com", EmailVerified: true, Name: "Dup",
-	}, AuthSessionMetadata{})
+	}, slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("LoginWithOIDC() error = %v", err)
 	}
@@ -94,11 +95,11 @@ func TestLoginWithOIDCProvisionDuplicateFallback(t *testing.T) {
 // TestLoginWithOIDCProvisionNameFallback 覆盖 Name 为空时回退 email。
 func TestLoginWithOIDCProvisionNameFallback(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	result, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{
+	result, err := svc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{
 		Subject: "sub-2", Email: "noname@x.com", EmailVerified: true, Name: "   ",
-	}, AuthSessionMetadata{})
+	}, slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("LoginWithOIDC() error = %v", err)
 	}

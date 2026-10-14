@@ -1,7 +1,8 @@
-package application
+package infra
 
 import (
 	"context"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -13,7 +14,7 @@ import (
 // 再以缺失的会话表驱动 Login 的会话创建失败分支。
 func TestAuthServiceLoginSessionCreateError(t *testing.T) {
 	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
-	svc := NewService(db, testAuthConfig())
+	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 	hash, err := bcrypt.GenerateFromPassword([]byte("pw123456"), bcrypt.MinCost)
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
@@ -27,7 +28,7 @@ func TestAuthServiceLoginSessionCreateError(t *testing.T) {
 		t.Fatalf("drop sessions: %v", err)
 	}
 
-	if _, err := svc.Login(context.Background(), LoginInput{Username: "u63", Password: "pw123456"}, AuthSessionMetadata{}); err == nil {
+	if _, err := svc.Login(context.Background(), slapp.LoginInput{Username: "u63", Password: "pw123456"}, slapp.AuthSessionMetadata{}); err == nil {
 		t.Fatal("expected session create error during login")
 	}
 }

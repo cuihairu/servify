@@ -1,7 +1,8 @@
-package application
+package infra
 
 import (
 	"context"
+	slapp "servify/apps/server/internal/modules/auth/application"
 	"strings"
 	"testing"
 	"time"
@@ -24,8 +25,8 @@ func oidcTestConfig(mutate func(*config.OIDCConfig)) *config.Config {
 	return cfg
 }
 
-func oidcIdentity(email string, verified bool, roles ...string) OIDCIdentity {
-	return OIDCIdentity{
+func oidcIdentity(email string, verified bool, roles ...string) slapp.OIDCIdentity {
+	return slapp.OIDCIdentity{
 		Subject:       "idp-sub-" + email,
 		Email:         email,
 		EmailVerified: verified,
@@ -36,31 +37,31 @@ func oidcIdentity(email string, verified bool, roles ...string) OIDCIdentity {
 
 func TestLoginWithOIDCRequiresVerifiedEmail(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(nil))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(nil))
 
-	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("a@example.com", false), AuthSessionMetadata{}); err != ErrOIDCUnverifiedEmail {
-		t.Fatalf("unverified email: got %v, want ErrOIDCUnverifiedEmail", err)
+	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("a@example.com", false), slapp.AuthSessionMetadata{}); err != slapp.ErrOIDCUnverifiedEmail {
+		t.Fatalf("unverified email: got %v, want slapp.ErrOIDCUnverifiedEmail", err)
 	}
-	if _, err := svc.LoginWithOIDC(context.Background(), OIDCIdentity{Subject: "s", EmailVerified: true}, AuthSessionMetadata{}); err != ErrOIDCUnverifiedEmail {
-		t.Fatalf("missing email: got %v, want ErrOIDCUnverifiedEmail", err)
+	if _, err := svc.LoginWithOIDC(context.Background(), slapp.OIDCIdentity{Subject: "s", EmailVerified: true}, slapp.AuthSessionMetadata{}); err != slapp.ErrOIDCUnverifiedEmail {
+		t.Fatalf("missing email: got %v, want slapp.ErrOIDCUnverifiedEmail", err)
 	}
 }
 
 func TestLoginWithOIDCRejectsUnknownWithoutAutoProvision(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(nil))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(nil))
 
-	_, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("new@example.com", true), AuthSessionMetadata{})
-	if err != ErrOIDCAutoProvisionDisabled {
-		t.Fatalf("got %v, want ErrOIDCAutoProvisionDisabled", err)
+	_, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("new@example.com", true), slapp.AuthSessionMetadata{})
+	if err != slapp.ErrOIDCAutoProvisionDisabled {
+		t.Fatalf("got %v, want slapp.ErrOIDCAutoProvisionDisabled", err)
 	}
 }
 
 func TestLoginWithOIDCProvisionsAndReusesAccount(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	first, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("provision@example.com", true, "idp-admins"), AuthSessionMetadata{})
+	first, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("provision@example.com", true, "idp-admins"), slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("first login: %v", err)
 	}
@@ -72,7 +73,7 @@ func TestLoginWithOIDCProvisionsAndReusesAccount(t *testing.T) {
 	}
 
 	// 同一 email 二次登录必须复用账号，而不是再建一个。
-	second, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("provision@example.com", true), AuthSessionMetadata{})
+	second, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("provision@example.com", true), slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("second login: %v", err)
 	}
@@ -93,9 +94,9 @@ func TestLoginWithOIDCProvisionsAndReusesAccount(t *testing.T) {
 
 func TestLoginWithOIDCProvisionedPasswordIsUnusable(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("nopass@example.com", true), AuthSessionMetadata{}); err != nil {
+	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("nopass@example.com", true), slapp.AuthSessionMetadata{}); err != nil {
 		t.Fatalf("provision login: %v", err)
 	}
 	var user models.User
@@ -106,16 +107,16 @@ func TestLoginWithOIDCProvisionedPasswordIsUnusable(t *testing.T) {
 	if strings.HasPrefix(user.Password, "$2") {
 		t.Fatal("provisioned password should be a random value, not a real hash")
 	}
-	if _, err := svc.Login(context.Background(), LoginInput{Username: user.Username, Password: user.Password}, AuthSessionMetadata{}); err == nil {
+	if _, err := svc.Login(context.Background(), slapp.LoginInput{Username: user.Username, Password: user.Password}, slapp.AuthSessionMetadata{}); err == nil {
 		t.Fatal("password login with stored secret must fail")
 	}
 }
 
 func TestLoginWithOIDCDefaultRole(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("agent-role@example.com", true, "unknown-group"), AuthSessionMetadata{})
+	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("agent-role@example.com", true, "unknown-group"), slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
@@ -126,15 +127,15 @@ func TestLoginWithOIDCDefaultRole(t *testing.T) {
 
 func TestLoginWithOIDCDomainAllowlist(t *testing.T) {
 	db := newAuthServiceTestDB(t)
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) {
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) {
 		c.AutoProvision = true
 		c.AllowedDomains = []string{"corp.example.com"}
 	}))
 
-	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("outsider@example.com", true), AuthSessionMetadata{}); err != ErrOIDCDomainNotAllowed {
-		t.Fatalf("got %v, want ErrOIDCDomainNotAllowed", err)
+	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("outsider@example.com", true), slapp.AuthSessionMetadata{}); err != slapp.ErrOIDCDomainNotAllowed {
+		t.Fatalf("got %v, want slapp.ErrOIDCDomainNotAllowed", err)
 	}
-	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("insider@CORP.example.com", true), AuthSessionMetadata{}); err != nil {
+	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("insider@CORP.example.com", true), slapp.AuthSessionMetadata{}); err != nil {
 		t.Fatalf("allowed domain rejected: %v", err)
 	}
 }
@@ -150,10 +151,10 @@ func TestLoginWithOIDCBannedUserRejected(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed banned user: %v", err)
 	}
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("banned@example.com", true), AuthSessionMetadata{}); err != ErrAuthUserDisabled {
-		t.Fatalf("got %v, want ErrAuthUserDisabled", err)
+	if _, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("banned@example.com", true), slapp.AuthSessionMetadata{}); err != slapp.ErrAuthUserDisabled {
+		t.Fatalf("got %v, want slapp.ErrAuthUserDisabled", err)
 	}
 }
 
@@ -172,9 +173,9 @@ func TestLoginWithOIDCIgnoresIdPRoleForExistingUser(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
-	svc := NewService(db, oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
+	svc := slapp.NewService(NewGormRepository(db), oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true }))
 
-	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("plain@example.com", true, "idp-admins"), AuthSessionMetadata{})
+	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("plain@example.com", true, "idp-admins"), slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
@@ -187,13 +188,13 @@ func TestLoginWithOIDCSessionRefreshable(t *testing.T) {
 	db := newAuthServiceTestDB(t)
 	cfg := oidcTestConfig(func(c *config.OIDCConfig) { c.AutoProvision = true })
 	cfg.JWT.RefreshExpiresIn = time.Hour
-	svc := NewService(db, cfg)
+	svc := slapp.NewService(NewGormRepository(db), cfg)
 
-	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("refresh@example.com", true), AuthSessionMetadata{})
+	result, err := svc.LoginWithOIDC(context.Background(), oidcIdentity("refresh@example.com", true), slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	rotated, err := svc.RefreshToken(context.Background(), result.RefreshToken, AuthSessionMetadata{})
+	rotated, err := svc.RefreshToken(context.Background(), result.RefreshToken, slapp.AuthSessionMetadata{})
 	if err != nil {
 		t.Fatalf("refresh: %v", err)
 	}

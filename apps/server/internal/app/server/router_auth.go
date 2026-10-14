@@ -11,6 +11,7 @@ import (
 	"servify/apps/server/internal/middleware"
 	authapp "servify/apps/server/internal/modules/auth/application"
 	authdelivery "servify/apps/server/internal/modules/auth/delivery"
+	authinfra "servify/apps/server/internal/modules/auth/infra"
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/storage"
@@ -37,7 +38,7 @@ func registerAuthRoutes(r *gin.Engine, deps Dependencies) {
 		configscope.WithTenantSessionRiskProvider(configscope.NewGormTenantConfigProvider(deps.DB)),
 		configscope.WithWorkspaceSessionRiskProvider(configscope.NewGormWorkspaceConfigProvider(deps.DB)),
 	)
-	authService := authapp.NewService(deps.DB, deps.Config)
+	authService := authapp.NewService(authinfra.NewGormRepository(deps.DB), deps.Config)
 	// refresh token 重放处置档位（P2-5 第三刀）：不依赖情报源，无条件注入
 	// （off/未配置时等价 no-op，刷新行为不变）。
 	authService.WithRefreshReusePolicy(deps.Config.Security.SessionRisk.RefreshReusePolicy)

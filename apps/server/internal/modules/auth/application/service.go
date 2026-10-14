@@ -17,11 +17,10 @@ import (
 	platformauth "servify/apps/server/internal/platform/auth"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type AuthService struct {
-	db     *gorm.DB
+	repo   Repository
 	config *config.Config
 	// 登录风险执行（P2-5 第二刀）：riskIntel 提供登录来源 IP 的网络标签，
 	// loginEnforcement 取 ""/"off"/"step_up"/"block"。两者均未注入时登录
@@ -73,8 +72,8 @@ type AuthResult struct {
 	SessionID        string
 }
 
-func NewService(db *gorm.DB, cfg *config.Config) *AuthService {
-	return &AuthService{db: db, config: cfg}
+func NewService(repo Repository, cfg *config.Config) *AuthService {
+	return &AuthService{repo: repo, config: cfg}
 }
 
 // WithLoginRiskEnforcement 注入登录风险情报源与执行档位（P2-5 第二刀）。
@@ -122,8 +121,8 @@ func (s *AuthService) loginRiskHighRisk(ctx context.Context, ip string) bool {
 }
 
 func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta AuthSessionMetadata) (*AuthResult, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
@@ -132,7 +131,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 	}
 
 	var count int64
-	s.db.WithContext(ctx).Model(&models.User{}).Where("username = ? OR email = ?", req.Username, req.Email).Count(&count)
+	count = s.repo.CountUsersByUsernameOrEmail(ctx, req.Username, req.Email)
 	if count > 0 {
 		return nil, ErrAuthUserAlreadyExists
 	}
@@ -146,12 +145,8 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 	if role == "" {
 		role = "customer"
 	}
-	if role == "admin" {
-		var total int64
-		s.db.WithContext(ctx).Model(&models.User{}).Count(&total)
-		if total > 0 {
-			role = "customer"
-		}
+	if role == "admin" && s.repo.CountUsers(ctx) > 0 {
+		role = "customer"
 	}
 
 	user := &models.User{
@@ -163,7 +158,7 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 		Role:     role,
 		Status:   "active",
 	}
-	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+	if err := s.repo.CreateUser(ctx, user); err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return nil, ErrAuthUserAlreadyExists
 		}
@@ -181,12 +176,12 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 // 到会话 token；已启用的用户只拿到短命挑战 token，须走 VerifyTwoFactorLogin
 // 完成第二因子后才换取正式会话。
 func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessionMetadata) (*LoginOutcome, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
-	var user models.User
-	if err := s.db.WithContext(ctx).Where("username = ? OR email = ?", req.Username, req.Username).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	user, err := s.repo.GetUserByUsernameOrEmail(ctx, req.Username)
+	if err != nil {
+		if errors.Is(err, ErrAuthUserNotFound) {
 			return nil, ErrAuthInvalidCredentials
 		}
 		return nil, err
@@ -209,8 +204,8 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 			if !user.TotpEnabled {
 				return nil, ErrLoginBlockedByRisk
 			}
-			if !s.twoFactorChallengeEnabled(s.config, &user) {
-				token, expiresIn, err := s.createChallengeToken(&user, meta)
+			if !s.twoFactorChallengeEnabled(s.config, user) {
+				token, expiresIn, err := s.createChallengeToken(user, meta)
 				if err != nil {
 					return nil, err
 				}
@@ -218,8 +213,8 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 			}
 		}
 	}
-	if s.twoFactorChallengeEnabled(s.config, &user) {
-		token, expiresIn, err := s.createChallengeToken(&user, meta)
+	if s.twoFactorChallengeEnabled(s.config, user) {
+		token, expiresIn, err := s.createChallengeToken(user, meta)
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +224,7 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.buildAuthResult(ctx, &user, session)
+	result, err := s.buildAuthResult(ctx, user, session)
 	if err != nil {
 		return nil, err
 	}
@@ -237,37 +232,30 @@ func (s *AuthService) Login(ctx context.Context, req LoginInput, meta AuthSessio
 }
 
 func (s *AuthService) GetCurrentUser(ctx context.Context, userID uint) (*models.User, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
-	var user models.User
-	if err := s.db.WithContext(ctx).First(&user, userID).Error; err != nil {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	return &user, nil
+	return user, nil
 }
 
 func (s *AuthService) ListAuthSessions(ctx context.Context, userID uint) ([]models.UserAuthSession, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	if userID == 0 {
 		return nil, fmt.Errorf("user_id required")
 	}
 
-	var sessions []models.UserAuthSession
-	if err := s.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Order("updated_at desc, created_at desc").
-		Find(&sessions).Error; err != nil {
-		return nil, err
-	}
-	return sessions, nil
+	return s.repo.ListAuthSessionsByUser(ctx, userID)
 }
 
 func (s *AuthService) RevokeCurrentSession(ctx context.Context, userID uint, sessionID string) (*models.UserAuthSession, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	if userID == 0 {
 		return nil, fmt.Errorf("user_id required")
@@ -276,31 +264,24 @@ func (s *AuthService) RevokeCurrentSession(ctx context.Context, userID uint, ses
 		return nil, fmt.Errorf("session_id required")
 	}
 
-	now := time.Now().UTC()
-	result := s.db.WithContext(ctx).Model(&models.UserAuthSession{}).
-		Where("id = ? AND user_id = ?", sessionID, userID).
-		Updates(map[string]any{
-			"status":        "revoked",
-			"revoked_at":    now,
-			"token_version": gorm.Expr("COALESCE(token_version, 0) + 1"),
-		})
-	if result.Error != nil {
-		return nil, result.Error
+	rows, err := s.repo.RevokeAuthSession(ctx, sessionID, userID)
+	if err != nil {
+		return nil, err
 	}
-	if result.RowsAffected == 0 {
+	if rows == 0 {
 		return nil, fmt.Errorf("session not found")
 	}
 
-	var session models.UserAuthSession
-	if err := s.db.WithContext(ctx).First(&session, "id = ? AND user_id = ?", sessionID, userID).Error; err != nil {
+	session, err := s.repo.GetAuthSession(ctx, sessionID, userID)
+	if err != nil {
 		return nil, err
 	}
-	return &session, nil
+	return session, nil
 }
 
 func (s *AuthService) RevokeOtherSessions(ctx context.Context, userID uint, currentSessionID string) (int, error) {
-	if s == nil || s.db == nil {
-		return 0, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return 0, ErrAuthInvalidDB
 	}
 	if userID == 0 {
 		return 0, fmt.Errorf("user_id required")
@@ -309,23 +290,16 @@ func (s *AuthService) RevokeOtherSessions(ctx context.Context, userID uint, curr
 		return 0, fmt.Errorf("current session_id required")
 	}
 
-	now := time.Now().UTC()
-	result := s.db.WithContext(ctx).Model(&models.UserAuthSession{}).
-		Where("user_id = ? AND id <> ? AND status = ? AND revoked_at IS NULL", userID, currentSessionID, "active").
-		Updates(map[string]any{
-			"status":        "revoked",
-			"revoked_at":    now,
-			"token_version": gorm.Expr("COALESCE(token_version, 0) + 1"),
-		})
-	if result.Error != nil {
-		return 0, result.Error
+	rows, err := s.repo.RevokeOtherAuthSessions(ctx, userID, currentSessionID)
+	if err != nil {
+		return 0, err
 	}
-	return int(result.RowsAffected), nil
+	return int(rows), nil
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string, meta AuthSessionMetadata) (*AuthResult, error) {
-	if s == nil || s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s == nil || s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
@@ -385,7 +359,7 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 	}
 
 	now := time.Now()
-	token, err := hookCreateHS256JWT(map[string]interface{}{
+	token, err := HookCreateHS256JWT(map[string]interface{}{
 		"iat":                   now.Unix(),
 		"sub":                   user.ID,
 		"jti":                   newAuthTokenID(),
@@ -401,7 +375,7 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 		return nil, err
 	}
 	refreshExpiresIn := s.refreshExpiresIn()
-	refreshToken, err := hookCreateHS256JWT(map[string]interface{}{
+	refreshToken, err := HookCreateHS256JWT(map[string]interface{}{
 		"iat":                   now.Unix(),
 		"sub":                   user.ID,
 		"jti":                   newAuthTokenID(),
@@ -416,7 +390,7 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 	if err != nil {
 		return nil, err
 	}
-	_ = s.db.WithContext(ctx).Model(user).Update("last_login", now).Error
+	_ = s.repo.UpdateUserLastLogin(ctx, user, now)
 	return &AuthResult{
 		Token:            token,
 		ExpiresIn:        int(s.config.JWT.ExpiresIn.Seconds()),
@@ -428,8 +402,8 @@ func (s *AuthService) buildAuthResult(ctx context.Context, user *models.User, se
 }
 
 func (s *AuthService) createAuthSession(ctx context.Context, userID uint, meta AuthSessionMetadata) (*models.UserAuthSession, error) {
-	if s.db == nil {
-		return nil, gorm.ErrInvalidDB
+	if s.repo == nil {
+		return nil, ErrAuthInvalidDB
 	}
 	now := time.Now().UTC()
 	session := &models.UserAuthSession{
@@ -442,15 +416,15 @@ func (s *AuthService) createAuthSession(ctx context.Context, userID uint, meta A
 		ClientIP:          normalizeAuthSessionField(meta.ClientIP, 128),
 		LastSeenAt:        &now,
 	}
-	if err := s.db.WithContext(ctx).Create(session).Error; err != nil {
+	if err := s.repo.CreateAuthSession(ctx, session); err != nil {
 		return nil, err
 	}
 	return session, nil
 }
 
 func (s *AuthService) rotateRefreshSession(ctx context.Context, userID uint, sessionID string, expectedVersion int, meta AuthSessionMetadata) (*models.UserAuthSession, error) {
-	var session models.UserAuthSession
-	if err := s.db.WithContext(ctx).First(&session, "id = ? AND user_id = ?", sessionID, userID).Error; err != nil {
+	session, err := s.repo.GetAuthSession(ctx, sessionID, userID)
+	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(session.Status) != "active" || session.RevokedAt != nil {
@@ -463,40 +437,22 @@ func (s *AuthService) rotateRefreshSession(ctx context.Context, userID uint, ses
 		// 重放者与合法用户手里的"最新"token——一并失效，迫使重新登录）。
 		// 对外统一 401，不回显是否吊销、不回显版本差异。
 		if s.refreshReuseRevocation && expectedVersion < session.TokenVersion {
-			now := time.Now().UTC()
-			if err := s.db.WithContext(ctx).Model(&models.UserAuthSession{}).
-				Where("id = ? AND user_id = ? AND status = ?", sessionID, userID, "active").
-				Updates(map[string]any{
-					"status":        "revoked",
-					"revoked_at":    now,
-					"token_version": gorm.Expr("COALESCE(token_version, 0) + 1"),
-				}).Error; err != nil {
+			if err := s.repo.RevokeActiveAuthSession(ctx, sessionID, userID); err != nil {
 				return nil, err
 			}
 		}
 		return nil, ErrAuthInvalidRefreshToken
 	}
 
-	now := time.Now().UTC()
-	updates := map[string]interface{}{
-		"status":             "active",
-		"token_version":      gorm.Expr("COALESCE(token_version, 0) + 1"),
-		"device_fingerprint": normalizeAuthSessionField(meta.DeviceFingerprint, 128),
-		"user_agent":         normalizeAuthSessionField(meta.UserAgent, 512),
-		"client_ip":          normalizeAuthSessionField(meta.ClientIP, 128),
-		"last_seen_at":       now,
-		"last_refreshed_at":  now,
-		"revoked_at":         nil,
-	}
-	if err := s.db.WithContext(ctx).Model(&models.UserAuthSession{}).
-		Where("id = ? AND user_id = ?", sessionID, userID).
-		Updates(updates).Error; err != nil {
+	if err := s.repo.RotateAuthSession(ctx, sessionID, userID, AuthSessionRotation{
+		DeviceFingerprint: normalizeAuthSessionField(meta.DeviceFingerprint, 128),
+		UserAgent:         normalizeAuthSessionField(meta.UserAgent, 512),
+		ClientIP:          normalizeAuthSessionField(meta.ClientIP, 128),
+		Now:               time.Now().UTC(),
+	}); err != nil {
 		return nil, err
 	}
-	if err := s.db.WithContext(ctx).First(&session, "id = ? AND user_id = ?", sessionID, userID).Error; err != nil {
-		return nil, err
-	}
-	return &session, nil
+	return s.repo.GetAuthSession(ctx, sessionID, userID)
 }
 
 func (s *AuthService) refreshExpiresIn() time.Duration {
@@ -551,7 +507,7 @@ func normalizeAuthSessionField(value string, max int) string {
 
 func newAuthSessionID() string {
 	var buf [16]byte
-	if _, err := hookRandRead(buf[:]); err != nil {
+	if _, err := HookRandRead(buf[:]); err != nil {
 		return fmt.Sprintf("auth_%d", time.Now().UnixNano())
 	}
 	return "auth_" + hex.EncodeToString(buf[:])
@@ -559,7 +515,7 @@ func newAuthSessionID() string {
 
 func newAuthTokenID() string {
 	var buf [16]byte
-	if _, err := hookRandRead(buf[:]); err != nil {
+	if _, err := HookRandRead(buf[:]); err != nil {
 		return fmt.Sprintf("jti_%d", time.Now().UnixNano())
 	}
 	return "jti_" + hex.EncodeToString(buf[:])
