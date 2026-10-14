@@ -75,17 +75,18 @@ func (r *RedisRegistry) GoOnline(profile agentdomain.AgentProfile) (agentapp.Age
 		return agentapp.AgentRuntimeDTO{}, fmt.Errorf("persist agent state: %w", err)
 	}
 
-	// 2. Store in Redis
+	// 2. Store in Redis + 4. 镜像本地缓存，整体持 r.mu：syncLoop 的状态合并
+	//    也持 r.mu，本实例写共享状态时不可被回灌/重建穿插。
+	r.mu.Lock()
 	if err := r.storeInRedis(profile.UserID, dto); err != nil {
 		r.logger.Warnf("redis write failed: %v", err)
 		// Don't fail - DB write succeeded
 	}
+	_, _ = r.localCache.GoOnline(profile) // 内存表永不报错，best-effort 检查
+	r.mu.Unlock()
 
 	// 3. Publish status change
 	r.publishStatusChange("online", profile.UserID)
-
-	// 4. Update local cache（镜像写入；内存表永不报错，best-effort 检查）
-	_, _ = r.localCache.GoOnline(profile)
 
 	return dto, nil
 }
@@ -103,14 +104,15 @@ func (r *RedisRegistry) GoOffline(userID uint) {
 			"connected_at":     nil,
 		})
 
-	// 2. Remove from Redis
+	// 2. Remove from Redis + 4. 清本地缓存，整体持 r.mu：否则并发 AssignSession
+	//    的 storeInRedis 可在下线删除之后把运行态复活回共享键。
+	r.mu.Lock()
 	r.removeFromRedis(userID)
+	r.localCache.GoOffline(userID)
+	r.mu.Unlock()
 
 	// 3. Publish status change
 	r.publishStatusChange("offline", userID)
-
-	// 4. Update local cache
-	r.localCache.GoOffline(userID)
 }
 
 // UpdateStatus updates an agent's presence status.
@@ -125,7 +127,9 @@ func (r *RedisRegistry) UpdateStatus(userID uint, status agentdomain.PresenceSta
 			"last_activity_at": now,
 		})
 
-	// 2. Update in Redis (if online)
+	// 2. Update in Redis (if online) + 3. 更新本地缓存，整体持 r.mu
+	//    （与 syncLoop 状态合并互斥，见 GoOnline 注释）。
+	r.mu.Lock()
 	if dto, ok := r.localCache.Get(userID); ok {
 		dto.Status = string(status)
 		dto.LastActivity = now
@@ -133,43 +137,52 @@ func (r *RedisRegistry) UpdateStatus(userID uint, status agentdomain.PresenceSta
 			r.logger.Warnf("redis write failed: %v", err)
 		}
 	}
-
-	// 3. Update local cache
 	r.localCache.UpdateStatus(userID, status)
+	r.mu.Unlock()
 }
 
 // AssignSession assigns a session to an agent.
 func (r *RedisRegistry) AssignSession(userID uint, session *models.Session) (agentapp.AgentRuntimeDTO, error) {
-	// Use local cache for the operation
+	// 本地变更与 Redis 同步整体持 r.mu：syncLoop 的状态合并读共享键，若在
+	// 两者之间穿插，会把尚未同步的负载增量重置成过期快照（见 MergeRemote）。
+	r.mu.Lock()
 	dto, err := r.localCache.AssignSession(userID, session)
 	if err != nil {
+		r.mu.Unlock()
 		return dto, err
 	}
-
-	// Sync to Redis
 	if err := r.storeInRedis(userID, dto); err != nil {
+		r.mu.Unlock()
 		r.logger.Warnf("redis write failed: %v", err)
+		return dto, nil
 	}
+	r.mu.Unlock()
 	return dto, nil
 }
 
 // ReleaseSession releases a session from an agent.
 func (r *RedisRegistry) ReleaseSession(userID uint, sessionID string) (agentapp.AgentRuntimeDTO, bool) {
-	// Use local cache for the operation
+	// 持锁口径同 AssignSession。
+	r.mu.Lock()
 	dto, ok := r.localCache.ReleaseSession(userID, sessionID)
 	if !ok {
+		r.mu.Unlock()
 		return dto, false
 	}
-
-	// Sync to Redis
 	if err := r.storeInRedis(userID, dto); err != nil {
+		r.mu.Unlock()
 		r.logger.Warnf("redis write failed: %v", err)
+		return dto, true
 	}
+	r.mu.Unlock()
 	return dto, true
 }
 
 // ApplyTransfer transfers a session between agents.
 func (r *RedisRegistry) ApplyTransfer(sessionID string, fromAgentID *uint, toAgentID uint) {
+	// 持锁口径同 AssignSession：转接的双 agent 记账与同步不可被状态合并穿插。
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.localCache.ApplyTransfer(sessionID, fromAgentID, toAgentID)
 
 	// Sync both agents to Redis
@@ -269,7 +282,7 @@ func (r *RedisRegistry) syncFromRedis() {
 		}
 		if dto, err := r.getFromRedis(userID); err == nil {
 			r.mu.Lock()
-			_, _ = r.localCache.GoOnline(dtoToProfile(*dto)) // 内存表永不报错
+			r.localCache.MergeRemote(*dto)
 			r.mu.Unlock()
 		}
 	}
@@ -289,11 +302,12 @@ func (r *RedisRegistry) handleStatusChange(payload string) {
 
 	switch action {
 	case "online":
-		// Fetch from Redis and update local cache
+		// Fetch from Redis and merge into local cache：presence 元数据以远端
+		// 为准，本地负载/会话保留（发布者自己也收到自己的 online 回灌，
+		// 整条重建会把未同步到 Redis 的本地记账重置成过期快照）。
 		if dto, err := r.getFromRedis(userID); err == nil {
-			// Update local cache without triggering another publish
 			r.mu.Lock()
-			_, _ = r.localCache.GoOnline(dtoToProfile(*dto)) // 内存表永不报错
+			r.localCache.MergeRemote(*dto)
 			r.mu.Unlock()
 		}
 	case "offline":
@@ -408,22 +422,6 @@ func (r *RedisRegistry) getFromRedis(userID uint) (*agentapp.AgentRuntimeDTO, er
 
 func (r *RedisRegistry) publishStatusChange(action string, userID uint) {
 	r.client.Publish(r.ctx, agentStatusChannel, fmt.Sprintf("%s:%d", action, userID))
-}
-
-func dtoToProfile(dto agentapp.AgentRuntimeDTO) agentdomain.AgentProfile {
-	return agentdomain.AgentProfile{
-		UserID:              dto.UserID,
-		Username:            dto.Username,
-		Name:                dto.Name,
-		Department:          dto.Department,
-		Skills:              dto.Skills,
-		MaxChatConcurrency:  dto.MaxChatConcurrency,
-		MaxVoiceConcurrency: dto.MaxVoiceConcurrency,
-		CurrentChatLoad:     dto.CurrentChatLoad,
-		CurrentVoiceLoad:    dto.CurrentVoiceLoad,
-		Rating:              dto.Rating,
-		AvgResponseTime:     dto.AvgResponseTime,
-	}
 }
 
 // Ensure RedisRegistry implements RuntimeRegistry

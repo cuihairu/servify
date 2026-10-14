@@ -122,6 +122,43 @@ func (r *InMemoryRegistry) ApplyTransfer(sessionID string, fromAgentID *uint, to
 	}
 }
 
+// MergeRemote 以远端快照合并本地运行态：presence 元数据（身份/技能/并发
+// 上限/评分）以远端为准，负载记账、会话表与上线时间保留本地。负载与会话
+// 归持有会话的实例所有（AssignSession/ReleaseSession/ApplyTransfer 的写侧），
+// 状态消息只是 presence 通知：pub/sub 广播含发布者自己，若用 GoOnline 整条
+// 重建，回灌落在本地变更与其 Redis 同步之间时会把未同步的记账重置成过期
+// 快照，并在下一次分配时写回共享键。
+func (r *InMemoryRegistry) MergeRemote(dto agentapp.AgentRuntimeDTO) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	item, ok := r.agents[dto.UserID]
+	if !ok {
+		// 本实例从未见过的 agent：按远端快照整条插入。
+		now := time.Now()
+		if dto.ConnectedAt.IsZero() {
+			dto.ConnectedAt = now
+		}
+		if dto.LastActivity.IsZero() {
+			dto.LastActivity = now
+		}
+		if dto.Status == "" {
+			dto.Status = string(agentdomain.PresenceStatusOnline)
+		}
+		r.agents[dto.UserID] = &runtimeAgent{AgentRuntimeDTO: dto, Sessions: map[string]*models.Session{}}
+		return
+	}
+	// 已有本地条目：只刷新元数据，记账字段保留本地。
+	chatLoad, voiceLoad := item.CurrentChatLoad, item.CurrentVoiceLoad
+	connectedAt, lastActivity := item.ConnectedAt, item.LastActivity
+	sessions := item.Sessions
+	item.AgentRuntimeDTO = dto
+	item.CurrentChatLoad = chatLoad
+	item.CurrentVoiceLoad = voiceLoad
+	item.ConnectedAt = connectedAt
+	item.LastActivity = lastActivity
+	item.Sessions = sessions
+}
+
 func (r *InMemoryRegistry) Get(userID uint) (agentapp.AgentRuntimeDTO, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

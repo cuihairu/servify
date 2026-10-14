@@ -56,7 +56,7 @@
 - [x] P1-8 文本编码与仓库可读性（编码门禁、乱码存量清零）— check-text-encoding.sh 覆盖 1999 文件，0 非 UTF-8 / 0 BOM / 0 U+FFFD
 - [x] P1-9 demo-sdk 生成链路一致性（sync-sdk-to-demo.sh、一键同步、漂移校验、CI 门）— check-generated-drift.sh 绿
 - [x] P2-0 客户侧推荐问题与上下文联想（含 RQ-5 曝光/转化归因、ExposureSummary 出口、路径级限流）— 38566cf 3b8370e，CI 35688179671 绿
-- [x] P2-1 多实例与高可用边界明确化（multi-instance-boundary 文档与实测口径）——2026-10-15 补回第 1 节测试锚点（P3-2 删 services 层时随 agent_service_redis_integration_test.go 丢失）：双 RedisRegistry 共享同一 Redis+DB 互见 presence、transfer load 与 TTL 过期收敛，退回进程内存储必红
+- [x] P2-1 多实例与高可用边界明确化（multi-instance-boundary 文档与实测口径）——2026-10-15 补回第 1 节测试锚点（P3-2 删 services 层时随 agent_service_redis_integration_test.go 丢失）：双 RedisRegistry 共享同一 Redis+DB 互见 presence、transfer load 与 TTL 过期收敛，退回进程内存储必红；锚点首上 CI 即抓到真竞态（041ffb6 Module Checks 红）：online 回灌经 GoOnline 整条重建本地条目，落在 AssignSession 本地变更与 Redis 同步之间时把未同步负载重置回过期快照——MergeRemote 改合并语义（元数据远端为准、负载/会话/时间本地保留）+ 变更与同步整体持 r.mu，redis_registry_status_echo_test.go 确定性复现窗口
 - [x] P2-2 配置治理与环境分层强化（配置加载、校验、模板、文档四收口）
 - [x] P2-3 数据恢复、备份与迁移演练（recovery 包 + dbrecovery 工具 + sqlite/pg 双轨演练证据）
 - [x] P2-4 可观测性从有指标升级到可运维（五刀：错误分类与埋点、业务指标、SLO 与 burn rate、worker 轮次、known-gaps 清零）— 871119c 2cb1dd8 99a42d2 b0e4bc5 ac9ef2c 88d633a 822d788 a512989 3090a27，净 -4000 行

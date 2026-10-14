@@ -27,6 +27,12 @@
   由 `agent/infra/redis_registry_multi_instance_test.go` 锁定
   （原 integration 测试 `services/agent_service_redis_integration_test.go`
   已随 P3-2 `internal/services` 移除而删除，2026-10-14 按模块现结构补回等价锚）。
+- 状态消息（`servify:agent:status`）只是 presence 通知：跨实例回灌经
+  `InMemoryRegistry.MergeRemote` 合并——元数据以远端快照为准，负载记账、
+  会话表与上线时间保留本地（负载归持有会话的实例所有）。pub/sub 广播
+  含发布者自己，2026-10-15 该锚点在 CI 抓到整条重建版本的真实竞态
+  （回灌落在本地负载变更与其 Redis 同步之间 → 增量被重置成过期快照），
+  复现窗口与合并语义由 `agent/infra/redis_registry_status_echo_test.go` 锁定。
 - 前提：所有实例必须连**同一个 Redis**（`BuildRuntime` 注入的共享 client）。
 
 ### 2. WebSocket / WebRTC 实时路由 —— 单实例硬约束 ❌
@@ -112,5 +118,7 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
   —— 两个 `RedisRegistry` 实例共享同一 Redis 与 DB，互见 presence、transfer
   load 与实例崩溃后的 TTL 过期（原锚 `services/agent_service_redis_integration_test.go`
   已随 P3-2 删除，2026-10-14 补回等价锚）。
+- 回灌合并语义证据：`agent/infra/redis_registry_status_echo_test.go`
+  —— online 回灌不得覆盖本地负载/会话/上线时间（2026-10-15）。
 - routing 租约样板：`routing/infra/gorm_repository.go`
   `ClaimQueueEntries` / `ReleaseQueueClaim`。
