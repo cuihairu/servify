@@ -24,9 +24,9 @@
 - 实例崩溃后其 agent 状态随 TTL 过期自动消失，`agentRuntimeMaintenance`
   的 `cleanupInactiveAgents`（每实例运行、操作幂等）做兜底清理。
 - 两实例共享 Redis + DB 时互相观测 presence 与 transfer load 的行为
-  原由 integration 测试锁定
-  （`services/agent_service_redis_integration_test.go`）；该测试已随
-  P3-2 `internal/services` 移除而删除，当前无等价锚，补测为待办。
+  由 `agent/infra/redis_registry_multi_instance_test.go` 锁定
+  （原 integration 测试 `services/agent_service_redis_integration_test.go`
+  已随 P3-2 `internal/services` 移除而删除，2026-10-14 按模块现结构补回等价锚）。
 - 前提：所有实例必须连**同一个 Redis**（`BuildRuntime` 注入的共享 client）。
 
 ### 2. WebSocket / WebRTC 实时路由 —— 单实例硬约束 ❌
@@ -108,8 +108,9 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
 - 广播语义测试锚点：`platform/eventbus/redis_bus_multi_instance_test.go`
   —— 两个 `RedisBus` 实例共享同一 Redis，一条事件两边订阅方都收到
   （锁定本文档第 3 节的声明，防止未来静默改成竞争消费或丢失广播）。
-- Agent 多实例证据：原锚定测试
-  `services/agent_service_redis_integration_test.go` 已随 P3-2 services
-  移除而删除，当前无等价锚，补测为待办（P0-3）。
+- Agent 多实例证据：`agent/infra/redis_registry_multi_instance_test.go`
+  —— 两个 `RedisRegistry` 实例共享同一 Redis 与 DB，互见 presence、transfer
+  load 与实例崩溃后的 TTL 过期（原锚 `services/agent_service_redis_integration_test.go`
+  已随 P3-2 删除，2026-10-14 补回等价锚）。
 - routing 租约样板：`routing/infra/gorm_repository.go`
   `ClaimQueueEntries` / `ReleaseQueueClaim`。
