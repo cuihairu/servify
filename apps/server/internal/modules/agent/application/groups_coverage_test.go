@@ -7,8 +7,6 @@ import (
 
 	"servify/apps/server/internal/models"
 	agentdomain "servify/apps/server/internal/modules/agent/domain"
-
-	"gorm.io/gorm"
 )
 
 // groupsStubRepo 组合 stubRepo 并注入组操作错误，覆盖应用层错误映射分支。
@@ -138,7 +136,9 @@ func TestServiceCreateAgentGroup(t *testing.T) {
 		t.Fatalf("CreateAgentGroup() error = %v", err)
 	}
 
-	dup := &groupsStubRepo{stubRepo: &stubRepo{}, createErr: gorm.ErrDuplicatedKey}
+	// infra 层负责把驱动唯一键错误折成 ErrGroupDuplicate（gorm_repository.go
+	// duplicateGroupError），应用层只透传——应用层不再 import gorm。
+	dup := &groupsStubRepo{stubRepo: &stubRepo{}, createErr: ErrGroupDuplicate}
 	if err := newGroupsService(dup).CreateAgentGroup(ctx, &models.AgentGroup{Name: "billing"}); !errors.Is(err, ErrGroupDuplicate) {
 		t.Fatalf("duplicate want ErrGroupDuplicate, got %v", err)
 	}
@@ -163,7 +163,7 @@ func TestServiceUpdateAgentGroup(t *testing.T) {
 		t.Fatalf("UpdateAgentGroup() error = %v", err)
 	}
 
-	dup := &groupsStubRepo{stubRepo: &stubRepo{}, updateErr: gorm.ErrDuplicatedKey}
+	dup := &groupsStubRepo{stubRepo: &stubRepo{}, updateErr: ErrGroupDuplicate}
 	if err := newGroupsService(dup).UpdateAgentGroup(ctx, &models.AgentGroup{ID: 1, Name: "x"}); !errors.Is(err, ErrGroupDuplicate) {
 		t.Fatalf("duplicate want ErrGroupDuplicate, got %v", err)
 	}

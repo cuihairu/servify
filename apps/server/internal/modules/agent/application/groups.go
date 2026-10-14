@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"servify/apps/server/internal/models"
-
-	"gorm.io/gorm"
 )
 
 // ErrGroupNameRequired 组名为空。
@@ -36,26 +34,15 @@ func (s *Service) CreateAgentGroup(ctx context.Context, group *models.AgentGroup
 	if group == nil || strings.TrimSpace(group.Name) == "" {
 		return ErrGroupNameRequired
 	}
-	if err := s.repo.CreateAgentGroup(ctx, group); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return ErrGroupDuplicate
-		}
-		return err
-	}
-	return nil
+	// infra 层已把唯一键冲突折成 ErrGroupDuplicate，应用层只透传（不 import gorm）。
+	return s.repo.CreateAgentGroup(ctx, group)
 }
 
 func (s *Service) UpdateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
 	if group == nil || group.ID == 0 {
 		return ErrGroupNotFound
 	}
-	if err := s.repo.UpdateAgentGroup(ctx, group); err != nil {
-		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			return ErrGroupDuplicate
-		}
-		return err
-	}
-	return nil
+	return s.repo.UpdateAgentGroup(ctx, group)
 }
 
 func (s *Service) DeleteAgentGroup(ctx context.Context, id uint) error {

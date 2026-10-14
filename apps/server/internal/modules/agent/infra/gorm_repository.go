@@ -260,6 +260,16 @@ func (r *GormRepository) ListAgentGroups(ctx context.Context) ([]models.AgentGro
 	return groups, nil
 }
 
+// duplicateGroupError 把驱动唯一键错误折成应用层哨兵 ErrGroupDuplicate。
+// 依赖 OpenDB 的 TranslateError 开关（app/bootstrap/database.go）把 sqlite/pg 的
+// 约束原文折成 gorm.ErrDuplicatedKey；关闭该开关的库里此分支不会命中。
+func duplicateGroupError(err error) error {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return agentapp.ErrGroupDuplicate
+	}
+	return err
+}
+
 // CreateAgentGroup 创建组；tenant/workspace 从 ctx scope 注入（有则写）。
 func (r *GormRepository) CreateAgentGroup(ctx context.Context, group *models.AgentGroup) error {
 	if group.OverflowPolicy == "" {
@@ -272,7 +282,7 @@ func (r *GormRepository) CreateAgentGroup(ctx context.Context, group *models.Age
 		group.WorkspaceID = workspaceID
 	}
 	if err := r.db.WithContext(ctx).Create(group).Error; err != nil {
-		return fmt.Errorf("failed to create agent group: %w", err)
+		return fmt.Errorf("failed to create agent group: %w", duplicateGroupError(err))
 	}
 	return nil
 }
@@ -287,7 +297,7 @@ func (r *GormRepository) UpdateAgentGroup(ctx context.Context, group *models.Age
 		"enabled":         group.Enabled,
 	}
 	if err := r.db.WithContext(ctx).Model(&models.AgentGroup{}).Where("id = ?", group.ID).Updates(updates).Error; err != nil {
-		return fmt.Errorf("failed to update agent group: %w", err)
+		return fmt.Errorf("failed to update agent group: %w", duplicateGroupError(err))
 	}
 	return nil
 }

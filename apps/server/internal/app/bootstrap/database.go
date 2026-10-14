@@ -90,6 +90,12 @@ func OpenDatabase(cfg *config.Config, opts DatabaseOptions) (*gorm.DB, error) {
 	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger:                                   logger.Default.LogMode(level),
 		DisableForeignKeyConstraintWhenMigrating: true,
+		// 必须开启：否则驱动返回「UNIQUE constraint failed / duplicate key value...」
+		// 原文，errors.Is(err, gorm.ErrDuplicatedKey) 恒为 false。唯一键冲突判定
+		// （唯一索引名 uniq_agent_groups_name）依赖这个开关才能折成 gorm 哨兵。
+		// SQL 与原始错误仍由 db.Logger.Trace 在翻译前打出（callbacks.go Execute 尾部），
+		// 排障信息不丢。切勿关闭——agent/infra 的 duplicateGroupError 据此判重。
+		TranslateError: true,
 	})
 	if err != nil {
 		return nil, err
