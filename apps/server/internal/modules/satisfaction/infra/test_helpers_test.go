@@ -1,4 +1,4 @@
-package application
+package infra
 
 // 测试 helper 复刻（services 侧同名 helper 不跨包引用）。
 

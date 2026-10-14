@@ -49,6 +49,7 @@ import (
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	routinginfra "servify/apps/server/internal/modules/routing/infra"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 	shiftapp "servify/apps/server/internal/modules/shift/application"
 	shiftdelivery "servify/apps/server/internal/modules/shift/delivery"
 	shiftinfra "servify/apps/server/internal/modules/shift/infra"
@@ -440,7 +441,7 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 	analyticsdelivery.NewEventBusSubscriber(analyticsModule).Register(rt.Bus)
 	rt.dailyStatsRunner = analyticsdelivery.NewDailyStatsRunner(analyticsModule, rt.Logger)
 
-	satisfactionService := satisfapp.NewService(rt.DB, rt.Logger)
+	satisfactionService := satisfapp.NewService(satisfinfra.NewGormRepository(rt.DB), rt.Logger)
 	rt.SatisfactionService = satisfactionService
 	rt.satisfactionSvc = satisfactionService
 	state.satisfactionService = satisfactionService

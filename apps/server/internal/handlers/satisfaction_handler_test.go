@@ -19,6 +19,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 )
 
 func newSatisfactionHandlerTestDB(t *testing.T) *gorm.DB {
@@ -49,7 +50,7 @@ func TestSatisfactionHandler_CreateSatisfaction_Success(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -97,7 +98,7 @@ func TestSatisfactionHandler_CreateSatisfaction_InvalidJSON(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -119,7 +120,7 @@ func TestSatisfactionHandler_GetSatisfaction_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -140,7 +141,7 @@ func TestSatisfactionHandler_GetSatisfaction_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -161,7 +162,7 @@ func TestSatisfactionHandler_ListSatisfactions_Empty(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -187,7 +188,7 @@ func TestSatisfactionHandler_ListSatisfactions_InvalidDate(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -208,7 +209,7 @@ func TestSatisfactionHandler_ListSurveys_Empty(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -229,7 +230,7 @@ func TestSatisfactionHandler_ResendSurvey_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -250,7 +251,7 @@ func TestSatisfactionHandler_ResendSurvey_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -271,7 +272,7 @@ func TestSatisfactionHandler_GetSatisfactionByTicket_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -292,7 +293,7 @@ func TestSatisfactionHandler_GetSatisfactionByTicket_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -313,7 +314,7 @@ func TestSatisfactionHandler_GetSatisfactionStats_Success(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -334,7 +335,7 @@ func TestSatisfactionHandler_GetSatisfactionStats_InvalidDate(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -355,7 +356,7 @@ func TestSatisfactionHandler_UpdateSatisfaction_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -380,7 +381,7 @@ func TestSatisfactionHandler_UpdateSatisfaction_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -405,7 +406,7 @@ func TestSatisfactionHandler_DeleteSatisfaction_NotFound(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -426,7 +427,7 @@ func TestSatisfactionHandler_DeleteSatisfaction_InvalidID(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.ErrorLevel)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	handler := NewSatisfactionHandler(svc, logger)
 
 	router := gin.New()
@@ -443,7 +444,7 @@ func TestSatisfactionHandler_DeleteSatisfaction_InvalidID(t *testing.T) {
 func TestNewSatisfactionHandler(t *testing.T) {
 	db := newSatisfactionHandlerTestDB(t)
 	logger := logrus.New()
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 
 	handler := NewSatisfactionHandler(svc, logger)
 

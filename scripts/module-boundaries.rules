@@ -164,7 +164,7 @@ require|apps/server/internal/app/server/router_auth.go|authService[[:space:]]*:=
 forbid|apps/server/internal/app/server/router_auth.go|services\.NewAuthService|Router auth must not construct the legacy service.
 forbid|apps/server/internal/app/server/runtime.go|services\.AuthService|Runtime must not expose the concrete auth service; use authdelivery contracts.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.AuthService|Runtime assembly must not depend on the concrete auth service.
-require|apps/server/internal/app/server/runtime_assembly.go|satisfactionService[[:space:]]*:=[[:space:]]*satisfapp\.NewService\(rt\.DB, rt\.Logger\)|Satisfaction assembly must construct the single module instance.
+require|apps/server/internal/app/server/runtime_assembly.go|satisfactionService[[:space:]]*:=[[:space:]]*satisfapp\.NewService\(|Satisfaction assembly must construct the single module instance.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.NewSatisfactionService|Runtime assembly must not construct the legacy satisfaction service.
 forbid|apps/server/internal/app/server/runtime.go|services\.SatisfactionService|Runtime must not reference the legacy satisfaction service.
 forbid|apps/server/internal/app/server/runtime_assembly.go|services\.SatisfactionService|Runtime assembly must not reference the legacy satisfaction service.

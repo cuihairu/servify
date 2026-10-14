@@ -1,4 +1,4 @@
-package application
+package infra
 
 // satisfaction 落库错误分支：丢表、trigger 注入、顺序查询失败（自 services
 // error_paths/more_branches/sequential_errors/trigger_error_paths 单测的
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -43,22 +44,22 @@ func TestSatisfactionService_DroppedTableErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, logrus.New())
+	svc := satisfapp.NewService(NewGormRepository(db), logrus.New())
 	ctx := context.Background()
 
 	if err := db.Migrator().DropTable("satisfaction_surveys"); err != nil {
 		t.Fatalf("drop surveys: %v", err)
 	}
-	if _, err := svc.GetSurveyPreviewByToken(ctx, "tok"); err == nil || err == ErrSurveyNotFound {
+	if _, err := svc.GetSurveyPreviewByToken(ctx, "tok"); err == nil || err == satisfapp.ErrSurveyNotFound {
 		t.Fatalf("expected load error, got %v", err)
 	}
-	if _, err := svc.RespondSurvey(ctx, "tok", 5, ""); err == nil || err == ErrSurveyNotFound {
+	if _, err := svc.RespondSurvey(ctx, "tok", 5, ""); err == nil || err == satisfapp.ErrSurveyNotFound {
 		t.Fatalf("expected load error, got %v", err)
 	}
-	if _, err := svc.ResendSurvey(ctx, 1); err == nil || err == ErrSurveyNotFound {
+	if _, err := svc.ResendSurvey(ctx, 1); err == nil || err == satisfapp.ErrSurveyNotFound {
 		t.Fatalf("expected load error, got %v", err)
 	}
-	if _, _, err := svc.ListSurveys(ctx, &SatisfactionSurveyListRequest{Page: 1, PageSize: 10}); err == nil {
+	if _, _, err := svc.ListSurveys(ctx, &satisfapp.SatisfactionSurveyListRequest{Page: 1, PageSize: 10}); err == nil {
 		t.Fatal("expected list surveys error")
 	}
 
@@ -68,7 +69,7 @@ func TestSatisfactionService_DroppedTableErrors(t *testing.T) {
 	if _, err := svc.GetSatisfaction(ctx, 1); err == nil {
 		t.Fatal("expected get satisfaction error")
 	}
-	if _, _, err := svc.ListSatisfactions(ctx, &SatisfactionListRequest{Page: 1, PageSize: 10}); err == nil {
+	if _, _, err := svc.ListSatisfactions(ctx, &satisfapp.SatisfactionListRequest{Page: 1, PageSize: 10}); err == nil {
 		t.Fatal("expected list satisfactions error")
 	}
 	if _, err := svc.GetSatisfactionByTicket(ctx, 1); err == nil {
@@ -90,7 +91,7 @@ func TestSatisfactionService_ScheduleSurveyCountError(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, logrus.New())
+	svc := satisfapp.NewService(NewGormRepository(db), logrus.New())
 	ticket := &models.Ticket{Title: "T", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -108,7 +109,7 @@ func TestSatisfactionService_TicketLoadErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, logrus.New())
+	svc := satisfapp.NewService(NewGormRepository(db), logrus.New())
 	ctx := context.Background()
 
 	past := time.Now().Add(-time.Hour)
@@ -125,8 +126,30 @@ func TestSatisfactionService_TicketLoadErrors(t *testing.T) {
 	if _, err := svc.GetSurveyPreviewByToken(ctx, "tok-err"); err == nil {
 		t.Fatal("expected ticket preload error")
 	}
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: 1, CustomerID: 1, Rating: 5}); err == nil {
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: 1, CustomerID: 1, Rating: 5}); err == nil {
 		t.Fatal("expected ticket lookup error")
+	}
+}
+
+func TestSatisfactionService_CustomerLookupErrors(t *testing.T) {
+	db := newSatisfactionTestDB(t,
+		&models.User{}, &models.Customer{}, &models.Agent{},
+		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
+	)
+	svc := satisfapp.NewService(NewGormRepository(db), logrus.New())
+	ctx := context.Background()
+
+	ticket := &models.Ticket{Title: "T", CustomerID: 1, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := db.Create(ticket).Error; err != nil {
+		t.Fatalf("seed ticket: %v", err)
+	}
+	if err := db.Migrator().DropTable("customers"); err != nil {
+		t.Fatalf("drop customers: %v", err)
+	}
+	// 客户查询落到非 ErrRecordNotFound 的原始错误分支
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: ticket.ID, CustomerID: 1, Rating: 5}); err == nil ||
+		!strings.Contains(err.Error(), "failed to validate customer") {
+		t.Fatalf("expected customer lookup error, got %v", err)
 	}
 }
 
@@ -142,7 +165,7 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	if err := db.Migrator().DropTable("tickets"); err != nil {
 		t.Fatalf("drop tickets: %v", err)
 	}
@@ -155,7 +178,7 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc2 := NewService(db2, nil)
+	svc2 := satisfapp.NewService(NewGormRepository(db2), nil)
 	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
 	if err := db2.Create(customer).Error; err != nil {
 		t.Fatalf("seed customer: %v", err)
@@ -184,7 +207,7 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc3 := NewService(db3, nil)
+	svc3 := satisfapp.NewService(NewGormRepository(db3), nil)
 	owner := &models.User{Username: "owner", Email: "owner@x.com", Role: "customer"}
 	if err := db3.Create(owner).Error; err != nil {
 		t.Fatalf("seed owner: %v", err)
@@ -203,7 +226,7 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 	if err := db3.Create(ticket3).Error; err != nil {
 		t.Fatalf("seed ticket3: %v", err)
 	}
-	if _, err := svc3.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	if _, err := svc3.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: ticket3.ID, CustomerID: other.ID, Rating: 5,
 	}); err == nil || !strings.Contains(err.Error(), "owner") {
 		t.Fatalf("expected owner mismatch error, got %v", err)
@@ -211,7 +234,7 @@ func TestSatisfactionService_MoreErrorBranches(t *testing.T) {
 	if err := db3.Migrator().DropTable("agents"); err != nil {
 		t.Fatalf("drop agents: %v", err)
 	}
-	if _, err := svc3.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	if _, err := svc3.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: ticket3.ID, CustomerID: owner.ID, AgentID: &missingAgent, Rating: 5,
 	}); err == nil {
 		t.Fatal("expected agent query error")
@@ -227,8 +250,8 @@ func TestSatisfactionService_SequentialErrors(t *testing.T) {
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
 	failNthQuery(db, 2)
-	svc := NewService(db, nil)
-	if _, _, err := svc.ListSurveys(ctx, &SatisfactionSurveyListRequest{Page: 1, PageSize: 10}); err == nil ||
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
+	if _, _, err := svc.ListSurveys(ctx, &satisfapp.SatisfactionSurveyListRequest{Page: 1, PageSize: 10}); err == nil ||
 		!strings.Contains(err.Error(), "failed to list satisfaction surveys") {
 		t.Fatalf("surveys find error: %v", err)
 	}
@@ -239,8 +262,8 @@ func TestSatisfactionService_SequentialErrors(t *testing.T) {
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
 	failNthQuery(db2, 2)
-	svc2 := NewService(db2, nil)
-	if _, _, err := svc2.ListSatisfactions(ctx, &SatisfactionListRequest{Page: 1, PageSize: 10}); err == nil ||
+	svc2 := satisfapp.NewService(NewGormRepository(db2), nil)
+	if _, _, err := svc2.ListSatisfactions(ctx, &satisfapp.SatisfactionListRequest{Page: 1, PageSize: 10}); err == nil ||
 		!strings.Contains(err.Error(), "failed to list satisfactions") {
 		t.Fatalf("satisfactions find error: %v", err)
 	}
@@ -259,7 +282,7 @@ func TestSatisfactionService_StatsSequentialErrors(t *testing.T) {
 	for _, tc := range cases {
 		db := newSatisfactionTestDB(t, &models.CustomerSatisfaction{})
 		failNthQuery(db, tc.n)
-		svc := NewService(db, nil)
+		svc := satisfapp.NewService(NewGormRepository(db), nil)
 		_, err := svc.GetSatisfactionStats(ctx, nil, nil)
 		if err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
 			t.Fatalf("n=%d: expected %q, got %v", tc.n, tc.wantSubstr, err)
@@ -269,7 +292,7 @@ func TestSatisfactionService_StatsSequentialErrors(t *testing.T) {
 	// trend query failure only logs a warning
 	db := newSatisfactionTestDB(t, &models.CustomerSatisfaction{})
 	failNthQuery(db, 5)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	stats, err := svc.GetSatisfactionStats(ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("trend failure should not propagate: %v", err)
@@ -287,7 +310,7 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
 	if err := db.Create(customer).Error; err != nil {
 		t.Fatalf("seed customer: %v", err)
@@ -300,7 +323,7 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 		t.Fatalf("seed ticket: %v", err)
 	}
 	failNthQuery(db, 5)
-	sat, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	sat, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: ticket.ID, CustomerID: customer.ID, Rating: 5,
 	})
 	if err != nil {
@@ -315,7 +338,7 @@ func TestSatisfactionService_PreloadWarnings(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc2 := NewService(db2, nil)
+	svc2 := satisfapp.NewService(NewGormRepository(db2), nil)
 	row := &models.CustomerSatisfaction{TicketID: 1, CustomerID: 1, Rating: 4, Comment: "old", CreatedAt: time.Now()}
 	if err := db2.Create(row).Error; err != nil {
 		t.Fatalf("seed row: %v", err)
@@ -338,7 +361,7 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	ticket := &models.Ticket{Title: "T", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -353,7 +376,7 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc2 := NewService(db2, nil)
+	svc2 := satisfapp.NewService(NewGormRepository(db2), nil)
 	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
 	if err := db2.Create(customer).Error; err != nil {
 		t.Fatalf("seed customer: %v", err)
@@ -387,7 +410,7 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc3 := NewService(db3, nil)
+	svc3 := satisfapp.NewService(NewGormRepository(db3), nil)
 	survey3 := &models.SatisfactionSurvey{
 		TicketID: 1, CustomerID: 1, Status: "sent", SurveyToken: "tok-trig3",
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
@@ -405,7 +428,7 @@ func TestSatisfaction_InsertUpdateTriggerErrors(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc4 := NewService(db4, nil)
+	svc4 := satisfapp.NewService(NewGormRepository(db4), nil)
 	row := &models.CustomerSatisfaction{TicketID: 9, CustomerID: 9, Rating: 5, CreatedAt: time.Now()}
 	if err := db4.Create(row).Error; err != nil {
 		t.Fatalf("seed satisfaction: %v", err)

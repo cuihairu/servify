@@ -17,6 +17,7 @@
 - [x] retriever 会话语义统一：非空 session_id 查询滤掉全局摄入文档（pgvector 同构既有语义）——口径已定：会话 id 不是知识命名空间 id，KnowledgeID 留空由 provider 落回默认命名空间（1f190df 收口，全 provider 同构验证：pgvector/local 按 workspace_id、dify/ragflow 按 datasetID、weknora 按 KnowledgeBaseID，透传会话 id 即恒空）；租户维度检索为正解。会话级检索需会话级摄入（未立项，随会话知识库刀）；残留：ai_runtime_local_test.go 旧注释曾把修复前行为当现状，已随本轮纠正
 - [ ] AI agent-loop 三工具接线：CustomerLookup / TicketLookup / Handoff 现传 nil Ports，调用即报 port is not configured（2026-10-11 拍板保持死路，等用户明令）
 - [ ] modules 非 infra 层 GORM 写归属下沉 infra（约 70 文件，大重构）
+  - [x] satisfaction（50 操作，新建 infra 层）：application 定 Repository 端口 + 7 个哨兵错误（文案与原 inline 串逐字一致，handlers 按字符串映射不变），infra/gorm_repository.go 逐字承接 SQL 并把 ErrRecordNotFound 映射哨兵；service.go 由 843 行 db 直调瘦为端口调用、零 gorm 导入；7 个 db 型测试文件 git mv 至 infra，应用层补 31 方法 stubRepo + 15 个纯端口单测恢复包内覆盖率归属，infra 补丢 customers 表用例收口客户查询原始错误分支；boundary rules 的 assembly 锚点由 pin 构造参数放宽为 pin 构造名。覆盖率回 100.0%，全量绿
 - [ ] models 侧过渡别名最终删除（15 类型别名 + 4 投递状态常量 + NewEmbedding 转发，随 bootstrap/migrate、handlers swag、platform provider 各自迁移）
 
 ## 已定口径

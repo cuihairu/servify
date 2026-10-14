@@ -1,4 +1,4 @@
-package application
+package infra
 
 import (
 	"context"
@@ -6,18 +6,19 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
-func newSatisfactionTestService(t *testing.T) (*SatisfactionService, *gorm.DB) {
+func newSatisfactionTestService(t *testing.T) (*satisfapp.SatisfactionService, *gorm.DB) {
 	t.Helper()
 	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	return NewService(db, logrus.New()), db
+	return satisfapp.NewService(NewGormRepository(db), logrus.New()), db
 }
 
 func seedSatisfactionData(t *testing.T, db *gorm.DB) (customerID, agentID, ticketID uint) {
@@ -108,7 +109,7 @@ func TestSatisfactionService_ListSurveys(t *testing.T) {
 		t.Fatalf("ScheduleSurvey: %v", err)
 	}
 
-	items, total, err := svc.ListSurveys(ctx, &SatisfactionSurveyListRequest{
+	items, total, err := svc.ListSurveys(ctx, &satisfapp.SatisfactionSurveyListRequest{
 		Page: 0, PageSize: 0,
 		TicketID:   uintPtr(ticketID),
 		CustomerID: uintPtr(customerID),
@@ -128,17 +129,17 @@ func TestSatisfactionService_PreviewAndRespond(t *testing.T) {
 	_, _, ticketID := seedSatisfactionData(t, db)
 	ctx := context.Background()
 
-	if _, err := svc.GetSurveyPreviewByToken(ctx, ""); err != ErrSurveyNotFound {
-		t.Fatalf("expected ErrSurveyNotFound, got %v", err)
+	if _, err := svc.GetSurveyPreviewByToken(ctx, ""); err != satisfapp.ErrSurveyNotFound {
+		t.Fatalf("expected satisfapp.ErrSurveyNotFound, got %v", err)
 	}
-	if _, err := svc.GetSurveyPreviewByToken(ctx, "missing-token"); err != ErrSurveyNotFound {
-		t.Fatalf("expected ErrSurveyNotFound, got %v", err)
+	if _, err := svc.GetSurveyPreviewByToken(ctx, "missing-token"); err != satisfapp.ErrSurveyNotFound {
+		t.Fatalf("expected satisfapp.ErrSurveyNotFound, got %v", err)
 	}
-	if _, err := svc.RespondSurvey(ctx, "", 5, ""); err != ErrSurveyNotFound {
-		t.Fatalf("expected ErrSurveyNotFound, got %v", err)
+	if _, err := svc.RespondSurvey(ctx, "", 5, ""); err != satisfapp.ErrSurveyNotFound {
+		t.Fatalf("expected satisfapp.ErrSurveyNotFound, got %v", err)
 	}
-	if _, err := svc.RespondSurvey(ctx, "missing-token", 5, ""); err != ErrSurveyNotFound {
-		t.Fatalf("expected ErrSurveyNotFound, got %v", err)
+	if _, err := svc.RespondSurvey(ctx, "missing-token", 5, ""); err != satisfapp.ErrSurveyNotFound {
+		t.Fatalf("expected satisfapp.ErrSurveyNotFound, got %v", err)
 	}
 
 	survey, err := svc.ScheduleSurvey(ctx, &models.Ticket{ID: ticketID, TenantID: "t1", WorkspaceID: "w1"})
@@ -163,11 +164,11 @@ func TestSatisfactionService_PreviewAndRespond(t *testing.T) {
 	}
 
 	// completed survey cannot be responded to again
-	if _, err := svc.RespondSurvey(ctx, survey.SurveyToken, 5, ""); err != ErrSurveyCompleted {
-		t.Fatalf("expected ErrSurveyCompleted, got %v", err)
+	if _, err := svc.RespondSurvey(ctx, survey.SurveyToken, 5, ""); err != satisfapp.ErrSurveyCompleted {
+		t.Fatalf("expected satisfapp.ErrSurveyCompleted, got %v", err)
 	}
-	if _, err := svc.ResendSurvey(ctx, survey.ID); err != ErrSurveyCompleted {
-		t.Fatalf("expected ErrSurveyCompleted, got %v", err)
+	if _, err := svc.ResendSurvey(ctx, survey.ID); err != satisfapp.ErrSurveyCompleted {
+		t.Fatalf("expected satisfapp.ErrSurveyCompleted, got %v", err)
 	}
 
 	// duplicate rating path returns existing record; a new ScheduleSurvey would
@@ -203,8 +204,8 @@ func TestSatisfactionService_ExpiredSurvey(t *testing.T) {
 		t.Fatalf("seed expired survey: %v", err)
 	}
 
-	if _, err := svc.RespondSurvey(context.Background(), "expired-token", 5, ""); err != ErrSurveyExpired {
-		t.Fatalf("expected ErrSurveyExpired, got %v", err)
+	if _, err := svc.RespondSurvey(context.Background(), "expired-token", 5, ""); err != satisfapp.ErrSurveyExpired {
+		t.Fatalf("expected satisfapp.ErrSurveyExpired, got %v", err)
 	}
 }
 
@@ -212,8 +213,8 @@ func TestSatisfactionService_ResendSurvey(t *testing.T) {
 	svc, db := newSatisfactionTestService(t)
 	_, _, ticketID := seedSatisfactionData(t, db)
 
-	if _, err := svc.ResendSurvey(context.Background(), 999); err != ErrSurveyNotFound {
-		t.Fatalf("expected ErrSurveyNotFound, got %v", err)
+	if _, err := svc.ResendSurvey(context.Background(), 999); err != satisfapp.ErrSurveyNotFound {
+		t.Fatalf("expected satisfapp.ErrSurveyNotFound, got %v", err)
 	}
 
 	past := time.Now().Add(-2 * time.Hour)
@@ -269,18 +270,18 @@ func TestSatisfactionService_CreateSatisfactionValidation(t *testing.T) {
 	customerID, agentID, ticketID := seedSatisfactionData(t, db)
 	ctx := unitScopedContext("t1", "w1")
 
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: 999, CustomerID: customerID, Rating: 5}); err == nil {
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: 999, CustomerID: customerID, Rating: 5}); err == nil {
 		t.Fatal("expected ticket not found error")
 	}
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: ticketID, CustomerID: 999, Rating: 5}); err == nil {
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: ticketID, CustomerID: 999, Rating: 5}); err == nil {
 		t.Fatal("expected customer not found error")
 	}
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID + 1, Rating: 5}); err == nil {
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID + 1, Rating: 5}); err == nil {
 		t.Fatal("expected owner mismatch error")
 	}
 
 	// create without agent
-	first, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID, Rating: 5})
+	first, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID, Rating: 5})
 	if err != nil {
 		t.Fatalf("CreateSatisfaction: %v", err)
 	}
@@ -289,12 +290,12 @@ func TestSatisfactionService_CreateSatisfactionValidation(t *testing.T) {
 	}
 
 	// duplicate rating rejected
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID, Rating: 4}); err == nil {
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{TicketID: ticketID, CustomerID: customerID, Rating: 4}); err == nil {
 		t.Fatal("expected duplicate rating error")
 	}
 
 	// with invalid agent
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: 202, CustomerID: customerID, AgentID: uintPtr(999), Rating: 5,
 	}); err == nil {
 		t.Fatal("expected agent not found error")
@@ -308,7 +309,7 @@ func TestSatisfactionService_CreateSatisfactionValidation(t *testing.T) {
 	if err := db.Create(ticket2).Error; err != nil {
 		t.Fatalf("seed ticket2: %v", err)
 	}
-	second, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	second, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: 202, CustomerID: customerID, AgentID: uintPtr(agentID), Rating: 3, Category: "service_quality",
 	})
 	if err != nil {
@@ -324,7 +325,7 @@ func TestSatisfactionService_GetListStatsDeleteUpdate(t *testing.T) {
 	customerID, agentID, ticketID := seedSatisfactionData(t, db)
 	ctx := unitScopedContext("t1", "w1")
 
-	created, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	created, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: ticketID, CustomerID: customerID, AgentID: uintPtr(agentID), Rating: 5, Comment: "c",
 	})
 	if err != nil {
@@ -347,7 +348,7 @@ func TestSatisfactionService_GetListStatsDeleteUpdate(t *testing.T) {
 		t.Fatalf("expected nil for missing ticket: %v %+v", err, none)
 	}
 
-	items, total, err := svc.ListSatisfactions(ctx, &SatisfactionListRequest{
+	items, total, err := svc.ListSatisfactions(ctx, &satisfapp.SatisfactionListRequest{
 		Page: 1, PageSize: 10,
 		TicketID:   uintPtr(ticketID),
 		CustomerID: uintPtr(customerID),
@@ -365,7 +366,7 @@ func TestSatisfactionService_GetListStatsDeleteUpdate(t *testing.T) {
 	if total != 1 || len(items) != 1 {
 		t.Fatalf("unexpected list: %d %+v", total, items)
 	}
-	if _, _, err := svc.ListSatisfactions(ctx, &SatisfactionListRequest{SortBy: "", SortOrder: "bogus"}); err != nil {
+	if _, _, err := svc.ListSatisfactions(ctx, &satisfapp.SatisfactionListRequest{SortBy: "", SortOrder: "bogus"}); err != nil {
 		t.Fatalf("ListSatisfactions defaults: %v", err)
 	}
 
@@ -402,29 +403,7 @@ func TestSatisfactionService_GetListStatsDeleteUpdate(t *testing.T) {
 	}
 }
 
-func TestSatisfactionHelpers(t *testing.T) {
-	cases := map[string]string{
-		"chat":  "chat",
-		" IM ":  "chat",
-		"voice": "voice",
-		"phone": "voice",
-		"email": "email",
-		"weird": "email",
-		"":      "email",
-	}
-	for in, want := range cases {
-		if got := detectSurveyChannel(in); got != want {
-			t.Fatalf("detectSurveyChannel(%q) = %q, want %q", in, got, want)
-		}
-	}
-
-	if tenant, ws := tenantAndWorkspace(contextWithRecordScope(context.Background(), "rt", "rw")); tenant != "rt" || ws != "rw" {
-		t.Fatalf("record scope fallback: %q/%q", tenant, ws)
-	}
-	if tenant, ws := tenantAndWorkspace(contextWithRecordScope(unitScopedContext("ct", "cw"), "rt", "rw")); tenant != "ct" || ws != "cw" {
-		t.Fatalf("record scope keeps context: %q/%q", tenant, ws)
-	}
-
+func TestSatisfactionPreloads(t *testing.T) {
 	db := newSatisfactionTestDB(t,
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},

@@ -25,6 +25,7 @@ import (
 	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
+	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/platform/eventbus"
@@ -509,7 +510,7 @@ func TestSurveyEmailWorkerDeliversQueuedSurveys(t *testing.T) {
 	}
 
 	mailer := &stubSurveyMailer{rejectDom: "blocked@example.com"}
-	svc := satisfapp.NewService(db, discardLogger())
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), discardLogger())
 	svc.SetSurveyMailer(mailer)
 
 	w := NewSurveyEmailWorker(svc, discardLogger()).(*SurveyEmailWorker)
@@ -577,7 +578,7 @@ func TestSurveyEmailWorkerLogsScanFailures(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(buf)
 
-	svc := satisfapp.NewService(db, logger)
+	svc := satisfapp.NewService(satisfinfra.NewGormRepository(db), logger)
 	svc.SetSurveyMailer(&stubSurveyMailer{})
 
 	w := NewSurveyEmailWorker(svc, logger).(*SurveyEmailWorker)

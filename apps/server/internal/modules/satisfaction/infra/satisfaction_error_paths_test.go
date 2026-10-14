@@ -1,4 +1,4 @@
-package application
+package infra
 
 // satisfaction 落库错误分支（自 services/satisfaction_ai_error_paths_unit_test.go
 // 的 satisfaction 段下沉；同文件的 AI 编排测试留在 services 包）。
@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/models"
+	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 )
 
 func TestSatisfactionService_CreateInsertError(t *testing.T) {
@@ -15,7 +16,7 @@ func TestSatisfactionService_CreateInsertError(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	ctx := context.Background()
 
 	customer := &models.User{Username: "c", Email: "c@x.com", Role: "customer"}
@@ -33,7 +34,7 @@ func TestSatisfactionService_CreateInsertError(t *testing.T) {
 		t.Fatalf("drop satisfactions: %v", err)
 	}
 	// duplicate-check query errors, insert then also fails
-	if _, err := svc.CreateSatisfaction(ctx, &SatisfactionCreateRequest{
+	if _, err := svc.CreateSatisfaction(ctx, &satisfapp.SatisfactionCreateRequest{
 		TicketID: ticket.ID, CustomerID: customer.ID, Rating: 5,
 	}); err == nil {
 		t.Fatal("expected insert error")
@@ -45,7 +46,7 @@ func TestSatisfactionService_ScheduleSurveyExistingLoadError(t *testing.T) {
 		&models.User{}, &models.Customer{}, &models.Agent{},
 		&models.Ticket{}, &models.CustomerSatisfaction{}, &models.SatisfactionSurvey{},
 	)
-	svc := NewService(db, nil)
+	svc := satisfapp.NewService(NewGormRepository(db), nil)
 	ticket := &models.Ticket{Title: "T", CreatedAt: timeNow(), UpdatedAt: timeNow()}
 	if err := db.Create(ticket).Error; err != nil {
 		t.Fatalf("seed ticket: %v", err)
@@ -61,7 +62,7 @@ func TestSatisfactionService_ScheduleSurveyExistingLoadError(t *testing.T) {
 
 func TestService_NilLogger(t *testing.T) {
 	db := newSatisfactionTestDB(t, &models.CustomerSatisfaction{})
-	if NewService(db, nil) == nil {
+	if satisfapp.NewService(NewGormRepository(db), nil) == nil {
 		t.Fatal("expected satisfaction service")
 	}
 }
