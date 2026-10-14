@@ -66,7 +66,7 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 
 ### 4.3 WebRTC 信令类（移动端 V1 不消费，列出仅为契约完整性）
 
-`webrtc-answer`（offer 的 SDP 应答）、`webrtc-candidate`（ICE 候选）、`webrtc-ice-config`（ICE 服务器下发，与管理面 `GET /api/v1/rtc/ice-servers` 同形）、`webrtc-state-change`（连接状态）、`data-channel-message`。
+`webrtc-offer`（客户端→服务端：建连 offer；**服务端→客户端：重协商 offer**，2026-10-15 起服务端媒体桥接加轨后会向该连接的信令归属客户端主动下发，客户端在**同一条 PC** 上 `setRemoteDescription` → `createAnswer` → 回发 `webrtc-answer` 应答；answer 在途未稳态时应排队待稳态补应用，不得丢弃）、`webrtc-answer`（offer 的 SDP 应答）、`webrtc-candidate`（ICE 候选；服务端下发的候选/状态帧按信令归属**定向投递**，不再会话广播——同会话访客/坐席各持一条服务端 PC）、`webrtc-ice-config`（ICE 服务器下发，与管理面 `GET /api/v1/rtc/ice-servers` 同形）、`webrtc-state-change`（连接状态）、`data-channel-message`。
 
 ### 4.4 消息 metadata 保留键（翻译；Phase 0.5 约定，非新帧）
 

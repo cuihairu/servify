@@ -88,7 +88,10 @@
 - **TTS 优先走"服务端合成、WebRTC 下发"**的备选被否决为 Phase 3：先落地
   "字幕 + 客户端播放"（TTS 返回音频 URL 或 base64，客户端 Audio 播放），
   避开服务端混音/回声消除复杂度；WebRTC 音轨下发在 Phase 3 与远程协助
-  媒体桥接（RA-7）共用 SFU-lite 基建。
+  媒体桥接（RA-7）共用 SFU-lite 基建（**2026-10-15 RA-7 已落地**：
+  `webrtc_service.go` 的 trackForwarder 转发注册表 + 桥接加轨重协商，
+  音轨下发可复用——服务端把 TTS 音频写成 `TrackLocalStaticRTP` 挂轨即走
+  同一条 fan-out/重协商链路，见 docs/remote-assistance-status.md）。
 - **每说话方一条 pipeline**，双向翻译 = 两条 pipeline 独立运行，避免
   单 pipeline 语言状态互相污染。
 - **语音走独立 WS 通道 `/api/v1/ws/voice`（刀二b-2 已落地）**：上行二进制
