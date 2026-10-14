@@ -84,3 +84,28 @@ func TestLockedTransferAgentIDRespectsScope(t *testing.T) {
 		t.Fatalf("unassigned agent = %v, want nil", *got)
 	}
 }
+
+// postgresNamedSQLite 包装 sqlite 方言、Name 报 postgres：覆盖
+// LockedTransferAgentID 的方言分支（加 clause.Locking；sqlite 驱动的
+// FOR 子句构造器静默剥离 FOR UPDATE，查询语义不受影响）。
+type postgresNamedSQLite struct{ gorm.Dialector }
+
+func (d postgresNamedSQLite) Name() string { return "postgres" }
+
+func TestLockedTransferAgentIDPostgresNamedDialect(t *testing.T) {
+	db := openRuntimeAdapterDB(t, "pgdialect", func(d gorm.Dialector) gorm.Dialector {
+		return postgresNamedSQLite{d}
+	})
+	adapter := NewRuntimeAdapter(db, nil)
+
+	agentID := uint(11)
+	seedRuntimeSession(t, db, models.Session{ID: "sess-pg", UserID: 5, AgentID: &agentID, Status: "active"})
+
+	got, err := adapter.LockedTransferAgentID(context.Background(), db, "sess-pg")
+	if err != nil {
+		t.Fatalf("locked read with postgres-named dialect: %v", err)
+	}
+	if got == nil || *got != 11 {
+		t.Fatalf("agent id = %v, want 11", got)
+	}
+}

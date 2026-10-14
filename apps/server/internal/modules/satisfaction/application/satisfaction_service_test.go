@@ -349,6 +349,11 @@ func TestRespondSurveyStub(t *testing.T) {
 		t.Fatalf("not found: %v", err)
 	}
 
+	loadErr := &stubRepo{surveyByTokenErr: errBoom}
+	if _, err := newStubService(loadErr).RespondSurvey(context.Background(), "x", 5, ""); err == nil || !strings.Contains(err.Error(), "failed to load survey") {
+		t.Fatalf("load err: %v", err)
+	}
+
 	completed := &stubRepo{surveyByToken: &models.SatisfactionSurvey{Status: "completed"}}
 	if _, err := newStubService(completed).RespondSurvey(context.Background(), "x", 5, ""); err != ErrSurveyCompleted {
 		t.Fatalf("completed: %v", err)

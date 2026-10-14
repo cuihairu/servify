@@ -344,3 +344,49 @@ func TestSLA_UpdateConfigSaveTriggerError(t *testing.T) {
 		t.Fatalf("expected save error, got %v", err)
 	}
 }
+
+// ---- repo 查询错误分支：First/Count/Scan 的非 notfound 错误上抛 ----
+
+func TestSLA_RepoQueryErrorBranches(t *testing.T) {
+	ctx := context.Background()
+
+	// FindConfigByPriorityTierActive: First 非 notfound 错误原样上抛
+	db := newSLAErrorDB(t)
+	if err := db.Migrator().DropTable("sla_configs"); err != nil {
+		t.Fatalf("drop sla_configs: %v", err)
+	}
+	repo := NewGormRepository(db)
+	if _, err := repo.FindConfigByPriorityTierActive(ctx, "high", "vip"); err == nil {
+		t.Fatal("expected find-config-active error")
+	}
+
+	// GetCustomerPriorityScoped: First 错误（丢表）上抛空串+err
+	db2 := newSLAErrorDB(t)
+	repo2 := NewGormRepository(db2)
+	if err := db2.Migrator().DropTable("customers"); err != nil {
+		t.Fatalf("drop customers: %v", err)
+	}
+	if _, err := repo2.GetCustomerPriorityScoped(ctx, 42); err == nil {
+		t.Fatal("expected customer priority error")
+	}
+
+	// CountViolationsByDate: Count 错误上抛 0+err
+	db3 := newSLAErrorDB(t)
+	repo3 := NewGormRepository(db3)
+	if err := db3.Migrator().DropTable("sla_violations"); err != nil {
+		t.Fatalf("drop sla_violations: %v", err)
+	}
+	if _, err := repo3.CountViolationsByDate(ctx, "2026-10-14"); err == nil {
+		t.Fatal("expected violations count error")
+	}
+
+	// ViolationsByTier: Scan 错误（JOIN 丢表）上抛 nil+err
+	db4 := newSLAErrorDB(t)
+	repo4 := NewGormRepository(db4)
+	if err := db4.Migrator().DropTable("sla_configs"); err != nil {
+		t.Fatalf("drop sla_configs for tier scan: %v", err)
+	}
+	if _, err := repo4.ViolationsByTier(ctx); err == nil {
+		t.Fatal("expected tier stats scan error")
+	}
+}

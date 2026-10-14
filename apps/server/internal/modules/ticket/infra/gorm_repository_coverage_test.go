@@ -36,7 +36,12 @@ func newTicketCovTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
+	ticketCovMigrate(t, db)
+	return db
+}
 
+func ticketCovMigrate(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Agent{},
@@ -50,7 +55,42 @@ func newTicketCovTestDB(t *testing.T) *gorm.DB {
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
+}
+
+// postgresNamedSQLite 包装 sqlite 方言、Name 报 postgres：覆盖
+// ticketAgentIDWithLock 的 FOR UPDATE 加锁分支。sqlite 驱动的 FOR 子句
+// 构造器静默剥离 clause.Locking，锁行查询语义不受影响。
+type postgresNamedSQLite struct{ gorm.Dialector }
+
+func (d postgresNamedSQLite) Name() string { return "postgres" }
+
+func newTicketCovPostgresNamedDB(t *testing.T) *gorm.DB {
+	t.Helper()
+
+	dsn := "file:tkpgh_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" + strconv.FormatUint(ticketCovDBSeq.Add(1), 10) + "?mode=memory&cache=shared"
+	db, err := gorm.Open(postgresNamedSQLite{sqlite.Open(dsn)}, &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	ticketCovMigrate(t, db)
 	return db
+}
+
+// zeroTicketCovUpdateRowsWhen 令匹配 SQL 的 UPDATE 在回调后 RowsAffected
+// 归零，制造「锁行命中但更新影响 0 行」的并发形态（Assign/Unassign 的
+// 零影响行分支）。
+func zeroTicketCovUpdateRowsWhen(db *gorm.DB, match func(sql string) bool) {
+	handler := func(tx *gorm.DB) {
+		if tx.Error == nil && match(tx.Statement.SQL.String()) {
+			tx.RowsAffected = 0
+		}
+	}
+	_ = db.Callback().Update().After("gorm:update").Replace("test:zero_update_rows", handler)
 }
 
 func ticketCovScopeCtx(tenantID, workspaceID string) context.Context {
@@ -950,5 +990,145 @@ func TestTicketCovExistenceChecks(t *testing.T) {
 func TestTicketCovApplyTicketScopeFieldsNilModel(t *testing.T) {
 	assert.NotPanics(t, func() {
 		applyTicketScopeFields(ticketCovScopeCtx("t1", "w1"), nil)
+	})
+}
+
+// ticketAgentIDWithLock 方言分支：postgres/mysql 名下锁行查询加
+// clause.Locking（sqlite 驱动剥离 FOR UPDATE 子句，查询照常成功）。
+func TestTicketCovLockBranchPostgresNamedDialect(t *testing.T) {
+	db := newTicketCovPostgresNamedDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+
+	seedTicketCovUser(t, db, 1, "alice")
+	seedTicketCovUser(t, db, 2, "bob")
+	seedTicketCovUser(t, db, 3, "carol")
+	require.NoError(t, db.Create(&models.Agent{UserID: 2, Status: "online", MaxConcurrent: 5}).Error)
+	require.NoError(t, db.Create(&models.Agent{UserID: 3, Status: "online", MaxConcurrent: 5}).Error)
+	ticket := seedTicketCovTicket(t, db, 10, "Need help", "", "")
+
+	if err := repo.AssignTicketModel(ctx, ticket.ID, 3, nil, "open", "open", 2, "lock branch"); err != nil {
+		t.Fatalf("assign with postgres-named dialect: %v", err)
+	}
+	var got models.Ticket
+	require.NoError(t, db.Where("id = ?", ticket.ID).First(&got).Error)
+	if got.AgentID == nil || *got.AgentID != 3 {
+		t.Fatalf("agent id = %v, want 3", got.AgentID)
+	}
+	var agent models.Agent
+	require.NoError(t, db.Where("user_id = ?", 3).First(&agent).Error)
+	if agent.CurrentLoad != 1 {
+		t.Fatalf("current_load = %d, want 1", agent.CurrentLoad)
+	}
+}
+
+// CloseTicket/AssignTicketModel/UnassignTicketModel 事务内落库错误分支：
+// 更新失败、旧坐席减载 Exec 失败、锁行命中但更新影响 0 行。
+func TestTicketCovTransactionErrorBranches(t *testing.T) {
+	ctx := context.Background()
+
+	seed := func(t *testing.T, db *gorm.DB, ticketID uint, agentID *uint) {
+		t.Helper()
+		seedTicketCovUser(t, db, 1, "alice")
+		seedTicketCovUser(t, db, 2, "bob")
+		require.NoError(t, db.Create(&models.Agent{UserID: 2, Status: "online", MaxConcurrent: 5}).Error)
+		require.NoError(t, db.Create(&models.Ticket{
+			ID: ticketID, Title: "tx", CustomerID: 1, Status: "open",
+			Priority: "normal", Category: "support", AgentID: agentID,
+		}).Error)
+	}
+
+	t.Run("close update error", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		agentID := uint(2)
+		seed(t, db, 10, &agentID)
+		failTicketCovUpdateAt(db, 1)
+		closedAt := time.Now()
+		ticket := &domain.Ticket{ID: 10, Status: "closed", ClosedAt: &closedAt, UpdatedAt: time.Now()}
+		err := repo.CloseTicket(ctx, ticket, "open", 1, "close")
+		if err == nil || !strings.Contains(err.Error(), "forced update failure") {
+			t.Fatalf("expected forced update failure, got %v", err)
+		}
+	})
+
+	t.Run("close old agent decrement exec error", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		agentID := uint(2)
+		seed(t, db, 10, &agentID)
+		failTicketCovQueryWhen(db, func(sql string) bool {
+			return strings.Contains(sql, "current_load")
+		})
+		closedAt := time.Now()
+		ticket := &domain.Ticket{ID: 10, Status: "closed", ClosedAt: &closedAt, UpdatedAt: time.Now()}
+		err := repo.CloseTicket(ctx, ticket, "open", 1, "close")
+		if err == nil || !strings.Contains(err.Error(), "forced query failure") {
+			t.Fatalf("expected forced query failure, got %v", err)
+		}
+	})
+
+	t.Run("assign old agent decrement exec error", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		agentID := uint(2)
+		seed(t, db, 10, &agentID)
+		failTicketCovQueryWhen(db, func(sql string) bool {
+			return strings.Contains(sql, "current_load")
+		})
+		err := repo.AssignTicketModel(ctx, 10, 3, nil, "open", "open", 2, "assign")
+		if err == nil || !strings.Contains(err.Error(), "forced query failure") {
+			t.Fatalf("expected forced query failure, got %v", err)
+		}
+	})
+
+	t.Run("assign update error", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		seed(t, db, 10, nil)
+		failTicketCovUpdateAt(db, 1)
+		err := repo.AssignTicketModel(ctx, 10, 3, nil, "open", "open", 2, "assign")
+		if err == nil || !strings.Contains(err.Error(), "forced update failure") {
+			t.Fatalf("expected forced update failure, got %v", err)
+		}
+	})
+
+	t.Run("assign update zero rows", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		seed(t, db, 10, nil)
+		zeroTicketCovUpdateRowsWhen(db, func(sql string) bool {
+			return strings.Contains(sql, "tickets")
+		})
+		err := repo.AssignTicketModel(ctx, 10, 3, nil, "open", "open", 2, "assign")
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("expected gorm.ErrRecordNotFound, got %v", err)
+		}
+	})
+
+	t.Run("unassign update error", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		agentID := uint(2)
+		seed(t, db, 10, &agentID)
+		failTicketCovUpdateAt(db, 1)
+		err := repo.UnassignTicketModel(ctx, 10, 2, "open", "open", 2, "unassign")
+		if err == nil || !strings.Contains(err.Error(), "forced update failure") {
+			t.Fatalf("expected forced update failure, got %v", err)
+		}
+	})
+
+	t.Run("unassign update zero rows", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		agentID := uint(2)
+		seed(t, db, 10, &agentID)
+		zeroTicketCovUpdateRowsWhen(db, func(sql string) bool {
+			return strings.Contains(sql, "tickets")
+		})
+		err := repo.UnassignTicketModel(ctx, 10, 2, "open", "open", 2, "unassign")
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("expected gorm.ErrRecordNotFound, got %v", err)
+		}
 	})
 }

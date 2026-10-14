@@ -417,10 +417,9 @@ func encodeMessageMetadata(meta map[string]string) string {
 	if len(meta) == 0 {
 		return ""
 	}
-	encoded, err := json.Marshal(meta)
-	if err != nil {
-		return ""
-	}
+	// map[string]string 无 channel/func/环形态，json.Marshal 恒不失败——
+	// 失败分支不可达，留空串兜底会让覆盖率恒缺一块，故不写死代码。
+	encoded, _ := json.Marshal(meta)
 	return string(encoded)
 }
 

@@ -15,7 +15,17 @@ import (
 
 func newRuntimeAdapterTestDB(t *testing.T, shard string) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:"+t.Name()+"_"+shard+"")), &gorm.Config{})
+	return openRuntimeAdapterDB(t, shard, nil)
+}
+
+// dialector 可为 nil；非 nil 时包装 sqlite 方言（如 postgres-named 方言分支测试）。
+func openRuntimeAdapterDB(t *testing.T, shard string, wrap func(gorm.Dialector) gorm.Dialector) *gorm.DB {
+	t.Helper()
+	dialector := sqlite.Open(uniqueMemDSN("file:" + t.Name() + "_" + shard))
+	if wrap != nil {
+		dialector = wrap(dialector)
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
