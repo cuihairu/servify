@@ -20,7 +20,7 @@
   - [x] satisfaction（50 操作，新建 infra 层）：application 定 Repository 端口 + 7 个哨兵错误（文案与原 inline 串逐字一致，handlers 按字符串映射不变），infra/gorm_repository.go 逐字承接 SQL 并把 ErrRecordNotFound 映射哨兵；service.go 由 843 行 db 直调瘦为端口调用、零 gorm 导入；7 个 db 型测试文件 git mv 至 infra，应用层补 31 方法 stubRepo + 15 个纯端口单测恢复包内覆盖率归属，infra 补丢 customers 表用例收口客户查询原始错误分支；boundary rules 的 assembly 锚点由 pin 构造参数放宽为 pin 构造名。覆盖率回 100.0%，全量绿
   - [x] sla（32 操作，新建 infra 层）：application 定 Repository 端口 + 3 个哨兵错误，infra/gorm_repository.go 逐字承接 SQL（count/find 拆分保住「failed to count/list」双文案断言、PageSize>0 分页闸、byTier/trend 查询失败静默分支原样）；service.go 零 gorm 导入，CreateSLAViolation 的小写「sla config not found」与哨兵大小写差异保留；7 个 db 型测试文件 git mv 至 infra（monitorSLAViolations/getSLATrendData 改走导出 RunMonitorOnce 或移回应用层 stub 测试），应用层补 32 方法 stubRepo 分支单测（含 automation 分支嵌入接口 noop repo）恢复覆盖率归属；runtime_assembly 经 slainfra.NewGormRepository 装配，boundary 锚点同 satisfaction 放宽。sla 单测+integration 绿、handlers SLA integration 绿、worker 绿、全量 100.0%
   - [x] auth（19 操作，新建 infra 层）：application 定 Repository 端口（19 方法：不存在类返 ErrAuthUserNotFound 哨兵、重复检测转 int64 count 端口保住既有吞错、其余原样透传）+ 11 个哨兵错误（文案与原 inline 串逐字一致，handlers 按字符串映射不变）；infra/gorm_repository.go 逐字承接 SQL（LOWER(email)、COALESCE(token_version)+1、used_at IS NULL 原子核销、ReplaceRecoveryCodes 事务）；service.go/totp.go/oidc.go 零 gorm 导入（登录风险档位与 refresh 重放档位、2FA kill-switch、OIDC 自动建号回落逻辑原样）；14 个 db 型测试文件 git mv 至 infra（未导出符号改走导出 HookRandRead/HookCreateHS256JWT 缝线、svc.db 断言改导出 API 或 helper 回传 db、gorm.ErrInvalidDB 换哨兵），应用层新增 auth_helpers_unit_test.go（纯内部逻辑：claim 解析/会话字段归一化/ID 回退/OIDC 角色映射/登录风险与 refresh 重放档位）+ auth_stub_test.go（19 方法 stubRepo 分支单测：注册/登录/风险执行/2FA 全链/挑战 token 指纹/OIDC 自动建号撞唯一键回落）恢复覆盖率归属；router_auth 与 handlers 测试改经 authinfra.NewGormRepository 装配，boundary 锚点同前放宽为 pin 构造名。application/infra 单测 + handlers 绿、全量 100.0%
-- [x] models 侧过渡别名最终删除（models.go 9 个别名块 + 5 个 domain 导入摘除，automation/webhook/embedding 三文件删除，bootstrap/migrate、cmd/migrate、platform knowledgeprovider、knowledge_doc 测试随 domain 类型迁移；handlers 无别名引用、swag 重生成零漂移、boundary rules 无别名残留）
+- [x] models 侧过渡别名最终删除（models.go 9 个别名块 + 5 个 domain 导入摘除，automation/webhook/embedding 三文件删除，bootstrap/migrate、cmd/migrate、platform knowledgeprovider、knowledge_doc 测试随 domain 类型迁移；handlers 无别名引用、swag 重生成零漂移、boundary rules 无别名残留；别名载体禁令由 TestModelsDoesNotImportModulePackages 接管）
 
 ## 已定口径
 
@@ -52,7 +52,7 @@
 - [x] P1-4 运行基线最小事实补齐（/ready、/metrics、/api/v1/messages/platforms）— security-acceptance + runtime-baseline-acceptance manifest 入库
 - [x] P1-5 Ticket 主闭环高频操作补齐 — make ticket-acceptance 通过并入库 manifest
 - [x] P1-6 Bootstrap 落地与入口 wiring 收口（RunStandalone 唯一编排根、双入口薄壳化、seam 归一）— 9d801a7，CI 35465422927 绿，bootstrap 覆盖率 98.1% → 100%
-- [x] P1-7 Modules 与 legacy services/models 边界收口（modules→services 清零、六刀模块自有模型迁移、两类 parser 级守卫）— 8a3a624，TestModulesDoNotImportLegacyServices + TestModulesDoNotUseMigratedTypeAliases 绿
+- [x] P1-7 Modules 与 legacy services/models 边界收口（modules→services 清零、六刀模块自有模型迁移、两类 parser 级守卫）— 8a3a624，TestModulesDoNotImportLegacyServices 绿；别名最终态 2026-10-14 删除后 TestModulesDoNotUseMigratedTypeAliases 退役、换代为 TestModelsDoesNotImportModulePackages（models→modules 反向 import 禁令，变异验证可拦别名回流）
 - [x] P1-8 文本编码与仓库可读性（编码门禁、乱码存量清零）— check-text-encoding.sh 覆盖 1999 文件，0 非 UTF-8 / 0 BOM / 0 U+FFFD
 - [x] P1-9 demo-sdk 生成链路一致性（sync-sdk-to-demo.sh、一键同步、漂移校验、CI 门）— check-generated-drift.sh 绿
 - [x] P2-0 客户侧推荐问题与上下文联想（含 RQ-5 曝光/转化归因、ExposureSummary 出口、路径级限流）— 38566cf 3b8370e，CI 35688179671 绿
