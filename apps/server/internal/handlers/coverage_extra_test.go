@@ -21,6 +21,7 @@ import (
 	customerapplication "servify/apps/server/internal/modules/customer/application"
 	customerdelivery "servify/apps/server/internal/modules/customer/delivery"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	routingapplication "servify/apps/server/internal/modules/routing/application"
 
 	"github.com/gin-gonic/gin"
@@ -126,7 +127,7 @@ func TestExtraCustomerDataBoundaryEndpoints(t *testing.T) {
 
 type extraKnowledgeSourcesService struct {
 	*unitKnowledgeService
-	source          *models.KnowledgeSource
+	source          *knowledgedomain.KnowledgeSource
 	listSourcesErr  error
 	createSourceErr error
 	deleteSourceErr error
@@ -136,14 +137,14 @@ type extraKnowledgeSourcesService struct {
 	retryErr        error
 }
 
-func (s *extraKnowledgeSourcesService) ListSources(ctx context.Context, sourceType string) ([]models.KnowledgeSource, error) {
+func (s *extraKnowledgeSourcesService) ListSources(ctx context.Context, sourceType string) ([]knowledgedomain.KnowledgeSource, error) {
 	if s.listSourcesErr != nil {
 		return nil, s.listSourcesErr
 	}
-	return []models.KnowledgeSource{*s.source}, nil
+	return []knowledgedomain.KnowledgeSource{*s.source}, nil
 }
 
-func (s *extraKnowledgeSourcesService) CreateSource(ctx context.Context, req *knowledgedelivery.KnowledgeSourceCreateRequest) (*models.KnowledgeSource, error) {
+func (s *extraKnowledgeSourcesService) CreateSource(ctx context.Context, req *knowledgedelivery.KnowledgeSourceCreateRequest) (*knowledgedomain.KnowledgeSource, error) {
 	if s.createSourceErr != nil {
 		return nil, s.createSourceErr
 	}
@@ -178,7 +179,7 @@ func (s *extraKnowledgeSourcesService) RetryIndexJob(ctx context.Context, jobID 
 func TestExtraKnowledgeSourcesAndIndexJobsBranches(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &extraKnowledgeSourcesService{
-		source: &models.KnowledgeSource{Name: "src", Type: "markdown"},
+		source: &knowledgedomain.KnowledgeSource{Name: "src", Type: "markdown"},
 		jobs:   []knowledgedelivery.IndexJobDTO{{ID: "j1"}},
 	}
 	r := gin.New()

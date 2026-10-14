@@ -9,6 +9,7 @@ import (
 
 	appbootstrap "servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -64,7 +65,7 @@ func TestSeedDefaultData(t *testing.T) {
 	assert.EqualValues(t, 5, agent.MaxConcurrent)
 
 	var docs int64
-	require.NoError(t, db.Model(&models.KnowledgeDoc{}).Count(&docs).Error)
+	require.NoError(t, db.Model(&knowledgedomain.KnowledgeDoc{}).Count(&docs).Error)
 	assert.EqualValues(t, 1, docs)
 
 	var stats int64
@@ -109,7 +110,7 @@ func TestMainSQLiteDatabasePath(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&models.User{}).Count(&count).Error)
 	assert.EqualValues(t, 3, count)
-	require.NoError(t, db.Model(&models.KnowledgeDoc{}).Count(&count).Error)
+	require.NoError(t, db.Model(&knowledgedomain.KnowledgeDoc{}).Count(&count).Error)
 	assert.EqualValues(t, 1, count)
 }
 

@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/pgvector/pgvector-go"
-	"servify/apps/server/internal/models"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
@@ -123,7 +122,7 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 	query = query.Limit(topK)
 
 	// 4. 执行查询
-	var docs []models.KnowledgeDoc
+	var docs []knowledgedomain.KnowledgeDoc
 	if err := query.Find(&docs).Error; err != nil {
 		return nil, fmt.Errorf("failed to execute search query: %w", err)
 	}
@@ -208,7 +207,7 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 		if doc.TenantID != "" {
 			query = query.Where("tenant_id = ?", doc.TenantID)
 		}
-		if err := query.Delete(&models.KnowledgeDoc{}).Error; err != nil {
+		if err := query.Delete(&knowledgedomain.KnowledgeDoc{}).Error; err != nil {
 			return "", fmt.Errorf("failed to delete existing document: %w", err)
 		}
 	}
@@ -216,7 +215,7 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	// 4. 存储每个 chunk
 	var firstDocID string
 	for i, chunk := range chunks {
-		docModel := &models.KnowledgeDoc{
+		docModel := &knowledgedomain.KnowledgeDoc{
 			TenantID:    doc.TenantID,
 			WorkspaceID: doc.KnowledgeID,
 			ProviderID:  "pgvector",
@@ -276,14 +275,14 @@ func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
 	id = strings.TrimSpace(id)
 	query := p.db.WithContext(ctx).Table("knowledge_docs").
 		Where("external_id = ? AND provider_id = ?", id, "pgvector")
-	result := query.Delete(&models.KnowledgeDoc{})
+	result := query.Delete(&knowledgedomain.KnowledgeDoc{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete document: %w", result.Error)
 	}
 	if result.RowsAffected > 0 {
 		return nil
 	}
-	result = p.db.WithContext(ctx).Table("knowledge_docs").Where("id = ?", id).Delete(&models.KnowledgeDoc{})
+	result = p.db.WithContext(ctx).Table("knowledge_docs").Where("id = ?", id).Delete(&knowledgedomain.KnowledgeDoc{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete document: %w", result.Error)
 	}

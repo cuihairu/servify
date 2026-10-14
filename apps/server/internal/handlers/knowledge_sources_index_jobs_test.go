@@ -16,15 +16,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"servify/apps/server/internal/models"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 func newKnowledgeSourcesRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := newTestDBForKnowledgeDocs(t)
-	if err := db.AutoMigrate(&models.KnowledgeSource{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeSource{}); err != nil {
 		t.Fatalf("automigrate sources: %v", err)
 	}
 	h := NewKnowledgeDocHandler(knowledgedelivery.NewHandlerService(db))
@@ -64,7 +64,7 @@ func TestKnowledgeSourceCRUD_And_DocumentSourceBinding(t *testing.T) {
 	if code != http.StatusCreated {
 		t.Fatalf("create source status=%d body=%s", code, body)
 	}
-	var source models.KnowledgeSource
+	var source knowledgedomain.KnowledgeSource
 	_ = json.Unmarshal(body, &source)
 	if source.ID == 0 || source.Type != "website" {
 		t.Fatalf("unexpected source: %#v", source)
@@ -77,7 +77,7 @@ func TestKnowledgeSourceCRUD_And_DocumentSourceBinding(t *testing.T) {
 	if code != http.StatusCreated {
 		t.Fatalf("create doc status=%d body=%s", code, body)
 	}
-	var doc models.KnowledgeDoc
+	var doc knowledgedomain.KnowledgeDoc
 	_ = json.Unmarshal(body, &doc)
 	if doc.SourceID != source.ID || doc.Version != 1 {
 		t.Fatalf("doc source/version = %d/%d want %d/1", doc.SourceID, doc.Version, source.ID)
@@ -93,7 +93,7 @@ func TestKnowledgeSourceCRUD_And_DocumentSourceBinding(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("list sources status=%d", code)
 	}
-	var sources []models.KnowledgeSource
+	var sources []knowledgedomain.KnowledgeSource
 	_ = json.Unmarshal(body, &sources)
 	if len(sources) != 1 || sources[0].ID != source.ID {
 		t.Fatalf("sources = %#v", sources)
@@ -110,7 +110,7 @@ func TestKnowledgeIndexJobs_EndToEnd(t *testing.T) {
 	if code != http.StatusCreated {
 		t.Fatalf("create doc status=%d body=%s", code, body)
 	}
-	var doc models.KnowledgeDoc
+	var doc knowledgedomain.KnowledgeDoc
 	_ = json.Unmarshal(body, &doc)
 
 	// 重建索引：POST /:id/index-jobs → done，任务落版本。

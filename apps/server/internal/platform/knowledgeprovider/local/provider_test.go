@@ -9,13 +9,13 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	localllm "servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
 
 // knowledgeDocModel 是 KnowledgeDoc 的测试侧别名（表结构唯一真源在 domain）。
-type knowledgeDocModel = models.KnowledgeDoc
+type knowledgeDocModel = knowledgedomain.KnowledgeDoc
 
 // newTestProvider 构造 sqlite in-memory 库 + 真实本地嵌入器 + 本地引擎。
 func newTestProvider(t *testing.T, db *gorm.DB, cfg Config) (*Provider, error) {

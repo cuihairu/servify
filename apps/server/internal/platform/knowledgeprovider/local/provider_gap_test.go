@@ -10,7 +10,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	localllm "servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
@@ -52,7 +52,7 @@ func TestUpsertEmptyContent(t *testing.T) {
 		t.Fatalf("upsert empty content: %v, %v", externalID, err)
 	}
 	var count int64
-	if err := db.Model(&models.KnowledgeDoc{}).Where("external_id = ?", "doc-empty").Count(&count).Error; err != nil {
+	if err := db.Model(&knowledgedomain.KnowledgeDoc{}).Where("external_id = ?", "doc-empty").Count(&count).Error; err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if count != 1 {
@@ -76,7 +76,7 @@ func TestUpsertNoID(t *testing.T) {
 	if first == "" {
 		t.Fatalf("first chunk id empty")
 	}
-	var row models.KnowledgeDoc
+	var row knowledgedomain.KnowledgeDoc
 	if err := db.First(&row, "doc_chunk_id = ?", "chunk-0").Error; err != nil {
 		t.Fatalf("chunk-0 naming lookup: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestUpsertNoID(t *testing.T) {
 		t.Fatalf("second upsert: %v", err)
 	}
 	var count int64
-	if err := db.Model(&models.KnowledgeDoc{}).Count(&count).Error; err != nil {
+	if err := db.Model(&knowledgedomain.KnowledgeDoc{}).Count(&count).Error; err != nil {
 		t.Fatalf("count all: %v", err)
 	}
 	if count != 2 {

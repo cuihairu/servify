@@ -11,6 +11,7 @@ import (
 
 	appbootstrap "servify/apps/server/internal/app/bootstrap"
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -237,9 +238,9 @@ func seedDefaultData(db *gorm.DB) {
 	}
 
 	// 创建示例知识库文档
-	var existingDoc models.KnowledgeDoc
+	var existingDoc knowledgedomain.KnowledgeDoc
 	if err := db.Where("title = ?", "欢迎使用 Servify").First(&existingDoc).Error; err != nil {
-		doc := models.KnowledgeDoc{
+		doc := knowledgedomain.KnowledgeDoc{
 			Title:    "欢迎使用 Servify",
 			Content:  "Servify 是一个智能客服系统，集成了 AI 对话和人工客服功能。系统支持自动回复、工单管理、客户管理等功能。",
 			Category: "getting-started",

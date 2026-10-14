@@ -2,7 +2,14 @@ package bootstrap
 
 import (
 	"servify/apps/server/internal/models"
+	aidomain "servify/apps/server/internal/modules/ai/domain"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
+	translationdomain "servify/apps/server/internal/modules/translation/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 
 	"gorm.io/gorm"
 )
@@ -26,11 +33,11 @@ func MigrationModels() []interface{} {
 		&models.TicketStatus{},
 		&models.CustomField{},
 		&models.TicketCustomFieldValue{},
-		&models.KnowledgeDoc{},
-		&models.KnowledgeIndexJob{},
-		&models.KnowledgeSource{}, // V1.0 收敛 B3-1a：知识来源登记（表名 knowledge_sources）
-		&models.AIAnswer{},        // V1.0 收敛 B3-1b：AI 首答持久化（表名 ai_answers）
-		&models.AnswerFeedback{},  // V1.0 收敛 B3-1b：AI 答案反馈（表名 answer_feedbacks，000019 纠偏）
+		&knowledgedomain.KnowledgeDoc{},
+		&knowledgedomain.KnowledgeIndexJob{},
+		&knowledgedomain.KnowledgeSource{}, // V1.0 收敛 B3-1a：知识来源登记（表名 knowledge_sources）
+		&aidomain.AIAnswer{},               // V1.0 收敛 B3-1b：AI 首答持久化（表名 ai_answers）
+		&aidomain.AnswerFeedback{},         // V1.0 收敛 B3-1b：AI 答案反馈（表名 answer_feedbacks，000019 纠偏）
 		&models.WebRTCConnection{},
 		&models.DailyStats{},
 		&models.SLAConfig{},
@@ -39,8 +46,8 @@ func MigrationModels() []interface{} {
 		&models.SatisfactionSurvey{},
 		&models.AppIntegration{},
 		&models.ShiftSchedule{},
-		&models.AutomationTrigger{},
-		&models.AutomationRun{},
+		&automationdomain.AutomationTrigger{},
+		&automationdomain.AutomationRun{},
 		&models.Macro{},
 		&models.TenantConfig{},
 		&models.WorkspaceConfig{},
@@ -48,19 +55,19 @@ func MigrationModels() []interface{} {
 		&voiceinfra.VoiceCall{},
 		&voiceinfra.VoiceRecording{},
 		&voiceinfra.VoiceTranscript{},
-		&models.WebhookEndpoint{},
-		&models.WebhookDelivery{},
+		&webhookdomain.WebhookEndpoint{},
+		&webhookdomain.WebhookDelivery{},
 		&models.APIKey{},
-		&models.QualityReview{},
+		&qualitydomain.QualityReview{},
 		&models.AgentGroup{},
 		&models.AgentGroupMember{},
-		&models.RemoteAssistSession{},
-		&models.RemoteAssistAnnotation{},
-		&models.AutomationTimer{},
+		&assistdomain.RemoteAssistSession{},
+		&assistdomain.RemoteAssistAnnotation{},
+		&automationdomain.AutomationTimer{},
 		&models.UserRecoveryCode{},
 		&models.SuggestionExposureLog{},
 		&models.PushToken{},
-		&models.TranslationLanguagePreference{},
+		&translationdomain.TranslationLanguagePreference{},
 		// V1.0 收敛 B1：会话服务过程事件流水（Service Timeline）
 		&models.ConversationEvent{},
 	}

@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func dxcAutomationService() *unitAutomationService {
 	return &unitAutomationService{
-		triggers: []models.AutomationTrigger{{ID: 1, Name: "t1"}},
-		trigger:  &models.AutomationTrigger{ID: 1, Name: "t1"},
-		runs:     []models.AutomationRun{{ID: 1}},
+		triggers: []automationdomain.AutomationTrigger{{ID: 1, Name: "t1"}},
+		trigger:  &automationdomain.AutomationTrigger{ID: 1, Name: "t1"},
+		runs:     []automationdomain.AutomationRun{{ID: 1}},
 		runTotal: 1,
 		batch:    &automationdelivery.BatchRunResponse{Event: "ticket.created", Matches: 1},
 	}

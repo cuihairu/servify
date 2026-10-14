@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/config"
-	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	localllm "servify/apps/server/internal/platform/embedding/local"
 	"servify/apps/server/internal/platform/llm/openai"
 
@@ -157,7 +157,7 @@ func TestLocalKnowledgeQAEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 

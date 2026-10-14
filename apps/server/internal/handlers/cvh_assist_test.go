@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	assistdelivery "servify/apps/server/internal/modules/assist/delivery"
+	assistdomain "servify/apps/server/internal/modules/assist/domain"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -17,22 +17,22 @@ var _ assistdelivery.HandlerService = (*cvhAssistService)(nil)
 
 // cvhAssistService 远程协助服务 inline mock（管理面 + 访客面共用）。
 type cvhAssistService struct {
-	startSession *models.RemoteAssistSession
+	startSession *assistdomain.RemoteAssistSession
 	startErr     error
-	endSession   *models.RemoteAssistSession
+	endSession   *assistdomain.RemoteAssistSession
 	endErr       error
-	getSession   *models.RemoteAssistSession
+	getSession   *assistdomain.RemoteAssistSession
 	getErr       error
-	sessions     []models.RemoteAssistSession
+	sessions     []assistdomain.RemoteAssistSession
 	listErr      error
-	annotation   *models.RemoteAssistAnnotation
+	annotation   *assistdomain.RemoteAssistAnnotation
 	annotErr     error
-	annotations  []models.RemoteAssistAnnotation
+	annotations  []assistdomain.RemoteAssistAnnotation
 	listAnnotErr error
 	deleteErr    error
-	attach       *models.RemoteAssistSession
+	attach       *assistdomain.RemoteAssistSession
 	attachErr    error
-	consent      *models.RemoteAssistSession
+	consent      *assistdomain.RemoteAssistSession
 	consentErr   error
 
 	startCmd      assistdelivery.StartCommand
@@ -55,18 +55,18 @@ type cvhAssistService struct {
 	consentCalled bool
 }
 
-func (s *cvhAssistService) StartSession(_ context.Context, cmd assistdelivery.StartCommand) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) StartSession(_ context.Context, cmd assistdelivery.StartCommand) (*assistdomain.RemoteAssistSession, error) {
 	s.startCmd = cmd
 	if s.startErr != nil {
 		return nil, s.startErr
 	}
 	if s.startSession == nil {
-		return &models.RemoteAssistSession{ID: 11, Status: "active"}, nil
+		return &assistdomain.RemoteAssistSession{ID: 11, Status: "active"}, nil
 	}
 	return s.startSession, nil
 }
 
-func (s *cvhAssistService) EndSession(_ context.Context, id uint, actor assistdelivery.Actor, cmd assistdelivery.EndCommand) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) EndSession(_ context.Context, id uint, actor assistdelivery.Actor, cmd assistdelivery.EndCommand) (*assistdomain.RemoteAssistSession, error) {
 	s.endID = id
 	s.endActor = actor
 	s.endCmd = cmd
@@ -74,29 +74,29 @@ func (s *cvhAssistService) EndSession(_ context.Context, id uint, actor assistde
 		return nil, s.endErr
 	}
 	if s.endSession == nil {
-		return &models.RemoteAssistSession{ID: id, Status: "ended"}, nil
+		return &assistdomain.RemoteAssistSession{ID: id, Status: "ended"}, nil
 	}
 	return s.endSession, nil
 }
 
-func (s *cvhAssistService) GetSession(_ context.Context, id uint) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) GetSession(_ context.Context, id uint) (*assistdomain.RemoteAssistSession, error) {
 	s.getID = id
 	return s.getSession, s.getErr
 }
 
-func (s *cvhAssistService) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]models.RemoteAssistSession, error) {
+func (s *cvhAssistService) ListSessions(_ context.Context, conversationSessionID string, limit int) ([]assistdomain.RemoteAssistSession, error) {
 	s.listConvID = conversationSessionID
 	s.listLimit = limit
 	return s.sessions, s.listErr
 }
 
-func (s *cvhAssistService) AddAnnotation(_ context.Context, assistSessionID uint, cmd assistdelivery.AnnotationCommand) (*models.RemoteAssistAnnotation, error) {
+func (s *cvhAssistService) AddAnnotation(_ context.Context, assistSessionID uint, cmd assistdelivery.AnnotationCommand) (*assistdomain.RemoteAssistAnnotation, error) {
 	s.annotID = assistSessionID
 	s.annotCmd = cmd
 	return s.annotation, s.annotErr
 }
 
-func (s *cvhAssistService) ListAnnotations(_ context.Context, assistSessionID uint) ([]models.RemoteAssistAnnotation, error) {
+func (s *cvhAssistService) ListAnnotations(_ context.Context, assistSessionID uint) ([]assistdomain.RemoteAssistAnnotation, error) {
 	s.annotID = assistSessionID
 	return s.annotations, s.listAnnotErr
 }
@@ -107,14 +107,14 @@ func (s *cvhAssistService) DeleteAnnotation(_ context.Context, id uint, actor as
 	return s.deleteErr
 }
 
-func (s *cvhAssistService) AttachRecording(_ context.Context, id uint, customerUserID uint, meta assistdelivery.RecordingMeta) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) AttachRecording(_ context.Context, id uint, customerUserID uint, meta assistdelivery.RecordingMeta) (*assistdomain.RemoteAssistSession, error) {
 	s.attachID = id
 	s.attachUID = customerUserID
 	s.attachCmd = meta
 	return s.attach, s.attachErr
 }
 
-func (s *cvhAssistService) RespondConsent(_ context.Context, id uint, customerUserID uint, accept bool) (*models.RemoteAssistSession, error) {
+func (s *cvhAssistService) RespondConsent(_ context.Context, id uint, customerUserID uint, accept bool) (*assistdomain.RemoteAssistSession, error) {
 	s.consentCalled = true
 	s.consentID = id
 	s.consentUID = customerUserID
@@ -123,7 +123,7 @@ func (s *cvhAssistService) RespondConsent(_ context.Context, id uint, customerUs
 		return nil, s.consentErr
 	}
 	if s.consent == nil {
-		return &models.RemoteAssistSession{ID: id, ConsentStatus: "granted"}, nil
+		return &assistdomain.RemoteAssistSession{ID: id, ConsentStatus: "granted"}, nil
 	}
 	return s.consent, nil
 }
@@ -279,14 +279,14 @@ func TestCvhAssistEndSession(t *testing.T) {
 
 func TestCvhAssistListSessions(t *testing.T) {
 	t.Run("success with filters", func(t *testing.T) {
-		svc := &cvhAssistService{sessions: []models.RemoteAssistSession{{ID: 1}, {ID: 2}}}
+		svc := &cvhAssistService{sessions: []assistdomain.RemoteAssistSession{{ID: 1}, {ID: 2}}}
 		w := dxcDo(cvhAssistRouter(svc), http.MethodGet, "/api/remote-assist/sessions?conversation_session_id=sess-1&limit=25", "")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "sess-1", svc.listConvID)
 		assert.Equal(t, 25, svc.listLimit)
 		var resp struct {
-			Items []models.RemoteAssistSession `json:"items"`
-			Total int                          `json:"total"`
+			Items []assistdomain.RemoteAssistSession `json:"items"`
+			Total int                                `json:"total"`
 		}
 		dxcDecode(t, w, &resp)
 		assert.Len(t, resp.Items, 2)
@@ -316,7 +316,7 @@ func TestCvhAssistGetSession(t *testing.T) {
 		id   string
 		want int
 	}{
-		{"success", &cvhAssistService{getSession: &models.RemoteAssistSession{ID: 9, Status: "ended"}}, "9", http.StatusOK},
+		{"success", &cvhAssistService{getSession: &assistdomain.RemoteAssistSession{ID: 9, Status: "ended"}}, "9", http.StatusOK},
 		{"invalid id", &cvhAssistService{}, "abc", http.StatusBadRequest},
 		{"forbidden", &cvhAssistService{getErr: assistdelivery.ErrAssistForbidden}, "9", http.StatusForbidden},
 		{"generic error", &cvhAssistService{getErr: errors.New("boom")}, "9", http.StatusInternalServerError},
@@ -326,7 +326,7 @@ func TestCvhAssistGetSession(t *testing.T) {
 			w := dxcDo(cvhAssistRouter(tc.svc), http.MethodGet, "/api/remote-assist/sessions/"+tc.id, "")
 			assert.Equal(t, tc.want, w.Code)
 			if tc.want == http.StatusOK {
-				var got models.RemoteAssistSession
+				var got assistdomain.RemoteAssistSession
 				dxcDecode(t, w, &got)
 				assert.Equal(t, uint(9), got.ID)
 			}
@@ -339,7 +339,7 @@ func TestCvhAssistAddAnnotation(t *testing.T) {
 	asAgent := func(c *gin.Context) { c.Set("user_id", uint(7)); c.Next() }
 
 	t.Run("success with payload", func(t *testing.T) {
-		svc := &cvhAssistService{annotation: &models.RemoteAssistAnnotation{ID: 3, Shape: "rect"}}
+		svc := &cvhAssistService{annotation: &assistdomain.RemoteAssistAnnotation{ID: 3, Shape: "rect"}}
 		body := `{"timestamp_ms":12000,"shape":"rect","payload":{"x":0.1,"color":"#f5222d"}}`
 		w := dxcDo(cvhAssistRouter(svc, asAgent), http.MethodPost, path, body)
 		assert.Equal(t, http.StatusCreated, w.Code)
@@ -383,12 +383,12 @@ func TestCvhAssistAddAnnotation(t *testing.T) {
 
 func TestCvhAssistListAnnotations(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		svc := &cvhAssistService{annotations: []models.RemoteAssistAnnotation{{ID: 1}, {ID: 2}, {ID: 3}}}
+		svc := &cvhAssistService{annotations: []assistdomain.RemoteAssistAnnotation{{ID: 1}, {ID: 2}, {ID: 3}}}
 		w := dxcDo(cvhAssistRouter(svc), http.MethodGet, "/api/remote-assist/sessions/9/annotations", "")
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp struct {
-			Items []models.RemoteAssistAnnotation `json:"items"`
-			Total int                             `json:"total"`
+			Items []assistdomain.RemoteAssistAnnotation `json:"items"`
+			Total int                                   `json:"total"`
 		}
 		dxcDecode(t, w, &resp)
 		assert.Len(t, resp.Items, 3)
@@ -463,7 +463,7 @@ func TestCvhAssistRecordingAttach(t *testing.T) {
 	asVisitor := func(c *gin.Context) { c.Set("user_id", float64(12)); c.Next() }
 
 	t.Run("success", func(t *testing.T) {
-		svc := &cvhAssistService{attach: &models.RemoteAssistSession{ID: 9, RecordingKey: "rec.webm"}}
+		svc := &cvhAssistService{attach: &assistdomain.RemoteAssistSession{ID: 9, RecordingKey: "rec.webm"}}
 		body := `{"recording_key":"rec.webm","recording_mime":"video/webm","recording_duration_ms":95,"recording_size":1024}`
 		w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, body)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -522,7 +522,7 @@ func TestCvhAssistRecordingRespondConsent(t *testing.T) {
 	asVisitor := func(c *gin.Context) { c.Set("user_id", float64(12)); c.Next() }
 
 	t.Run("accept grants and echoes session", func(t *testing.T) {
-		svc := &cvhAssistService{consent: &models.RemoteAssistSession{ID: 9, ConsentStatus: "granted", Status: "active"}}
+		svc := &cvhAssistService{consent: &assistdomain.RemoteAssistSession{ID: 9, ConsentStatus: "granted", Status: "active"}}
 		w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"accept":true}`)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.True(t, svc.consentCalled)
@@ -533,7 +533,7 @@ func TestCvhAssistRecordingRespondConsent(t *testing.T) {
 	})
 
 	t.Run("decline forwards accept=false", func(t *testing.T) {
-		svc := &cvhAssistService{consent: &models.RemoteAssistSession{ID: 9, ConsentStatus: "declined", Status: "ended"}}
+		svc := &cvhAssistService{consent: &assistdomain.RemoteAssistSession{ID: 9, ConsentStatus: "declined", Status: "ended"}}
 		w := dxcDo(cvhAssistRecordingRouter(svc, asVisitor), http.MethodPost, path, `{"accept":false}`)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.False(t, svc.consentAccept)

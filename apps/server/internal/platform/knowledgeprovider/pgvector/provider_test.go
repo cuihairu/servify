@@ -10,7 +10,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"servify/apps/server/internal/models"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
@@ -65,7 +64,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	}
 
 	// 创建表结构
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 
@@ -146,7 +145,7 @@ func TestProvider_Search(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试文档（不使用 embedding 字段，因为 SQLite 不支持）
-	testDoc := models.KnowledgeDoc{
+	testDoc := knowledgedomain.KnowledgeDoc{
 		TenantID:    "tenant1",
 		WorkspaceID: "kb1",
 		ProviderID:  "pgvector",
@@ -344,7 +343,7 @@ func TestProvider_UpsertDocument(t *testing.T) {
 		}
 
 		// 验证文档被保存
-		var savedDoc models.KnowledgeDoc
+		var savedDoc knowledgedomain.KnowledgeDoc
 		if err := db.Where("title = ?", "Test Document").First(&savedDoc).Error; err != nil {
 			t.Errorf("failed to find saved document: %v", err)
 		}
@@ -387,7 +386,7 @@ func TestProvider_UpsertDocument_Update(t *testing.T) {
 	}
 
 	// 验证更新
-	var docs []models.KnowledgeDoc
+	var docs []knowledgedomain.KnowledgeDoc
 	if err := db.Where("doc_chunk_id LIKE ?", "update-test-chunk-%").Find(&docs).Error; err != nil {
 		t.Fatalf("failed to query documents: %v", err)
 	}
@@ -411,7 +410,7 @@ func TestProvider_DeleteDocument(t *testing.T) {
 	ctx := context.Background()
 
 	// 创建测试文档
-	doc := models.KnowledgeDoc{
+	doc := knowledgedomain.KnowledgeDoc{
 		TenantID:    "tenant1",
 		WorkspaceID: "kb1",
 		ProviderID:  "pgvector",
@@ -601,7 +600,7 @@ func BenchmarkProvider_Search(b *testing.B) {
 
 	// 创建测试文档
 	for i := 0; i < 100; i++ {
-		doc := models.KnowledgeDoc{
+		doc := knowledgedomain.KnowledgeDoc{
 			TenantID:    "tenant1",
 			WorkspaceID: "kb1",
 			ProviderID:  "pgvector",
@@ -668,9 +667,9 @@ func TestProvider_SearchEmptyVectors(t *testing.T) {
 	}
 }
 
-func interceptQuery(db *gorm.DB, docs []models.KnowledgeDoc) {
+func interceptQuery(db *gorm.DB, docs []knowledgedomain.KnowledgeDoc) {
 	_ = db.Callback().Query().Replace("gorm:query", func(tx *gorm.DB) {
-		if dest, ok := tx.Statement.Dest.(*[]models.KnowledgeDoc); ok {
+		if dest, ok := tx.Statement.Dest.(*[]knowledgedomain.KnowledgeDoc); ok {
 			*dest = docs
 		}
 	})
@@ -680,7 +679,7 @@ func TestProvider_SearchScoresAndFilters(t *testing.T) {
 	db := setupTestDB(t)
 	ctx := context.Background()
 
-	docs := []models.KnowledgeDoc{
+	docs := []knowledgedomain.KnowledgeDoc{
 		{ID: 1, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e1", Title: "Same Direction", Content: "c1", ChunkIndex: 0, DocChunkID: "e1-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.1, 0.2, 0.3})},
 		{ID: 2, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e2", Title: "Orthogonal", Content: "c2", ChunkIndex: 0, DocChunkID: "e2-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.3, -0.3, 0.0})},
 		{ID: 3, TenantID: "t1", WorkspaceID: "kb1", ProviderID: "pgvector", ExternalID: "e3", Title: "Dim Mismatch", Content: "c3", ChunkIndex: 0, DocChunkID: "e3-chunk-0", Embedding: knowledgedomain.NewEmbedding([]float32{0.1, 0.2})},
@@ -750,7 +749,7 @@ func TestProvider_UpsertDocumentBranches(t *testing.T) {
 
 	// delete by numeric id branch (no external id)
 	byID := NewProvider(db, &mockEmbeddingProvider{dimension: 3, vectors: [][]float32{{0.1, 0.2, 0.3}}}, Config{})
-	seed := models.KnowledgeDoc{ProviderID: "pgvector", Title: "Old", Content: "old"}
+	seed := knowledgedomain.KnowledgeDoc{ProviderID: "pgvector", Title: "Old", Content: "old"}
 	if err := db.Create(&seed).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}

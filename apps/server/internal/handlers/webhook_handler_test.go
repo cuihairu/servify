@@ -8,33 +8,33 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/webhook/application"
 	webhookdelivery "servify/apps/server/internal/modules/webhook/delivery"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 
 	"github.com/gin-gonic/gin"
 )
 
 type fakeWebhookHandlerService struct {
-	endpoints       []models.WebhookEndpoint
-	deliveries      []models.WebhookDelivery
+	endpoints       []webhookdomain.WebhookEndpoint
+	deliveries      []webhookdomain.WebhookDelivery
 	createdSecret   string
 	createErr       error
 	notFoundActions bool
 }
 
-func (f *fakeWebhookHandlerService) ListEndpoints(ctx context.Context) ([]models.WebhookEndpoint, error) {
+func (f *fakeWebhookHandlerService) ListEndpoints(ctx context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return f.endpoints, nil
 }
-func (f *fakeWebhookHandlerService) CreateEndpoint(ctx context.Context, req *webhookdelivery.EndpointCreateRequest) (*models.WebhookEndpoint, string, error) {
+func (f *fakeWebhookHandlerService) CreateEndpoint(ctx context.Context, req *webhookdelivery.EndpointCreateRequest) (*webhookdomain.WebhookEndpoint, string, error) {
 	if f.createErr != nil {
 		return nil, "", f.createErr
 	}
-	ep := &models.WebhookEndpoint{ID: 1, Name: req.Name, URL: req.URL, Secret: f.createdSecret, Active: true}
+	ep := &webhookdomain.WebhookEndpoint{ID: 1, Name: req.Name, URL: req.URL, Secret: f.createdSecret, Active: true}
 	f.endpoints = append(f.endpoints, *ep)
 	return ep, f.createdSecret, nil
 }
-func (f *fakeWebhookHandlerService) UpdateEndpoint(ctx context.Context, id uint, req *webhookdelivery.EndpointUpdateRequest) (*models.WebhookEndpoint, error) {
+func (f *fakeWebhookHandlerService) UpdateEndpoint(ctx context.Context, id uint, req *webhookdelivery.EndpointUpdateRequest) (*webhookdomain.WebhookEndpoint, error) {
 	if f.notFoundActions {
 		return nil, application.ErrNotFound
 	}
@@ -46,20 +46,20 @@ func (f *fakeWebhookHandlerService) DeleteEndpoint(ctx context.Context, id uint)
 	}
 	return nil
 }
-func (f *fakeWebhookHandlerService) RotateEndpointSecret(ctx context.Context, id uint) (*models.WebhookEndpoint, string, error) {
+func (f *fakeWebhookHandlerService) RotateEndpointSecret(ctx context.Context, id uint) (*webhookdomain.WebhookEndpoint, string, error) {
 	return &f.endpoints[0], "rotated-secret", nil
 }
-func (f *fakeWebhookHandlerService) TestEndpoint(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
-	return &models.WebhookDelivery{ID: 9, EndpointID: id, EventName: "ping", Status: models.WebhookDeliveryStatusSuccess}, nil
+func (f *fakeWebhookHandlerService) TestEndpoint(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
+	return &webhookdomain.WebhookDelivery{ID: 9, EndpointID: id, EventName: "ping", Status: webhookdomain.WebhookDeliveryStatusSuccess}, nil
 }
-func (f *fakeWebhookHandlerService) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (f *fakeWebhookHandlerService) ListDeliveries(ctx context.Context, query application.DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return f.deliveries, int64(len(f.deliveries)), nil
 }
-func (f *fakeWebhookHandlerService) RedeliverDelivery(ctx context.Context, id uint) (*models.WebhookDelivery, error) {
+func (f *fakeWebhookHandlerService) RedeliverDelivery(ctx context.Context, id uint) (*webhookdomain.WebhookDelivery, error) {
 	if f.notFoundActions {
 		return nil, application.ErrNotFound
 	}
-	return &models.WebhookDelivery{ID: id, Status: models.WebhookDeliveryStatusPending}, nil
+	return &webhookdomain.WebhookDelivery{ID: id, Status: webhookdomain.WebhookDeliveryStatusPending}, nil
 }
 func (f *fakeWebhookHandlerService) SupportedEvents() []string {
 	return application.SupportedEvents()
@@ -100,8 +100,8 @@ func TestWebhookRoutesCRUDAndSecretHygiene(t *testing.T) {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
 	}
 	var created struct {
-		Endpoint models.WebhookEndpoint `json:"endpoint"`
-		Secret   string                 `json:"secret"`
+		Endpoint webhookdomain.WebhookEndpoint `json:"endpoint"`
+		Secret   string                        `json:"secret"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create response: %v", err)

@@ -2,11 +2,6 @@ package models
 
 import (
 	"gorm.io/gorm"
-	aidomain "servify/apps/server/internal/modules/ai/domain"
-	assistdomain "servify/apps/server/internal/modules/assist/domain"
-	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
-	qualitydomain "servify/apps/server/internal/modules/quality/domain"
-	translationdomain "servify/apps/server/internal/modules/translation/domain"
 	"time"
 )
 
@@ -467,40 +462,6 @@ type DailyStats struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
-// RemoteAssistSession 远程协助会话。定义已迁至 modules/assist/domain，
-// 此处保留类型别名供 legacy 引用方使用（assist_handler.go /
-// assist_recording_handler.go 的 swag 注解亦经此别名解析）。
-type RemoteAssistSession = assistdomain.RemoteAssistSession
-
-// RemoteAssistAnnotation 远程协助标注。定义已迁至 modules/assist/domain，
-// 此处保留类型别名供 legacy 引用方使用（assist_handler.go 的 swag 注解亦经此别名解析）。
-type RemoteAssistAnnotation = assistdomain.RemoteAssistAnnotation
-
-// TranslationLanguagePreference 会话翻译语言偏好。定义已迁至
-// modules/translation/domain，此处保留类型别名供 legacy 引用方使用
-// （migrate 注册与 swag 注解经此别名解析）。
-type TranslationLanguagePreference = translationdomain.TranslationLanguagePreference
-
-// KnowledgeDoc 知识库文档。定义已迁至 modules/knowledge/domain（向量列
-// 值对象 Embedding 一并随迁，见 embedding.go），此处保留类型别名供 legacy
-// 引用方（pgvector provider / services / migrate 注册）过渡使用。
-type KnowledgeDoc = knowledgedomain.KnowledgeDoc
-
-// KnowledgeIndexJob 知识库索引任务。定义已迁至 modules/knowledge/domain，
-// 此处保留类型别名供 legacy 引用方过渡使用。
-type KnowledgeIndexJob = knowledgedomain.KnowledgeIndexJob
-
-// KnowledgeSource 知识来源登记。定义在 modules/knowledge/domain（B3-1a §8.1），
-// 别名供 migrate 注册引用。
-type KnowledgeSource = knowledgedomain.KnowledgeSource
-
-// AIAnswer AI 首答持久化（B3-1b §5.3 反馈闭环锚表）。定义在 modules/ai/domain，
-// 别名供 migrate 注册引用。
-type AIAnswer = aidomain.AIAnswer
-
-// AnswerFeedback AI 答案反馈（B3-1b §5.3）。定义在 modules/ai/domain。
-type AnswerFeedback = aidomain.AnswerFeedback
-
 // TenantConfig stores tenant-scoped configuration overrides.
 type TenantConfig struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
@@ -556,10 +517,6 @@ type AuditLog struct {
 	EntryHash string    `gorm:"size:64;index" json:"entry_hash"`
 	CreatedAt time.Time `json:"created_at"`
 }
-
-// QualityReview 是单个已结束会话的质检记录。定义已迁至 modules/quality/domain，
-// 此处保留类型别名供 legacy 引用方使用（quality_handler.go 的 swag 注解亦经此别名解析）。
-type QualityReview = qualitydomain.QualityReview
 
 // AgentGroup 坐席组：组内分配 + 溢出策略（global 落全局池 / none 直接失败）。
 // agent_id 语义全链路统一 users.id；parent_id 预留列，本期不实现树语义。

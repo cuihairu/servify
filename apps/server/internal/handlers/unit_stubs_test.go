@@ -12,10 +12,12 @@ import (
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	appintegrationdelivery "servify/apps/server/internal/modules/app_integration/delivery"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 	customfielddelivery "servify/apps/server/internal/modules/custom_field/delivery"
 	customerapi "servify/apps/server/internal/modules/customer/api"
 	customerapplication "servify/apps/server/internal/modules/customer/application"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	macrodelivery "servify/apps/server/internal/modules/macro/delivery"
 	routingapplication "servify/apps/server/internal/modules/routing/application"
 	routingcontract "servify/apps/server/internal/modules/routing/contract"
@@ -286,9 +288,9 @@ func (s *unitTicketService) GetRelatedConversations(ctx context.Context, ticketI
 // ---- knowledge docs ----
 
 type unitKnowledgeService struct {
-	docs      []models.KnowledgeDoc
+	docs      []knowledgedomain.KnowledgeDoc
 	total     int64
-	doc       *models.KnowledgeDoc
+	doc       *knowledgedomain.KnowledgeDoc
 	listErr   error
 	getErr    error
 	createErr error
@@ -296,28 +298,28 @@ type unitKnowledgeService struct {
 	deleteErr error
 }
 
-func (s *unitKnowledgeService) List(ctx context.Context, req *knowledgedelivery.KnowledgeDocListRequest) ([]models.KnowledgeDoc, int64, error) {
+func (s *unitKnowledgeService) List(ctx context.Context, req *knowledgedelivery.KnowledgeDocListRequest) ([]knowledgedomain.KnowledgeDoc, int64, error) {
 	if s.listErr != nil {
 		return nil, 0, s.listErr
 	}
 	return s.docs, s.total, nil
 }
 
-func (s *unitKnowledgeService) Get(ctx context.Context, id uint) (*models.KnowledgeDoc, error) {
+func (s *unitKnowledgeService) Get(ctx context.Context, id uint) (*knowledgedomain.KnowledgeDoc, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
 	}
 	return s.doc, nil
 }
 
-func (s *unitKnowledgeService) Create(ctx context.Context, req *knowledgedelivery.KnowledgeDocCreateRequest) (*models.KnowledgeDoc, error) {
+func (s *unitKnowledgeService) Create(ctx context.Context, req *knowledgedelivery.KnowledgeDocCreateRequest) (*knowledgedomain.KnowledgeDoc, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
 	return s.doc, nil
 }
 
-func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *knowledgedelivery.KnowledgeDocUpdateRequest) (*models.KnowledgeDoc, error) {
+func (s *unitKnowledgeService) Update(ctx context.Context, id uint, req *knowledgedelivery.KnowledgeDocUpdateRequest) (*knowledgedomain.KnowledgeDoc, error) {
 	if s.updateErr != nil {
 		return nil, s.updateErr
 	}
@@ -328,10 +330,10 @@ func (s *unitKnowledgeService) Delete(ctx context.Context, id uint) error { retu
 
 // ---- knowledge sources / index jobs（B3-1a，单元桩固定零值行为） ----
 
-func (s *unitKnowledgeService) ListSources(ctx context.Context, sourceType string) ([]models.KnowledgeSource, error) {
+func (s *unitKnowledgeService) ListSources(ctx context.Context, sourceType string) ([]knowledgedomain.KnowledgeSource, error) {
 	return nil, nil
 }
-func (s *unitKnowledgeService) CreateSource(ctx context.Context, req *knowledgedelivery.KnowledgeSourceCreateRequest) (*models.KnowledgeSource, error) {
+func (s *unitKnowledgeService) CreateSource(ctx context.Context, req *knowledgedelivery.KnowledgeSourceCreateRequest) (*knowledgedomain.KnowledgeSource, error) {
 	return nil, s.createErr
 }
 func (s *unitKnowledgeService) DeleteSource(ctx context.Context, id uint) error { return s.deleteErr }
@@ -414,9 +416,9 @@ func (s *unitTransferService) AutoTransferCheck(ctx context.Context, sessionID s
 // ---- automation ----
 
 type unitAutomationService struct {
-	triggers   []models.AutomationTrigger
-	trigger    *models.AutomationTrigger
-	runs       []models.AutomationRun
+	triggers   []automationdomain.AutomationTrigger
+	trigger    *automationdomain.AutomationTrigger
+	runs       []automationdomain.AutomationRun
 	runTotal   int64
 	batch      *automationdelivery.BatchRunResponse
 	listErr    error
@@ -427,14 +429,14 @@ type unitAutomationService struct {
 	deleteFail error
 }
 
-func (s *unitAutomationService) ListTriggers(ctx context.Context) ([]models.AutomationTrigger, error) {
+func (s *unitAutomationService) ListTriggers(ctx context.Context) ([]automationdomain.AutomationTrigger, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
 	return s.triggers, nil
 }
 
-func (s *unitAutomationService) CreateTrigger(ctx context.Context, req *automationdelivery.TriggerRequest) (*models.AutomationTrigger, error) {
+func (s *unitAutomationService) CreateTrigger(ctx context.Context, req *automationdelivery.TriggerRequest) (*automationdomain.AutomationTrigger, error) {
 	if s.createErr != nil {
 		return nil, s.createErr
 	}
@@ -448,7 +450,7 @@ func (s *unitAutomationService) DeleteTrigger(ctx context.Context, id uint) erro
 	return s.deleteErr
 }
 
-func (s *unitAutomationService) ListRuns(ctx context.Context, req *automationdelivery.RunListQuery) ([]models.AutomationRun, int64, error) {
+func (s *unitAutomationService) ListRuns(ctx context.Context, req *automationdelivery.RunListQuery) ([]automationdomain.AutomationRun, int64, error) {
 	if s.runsErr != nil {
 		return nil, 0, s.runsErr
 	}

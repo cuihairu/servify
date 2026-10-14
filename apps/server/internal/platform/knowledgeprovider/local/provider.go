@@ -18,7 +18,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"servify/apps/server/internal/models"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	"servify/apps/server/internal/platform/embedding"
 	"servify/apps/server/internal/platform/knowledgeprovider"
@@ -109,7 +108,7 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 		threshold = p.config.Search.Threshold
 	}
 
-	query := p.db.WithContext(ctx).Model(&models.KnowledgeDoc{}).
+	query := p.db.WithContext(ctx).Model(&knowledgedomain.KnowledgeDoc{}).
 		Where("provider_id = ?", ProviderID)
 	if req.TenantID != "" {
 		query = query.Where("tenant_id = ?", req.TenantID)
@@ -117,13 +116,13 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 	if req.KnowledgeID != "" {
 		query = query.Where("workspace_id = ?", req.KnowledgeID)
 	}
-	var docs []models.KnowledgeDoc
+	var docs []knowledgedomain.KnowledgeDoc
 	if err := query.Order("id DESC").Limit(candidateScanLimit).Find(&docs).Error; err != nil {
 		return nil, fmt.Errorf("failed to load candidate chunks: %w", err)
 	}
 
 	type scored struct {
-		doc   models.KnowledgeDoc
+		doc   knowledgedomain.KnowledgeDoc
 		score float64
 	}
 	hits := make([]scored, 0, len(docs))
@@ -193,7 +192,7 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 
 	var firstDocID string
 	for i, chunk := range chunks {
-		docModel := &models.KnowledgeDoc{
+		docModel := &knowledgedomain.KnowledgeDoc{
 			TenantID:    doc.TenantID,
 			WorkspaceID: doc.KnowledgeID,
 			ProviderID:  ProviderID,
@@ -241,7 +240,7 @@ func (p *Provider) deleteByDocument(ctx context.Context, externalID string) erro
 	}
 	query := p.db.WithContext(ctx).Where("provider_id = ?", ProviderID).
 		Where("external_id = ?", externalID)
-	if err := query.Delete(&models.KnowledgeDoc{}).Error; err != nil {
+	if err := query.Delete(&knowledgedomain.KnowledgeDoc{}).Error; err != nil {
 		return fmt.Errorf("failed to delete existing document: %w", err)
 	}
 	return nil

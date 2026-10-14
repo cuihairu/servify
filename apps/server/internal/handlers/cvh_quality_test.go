@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	"servify/apps/server/internal/models"
 	qualitydelivery "servify/apps/server/internal/modules/quality/delivery"
+	qualitydomain "servify/apps/server/internal/modules/quality/domain"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -17,10 +17,10 @@ var _ qualitydelivery.HandlerService = (*cvhQualityService)(nil)
 
 // cvhQualityService 质检服务 inline mock。
 type cvhQualityService struct {
-	reviews    []models.QualityReview
+	reviews    []qualitydomain.QualityReview
 	total      int64
 	listErr    error
-	review     *models.QualityReview
+	review     *qualitydomain.QualityReview
 	getErr     error
 	confirmErr error
 	rescoreErr error
@@ -34,12 +34,12 @@ type cvhQualityService struct {
 	gotRescoreForce   bool
 }
 
-func (s *cvhQualityService) ListReviews(_ context.Context, query qualitydelivery.ReviewListQuery) ([]models.QualityReview, int64, error) {
+func (s *cvhQualityService) ListReviews(_ context.Context, query qualitydelivery.ReviewListQuery) ([]qualitydomain.QualityReview, int64, error) {
 	s.gotQuery = query
 	return s.reviews, s.total, s.listErr
 }
 
-func (s *cvhQualityService) GetReview(_ context.Context, sessionID string) (*models.QualityReview, error) {
+func (s *cvhQualityService) GetReview(_ context.Context, sessionID string) (*qualitydomain.QualityReview, error) {
 	s.gotGetSession = sessionID
 	return s.review, s.getErr
 }
@@ -99,7 +99,7 @@ func TestCvhRegisterQualityRoutes(t *testing.T) {
 func TestCvhQualityListReviews(t *testing.T) {
 	t.Run("all filters parsed", func(t *testing.T) {
 		svc := &cvhQualityService{
-			reviews: []models.QualityReview{{ID: 1, SessionID: "sess-1"}, {ID: 2, SessionID: "sess-2"}},
+			reviews: []qualitydomain.QualityReview{{ID: 1, SessionID: "sess-1"}, {ID: 2, SessionID: "sess-2"}},
 			total:   2,
 		}
 		q := "/api/quality/reviews?status=pending&severity=high&agent_id=9&customer_id=12&has_violations=true" +
@@ -167,7 +167,7 @@ func TestCvhQualityGetReview(t *testing.T) {
 		svc  *cvhQualityService
 		want int
 	}{
-		{"success", &cvhQualityService{review: &models.QualityReview{ID: 1, SessionID: "sess-1", Status: "scored"}}, http.StatusOK},
+		{"success", &cvhQualityService{review: &qualitydomain.QualityReview{ID: 1, SessionID: "sess-1", Status: "scored"}}, http.StatusOK},
 		{"not found", &cvhQualityService{getErr: qualitydelivery.ErrNotFound}, http.StatusNotFound},
 		{"generic error", &cvhQualityService{getErr: errors.New("boom")}, http.StatusInternalServerError},
 	}
@@ -177,7 +177,7 @@ func TestCvhQualityGetReview(t *testing.T) {
 			assert.Equal(t, tc.want, w.Code)
 			assert.Equal(t, "sess-1", tc.svc.gotGetSession)
 			if tc.want == http.StatusOK {
-				var got models.QualityReview
+				var got qualitydomain.QualityReview
 				dxcDecode(t, w, &got)
 				assert.Equal(t, "sess-1", got.SessionID)
 			} else {

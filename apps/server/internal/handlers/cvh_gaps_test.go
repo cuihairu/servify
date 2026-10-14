@@ -21,6 +21,7 @@ import (
 	authinfra "servify/apps/server/internal/modules/auth/infra"
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	"servify/apps/server/internal/modules/webhook/delivery"
+	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
 )
 
@@ -103,34 +104,34 @@ type cvhWebhookService struct {
 	deliverErr error
 }
 
-func (s *cvhWebhookService) ListEndpoints(context.Context) ([]models.WebhookEndpoint, error) {
+func (s *cvhWebhookService) ListEndpoints(context.Context) ([]webhookdomain.WebhookEndpoint, error) {
 	return nil, s.listErr
 }
 
-func (s *cvhWebhookService) CreateEndpoint(context.Context, *delivery.EndpointCreateRequest) (*models.WebhookEndpoint, string, error) {
+func (s *cvhWebhookService) CreateEndpoint(context.Context, *delivery.EndpointCreateRequest) (*webhookdomain.WebhookEndpoint, string, error) {
 	return nil, "", s.createErr
 }
 
-func (s *cvhWebhookService) UpdateEndpoint(context.Context, uint, *delivery.EndpointUpdateRequest) (*models.WebhookEndpoint, error) {
+func (s *cvhWebhookService) UpdateEndpoint(context.Context, uint, *delivery.EndpointUpdateRequest) (*webhookdomain.WebhookEndpoint, error) {
 	return nil, s.updateErr
 }
 
 func (s *cvhWebhookService) DeleteEndpoint(context.Context, uint) error { return s.deleteErr }
 
-func (s *cvhWebhookService) RotateEndpointSecret(context.Context, uint) (*models.WebhookEndpoint, string, error) {
+func (s *cvhWebhookService) RotateEndpointSecret(context.Context, uint) (*webhookdomain.WebhookEndpoint, string, error) {
 	return nil, "", s.rotateErr
 }
 
-func (s *cvhWebhookService) TestEndpoint(context.Context, uint) (*models.WebhookDelivery, error) {
+func (s *cvhWebhookService) TestEndpoint(context.Context, uint) (*webhookdomain.WebhookDelivery, error) {
 	return nil, s.testErr
 }
 
-func (s *cvhWebhookService) ListDeliveries(context.Context, delivery.DeliveryListQuery) ([]models.WebhookDelivery, int64, error) {
+func (s *cvhWebhookService) ListDeliveries(context.Context, delivery.DeliveryListQuery) ([]webhookdomain.WebhookDelivery, int64, error) {
 	return nil, 0, s.deliverErr
 }
 
-func (s *cvhWebhookService) RedeliverDelivery(context.Context, uint) (*models.WebhookDelivery, error) {
-	return &models.WebhookDelivery{ID: 1}, nil
+func (s *cvhWebhookService) RedeliverDelivery(context.Context, uint) (*webhookdomain.WebhookDelivery, error) {
+	return &webhookdomain.WebhookDelivery{ID: 1}, nil
 }
 
 func (s *cvhWebhookService) SupportedEvents() []string { return []string{"ping"} }

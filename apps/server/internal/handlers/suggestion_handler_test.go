@@ -16,6 +16,7 @@ import (
 	"gorm.io/gorm"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 )
 
@@ -29,7 +30,7 @@ func newTestDBForSuggestions(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.KnowledgeDoc{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &knowledgedomain.KnowledgeDoc{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db
@@ -50,7 +51,7 @@ func TestSuggestionHandler_Suggest_ReturnsIntentAndRecommendations(t *testing.T)
 			t.Fatalf("seed ticket: %v", err)
 		}
 	}
-	seedDocs := []models.KnowledgeDoc{
+	seedDocs := []knowledgedomain.KnowledgeDoc{
 		{Title: "登录问题排查", Content: "如果无法登录，请检查账号与网络。", Category: "faq", Tags: "login,error", CreatedAt: now.Add(-24 * time.Hour), UpdatedAt: now.Add(-24 * time.Hour)},
 		{Title: "退款政策", Content: "退款流程与账单说明。", Category: "billing", Tags: "refund,invoice", CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now.Add(-48 * time.Hour)},
 	}

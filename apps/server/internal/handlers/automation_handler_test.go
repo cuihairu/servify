@@ -21,6 +21,7 @@ import (
 	"servify/apps/server/internal/models"
 	automationapp "servify/apps/server/internal/modules/automation/application"
 	automationdelivery "servify/apps/server/internal/modules/automation/delivery"
+	automationdomain "servify/apps/server/internal/modules/automation/domain"
 )
 
 func newTestDBForAutomations(t *testing.T) *gorm.DB {
@@ -33,7 +34,7 @@ func newTestDBForAutomations(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &models.AutomationTrigger{}, &models.AutomationRun{}); err != nil {
+	if err := db.AutoMigrate(&models.Ticket{}, &models.TicketComment{}, &automationdomain.AutomationTrigger{}, &automationdomain.AutomationRun{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

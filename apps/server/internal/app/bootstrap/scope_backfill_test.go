@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -29,7 +30,7 @@ func newScopeBackfillDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.Session{}, &models.Message{}, &models.ConversationEvent{},
 		&models.Ticket{},
-		&models.Customer{}, &models.KnowledgeDoc{},
+		&models.Customer{}, &knowledgedomain.KnowledgeDoc{},
 		&models.TransferRecord{}, &models.WaitingRecord{}, &models.RoutingAssignment{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"servify/apps/server/internal/models"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +26,7 @@ func cxcNewKnowledgeRouter(svc *unitKnowledgeService) (*gin.Engine, *KnowledgeDo
 
 func TestCxcKnowledgeDocList(t *testing.T) {
 	svc := &unitKnowledgeService{
-		docs:  []models.KnowledgeDoc{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}},
+		docs:  []knowledgedomain.KnowledgeDoc{{ID: 1, Title: "A"}, {ID: 2, Title: "B"}},
 		total: 2,
 	}
 	r, _, _ := cxcNewKnowledgeRouter(svc)
@@ -86,7 +86,7 @@ func TestCxcKnowledgeDocList(t *testing.T) {
 }
 
 func TestCxcKnowledgeDocGet(t *testing.T) {
-	svc := &unitKnowledgeService{doc: &models.KnowledgeDoc{ID: 1, Title: "A", IsPublic: false}}
+	svc := &unitKnowledgeService{doc: &knowledgedomain.KnowledgeDoc{ID: 1, Title: "A", IsPublic: false}}
 	r, _, _ := cxcNewKnowledgeRouter(svc)
 
 	if w := cxcPerform(r, http.MethodGet, "/api/knowledge-docs/not-a-number", nil, ""); w.Code != http.StatusBadRequest {
@@ -108,14 +108,14 @@ func TestCxcKnowledgeDocGet(t *testing.T) {
 		t.Fatalf("public get non-public expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
 
-	svc.doc = &models.KnowledgeDoc{ID: 2, Title: "P", IsPublic: true}
+	svc.doc = &knowledgedomain.KnowledgeDoc{ID: 2, Title: "P", IsPublic: true}
 	if w := cxcPerform(r, http.MethodGet, "/public/kb/docs/2", nil, ""); w.Code != http.StatusOK {
 		t.Fatalf("public get expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
 func TestCxcKnowledgeDocCreateUpdateDelete(t *testing.T) {
-	svc := &unitKnowledgeService{doc: &models.KnowledgeDoc{ID: 1, Title: "A"}}
+	svc := &unitKnowledgeService{doc: &knowledgedomain.KnowledgeDoc{ID: 1, Title: "A"}}
 	r, _, _ := cxcNewKnowledgeRouter(svc)
 
 	// create: bad json

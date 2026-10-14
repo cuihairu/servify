@@ -16,8 +16,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
-	"servify/apps/server/internal/models"
 	knowledgedelivery "servify/apps/server/internal/modules/knowledge/delivery"
+	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
 )
 
 func newTestDBForKnowledgeDocs(t *testing.T) *gorm.DB {
@@ -30,7 +30,7 @@ func newTestDBForKnowledgeDocs(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.KnowledgeDoc{}, &models.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db
@@ -63,7 +63,7 @@ func TestKnowledgeDocHandler_AdminCRUD_And_PublicList(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", w.Code, w.Body.String())
 	}
-	var created models.KnowledgeDoc
+	var created knowledgedomain.KnowledgeDoc
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatalf("unmarshal created: %v body=%s", err, w.Body.String())
 	}
@@ -87,7 +87,7 @@ func TestKnowledgeDocHandler_AdminCRUD_And_PublicList(t *testing.T) {
 	if wInternal.Code != http.StatusCreated {
 		t.Fatalf("create internal status=%d body=%s", wInternal.Code, wInternal.Body.String())
 	}
-	var internalDoc models.KnowledgeDoc
+	var internalDoc knowledgedomain.KnowledgeDoc
 	if err := json.Unmarshal(wInternal.Body.Bytes(), &internalDoc); err != nil {
 		t.Fatalf("unmarshal internal doc: %v body=%s", err, wInternal.Body.String())
 	}
