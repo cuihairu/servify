@@ -31,6 +31,10 @@ const (
 	voiceFrameWebRTCError     = "webrtc-error"
 
 	voiceErrWebRTCUnavail = "webrtc_unavailable" // 音轨面建连失败（不收线，WS 通道继续可用）
+
+	// voiceMaxPendingCandidates 应答前置候选暂存上限：正常 ICE 收敛远低于此，
+	// 只挡无应答连接的候选洪水（超限截头保留最新）。
+	voiceMaxPendingCandidates = 32
 )
 
 // voiceClientMedia 单连接的 WebRTC 音轨面：一条 sendonly PCMU 轨 + PC 生命
@@ -39,6 +43,12 @@ const (
 type voiceClientMedia struct {
 	pc    *webrtc.PeerConnection
 	track *VoiceMediaTrack
+
+	// pendingCandidates 应答前置候选暂存：RFC 8829 允许候选先于 answer 到达
+	// （trickle 顺序无关），pion 的 AddICECandidate 在远端描述置位前直接报
+	// InvalidStateError（不缓冲），故先按帧序暂存、应答置位后冲刷。仅
+	// readPump 串行触达（answer/candidate 同连接同泵），无需加锁。
+	pendingCandidates []webrtc.ICECandidateInit
 
 	// runOnce 连接建立后启动节拍循环（只跑一次；断线重连不重启——轨的
 	// seq/ts 连续性由 VoiceMediaTrack 自身持有，重启只会重复计拍）。
@@ -158,7 +168,8 @@ func (c *VoiceClient) failVoiceMedia(media *voiceClientMedia, cause string) {
 	c.voiceWebRTCError("webrtc media unavailable")
 }
 
-// handleVoiceWebRTCAnswer 客户端应答：置远端描述后 ICE 自动推进。
+// handleVoiceWebRTCAnswer 客户端应答：置远端描述后 ICE 自动推进，并冲刷
+// 应答前置候选（远端描述未置位期间暂存的入站候选）。
 func (c *VoiceClient) handleVoiceWebRTCAnswer(data interface{}) {
 	c.Hub.mutex.RLock()
 	media := c.media
@@ -175,9 +186,15 @@ func (c *VoiceClient) handleVoiceWebRTCAnswer(data interface{}) {
 	if err := hookPeerConnectionSetRemoteDescription(media.pc, answer); err != nil {
 		logrus.Warnf("Voice webrtc answer rejected (client=%s): %v", c.ID, err)
 	}
+	for _, pending := range media.takePendingCandidates() {
+		if err := hookAddICECandidate(media.pc, pending); err != nil {
+			logrus.Warnf("Voice webrtc pending candidate rejected (client=%s): %v", c.ID, err)
+		}
+	}
 }
 
-// handleVoiceWebRTCCandidate 客户端候选注入。
+// handleVoiceWebRTCCandidate 客户端候选注入：应答未置远端描述时暂存
+// （pion 无候选缓冲，直接注入会被 InvalidStateError 丢弃）。
 func (c *VoiceClient) handleVoiceWebRTCCandidate(data interface{}) {
 	c.Hub.mutex.RLock()
 	media := c.media
@@ -191,9 +208,35 @@ func (c *VoiceClient) handleVoiceWebRTCCandidate(data interface{}) {
 		logrus.Warnf("Voice webrtc candidate decode failed (client=%s): %v", c.ID, err)
 		return
 	}
+	if media.pc.RemoteDescription() == nil {
+		if dropped := media.queuePendingCandidate(candidate); dropped > 0 {
+			logrus.Warnf("Voice webrtc pending candidates capped at %d (client=%s, dropped %d)",
+				voiceMaxPendingCandidates, c.ID, dropped)
+		}
+		return
+	}
 	if err := hookAddICECandidate(media.pc, candidate); err != nil {
 		logrus.Warnf("Voice webrtc candidate rejected (client=%s): %v", c.ID, err)
 	}
+}
+
+// queuePendingCandidate 暂存应答前置候选，超过上限截头保留最新并返回丢弃
+// 条数（防无应答连接的候选洪水无界增长）。
+func (m *voiceClientMedia) queuePendingCandidate(cand webrtc.ICECandidateInit) int {
+	m.pendingCandidates = append(m.pendingCandidates, cand)
+	if len(m.pendingCandidates) <= voiceMaxPendingCandidates {
+		return 0
+	}
+	dropped := len(m.pendingCandidates) - voiceMaxPendingCandidates
+	m.pendingCandidates = m.pendingCandidates[len(m.pendingCandidates)-voiceMaxPendingCandidates:]
+	return dropped
+}
+
+// takePendingCandidates 取空暂存候选（应答置位后冲刷用）。
+func (m *voiceClientMedia) takePendingCandidates() []webrtc.ICECandidateInit {
+	pending := m.pendingCandidates
+	m.pendingCandidates = nil
+	return pending
 }
 
 // signalFrame 定向信令帧投递（非阻塞：信号通道满只丢帧记日志，客户端以

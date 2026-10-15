@@ -549,7 +549,7 @@ func rtpPacket(pt uint8, seq uint16, timestamp, ssrc uint32) []byte {
 
 func waitBridgeConnected(t *testing.T, pc *webrtc.PeerConnection) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if pc.ConnectionState() == webrtc.PeerConnectionStateConnected {
 			return

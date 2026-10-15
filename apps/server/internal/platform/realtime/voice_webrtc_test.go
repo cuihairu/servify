@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,10 +91,11 @@ func attachTestMedia(t *testing.T, hub *VoiceHub, client *VoiceClient) *voiceCli
 	return media
 }
 
-// startVoiceFrameReader 连接的单读循环：候选帧回喂对端 PC（trickle 下行），
-// 其余帧投 channel 供主测试断言——gorilla 同一连接只允许一个读者，全部
-// 下行消费集中到这里。
-func startVoiceFrameReader(conn *websocket.Conn, pc *webrtc.PeerConnection) <-chan WebSocketMessage {
+// startVoiceFrameReader 连接的单读循环：全部下行帧（含 trickle 候选）投
+// channel 供主测试断言/注入——gorilla 同一连接只允许一个读者，全部下行
+// 消费集中到这里。候选不在此直接注入：客户端远端描述未置位的窗口内 pion
+// 丢弃候选（InvalidStateError），注入时序由主 goroutine 在 SRD 之后统一收敛。
+func startVoiceFrameReader(conn *websocket.Conn) <-chan WebSocketMessage {
 	frames := make(chan WebSocketMessage, 64)
 	go func() {
 		for {
@@ -108,16 +110,6 @@ func startVoiceFrameReader(conn *websocket.Conn, pc *webrtc.PeerConnection) <-ch
 			if json.Unmarshal(payload, &frame) != nil {
 				continue
 			}
-			if frame.Type == voiceFrameWebRTCCandidate && pc != nil {
-				if data, ok := frame.Data.(map[string]interface{}); ok {
-					raw, _ := json.Marshal(data["candidate"])
-					var candidate webrtc.ICECandidateInit
-					if json.Unmarshal(raw, &candidate) == nil {
-						_ = pc.AddICECandidate(candidate)
-					}
-				}
-				continue
-			}
 			select {
 			case frames <- frame:
 			default:
@@ -125,6 +117,33 @@ func startVoiceFrameReader(conn *websocket.Conn, pc *webrtc.PeerConnection) <-ch
 		}
 	}()
 	return frames
+}
+
+// waitForClientConnected 冲刷下行候选帧直至 PC 连通（trickle 服务端候选
+// 先于应答投进帧通道；客户端远端描述已置位，主 goroutine 统一注入收敛——
+// reader goroutine 直接注入会与 SRD 竞速丢候选）。
+func waitForClientConnected(t *testing.T, frames <-chan WebSocketMessage, pc *webrtc.PeerConnection) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for pc.ConnectionState() != webrtc.PeerConnectionStateConnected && time.Now().Before(deadline) {
+		select {
+		case frame := <-frames:
+			if frame.Type != voiceFrameWebRTCCandidate {
+				continue
+			}
+			if data, ok := frame.Data.(map[string]interface{}); ok {
+				raw, _ := json.Marshal(data["candidate"])
+				var candidate webrtc.ICECandidateInit
+				if json.Unmarshal(raw, &candidate) == nil {
+					_ = pc.AddICECandidate(candidate)
+				}
+			}
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if pc.ConnectionState() != webrtc.PeerConnectionStateConnected {
+		t.Fatalf("peer connection state = %s, want connected", pc.ConnectionState())
+	}
 }
 
 // waitVoiceFrameOfType 直读连接等待指定类型帧（无 reader goroutine 的用例）。
@@ -208,10 +227,10 @@ func TestVoiceWebRTCSignalingAndMedia(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientPC.Close() })
 
-	frames := startVoiceFrameReader(agentConn, clientPC)
+	frames := startVoiceFrameReader(agentConn)
 
-	// 服务端候选经 WS 下行（reader 回喂），客户端候选上行（载荷即
-	// ICECandidateInit 本体，与服务端 asICECandidate 的入站形态一致）。
+	// 客户端候选上行（载荷即 ICECandidateInit 本体，与服务端 asICECandidate
+	// 的入站形态一致）；候选可能先于应答到达，服务端按序暂存待应答冲刷。
 	clientPC.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand == nil {
 			return
@@ -243,7 +262,7 @@ func TestVoiceWebRTCSignalingAndMedia(t *testing.T) {
 		clientTrack <- track
 	})
 
-	waitBridgeConnected(t, clientPC)
+	waitForClientConnected(t, frames, clientPC)
 
 	// 访客管线（不上 WebRTC）是产出方：坐席音轨消费其产出 → 格式协商 wav。
 	visitorSink := runtime.sinkForSpeaker("s1", "visitor")
@@ -747,4 +766,154 @@ func TestVoiceWebRTCMediaCloseErrorPath(t *testing.T) {
 		t.Fatalf("close conn: %v", err)
 	}
 	waitMediaClosed(t, hub, client.ID)
+}
+
+// TestVoiceWebRTCCandidatesBufferedUntilAnswer 应答前置候选的服务端缓冲：
+// RFC 8829 允许候选先于 answer 到达（trickle 顺序无关），pion 在远端描述
+// 置位前不缓冲直接注入的候选（InvalidStateError 静默丢弃）——服务端暂存、
+// 应答置位后冲刷；无应答的候选洪水按 voiceMaxPendingCandidates 截头保留。
+func TestVoiceWebRTCCandidatesBufferedUntilAnswer(t *testing.T) {
+	runtime := newFakeVoiceRuntime()
+	_, url := newVoiceTestHub(t, runtime)
+	conn := dialVoice(t, url)
+	waitForStarts(t, runtime, 1)
+
+	var appliedMu sync.Mutex
+	applied := 0
+	hscovSetSeam(t, &hookAddICECandidateVar,
+		func(pc *webrtc.PeerConnection, cand webrtc.ICECandidateInit) error {
+			appliedMu.Lock()
+			applied++
+			appliedMu.Unlock()
+			return pc.AddICECandidate(cand)
+		})
+
+	mu := &sync.Mutex{}
+	frames := startVoiceFrameReader(conn)
+	clientPC, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("new peer connection: %v", err)
+	}
+	t.Cleanup(func() { _ = clientPC.Close() })
+
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCRequest, nil)
+	offerFrame := waitFrameOfType(t, frames, voiceFrameWebRTCOffer)
+	offer, err := asSessionDescription(offerFrame.Data)
+	if err != nil {
+		t.Fatalf("decode offer: %v", err)
+	}
+
+	// 33 条手造候选先于应答上行（服务端 SRD 未置位 → 暂存，超上限截头，
+	// 最早 1 条丢弃）。
+	for i := 0; i < voiceMaxPendingCandidates+1; i++ {
+		writeVoiceFrame(t, conn, mu, voiceFrameWebRTCCandidate, map[string]string{
+			"candidate": fmt.Sprintf("candidate:%d 1 UDP 2130706431 192.0.2.1 %d typ host", i, 5000+i),
+		})
+	}
+
+	// 暂存不注入：应答前不得有任何候选触达 PC。
+	time.Sleep(300 * time.Millisecond)
+	appliedMu.Lock()
+	if applied != 0 {
+		t.Fatalf("pre-answer candidates applied = %d, want 0 (must buffer until answer)", applied)
+	}
+	appliedMu.Unlock()
+
+	if err := clientPC.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("set remote: %v", err)
+	}
+	answer, err := clientPC.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("create answer: %v", err)
+	}
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCAnswer, answer)
+
+	waitApplied := func(want int) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			appliedMu.Lock()
+			got := applied
+			appliedMu.Unlock()
+			if got >= want {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		appliedMu.Lock()
+		got := applied
+		appliedMu.Unlock()
+		t.Fatalf("applied candidates = %d, want %d", got, want)
+	}
+	// 应答后冲刷：暂存的 32 条全部注入。
+	waitApplied(voiceMaxPendingCandidates)
+
+	// 应答置位后的新候选走直注（不再暂存）。
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCCandidate, map[string]string{
+		"candidate": "candidate:999 1 UDP 2130706431 192.0.2.1 9999 typ host",
+	})
+	waitApplied(voiceMaxPendingCandidates + 1)
+}
+
+// TestVoiceWebRTCCandidateInjectionErrors 候选注入两条 pion 拒绝分支：应答置位
+// 后冲刷暂存候选（handleVoiceWebRTCAnswer 的冲刷循环）与应答后新候选直注
+// （handleVoiceWebRTCCandidate 的直注路径）各命中一次缝线拒绝。与
+// TestVoiceWebRTCAnswerAndCandidateErrorBranches 互补——那个用例的候选在应答
+// 前置入，落进暂存路径，到不了 hook。拒绝只记日志，媒体面与音频喂入不受影响。
+func TestVoiceWebRTCCandidateInjectionErrors(t *testing.T) {
+	runtime := newFakeVoiceRuntime()
+	_, url := newVoiceTestHub(t, runtime)
+	conn := dialVoice(t, url)
+	waitForStarts(t, runtime, 1)
+
+	hscovSetSeam(t, &hookAddICECandidateVar,
+		func(pc *webrtc.PeerConnection, cand webrtc.ICECandidateInit) error {
+			return errors.New("synthetic candidate rejection")
+		})
+
+	mu := &sync.Mutex{}
+	frames := startVoiceFrameReader(conn)
+	clientPC, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatalf("new peer connection: %v", err)
+	}
+	t.Cleanup(func() { _ = clientPC.Close() })
+
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCRequest, nil)
+	offerFrame := waitFrameOfType(t, frames, voiceFrameWebRTCOffer)
+	offer, err := asSessionDescription(offerFrame.Data)
+	if err != nil {
+		t.Fatalf("decode offer: %v", err)
+	}
+
+	// 应答前置候选：落进暂存路径（不经 hook）。
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCCandidate, map[string]string{
+		"candidate": "candidate:1 1 UDP 2130706431 192.0.2.1 5001 typ host",
+	})
+
+	if err := clientPC.SetRemoteDescription(offer); err != nil {
+		t.Fatalf("set remote: %v", err)
+	}
+	answer, err := clientPC.CreateAnswer(nil)
+	if err != nil {
+		t.Fatalf("create answer: %v", err)
+	}
+	// 应答置位 → 冲刷暂存候选 → 冲刷循环拒绝分支。
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCAnswer, answer)
+	// 应答后新候选 → 直注路径拒绝分支。
+	writeVoiceFrame(t, conn, mu, voiceFrameWebRTCCandidate, map[string]string{
+		"candidate": "candidate:2 1 UDP 2130706431 192.0.2.1 5002 typ host",
+	})
+
+	// 拒绝不收线：音频上行仍可达。
+	if err := conn.WriteMessage(websocket.BinaryMessage, []byte{0x04}); err != nil {
+		t.Fatalf("write audio: %v", err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for len(runtime.stream.recordedChunks()) < 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("audio feed broken after candidate rejections")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

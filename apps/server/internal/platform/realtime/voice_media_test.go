@@ -5,21 +5,44 @@ import (
 	"encoding/binary"
 	"errors"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/pion/webrtc/v4"
 )
 
-// exchangeICE 双向注入 ICE 候选（trickle ICE，nil 表示收尾）。
-func exchangeICE(t *testing.T, from, to *webrtc.PeerConnection) {
-	t.Helper()
-	from.OnICECandidate(func(c *webrtc.ICECandidate) {
-		if c == nil {
-			return
-		}
-		_ = to.AddICECandidate(c.ToJSON())
-	})
+// iceCandidateBridge trickle 候选缓冲桥：对端远端描述置位前到达的候选先
+// 缓存（pion AddICECandidate 在 SRD 前不缓冲，直接注入即 InvalidStateError
+// 丢弃），markReady 后按到达顺序冲刷并接管直注——无丢候选窗口（RFC 8829
+// 候选缓冲要求的测试侧对齐）。
+type iceCandidateBridge struct {
+	mu      sync.Mutex
+	ready   bool
+	pending []webrtc.ICECandidateInit
+}
+
+func (b *iceCandidateBridge) add(pc *webrtc.PeerConnection, cand webrtc.ICECandidateInit) {
+	b.mu.Lock()
+	if !b.ready {
+		b.pending = append(b.pending, cand)
+		b.mu.Unlock()
+		return
+	}
+	b.mu.Unlock()
+	_ = pc.AddICECandidate(cand)
+}
+
+// markReady 在对端 SetRemoteDescription 完成后调用：冲刷暂存候选并直注后续。
+func (b *iceCandidateBridge) markReady(pc *webrtc.PeerConnection) {
+	b.mu.Lock()
+	b.ready = true
+	pending := b.pending
+	b.pending = nil
+	b.mu.Unlock()
+	for _, cand := range pending {
+		_ = pc.AddICECandidate(cand)
+	}
 }
 
 // buildTestWAV 组一个标准 RIFF/WAVE（PCM16）容器：fmt + data 两个 chunk。
@@ -357,6 +380,24 @@ func TestVoiceMediaTrack_LoopbackPCMU(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add transceiver: %v", err)
 	}
+
+	// trickle 候选经缓冲桥注入：handler 必须在 SetLocalDescription 之前挂
+	// （pion 不回放已产出的候选），且远端描述置位前到的候选先缓存——
+	// pion AddICECandidate 在 SRD 前不缓冲，直接注入即静默丢弃。置位后
+	// markReady 按到达顺序冲刷，无丢候选窗口。
+	toClient := &iceCandidateBridge{}
+	toServer := &iceCandidateBridge{}
+	serverPC.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c != nil {
+			toClient.add(clientPC, c.ToJSON())
+		}
+	})
+	clientPC.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c != nil {
+			toServer.add(serverPC, c.ToJSON())
+		}
+	})
+
 	offer, err := serverPC.CreateOffer(nil)
 	if err != nil {
 		t.Fatalf("create offer: %v", err)
@@ -367,6 +408,7 @@ func TestVoiceMediaTrack_LoopbackPCMU(t *testing.T) {
 	if err := clientPC.SetRemoteDescription(offer); err != nil {
 		t.Fatalf("client set remote: %v", err)
 	}
+	toClient.markReady(clientPC)
 	answer, err := clientPC.CreateAnswer(nil)
 	if err != nil {
 		t.Fatalf("create answer: %v", err)
@@ -377,10 +419,7 @@ func TestVoiceMediaTrack_LoopbackPCMU(t *testing.T) {
 	if err := serverPC.SetRemoteDescription(answer); err != nil {
 		t.Fatalf("server set remote: %v", err)
 	}
-
-	// ICE 候选双向注入。
-	exchangeICE(t, serverPC, clientPC)
-	exchangeICE(t, clientPC, serverPC)
+	toServer.markReady(serverPC)
 
 	waitBridgeConnected(t, serverPC)
 	waitBridgeConnected(t, clientPC)

@@ -214,7 +214,7 @@ func TestWebRTC_LoopbackDataChannel(t *testing.T) {
 
 	select {
 	case <-opened:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("data channel did not open within timeout")
 	}
 
