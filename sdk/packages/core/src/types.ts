@@ -378,6 +378,10 @@ export type ServifyVoiceEventMap = {
   'voice:final': [update: VoiceFinalUpdate];
   'voice:audio': [update: VoiceAudioUpdate];
   'voice:error': [update: VoiceErrorUpdate];
+  /** WebRTC 音轨（PROTOCOL §9.3）：对侧说话方译文的 PCMU 音轨就绪——宿主 new Audio + MediaStream 播放。 */
+  'voice:audio-track': [track: MediaStreamTrack];
+  /** 音轨面失败回执（PROTOCOL §9.3，非致命）：通道不收线，译文音频回落 voice:audio。 */
+  'voice:webrtc-error': [update: VoiceErrorUpdate];
 };
 
 // 客户侧推荐问题（P2-0）：首屏热门 / 会话内上下文联想。

@@ -11,6 +11,10 @@ import type { ServifyVoiceEventMap } from './types';
  * 帧族、事件面都不同；麦克风采集（getUserMedia → pcm16 24kHz 单声道分片）
  * 是宿主/demo 层职责，本类只负责把分片按二进制帧送上去（sendAudio）。
  *
+ * WebRTC 音轨面（PROTOCOL §9.3）：enableAudioTrack() 上行 webrtc-request，
+ * 服务端发起 offer（服务端是媒体发送方），本类自动应答并经 voice:audio-track
+ * 透出 PCMU 音轨；失败回 voice:webrtc-error（非致命，通道不收线）。
+ *
  * 无自动重连：语音流是活体采集会话，服务端无续传语义，`voice-error` 帧后
  * 必随 close（close 是流终止单一信号）——重启说话是用户显式动作，由宿主
  * 重新 connect。
@@ -25,11 +29,15 @@ export interface VoiceChannelOptions {
   accessToken?: string;
   /** WebSocket 工厂注入点；缺省用 globalThis.WebSocket（非 DOM 宿主需自行注入）。 */
   webSocketFactory?: WebSocketFactory;
+  /** RTCPeerConnection 工厂注入点（音轨面 §9.3）；缺省用 globalThis（非 DOM 宿主需自行注入）。 */
+  peerConnectionFactory?: () => RTCPeerConnection;
   debug?: boolean;
 }
 
 export class VoiceChannel extends EventEmitter<ServifyVoiceEventMap> {
   private ws: WebSocket | null = null;
+  private peer: RTCPeerConnection | null = null;
+  private trackRequested = false;
   private readonly options: VoiceChannelOptions;
 
   constructor(options: VoiceChannelOptions) {
@@ -85,10 +93,30 @@ export class VoiceChannel extends EventEmitter<ServifyVoiceEventMap> {
   }
 
   disconnect(): void {
+    this.closePeer();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
+  }
+
+  /**
+   * 请求 WebRTC 音轨面（PROTOCOL §9.3）：上行 webrtc-request，服务端回
+   * webrtc-offer 后自动应答并经 voice:audio-track 透出音轨。幂等：请求在途
+   * 或音轨面已建时忽略。未连接时 throw transport_disconnected（同 sendAudio）。
+   */
+  enableAudioTrack(): void {
+    if (this.trackRequested || this.peer) {
+      return;
+    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new ServifyError('Voice channel not connected', {
+        code: 'transport_disconnected',
+        retryable: true,
+      });
+    }
+    this.trackRequested = true;
+    this.sendFrame('webrtc-request', {});
   }
 
   /**
@@ -205,9 +233,101 @@ export class VoiceChannel extends EventEmitter<ServifyVoiceEventMap> {
         this.emit('voice:error', { code, message } satisfies VoiceErrorUpdate);
         return;
       }
+      case 'webrtc-offer': {
+        this.handleAudioTrackOffer(data);
+        return;
+      }
+      case 'webrtc-candidate': {
+        const candidate = data['candidate'];
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+          this.log('忽略畸形 webrtc-candidate 载荷');
+          return;
+        }
+        // 候选早于应答到达属正常（trickle）：注入失败不致命。
+        void this.peer
+          ?.addIceCandidate(candidate as RTCIceCandidateInit)
+          .catch((err) => this.log('音轨候选注入失败:', err));
+        return;
+      }
+      case 'webrtc-error': {
+        const { code, message } = data;
+        if (typeof code !== 'string' || typeof message !== 'string') {
+          return;
+        }
+        this.emit('voice:webrtc-error', { code, message } satisfies VoiceErrorUpdate);
+        return;
+      }
       default:
         this.log('未知语音帧类型:', frame.type);
     }
+  }
+
+  private sendFrame(type: string, data: unknown): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.ws.send(JSON.stringify({ type, data }));
+  }
+
+  /**
+   * 音轨协商（§9.3）：服务端是媒体发送方，offer 由服务端发起——置远端描述、
+   * 造应答、置本地描述后回 webrtc-answer；候选走 trickle 双向。任一步失败
+   * 只收本地音轨面（通道不收线，译文音频回落 voice:audio）。
+   */
+  private handleAudioTrackOffer(data: Record<string, unknown>): void {
+    const { type, sdp } = data;
+    if (type !== 'offer' || typeof sdp !== 'string') {
+      this.log('忽略畸形 webrtc-offer 载荷');
+      return;
+    }
+    this.closePeer(); // 重协商先收旧面（正常流里每连接至多一次）
+    const peer = this.createPeer();
+    if (!peer) {
+      return;
+    }
+    this.peer = peer;
+
+    peer.ontrack = (event) => {
+      this.emit('voice:audio-track', event.track);
+    };
+    peer.onicecandidate = (event) => {
+      if (!event.candidate) {
+        return; // 收尾空候选不上行
+      }
+      this.sendFrame('webrtc-candidate', event.candidate.toJSON());
+    };
+
+    void (async () => {
+      await peer.setRemoteDescription({ type: 'offer', sdp });
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      const local = peer.localDescription ?? answer;
+      this.sendFrame('webrtc-answer', local);
+    })().catch((err) => {
+      this.log('音轨协商失败:', err);
+      this.closePeer();
+      this.trackRequested = false; // 面已回收，允许重新 enableAudioTrack
+    });
+  }
+
+  private createPeer(): RTCPeerConnection | null {
+    if (this.options.peerConnectionFactory) {
+      return this.options.peerConnectionFactory();
+    }
+    const PC = (globalThis as { RTCPeerConnection?: new () => RTCPeerConnection })
+      .RTCPeerConnection;
+    if (!PC) {
+      this.log('RTCPeerConnection 不可用；请注入 peerConnectionFactory 以启用音轨面');
+      return null;
+    }
+    return new PC();
+  }
+
+  private closePeer(): void {
+    const peer = this.peer;
+    this.peer = null;
+    this.trackRequested = false;
+    peer?.close();
   }
 
   private log(...args: unknown[]): void {

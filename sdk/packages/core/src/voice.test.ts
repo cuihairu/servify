@@ -255,3 +255,152 @@ describe('VoiceChannel', () => {
     expect(errors).toEqual([{ code: 'stream_broken', message: 'audio stream broken' }]);
   });
 });
+
+// --- WebRTC 音轨面（PROTOCOL.md §9.3）：webrtc-request 发起 + offer 应答 +
+// 候选交换 + 音轨事件 + 非致命失败回执 ---
+
+class FakeVoicePeerConnection {
+  remoteDescription: unknown = null;
+  localDescription: { type: string; sdp: string } | null = null;
+  addedCandidates: unknown[] = [];
+  closed = false;
+
+  ontrack: ((event: { track: unknown }) => void) | null = null;
+  onicecandidate: ((event: { candidate: { toJSON(): unknown } | null }) => void) | null = null;
+
+  async setRemoteDescription(desc: unknown): Promise<void> {
+    this.remoteDescription = desc;
+  }
+
+  async createAnswer(): Promise<{ type: string; sdp: string }> {
+    return { type: 'answer', sdp: 'v=0 fake-answer' };
+  }
+
+  async setLocalDescription(desc: { type: string; sdp: string }): Promise<void> {
+    this.localDescription = desc;
+  }
+
+  async addIceCandidate(candidate: unknown): Promise<void> {
+    this.addedCandidates.push(candidate);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
+async function connectWithPeerFactory(): Promise<{
+  channel: VoiceChannel;
+  socket: FakeVoiceSocket;
+  peers: FakeVoicePeerConnection[];
+}> {
+  const peers: FakeVoicePeerConnection[] = [];
+  const { channel, socket } = await connectChannel({
+    peerConnectionFactory: () => {
+      const peer = new FakeVoicePeerConnection();
+      peers.push(peer);
+      return peer as unknown as RTCPeerConnection;
+    },
+  });
+  return { channel, socket, peers };
+}
+
+function sentTextFrames(socket: FakeVoiceSocket): Array<{ type: string; data: unknown }> {
+  return socket.sent
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((raw) => JSON.parse(raw) as { type: string; data: unknown });
+}
+
+describe('VoiceChannel WebRTC audio track (PROTOCOL.md §9.3)', () => {
+  beforeEach(() => {
+    FakeVoiceSocket.instances = [];
+  });
+
+  it('throws transport_disconnected when enabling the track before connect', async () => {
+    const channel = new VoiceChannel({
+      url: 'ws://localhost:8080/api/v1/ws/voice',
+      sessionId: 's1',
+      webSocketFactory: (url) => new FakeVoiceSocket(url) as unknown as WebSocket,
+    });
+    expect(() => channel.enableAudioTrack()).toThrow(/not connected/i);
+  });
+
+  it('sends webrtc-request once (idempotent) and answers the server offer', async () => {
+    const { channel, socket, peers } = await connectWithPeerFactory();
+
+    channel.enableAudioTrack();
+    channel.enableAudioTrack(); // 幂等：音轨面生命周期内不重复发起
+    expect(sentTextFrames(socket).filter((f) => f.type === 'webrtc-request')).toHaveLength(1);
+
+    socket.feed({ type: 'webrtc-offer', data: { type: 'offer', sdp: 'v=0 fake-offer' } });
+    await vi.waitFor(() => {
+      const answers = sentTextFrames(socket).filter((f) => f.type === 'webrtc-answer');
+      expect(answers).toHaveLength(1);
+      expect(answers[0].data).toEqual({ type: 'answer', sdp: 'v=0 fake-answer' });
+    });
+    expect(peers).toHaveLength(1);
+    expect(peers[0].remoteDescription).toEqual({ type: 'offer', sdp: 'v=0 fake-offer' });
+    expect(peers[0].localDescription).toEqual({ type: 'answer', sdp: 'v=0 fake-answer' });
+  });
+
+  it('emits voice:audio-track when the peer receives media and relays ICE candidates both ways', async () => {
+    const { channel, socket, peers } = await connectWithPeerFactory();
+    const track = {} as MediaStreamTrack;
+    const tracks: unknown[] = [];
+    channel.on('voice:audio-track', (t) => tracks.push(t));
+
+    channel.enableAudioTrack();
+    socket.feed({ type: 'webrtc-offer', data: { type: 'offer', sdp: 'v=0 fake-offer' } });
+    await vi.waitFor(() => expect(peers[0]?.localDescription).not.toBeNull());
+
+    peers[0].ontrack?.({ track });
+    expect(tracks).toEqual([track]);
+
+    peers[0].onicecandidate?.({ candidate: { toJSON: () => ({ candidate: 'c1' }) } });
+    const upCandidates = sentTextFrames(socket).filter((f) => f.type === 'webrtc-candidate');
+    expect(upCandidates).toEqual([{ type: 'webrtc-candidate', data: { candidate: 'c1' } }]);
+
+    socket.feed({ type: 'webrtc-candidate', data: { candidate: { candidate: 'c2' } } });
+    await vi.waitFor(() => expect(peers[0].addedCandidates).toEqual([{ candidate: 'c2' }]));
+
+    peers[0].onicecandidate?.({ candidate: null }); // 收尾空候选不上行
+    expect(sentTextFrames(socket).filter((f) => f.type === 'webrtc-candidate')).toHaveLength(1);
+  });
+
+  it('emits non-fatal voice:webrtc-error without closing the channel', async () => {
+    const { channel, socket } = await connectChannel();
+    const errors: unknown[] = [];
+    channel.on('voice:webrtc-error', (u) => errors.push(u));
+
+    socket.feed({ type: 'webrtc-error', data: { code: 'webrtc_unavailable', message: 'webrtc media unavailable' } });
+    expect(errors).toEqual([{ code: 'webrtc_unavailable', message: 'webrtc media unavailable' }]);
+    expect(channel.isConnected()).toBe(true); // 不收线：纯 WS 语义继续可用
+  });
+
+  it('ignores malformed webrtc frames and uplink-only types silently', async () => {
+    const { channel, socket, peers } = await connectWithPeerFactory();
+    const events: unknown[] = [];
+    channel.on('voice:webrtc-error', (u) => events.push(u));
+    channel.on('voice:audio-track', (t) => events.push(t));
+
+    socket.feed({ type: 'webrtc-offer', data: { sdp: 'v=0' } }); // 缺 type 字段
+    socket.feed({ type: 'webrtc-offer', data: { type: 'answer', sdp: 'v=0' } }); // 非 offer
+    socket.feed({ type: 'webrtc-candidate', data: {} }); // 缺 candidate
+    socket.feed({ type: 'webrtc-error', data: { code: 'webrtc_unavailable' } }); // 缺 message
+    socket.feed({ type: 'webrtc-request', data: {} }); // 上行词表误回：忽略
+    socket.feed({ type: 'webrtc-answer', data: { type: 'answer', sdp: 'v=0' } }); // 上行词表误回：忽略
+
+    expect(events).toHaveLength(0);
+    expect(peers).toHaveLength(0); // 未误建音轨面
+  });
+
+  it('closes the peer connection on disconnect', async () => {
+    const { channel, socket, peers } = await connectWithPeerFactory();
+    channel.enableAudioTrack();
+    socket.feed({ type: 'webrtc-offer', data: { type: 'offer', sdp: 'v=0 fake-offer' } });
+    await vi.waitFor(() => expect(peers[0]?.localDescription).not.toBeNull());
+
+    channel.disconnect();
+    expect(peers[0].closed).toBe(true);
+  });
+});

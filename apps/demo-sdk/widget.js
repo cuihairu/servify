@@ -482,6 +482,7 @@
     var voiceStartPending = false;
     var voiceLiveBubbles = {}; // speaker → 正在说 直播行
     var voiceCaptions = {};    // speaker:seq → 终句字幕气泡（voice:audio 回填播放）
+    var voiceTrackEl = null;   // WebRTC 音轨播放元素（PROTOCOL §9.3，持续播放对侧译文）
 
     function speakerLabel(speaker) {
       return speaker === 'agent' ? '客服' : '访客';
@@ -552,6 +553,27 @@
       });
     }
 
+    // WebRTC 音轨（PROTOCOL §9.3）：对侧说话方译文的 PCMU 轨就绪即持续播放
+    //（比逐句 base64 播报平滑；自动播放被拦截时静默失败——voice:audio 的
+    // ▶ 按钮兜底仍在）。轨播放与字幕播报并行：轨是"听到对方"，字幕是"看到对方"。
+    function attachVoiceTrack(track) {
+      if (typeof MediaStream !== 'function' || typeof Audio !== 'function') return;
+      if (!voiceTrackEl) {
+        voiceTrackEl = new Audio();
+        voiceTrackEl.autoplay = true;
+      }
+      voiceTrackEl.srcObject = new MediaStream([track]);
+      voiceTrackEl.play().catch(function () {});
+    }
+
+    function cleanupVoiceTrack() {
+      if (voiceTrackEl) {
+        voiceTrackEl.pause();
+        voiceTrackEl.srcObject = null;
+        voiceTrackEl = null;
+      }
+    }
+
     function startMicCapture() {
       var capture = new voiceSdk.MicCapture();
       micCapture = capture;
@@ -602,6 +624,9 @@
       channel.on('connected', function () {
         voiceStartPending = false;
         startMicCapture();
+        // 译文音轨（PROTOCOL §9.3）：服务端是媒体发送方，请求即协商；失败
+        // 非致命（voice:webrtc-error 只提示，通道不收线），字幕播报兜底。
+        try { channel.enableAudioTrack(); } catch (e) { /* 未连接竞态：下一连接再试 */ }
       });
 
       channel.on('disconnected', function () {
@@ -610,6 +635,7 @@
         voiceActive = false;
         clearLiveBubbles();
         cleanupMicCapture();
+        cleanupVoiceTrack();
         voiceChannel = null;
         updateMicButton();
         if (wasLive) addMsg('system', '语音连接已断开');
@@ -618,6 +644,11 @@
       channel.on('voice:delta', function (u) { renderVoiceLive(u.speaker, u.turn_seq, u.text); });
       channel.on('voice:final', renderVoiceFinal);
       channel.on('voice:audio', attachVoiceAudio);
+      channel.on('voice:audio-track', attachVoiceTrack);
+      channel.on('voice:webrtc-error', function (u) {
+        // 非致命（通道不收线）：字幕 + voice:audio 播报继续可用
+        addMsg('system', 'WebRTC 音轨不可用：' + u.message);
+      });
       channel.on('voice:error', function (u) {
         addMsg('system', '语音不可用：' + u.message);
         stopVoice();
@@ -636,6 +667,7 @@
       voiceActive = false;
       clearLiveBubbles();
       cleanupMicCapture();
+      cleanupVoiceTrack();
       if (voiceChannel) {
         voiceChannel.disconnect();
         voiceChannel = null;
