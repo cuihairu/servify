@@ -167,7 +167,33 @@ agent_chatting ──(增量补拉发现会话 closed)──> closed
 - **方向自辨**：服务端按会话广播（同会话所有语音连接都收到全部帧），客户端按 `speaker` 自行过滤渲染方向（我说话的字幕给对方看，对方说话的字幕给我看）；
 - **命名族**：kebab-case（§7 约定，新帧优先族）。
 
+### 9.3 WebRTC 音轨信令（Phase 3，服务端已落地）
+
+同一条语音通道上的音轨信令词表（`platform/realtime/voice_webrtc.go`）——译文
+TTS 音频除走 `translation-audio` 外，可按需同步走一条 **PCMU（G.711 μ-law，
+8kHz，40ms/帧，payload 0）sendonly 音轨**直接播放。帧信封与上行方向如表：
+
+| type | 方向 | 载荷 `data` | 语义 |
+|---|---|---|---|
+| `webrtc-request` | 客户端 → 服务端（文本帧） | 空 | 请求建连音轨面。**幂等**：媒体面已存在时静默忽略（沿用既有 offer 应答） |
+| `webrtc-offer` | 服务端 → 请求方 | SDP 对象 `{type, sdp}` | 服务端是媒体**发送方**，故由服务端发起 offer（与会话通道 §3 客户端发起方向相反） |
+| `webrtc-answer` | 请求方 → 服务端 | SDP 对象 `{type, sdp}` | 客户端应答；失败仅告警不回错误帧（协商不因此中断） |
+| `webrtc-candidate` | 双向 | 上行 `data` = `ICECandidateInit` 本体；下行 `data` = `{candidate: <ICECandidateInit>}` | trickle ICE（两侧非对称：上行不包壳，下行带 `candidate` 键）；未知/非法载荷忽略 |
+| `webrtc-error` | 服务端 → 请求方 | `{code, message}` | 建连/协商失败回执，`code` 恒为 `webrtc_unavailable`；**不收线**（WS 通道与音频上行继续可用，客户端走 `translation-audio` 兜底） |
+
+- **不请求即不建连**：未发 `webrtc-request` 的连接拿不到音轨，`translation-audio`
+  帧契约零变更（纯 WS 客户端不受影响）；
+- **格式协商（服务端自动）**：某说话方的译文音频存在对侧消费音轨（对侧发过
+  `webrtc-request`）时，服务端按 **wav（PCM16）** 合成并进音轨，`translation-audio`
+  帧同步改带 `format: "wav"`（原 base64 字节不变）；无音轨消费方时回落 provider
+  默认（`mp3`）；
+- **路由（服务端定向）**：`speaker` 管线产出的译文音频投进**对侧说话方**客户端
+  的音轨（与 WS 广播的 `speaker` 自辨语义同方向——产出归对侧消费）；
+- **无历史重发/无自动重连**：断连即丢轨（与 §9 上行的无重放口径一致），重连后
+  重新 `webrtc-request`。
+
 ### 9.2 三端消费状态
 
 - **core 已消费（上行 + 下行）**：`VoiceChannel`（`sdk/packages/core/src/voice.ts`）承载本通道下行——`voice:delta`/`voice:final`/`voice:audio`/`voice:error` 四个独立事件（载荷保持线序 snake_case，与 `MessageTranslation` 同族）；`sendAudio()` 提供二进制上行传输。上行采集由 `MicCapture`（`sdk/packages/core/src/voice-capture.ts`，刀二c）补齐：getUserMedia → ScriptProcessor → pcm16 24kHz 小端分片（选 ScriptProcessor 而非 AudioWorklet：processor 模块经 Blob URL 加载会被服务端 `default-src 'self'` CSP 拦截，ScriptProcessor 无模块加载全浏览器可用）；无自动重连（语音流是活体采集会话，服务端无续传，重启说话是用户显式动作）。fixtures 回放断言四帧全载荷事件 + 会话通道管理器对误入语音帧静默忽略；demo 挂件（`apps/demo-sdk/widget.js`）消费两类的端到端形态：麦克风按钮 + 字幕气泡 + 译文播放；
 - **Android / iOS**：会话通道核心按未知类型静默忽略语音帧（`UnknownIgnored`——两通道零共享，会话通道不该见到这些帧）；语音通道客户端与上行/字幕渲染消费是后续刀，届时更新本节与 fixtures 端级偏差声明。
+- **WebRTC 音轨（§9.3）**：服务端面已落地；客户端消费（`webrtc-request` 发起 + PCMU 音轨播放）是后续刀，core `VoiceChannel` 现按未知类型静默忽略五个 webrtc-* 帧（与本节上行/下行四事件契约不冲突）。

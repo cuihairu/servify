@@ -92,6 +92,12 @@
   `webrtc_service.go` 的 trackForwarder 转发注册表 + 桥接加轨重协商，
   音轨下发可复用——服务端把 TTS 音频写成 `TrackLocalStaticRTP` 挂轨即走
   同一条 fan-out/重协商链路，见 docs/remote-assistance-status.md）。
+  **2026-10-15 服务端面已落地**（客户端消费随后）：语音通道上的
+  `webrtc-request` 信令（`voice_webrtc.go`，帧词表 PROTOCOL §9.3）建
+  sendonly PCMU 轨（`voice_media.go`：wav 解码 → 重采样 → G.711 μ-law →
+  RTP 40ms 节拍）；译文音频按"对侧说话方"路由进音轨，`VoiceSink.AudioFormat()`
+  协商 TTS 按 wav 合成（无音轨消费方回落 mp3，Phase 2 帧契约零变更）；
+  建连失败回 `webrtc-error` 不收线（纯 WS 兜底）。
 - **每说话方一条 pipeline**，双向翻译 = 两条 pipeline 独立运行，避免
   单 pipeline 语言状态互相污染。
 - **语音走独立 WS 通道 `/api/v1/ws/voice`（刀二b-2 已落地）**：上行二进制
