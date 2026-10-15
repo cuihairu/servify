@@ -417,24 +417,26 @@ func TestCxcMetricsIngestBadJSONAndZeroValue(t *testing.T) {
 	if w := cxcPerform(r, http.MethodPost, "/ingest", cxcJSONBody(payload), "application/json"); w.Code != http.StatusOK {
 		t.Fatalf("ingest expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	snap := agg.Snapshot()
+	snap := agg.SnapshotSeries()
 	series, ok := snap["agent_online_gauge"]
 	if !ok {
 		t.Fatalf("expected agent_online_gauge in snapshot: %#v", snap)
 	}
-	var gotVal float64
-	var gotKey string
-	for k, v := range series {
-		gotKey, gotVal = k, v
+	if len(series) != 1 {
+		t.Fatalf("expected single series, got %d", len(series))
 	}
-	if gotVal != 1 {
-		t.Fatalf("expected normalized value 1, got %v", gotVal)
+	if series[0].Value != 1 {
+		t.Fatalf("expected normalized value 1, got %v", series[0].Value)
 	}
-	if !strings.Contains(gotKey, `source="agent"`) || !strings.Contains(gotKey, `region="cn"`) {
-		t.Fatalf("expected merged labels in key %q", gotKey)
+	labels := series[0].Labels
+	if labels["source"] != "agent" || labels["region"] != "cn" {
+		t.Fatalf("expected merged labels, got %q", labels)
 	}
-	if strings.Contains(gotKey, "tenant") || strings.Contains(gotKey, "session") {
-		t.Fatalf("unexpected tenant/session labels in key %q", gotKey)
+	if _, ok := labels["tenant"]; ok {
+		t.Fatalf("unexpected tenant label in %q", labels)
+	}
+	if _, ok := labels["session"]; ok {
+		t.Fatalf("unexpected session label in %q", labels)
 	}
 }
 

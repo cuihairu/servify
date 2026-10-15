@@ -55,20 +55,6 @@ func (a *MetricsAggregator) Add(name string, labels map[string]string, v float64
 	s.value += v
 }
 
-func (a *MetricsAggregator) Snapshot() map[string]map[string]float64 {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	out := make(map[string]map[string]float64, len(a.counter))
-	for n, series := range a.counter {
-		m := make(map[string]float64, len(series))
-		for k, s := range series {
-			m[k] = s.value
-		}
-		out[n] = m
-	}
-	return out
-}
-
 // MetricSeries 是聚合器内一条时间序列的快照。
 type MetricSeries struct {
 	Labels map[string]string

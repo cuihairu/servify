@@ -48,7 +48,7 @@ func TestMetricsIngest_BasicFlow(t *testing.T) {
 		t.Fatalf("ingest status = %d, body=%s", w.Code, w.Body.String())
 	}
 
-	snap := agg.Snapshot()
+	snap := agg.SnapshotSeries()
 	if len(snap) == 0 {
 		t.Fatalf("expected some counters after ingest")
 	}

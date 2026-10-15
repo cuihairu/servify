@@ -54,6 +54,8 @@ const operatePages = [
   '/multi-instance-boundary',
   '/metrics-glossary',
   '/metrics-spec',
+  '/design/metrics-snapshot-read-exit',
+  '/design/tenant-quota-policy',
   '/perf-baseline',
   '/ai-observability-policy',
 ];
@@ -72,6 +74,7 @@ const aiPages = [
   '/WEKNORA_INTEGRATION',
   '/RAGFLOW_INTEGRATION',
   '/KNOWLEDGE_BASE_LANDSCAPE',
+  '/design/knowledge-provider-selection-policy',
   '/ai-fallback-behavior',
 ];
 
