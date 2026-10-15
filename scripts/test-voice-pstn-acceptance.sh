@@ -358,7 +358,10 @@ PY
   assert_status "200" "$RESPONSE_STATUS" "outbound_invite"
 
   OUTBOUND_HIT=false
-  for _ in $(seq 1 30); do
+  # 投递由 webhook-delivery worker 周期领取（30s 间隔）：入队落在 tick 后
+  # 最坏 ~30s 才投递，轮询预算须留足余量（曾两现 +29.1s 才到、错过整数秒
+  # 末次 grep 的竞态红）。
+  for _ in $(seq 1 45); do
     if grep -q "$OUT_CALL_ID" "$RECEIVED_FILE" 2>/dev/null; then
       OUTBOUND_HIT=true
       break
