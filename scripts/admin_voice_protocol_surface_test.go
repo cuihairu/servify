@@ -27,9 +27,10 @@ const (
 	protocolPath       = "../sdk/PROTOCOL.md"
 )
 
-// protocolSection 抓 PROTOCOL.md 里指定标题（如 "## 9."）到下一个 "## " 或
-// 文件尾之间的正文。
-func protocolSection(t *testing.T, heading string) string {
+// protocolSubsection 抓 PROTOCOL.md 里指定子节标题（如 "### 9.1"）到下一个
+// "###" 子节或所属章节结束之间的正文——比整节抓取多一层子节边界，用于把
+// 帧表解析限定在单个子节的表内。
+func protocolSubsection(t *testing.T, heading string) string {
 	t.Helper()
 	raw, err := os.ReadFile(protocolPath)
 	if err != nil {
@@ -44,28 +45,30 @@ func protocolSection(t *testing.T, heading string) string {
 			}
 			continue
 		}
-		if strings.HasPrefix(line, "## ") {
+		if strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "## ") {
 			end = i
 			break
 		}
 	}
 	if start == -1 {
-		t.Fatalf("%s 未找到节标题 %q（PROTOCOL 章节被改名？）", protocolPath, heading)
+		t.Fatalf("%s 未找到子节标题 %q（PROTOCOL 子节被改名？）", protocolPath, heading)
 	}
 	return strings.Join(lines[start:end], "\n")
 }
 
-// voiceProtocolFrameNames 解析 §9 下行帧载荷表的 type 列（行首 `| \`frame\“）。
+// voiceProtocolFrameNames 解析 §9.1 下行帧族载荷表的 type 列（行首 `| \`frame\“）。
+// 只认 §9.1 的表：§9.3 的 webrtc-* 信令帧是按需音轨面（管理端不发
+// webrtc-request 即收不到，不属管理端消费面），不得混入本比较。
 func voiceProtocolFrameNames(t *testing.T) []string {
 	t.Helper()
-	section := protocolSection(t, "## 9.")
+	section := protocolSubsection(t, "### 9.1")
 	frameRow := regexp.MustCompile(`(?m)^\|\s*` + "`" + `([a-z-]+)` + "`")
 	var names []string
 	for _, m := range frameRow.FindAllStringSubmatch(section, -1) {
 		names = append(names, m[1])
 	}
 	if len(names) == 0 {
-		t.Fatalf("PROTOCOL §9 未解析出任何下行帧型（载荷表格式变了？）")
+		t.Fatalf("PROTOCOL §9.1 未解析出任何下行帧型（载荷表格式变了？）")
 	}
 	sort.Strings(names)
 	return names
