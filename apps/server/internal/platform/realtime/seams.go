@@ -28,4 +28,10 @@ var (
 	hookNewTrackLocalStaticRTP = func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
 		return webrtc.NewTrackLocalStaticRTP(codec, id, streamID)
 	}
+	// hookTrackLocalStaticRTPWrite 是语音音轨写包缝线：DTLS 链路破损时 pion
+	// 才会在写包返回错误（轨关闭场景下 pion 反而静默 no-op），注入错误覆盖
+	// 节拍循环的收线分支。
+	hookTrackLocalStaticRTPWrite = func(track *webrtc.TrackLocalStaticRTP, packet []byte) (int, error) {
+		return track.Write(packet)
+	}
 )
