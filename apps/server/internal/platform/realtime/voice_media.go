@@ -45,12 +45,12 @@ var voiceMuEnd = []int{0xFF, 0x1FF, 0x3FF, 0x7FF, 0xFFF, 0x1FFF, 0x3FFF, 0x7FFF}
 // voiceNextSSRC 每轨分配唯一 SSRC（RTP 流标识，PC 内唯一即可，不要求可预测）。
 var voiceNextSSRC uint32 = 0x10000001
 
-// voiceMuLawTrackCodec 轨的 codec 能力（PCMU/8000/1）。
+// voiceMuLawTrackCodec 轨的 codec 能力（PCMU/8000/1）；payload type 由 SDP
+// 协商决定（pion 默认 media engine 广播 PCMU 为 payload 0）。
 var voiceMuLawTrackCodec = webrtc.RTPCodecCapability{
-	MimeType:    webrtc.MimeTypePCMU,
-	ClockRate:   voiceClockRate,
-	Channels:    1,
-	PayloadType: voicePayloadType,
+	MimeType:   webrtc.MimeTypePCMU,
+	ClockRate: voiceClockRate,
+	Channels:  1,
 }
 
 // pcm16FromWAV 解析 RIFF/WAVE（PCM16）：遍历 chunk 找 fmt 与 data，多声道按
