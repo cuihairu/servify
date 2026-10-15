@@ -1,9 +1,10 @@
 // quota_gate.go 租户级配额限流检查点（Phase 3，docs/design/tenant-quota-policy.md）：
 // HandlerService 装饰器，装配层包在翻译门面外（REST / 实时自动翻译 / 历史
 // 批量标注 / 语音通道统一过门）。租户从 ctx 认证信息提取（platformauth），
-// 无租户（内部/未认证路径）静默跳过；计量存储为 Redis 固定窗（platform/
-// quotameter，窗口锚点入键名），meter 故障 fail-open——保护面不该反过来
-// 打死翻译主链路。
+// 无租户（内部/未认证路径）静默跳过；限额经 QuotaLimitSource 按租户解析
+// （system 默认 + 租户/工作区覆盖，docs/design/tenant-quota-policy.md §4）；
+// 计量存储为 Redis 固定窗（platform/quotameter，窗口锚点入键名），meter
+// 故障 fail-open——保护面不该反过来打死翻译主链路。
 package delivery
 
 import (
@@ -40,28 +41,51 @@ type QuotaMeter interface {
 	Add(ctx context.Context, scope string, amount int64) (int64, error)
 }
 
+// QuotaLimitSource 运行时限额解析端口（装配层注入 configscope 解析：system
+// 默认 + 租户/工作区覆盖，租户身份取自 ctx）。nil 表示静态系统限额。
+type QuotaLimitSource func(ctx context.Context) int64
+
 // quotaGate 装饰任意 HandlerService：按 ctx 租户键控固定窗配额。
 type quotaGate struct {
-	next   HandlerService
-	meter  QuotaMeter
-	limit  int64
-	unit   string
-	logger *logrus.Logger
+	next     HandlerService
+	meter    QuotaMeter
+	limit    int64
+	unit     string
+	logger   *logrus.Logger
+	limitSrc QuotaLimitSource
 }
 
 // 编译期确认实现端口。
 var _ HandlerService = (*quotaGate)(nil)
 
-// NewQuotaGate 装饰 next（unit/limit/window 由装配层校验后注入；logger
-// 为 nil 时用标准 logger）。next 为 nil 时不装饰（装配层跳过配额面）。
-func NewQuotaGate(next HandlerService, meter QuotaMeter, limit int64, unit string, logger *logrus.Logger) HandlerService {
+// NewQuotaGateWithLimitSource 装饰 next（unit/limit/window 由装配层校验后
+// 注入；limitSrc 为租户覆盖限额解析器，可为 nil 用静态 limit；logger 为
+// nil 时用标准 logger）。next 或 meter 为 nil 时不装饰（装配层跳过配额面）。
+func NewQuotaGateWithLimitSource(next HandlerService, meter QuotaMeter, limit int64, unit string, limitSrc QuotaLimitSource, logger *logrus.Logger) HandlerService {
 	if next == nil || meter == nil {
 		return next
 	}
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
-	return &quotaGate{next: next, meter: meter, limit: limit, unit: unit, logger: logger}
+	return &quotaGate{next: next, meter: meter, limit: limit, unit: unit, logger: logger, limitSrc: limitSrc}
+}
+
+// NewQuotaGate 静态系统限额的便捷构造（无租户覆盖解析器）。
+func NewQuotaGate(next HandlerService, meter QuotaMeter, limit int64, unit string, logger *logrus.Logger) HandlerService {
+	return NewQuotaGateWithLimitSource(next, meter, limit, unit, nil, logger)
+}
+
+// limitFor 解析当次调用限额：解析源返回 <=0 回落静态限额（覆盖未设置或
+// 解析失败均按系统默认把关，不因覆盖读取失败误拒服务）。
+func (g *quotaGate) limitFor(ctx context.Context) int64 {
+	if g.limitSrc == nil {
+		return g.limit
+	}
+	if source := g.limitSrc(ctx); source > 0 {
+		return source
+	}
+	return g.limit
 }
 
 // Translate 过门语义：
@@ -76,11 +100,12 @@ func (g *quotaGate) Translate(ctx context.Context, cmd TranslateCommand) (Transl
 	if tenant == "" {
 		return g.next.Translate(ctx, cmd)
 	}
+	limit := g.limitFor(ctx)
 	if g.unit == QuotaUnitRequests {
 		total, err := g.meter.Add(ctx, tenant, 1)
 		if err != nil {
 			g.logger.Warnf("translation quota meter failed (fail-open): %v", err)
-		} else if total > g.limit {
+		} else if total > limit {
 			return TranslateResult{}, ErrTranslationQuotaExceeded
 		}
 		return g.next.Translate(ctx, cmd)
@@ -90,7 +115,7 @@ func (g *quotaGate) Translate(ctx context.Context, cmd TranslateCommand) (Transl
 		g.logger.Warnf("translation quota meter failed (fail-open): %v", err)
 		return g.next.Translate(ctx, cmd)
 	}
-	if used >= g.limit {
+	if used >= limit {
 		return TranslateResult{}, ErrTranslationQuotaExceeded
 	}
 	res, err := g.next.Translate(ctx, cmd)
@@ -113,11 +138,12 @@ func (g *quotaGate) BatchTranslate(ctx context.Context, cmd BatchTranslateComman
 	if tenant == "" {
 		return g.next.BatchTranslate(ctx, cmd)
 	}
+	limit := g.limitFor(ctx)
 	if g.unit == QuotaUnitRequests {
 		total, err := g.meter.Add(ctx, tenant, 1)
 		if err != nil {
 			g.logger.Warnf("translation quota meter failed (fail-open): %v", err)
-		} else if total > g.limit {
+		} else if total > limit {
 			return BatchTranslateResult{}, ErrTranslationQuotaExceeded
 		}
 		return g.next.BatchTranslate(ctx, cmd)
@@ -127,7 +153,7 @@ func (g *quotaGate) BatchTranslate(ctx context.Context, cmd BatchTranslateComman
 		g.logger.Warnf("translation quota meter failed (fail-open): %v", err)
 		return g.next.BatchTranslate(ctx, cmd)
 	}
-	if used >= g.limit {
+	if used >= limit {
 		return BatchTranslateResult{}, ErrTranslationQuotaExceeded
 	}
 	return g.next.BatchTranslate(ctx, cmd)

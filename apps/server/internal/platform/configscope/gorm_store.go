@@ -12,14 +12,15 @@ import (
 )
 
 type ScopedConfigDocument struct {
-	TenantID    string                          `json:"tenant_id,omitempty"`
-	WorkspaceID string                          `json:"workspace_id,omitempty"`
-	Portal      *config.PortalConfig            `json:"portal,omitempty"`
-	OpenAI      *config.OpenAIConfig            `json:"openai,omitempty"`
-	Dify        *config.DifyConfig              `json:"dify,omitempty"`
-	WeKnora     *config.WeKnoraConfig           `json:"weknora,omitempty"`
-	RagFlow     *config.RagFlowConfig           `json:"ragflow,omitempty"`
-	SessionRisk *config.SessionRiskPolicyConfig `json:"session_risk,omitempty"`
+	TenantID         string                                 `json:"tenant_id,omitempty"`
+	WorkspaceID      string                                 `json:"workspace_id,omitempty"`
+	Portal           *config.PortalConfig                   `json:"portal,omitempty"`
+	OpenAI           *config.OpenAIConfig                   `json:"openai,omitempty"`
+	Dify             *config.DifyConfig                     `json:"dify,omitempty"`
+	WeKnora          *config.WeKnoraConfig                  `json:"weknora,omitempty"`
+	RagFlow          *config.RagFlowConfig                  `json:"ragflow,omitempty"`
+	SessionRisk      *config.SessionRiskPolicyConfig        `json:"session_risk,omitempty"`
+	TranslationQuota *config.TranslationQuotaOverrideConfig `json:"translation_quota,omitempty"`
 }
 
 type GormConfigStore struct {
@@ -102,6 +103,13 @@ func (s *GormConfigStore) UpsertTenantConfig(ctx context.Context, tenantID strin
 		}
 		row.SessionRiskJSON = encoded
 	}
+	if payload.TranslationQuota != nil {
+		encoded, err := encodeConfig(*payload.TranslationQuota)
+		if err != nil {
+			return nil, err
+		}
+		row.TranslationQuotaJSON = encoded
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
@@ -182,6 +190,13 @@ func (s *GormConfigStore) UpsertWorkspaceConfig(ctx context.Context, tenantID, w
 		}
 		row.SessionRiskJSON = encoded
 	}
+	if payload.TranslationQuota != nil {
+		encoded, err := encodeConfig(*payload.TranslationQuota)
+		if err != nil {
+			return nil, err
+		}
+		row.TranslationQuotaJSON = encoded
+	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
@@ -224,6 +239,11 @@ func tenantRowToDocument(row models.TenantConfig) (*ScopedConfigDocument, error)
 	} else if ok {
 		doc.SessionRisk = &cfg
 	}
+	if cfg, ok, err := decodeConfig[config.TranslationQuotaOverrideConfig](row.TranslationQuotaJSON); err != nil {
+		return nil, err
+	} else if ok {
+		doc.TranslationQuota = &cfg
+	}
 	return doc, nil
 }
 
@@ -258,6 +278,11 @@ func workspaceRowToDocument(row models.WorkspaceConfig) (*ScopedConfigDocument, 
 		return nil, err
 	} else if ok {
 		doc.SessionRisk = &cfg
+	}
+	if cfg, ok, err := decodeConfig[config.TranslationQuotaOverrideConfig](row.TranslationQuotaJSON); err != nil {
+		return nil, err
+	} else if ok {
+		doc.TranslationQuota = &cfg
 	}
 	return doc, nil
 }

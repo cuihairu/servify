@@ -3,7 +3,8 @@
 > 状态：**已代决待核**（2026-10-15 巡检代决，用户可推翻；推翻只需改本文，
 > 无代码耦合）。对应 todo「Phase 3 语音 → 租户级配额限流」卡点
 > 「unit/window 口径未注册，需产品拍板」。本文给出对比表与单个明确推荐；
-> enforcement 已按 §4 落地（2026-10-15，默认 `enabled: false`）。
+> enforcement 已按 §4 落地（2026-10-15，默认 `enabled: false`）；租户/
+> 工作区覆盖限额链按 §4.4 落地（2026-10-16，同轮代决）。
 
 ## 1. 现状（2026-10-15 实测）
 
@@ -50,7 +51,7 @@ translation:
   `TokenUsage` 累计计；窗口固定滚动语义（不做 token bucket 平滑）。
 - 默认 `enabled: false`：口径先注册，enforcement 缺口补齐前不产生行为。
 - 与 `docs/realtime-translation-design.md` §3.2/§4.6 对齐：configscope
-  租户覆盖（tenant/workspace 层覆盖 system 值），超配额 429。
+  租户覆盖（tenant/workspace 层覆盖 system 值，§4.4 已落地），超配额 429。
 
 **计量存储选型（2026-10-15 已代决）**：Redis 固定窗，不建 DB 用量表。
 理由：本仓生产配置本就钉 redis（config.yml 启动校验拒绝 inmemory），
@@ -86,16 +87,49 @@ translation:
 unit/window/limit 与 redis 可用性，非法即启动失败（fail-fast）。四份
 config 模板已同步（schema 注册过 config_template_lint 门禁）。
 
+### 4.4 configscope 租户覆盖（2026-10-16 已代决落地）
+
+`§3` 与 realtime-translation-design §3.2 的「configscope 租户覆盖」对齐
+承诺补齐（原缺口记为「待真实需求排期」，本轮按代决权限直接落地，用户可
+推翻——推翻只改本文与本节实现）：
+
+1. **存储**：迁移 `000024_translation_quota_scoped_config` 给
+   `tenant_configs` / `workspace_configs` 各加一列
+   `translation_quota_json` text（对齐 `rag_flow_json` /
+   `session_risk_json` 列形态，sqlite 走 AutoMigrate），与
+   `models.TenantConfig.TranslationQuotaJSON` /
+   `models.WorkspaceConfig.TranslationQuotaJSON` 逐列对齐（列级对账
+   守卫 `TestMigrationChainCoversAllModelColumns` 通过）。列内仅存
+   `{limit: N}`（`config.TranslationQuotaOverrideConfig`）。
+2. **解析**：`configscope.Resolver.ResolveTranslationQuotaLimit(ctx)` 三层
+   合并——system 默认（`translation.quota.limit`）+ 租户覆盖 + 工作区
+   覆盖（工作区优先，与 portal/openai/session_risk 的层级口径一致）；
+   覆盖值 `<= 0` 视为未设置回落上一层，provider 出错或无覆盖行同样回落
+   （保护面不因覆盖读取失败误拒服务）。租户与工作区身份取自
+   `platformauth` ctx，provider 形态复用现有 gorm provider。
+3. **检查点**：`QuotaGate` 增 `QuotaLimitSource func(ctx) int64` 端口，
+   每请求解析当次限额（`NewQuotaGate` 保持静态限额语义，
+   `NewQuotaGateWithLimitSource` 接解析器）；`Translate` /
+   `BatchTranslate` 两面统一走 `limitFor(ctx)`。装配层
+   `buildTranslationQuotaGate` 在有主库时构造 resolver 注入，无主库部署
+   形态传 nil（只按系统默认限额把关，零行为差异）。
+4. **只覆盖 `limit`**：`enabled` / `unit` / `window` 保持系统级——
+   `window` 已进入 Redis 计量键名，按租户切窗需另一组计量键与键空间
+   治理，收益不足以抵复杂度；`unit` 与计量语义绑定（requests 预占窗 /
+   tokens 事后记账），租户级混用会产生口径歧义。
+
 **本轮明确不做**（后续缺口）：
 
-- **configscope 租户覆盖**：现行实现为全局单一 limit（`limit` 对所有
-  租户同值）；按租户/工作区差异化配额需 configscope resolver 接入
-  （§3 与 realtime-translation-design §3.2 的对齐承诺），待租户级覆盖
-  真实需求出现再排期。
+- **管理端写面**：覆盖值目前只有读路径生效（覆盖行需直接写
+  tenant_configs / workspace_configs）；管理端 scope 表单、字段校验与
+  审计段需 `scoped_config_handler` 新 scope 分支 + admin 前端表单，属
+  产品面而非 enforcement 缺口，单独立项。
 - **实时/历史路径的租户 plumbing**：这些路径的 ctx 尚未携带租户时按
   无租户跳过（过门但不计量）；REST translate 端点已带认证租户全量生效。
 
 ## 5. 推翻方式
 
 口径推翻 = 改本文 + 改 `todo.md` 对应注记 + `translation.quota.enabled`
-回 false（默认即关，无数据回滚成本；meter 键靠 TTL 自清理）。
+回 false（默认即关，无数据回滚成本；meter 键靠 TTL 自清理）。覆盖限额
+链推翻（§4.4）= 清空 `translation_quota_json` 覆盖行即回到系统单值口径
+（列可留，无覆盖行=无覆盖；migration 为纯加列，无回滚需求）。

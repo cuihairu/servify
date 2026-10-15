@@ -40,6 +40,7 @@ func TestUpsertTenantConfigEncodeErrorBranches(t *testing.T) {
 		{"dify", ScopedConfigDocument{Dify: &config.DifyConfig{}}},
 		{"weknora", ScopedConfigDocument{WeKnora: &config.WeKnoraConfig{}}},
 		{"session_risk", ScopedConfigDocument{SessionRisk: &config.SessionRiskPolicyConfig{}}},
+		{"translation_quota", ScopedConfigDocument{TranslationQuota: &config.TranslationQuotaOverrideConfig{}}},
 	}
 
 	for _, tc := range cases {
@@ -70,6 +71,7 @@ func TestUpsertWorkspaceConfigEncodeErrorBranches(t *testing.T) {
 		{"dify", ScopedConfigDocument{Dify: &config.DifyConfig{}}},
 		{"weknora", ScopedConfigDocument{WeKnora: &config.WeKnoraConfig{}}},
 		{"session_risk", ScopedConfigDocument{SessionRisk: &config.SessionRiskPolicyConfig{}}},
+		{"translation_quota", ScopedConfigDocument{TranslationQuota: &config.TranslationQuotaOverrideConfig{}}},
 	}
 
 	for _, tc := range cases {

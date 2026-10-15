@@ -55,6 +55,16 @@ func TestCov3TenantRowToDocumentInvalidSections(t *testing.T) {
 	if _, _, err := store.GetTenantConfig(context.Background(), "tenant-risk-bad"); err == nil {
 		t.Fatal("expected session risk decode error")
 	}
+
+	if err := store.db.Create(&models.TenantConfig{
+		TenantID:             "tenant-quota-bad",
+		TranslationQuotaJSON: "\tinvalid: {yaml",
+	}).Error; err != nil {
+		t.Fatalf("seed translation quota row: %v", err)
+	}
+	if _, _, err := store.GetTenantConfig(context.Background(), "tenant-quota-bad"); err == nil {
+		t.Fatal("expected translation quota decode error")
+	}
 }
 
 func TestCov3WorkspaceRowToDocumentInvalidSections(t *testing.T) {
@@ -72,6 +82,8 @@ func TestCov3WorkspaceRowToDocumentInvalidSections(t *testing.T) {
 			row.DifyJSON = body
 		case "session_risk":
 			row.SessionRiskJSON = body
+		case "translation_quota":
+			row.TranslationQuotaJSON = body
 		}
 		if err := store.db.Create(row).Error; err != nil {
 			t.Fatalf("seed row: %v", err)
@@ -96,6 +108,11 @@ func TestCov3WorkspaceRowToDocumentInvalidSections(t *testing.T) {
 	seed("tenant-w", "ws-risk", "session_risk", "\tbad yaml")
 	if _, _, err := store.GetWorkspaceConfig(context.Background(), "tenant-w", "ws-risk"); err == nil {
 		t.Fatal("expected session risk decode error")
+	}
+
+	seed("tenant-w", "ws-quota", "translation_quota", "\tinvalid: {yaml")
+	if _, _, err := store.GetWorkspaceConfig(context.Background(), "tenant-w", "ws-quota"); err == nil {
+		t.Fatal("expected translation quota decode error")
 	}
 }
 

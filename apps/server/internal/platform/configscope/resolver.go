@@ -31,20 +31,28 @@ type SessionRiskConfigProvider interface {
 	LoadSessionRiskConfig(ctx context.Context) (config.SessionRiskPolicyConfig, bool, error)
 }
 
+// TranslationQuotaConfigProvider 加载租户/工作区的翻译配额覆盖值
+// （docs/design/tenant-quota-policy.md §4：只覆盖 limit）。
+type TranslationQuotaConfigProvider interface {
+	LoadTranslationQuotaConfig(ctx context.Context) (config.TranslationQuotaOverrideConfig, bool, error)
+}
+
 type Resolver struct {
-	system               *config.Config
-	tenantPortal         PortalConfigProvider
-	workspacePortal      PortalConfigProvider
-	tenantOpenAI         OpenAIConfigProvider
-	workspaceOpenAI      OpenAIConfigProvider
-	tenantDify           DifyConfigProvider
-	workspaceDify        DifyConfigProvider
-	tenantWeKnora        WeKnoraConfigProvider
-	workspaceWeKnora     WeKnoraConfigProvider
-	tenantRagFlow        RagFlowConfigProvider
-	workspaceRagFlow     RagFlowConfigProvider
-	tenantSessionRisk    SessionRiskConfigProvider
-	workspaceSessionRisk SessionRiskConfigProvider
+	system                    *config.Config
+	tenantPortal              PortalConfigProvider
+	workspacePortal           PortalConfigProvider
+	tenantOpenAI              OpenAIConfigProvider
+	workspaceOpenAI           OpenAIConfigProvider
+	tenantDify                DifyConfigProvider
+	workspaceDify             DifyConfigProvider
+	tenantWeKnora             WeKnoraConfigProvider
+	workspaceWeKnora          WeKnoraConfigProvider
+	tenantRagFlow             RagFlowConfigProvider
+	workspaceRagFlow          RagFlowConfigProvider
+	tenantSessionRisk         SessionRiskConfigProvider
+	workspaceSessionRisk      SessionRiskConfigProvider
+	tenantTranslationQuota    TranslationQuotaConfigProvider
+	workspaceTranslationQuota TranslationQuotaConfigProvider
 }
 
 func NewResolver(cfg *config.Config, opts ...Option) *Resolver {
@@ -128,6 +136,18 @@ func WithTenantSessionRiskProvider(provider SessionRiskConfigProvider) Option {
 func WithWorkspaceSessionRiskProvider(provider SessionRiskConfigProvider) Option {
 	return func(r *Resolver) {
 		r.workspaceSessionRisk = provider
+	}
+}
+
+func WithTenantTranslationQuotaProvider(provider TranslationQuotaConfigProvider) Option {
+	return func(r *Resolver) {
+		r.tenantTranslationQuota = provider
+	}
+}
+
+func WithWorkspaceTranslationQuotaProvider(provider TranslationQuotaConfigProvider) Option {
+	return func(r *Resolver) {
+		r.workspaceTranslationQuota = provider
 	}
 }
 
@@ -306,6 +326,36 @@ func (r *Resolver) ResolveSessionRisk(ctx context.Context, runtime *config.Sessi
 		resolved = mergeSessionRiskConfig(resolved, *runtime)
 	}
 	return resolved
+}
+
+// ResolveTranslationQuotaLimit 解析翻译配额限额：system 默认 + 租户覆盖 +
+// 工作区覆盖（工作区优先级最高）。覆盖值 <=0 视为未设置（回落上一层），
+// provider 出错或无覆盖行同样回落——保护面不因覆盖读取失败而误拒服务
+// （docs/design/tenant-quota-policy.md §4）。
+func (r *Resolver) ResolveTranslationQuotaLimit(ctx context.Context) int64 {
+	var limit int64
+	if r != nil && r.system != nil {
+		limit = r.system.Translation.Quota.Limit
+	}
+	if r != nil && r.tenantTranslationQuota != nil {
+		if next, ok, err := r.tenantTranslationQuota.LoadTranslationQuotaConfig(ctx); err == nil && ok {
+			limit = mergeTranslationQuotaLimit(limit, next)
+		}
+	}
+	if r != nil && r.workspaceTranslationQuota != nil {
+		if next, ok, err := r.workspaceTranslationQuota.LoadTranslationQuotaConfig(ctx); err == nil && ok {
+			limit = mergeTranslationQuotaLimit(limit, next)
+		}
+	}
+	return limit
+}
+
+// mergeTranslationQuotaLimit 只在覆盖值明确为正时覆盖（<=0 表示未设置）。
+func mergeTranslationQuotaLimit(base int64, overlay config.TranslationQuotaOverrideConfig) int64 {
+	if overlay.Limit > 0 {
+		return overlay.Limit
+	}
+	return base
 }
 
 func mergeOpenAIConfig(base config.OpenAIConfig, overlay config.OpenAIConfig) config.OpenAIConfig {

@@ -244,3 +244,66 @@ func TestGateBatchAnonymousSkipsGate(t *testing.T) {
 		t.Fatalf("anonymous batch must not consume meter, usage = %d", meter.usage)
 	}
 }
+
+// TestNewQuotaGateWithLimitSourceNilSafety 解析源为 nil 时等价静态限额
+// （无 configscope provider 的部署形态），nil next / nil meter 不装饰。
+func TestNewQuotaGateWithLimitSourceNilSafety(t *testing.T) {
+	next := &stubNext{}
+	if NewQuotaGateWithLimitSource(nil, &stubQuotaMeter{}, 10, QuotaUnitRequests, nil, nil) != nil {
+		t.Fatal("nil next must return nil (no gate)")
+	}
+	if got := NewQuotaGateWithLimitSource(next, nil, 10, QuotaUnitRequests, nil, nil); got != next {
+		t.Fatalf("nil meter must return bare next, got %v", got)
+	}
+	// 已用量 50 < 静态限额 100：放行（覆盖解析器缺失不改判）。
+	gate := NewQuotaGateWithLimitSource(next, &stubQuotaMeter{usage: 50}, 100, QuotaUnitTokens, nil, logrus.StandardLogger())
+	if _, err := gate.Translate(tenantCtx(), TranslateCommand{Text: "hi"}); err != nil {
+		t.Fatalf("nil source must fall back to static limit: %v", err)
+	}
+	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
+		t.Fatalf("nil source batch must pass: %v", err)
+	}
+}
+
+// TestGateLimitSourceOverride 租户覆盖限额按 ctx 解析生效（requests / tokens
+// 两单位、Translate / BatchTranslate 两面），解析返回 <=0 回落静态限额。
+func TestGateLimitSourceOverride(t *testing.T) {
+	ctx := tenantCtx()
+	// requests：静态 10、覆盖 1 → 第 2 次调用被拒（静态限额下会放行）。
+	meter := &stubQuotaMeter{}
+	gate := NewQuotaGateWithLimitSource(&stubNext{}, meter, 10, QuotaUnitRequests,
+		func(context.Context) int64 { return 1 }, logrus.StandardLogger())
+	if _, err := gate.Translate(ctx, TranslateCommand{Text: "hi"}); err != nil {
+		t.Fatalf("first call within override quota: %v", err)
+	}
+	if _, err := gate.Translate(ctx, TranslateCommand{Text: "hi"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
+		t.Fatalf("second call expected ErrTranslationQuotaExceeded, got %v", err)
+	}
+	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
+		t.Fatalf("batch expected ErrTranslationQuotaExceeded, got %v", err)
+	}
+
+	// tokens：已用量 6 ≥ 覆盖 5 → 被拒且不记账。
+	meter2 := &stubQuotaMeter{usage: 6}
+	gate2 := NewQuotaGateWithLimitSource(&stubNext{}, meter2, 100, QuotaUnitTokens,
+		func(context.Context) int64 { return 5 }, logrus.StandardLogger())
+	if _, err := gate2.Translate(ctx, TranslateCommand{Text: "hi"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
+		t.Fatalf("tokens call expected ErrTranslationQuotaExceeded, got %v", err)
+	}
+	if meter2.records != nil {
+		t.Fatalf("rejected call must not consume meter, records = %v", meter2.records)
+	}
+	if _, err := gate2.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
+		t.Fatalf("tokens batch expected ErrTranslationQuotaExceeded, got %v", err)
+	}
+
+	// 解析返回 0（覆盖未设置）：回落静态 100 → 放行。
+	gate3 := NewQuotaGateWithLimitSource(&stubNext{}, meter2, 100, QuotaUnitTokens,
+		func(context.Context) int64 { return 0 }, logrus.StandardLogger())
+	if _, err := gate3.Translate(ctx, TranslateCommand{Text: "hi"}); err != nil {
+		t.Fatalf("unset override must fall back to static limit: %v", err)
+	}
+	if _, err := gate3.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
+		t.Fatalf("unset override batch must pass: %v", err)
+	}
+}

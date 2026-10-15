@@ -121,9 +121,10 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 	// 租户级配额限流（Phase 3，docs/design/tenant-quota-policy.md）：enabled
 	// 时在翻译门面外再包一层 QuotaGate（Redis 固定窗计量，meter 故障
 	// fail-open），REST / 实时自动翻译 / 历史批量标注 / 语音通道统一过门
-	// （构建于全部下游消费之前）；enabled=false 零行为，校验见
-	// buildTranslationQuotaGate。
-	gated, err := buildTranslationQuotaGate(rt.Config, rt.Redis, aiAssembly.Translation, rt.Logger)
+	// （构建于全部下游消费之前）；限额按 ctx 租户经 configscope 解析
+	// （system 默认 + 租户/工作区覆盖，无主库部署形态只用系统值）；
+	// enabled=false 零行为，校验见 buildTranslationQuotaGate。
+	gated, err := buildTranslationQuotaGate(rt.Config, rt.DB, rt.Redis, aiAssembly.Translation, rt.Logger)
 	if err != nil {
 		return nil, err
 	}

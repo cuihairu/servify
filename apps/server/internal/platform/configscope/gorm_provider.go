@@ -77,6 +77,15 @@ func (p *GormTenantConfigProvider) LoadSessionRiskConfig(ctx context.Context) (c
 	return decodeConfig[config.SessionRiskPolicyConfig](cfg.SessionRiskJSON)
 }
 
+func (p *GormTenantConfigProvider) LoadTranslationQuotaConfig(ctx context.Context) (config.TranslationQuotaOverrideConfig, bool, error) {
+	var cfg models.TenantConfig
+	ok, err := p.load(ctx, &cfg)
+	if !ok || err != nil {
+		return config.TranslationQuotaOverrideConfig{}, ok, err
+	}
+	return decodeConfig[config.TranslationQuotaOverrideConfig](cfg.TranslationQuotaJSON)
+}
+
 func (p *GormTenantConfigProvider) load(ctx context.Context, out *models.TenantConfig) (bool, error) {
 	if p == nil || p.db == nil {
 		return false, nil
@@ -158,6 +167,15 @@ func (p *GormWorkspaceConfigProvider) LoadSessionRiskConfig(ctx context.Context)
 		return config.SessionRiskPolicyConfig{}, ok, err
 	}
 	return decodeConfig[config.SessionRiskPolicyConfig](cfg.SessionRiskJSON)
+}
+
+func (p *GormWorkspaceConfigProvider) LoadTranslationQuotaConfig(ctx context.Context) (config.TranslationQuotaOverrideConfig, bool, error) {
+	var cfg models.WorkspaceConfig
+	ok, err := p.load(ctx, &cfg)
+	if !ok || err != nil {
+		return config.TranslationQuotaOverrideConfig{}, ok, err
+	}
+	return decodeConfig[config.TranslationQuotaOverrideConfig](cfg.TranslationQuotaJSON)
 }
 
 func (p *GormWorkspaceConfigProvider) load(ctx context.Context, out *models.WorkspaceConfig) (bool, error) {

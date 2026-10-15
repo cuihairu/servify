@@ -127,6 +127,15 @@ type TranslationQuotaConfig struct {
 	Window  string `yaml:"window"`
 }
 
+// TranslationQuotaOverrideConfig 租户/工作区对翻译配额的覆盖值（configscope
+// 租户覆盖层，tenant_configs/workspace_configs.translation_quota_json）：只
+// 覆盖 limit——enabled/unit/window 属系统级口径（window 进 Redis 计量键名，
+// 按租户切窗需另一组计量键，见 docs/design/tenant-quota-policy.md §4）。
+// Limit<=0 表示不覆盖（回落系统值）。
+type TranslationQuotaOverrideConfig struct {
+	Limit int64 `yaml:"limit" json:"limit"`
+}
+
 // TURNCredentialConfig 对接 coturn use-auth-secret 时间限凭据模式：
 // secret 只存服务端，短时凭据运行时生成并经信令下发；URL 为空即禁用。
 type TURNCredentialConfig struct {
