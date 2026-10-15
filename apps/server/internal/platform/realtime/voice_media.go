@@ -48,7 +48,7 @@ var voiceNextSSRC uint32 = 0x10000001
 // voiceMuLawTrackCodec 轨的 codec 能力（PCMU/8000/1）；payload type 由 SDP
 // 协商决定（pion 默认 media engine 广播 PCMU 为 payload 0）。
 var voiceMuLawTrackCodec = webrtc.RTPCodecCapability{
-	MimeType:   webrtc.MimeTypePCMU,
+	MimeType:  webrtc.MimeTypePCMU,
 	ClockRate: voiceClockRate,
 	Channels:  1,
 }
@@ -110,8 +110,9 @@ func pcm16FromWAV(data []byte) (samples []int16, sampleRate int, channels int, e
 	return samples, rate, ch, nil
 }
 
-// resamplePCM16 线性插值重采样到 toHz。同率原样返回，空输入返回空；越界位置
-// 取末样本钳位（不补零，零填充留给写帧环节按帧长对齐）。
+// resamplePCM16 线性插值重采样到 toHz。同率原样返回，空输入返回空。
+// outLen = ⌊len/ratio⌋ ⇒ 末点位置恒 < len(pcm)，可直接索引；线性插值恒落在
+// 两端样本之间（frac ∈ [0,1)，float 截断不越 int16 值域），无需钳位。
 func resamplePCM16(pcm []int16, fromHz, toHz int) []int16 {
 	if fromHz <= 0 || toHz <= 0 || len(pcm) == 0 || fromHz == toHz {
 		return pcm
@@ -126,18 +127,10 @@ func resamplePCM16(pcm []int16, fromHz, toHz int) []int16 {
 	for i := 0; i < outLen; i++ {
 		pos := float64(i) * ratio
 		i0 := int(pos)
-		if i0 > last {
-			i0 = last
-		}
 		frac := pos - float64(i0)
 		v := float64(pcm[i0])
 		if i0+1 <= last {
 			v += float64(pcm[i0+1]-pcm[i0]) * frac
-		}
-		if v > 32767 {
-			v = 32767
-		} else if v < -32768 {
-			v = -32768
 		}
 		out[i] = int16(v)
 	}

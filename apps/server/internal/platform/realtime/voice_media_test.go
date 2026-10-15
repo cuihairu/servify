@@ -69,25 +69,25 @@ func TestVoiceMedia_Pcm16FromWAV(t *testing.T) {
 
 	t.Run("stereo averaged to mono", func(t *testing.T) {
 		// 立体声左右声道不同：构造 [L, R] 交错，验证按声道平均。
-		// buildTestWAV 对每声道写同一值，这里手工构造交错。
+		// buildTestWAV 对每声道写同一值，这里手工构造交错（8000Hz）。
 		data := []byte{
-			'L', 'R', 'I', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E',
+			'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E',
 			'f', 'm', 't', ' ', 0x10, 0, 0, 0,
 			0x01, 0x00, // PCM
 			0x02, 0x00, // 2 channels
-			0x00, 0x0B, 0x00, 0x00, // 28000 Hz
-			0x00, 0x16, 0x00, 0x00, // byte rate
+			0x40, 0x1F, 0x00, 0x00, // 8000 Hz
+			0x00, 0x7D, 0x00, 0x00, // byte rate 32000
 			0x04, 0x00, // block align
 			0x10, 0x00, // 16 bit
 			'd', 'a', 't', 'a', 0x08, 0, 0, 0,
-			0xC0, 0xFF, 0x80, 0x00, // sample0: L=-100, R=0 → avg=-50
+			0x9C, 0xFF, 0x00, 0x00, // sample0: L=-100, R=0 → avg=-50
 			0x00, 0x00, 0x00, 0x00, // sample1: 0
 		}
 		samples, rate, ch, err := pcm16FromWAV(data)
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		if rate != 28000 || ch != 2 || len(samples) != 2 {
+		if rate != 8000 || ch != 2 || len(samples) != 2 {
 			t.Fatalf("got rate=%d ch=%d n=%d", rate, ch, len(samples))
 		}
 		if samples[0] != -50 {
@@ -97,7 +97,11 @@ func TestVoiceMedia_Pcm16FromWAV(t *testing.T) {
 
 	t.Run("errors", func(t *testing.T) {
 		cases := map[string][]byte{
-			"not riff":     []byte("XXXX" + buildTestWAV([]int16{1}, 8000, 1)[4:]),
+			"not riff": func() []byte {
+				b := buildTestWAV([]int16{1}, 8000, 1)
+				copy(b, "XXXX")
+				return b
+			}(),
 			"truncated":    buildTestWAV([]int16{1}, 8000, 1)[:20],
 			"missing data": buildTestWAV([]int16{1}, 8000, 1)[:36], // 只到 fmt
 			"non pcm": func() []byte {
@@ -115,6 +119,16 @@ func TestVoiceMedia_Pcm16FromWAV(t *testing.T) {
 				b[22] = 0 // channels 位置
 				return b
 			}(),
+			"short fmt chunk": []byte{
+				'R', 'I', 'F', 'F', 0x24, 0, 0, 0, 'W', 'A', 'V', 'E',
+				'f', 'm', 't', ' ', 4, 0, 0, 0, 0, 0, 0, 0,
+				'd', 'a', 't', 'a', 0, 0, 0, 0,
+			},
+			"odd data": func() []byte {
+				b := buildTestWAV([]int16{1}, 8000, 1)
+				b[40] = 1 // data chunk size = 1 字节
+				return b
+			}(),
 		}
 		for name, payload := range cases {
 			if _, _, _, err := pcm16FromWAV(payload); err == nil {
@@ -126,13 +140,13 @@ func TestVoiceMedia_Pcm16FromWAV(t *testing.T) {
 
 func TestVoiceMedia_Resample(t *testing.T) {
 	same := []int16{100, -200, 300}
-	if got := resamplePCM16(same, 8000, 8000); got != same {
+	if got := resamplePCM16(same, 8000, 8000); len(got) == 0 || &got[0] != &same[0] {
 		t.Fatalf("same-rate must return the input slice")
 	}
 	if got := resamplePCM16(nil, 8000, 8000); got != nil {
 		t.Fatalf("empty input must return nil, got %v", got)
 	}
-	if got := resamplePCM16(same, 0, 8000); got != same {
+	if got := resamplePCM16(same, 0, 8000); len(got) == 0 || &got[0] != &same[0] {
 		t.Fatalf("zero fromHz must return the input slice")
 	}
 
@@ -162,8 +176,8 @@ func TestVoiceMedia_Resample(t *testing.T) {
 		}
 	}
 
-	// 越界末点钳位：极短输入不外借样本。
-	if got := resamplePCM16([]int16{500}, 4000, 8000); len(got) != 0 {
+	// 越界末点钳位：极短输入（24kHz 单样本降到 8kHz）不产出样本。
+	if got := resamplePCM16([]int16{500}, 24000, 8000); len(got) != 0 {
 		t.Fatalf("sub-sample downsample should return empty, got %v", got)
 	}
 }
@@ -282,6 +296,36 @@ func TestVoiceMediaTrack_EnqueueResamplesAndPaces(t *testing.T) {
 	tr.enqueue([]int16{}, 8000)
 	if got := tr.enqueued(); got != 0 {
 		t.Fatalf("no-op enqueue = %d, want 0", got)
+	}
+
+	// 采样率为 0 时按 8kHz 处理。
+	tr.enqueue([]int16{100, 200}, 0)
+	if got := tr.enqueued(); got != 2 {
+		t.Fatalf("enqueued = %d, want 2", got)
+	}
+	// 重采样后无样本（24kHz 单样本 → 8kHz 0 样本）不产生缓冲。
+	tr.enqueue([]int16{500}, 24000)
+	if got := tr.enqueued(); got != 2 {
+		t.Fatalf("empty resample = %d, want 2", got)
+	}
+}
+
+func TestVoiceMediaTrack_NewDefaultsAndErrors(t *testing.T) {
+	// frameDuration 为 0 时取 40ms 默认节拍。
+	tr, err := newVoiceMediaTrack(0)
+	if err != nil {
+		t.Fatalf("new track: %v", err)
+	}
+	if tr.frameDuration != voiceFrameDuration {
+		t.Fatalf("frame = %v, want %v", tr.frameDuration, voiceFrameDuration)
+	}
+
+	// 轨构造失败（codec 非法等）经缝线注入。
+	hscovSetSeam(t, &hookNewTrackLocalStaticRTP, func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
+		return nil, errors.New("synthetic track failure")
+	})
+	if _, err := newVoiceMediaTrack(time.Millisecond); err == nil {
+		t.Fatal("expected error from track constructor")
 	}
 }
 
