@@ -45,11 +45,11 @@ func TestBuildTranslationQuotaGateValidation(t *testing.T) {
 	client := quotaTestRedis(t)
 
 	cases := []struct {
-		name string
-		unit string
-		win  string
-		limit int64
-		redis bool
+		name    string
+		unit    string
+		win     string
+		limit   int64
+		redis   bool
 		wantSub string
 	}{
 		{"bad unit", "chars", "day", 100, true, "translation.quota.unit"},
