@@ -100,6 +100,8 @@ var allowlist = map[columnKey]string{
 	{"translation_language_preferences", "workspace_id"}: "inert DEFAULT '' the model never declared",
 	{"workspace_configs", "rag_flow_json"}:               "inert DEFAULT '' the model never declared",
 	{"tenant_configs", "rag_flow_json"}:                  "inert DEFAULT '' the model never declared",
+	{"workspace_configs", "translation_quota_json"}:      "inert DEFAULT '' the model never declared",
+	{"tenant_configs", "translation_quota_json"}:         "inert DEFAULT '' the model never declared",
 	{"agent_groups", "enabled"}:                          "inert DEFAULT true the model never declared",
 	{"agent_groups", "overflow_policy"}:                  "inert DEFAULT 'global' the model never declared",
 	{"remote_assist_sessions", "status"}:                 "inert DEFAULT 'active' the model never declared",
