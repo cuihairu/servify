@@ -52,6 +52,10 @@ type VoiceCaption struct {
 // "正在说"字幕行；caption/audio → translation 帧族）或测试录制器。
 // 全部方法要求非阻塞（管线串行调用，重活由实现方自行异步）。
 type VoiceSink interface {
+	// AudioFormat 本管线向 TTS 请求的合成格式（空 = provider 级默认）。
+	// 下发形态决定格式：纯 WS 帧面走默认（mp3），WebRTC 音轨消费方在线时
+	// 请求 wav（服务端解回 PCM16 喂轨）。管线逐句合成前调用，实现须非阻塞。
+	AudioFormat() string
 	// OnSpeechStart ASR 检测到说话开始（turnSeq 为 ASR 轮次序号）。
 	OnSpeechStart(turnSeq int64)
 	// OnPartial 中间假设（只驱动"正在说"，不进翻译——§2.2 稳定化规则）。
@@ -182,7 +186,11 @@ func (p *VoicePipeline) processSentence(ctx context.Context, sentence domain.Sen
 	}
 	sctx, cancel := context.WithTimeout(ctx, p.synthBudget)
 	defer cancel()
-	resp, err := p.synth.Synthesize(sctx, tts.SynthesizeRequest{Text: caption.Translated, Lang: caption.TargetLang})
+	resp, err := p.synth.Synthesize(sctx, tts.SynthesizeRequest{
+		Text:   caption.Translated,
+		Lang:   caption.TargetLang,
+		Format: p.sink.AudioFormat(),
+	})
 	if err != nil {
 		if ctx.Err() != nil {
 			return

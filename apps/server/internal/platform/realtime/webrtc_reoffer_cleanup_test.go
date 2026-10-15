@@ -113,9 +113,10 @@ func TestWebRTC_CloseTerminalConnections_Branches(t *testing.T) {
 			t.Fatalf("CreatePeerConnection: %v", err)
 		}
 		stale.SetStatus("disconnected")
-		hscovSetSeam(t, &hookPeerConnectionClose, func(*webrtc.PeerConnection) error {
-			return errors.New("boom: close")
-		})
+		hscovSetSeam(t, &hookPeerConnectionCloseVar,
+			func(*webrtc.PeerConnection) error {
+				return errors.New("boom: close")
+			})
 		s.closeTerminalConnections("sess-close-err")
 		if got := sessionConnIDs(s, "sess-close-err"); len(got) != 0 {
 			t.Fatalf("connection must still be removed after close error, got %v", got)

@@ -94,6 +94,19 @@ func (r *fakeVoiceRuntime) lastSink() translationdelivery.VoiceStreamSink {
 	return r.sinks[len(r.sinks)-1]
 }
 
+// sinkForSpeaker 按会话+说话方取启动时捕获的 sink：同会话多连接不能按槽位
+// 或到达序对号。
+func (r *fakeVoiceRuntime) sinkForSpeaker(sessionID, speaker string) translationdelivery.VoiceStreamSink {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, s := range r.sessions {
+		if s == sessionID && r.speakers[i] == speaker {
+			return r.sinks[i]
+		}
+	}
+	return nil
+}
+
 func (r *fakeVoiceRuntime) startedCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -122,6 +135,23 @@ func newVoiceTestHub(t *testing.T, runtime translationdelivery.VoiceStreamStarte
 		hub.SetVoiceTranslationRuntime(runtime)
 	}
 	go hub.Run()
+
+	// 测试收口（最后执行的 cleanup）：等所有语音连接的读泵完成收线（会话
+	// 表清空），杜绝跨测试存活的迟到收线 goroutine 触碰 seam 变量（数据
+	// 竞态：收线路径读 hook，下一测试写 hook）。
+	t.Cleanup(func() {
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			hub.mutex.RLock()
+			empty := len(hub.clients) == 0
+			hub.mutex.RUnlock()
+			if empty {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("voice hub not drained at test end")
+	})
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

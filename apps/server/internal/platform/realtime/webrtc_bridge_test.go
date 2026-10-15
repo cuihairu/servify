@@ -284,27 +284,31 @@ func TestWebRTC_NegotiateRenegotiationOffer(t *testing.T) {
 	}
 
 	// CreateOffer 失败：仅记日志，不外发（PC 保持 new 状态）
-	hscovSetSeam(t, &hookPeerConnectionCreateOffer, func(*webrtc.PeerConnection, *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
-		return webrtc.SessionDescription{}, errors.New("boom: offer")
-	})
+	hscovSetSeam(t, &hookPeerConnectionCreateOfferVar,
+		func(*webrtc.PeerConnection, *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
+			return webrtc.SessionDescription{}, errors.New("boom: offer")
+		})
 	drainBridgeMessages(ownerCh)
 	conn.negotiate()
 	assertNoBridgeFrame(t, ownerCh)
 
 	// SetLocalDescription 失败：仅记日志，不外发（PC 仍保持 new 状态）
-	hscovSetSeam(t, &hookPeerConnectionCreateOffer, func(pc *webrtc.PeerConnection, options *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
-		return pc.CreateOffer(options)
-	})
-	hscovSetSeam(t, &hookPeerConnectionSetLocalDescription, func(*webrtc.PeerConnection, webrtc.SessionDescription) error {
-		return errors.New("boom: local")
-	})
+	hscovSetSeam(t, &hookPeerConnectionCreateOfferVar,
+		func(pc *webrtc.PeerConnection, options *webrtc.OfferOptions) (webrtc.SessionDescription, error) {
+			return pc.CreateOffer(options)
+		})
+	hscovSetSeam(t, &hookPeerConnectionSetLocalDescriptionVar,
+		func(*webrtc.PeerConnection, webrtc.SessionDescription) error {
+			return errors.New("boom: local")
+		})
 	conn.negotiate()
 	assertNoBridgeFrame(t, ownerCh)
 
 	// 成功路径：offer 定向投给归属连接
-	hscovSetSeam(t, &hookPeerConnectionSetLocalDescription, func(pc *webrtc.PeerConnection, desc webrtc.SessionDescription) error {
-		return pc.SetLocalDescription(desc)
-	})
+	hscovSetSeam(t, &hookPeerConnectionSetLocalDescriptionVar,
+		func(pc *webrtc.PeerConnection, desc webrtc.SessionDescription) error {
+			return pc.SetLocalDescription(desc)
+		})
 	conn.negotiate()
 	waitForBridgeOffer(t, ownerCh)
 
@@ -344,16 +348,18 @@ func TestWebRTC_AttachForwarderBranches(t *testing.T) {
 	}
 
 	// 本地轨构造失败分支
-	hscovSetSeam(t, &hookNewTrackLocalStaticRTP, func(webrtc.RTPCodecCapability, string, string) (*webrtc.TrackLocalStaticRTP, error) {
-		return nil, errors.New("boom: track")
-	})
+	hscovSetSeam(t, &hookNewTrackLocalStaticRTPVar,
+		func(webrtc.RTPCodecCapability, string, string) (*webrtc.TrackLocalStaticRTP, error) {
+			return nil, errors.New("boom: track")
+		})
 	s.attachForwarder(conn, fwd)
 	if fwd.targetCount() != 0 {
 		t.Fatal("constructor failure should not attach a write side")
 	}
-	hscovSetSeam(t, &hookNewTrackLocalStaticRTP, func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
-		return webrtc.NewTrackLocalStaticRTP(codec, id, streamID)
-	})
+	hscovSetSeam(t, &hookNewTrackLocalStaticRTPVar,
+		func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
+			return webrtc.NewTrackLocalStaticRTP(codec, id, streamID)
+		})
 
 	// AddTrack 失败分支：PC 已关
 	closed, err := s.CreatePeerConnection("sess-attach")

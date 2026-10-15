@@ -210,3 +210,30 @@ func TestProviderDefaultsStructure(t *testing.T) {
 		t.Fatalf("constructor defaults degraded: %+v", p2)
 	}
 }
+
+func TestSynthesizeRequestFormatOverride(t *testing.T) {
+	// 逐句请求可按次覆盖 provider 级格式（WebRTC 音轨消费方要 wav、纯 WS
+	// 帧面走 provider 默认，共用同一 provider 实例）；空值回落 provider 配置。
+	srv, captured := newSpeechServer(t, http.StatusOK, []byte("audio"))
+	p := NewProvider(Config{BaseURL: srv.URL, Format: "mp3"})
+
+	resp, err := p.Synthesize(context.Background(), tts.SynthesizeRequest{Text: "hi", Format: "wav"})
+	if err != nil {
+		t.Fatalf("Synthesize: %v", err)
+	}
+	req := <-captured
+	if req.body.ResponseFormat != "wav" {
+		t.Fatalf("request format = %q, want wav", req.body.ResponseFormat)
+	}
+	if resp.Format != "wav" {
+		t.Fatalf("response format = %q, want wav", resp.Format)
+	}
+
+	if _, err := p.Synthesize(context.Background(), tts.SynthesizeRequest{Text: "hi"}); err != nil {
+		t.Fatalf("Synthesize: %v", err)
+	}
+	req = <-captured
+	if req.body.ResponseFormat != "mp3" {
+		t.Fatalf("fallback format = %q, want mp3", req.body.ResponseFormat)
+	}
+}

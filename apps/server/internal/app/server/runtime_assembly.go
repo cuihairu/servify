@@ -335,6 +335,9 @@ func wireRealtimeGateways(rt *Runtime, wsHub *realtimeplatform.WebSocketHub) (*r
 	rt.Logger.Infof("WebRTC ICE assembled: %s", ice.Describe())
 	webrtcService := realtimeplatform.NewWebRTCService(ice, wsHub)
 	wsHub.SetWebRTCService(webrtcService)
+	// Phase 3：语音音轨 PC 与会话 WebRTC 同源 ICE 配置（wireRealtimeRuntime
+	// 先行装配 voiceHub）。
+	rt.voiceHub.SetICEServers(webrtcService.ICEServers())
 	rt.RTCGateway = realtimeplatform.NewWebRTCAdapter(webrtcService)
 	// REST 下发口与 WS 推送消费同一份装配结果（ICEConfigSource 由 *WebRTCService 实现）。
 	rt.RTCIceSource = webrtcService

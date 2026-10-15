@@ -219,6 +219,12 @@ func (s *WebRTCService) iceServers() []webrtc.ICEServer {
 	return servers
 }
 
+// ICEServers 装配的 ICE 服务器出站面：语音音轨 PC（Phase 3）与会话 WebRTC
+// 同源配置。
+func (s *WebRTCService) ICEServers() []webrtc.ICEServer {
+	return s.iceServers()
+}
+
 // ICEConfigPayload 把装配好的 ICE 配置转为客户端下发消息体（webrtc-ice-config）。
 // 每个 STUN 一项；TURN 启用时追加带 username/credential/ttl 的一项（时间限
 // 凭据，客户端按 ttl 秒数规划刷新）。无任何可下发条目时返回 (nil, false)。

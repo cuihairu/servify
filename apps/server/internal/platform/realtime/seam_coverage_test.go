@@ -17,12 +17,19 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// hscovSetSeam 替换一个包级变量并在测试结束后还原。
+// hscovSetSeam 替换一个包级变量并在测试结束后还原。替换/还原持 hookMu
+// Write 锁（调用点的 trampoline 持 RLock），杜绝跨测试的数据竞态。
 func hscovSetSeam[T any](t *testing.T, slot *T, value T) {
 	t.Helper()
+	hookMu.Lock()
 	old := *slot
 	*slot = value
-	t.Cleanup(func() { *slot = old })
+	hookMu.Unlock()
+	t.Cleanup(func() {
+		hookMu.Lock()
+		*slot = old
+		hookMu.Unlock()
+	})
 }
 
 // --- WebRTC：CreateAnswer / SetLocalDescription / Close 错误 ---
@@ -47,18 +54,20 @@ func TestHSSeamsWebRTCHandleOfferErrors(t *testing.T) {
 	}
 
 	t.Run("CreateAnswer error", func(t *testing.T) {
-		hscovSetSeam(t, &hookPeerConnectionCreateAnswer, func(*webrtc.PeerConnection, *webrtc.AnswerOptions) (webrtc.SessionDescription, error) {
-			return webrtc.SessionDescription{}, errors.New("boom: answer")
-		})
+		hscovSetSeam(t, &hookPeerConnectionCreateAnswerVar,
+			func(*webrtc.PeerConnection, *webrtc.AnswerOptions) (webrtc.SessionDescription, error) {
+				return webrtc.SessionDescription{}, errors.New("boom: answer")
+			})
 		if _, err := s.HandleOffer("", "sess-answer-err", offer); err == nil || !strings.Contains(err.Error(), "failed to create answer") {
 			t.Fatalf("expected create answer error, got %v", err)
 		}
 	})
 
 	t.Run("SetLocalDescription error", func(t *testing.T) {
-		hscovSetSeam(t, &hookPeerConnectionSetLocalDescription, func(*webrtc.PeerConnection, webrtc.SessionDescription) error {
-			return errors.New("boom: set local")
-		})
+		hscovSetSeam(t, &hookPeerConnectionSetLocalDescriptionVar,
+			func(*webrtc.PeerConnection, webrtc.SessionDescription) error {
+				return errors.New("boom: set local")
+			})
 		if _, err := s.HandleOffer("", "sess-local-err", offer); err == nil || !strings.Contains(err.Error(), "failed to set local description") {
 			t.Fatalf("expected set local description error, got %v", err)
 		}
@@ -70,9 +79,10 @@ func TestHSSeamsWebRTCCloseError(t *testing.T) {
 	if _, err := s.CreatePeerConnection("sess-close-err"); err != nil {
 		t.Fatalf("CreatePeerConnection: %v", err)
 	}
-	hscovSetSeam(t, &hookPeerConnectionClose, func(*webrtc.PeerConnection) error {
-		return errors.New("boom: close")
-	})
+	hscovSetSeam(t, &hookPeerConnectionCloseVar,
+		func(*webrtc.PeerConnection) error {
+			return errors.New("boom: close")
+		})
 	if err := s.CloseConnection("sess-close-err"); err != nil {
 		t.Fatalf("CloseConnection must swallow close error: %v", err)
 	}

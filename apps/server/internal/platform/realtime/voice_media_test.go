@@ -321,9 +321,10 @@ func TestVoiceMediaTrack_NewDefaultsAndErrors(t *testing.T) {
 	}
 
 	// 轨构造失败（codec 非法等）经缝线注入。
-	hscovSetSeam(t, &hookNewTrackLocalStaticRTP, func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
-		return nil, errors.New("synthetic track failure")
-	})
+	hscovSetSeam(t, &hookNewTrackLocalStaticRTPVar,
+		func(codec webrtc.RTPCodecCapability, id, streamID string) (*webrtc.TrackLocalStaticRTP, error) {
+			return nil, errors.New("synthetic track failure")
+		})
 	if _, err := newVoiceMediaTrack(time.Millisecond); err == nil {
 		t.Fatal("expected error from track constructor")
 	}
@@ -443,9 +444,10 @@ func TestVoiceMediaTrack_RunStopsOnWriteError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new track: %v", err)
 	}
-	hscovSetSeam(t, &hookTrackLocalStaticRTPWrite, func(track *webrtc.TrackLocalStaticRTP, packet []byte) (int, error) {
-		return 0, errors.New("synthetic write failure")
-	})
+	hscovSetSeam(t, &hookTrackLocalStaticRTPWriteVar,
+		func(track *webrtc.TrackLocalStaticRTP, packet []byte) (int, error) {
+			return 0, errors.New("synthetic write failure")
+		})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

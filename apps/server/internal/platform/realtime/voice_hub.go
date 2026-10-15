@@ -19,6 +19,7 @@ package realtime
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/pion/webrtc/v4"
 	"github.com/sirupsen/logrus"
 )
 
@@ -62,6 +64,10 @@ type VoiceClient struct {
 	// pingInterval / readTimeout 供测试注入；零值取默认（54s / 60s）。
 	pingInterval time.Duration
 	readTimeout  time.Duration
+
+	// media WebRTC 音轨面（Phase 3）：nil = 纯 WS 形态。写入只发生在
+	// readPump（webrtc-request / 收线），读取（路由、格式协商）持 hub 锁。
+	media *voiceClientMedia
 }
 
 // VoiceHub 语音翻译通道 hub：按会话聚合连接，管线产出按会话广播
@@ -75,15 +81,28 @@ type VoiceHub struct {
 	// close 的先后由单通道单处理点保证，不受 select 多路选择顺序影响。
 	teardown  chan *voiceTeardown
 	broadcast chan WebSocketMessage
-	mutex     sync.RWMutex
+	// signal 定向信令命令通道（webrtc-offer/candidate/error），Run 单点执行。
+	signal chan *voiceSignal
+	mutex  sync.RWMutex
 
 	voice          voiceTranslationRuntime
 	tokenValidator func(sessionID, accessToken string) error
+	// iceServers 语音音轨 PC 的 ICE 配置（装配层注入，与会话 WebRTC 同源）。
+	iceServers []webrtc.ICEServer
 }
 
 // voiceTeardown 收线命令：把 message（可空）排进该连接 Send 后立即关闭
 // Send + 摘除连接，仅由 Run 事件循环执行。
 type voiceTeardown struct {
+	client  *VoiceClient
+	message *WebSocketMessage
+}
+
+// voiceSignal 定向投递命令：webrtc-offer/candidate/webrtc-error 只发归属
+// 客户端（广播会打到全会话其他连接，信令必须定向）。与 teardown 同理，
+// Send 的投递只握在 Run 事件循环手里——pion 回调（ICE 候选、连接态）与
+// readPump 都只把命令投进通道。
+type voiceSignal struct {
 	client  *VoiceClient
 	message *WebSocketMessage
 }
@@ -97,6 +116,7 @@ func NewVoiceHub() *VoiceHub {
 		register:  make(chan *VoiceClient),
 		teardown:  make(chan *voiceTeardown, 64),
 		broadcast: make(chan WebSocketMessage, 256),
+		signal:    make(chan *voiceSignal, 64),
 	}
 }
 
@@ -126,6 +146,19 @@ func (h *VoiceHub) currentTokenValidator() func(sessionID, accessToken string) e
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 	return h.tokenValidator
+}
+
+// SetICEServers 注入语音音轨 PC 的 ICE 服务器（装配层一次；nil 保持直连形态）。
+func (h *VoiceHub) SetICEServers(servers []webrtc.ICEServer) {
+	h.mutex.Lock()
+	h.iceServers = append([]webrtc.ICEServer(nil), servers...)
+	h.mutex.Unlock()
+}
+
+func (h *VoiceHub) currentICEServers() []webrtc.ICEServer {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	return h.iceServers
 }
 
 // Run 事件循环：注册/收线/按会话广播。慢客户端踢线与会话 WS 同口径
@@ -166,6 +199,20 @@ func (h *VoiceHub) Run() {
 						close(client.Send)
 						delete(h.clients, client.ID)
 					}
+				}
+			}
+			h.mutex.Unlock()
+
+		case sig := <-h.signal:
+			// 定向信令：只发归属连接，且只在会话表内投递（收线后的迟到信号
+			// 绝不触碰已关闭的 Send）。慢客户端与广播同口径：缓冲写满即踢。
+			h.mutex.Lock()
+			if _, ok := h.clients[sig.client.ID]; ok {
+				select {
+				case sig.client.Send <- *sig.message:
+				default:
+					close(sig.client.Send)
+					delete(h.clients, sig.client.ID)
 				}
 			}
 			h.mutex.Unlock()
@@ -237,8 +284,10 @@ func (c *VoiceClient) readPump() {
 	// 收线不关 conn：teardown 命令后 Run 关闭 Send，writePump 排干余帧
 	// （含收线前排入的 voice-error）写 close 帧退出，由它的 defer 关 conn
 	//——错误帧与 close 帧的到达顺序因此确定。本方 ReadMessage 的解堵也
-	// 由该关闭完成（踢线路径 writePump 必然退出）。
+	// 由该关闭完成（踢线路径 writePump 必然退出）。WebRTC 音轨面先于通道
+	// 收线：先停节拍写包与 PC，再走 teardown（信号面随会话表摘除失效）。
 	defer func() {
+		c.closeMedia()
 		if c.stream != nil {
 			_ = c.stream.Close()
 		}
@@ -299,9 +348,31 @@ func (c *VoiceClient) readPump() {
 				c.pendingClose = c.voiceErrorFrame(voiceErrStreamBroken, "audio stream broken")
 				return
 			}
-		default:
-			// 文本帧当前无控制语义：忽略（协议演进留白）。
+		case websocket.TextMessage:
+			// 控制面文本帧：WebRTC 音轨信令（Phase 3）。未识别 type 忽略
+			// （协议演进留白，未知帧不破坏既有客户端）。
+			var frame WebSocketMessage
+			if err := json.Unmarshal(payload, &frame); err != nil {
+				logrus.Warnf("Voice text frame is not JSON (session=%s): %v", c.SessionID, err)
+				continue
+			}
+			c.handleVoiceTextFrame(frame)
 		}
+	}
+}
+
+// handleVoiceTextFrame 语音通道控制面：音轨信令三件套 + 错误回执。全部在
+// readPump 串行执行，与管线 Feed 无竞争。
+func (c *VoiceClient) handleVoiceTextFrame(frame WebSocketMessage) {
+	switch frame.Type {
+	case "webrtc-request":
+		c.handleVoiceWebRTCRequest()
+	case "webrtc-answer":
+		c.handleVoiceWebRTCAnswer(frame.Data)
+	case "webrtc-candidate":
+		c.handleVoiceWebRTCCandidate(frame.Data)
+	default:
+		// 未知控制帧：忽略（协议演进留白）。
 	}
 }
 
@@ -368,6 +439,16 @@ func (s *voiceFrameSink) emit(frameType string, data map[string]interface{}) {
 	}
 }
 
+// AudioFormat 本管线向 TTS 请求的合成格式：同会话存在 WebRTC 音轨消费方
+// （对侧说话方的客户端请求过音轨）时请求 wav——服务端解回 PCM16 喂轨；
+// 否则空值走 provider 级默认（Phase 2 客户端按 mp3 播放，零回归）。
+func (s *voiceFrameSink) AudioFormat() string {
+	if s.client.Hub.hubHasWebRTCAudio(s.client.SessionID, s.client.Speaker) {
+		return "wav"
+	}
+	return ""
+}
+
 // OnSpeechStart 无帧：partial 已承载"正在说"信号。
 func (s *voiceFrameSink) OnSpeechStart(turnSeq int64) {
 	_ = turnSeq
@@ -393,6 +474,10 @@ func (s *voiceFrameSink) OnCaption(caption translationdelivery.VoiceCaption) {
 	})
 }
 
+// OnAudio 译文合成的音频：WS 帧按 Phase 2 契约原样下发（broadcast + 客户端
+// 按 speaker 过滤）；wav 形态另解回 PCM16 投进对侧说话方客户端的 WebRTC
+// 音轨（服务端解码一次，所有音轨消费方共享同一份样本）。解码失败只记日志
+// ——WS 帧面已经携带原始字节，音轨缺失是该句降级，不收线。
 func (s *voiceFrameSink) OnAudio(capSeq int64, audio []byte, format string) {
 	s.emit("translation-audio", map[string]interface{}{
 		"speaker": s.client.Speaker,
@@ -400,6 +485,16 @@ func (s *voiceFrameSink) OnAudio(capSeq int64, audio []byte, format string) {
 		"format":  format,
 		"audio":   base64.StdEncoding.EncodeToString(audio),
 	})
+	if format != "wav" {
+		return
+	}
+	samples, rate, _, err := pcm16FromWAV(audio)
+	if err != nil {
+		logrus.Warnf("Voice translation audio not decodable for webrtc track (session=%s speaker=%s): %v",
+			s.client.SessionID, s.client.Speaker, err)
+		return
+	}
+	s.client.Hub.routeVoiceAudio(s.client.SessionID, s.client.Speaker, samples, rate)
 }
 
 func (s *voiceFrameSink) OnError(err error) {

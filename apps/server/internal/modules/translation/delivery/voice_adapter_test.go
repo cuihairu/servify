@@ -129,6 +129,9 @@ func (s *vaSink) OnAudio(_ int64, audio []byte, _ string) {
 
 func (s *vaSink) OnError(error) {}
 
+// AudioFormat 适配层用例不关心格式：空 = provider 级默认。
+func (s *vaSink) AudioFormat() string { return "" }
+
 func (s *vaSink) snapshot() (captions []translationapp.VoiceCaption, audios [][]byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

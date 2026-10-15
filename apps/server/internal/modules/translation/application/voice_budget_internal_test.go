@@ -32,6 +32,9 @@ func (s *budgetSink) OnCaption(c VoiceCaption) {
 func (s *budgetSink) OnAudio(int64, []byte, string) { s.mu.Lock(); s.audios++; s.mu.Unlock() }
 func (s *budgetSink) OnError(err error)             { s.mu.Lock(); s.errors = append(s.errors, err); s.mu.Unlock() }
 
+// AudioFormat 预算用例不关心格式：空 = provider 级默认。
+func (s *budgetSink) AudioFormat() string { return "" }
+
 // budgetTranslator 可编程延迟/错误的翻译替身（本文件专用）。
 type budgetTranslator struct {
 	text  string

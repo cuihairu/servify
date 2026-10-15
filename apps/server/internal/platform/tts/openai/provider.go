@@ -102,12 +102,18 @@ func (p *Provider) Synthesize(ctx context.Context, req tts.SynthesizeRequest) (t
 	if strings.TrimSpace(req.Text) == "" {
 		return tts.SynthesizeResponse{}, fmt.Errorf("%w: blank text", tts.ErrInvalidRequest)
 	}
+	// 逐次覆盖非空：语音翻译管线按下发形态逐句选格式（WebRTC 音轨要 wav，
+	// 纯 WS 帧面走 provider 级默认），空值回落 p.format。
+	format := p.format
+	if strings.TrimSpace(req.Format) != "" {
+		format = strings.TrimSpace(req.Format)
+	}
 	// 纯字符串字段结构 json.Marshal 不会失败，忽略错误安全。
 	body, _ := json.Marshal(speechRequest{
 		Model:          p.model,
 		Input:          req.Text,
 		Voice:          p.voice,
-		ResponseFormat: p.format,
+		ResponseFormat: format,
 	})
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/audio/speech", bytes.NewReader(body))
 	if err != nil {
@@ -130,7 +136,7 @@ func (p *Provider) Synthesize(ctx context.Context, req tts.SynthesizeRequest) (t
 		return tts.SynthesizeResponse{}, fmt.Errorf("%w: status %d: %s",
 			tts.ErrUpstream, resp.StatusCode, trimErrorMessage(payload))
 	}
-	return tts.SynthesizeResponse{Audio: payload, Format: p.format}, nil
+	return tts.SynthesizeResponse{Audio: payload, Format: format}, nil
 }
 
 func (p *Provider) HealthCheck(ctx context.Context) error {

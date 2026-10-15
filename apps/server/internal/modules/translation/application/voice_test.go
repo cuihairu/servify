@@ -53,6 +53,9 @@ type recordingSink struct {
 	captions []translationapp.VoiceCaption
 	audios   []recordedAudio
 	errors   []error
+
+	// audioFormat 管线向 TTS 请求的合成格式（注入模拟 WebRTC 消费方形态）。
+	audioFormat string
 }
 
 func (r *recordingSink) OnSpeechStart(turnSeq int64) {
@@ -83,6 +86,13 @@ func (r *recordingSink) OnError(err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.errors = append(r.errors, err)
+}
+
+// AudioFormat 录制器直接回放注入的格式字段。
+func (r *recordingSink) AudioFormat() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.audioFormat
 }
 
 // snapshot 返回全部录制的浅拷贝。
@@ -165,6 +175,40 @@ func TestVoicePipelineCaptionFlow(t *testing.T) {
 	second := requests[1].Messages[1].Content
 	if !strings.Contains(second, "对话上文") || !strings.Contains(second, "你好。") || !strings.Contains(second, "translated line") {
 		t.Fatalf("second sentence must carry prior source+translation tail: %+v", second)
+	}
+}
+
+func TestVoicePipelinePassesSinkAudioFormatToSynth(t *testing.T) {
+	// AudioFormat 是管线下发形态的格式协商口：sink 声明 wav（WebRTC 音轨
+	// 消费方在线）时逐句合成按 wav 请求；空值 = provider 级默认（零回归面）。
+	drive := func(sink *recordingSink) []tts.SynthesizeRequest {
+		t.Helper()
+		synth := &mocktts.Provider{Audio: []byte("x"), Format: "mp3"}
+		p := translationapp.NewVoicePipeline(
+			translationapp.NewService(&mockllm.Provider{ChatResponse: llm.ChatResponse{Content: "hi"}}, testParams),
+			synth, sink, "zh", "en", nil)
+		ch := make(chan asr.Event, 1)
+		ch <- asr.Event{Kind: asr.EventFinal, Seq: 1, Text: "你好。"}
+		close(ch)
+		done := make(chan struct{})
+		go func() {
+			p.Run(context.Background(), ch)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("pipeline Run did not return after channel close")
+		}
+		return synth.RecordedRequests()
+	}
+
+	requests := drive(&recordingSink{audioFormat: "wav"})
+	if len(requests) != 1 || requests[0].Format != "wav" {
+		t.Fatalf("synth requests = %+v, want single wav format", requests)
+	}
+	if requests2 := drive(&recordingSink{}); len(requests2) != 1 || requests2[0].Format != "" {
+		t.Fatalf("empty sink format must pass through empty: %+v", requests2)
 	}
 }
 
