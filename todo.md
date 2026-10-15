@@ -5,7 +5,7 @@
 ## 未完成
 
 - [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）
-- [ ] CODECOV_TOKEN：用户侧 `gh secret set CODECOV_TOKEN -R cuihairu/servify` 后对 CI 手动 re-run 首传
+- [x] CODECOV_TOKEN — 2026-10-15 用户配置 secret 后首传成功：CI 38731452145（f00eeaa）Go Checks「Upload coverage to Codecov」200（806,532 字节，coverage.out 2251 文件）；步骤恢复必需（fail_ci_if_error=true，移除缺 token 条件跳过——secret 吊销时 CI 如实红）
 - [ ] 移动端语音消费：Android/iOS 语音上行与字幕渲染（按产品节奏）
 - [ ] Phase 3 语音：WebRTC 音轨下发（**服务端面已于 2026-10-15 落地**：语音通道 `webrtc-request` 信令 + PCMU 音轨 + 对侧路由 + wav 格式协商，帧词表 PROTOCOL §9.3；**客户端消费已于 2026-10-15 落地**——core VoiceChannel `enableAudioTrack()` 发起请求 + offer/answer 协商 + `voice:audio-track` 透出 + `voice:webrtc-error` 非致命回执 + 挂件 Audio 播放接入，94353c7）、端到端语音评估（研究项，2026-10-15 代决维持不排期）、租户级配额限流（**口径已代决待核 2026-10-15**：docs/design/tenant-quota-policy.md——`limit + unit(requests|tokens) + window(hour|day|month)` 滚动窗口、超配额 429；enforcement 三缺口未落：租户用量记账表、租户键控检查点、共享窗口锚点）
 - [x] 远程协助 RA-7 媒体桥接 + RA-5 信令归属 — 864f897 075055b：服务端 SFU-lite（trackForwarder 一读 N 写转发注册表、fanOut/replicate 投递、桥接加轨显式重协商推 `webrtc-offer`、下线持锁收口）+ 每条 PC 记录信令归属（`connByOwner` 按归属路由 answer/candidate，`SendToClient` 定向投递）+ 管理端应答服务端 offer（glare 排队）与桥接轨组流兜底；webrtc_bridge_test.go 单元分支全覆盖 + `TestWebRTC_LoopbackMediaBridge` 真实双 pion PC 端到端（RTP 转发+重协商收轨），realtime 包覆盖率 100.0%、race 三连过，admin typecheck+build 绿
