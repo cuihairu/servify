@@ -3,7 +3,7 @@
 > 状态：**已代决待核**（2026-10-15 巡检代决，用户可推翻；推翻只需改本文，
 > 无代码耦合）。对应 todo「Phase 3 语音 → 租户级配额限流」卡点
 > 「unit/window 口径未注册，需产品拍板」。本文给出对比表与单个明确推荐；
-> enforcement 实现另有硬缺口（见 §4），本轮不落地。
+> enforcement 已按 §4 落地（2026-10-15，默认 `enabled: false`）。
 
 ## 1. 现状（2026-10-15 实测）
 
@@ -40,7 +40,7 @@
 ```yaml
 translation:
   quota:
-    enabled: false        # 默认关；开启前需完成 §4 三项缺口
+    enabled: false        # 默认关；开启即生效（§4 已落地）
     limit: 100000         # 每租户每窗口配额量
     unit: tokens          # requests | tokens（tokens 取 LLM TokenUsage 累计）
     window: day           # hour | day | month，固定滚动窗口，超配额 429
@@ -52,22 +52,50 @@ translation:
 - 与 `docs/realtime-translation-design.md` §3.2/§4.6 对齐：configscope
   租户覆盖（tenant/workspace 层覆盖 system 值），超配额 429。
 
-## 4. enforcement 缺口（本轮不落地，写明缺什么）
+**计量存储选型（2026-10-15 已代决）**：Redis 固定窗，不建 DB 用量表。
+理由：本仓生产配置本就钉 redis（config.yml 启动校验拒绝 inmemory），
+免迁移、免列守卫；窗口状态天然瞬态，redis 重启窗口归零重计的后果只是
+多放行一窗请求（429 保护面，非计费面），不产生资损。窗口锚点入键名
+（`servify:quota:translation:{window}:{anchor}:{tenant}`），TTL 兜底
+自清理。meter 故障时 fail-open（放行当次并保持翻译主链路可用——保护面
+不该反过来打死主面）。
 
-按推荐直接落地 **只有 schema 注册**——会产出无消费者的死配置，违反
-「demo/mock 边界清理」同类纪律，故不落。完整 enforcement 需要三项硬缺口
-补齐：
+## 4. enforcement（2026-10-15 已落地）
 
-1. **租户维度用量记账存储**：无 usage 表/迁移；Prometheus 计数器无
-   tenant 标签且按进程累计（多实例不可汇总，违反
-   `docs/multi-instance-boundary.md` 口径）。需新表（或 configscope
-   存储模式同构新列）+ 列级守卫迁移。
-2. **租户键控的配额检查点**：现行 `RateLimitMiddleware` 按 IP/API-Key
-   键控，非租户维度；需在 translation 路径加 per-tenant 预算检查
-   （configscope resolver 出配额值 + middleware 查账）。
-3. **窗口锚点存储**：固定滚动窗口需 Redis/DB 窗口锚点；进程内存版在
-   多实例部署下窗口各自为政，口径不成立。
+三缺口按 §3 决议补齐（默认 `enabled: false`，开启需同步 redis 可用）：
+
+1. **租户维度用量记账** → `internal/platform/quotameter`：Redis 固定窗
+   计量器（不建 DB 用量表，§3 计量存储选型决议）；`Usage` 读当前窗口
+   累计、`Add` 原子累加（IncrBy + ExpireNX 兜底 TTL），窗口归零重计
+   容忍边界见 §3 决议段。
+2. **租户键控检查点** → `translation/delivery` `QuotaGate` 装饰器：装配层
+   把它包在翻译门面外（REST translate / 实时自动翻译 / 历史批量标注 /
+   语音通道统一过门），租户从 ctx 认证信息提取（`platformauth`），
+   无租户静默跳过；`ErrTranslationQuotaExceeded` → HTTP 429。`requests`
+   单位先 +1 再比限（被拒调用也占窗，免 check-then-act 竞态）；`tokens`
+   单位事前 `Usage ≥ limit` 拒（不消耗计量）、成功后按
+   `TokenUsage.TotalTokens` 记账（provider 未回传 usage 不记）。批量
+   标注 `tokens` 单位仅事前检查——批量产出无 usage 面，事后记账不可得。
+   meter 故障一律 fail-open（放行 + Warn 日志）。
+3. **共享窗口锚点** → 键名编锚点
+   `servify:quota:translation:{window}:{anchor}:{tenant}`（hour→整点、
+   day→当日、month→当月），多实例共享同一 redis 键自然对齐；TTL =
+   剩余窗口 + 10min 宽限，旧键兜底自清理。
+
+**装配校验**（`buildTranslationQuotaGate`）：enabled=true 时校验
+unit/window/limit 与 redis 可用性，非法即启动失败（fail-fast）。四份
+config 模板已同步（schema 注册过 config_template_lint 门禁）。
+
+**本轮明确不做**（后续缺口）：
+
+- **configscope 租户覆盖**：现行实现为全局单一 limit（`limit` 对所有
+  租户同值）；按租户/工作区差异化配额需 configscope resolver 接入
+  （§3 与 realtime-translation-design §3.2 的对齐承诺），待租户级覆盖
+  真实需求出现再排期。
+- **实时/历史路径的租户 plumbing**：这些路径的 ctx 尚未携带租户时按
+  无租户跳过（过门但不计量）；REST translate 端点已带认证租户全量生效。
 
 ## 5. 推翻方式
 
-口径推翻 = 改本文 + 改 `todo.md` 对应注记；无代码回滚成本。
+口径推翻 = 改本文 + 改 `todo.md` 对应注记 + `translation.quota.enabled`
+回 false（默认即关，无数据回滚成本；meter 键靠 TTL 自清理）。

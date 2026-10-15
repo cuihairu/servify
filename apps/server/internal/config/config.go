@@ -39,32 +39,33 @@ var InsecureWeKnoraAPIKeys = map[string]bool{
 }
 
 type Config struct {
-	Server     ServerConfig     `yaml:"server"`
-	EventBus   EventBusConfig   `yaml:"event_bus"`
-	Database   DatabaseConfig   `yaml:"database"`
-	Redis      RedisConfig      `yaml:"redis"`
-	WebRTC     WebRTCConfig     `yaml:"webrtc"`
-	Voice      VoiceConfig      `yaml:"voice"`
-	AI         AIConfig         `yaml:"ai"`
-	Dify       DifyConfig       `yaml:"dify"`
-	WeKnora    WeKnoraConfig    `yaml:"weknora"`
-	RagFlow    RagFlowConfig    `yaml:"ragflow"`
-	Fallback   FallbackConfig   `yaml:"fallback"`
-	JWT        JWTConfig        `yaml:"jwt"`
-	Log        LogConfig        `yaml:"log"`
-	Monitoring MonitoringConfig `yaml:"monitoring"`
-	Security   SecurityConfig   `yaml:"security"`
-	Portal     PortalConfig     `yaml:"portal"`
-	Upload     UploadConfig     `yaml:"upload"`
-	OIDC       OIDCConfig       `yaml:"oidc"`
-	Embedding  EmbeddingConfig  `yaml:"embedding"`
-	Knowledge  KnowledgeConfig  `yaml:"knowledge"`
-	Email      EmailConfig      `yaml:"email"`
-	Quality    QualityConfig    `yaml:"quality"`
-	Routing    RoutingConfig    `yaml:"routing"`
-	Automation AutomationConfig `yaml:"automation"`
-	Push       PushConfig       `yaml:"push"`
-	Privacy    PrivacyConfig    `yaml:"privacy"`
+	Server      ServerConfig      `yaml:"server"`
+	EventBus    EventBusConfig    `yaml:"event_bus"`
+	Database    DatabaseConfig    `yaml:"database"`
+	Redis       RedisConfig       `yaml:"redis"`
+	WebRTC      WebRTCConfig      `yaml:"webrtc"`
+	Voice       VoiceConfig       `yaml:"voice"`
+	Translation TranslationConfig `yaml:"translation"`
+	AI          AIConfig          `yaml:"ai"`
+	Dify        DifyConfig        `yaml:"dify"`
+	WeKnora     WeKnoraConfig     `yaml:"weknora"`
+	RagFlow     RagFlowConfig     `yaml:"ragflow"`
+	Fallback    FallbackConfig    `yaml:"fallback"`
+	JWT         JWTConfig         `yaml:"jwt"`
+	Log         LogConfig         `yaml:"log"`
+	Monitoring  MonitoringConfig  `yaml:"monitoring"`
+	Security    SecurityConfig    `yaml:"security"`
+	Portal      PortalConfig      `yaml:"portal"`
+	Upload      UploadConfig      `yaml:"upload"`
+	OIDC        OIDCConfig        `yaml:"oidc"`
+	Embedding   EmbeddingConfig   `yaml:"embedding"`
+	Knowledge   KnowledgeConfig   `yaml:"knowledge"`
+	Email       EmailConfig       `yaml:"email"`
+	Quality     QualityConfig     `yaml:"quality"`
+	Routing     RoutingConfig     `yaml:"routing"`
+	Automation  AutomationConfig  `yaml:"automation"`
+	Push        PushConfig        `yaml:"push"`
+	Privacy     PrivacyConfig     `yaml:"privacy"`
 }
 
 type ServerConfig struct {
@@ -106,6 +107,24 @@ type WebRTCConfig struct {
 	STUNServer  string               `yaml:"stun_server"`
 	STUNServers []string             `yaml:"stun_servers"`
 	TURN        TURNCredentialConfig `yaml:"turn"`
+}
+
+// TranslationConfig 租户级翻译配额限流（Phase 3，
+// docs/design/tenant-quota-policy.md）：unit/window 口径与计量存储选型
+// 见该文档（Redis 固定窗，窗口锚点入键名）。enabled=false 只注册口径
+// 不产生行为；enabled=true 由装配层校验枚举（unit/window/limit）与
+// redis 可用性，非法即启动失败。
+type TranslationConfig struct {
+	Quota TranslationQuotaConfig `yaml:"quota"`
+}
+
+// TranslationQuotaConfig 每租户每窗口配额：unit 与 window 正交
+// （requests|tokens × hour|day|month），固定滚动窗口，超配额 429。
+type TranslationQuotaConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Limit   int64  `yaml:"limit"`
+	Unit    string `yaml:"unit"`
+	Window  string `yaml:"window"`
 }
 
 // TURNCredentialConfig 对接 coturn use-auth-secret 时间限凭据模式：
@@ -1362,6 +1381,16 @@ func GetDefaultConfig() *Config {
 		Automation: AutomationConfig{
 			TimerScanIntervalSeconds: 30,
 			TimerBatchSize:           50,
+		},
+		Translation: TranslationConfig{
+			Quota: TranslationQuotaConfig{
+				// 租户配额默认关闭（口径先注册）；开启需同步 redis 可用
+				// 与 unit/window/limit 合法（装配层校验，非法拒启动）。
+				Enabled: false,
+				Limit:   100000,
+				Unit:    "tokens",
+				Window:  "day",
+			},
 		},
 		Privacy: PrivacyConfig{
 			// 数据保留默认关闭（合规按需开启）；清理轮询默认每日一次

@@ -46,6 +46,15 @@ webrtc:
     static_auth_secret: "${WEBRTC_TURN_STATIC_AUTH_SECRET}"
     ttl: 5m
 
+# 租户级翻译配额限流（Phase 3，docs/design/tenant-quota-policy.md）：
+# Redis 固定窗计量，超配额 429；默认关闭，按租户预算开启。
+# translation:
+#   quota:
+#     enabled: true
+#     limit: 100000
+#     unit: "tokens"
+#     window: "day"
+
 jwt:
   secret: "${SERVIFY_JWT_SECRET}"
   expires_in: "12h"

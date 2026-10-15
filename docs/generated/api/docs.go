@@ -6367,7 +6367,7 @@ const docTemplate = `{
         },
         "/api/v1/translation/translate": {
             "post": {
-                "description": "单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；AI 未装配 503；模型上游故障 502；超时 504",
+                "description": "单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；租户配额耗尽 429；AI 未装配 503；模型上游故障 502；超时 504",
                 "consumes": [
                     "application/json"
                 ],
@@ -6398,6 +6398,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QueryResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/handlers.QueryResponse"
                         }

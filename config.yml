@@ -65,6 +65,17 @@ voice:
   deepgram:
     api_key: "${DEEPGRAM_API_KEY}"
 
+# 租户级翻译配额限流（Phase 3，docs/design/tenant-quota-policy.md）：
+# 每租户每窗口固定滚动配额，超配额 429；计量为 Redis 固定窗（窗口锚点
+# 入键名，重启窗口归零仅多放行一窗请求）。默认关闭；开启需 redis 可用，
+# unit: requests|tokens，window: hour|day|month，非法值拒启动。
+translation:
+  quota:
+    enabled: false
+    limit: 100000
+    unit: "tokens"
+    window: "day"
+
 ai:
   # provider: LLM 供应商选型（全局唯一决定）：openai（默认）| anthropic | local。
   # local 为零依赖抽取式问答基线（无出站请求、无 key 要求，回答逐字来自

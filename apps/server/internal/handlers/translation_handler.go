@@ -36,13 +36,14 @@ type TranslateRequest struct {
 
 // Translate 翻译单条聊天文本
 // @Summary 聊天文本实时翻译（Phase 0）
-// @Description 单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；AI 未装配 503；模型上游故障 502；超时 504
+// @Description 单条消息粒度的实时翻译：坐席/访客客户端对到达的消息即时调用，返回可直接展示的译文。参数问题 400；租户配额耗尽 429；AI 未装配 503；模型上游故障 502；超时 504
 // @Tags 翻译
 // @Accept json
 // @Produce json
 // @Param body body TranslateRequest true "翻译请求"
 // @Success 200 {object} QueryResponse
 // @Failure 400 {object} QueryResponse
+// @Failure 429 {object} QueryResponse
 // @Failure 502 {object} QueryResponse
 // @Failure 503 {object} QueryResponse
 // @Failure 504 {object} QueryResponse
@@ -81,7 +82,8 @@ func (h *TranslationHandler) Translate(c *gin.Context) {
 	})
 }
 
-// respondError 哨兵错误→400、未配置→503、超时→504、其余（provider 故障）→502。
+// respondError 哨兵错误→400、配额耗尽→429、未配置→503、超时→504、
+// 其余（provider 故障）→502。
 func (h *TranslationHandler) respondError(c *gin.Context, err error, start time.Time) {
 	body := QueryResponse{
 		Success:   false,
@@ -92,6 +94,8 @@ func (h *TranslationHandler) respondError(c *gin.Context, err error, start time.
 	switch {
 	case errors.Is(err, translationdelivery.ErrTranslationUnavailable):
 		c.JSON(http.StatusServiceUnavailable, body)
+	case errors.Is(err, translationdelivery.ErrTranslationQuotaExceeded):
+		c.JSON(http.StatusTooManyRequests, body)
 	case errors.Is(err, context.DeadlineExceeded):
 		c.JSON(http.StatusGatewayTimeout, body)
 	case errors.Is(err, translationdelivery.ErrTranslationTextRequired),
