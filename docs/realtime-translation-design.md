@@ -1,5 +1,7 @@
 > [English](realtime-translation-design.en.md) | **中文**
 
+> [English](realtime-translation-design.en.md) | **中文**
+
 # 实时翻译设计（语音 + 聊天文本）
 
 > 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 全部落地

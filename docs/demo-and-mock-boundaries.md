@@ -1,5 +1,7 @@
 > [English](demo-and-mock-boundaries.en.md) | **中文**
 
+> [English](demo-and-mock-boundaries.en.md) | **中文**
+
 # Demo / Mock / In-Memory Boundaries
 
 这份清单用于回答一个上线前必须说清楚的问题：仓库里哪些 demo、mock、stub、in-memory 能力仍然保留，它们为什么还在，以及什么时候才能退出。

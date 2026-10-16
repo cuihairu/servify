@@ -3,6 +3,7 @@ title: 文档首页说明
 ---
 > [English](README.en.md) | **中文**
 
+> [English](README.en.md) | **中文**
 
 > VitePress 首页入口已经迁移到 [index.md](./index.md)。
 >

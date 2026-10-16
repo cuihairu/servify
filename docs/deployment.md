@@ -1,5 +1,7 @@
 > [English](deployment.en.md) | **中文**
 
+> [English](deployment.en.md) | **中文**
+
 # Servify 部署指南
 
 本指南覆盖从本地开发到生产部署的完整流程。

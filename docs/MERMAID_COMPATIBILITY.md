@@ -1,5 +1,7 @@
 > [English](MERMAID_COMPATIBILITY.en.md) | **中文**
 
+> [English](MERMAID_COMPATIBILITY.en.md) | **中文**
+
 # Mermaid 兼容性
 
 本仓库当前文档站已经切换到 VitePress，并启用了 `vitepress-plugin-mermaid`。Markdown 中的 ` ```mermaid ` 代码块会参与站点渲染，但为了保证可读性和长期可维护性，仍然需要遵守下面的约束。

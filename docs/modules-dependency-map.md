@@ -1,5 +1,7 @@
 > [English](modules-dependency-map.en.md) | **中文**
 
+> [English](modules-dependency-map.en.md) | **中文**
+
 # Modules 与 legacy services/models 依赖地图
 
 > 数据口径：2026-09-15 对 `apps/server/internal/modules` 的全量扫描（命令见文末，可复现）。

@@ -1,5 +1,7 @@
 > [English](release-0.1.0-acceptance.en.md) | **中文**
 
+> [English](release-0.1.0-acceptance.en.md) | **中文**
+
 # Servify 0.1.0 Release Acceptance
 
 > 注：本文为 **v0.1.0 历史版本验收规范**（已被 v1.0.0 取代，现行口径见 [acceptance-checklist.md](./acceptance-checklist.md)）。文内 `internal/services/*` 证据路径为当时时点——该目录已随 P3-2 整体移除，测试迁移落点见 acceptance-checklist。

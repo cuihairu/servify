@@ -1,5 +1,7 @@
 > [English](mobile-sdk-integration.en.md) | **中文**
 
+> [English](mobile-sdk-integration.en.md) | **中文**
+
 # 移动端 SDK 接入指南（Android / iOS）
 
 双端 SDK 同一套协议与服务端（WS `wss://<host>/api/v1/ws` + 访客工单 `POST /api/v1/tickets`），

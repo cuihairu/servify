@@ -29,6 +29,7 @@ features:
 ---
 > [English](index.en.md) | **中文**
 
+> [English](index.en.md) | **中文**
 
 ## 产品概览
 

@@ -1,5 +1,7 @@
 > [English](configuration-scopes.en.md) | **中文**
 
+> [English](configuration-scopes.en.md) | **中文**
+
 # Configuration Scopes
 
 本文件定义 Servify 当前配置的作用域边界、覆盖顺序和变更约束，用于推进 `11 / T4 configuration-scopes`。

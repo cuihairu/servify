@@ -1,7 +1,6 @@
 ---
 title: Documentation Home Notes
 ---
-
 > **English** | [中文](README.md)
 
 > The VitePress home entry has already migrated to [index.md](./index.md).

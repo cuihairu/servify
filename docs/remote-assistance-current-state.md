@@ -1,5 +1,7 @@
 > [English](remote-assistance-current-state.en.md) | **中文**
 
+> [English](remote-assistance-current-state.en.md) | **中文**
+
 # 远程协助现状盘点
 
 > ⚠️ **本文已被 [remote-assistance-status.md](./remote-assistance-status.md) 取代**：assist 权限组现已挂 `/api/remote-assist/*` 七端点（远程协助已落地，`router_management.go` RequireResourcePermission("assist")）。本文保留为 2026-09「能力盘点/差距识别」时点存档。

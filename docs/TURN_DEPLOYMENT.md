@@ -1,5 +1,7 @@
 > [English](TURN_DEPLOYMENT.en.md) | **中文**
 
+> [English](TURN_DEPLOYMENT.en.md) | **中文**
+
 # TURN 部署选型：内嵌 pion/turn vs 独立 coturn
 
 > 状态：选型已拍板（2026-09-22）：**coturn 独立部署 + 时间限凭据**。第 5 节清单第 1–4 项与第 6 项已落地（2026-09-22）：配置面、`iceturn` 凭据包、服务端装配、WS 下发 `webrtc-ice-config` + REST 下发口 `/api/v1/rtc/ice-servers`（SDK `startCall` 桩已消，服务端下发为默认、宿主覆盖保留）、coturn compose 交付资产、双文档同步。剩余：`docs/deployment.md` 交付清单节、TURN 建联验收脚本。

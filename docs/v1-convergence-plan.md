@@ -1,5 +1,7 @@
 > [English](v1-convergence-plan.en.md) | **中文**
 
+> [English](v1-convergence-plan.en.md) | **中文**
+
 # Servify V1.0 产品与架构收敛改造计划书
 
 > 依据：ChatGPT 审核（2026-10-04，`docs/review/chatgpt-review-2026-10-04.md`）+ 本轮复查（`docs/review/chatgpt-review-2026-10-04-verification.md`）。

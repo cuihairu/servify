@@ -1,5 +1,7 @@
 > [English](mobile-sdk-design.en.md) | **中文**
 
+> [English](mobile-sdk-design.en.md) | **中文**
+
 # 移动端 SDK 策划：Android 与 iOS 嵌入式客服能力
 
 状态：策划文档（不含实现）。本文回答"做什么、为什么这样做、按什么顺序做"，实现细节留给各阶段开工时的技术方案。

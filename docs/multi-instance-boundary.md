@@ -1,5 +1,7 @@
 > [English](multi-instance-boundary.en.md) | **中文**
 
+> [English](multi-instance-boundary.en.md) | **中文**
+
 # Servify 多实例与高可用边界（P2-1）
 
 > 最后更新：2026-09-17（P2-1 定稿）
