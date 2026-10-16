@@ -1,103 +1,103 @@
 # 12 Operator Observability
 
-范围：
+Scope:
 
 - tracing
 - metrics
 - structured logging
-- 错误分级
-- 告警与回放
-- 运营诊断能力
+- error classification
+- alerting and replay
+- operational diagnostics capability
 
 ## O1 telemetry-conventions
 
-- [x] 统一 tracing、metrics、logging 的命名约定
-- [x] 为 HTTP、WebSocket、AI、routing、voice 链路定义公共标签
-- [x] 明确 request id、session id、tenant id、trace id 的透传规则
-- [x] 统一结构化日志字段规范
+- [x] Unify the naming conventions for tracing, metrics, and logging
+- [x] Define common labels for the HTTP, WebSocket, AI, routing, and voice chains
+- [x] Clarify the pass-through rules for request id, session id, tenant id, and trace id
+- [x] Unify the structured log field standards
 
-验收：
+Acceptance:
 
-- 不同模块输出的观测数据可以关联起来，而不是各写各的
+- Observability data emitted by different modules can be correlated instead of each writing its own
 
-当前进展：
+Current progress:
 
-- `internal/observability/telemetry/names.go` — 全量指标名、标签名、span 名、日志字段常量
-- `internal/observability/telemetry/request_id.go` — Gin RequestID 中间件，自动生成 UUID 并注入上下文（含 `FieldRequestID` 日志字段）
-- 上下文传播现状：request_id 传播已落地（request_id.go + `internal/app/server/middleware.go` 挂 RequestID 中间件，先于 gin.Logger() 执行）；session_id 落日志由 gin 中间件注入（`internal/platform/auth/gin_middleware.go:102-103`）
-- tenant_id / trace_id 透传已落地（2026-10-11）：`telemetry/logfields.go` — `FieldsFromContext` 汇集 request_id（RequestIDMiddleware 注入 gin ctx）/ tenant_id（auth 中间件盖进 request ctx，与仓储写入同源）/ trace_id（OTel span 优先，缺失时回退上游透传的 X-Trace-ID 头，RequestIDMiddleware 负责接住）；`AccessLogger` 替代 gin.Logger，访问日志走 logrus 标准出口（与 InitLogger 的 JSON/text 格式、输出目标合一）并携带全部透传字段 + method/path/status/latency_ms/client_ip
+- `internal/observability/telemetry/names.go` — the full set of metric name, label name, span name, and log field constants
+- `internal/observability/telemetry/request_id.go` — Gin RequestID middleware that generates a UUID and injects it into the context (with the `FieldRequestID` log field)
+- Context propagation status: request_id propagation has landed (request_id.go + `internal/app/server/middleware.go` mounts the RequestID middleware, running ahead of gin.Logger()); session_id logging is injected by the gin middleware (`internal/platform/auth/gin_middleware.go:102-103`)
+- tenant_id / trace_id pass-through has landed (2026-10-11): `telemetry/logfields.go` — `FieldsFromContext` gathers request_id (injected into the gin ctx by RequestIDMiddleware) / tenant_id (stamped into the request ctx by the auth middleware, same source as repository writes) / trace_id (OTel span first, falling back to the upstream-passed X-Trace-ID header, caught by RequestIDMiddleware); `AccessLogger` replaces gin.Logger, access logs go through the standard logrus exit (sharing InitLogger's JSON/text formats and output targets) and carry all pass-through fields + method/path/status/latency_ms/client_ip
 
 ## O2 core-service-level-indicators
 
-- [x] 定义 API、会话、工单、路由、AI、语音的关键指标
-- [x] 明确成功率、延迟、错误率、积压量等 SLI
-- [x] 为后台任务和事件消费定义吞吐与失败指标
-- [x] 为 SDK 与服务端交互补最小体验指标
+- [x] Define key metrics for API, sessions, tickets, routing, AI, and voice
+- [x] Clarify SLIs such as success rate, latency, error rate, and backlog
+- [x] Define throughput and failure metrics for background jobs and event consumption
+- [x] Add minimal experience metrics for SDK-server interactions
 
-验收：
+Acceptance:
 
-- 系统核心健康度可被量化，而不是靠日志猜测
+- Core system health is quantifiable instead of guessed from logs
 
-当前进展：
+Current progress:
 
-- `internal/observability/metrics/registry.go` — Prometheus Registry 封装，进程级单例 `DefaultRegistry`
-- `internal/observability/metrics/http_metrics.go` — HTTP 请求计数、延迟直方图、响应大小中间件
-- `internal/observability/metrics/business_metrics.go` — 会话/工单/路由/AI 计数器与直方图
-- `internal/observability/metrics/prometheus.go` — `PrometheusHandler()` 替代手写 metrics endpoint
-- 已添加 `prometheus/client_golang` 依赖
-- 已集成到 router（HTTPMetrics 中间件）和 health（/metrics Prometheus endpoint）
-- 旧 `internal/metrics/metrics.go` 保持兼容，新 Prometheus 注册器并存
+- `internal/observability/metrics/registry.go` — Prometheus Registry wrapper, process-level singleton `DefaultRegistry`
+- `internal/observability/metrics/http_metrics.go` — HTTP request count, latency histogram, and response size middleware
+- `internal/observability/metrics/business_metrics.go` — session/ticket/routing/AI counters and histograms
+- `internal/observability/metrics/prometheus.go` — `PrometheusHandler()` replaces the hand-written metrics endpoint
+- The `prometheus/client_golang` dependency has been added
+- Integrated into the router (HTTPMetrics middleware) and health (/metrics Prometheus endpoint)
+- The old `internal/metrics/metrics.go` stays compatible; the new Prometheus registry coexists
 
 ## O3 error-taxonomy-and-diagnostics
 
-- [x] 定义错误分级与错误类别
-- [x] 区分用户错误、依赖错误、配置错误、系统错误
-- [x] 为关键模块补统一错误映射与日志策略
-- [x] 为常见故障建立排查手册
+- [x] Define error severity levels and error categories
+- [x] Distinguish user errors, dependency errors, configuration errors, and system errors
+- [x] Add unified error mapping and logging policies for key modules
+- [x] Build a troubleshooting playbook for common failures
 
-验收：
+Acceptance:
 
-- 出问题时可以快速知道”哪类错误、在哪里、怎么查”
+- When something goes wrong, you can quickly tell "what kind of error, where, and how to investigate"
 
-当前进展：
+Current progress:
 
-- `internal/observability/errors/errors.go` — `AppError` type，Severity（user/dependency/config/system）、Category（auth/database/ai/routing/validation/rate_limit/internal/network）、Option 模式
-- `internal/observability/errors/http_middleware.go` — `RecordHTTPStatus()` 按响应状态码分类（502/504 归 dependency，其余 5xx 归 system）+ `StatusMiddleware()` 统一出口（原 `classify.go`/`httpstatus.go` 的 `Classify`/`HTTPStatusFromError` 链因生产零消费已随 2026-09-20 死代码清理移除）
-- `internal/observability/errors/metrics.go` — `errors_total` Prometheus counter + `RecordError()`
+- `internal/observability/errors/errors.go` — the `AppError` type, Severity (user/dependency/config/system), Category (auth/database/ai/routing/validation/rate_limit/internal/network), Option pattern
+- `internal/observability/errors/http_middleware.go` — `RecordHTTPStatus()` classifies by response status code (502/504 map to dependency, the remaining 5xx to system) + `StatusMiddleware()` as the unified exit (the former `Classify`/`HTTPStatusFromError` chain in `classify.go`/`httpstatus.go` was removed with the 2026-09-20 dead code cleanup due to zero production consumers)
+- `internal/observability/errors/metrics.go` — the `errors_total` Prometheus counter + `RecordError()`
 
 ## O4 async-reliability-observability
 
-- [x] 为 event bus 消费、worker、索引任务、AI fallback 增加幂等观测
-- [x] 记录重试次数、死信、跳过、回退路径
-- [x] 为长耗时任务增加阶段性进度与结果摘要
-- [x] 为异步任务建立最小 replay / rerun 接口预留
+- [x] Add idempotency observability for event bus consumption, workers, indexing jobs, and AI fallback
+- [x] Record retry counts, dead letters, skips, and fallback paths
+- [x] Add staged progress and result summaries for long-running jobs
+- [x] Reserve minimal replay / rerun interfaces for async jobs
 
-验收：
+Acceptance:
 
-- 异步链路从”黑盒”变为可观察、可重试、可解释
+- Async chains go from "black box" to observable, retryable, and explainable
 
-当前进展：
+Current progress:
 
-- `internal/observability/async/bus_middleware.go` — `BusMiddleware` 装饰 eventbus.Handler，记录时长/成功/失败/死信
-- `internal/observability/async/worker_tracker.go` — `ObservableWorker` 装饰 bootstrap.Worker，记录 job 指标
+- `internal/observability/async/bus_middleware.go` — `BusMiddleware` decorates eventbus.Handler, recording duration/success/failure/dead letters
+- `internal/observability/async/worker_tracker.go` — `ObservableWorker` decorates bootstrap.Worker, recording job metrics
 - `internal/observability/async/dead_letter.go` — `DeadLetterRecorder` interface + `InMemoryDeadLetterRecorder`
-- `internal/observability/async/replay.go` — `ReplayService` interface（stub 预留）
+- `internal/observability/async/replay.go` — `ReplayService` interface (stub reservation)
 
 ## O5 dashboards-alerts-and-replay
 
-- [x] 盘点需要 dashboard 的核心视角
-- [x] 定义关键告警触发条件与阈值策略
-- [x] 预留会话、AI 请求、路由决策的 replay 边界
-- [x] 为运营排障定义最小诊断面板需求
+- [x] Inventory the core perspectives that need dashboards
+- [x] Define key alert trigger conditions and threshold policies
+- [x] Reserve replay boundaries for sessions, AI requests, and routing decisions
+- [x] Define minimal diagnostic panel requirements for operational troubleshooting
 
-验收：
+Acceptance:
 
-- 运营和研发都具备足够的现场信息，不必直接翻原始日志救火
+- Operations and engineering both have enough on-site information and do not have to dig through raw logs to fight fires
 
-当前进展：
+Current progress:
 
-- `deploy/observability/dashboards/servify-service.json` — 基础设施面板：HTTP 速率/延迟、错误率、速率限制、事件总线、Worker、Go Runtime
-- `deploy/observability/dashboards/servify-business.json` — 业务面板：会话、工单、路由、AI 请求量/延迟/Token
-- `deploy/observability/alerts/rules.yaml` — Prometheus 告警规则：5xx、P99 延迟、系统错误、事件失败、AI 降级、Worker 失败
-- `deploy/observability/runbook/operational-runbook.md` — 运维手册：告警排查步骤、常见操作、Metric 参考
-- 已新增 `servify check-observability-baseline --strict` 与 `scripts/check-observability-baseline.sh`，可在部署前检查 metrics/tracing 配置与 dashboard/alert/runbook/collector 资产是否齐备
+- `deploy/observability/dashboards/servify-service.json` — infrastructure panels: HTTP rate/latency, error rate, rate limiting, event bus, workers, Go runtime
+- `deploy/observability/dashboards/servify-business.json` — business panels: sessions, tickets, routing, AI request volume/latency/tokens
+- `deploy/observability/alerts/rules.yaml` — Prometheus alert rules: 5xx, P99 latency, system errors, event failures, AI degradation, worker failures
+- `deploy/observability/runbook/operational-runbook.md` — operations runbook: alert troubleshooting steps, common operations, metric reference
+- `servify check-observability-baseline --strict` and `scripts/check-observability-baseline.sh` have been added to check metrics/tracing configuration and dashboard/alert/runbook/collector assets before deployment

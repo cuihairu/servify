@@ -1,31 +1,31 @@
-# 基于 pgvector 的自建知识库设计文档
+# Self-Hosted pgvector Knowledge Base Design Document
 
-**创建日期：** 2025-05-01
-**状态：** 已被取代（2026-10-10 注）——pgvector 自建 provider 与 openai/tei embedding 验收路径已由 local 自含知识引擎（`scripts/test-local-knowledge-acceptance.sh`，`make local-knowledge-acceptance`）及各 provider 验收脚本（ragflow/dify/weknora/pgvector）取代；`test-knowledge-acceptance.sh` 已删除，保留本文档作历史记录。
-**作者：** AI Assistant
+**Created:** 2025-05-01
+**Status:** Superseded (2026-10-10 note) — the pgvector self-hosted provider and the openai/tei embedding acceptance paths have been superseded by the local self-contained knowledge engine (`scripts/test-local-knowledge-acceptance.sh`, `make local-knowledge-acceptance`) and the per-provider acceptance scripts (ragflow/dify/weknora/pgvector); `test-knowledge-acceptance.sh` has been deleted, and this document is kept as a historical record.
+**Author:** AI Assistant
 
-## 1. 概述
+## 1. Overview
 
-### 1.1 背景
+### 1.1 Background
 
-Servify 当前支持 Dify 和 WeKnora 作为外部知识库 provider。为了支持企业内网私有部署场景，需要实现一个基于 pgvector 的自建知识库方案，作为默认推荐选项。
+Servify currently supports Dify and WeKnora as external knowledge base providers. To support enterprise intranet private deployment scenarios, a self-hosted knowledge base solution based on pgvector needs to be implemented as the default recommended option.
 
-### 1.2 目标
+### 1.2 Goals
 
-- 实现 Embedding 服务抽象层，支持多种 embedding provider
-- 实现 PgvectorProvider 作为默认知识库 provider
-- 保留 Dify/WeKnora 作为可选 provider
-- 支持云部署（OpenAI）和内网部署（TEI/Xinference）两种模式
+- Implement an Embedding service abstraction layer supporting multiple embedding providers
+- Implement PgvectorProvider as the default knowledge base provider
+- Keep Dify/WeKnora as optional providers
+- Support both cloud deployment (OpenAI) and intranet deployment (TEI/Xinference) modes
 
-### 1.3 非目标
+### 1.3 Non-Goals
 
-- 实现复杂的文档解析（PDF、Word 等）- 暂支持纯文本
-- 实现本地模型推理 - 通过外部服务（TEI/Xinference）实现
-- 替换现有的 Dify/WeKnora provider - 保留作为可选项
+- Implement complex document parsing (PDF, Word, etc.) - plain text only for now
+- Implement local model inference - implemented via external services (TEI/Xinference)
+- Replace the existing Dify/WeKnora providers - keep them as options
 
-## 2. 架构设计
+## 2. Architecture Design
 
-### 2.1 整体架构
+### 2.1 Overall Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -54,9 +54,9 @@ Servify 当前支持 Dify 和 WeKnora 作为外部知识库 provider。为了支
    └────────┘ └────────┘ └────────┘ └────────┘
 ```
 
-### 2.2 核心接口
+### 2.2 Core Interfaces
 
-#### EmbeddingProvider 接口
+#### EmbeddingProvider Interface
 
 ```go
 // apps/server/internal/platform/embedding/provider.go
@@ -77,17 +77,17 @@ type EmbeddingProvider interface {
 }
 ```
 
-#### Provider 实现
+#### Provider Implementations
 
-| Provider | 文件位置 | 向量维度 | 用途 |
+| Provider | File Location | Vector Dimension | Use |
 |----------|----------|----------|------|
-| `OpenAIProvider` | `embedding/openai/provider.go` | 1536 | 云部署默认 |
-| `TEIProvider` | `embedding/tei/provider.go` | 512/768 | 内网部署推荐 |
-| `XinferenceProvider` | `embedding/xinference/provider.go` | 可变 | 内网备选 |
+| `OpenAIProvider` | `embedding/openai/provider.go` | 1536 | Default for cloud deployment |
+| `TEIProvider` | `embedding/tei/provider.go` | 512/768 | Recommended for intranet deployment |
+| `XinferenceProvider` | `embedding/xinference/provider.go` | Variable | Intranet alternative |
 
-## 3. 数据库设计
+## 3. Database Design
 
-### 3.1 表结构变更
+### 3.1 Table Structure Changes
 
 ```sql
 -- 扩展 knowledge_docs 表
@@ -103,7 +103,7 @@ USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 ```
 
-### 3.2 模型扩展
+### 3.2 Model Extension
 
 ```go
 // apps/server/internal/models/models.go
@@ -127,9 +127,9 @@ type KnowledgeDoc struct {
 }
 ```
 
-## 4. 组件设计
+## 4. Component Design
 
-### 4.1 EmbeddingProvider 实现
+### 4.1 EmbeddingProvider Implementations
 
 #### OpenAIProvider
 
@@ -218,7 +218,7 @@ func (p *Provider) Dimension() int {
 }
 ```
 
-### 4.2 PgvectorProvider 实现
+### 4.2 PgvectorProvider Implementation
 
 ```go
 // apps/server/internal/platform/knowledgeprovider/pgvector/provider.go
@@ -360,9 +360,9 @@ func (p *Provider) chunkDocument(content string) []string {
 }
 ```
 
-## 5. 配置设计
+## 5. Configuration Design
 
-### 5.1 配置结构
+### 5.1 Configuration Structure
 
 ```yaml
 # config.yml
@@ -408,7 +408,7 @@ weknora:
   ...
 ```
 
-### 5.2 Config 结构扩展
+### 5.2 Config Structure Extension
 
 ```go
 // apps/server/internal/config/config.go
@@ -476,7 +476,7 @@ type IndexingConfig struct {
 }
 ```
 
-## 6. 文件结构
+## 6. File Structure
 
 ```
 apps/server/internal/
@@ -510,46 +510,47 @@ apps/server/internal/
         └── service.go                       # 更新以支持新 provider
 ```
 
-## 7. 实施步骤
+## 7. Implementation Steps
 
-### Phase 1: Embedding 抽象层
-- [ ] 定义 `EmbeddingProvider` 接口
-- [ ] 实现 `OpenAIProvider`
-- [ ] 实现 `TEIProvider`
-- [ ] 实现 `XinferenceProvider` (可选)
-- [ ] 添加配置结构
-- [ ] 实现 Factory 模式创建 provider
-- [ ] 编写单元测试
+### Phase 1: Embedding Abstraction Layer
+- [ ] Define the `EmbeddingProvider` interface
+- [ ] Implement `OpenAIProvider`
+- [ ] Implement `TEIProvider`
+- [ ] Implement `XinferenceProvider` (optional)
+- [ ] Add configuration structures
+- [ ] Implement the Factory pattern for creating providers
+- [ ] Write unit tests
 
 ### Phase 2: PgvectorProvider
-- [ ] 扩展数据库模型（添加 embedding 列）
-- [ ] 编写数据库迁移脚本
-- [ ] 实现文档分块逻辑
-- [ ] 实现 `UpsertDocument` 方法
-- [ ] 实现 `Search` 方法
-- [ ] 实现 `DeleteDocument` 方法
-- [ ] 实现 `HealthCheck` 方法
-- [ ] 编写集成测试
+- [ ] Extend the database model (add the embedding column)
+- [ ] Write database migration scripts
+- [ ] Implement document chunking logic
+- [ ] Implement the `UpsertDocument` method
+- [ ] Implement the `Search` method
+- [ ] Implement the `DeleteDocument` method
+- [ ] Implement the `HealthCheck` method
+- [ ] Write integration tests
 
-### Phase 3: 集成与测试
-- [ ] 更新知识库 service 以使用新 provider
-- [ ] 更新 runtime wiring
-- [ ] 编写端到端测试
-- [ ] 编写验收脚本
-- [ ] 更新文档
+### Phase 3: Integration and Testing
+- [ ] Update the knowledge base service to use the new provider
+- [ ] Update runtime wiring
+- [ ] Write end-to-end tests
+- [ ] Write acceptance scripts
+- [ ] Update docs
 
-## 8. 测试策略
+## 8. Testing Strategy
 
-### 8.1 单元测试
-- EmbeddingProvider 各实现的测试
-- 文档分块逻辑测试
-- 向量相似度计算测试
+### 8.1 Unit Tests
+- Tests for each EmbeddingProvider implementation
+- Document chunking logic tests
+- Vector similarity computation tests
 
-### 8.2 集成测试
-- PgvectorProvider 完整流程测试
-- 与现有知识库 service 集成测试
+### 8.2 Integration Tests
+- PgvectorProvider full-flow tests
+- Integration tests with the existing knowledge base service
 
-### 8.3 验收脚本
+### 8.3 Acceptance Scripts
+
 ```bash
 # 使用真实 OpenAI 测试
 EMBEDDING_PROVIDER=openai ./scripts/test-knowledge-acceptance.sh
@@ -558,16 +559,16 @@ EMBEDDING_PROVIDER=openai ./scripts/test-knowledge-acceptance.sh
 EMBEDDING_PROVIDER=tei ./scripts/test-knowledge-acceptance.sh
 ```
 
-## 9. 依赖项
+## 9. Dependencies
 
-- `github.com/pgvector/pgvector-go` - pgvector Go 绑定
-- `github.com/lib/pq` - PostgreSQL 驱动（已有）
+- `github.com/pgvector/pgvector-go` - pgvector Go bindings
+- `github.com/lib/pq` - PostgreSQL driver (already present)
 
-## 10. 风险与缓解
+## 10. Risks and Mitigation
 
-| 风险 | 缓解措施 |
+| Risk | Mitigation |
 |------|----------|
-| pgvector 性能问题 | 使用 ivfflat 索引，设置合适的 lists 参数 |
-| Embedding API 限流 | 实现请求批处理和缓存 |
-| 向量维度不一致 | 在配置中明确指定维度，自动检测 |
-| 文档分块策略不优 | 先实现简单分块，后续可扩展 |
+| pgvector performance issues | Use an ivfflat index with an appropriate lists parameter |
+| Embedding API rate limiting | Implement request batching and caching |
+| Inconsistent vector dimensions | Specify dimensions explicitly in config, with auto-detection |
+| Suboptimal document chunking strategy | Implement simple chunking first, extensible later |

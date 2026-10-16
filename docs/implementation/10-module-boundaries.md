@@ -1,43 +1,43 @@
 # 10 Module Boundaries
 
-> 状态（2026-10-04 文档对账）：迁移完成后 `services` 层已不存在，本文的三层
-> 职责表述按迁移期档案理解；当前依赖方向以
-> [current-architecture.md](../current-architecture.md) 为准，可执行规则仍是
-> `scripts/module-boundaries.rules`（持续生效）。
+> Status (2026-10-04 doc reconciliation): after the migration completed the `services` layer no longer
+> exists; read the three-layer responsibility descriptions in this doc as migration-period archives.
+> The current dependency direction follows [current-architecture.md](../current-architecture.md),
+> while the executable rules remain `scripts/module-boundaries.rules` (still in force).
 
-本文件定义 `handlers`、`services`、`modules` 三层在迁移阶段的职责与依赖方向，用于支持 M5 的边界治理。
+This file defines the responsibilities and dependency directions of the `handlers`, `services`, and `modules` layers during the migration phase, supporting boundary governance for M5.
 
-可执行规则来源：
+Executable rule sources:
 
 - [scripts/module-boundaries.rules](../../scripts/module-boundaries.rules)
-  - 这是当前边界检查的规则清单
+  - This is the rule list for the current boundary check
 - [scripts/check-module-boundaries.sh](../../scripts/check-module-boundaries.sh)
-  - 这是规则执行器
+  - This is the rule executor
 
-维护约定：
+Maintenance conventions:
 
-- 新增一个已收口模块时，优先更新 `scripts/module-boundaries.rules`
-- 文档中的“当前已锁定的边界”应与规则清单保持一致
-- 如果文档与规则冲突，以规则清单和 CI 结果为准，再回补文档
+- When adding a newly closed-out module, update `scripts/module-boundaries.rules` first
+- The doc's "currently locked boundaries" should stay consistent with the rule list
+- If the doc and the rules conflict, the rule list and CI results win; backfill the doc afterwards
 
-## 目标规则
+## Target rules
 
 - `handlers/*`
-  - 只依赖 `modules/*/delivery` contract、少量平台接口、请求响应 DTO
-  - 不直接依赖 concrete legacy service 作为默认业务入口
+  - Depend only on `modules/*/delivery` contracts, a few platform interfaces, and request/response DTOs
+  - Do not depend directly on concrete legacy services as the default business entrypoint
 - `app/server/*`
-  - 负责 runtime assembly
-  - 可以持有 legacy concrete service，但对 HTTP 注入时应优先暴露 `modules/*/delivery` contract
-  - 路由注册与 runtime 装配应按领域或接入面拆分文件，避免继续集中回单个超大入口文件
+  - Owns runtime assembly
+  - May hold legacy concrete services, but HTTP injection should prefer exposing `modules/*/delivery` contracts
+  - Route registration and runtime assembly should be split into files by domain or access surface, avoiding re-concentration into a single giant entrypoint file
 - `services/*`
-  - 只在确有未迁出 runtime glue、状态同步、side effect 组装时临时保留
-  - 已收口且不再承担必要职责时应直接删除，而不是继续增长为默认业务中心
+  - Retained temporarily only when unmigrated runtime glue, state synchronization, or side-effect assembly genuinely remains
+  - Once closed out and no longer serving a necessary role, delete it outright instead of letting it grow into the default business center
 - `modules/*/application`
-  - 承担新的核心业务逻辑
+  - Owns new core business logic
 - `modules/*/delivery`
-  - 承担 handler-facing / runtime-facing adapter 与 contract
+  - Owns handler-facing / runtime-facing adapters and contracts
 
-## 允许的依赖方向
+## Allowed dependency directions
 
 - `handlers -> modules/*/delivery`
 - `app/server -> modules/*/delivery`
@@ -47,64 +47,64 @@
 - `modules/*/delivery -> modules/*/application`
 - `modules/*/application -> modules/*/domain|infra`
 
-## 禁止继续扩散的模式
+## Patterns forbidden from spreading further
 
 - `handlers -> *services.ConcreteType`
 - `handlers -> gorm.DB`
-- `handlers -> modules/*/application` 直接拼业务
-- `services/*` 为了新需求再次变成 handler 默认入口
-- runtime 新增一条与既有 module contract 平行的 legacy 入口
-- 在 `app/server` 重新堆积跨域装配逻辑到单个 `router.go` 或 `runtime.go`
+- `handlers -> modules/*/application` assembling business logic directly
+- `services/*` becoming the default handler entrypoint again for new requirements
+- The runtime adding another legacy entrypoint parallel to an existing module contract
+- Re-piling cross-domain assembly logic into a single `router.go` or `runtime.go` under `app/server`
 
-## 当前已锁定的边界
+## Currently locked boundaries
 
 - `ticket`
-  - HTTP 入口必须走 `modules/ticket/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/ticket/delivery.HandlerService`
 - `agent`
-  - HTTP 入口必须走 `modules/agent/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/agent/delivery.HandlerService`
 - `analytics`
-  - HTTP 入口必须走 `modules/analytics/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/analytics/delivery.HandlerService`
 - `routing / session transfer`
-  - HTTP 入口必须走 `modules/routing/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/routing/delivery.HandlerService`
 - `ai`
-  - HTTP / health / metrics 入口必须走 `modules/ai/delivery.HandlerService`
+  - The HTTP / health / metrics entrypoints must go through `modules/ai/delivery.HandlerService`
 - `customer`
-  - HTTP 入口必须走 `modules/customer/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/customer/delivery.HandlerService`
 - `automation`
-  - HTTP 入口必须走 `modules/automation/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/automation/delivery.HandlerService`
 - `knowledge`
-  - HTTP 入口必须走 `modules/knowledge/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/knowledge/delivery.HandlerService`
 - `suggestion`
-  - HTTP 入口必须走 `modules/suggestion/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/suggestion/delivery.HandlerService`
 - `gamification`
-  - HTTP 入口必须走 `modules/gamification/delivery.HandlerService`
+  - The HTTP entrypoint must go through `modules/gamification/delivery.HandlerService`
 - `conversation`
-  - websocket persistence 入口必须走 `modules/conversation/delivery.WebSocketMessageWriter`
+  - The websocket persistence entrypoint must go through `modules/conversation/delivery.WebSocketMessageWriter`
 - handler-local contracts
-  - `satisfaction`、`macro`、`app integration`、`custom field`、`shift`、`sla` 等尚未完全模块化的薄能力，HTTP handler 与 router/runtime surface 必须停留在 handler-local contract，避免回退到 concrete legacy service
+  - For thin capabilities not yet fully modularized — `satisfaction`, `macro`, `app integration`, `custom field`, `shift`, `sla` — the HTTP handler and router/runtime surface must stay on handler-local contracts, avoiding regression to concrete legacy services
 
-对应规则：
+Corresponding rules:
 
-- `handler` / `runtime` 规则记录在 `scripts/module-boundaries.rules`
-- `conversation` 的 websocket persistence 与 `AIAssembly` 的双入口规则也记录在同一规则文件
-- `scripts/check-module-boundaries.sh` 额外对非测试 handler 做 import 扫描，禁止直连 `modules/*/application`、`modules/*/infra`、`gorm`
+- The `handler` / `runtime` rules are recorded in `scripts/module-boundaries.rules`
+- The websocket persistence rule for `conversation` and the dual-entrypoint rules for `AIAssembly` are also recorded in the same rule file
+- `scripts/check-module-boundaries.sh` additionally import-scans non-test handlers, forbidding direct connections to `modules/*/application`, `modules/*/infra`, and `gorm`
 
 ## Legacy Service Freeze Policy
 
-- 已进入 `stabilized` 的能力：
-  - legacy `services/*` 只允许必要的 runtime glue、状态同步、side effect 组装类修改
-  - 新业务逻辑优先进入 `modules/*/application`
-  - 新的 handler/router wiring 不得回退到 concrete service
-  - 若某个 legacy service 已无必要职责，应优先删除，不保留空壳 facade
-- 仍处于 `legacy` 的能力：
-  - 允许临时修改，但每次新增业务逻辑都应同步标注目标 module 归属
+- Capabilities already in `stabilized`:
+  - legacy `services/*` only allows necessary runtime glue, state synchronization, and side-effect assembly changes
+  - New business logic goes into `modules/*/application` first
+  - New handler/router wiring must not regress to concrete services
+  - If a legacy service no longer has a necessary role, delete it rather than keeping an empty-shell facade
+- Capabilities still in `legacy`:
+  - Temporary changes are allowed, but every addition of business logic should be annotated with its target module
 
-## Retirement 条件
+## Retirement conditions
 
-某个 legacy service 可以进入“退役候选”状态，至少应满足：
+A legacy service can enter the "retirement candidate" state only if at least the following hold:
 
-1. HTTP handler 已全部改为依赖 `modules/*/delivery`
-2. runtime 注入已不再需要 concrete legacy type 暴露给 router
-3. 关键兼容职责已被 adapter 或 platform layer 吸收
-4. 有测试覆盖迁移前后的关键行为
-5. scorecard 状态达到 `stabilized` 并持续一段时间无回退
+1. HTTP handlers all depend on `modules/*/delivery`
+2. Runtime injection no longer needs to expose concrete legacy types to the router
+3. Key compatibility responsibilities have been absorbed by adapters or the platform layer
+4. Tests cover the key behaviors before and after the migration
+5. The scorecard status reaches `stabilized` and stays regression-free for a period

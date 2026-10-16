@@ -1,78 +1,78 @@
 # 11 Tenant Scope Inventory
 
-本文件记录 `11-tenant-auth-and-audit` 在 `T1 tenant-and-workspace-boundaries` 阶段的当前盘点结果。
+This file records the current inventory results of `11-tenant-auth-and-audit` during the `T1 tenant-and-workspace-boundaries` phase.
 
-> 注：本盘点最初成文时核心业务表尚未普遍落 scope 列；**2026-10-08 文档一致性审计已按现码整体重写**——Session/Ticket/Message/Customer/Agent 等核心表均已带 `tenant_id`/`workspace_id` 列与复合索引，workspace/statistics 仓库层均已按请求 context 过滤。当前进展权威口径见 `11-tenant-auth-and-audit.md` T1。
+> Note: when this inventory was first written, the core business tables did not yet commonly carry scope columns; **the 2026-10-08 documentation consistency audit rewrote it wholesale against the current code** — core tables such as Session/Ticket/Message/Customer/Agent now all carry `tenant_id`/`workspace_id` columns and composite indexes, and the workspace/statistics repository layers filter by request context. The authoritative view of current progress is `11-tenant-auth-and-audit.md` T1.
 
-## 当前已确认的 scope 来源
+## Currently Confirmed Scope Sources
 
 - JWT / auth subject
   - `platform/auth/claims.go`
-  - 当前可从 token 中归一化出：
+  - Currently normalized out of the token:
     - `tenant_id`
     - `workspace_id`
     - `token_type`
     - `principal_type`
-  - subject / scope 归一化在 `platform/auth.AuthMiddleware` 内部完成：`extractClaims` 将标准化后的 claims（`tenant_id` / `workspace_id` / `roles` 等）写入 gin context；请求级 scope 头（`X-Tenant-ID` / `X-Workspace-ID`）经 `platform/auth.EnforceRequestScope()` 校验，阻止调用方放大或抵触 token 自带的 scope（原 `SubjectFromGin` / `ScopeFromGin` 独立读取入口已随 2026-09-20 死代码清理移除）
-  - scope 经 `platform/auth/context.go` 投影进 request context，供仓库层取用（`gin_middleware.go` 注入）
+  - Subject / scope normalization happens inside `platform/auth.AuthMiddleware`: `extractClaims` writes the normalized claims (`tenant_id` / `workspace_id` / `roles`, etc.) into the gin context; the request-level scope headers (`X-Tenant-ID` / `X-Workspace-ID`) are validated by `platform/auth.EnforceRequestScope()`, preventing callers from widening or conflicting with the scope carried by the token itself (the former standalone `SubjectFromGin` / `ScopeFromGin` read entries were removed with the 2026-09-20 dead code cleanup)
+  - Scope is projected into the request context via `platform/auth/context.go` for repository-layer use (injected by `gin_middleware.go`)
 
-- AI / knowledge provider 默认配置
+- AI / knowledge provider default configuration
   - `config.WeKnora.TenantID`
   - `config.WeKnora.KnowledgeBaseID`
-  - 默认值目前来自配置，而不是请求级或 workspace 级覆盖
+  - Defaults currently come from configuration, not from request-level or workspace-level overrides
 
-- knowledge provider namespace 解析
+- knowledge provider namespace resolution
   - `platform/knowledgeprovider.ResolveNamespace(defaultTenantID, defaultKnowledgeID, tenantID, knowledgeID)`
-  - 当前 namespace 语义是：
-    - 先取请求 tenant / knowledge
-    - 没有时回退到默认配置
-    - 若 knowledge 为空且 tenant 非空，则用 tenant 作为 knowledge id
+  - Current namespace semantics:
+    - Take the request tenant / knowledge first
+    - Fall back to the default configuration when absent
+    - If knowledge is empty but tenant is not, use the tenant as the knowledge id
 
 - event bus
   - `platform/eventbus.BaseEvent`
-  - 事件模型已预留 `EventTenantID`
-  - 但尚未形成统一的"所有关键事件都必须带 tenant"约束
+  - The event model reserves `EventTenantID`
+  - But there is not yet a unified "all key events must carry tenant" constraint
 
-## 当前落库与过滤现状（2026-10-08 按现码核验）
+## Current Persistence and Filtering Status (verified against code on 2026-10-08)
 
-- 核心业务表已普遍带显式 tenant / workspace 列
-  - `Session`（`models/models.go:237-238`）、`Ticket`（:131-132）、`Message`（:262-263）、`Customer`（:88-89）、`Agent`（:107-108）等 16+ 模型均带 `TenantID` + `WorkspaceID` 复合索引（`idx_sessions_scope` 等）
-  - 数据库层边界已建立，不再只依赖调用约定
-  - **残余空白：`User` 表无租户列**（用户主体按设计全局唯一，跨租户登录）
+- Core business tables now commonly carry explicit tenant / workspace columns
+  - `Session` (`models/models.go:237-238`), `Ticket` (:131-132), `Message` (:262-263), `Customer` (:88-89), `Agent` (:107-108), and 16+ other models all carry `TenantID` + `WorkspaceID` composite indexes (`idx_sessions_scope`, etc.)
+  - The database-level boundary is established, no longer relying only on calling conventions
+  - **Remaining gap: the `User` table has no tenant column** (user principals are globally unique by design, logging in across tenants)
 
-- workspace 工作台已按 scope 过滤
-  - `modules/workspace/infra/gorm_repository.go:24-28,87-100`：查询按 request context 的 tenant / workspace scope 过滤
-  - `workspace` scope 不能脱离 `tenant` scope、缺省 `global` 视图只允许 internal principal 的两条入口规则仍在入口面固定
-  - 注：早期版本的 `scope_enforced` / `scope_warning` 响应字段已不存在于任何契约——隔离已由仓库层过滤实际承接，不再靠「入口透传可见性」声明
+- The workspace console now filters by scope
+  - `modules/workspace/infra/gorm_repository.go:24-28,87-100`: queries filter by the tenant / workspace scope of the request context
+  - The two entry rules — `workspace` scope cannot escape the `tenant` scope, and the default `global` view is allowed only for internal principals — remain fixed at the entry surface
+  - Note: the early `scope_enforced` / `scope_warning` response fields no longer exist in any contract — isolation is now actually carried by repository-layer filtering, no longer declared via "entry pass-through visibility"
 
-- statistics / analytics 已按 scope 过滤
-  - `modules/analytics/infra/gorm_repository.go:188-198,316-347`：统计查询按 context scope 过滤
-  - 该链路有 `analytics/infra/gorm_repository_scope_integration_test.go` 集成测试锚定（`integration && sqlite_integration` 标签）
-  - `DailyStats` 仍是 system 级 read model（`models.go` 内无 scope 字段，与 `current-architecture.md` 口径一致）
+- statistics / analytics now filter by scope
+  - `modules/analytics/infra/gorm_repository.go:188-198,316-347`: statistics queries filter by context scope
+  - This chain is anchored by the `analytics/infra/gorm_repository_scope_integration_test.go` integration test (`integration && sqlite_integration` tags)
+  - `DailyStats` remains a system-level read model (no scope fields in `models.go`, consistent with `current-architecture.md`)
 
-- customer 主数据已带租户列
-  - `models/models.go:88-89`，create 链路的 scope 入口规则（workspace 不脱离 tenant、global 仅 internal）继续有效
+- Customer master data now carries tenant columns
+  - `models/models.go:88-89`; the create chain's scope entry rules (workspace does not escape tenant, global only for internal) remain in effect
 
-## 当前可回答的问题
+## Questions That Can Currently Be Answered
 
-- "tenant / workspace scope 现在从哪里来？"
-  - 认证 token claims（经 `platform/auth` 标准化 + request context 投影）
-  - WeKnora 默认配置
+- "Where do tenant / workspace scopes come from now?"
+  - Auth token claims (normalized via `platform/auth` + projected into the request context)
+  - WeKnora default configuration
   - knowledge provider request namespace
-  - event bus 的可选 tenant 字段
+  - The event bus's optional tenant field
 
-- "哪些核心能力已经开始具备 scope 基础设施？"
-  - auth subject / scope 读取
-  - knowledge provider namespace 解析
-  - event bus tenant 字段预留
-  - 核心业务表落库列 + workspace/statistics 仓库层过滤（含集成测试锚）
+- "Which core capabilities already have scope infrastructure?"
+  - auth subject / scope reading
+  - knowledge provider namespace resolution
+  - event bus tenant field reservation
+  - Core business table columns + workspace/statistics repository-layer filtering (with integration test anchors)
 
-- "哪些核心能力还没有真正 tenant 隔离？"
-  - `User` 主数据（无租户列，按设计全局）
-  - `DailyStats` 聚合表（system 级 read model，按口径不落 scope）
-  - event bus 事件的 tenant 字段仍是预留，未形成全链强制约束
+- "Which core capabilities are still not truly tenant-isolated?"
+  - `User` master data (no tenant column, global by design)
+  - The `DailyStats` aggregation table (system-level read model, no scope columns by convention)
+  - The event bus tenant field is still a reservation, without a chain-wide mandatory constraint
 
-## 下一步建议
+## Next-Step Suggestions
 
-- event bus 全链 tenant 强制：把「所有关键事件必须带 tenant」从预留变成门禁
-- knowledge 检索与业务主数据的 scope 语义继续对齐（knowledge 已有 namespace，ticket/conversation/customer 链路已落库列，残余是对账类读面的统一）
+- Enforce tenant chain-wide on the event bus: turn "all key events must carry tenant" from a reservation into a gate
+- Keep aligning the scope semantics of knowledge retrieval with business master data (knowledge already has namespaces; the ticket/conversation/customer chains already have columns; the remainder is unifying reconciliation-style read surfaces)

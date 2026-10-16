@@ -1,96 +1,96 @@
 # Servify Implementation Backlogs
 
-本目录按主题拆分架构实施任务。
+This directory splits architecture implementation tasks by topic.
 
-目的：
+Purpose:
 
-- 让每份 backlog 保持可读
-- 让 server、AI、SDK、协议接入各自可独立推进
-- 支持中断恢复
+- Keep each backlog readable
+- Let server, AI, SDK, and protocol integration each advance independently
+- Support interrupt and resume
 
-文件说明：
+File descriptions:
 
-- [总体架构设计](../ARCHITECTURE.md)
-  - 宏观边界、运行时分层、未来扩展方向
-- [当前架构分析](../current-architecture.md)
-  - 当前真实架构快照、模块迁移状态与过渡风险
-- [架构重设计计划](../architecture-redesign-plan.md)
-  - 架构重设计计划（services→modules 迁移期产物，仅存档）
+- [Overall Architecture Design](../ARCHITECTURE.md)
+  - Macro boundaries, runtime layering, and future extension directions
+- [Current Architecture Analysis](../current-architecture.md)
+  - Current real architecture snapshot, module migration status, and transition risks
+- [Architecture Redesign Plan](../architecture-redesign-plan.md)
+  - Architecture redesign plan (a services→modules migration-era artifact, archived only)
 - [01-platform-and-runtime.md](./01-platform-and-runtime.md)
-  - 入口、bootstrap、router、auth、event bus、realtime 等平台任务
+  - Platform tasks such as entry, bootstrap, router, auth, event bus, and realtime
 
 - [02-ai-and-knowledge.md](./02-ai-and-knowledge.md)
-  - provider、AI orchestration、tooling、knowledge indexing 等任务
+  - provider, AI orchestration, tooling, knowledge indexing, and related tasks
 
 - [03-business-modules.md](./03-business-modules.md)
-  - conversation、routing、agent、ticket、customer、automation、analytics、voice
+  - conversation, routing, agent, ticket, customer, automation, analytics, voice
 
 - [04-sdk-and-channel-adapters.md](./04-sdk-and-channel-adapters.md)
-  - sdk core、web sdk、future api/app sdk 预留、channel adapters、SIP adapter
+  - sdk core, web sdk, future api/app sdk reservations, channel adapters, SIP adapter
 - [05-engineering-hardening.md](./05-engineering-hardening.md)
-  - CI、测试金字塔、版本发布、文档站点
+  - CI, testing pyramid, release versioning, documentation site
 - [06-voice-and-protocol-expansion.md](./06-voice-and-protocol-expansion.md)
-  - voice 协议入口深化、provider 落地、更多常见语音协议预留
+  - deeper voice protocol entries, provider landing, and more common voice protocol reservations
 - [07-sdk-multi-surface.md](./07-sdk-multi-surface.md)
-  - web sdk 收口、future api/app sdk contract 深化、transport 演进
+  - web sdk wrap-up, deeper future api/app sdk contracts, transport evolution
 - [08-ai-provider-expansion.md](./08-ai-provider-expansion.md)
-  - LLM/knowledge provider 扩展、编排层稳定性、AI 可观测性
+  - LLM/knowledge provider expansion, orchestration layer stability, AI observability
 - [09-runtime-and-repo-hygiene.md](./09-runtime-and-repo-hygiene.md)
-  - 运行时产物清理、仓库卫生、ignore 策略、跨平台开发环境收口
+  - runtime artifact cleanup, repository hygiene, ignore policy, cross-platform dev environment convergence
 - [10-service-to-module-migration.md](./10-service-to-module-migration.md)
-  - 旧 services/handlers 向 modules 架构迁移、适配层与边界收口
+  - migrating legacy services/handlers to the modules architecture, adapter layers, and boundary convergence
 - [10-migration-inventory.md](./10-migration-inventory.md)
-  - 当前 handlers/services/modules 迁移盘点与优先级建议
+  - current handlers/services/modules migration inventory and priority suggestions
 - [10-migration-scorecard.md](./10-migration-scorecard.md)
-  - 当前迁移完成度表与模块状态追踪
+  - current migration completeness table and module status tracking
 - [10-module-boundaries.md](./10-module-boundaries.md)
-  - handlers/services/modules 迁移期边界规则与冻结策略
+  - handlers/services/modules migration-era boundary rules and freeze policy
 - [11-tenant-auth-and-audit.md](./11-tenant-auth-and-audit.md)
-  - 多租户、权限模型、审计日志、配置边界
+  - multi-tenancy, permission model, audit logging, configuration boundaries
 - [12-operator-observability.md](./12-operator-observability.md)
-  - tracing、metrics、日志、告警、回放与运营诊断
+  - tracing, metrics, logging, alerting, replay, and operational diagnostics
 - [13-ai-agent-loop.md](./13-ai-agent-loop.md)
-  - P0：接通 AI agent loop（tool-calling 循环 + 流式），让智能客服多步行动
+  - P0: wire up the AI agent loop (tool-calling loop + streaming), so the intelligent customer service can act in multiple steps
 
-状态约定：
+Status conventions:
 
-- `[ ]` 未开始
-- `[-]` 进行中
-- `[x]` 已完成
+- `[ ]` not started
+- `[-]` in progress
+- `[x]` done
 
-执行建议：
+Execution suggestions:
 
-1. 先做 `01-platform-and-runtime`
-2. 再做 `02-ai-and-knowledge`
-3. 再拆 `03-business-modules`
-4. 并行规划 `04-sdk-and-channel-adapters`（web sdk 已实现，Android/iOS 原生
-   SDK 已随 M1–M3 落地；api/app sdk 仍为预留）
-5. 第一阶段清零后，进入 `05` 到 `08` 的工程化与扩展阶段
+1. Do `01-platform-and-runtime` first
+2. Then do `02-ai-and-knowledge`
+3. Then split `03-business-modules`
+4. Plan `04-sdk-and-channel-adapters` in parallel (web sdk is implemented; Android/iOS native
+   SDKs landed with M1–M3; api/app sdk remain reservations)
+5. After the first phase is cleared, enter the `05` to `08` engineering and expansion phase
 
-当前进度（2026-10-04 更新，`v1.0.0` 已发布）：
+Current progress (updated 2026-10-04, `v1.0.0` released):
 
-- `01` 到 `08` 已全部清零
-- `09` 已完成仓库卫生与运行时产物治理
-- `10` services→modules 迁移已完成（`internal/services` 已整体移除，27 个
-  一级模块封顶），配套 inventory / scorecard / boundaries 为迁移期档案
-- `11` 和 `12` 主体已落地（租户/审计/安全基线接入管理面；tracing/metrics/
-  告警通过 observability baseline 门禁）
-- `13` AI agent loop 主循环已接通（tool-calling 循环 + 流式 + 三工具注册；
-  工具 Port 数据源与权限校验接入为遗留项，状态见
-  [13-ai-agent-loop.md](./13-ai-agent-loop.md) 头部核实注记）
-- V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是
-  [todo.md](../../todo.md) 与 [验收矩阵](../acceptance-checklist.md)；后续
-  演进见 「演进方向」
+- `01` through `08` are all cleared
+- `09` completed repository hygiene and runtime artifact governance
+- `10` services→modules migration is complete (`internal/services` fully removed, capped at 27
+  first-level modules); the accompanying inventory / scorecard / boundaries docs are migration-era archives
+- `11` and `12` have mostly landed (tenant/audit/security baseline wired into the management surface; tracing/metrics/
+  alerting pass the observability baseline gate)
+- `13` the AI agent loop main loop is wired (tool-calling loop + streaming + three-tool registration;
+  wiring the tool Port data sources and permission checks is left over; see the
+  verification note at the top of [13-ai-agent-loop.md](./13-ai-agent-loop.md))
+- The V1.0 convergence batches (B0–B4) have all passed the gate; the only active status sources are
+  [todo.md](../../todo.md) and the [acceptance matrix](../acceptance-checklist.md); for future
+  evolution see "Evolution Directions"
 
-当前阅读顺序：
+Current reading order:
 
-1. 先读 [当前架构分析](../current-architecture.md)，确认仓库真实状态。
-2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)，确认当前产品/架构口径。
-3. 历史实施主线（架构重设计计划、10-series 迁移档案）仅作迁移史参考。
+1. Read [Current Architecture Analysis](../current-architecture.md) first to confirm the repository's real state.
+2. Then read the [V1.0 Convergence Plan](../v1-convergence-plan.md) to confirm the current product/architecture baseline.
+3. The historical implementation mainline (architecture redesign plan, 10-series migration archives) serves only as migration history reference.
 
-配套专题：
+Companion topics:
 
-- [版本发布策略](../release-versioning.md)
-- [测试金字塔](../testing-pyramid.md)
-- [Mermaid 兼容性](../MERMAID_COMPATIBILITY.md)
-- [仓库卫生与生成物边界](../repo-hygiene.md)
+- [Release Versioning Strategy](../release-versioning.md)
+- [Testing Pyramid](../testing-pyramid.md)
+- [Mermaid Compatibility](../MERMAID_COMPATIBILITY.md)
+- [Repository Hygiene and Generated Asset Boundaries](../repo-hygiene.md)

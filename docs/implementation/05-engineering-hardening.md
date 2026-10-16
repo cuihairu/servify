@@ -1,66 +1,66 @@
 # 05 Engineering Hardening
 
-范围：
+Scope:
 
-- CI 质量门禁
-- 覆盖率与稳定性
-- 生成物一致性
-- 发布与版本控制
-- 文档站点自动化
+- CI quality gates
+- Coverage and stability
+- Generated-assets consistency
+- Release and versioning
+- Docs-site automation
 
 ## H1 ci-quality-gates
 
-- [x] 为 Go 增加 `go test -race` 分层执行策略
-- [x] 为 Go 增加覆盖率产物输出
-- [x] 为 SDK 增加 `typecheck` 独立 job
-- [x] 为 docs/VitePress 增加构建校验 job
-- [x] 为 shell/script 增加最小静态检查
+- [x] Add a layered `go test -race` execution strategy for Go
+- [x] Add coverage artifact output for Go
+- [x] Add a standalone `typecheck` job for the SDK
+- [x] Add a build-verification job for docs/VitePress
+- [x] Add minimal static checks for shell/scripts
 
-验收：
+Acceptance:
 
-- CI 不只验证能否编译，还能验证并发安全、类型稳定性和文档可构建性
+- CI verifies not only compilability but also concurrency safety, type stability, and docs buildability
 
 ## H2 generated-assets-and-lockfiles
 
-- [x] 固化需要提交的生成物清单
-- [x] 增加 lockfile 一致性检查
-- [x] 增加 demo SDK 同步结果校验
-- [x] 增加 API 文档生成/漂移检查
+- [x] Freeze the list of generated assets that must be committed
+- [x] Add lockfile consistency checks
+- [x] Add demo SDK sync-result verification
+- [x] Add API doc generation/drift checks
 
-验收：
+Acceptance:
 
-- 本地与 CI 不会因为“忘记提交生成物”而长期漂移
+- Local and CI no longer drift long-term over "forgotten generated-asset commits"
 
 ## H3 release-versioning
 
-- [x] 设计 server 版本号注入
-- [x] 设计 SDK workspace version strategy
-- [x] 预留 changelog 生成脚本
-- [x] 预留 tag/release action
+- [x] Design server version injection
+- [x] Design the SDK workspace version strategy
+- [x] Reserve a changelog generation script
+- [x] Reserve a tag/release action
 
-验收：
+Acceptance:
 
-- 后续发布 server 和 SDK 时不需要重新设计版本链路
+- Future server and SDK releases do not need the versioning pipeline redesigned
 
 ## H4 test-pyramid
 
-- [x] 盘点当前 integration build tag 覆盖面
-- [x] 为 `voice` 补 handler 到 runtime 的端到端测试
-- [x] 为 `ai` 补 provider fallback 集成测试
-- [x] 为 `sdk` 补 examples smoke tests
-- [x] 为关键模块定义最小冒烟用例集合
+- [x] Inventory the current integration build tag coverage
+- [x] Add handler-to-runtime end-to-end tests for `voice`
+- [x] Add provider fallback integration tests for `ai`
+- [x] Add examples smoke tests for `sdk`
+- [x] Define a minimal smoke-case set for key modules
 
-验收：
+Acceptance:
 
-- 单测、集成测试、冒烟测试职责清晰
+- Unit tests, integration tests, and smoke tests have clear responsibilities
 
 ## H5 docs-delivery
 
-- [x] 补 VitePress 站点配置骨架
-- [x] 补 docs 导航与侧边栏生成策略
-- [x] 增加 GitHub Pages 或 artifact 发布流程
-- [x] 增加 Mermaid 渲染兼容性约束说明
+- [x] Add the VitePress site config skeleton
+- [x] Add the docs navigation and sidebar generation strategy
+- [x] Add a GitHub Pages or artifact publishing pipeline
+- [x] Add Mermaid rendering compatibility constraint notes
 
-验收：
+Acceptance:
 
-- `docs/` 可以稳定构建并部署，而不是只有 Markdown 文件
+- `docs/` builds and deploys reliably, instead of being just Markdown files

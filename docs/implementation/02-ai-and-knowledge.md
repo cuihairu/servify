@@ -1,13 +1,13 @@
 # 02 AI And Knowledge
 
-> 状态（2026-10-04 文档对账）：A1–A8 任务清单已全部完成（`[x]`）。V1.0 收敛
-> B3 新增的 AI 首答持久化（`ai_answers`）、反馈回传（`POST /api/v1/ai/feedback`
-> 会话绑定）、检索分析（`GET /api/v1/ai/retrieval-analytics`）与 Knowledge
-> 来源登记/文档版本/索引任务 HTTP 面不在本任务包内，状态与证据以
-> [验收矩阵 §14](../acceptance-checklist.md) 为准。工具调用遗留项（Port/
-> PermissionChecker 生产装配为 `nil`）见 [13-ai-agent-loop.md](./13-ai-agent-loop.md)。
+> Status (2026-10-04 doc reconciliation): the A1–A8 task lists are all complete (`[x]`). The V1.0
+> convergence B3 additions — AI first-answer persistence (`ai_answers`), feedback submission
+> (`POST /api/v1/ai/feedback` session binding), retrieval analytics
+> (`GET /api/v1/ai/retrieval-analytics`) — and the Knowledge source registration / document
+> versioning / index job HTTP surfaces are not part of this task package; status and evidence follow
+> [Acceptance Matrix §14](../acceptance-checklist.md). Tool-calling leftovers (Port/PermissionChecker wired as `nil` in production assembly): see [13-ai-agent-loop.md](./13-ai-agent-loop.md).
 
-范围：
+Scope:
 
 - llm provider
 - knowledge provider
@@ -20,110 +20,110 @@
 
 ## A1 provider contracts
 
-- [x] 创建 `internal/platform/llm`
-- [x] 定义 `ChatRequest`
-- [x] 定义 `ChatResponse`
-- [x] 定义 `TokenUsage`
-- [x] 定义 `LLMProvider`
-- [x] 创建 `internal/platform/knowledgeprovider`
-- [x] 定义 `SearchRequest`
-- [x] 定义 `KnowledgeHit`
-- [x] 定义 `KnowledgeDocument`
-- [x] 定义 `KnowledgeProvider`
+- [x] Create `internal/platform/llm`
+- [x] Define `ChatRequest`
+- [x] Define `ChatResponse`
+- [x] Define `TokenUsage`
+- [x] Define `LLMProvider`
+- [x] Create `internal/platform/knowledgeprovider`
+- [x] Define `SearchRequest`
+- [x] Define `KnowledgeHit`
+- [x] Define `KnowledgeDocument`
+- [x] Define `KnowledgeProvider`
 
-验收：
+Acceptance:
 
-- provider 接口不暴露 OpenAI、Dify、WeKnora compatibility 私有 DTO
+- Provider interfaces do not expose OpenAI, Dify, or WeKnora compatibility private DTOs
 
 ## A2 provider adapters
 
-- [x] 新增 `llm/openai/provider.go`
-- [x] 迁移模型 HTTP 调用逻辑
-- [x] 新增 `llm/mock/provider.go`
-- [x] 新增 `knowledgeprovider/dify/provider.go`
-- [x] 包装 `pkg/dify`
-- [x] 新增 `knowledgeprovider/weknora/provider.go`
-- [x] 包装 `pkg/weknora`
-- [x] 新增 `knowledgeprovider/mock/provider.go`
+- [x] Add `llm/openai/provider.go`
+- [x] Migrate the model HTTP call logic
+- [x] Add `llm/mock/provider.go`
+- [x] Add `knowledgeprovider/dify/provider.go`
+- [x] Wrap `pkg/dify`
+- [x] Add `knowledgeprovider/weknora/provider.go`
+- [x] Wrap `pkg/weknora`
+- [x] Add `knowledgeprovider/mock/provider.go`
 
-验收：
+Acceptance:
 
-- AI 模块可在 mock provider 下运行，且 runtime 可按 `Dify -> WeKnora compatibility -> fallback` 装配
+- The AI module can run under the mock provider, and the runtime can be assembled with `Dify -> WeKnora compatibility -> fallback`
 
 ## A3 ai module skeleton
 
-- [x] 创建 `internal/modules/ai/domain`
-- [x] 创建 `internal/modules/ai/application`
-- [x] 创建 `internal/modules/ai/infra`
-- [x] 创建 `internal/modules/ai/delivery`
-- [x] 定义 `AIRequest`
-- [x] 定义 `AIResponse`
-- [x] 定义 `TaskType`
-- [x] 定义 `RetrievalPolicy`
-- [x] 定义 `ToolPolicy`
+- [x] Create `internal/modules/ai/domain`
+- [x] Create `internal/modules/ai/application`
+- [x] Create `internal/modules/ai/infra`
+- [x] Create `internal/modules/ai/delivery`
+- [x] Define `AIRequest`
+- [x] Define `AIResponse`
+- [x] Define `TaskType`
+- [x] Define `RetrievalPolicy`
+- [x] Define `ToolPolicy`
 
-验收：
+Acceptance:
 
-- AI 模块独立存在
+- The AI module exists independently
 
 ## A4 query orchestrator
 
-- [x] 新增 `query_orchestrator.go`
-- [x] 注入 `LLMProvider`
-- [x] 注入 `KnowledgeProvider`
-- [x] 实现 happy path
-- [x] 实现无知识检索 fallback
-- [x] 增加 orchestrator 单测
+- [x] Add `query_orchestrator.go`
+- [x] Inject `LLMProvider`
+- [x] Inject `KnowledgeProvider`
+- [x] Implement the happy path
+- [x] Implement the no-knowledge-retrieval fallback
+- [x] Add orchestrator unit tests
 
-验收：
+Acceptance:
 
-- 可以替代旧增强 AI 主流程
+- It can replace the old enhanced AI main flow
 
 ## A4.1 runtime bridge
 
-- [x] 新增 runtime AI bridge，允许旧运行态逐步切到 `QueryOrchestrator`
-- [x] 让旧运行态入口可调用新 `QueryOrchestrator`
-- [x] 在标准模式入口 wiring 中逐步替换旧 AI service
-- [x] 在增强模式入口 wiring 中逐步替换旧 AI service
+- [x] Add the runtime AI bridge, letting the old runtime switch to `QueryOrchestrator` incrementally
+- [x] Let the old runtime entrypoints call the new `QueryOrchestrator`
+- [x] Gradually replace the old AI service in the standard-mode entrypoint wiring
+- [x] Gradually replace the old AI service in the enhanced-mode entrypoint wiring
 
-验收：
+Acceptance:
 
-- 不改现有 handler / runtime 对外接口的情况下，可以复用新 AI 模块
+- The new AI module can be reused without changing the existing external handler / runtime interfaces
 
 ## A5 prompt and retrieval
 
-- [x] 新增 `prompt_builder.go`
-- [x] 拆 system prompt
-- [x] 拆 context prompt
-- [x] 拆 knowledge prompt
-- [x] 新增 `retriever.go`
-- [x] 支持 topK
-- [x] 支持 threshold
-- [x] 支持 strategy
+- [x] Add `prompt_builder.go`
+- [x] Split out the system prompt
+- [x] Split out the context prompt
+- [x] Split out the knowledge prompt
+- [x] Add `retriever.go`
+- [x] Support topK
+- [x] Support threshold
+- [x] Support strategy
 
-验收：
+Acceptance:
 
-- prompt 和 retrieval 从旧 service 中独立出来
+- Prompt and retrieval are separated out of the old service
 
 ## A6 tools
 
-- [x] 定义 `Tool`
-- [x] 定义 `ToolRegistry`
-- [x] 定义 `ToolExecutor`
-- [x] 第一批：
+- [x] Define `Tool`
+- [x] Define `ToolRegistry`
+- [x] Define `ToolExecutor`
+- [x] First batch:
   - [x] ticket lookup tool
   - [x] customer lookup tool
   - [x] handoff tool
 
-验收：
+Acceptance:
 
-- 工具调用有 schema 和权限检查
+- Tool calls have schema and permission checks
 
 ## A7 ai guardrails and metrics
 
-- [x] 输入长度限制
-- [x] 敏感内容拦截占位
-- [x] 输出截断
+- [x] Input length limit
+- [x] Sensitive-content interception placeholder
+- [x] Output truncation
 - [x] query_count
 - [x] success_count
 - [x] provider_usage_count
@@ -131,25 +131,25 @@
 - [x] latency
 - [x] fallback_count
 
-验收：
+Acceptance:
 
-- 指标由 orchestrator 统一上报
+- Metrics are reported uniformly by the orchestrator
 
 ## A8 knowledge module
 
-- [x] 创建 `internal/modules/knowledge/domain`
-- [x] 创建 `internal/modules/knowledge/application`
-- [x] 创建 `internal/modules/knowledge/infra`
-- [x] 创建 `internal/modules/knowledge/delivery`
-- [x] 定义 `Document`
-- [x] 定义 `DocumentRepository`
-- [x] 定义 `IndexJobRepository`
-- [x] 实现 CreateDocument
-- [x] 实现 UpdateDocument
-- [x] 实现 DeleteDocument
-- [x] 实现 QueueIndexJob
-- [x] 实现 RunIndexJob
+- [x] Create `internal/modules/knowledge/domain`
+- [x] Create `internal/modules/knowledge/application`
+- [x] Create `internal/modules/knowledge/infra`
+- [x] Create `internal/modules/knowledge/delivery`
+- [x] Define `Document`
+- [x] Define `DocumentRepository`
+- [x] Define `IndexJobRepository`
+- [x] Implement CreateDocument
+- [x] Implement UpdateDocument
+- [x] Implement DeleteDocument
+- [x] Implement QueueIndexJob
+- [x] Implement RunIndexJob
 
-验收：
+Acceptance:
 
-- 知识库文档和索引成为正式模块
+- Knowledge documents and indexing become a formal module

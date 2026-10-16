@@ -1,117 +1,117 @@
 # 10 Migration Inventory
 
-> 状态（2026-10-04 文档对账）：迁移已完成——`internal/services` 目录已整体移除，业务能力全部收口 `internal/modules/*`（27 个一级模块封顶）。本文是 M1 盘点阶段的迁移史档案，各能力「已完成收口」的结论已兑现。
+> Status (2026-10-04 doc reconciliation): The migration is complete — the `internal/services` directory has been removed entirely and all business capabilities are closed out under `internal/modules/*` (capped at 27 top-level modules). This doc is a migration-history archive of the M1 inventory phase; the "closeout complete" conclusions per capability have been delivered.
 
-本文件记录 `handlers -> services -> modules` 的迁移现状（M1 盘点快照），用于支持 `10-service-to-module-migration` 的 M1 盘点阶段。
+This file records the migration state of `handlers -> services -> modules` (M1 inventory snapshot), supporting the M1 inventory phase of `10-service-to-module-migration`.
 
-## 当前观察结论
+## Current observations
 
 - `ticket`
-  - 已具备较强的模块化基础
-  - `handlers/ticket_handler.go` 通过 `ticketHandlerService` 接口工作
-  - 已存在模块交付适配层 `modules/ticket/delivery/handler_adapter.go`
-  - runtime 已直接改用 `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)`
-  - 旧 `services/TicketService` 已删除
-  - 当前规则：HTTP handler 应依赖 `modules/ticket/delivery.HandlerService`
-  - 结论：`ticket` 已完成主路径收口，并采用删除 legacy service 的策略收尾
+  - Already has a fairly strong modularization base
+  - `handlers/ticket_handler.go` works through the `ticketHandlerService` interface
+  - A module delivery adapter layer already exists at `modules/ticket/delivery/handler_adapter.go`
+  - The runtime already uses `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)` directly
+  - The old `services/TicketService` is deleted
+  - Current rule: HTTP handlers should depend on `modules/ticket/delivery.HandlerService`
+  - Conclusion: `ticket` has completed main-path closeout and finished by deleting the legacy service
 
 - `agent`
-  - `services/AgentService` 已明显成为兼容层
-  - 核心读写已走 `modules/agent/application.Service`
-  - handler-facing DTO 与 transfer runtime contract 已回收到 `modules/agent/delivery`
-  - `agentQueues` 已移除；剩余在线客服兼容缓存回填、后台清理调度与 service 装配已拆成独立 runtime helper/adapter/assembly，且后台任务只在 server runtime 装配点显式启动
-  - `workspace` / `session transfer` 等下游 service 已改为依赖窄接口，而不再直接绑定 `*AgentService`
-  - `app/server` runtime/router 也不再对外暴露 `*services.AgentService` 字段，只保留 handler-facing 与业务专用依赖
-  - `workspace handler` 与 `websocket hub` 进一步切到工作台/转接接口，`app/server` 对 `WorkspaceService` / `SessionTransferService` 的 concrete 暴露继续收缩
-  - 当前规则：HTTP handler 应依赖 `modules/agent/delivery.HandlerService`
-  - 结论：属于“module 已落地，但 runtime 兼容状态尚未收口”的类型
+  - `services/AgentService` has clearly become a compatibility layer
+  - Core reads/writes go through `modules/agent/application.Service`
+  - The handler-facing DTO and transfer runtime contract have been recovered into `modules/agent/delivery`
+  - `agentQueues` is removed; the remaining online-agent compatibility cache backfill, background cleanup scheduling, and service assembly are split into standalone runtime helpers/adapters/assembly, and background jobs now start explicitly only at the server runtime assembly point
+  - Downstream services such as `workspace` / `session transfer` now depend on narrow interfaces instead of binding directly to `*AgentService`
+  - The `app/server` runtime/router no longer exposes `*services.AgentService` fields either, keeping only handler-facing and business-specific dependencies
+  - The `workspace handler` and `websocket hub` have further switched to workspace/transfer interfaces, continuing to shrink `app/server`'s concrete exposure of `WorkspaceService` / `SessionTransferService`
+  - Current rule: HTTP handlers should depend on `modules/agent/delivery.HandlerService`
+  - Conclusion: falls into the "module landed, but runtime compatibility state not yet closed out" category
 
 - `analytics`
-  - `services/StatisticsService` 基本是 module facade
-  - 核心统计能力已走 `modules/analytics/application.Service`
-  - 还保留事件总线订阅和 DTO 映射的兼容包装
-  - `app/server` runtime 已不再对外暴露 `*services.StatisticsService` 字段，仅保留 handler-facing contract 与局部 wiring
-  - 结论：迁移风险低，适合作为后续收口样板
+  - `services/StatisticsService` is basically a module facade
+  - Core statistics capabilities go through `modules/analytics/application.Service`
+  - It still keeps an event bus subscription and DTO-mapping compatibility wrapper
+  - The `app/server` runtime no longer exposes `*services.StatisticsService` fields, keeping only the handler-facing contract and local wiring
+  - Conclusion: low migration risk; a good template for later closeouts
 
 - `routing / session transfer`
-  - 主运行时已不再装配 `services/SessionTransferService`
-  - handler/runtime 已直接改用 `modules/routing/delivery.HandlerServiceAdapter`
-  - session assignment 同步已改走 `modules/conversation/delivery` runtime adapter，不再直接更新 `Session`
-  - transfer / waiting 的系统消息写入已改走 `modules/conversation/delivery` runtime adapter，不再直接写 `Message`
-  - waiting queue 的读取、新增、取消、查询、转态同步，以及 transfer record 写入已收口到 routing module 状态机
-  - waiting -> transferred 与 transfer record 写入已纳入同一事务，不再依赖事务后的补写同步
-  - 取消 waiting queue 时的系统消息写入也已切到 `modules/conversation/delivery` runtime adapter，减少 legacy `Message` 直写分支
-  - 会话转接触发的 ticket assignment 同步已改走 `modules/ticket/delivery` runtime adapter，不再直接写 `Ticket` / `TicketStatus`
-  - agent load 调整已改走 `modules/agent/delivery` runtime adapter，原先由 handler contract 反向依赖 `services` 引起的 import cycle 已被移除
-  - websocket 通知依赖已收窄为 `sessionTransferNotifier`，不再把 `WebSocketHub` 作为 service 内部 concrete 字段保存
-  - 会话读取入口已切到 `modules/conversation/delivery.RuntimeService.LoadTransferSession(...)`
-  - 默认装配下 `LoadTransferSession(...)` 的 adapter 错误会直接上抛，不再静默回退到 legacy DB 查询，避免掩盖 conversation runtime 故障
-  - 加入等待队列时的会话 active/unassigned 同步也已切到 `modules/conversation/delivery.RuntimeService.SyncWaitingAssignment(...)`
-  - websocket 通知已收窄为 notifier 接口，不再把 `WebSocketHub` 作为内部 concrete 依赖保存
-  - 旧 `services/SessionTransferService` 已删除；残留的 `services/session_transfer_legacy_store.go`（DB 兼容读写孤儿，无生产调用方）也已删除
-  - 结论：`routing / session transfer` 已完成主路径收口，并采用删除 legacy service 的策略收尾
+  - The main runtime no longer assembles `services.SessionTransferService`
+  - handler/runtime already uses `modules/routing/delivery.HandlerServiceAdapter` directly
+  - Session assignment sync goes through the `modules/conversation/delivery` runtime adapter and no longer updates `Session` directly
+  - Transfer / waiting system message writes go through the `modules/conversation/delivery` runtime adapter and no longer write `Message` directly
+  - Waiting queue reads, inserts, cancels, queries, and status synchronization, plus transfer record writes, are closed out into the routing module state machine
+  - waiting -> transferred and the transfer record write are inside the same transaction, no longer relying on post-transaction patch-up sync
+  - The system message write on waiting queue cancel has also switched to the `modules/conversation/delivery` runtime adapter, reducing legacy `Message` direct-write branches
+  - The ticket assignment sync triggered by session transfer goes through the `modules/ticket/delivery` runtime adapter and no longer writes `Ticket` / `TicketStatus` directly
+  - Agent load adjustments go through the `modules/agent/delivery` runtime adapter; the import cycle previously caused by the handler contract back-depending on `services` has been removed
+  - The websocket notification dependency is narrowed to `sessionTransferNotifier`; `WebSocketHub` is no longer kept as a concrete field inside the service
+  - The session read entrypoint has switched to `modules/conversation/delivery.RuntimeService.LoadTransferSession(...)`
+  - Under the default assembly, adapter errors from `LoadTransferSession(...)` propagate directly instead of silently falling back to legacy DB queries, avoiding masking conversation runtime failures
+  - The session active/unassigned sync when joining the waiting queue has also switched to `modules/conversation/delivery.RuntimeService.SyncWaitingAssignment(...)`
+  - Websocket notifications are narrowed to a notifier interface; `WebSocketHub` is no longer kept as an internal concrete dependency
+  - The old `services/SessionTransferService` is deleted; the leftover `services/session_transfer_legacy_store.go` (a DB compatibility read/write orphan with no production callers) is also deleted
+  - Conclusion: `routing / session transfer` has completed main-path closeout and finished by deleting the legacy service
 
 - `ai`
-  - 旧 `services/AIService` 与增强 AI 实现仍存在，但已不再通过 `AIServiceInterface` 暴露给 handler/runtime 顶层
-  - handler 已开始收口到 `modules/ai/delivery.HandlerService`
-  - `AIAssembly` 已去掉未消费的 `LegacyService *services.AIService` 暴露，仅保留 handler-facing contract、runtime-facing `RuntimeService` 与 knowledge provider state
-  - 旧 `services/AIServiceInterface` / `services.OrchestratedAIService` 已删除
-  - `services/router.go` 与 `services/websocket.go` 只依赖局部最小 AI runtime 接口
-  - 结论：`ai` 已完成 handler/runtime 主路径收口，后续重点是继续收缩 runtime 局部接口
+  - The old `services/AIService` and the enhanced AI implementation still exist, but are no longer exposed to the handler/runtime top level through `AIServiceInterface`
+  - The handler has started closing out to `modules/ai/delivery.HandlerService`
+  - `AIAssembly` has dropped the unconsumed `LegacyService *services.AIService` exposure, keeping only the handler-facing contract, the runtime-facing `RuntimeService`, and knowledge provider state
+  - The old `services/AIServiceInterface` / `services.OrchestratedAIService` are deleted
+  - `services/router.go` and `services/websocket.go` depend only on a local minimal AI runtime interface
+  - Conclusion: `ai` has completed handler/runtime main-path closeout; the follow-up focus is continuing to shrink the local runtime interfaces
 
 - `legacy handler-only capabilities`
-  - `satisfaction`、`csat public`、`macro`、`app integration`、`custom field`、`shift` 等能力尚未模块化
-  - 这批 handler 现在已改为依赖 `handlers` 包内定义的最小接口，而不再把 `*services.*` concrete type 暴露到 `app/server` runtime/router surface
-  - 结论：虽然还不属于 `services -> modules` 迁移完成项，但已完成一轮“装配面收口”，可减少 concrete legacy service 在顶层 runtime 的扩散
+  - Capabilities such as `satisfaction`, `csat public`, `macro`, `app integration`, `custom field`, and `shift` are not yet modularized
+  - These handlers now depend on minimal interfaces defined inside the `handlers` package, instead of exposing `*services.*` concrete types to the `app/server` runtime/router surface
+  - Conclusion: although not yet completed `services -> modules` migration items, they have gone through a round of "assembly-surface closeout", reducing the spread of concrete legacy services across the top-level runtime
 
 - `message router`
-  - 轻量 runtime 与主 runtime 都还需要 `Start/Stop` 生命周期，但 HTTP 层只关心平台统计读取
-  - 现已抽出 `services.MessageRouterRuntime`，`app/server` 与 `handlers.MessageHandler` 不再暴露 concrete `*services.MessageRouter`
-  - `MetricsHandler` 的无用 message router 注入已移除
+  - Both the lightweight runtime and the main runtime still need the `Start/Stop` lifecycle, but the HTTP layer only cares about platform statistics reads
+  - `services.MessageRouterRuntime` has been extracted; `app/server` and `handlers.MessageHandler` no longer expose the concrete `*services.MessageRouter`
+  - The unused message router injection into `MetricsHandler` has been removed
 
 - `realtime runtime internals`
-  - `WebSocketHub` / `WebRTCService` 属于运行态装配细节，不应继续作为 `Runtime` / `RealtimeRuntime` 的公开 concrete 字段暴露
-  - 现已收口为内部 `Run()` 启动依赖与 gateway adapter 装配细节，外部只保留 `RealtimeGateway` / `RTCGateway` / `MessageRouterRuntime`
+  - `WebSocketHub` / `WebRTCService` are runtime assembly details and should not keep being exposed as public concrete fields of `Runtime` / `RealtimeRuntime`
+  - They are now closed into internal `Run()` startup dependencies and gateway adapter assembly details; externally only `RealtimeGateway` / `RTCGateway` / `MessageRouterRuntime` remain
 
 - `sla`
-  - `SLAHandler` 早已在内部按最小方法集工作，但此前 `app/server` 顶层装配仍暴露 `*services.SLAService`
-  - 现已把 handler contract 显式提升为 `handlers.SLAService` / `handlers.SLATicketReader`
-  - `ticketdelivery.ReaderServiceAdapter` 直接复用为工单读取依赖，顶层 runtime/router 不再暴露 concrete `*services.SLAService`
+  - `SLAHandler` has long worked internally against a minimal method set, but the `app/server` top-level assembly still exposed `*services.SLAService`
+  - The handler contract has now been explicitly promoted to `handlers.SLAService` / `handlers.SLATicketReader`
+  - `ticketdelivery.ReaderServiceAdapter` is reused directly as the ticket-read dependency; the top-level runtime/router no longer exposes the concrete `*services.SLAService`
 
 - `customer`
-  - `services/CustomerService` 已经是 `modules/customer/application.Service` 的轻量 facade
-  - HTTP handler 只消费请求/响应 DTO 与兼容方法，核心业务已经下沉到 module application + infra repository
-  - `app/server` runtime 已不再对外暴露 `*services.CustomerService` 字段，且 customer handler 装配已直接切到 `modules/customer/delivery.NewHandlerService(db)`，不再经由 legacy facade 中转
-  - 结论：handler 主路径已直接贴近 module；旧 facade 主要只为历史调用者保留 DTO 兼容
+  - `services/CustomerService` is already a lightweight facade over `modules/customer/application.Service`
+  - The HTTP handler consumes only request/response DTOs and compatibility methods; core business has sunk into module application + infra repository
+  - The `app/server` runtime no longer exposes `*services.CustomerService` fields, and customer handler assembly has switched directly to `modules/customer/delivery.NewHandlerService(db)`, no longer relaying through the legacy facade
+  - Conclusion: the handler main path sits directly on the module; the old facade mainly keeps DTO compatibility for historical callers
 
 - `automation`
-  - `services/AutomationService` 已经把核心触发器与执行查询下沉到 `modules/automation/application.Service`
-  - legacy service 主要保留 event bus subscriber 注册、测试兼容 helper 与 module 装配
-  - `app/server` runtime/router 已不再对外暴露 `*services.AutomationService` 字段，且 automation handler 装配已直接切到 `modules/automation/delivery.NewHandlerService(db)`
-  - 结论：handler 主路径已直接贴近 module；旧 service 主要只保留 event bus subscriber 与测试兼容 glue
+  - `services/AutomationService` has sunk the core triggers and execution queries into `modules/automation/application.Service`
+  - The legacy service mainly retains event bus subscriber registration, test-compatibility helpers, and module assembly
+  - The `app/server` runtime/router no longer exposes `*services.AutomationService` fields, and automation handler assembly has switched directly to `modules/automation/delivery.NewHandlerService(db)`
+  - Conclusion: the handler main path sits directly on the module; the old service mainly retains the event bus subscriber and test-compatibility glue
 
 - `knowledge`
-  - 已存在 `modules/knowledge/application`，但此前缺少 Gorm repository 与 handler-facing delivery contract
-  - 旧 `services/KnowledgeDocService` 主要承接 CRUD 与 tag/category DTO，适合改成 module facade
-  - `app/server` runtime 已不再对外暴露 `*services.KnowledgeDocService` 字段，knowledge handler 装配已直接切到 `modules/knowledge/delivery.NewHandlerServiceWithProvider(db, ...)`，不再经由 legacy facade 中转
-  - `modules/knowledge/infra` 已补齐 `KnowledgeIndexJob` 的 Gorm 持久化仓储，module delivery 也已支持按 runtime 注入 provider
-  - 结论：knowledge 的 handler/runtime 主路径都已贴近 module；legacy facade 仅保留历史调用兼容
+  - `modules/knowledge/application` exists, but previously lacked a Gorm repository and a handler-facing delivery contract
+  - The old `services/KnowledgeDocService` mainly carries CRUD and tag/category DTOs and fits being turned into a module facade
+  - The `app/server` runtime no longer exposes `*services.KnowledgeDocService` fields; knowledge handler assembly has switched directly to `modules/knowledge/delivery.NewHandlerServiceWithProvider(db, ...)`, no longer relaying through the legacy facade
+  - `modules/knowledge/infra` has filled in the Gorm persistence repository for `KnowledgeIndexJob`, and module delivery now supports runtime-injected providers
+  - Conclusion: knowledge's handler/runtime main paths both sit close to the module; the legacy facade retains only historical-caller compatibility
 
 - `suggestion`
-  - `modules/suggestion/application`、`contract`、`infra`、`delivery` 已落地
-  - handler/runtime 已直接消费 `modules/suggestion/delivery.HandlerService`
-  - 旧 `services/SuggestionService` 已删除，DTO alias 与 helper 已全部下沉到 module application / contract
-  - 结论：`suggestion` 已完成主路径收口，并采用删除 legacy service 的策略收尾
+  - `modules/suggestion/application`, `contract`, `infra`, and `delivery` have landed
+  - handler/runtime already consumes `modules/suggestion/delivery.HandlerService` directly
+  - The old `services/SuggestionService` is deleted; DTO aliases and helpers have all sunk into module application / contract
+  - Conclusion: `suggestion` has completed main-path closeout and finished by deleting the legacy service
 
 - `gamification`
-  - `modules/gamification/application`、`contract`、`infra`、`delivery` 已落地
-  - handler/runtime 已直接消费 `modules/gamification/delivery.HandlerService`
-  - 旧 `services/GamificationService` 已删除，评分 / 徽章逻辑与 DTO alias 已全部下沉到 module application / contract
-  - 结论：`gamification` 已完成主路径收口，并采用删除 legacy service 的策略收尾
+  - `modules/gamification/application`, `contract`, `infra`, and `delivery` have landed
+  - handler/runtime already consumes `modules/gamification/delivery.HandlerService` directly
+  - The old `services/GamificationService` is deleted; points / badge logic and DTO aliases have all sunk into module application / contract
+  - Conclusion: `gamification` has completed main-path closeout and finished by deleting the legacy service
 
-## 按迁移成熟度分组
+## Grouped by migration maturity
 
-### A. 已有明显 module facade
+### A. A clear module facade already exists
 
 - `ticket`
 - `agent`
@@ -122,33 +122,33 @@
 - `suggestion`
 - `gamification`
 
-这些模块的共同特点：
+Common traits of these modules:
 
-- 已有 `modules/*/application` 作为核心业务入口
-- 旧 `services/*` 更多承担兼容包装、DTO 映射、runtime glue
-- 适合优先定义“唯一入口”并冻结旧 service 新增逻辑
+- `modules/*/application` already serves as the core business entrypoint
+- Old `services/*` mostly carry compatibility wrappers, DTO mapping, and runtime glue
+- They suit defining the "single entrypoint" first and freezing new logic in old services
 
-### B. 已接入 module adapter，但仍需运行态硬化
+### B. Module adapter wired in, but runtime hardening still needed
 
-- `conversation` 相关 websocket/runtime 路径
+- websocket/runtime paths related to `conversation`
 
-这些模块的共同特点：
+Common traits of these modules:
 
-- module 已存在
-- 关键持久化入口已切到 module delivery adapter
-- connection hub、通知、转接协作等运行态对象仍需要持续保持窄接口
-- 后续重点是避免在 realtime runtime 内重新引入业务直写路径，不回退重迁移
+- The module exists
+- Key persistence entrypoints have switched to the module delivery adapter
+- Runtime objects such as the connection hub, notifications, and transfer coordination still need to stay behind narrow interfaces
+- The follow-up focus is avoiding reintroducing business direct-write paths inside the realtime runtime, so the completed migration does not regress
 
-### C. 多实现并存，需要先确定默认主路径
+### C. Multiple implementations coexist; the default main path must be decided first
 
-- `voice` 等非典型 `services -> modules` 能力
+- Atypical `services -> modules` capabilities such as `voice`
 
-特点：
+Traits:
 
-- 并不完全遵循本轮 `services -> modules` 迁移模板
-- 下一步更像边界收紧与 runtime assembly 整理，而不是简单替换调用点
+- They do not fully follow this round's `services -> modules` migration template
+- The next step looks more like boundary tightening and runtime assembly cleanup than simple call-site replacement
 
-## 推荐迁移顺序
+## Recommended migration order
 
 1. `ticket`
 2. `agent`
@@ -158,92 +158,92 @@
 6. `knowledge`
 7. `suggestion`
 8. `gamification`
-9. 持续硬化 `conversation / websocket runtime`
-10. 扩大 scorecard 覆盖范围
+9. Continuously harden `conversation / websocket runtime`
+10. Expand scorecard coverage
 
-## 当前高风险点
+## Current high-risk points
 
-- 同一个业务能力同时存在 handler interface、legacy service、module service、delivery adapter 多层入口
-- 旧 service 中仍混有 runtime 状态与 side effects，导致无法简单替换
-- `ai` 路径下仍有多种 provider / enhanced 实现，runtime contract 如果不继续收窄仍可能重新分叉
-- `conversation` 的持久化主入口已收口，但 realtime connection hub 仍是运行态核心对象，需要继续防止业务写路径回流
-- 若不继续守护，未模块化但较薄的 legacy handler service 仍可能重新把 concrete type 扩散回 `app/server` runtime/router
+- The same business capability has multiple entry layers at once: handler interface, legacy service, module service, delivery adapter
+- Old services still mix in runtime state and side effects, preventing simple replacement
+- The `ai` path still has multiple provider / enhanced implementations; without continued narrowing, the runtime contract could fork again
+- `conversation`'s main persistence entrypoint is closed out, but the realtime connection hub remains a core runtime object; business write paths must keep being kept from flowing back
+- Without continued guarding, un-modularized but thin legacy handler services could spread concrete types back into the `app/server` runtime/router
 
-## 下一步建议
+## Next-step suggestions
 
-- 持续守住 `conversation` 的运行态写路径，避免绕过 module contract
-- 明确剩余 `services/*` 中哪些类型属于 runtime state holder / event bus glue / 历史兼容入口
-- 为仍处于 `legacy` 的能力拆最小任务包，并同步写入 scorecard
+- Keep holding the line on the `conversation` runtime write paths; avoid bypassing module contracts
+- Clarify which of the remaining `services/*` types are runtime state holders / event bus glue / historical compatibility entrypoints
+- Split minimal task packages for capabilities still in `legacy` and record them in the scorecard in sync
 
-## 已确认的入口规则
+## Confirmed entrypoint rules
 
 - `ticket`
-  - HTTP handler 入口：`modules/ticket/delivery.HandlerService`
-  - 旧 `services/TicketService` 状态：已删除
+  - HTTP handler entrypoint: `modules/ticket/delivery.HandlerService`
+  - Old `services/TicketService` status: deleted
 - `agent`
-  - HTTP handler 入口：`modules/agent/delivery.HandlerService`
-  - 旧 `services/AgentService` 定位：兼容 facade + runtime state holder
+  - HTTP handler entrypoint: `modules/agent/delivery.HandlerService`
+  - Old `services/AgentService` role: compatibility facade + runtime state holder
 - `analytics`
-  - HTTP handler 入口：`modules/analytics/delivery.HandlerService`
-  - 旧 `services/StatisticsService` 定位：兼容 facade + event bus subscriber / DTO mapping glue
+  - HTTP handler entrypoint: `modules/analytics/delivery.HandlerService`
+  - Old `services/StatisticsService` role: compatibility facade + event bus subscriber / DTO mapping glue
 - `customer`
-  - HTTP handler 入口：`modules/customer/delivery.HandlerService`
-  - 旧 `services/CustomerService` 定位：兼容 facade + DTO mapping + module application 装配
+  - HTTP handler entrypoint: `modules/customer/delivery.HandlerService`
+  - Old `services/CustomerService` role: compatibility facade + DTO mapping + module application assembly
 - `automation`
-  - HTTP handler 入口：`modules/automation/delivery.HandlerService`
-  - 旧 `services/AutomationService` 定位：兼容 facade + event bus subscriber + module application 装配
+  - HTTP handler entrypoint: `modules/automation/delivery.HandlerService`
+  - Old `services/AutomationService` role: compatibility facade + event bus subscriber + module application assembly
 - `knowledge`
-  - HTTP handler 入口：`modules/knowledge/delivery.HandlerService`
-  - runtime 装配入口：`modules/knowledge/delivery.NewHandlerServiceWithProvider(db, ...)`
-  - 旧 `services/KnowledgeDocService` 定位：兼容 facade + module application / repository 装配
+  - HTTP handler entrypoint: `modules/knowledge/delivery.HandlerService`
+  - Runtime assembly entrypoint: `modules/knowledge/delivery.NewHandlerServiceWithProvider(db, ...)`
+  - Old `services/KnowledgeDocService` role: compatibility facade + module application / repository assembly
 - `suggestion`
-  - HTTP handler 入口：`modules/suggestion/delivery.HandlerService`
-  - runtime 装配入口：`modules/suggestion/delivery.NewHandlerService(db)`
-  - 旧 `services/SuggestionService` 状态：已删除
+  - HTTP handler entrypoint: `modules/suggestion/delivery.HandlerService`
+  - Runtime assembly entrypoint: `modules/suggestion/delivery.NewHandlerService(db)`
+  - Old `services/SuggestionService` status: deleted
 - `gamification`
-  - HTTP handler 入口：`modules/gamification/delivery.HandlerService`
-  - runtime 装配入口：`modules/gamification/delivery.NewHandlerService(db)`
-  - 旧 `services/GamificationService` 状态：已删除
+  - HTTP handler entrypoint: `modules/gamification/delivery.HandlerService`
+  - Runtime assembly entrypoint: `modules/gamification/delivery.NewHandlerService(db)`
+  - Old `services/GamificationService` status: deleted
 - `routing / session transfer`
-  - HTTP handler 入口：`modules/routing/delivery.HandlerService`
-  - 旧 `services/SessionTransferService` 状态：已删除
+  - HTTP handler entrypoint: `modules/routing/delivery.HandlerService`
+  - Old `services/SessionTransferService` status: deleted
 - `conversation / websocket runtime`
-  - websocket 持久化入口：`modules/conversation/delivery.WebSocketMessageWriter`
-  - `services/WebSocketHub` 定位：runtime connection hub，不再自定义 conversation 私有持久化接口
+  - Websocket persistence entrypoint: `modules/conversation/delivery.WebSocketMessageWriter`
+  - `services/WebSocketHub` role: runtime connection hub; no longer defines its own conversation-private persistence interface
 - `ai`
-  - HTTP handler 入口：`modules/ai/delivery.HandlerService`
-  - `AIAssembly` 定位：显式区分 handler-facing AI contract 与 runtime-facing `RuntimeService`
+  - HTTP handler entrypoint: `modules/ai/delivery.HandlerService`
+  - `AIAssembly` role: explicitly separates the handler-facing AI contract from the runtime-facing `RuntimeService`
 
-## 已确认的兼容职责边界
+## Confirmed compatibility responsibility boundaries
 
 - `services/AgentService`
-  - 允许保留：旧调用方兼容入口、少量兼容方法
-  - 不应新增：新的 HTTP handler 直接依赖、脱离 `modules/agent/application.Service` 的核心业务写路径
+  - Allowed to retain: compatibility entrypoints for old callers, a few compatibility methods
+  - Must not add: new direct HTTP handler dependencies, core business write paths outside `modules/agent/application.Service`
 - `services/StatisticsService`
-  - 允许保留：旧调用方兼容入口、event bus 订阅注册、DTO 映射、统计后台任务调度
-  - 不应新增：新的 HTTP handler 直接依赖、绕过 `modules/analytics/application.Service` 的主统计读写路径
+  - Allowed to retain: compatibility entrypoints for old callers, event bus subscription registration, DTO mapping, statistics background job scheduling
+  - Must not add: new direct HTTP handler dependencies, main statistics read/write paths that bypass `modules/analytics/application.Service`
 - `services/CustomerService`
-  - 允许保留：旧调用方兼容入口、DTO 映射、`modules/customer/application.Service` 与 repository 的装配
-  - 不应新增：新的 HTTP handler 直接依赖、绕过 `modules/customer/application.Service` 的核心客户读写路径
+  - Allowed to retain: compatibility entrypoints for old callers, DTO mapping, assembly of `modules/customer/application.Service` and repositories
+  - Must not add: new direct HTTP handler dependencies, core customer read/write paths that bypass `modules/customer/application.Service`
 - `services/AutomationService`
-  - 允许保留：旧调用方兼容入口、event bus subscriber 注册、测试辅助方法、`modules/automation/application.Service` 的装配
-  - 不应新增：新的 HTTP handler 直接依赖、绕过 `modules/automation/application.Service` 的触发器和执行记录主入口
+  - Allowed to retain: compatibility entrypoints for old callers, event bus subscriber registration, test helper methods, assembly of `modules/automation/application.Service`
+  - Must not add: new direct HTTP handler dependencies, main trigger and execution-record entrypoints that bypass `modules/automation/application.Service`
 - `services/KnowledgeDocService`
-  - 允许保留：旧调用方兼容入口、DTO 映射、`modules/knowledge/application.Service` 与 repository 的兼容装配
-  - 不应新增：新的 HTTP handler 直接依赖、绕过 `modules/knowledge/application.Service` 的文档 CRUD 主入口
+  - Allowed to retain: compatibility entrypoints for old callers, DTO mapping, compatibility assembly of `modules/knowledge/application.Service` and repositories
+  - Must not add: new direct HTTP handler dependencies, main document CRUD entrypoints that bypass `modules/knowledge/application.Service`
 - `services/WebSocketHub`
-  - 允许保留：连接管理、广播、协议消息分发、对 AI/transfer 的 runtime glue
-  - 不应新增：新的 conversation 私有持久化接口、绕过 `modules/conversation/delivery.WebSocketMessageWriter` 的消息落库路径
-- `services` 下 legacy AI types
-  - 允许保留：provider 实现、增强链路、局部 runtime 协调
-  - 不应新增：新的 HTTP handler 直接依赖、重新暴露全局 `AIServiceInterface` 一类宽接口
+  - Allowed to retain: connection management, broadcast, protocol message dispatch, runtime glue for AI/transfer
+  - Must not add: new conversation-private persistence interfaces, message persistence paths that bypass `modules/conversation/delivery.WebSocketMessageWriter`
+- legacy AI types under `services`
+  - Allowed to retain: provider implementations, the enhanced chain, local runtime coordination
+  - Must not add: new direct HTTP handler dependencies, re-exposing wide interfaces like the global `AIServiceInterface`
 
-## 当前自动化守护
+## Current automated guards
 
 - `scripts/check-module-boundaries.sh`
-  - 校验 `ticket` / `agent` / `analytics` / `customer` / `automation` / `knowledge` / `routing` / `ai` 的 handler constructor 必须依赖 `modules/*/delivery.HandlerService`
-  - 校验 router/runtime 对这八个模块的注入类型必须停留在 handler-facing contract，并校验 `knowledge` runtime 必须直接通过 module delivery 装配，以及 `conversation` 的 websocket persistence 入口必须走 module delivery adapter
-  - 校验 `satisfaction` / `macro` / `app integration` / `custom field` / `shift` 等薄 handler 依赖必须停留在 handler-local contract，避免 `app/server` 顶层装配回退暴露 concrete legacy service
-  - 校验 `suggestion` / `gamification` 的 handler/runtime 入口必须停留在 module delivery contract
-  - 校验 `workspace` / `websocket transfer` 等新增收窄点必须依赖 `WorkspaceOverviewReader`、`SessionTransferRuntime` 等接口，并禁止 `app/server` runtime/router 回退暴露若干 concrete legacy service
-  - 目的：先锁住已完成迁移的入口，避免回退到 handler 直连具体旧 service
+  - Verifies that handler constructors for `ticket` / `agent` / `analytics` / `customer` / `automation` / `knowledge` / `routing` / `ai` must depend on `modules/*/delivery.HandlerService`
+  - Verifies that router/runtime injection types for these eight modules must stay on the handler-facing contract, that the `knowledge` runtime must be assembled directly through module delivery, and that the `conversation` websocket persistence entrypoint must go through the module delivery adapter
+  - Verifies that thin handler dependencies such as `satisfaction` / `macro` / `app integration` / `custom field` / `shift` must stay on handler-local contracts, preventing the `app/server` top-level assembly from regressing to expose concrete legacy services
+  - Verifies that handler/runtime entrypoints for `suggestion` / `gamification` must stay on module delivery contracts
+  - Verifies that newly narrowed points such as `workspace` / `websocket transfer` must depend on interfaces like `WorkspaceOverviewReader` and `SessionTransferRuntime`, and forbids the `app/server` runtime/router from regressing to expose several concrete legacy services
+  - Purpose: lock down the entrypoints of completed migrations first, avoiding regression to handlers wired directly to the old concrete services

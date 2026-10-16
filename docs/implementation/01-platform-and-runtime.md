@@ -1,6 +1,6 @@
 # 01 Platform And Runtime
 
-范围：
+Scope:
 
 - bootstrap
 - app wiring
@@ -12,120 +12,120 @@
 
 ## P1 bootstrap skeleton
 
-- [x] 创建 `apps/server/internal/app/bootstrap`
-- [x] 创建 `apps/server/internal/app/server`
-- [x] 创建 `apps/server/internal/app/worker`
-- [x] 新增 `bootstrap/app.go`
-- [x] 定义 `App` 结构
-- [x] 收口 `Config`
-- [x] 收口 `Logger`
-- [x] 收口 `DB`
-- [x] 收口 `Router`
-- [x] 收口 `Workers`
-- [x] 收口 `ShutdownHooks`
-- [x] 新增 `BuildApp(cfg)` 入口
-- [x] 新增 `bootstrap/app_test.go`
+- [x] Create `apps/server/internal/app/bootstrap`
+- [x] Create `apps/server/internal/app/server`
+- [x] Create `apps/server/internal/app/worker`
+- [x] Add `bootstrap/app.go`
+- [x] Define the `App` struct
+- [x] Close out `Config`
+- [x] Close out `Logger`
+- [x] Close out `DB`
+- [x] Close out `Router`
+- [x] Close out `Workers`
+- [x] Close out `ShutdownHooks`
+- [x] Add the `BuildApp(cfg)` entrypoint
+- [x] Add `bootstrap/app_test.go`
 
-验收：
+Acceptance:
 
-- `BuildApp` 存在
-- 不改现有功能路径
+- `BuildApp` exists
+- No change to existing functional paths
 
-中断点：
+Recovery point:
 
-- 目录和 `App` 已存在，但入口尚未接入
+- The directory and `App` exist, but the entrypoint is not wired up yet
 
 ## P2 config logging observability
 
-- [x] 新增 `bootstrap/config.go`
-- [x] 新增 `bootstrap/logging.go`
-- [x] 新增 `bootstrap/observability.go`
-- [x] server 入口切到 bootstrap config/logging
-- [x] cli 入口切到 bootstrap config/logging
-- [x] tracing shutdown 统一挂到 `ShutdownHooks`
+- [x] Add `bootstrap/config.go`
+- [x] Add `bootstrap/logging.go`
+- [x] Add `bootstrap/observability.go`
+- [x] Switch the server entrypoint to bootstrap config/logging
+- [x] Switch the cli entrypoint to bootstrap config/logging
+- [x] Hook tracing shutdown uniformly into `ShutdownHooks`
 
-验收：
+Acceptance:
 
-- 入口中不再重复初始化 config/logger/tracing
+- Entrypoints no longer re-initialize config/logger/tracing
 
 ## P3 database and migration
 
-- [x] 新增 `bootstrap/database.go`
-- [x] 抽 DSN builder
-- [x] 抽 GORM builder
-- [x] 抽 GORM tracing plugin 注入
-- [x] 新增 `bootstrap/migrate.go`
-- [x] 收口模型迁移列表
-- [x] 保留 server 自动迁移兼容开关
+- [x] Add `bootstrap/database.go`
+- [x] Extract the DSN builder
+- [x] Extract the GORM builder
+- [x] Extract GORM tracing plugin injection
+- [x] Add `bootstrap/migrate.go`
+- [x] Close out the model migration list
+- [x] Keep the server auto-migration compatibility switch
 
-验收：
+Acceptance:
 
-- `AutoMigrate` 不再写死在多个入口里
+- `AutoMigrate` is no longer hardcoded across multiple entrypoints
 
 ## P4 router assembly
 
-- [x] 新增 `app/server/router.go`
-- [x] 新增 `app/server/middleware.go`
-- [x] 新增 `app/server/health.go`
-- [x] 新增 `app/server/static.go`
-- [x] 提取 Gin init
-- [x] 提取 middleware registration
-- [x] 提取 static root detection
+- [x] Add `app/server/router.go`
+- [x] Add `app/server/middleware.go`
+- [x] Add `app/server/health.go`
+- [x] Add `app/server/static.go`
+- [x] Extract Gin init
+- [x] Extract middleware registration
+- [x] Extract static root detection
 
-验收：
+Acceptance:
 
-- `cmd/server/main.go` 不再直接创建和装配 router
+- `cmd/server/main.go` no longer creates and assembles the router directly
 
 ## P5 workers
 
-- [x] 新增 `app/worker/jobs.go`
-- [x] 定义 `Worker` 接口
-- [x] 包装 SLA monitor
-- [x] 包装 statistics worker
-- [x] 注册 worker 到 `App`
-- [x] 增加 worker 启停测试占位
+- [x] Add `app/worker/jobs.go`
+- [x] Define the `Worker` interface
+- [x] Wrap the SLA monitor
+- [x] Wrap the statistics worker
+- [x] Register workers on `App`
+- [x] Add worker start/stop test placeholders
 
-验收：
+Acceptance:
 
-- 后台任务不再散落在入口文件里
+- Background jobs are no longer scattered across entrypoint files
 
 ## P6 auth extraction
 
-- [x] 创建 `internal/platform/auth`
-- [x] 新增 `claims.go`
-- [x] 新增 `validator.go`
-- [x] 新增 `permissions.go`
-- [x] 新增 `resolver.go`
-- [x] 新增 `gin_middleware.go`
-- [x] 从 middleware 中迁出 JWT 解析
-- [x] 从 middleware 中迁出 perms 展开
+- [x] Create `internal/platform/auth`
+- [x] Add `claims.go`
+- [x] Add `validator.go`
+- [x] Add `permissions.go`
+- [x] Add `resolver.go`
+- [x] Add `gin_middleware.go`
+- [x] Move JWT parsing out of middleware
+- [x] Move perms expansion out of middleware
 
-验收：
+Acceptance:
 
-- Gin middleware 只做 HTTP 适配
+- The Gin middleware only does HTTP adaptation
 
 ## P7 event bus
 
-- [x] 创建 `internal/platform/eventbus`
-- [x] 定义 `Event`
-- [x] 定义 `Handler`
-- [x] 定义 `Bus`
-- [x] 实现 `inmemory_bus.go`
-- [x] 增加 contract test
-- [x] 将 bus 注入 `App`
+- [x] Create `internal/platform/eventbus`
+- [x] Define `Event`
+- [x] Define `Handler`
+- [x] Define `Bus`
+- [x] Implement `inmemory_bus.go`
+- [x] Add contract tests
+- [x] Inject the bus into `App`
 
-验收：
+Acceptance:
 
-- 模块可以基于 event bus 通信
+- Modules can communicate via the event bus
 
 ## P8 realtime abstraction
 
-- [x] 创建 `internal/platform/realtime`
-- [x] 定义 `RealtimeGateway`
-- [x] 定义 `RTCGateway`
-- [x] 包装现有 `WebSocketHub`
-- [x] 包装现有 `WebRTCService`
+- [x] Create `internal/platform/realtime`
+- [x] Define `RealtimeGateway`
+- [x] Define `RTCGateway`
+- [x] Wrap the existing `WebSocketHub`
+- [x] Wrap the existing `WebRTCService`
 
-验收：
+Acceptance:
 
-- 业务层不直接依赖旧 services 里的 realtime struct
+- The business layer no longer depends directly on realtime structs in the old services

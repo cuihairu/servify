@@ -1,159 +1,159 @@
 # 10 Service To Module Migration
 
-> 状态（2026-10-04 文档对账）：M1–M6 全部完成——`internal/services` 已整体
-> 移除（P3-2），业务能力收口 `internal/modules/*`（27 个一级模块封顶），
-> 本文转为迁移史档案。当前活跃状态源见 [todo.md](../../todo.md)。
+> Status (2026-10-04 doc reconciliation): M1–M6 are all complete — `internal/services` has been removed
+> entirely (P3-2), business capabilities are closed out under `internal/modules/*` (capped at 27 top-level
+> modules), so this doc is now a migration-history archive. The current active status source is [todo.md](../../todo.md).
 
-范围：
+Scope:
 
-- 旧 `services` / `handlers` 收口
-- `modules/*` 应用入口固化
-- legacy service 退役与删除
-- 迁移路线与完成度治理
+- Close out the old `services` / `handlers`
+- Solidify the `modules/*` application entrypoints
+- Legacy service retirement and deletion
+- Migration route and completion governance
 
 ## M1 migration-inventory
 
-- [x] 盘点 `handlers -> services -> repo` 旧链路
-- [x] 盘点 `delivery -> application -> domain -> infra` 新链路覆盖情况
-- [x] 为每个领域模块绘制当前入口与目标入口映射
-- [x] 标出高风险交叉依赖、共享模型、循环引用点
+- [x] Inventory the old `handlers -> services -> repo` chain
+- [x] Inventory the coverage of the new `delivery -> application -> domain -> infra` chain
+- [x] Map the current-vs-target entrypoints for every domain module
+- [x] Flag high-risk cross-dependencies, shared models, and circular reference points
 
-验收：
+Acceptance:
 
-- 每个核心能力都能回答“当前走哪条链路，目标走哪条链路”
+- Every core capability can answer "which chain it uses today, and which chain it targets"
 
-产出：
+Deliverables:
 
 - [10-migration-inventory.md](./10-migration-inventory.md)
 
 ## M2 module-entry-contracts
 
-- [x] 为 `conversation`、`routing`、`ticket`、`analytics`、`ai` 定义唯一应用入口
-- [x] 明确 handler 只能依赖 adapter / application contract，不能直接拼业务
-- [x] 为旧 service 定义允许保留的兼容职责
-- [x] 为 repo / gorm 依赖建立单向约束
+- [x] Define the single application entrypoint for `conversation`, `routing`, `ticket`, `analytics`, `ai`
+- [x] Make explicit that handlers can depend only on adapter / application contracts, not assemble business logic directly
+- [x] Define the compatibility responsibilities old services are allowed to retain
+- [x] Establish one-way constraints for repo / gorm dependencies
 
-验收：
+Acceptance:
 
-- 新增需求不会再同时落入旧 service 和新 module 两套实现
+- New requirements no longer land in both the old service and the new module implementations at once
 
-当前已落地：
+Currently landed:
 
 - `ticket`
-  - handler-facing contract 已收口到 `modules/ticket/delivery.HandlerService`
-  - runtime 已改为 `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)`
-  - 旧 `services/TicketService` 已删除
+  - The handler-facing contract is closed out to `modules/ticket/delivery.HandlerService`
+  - The runtime now uses `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)`
+  - The old `services/TicketService` is deleted
 - `agent`
-  - handler-facing contract 已收口到 `modules/agent/delivery.HandlerService`
-  - runtime 仍复用 `services.AgentService` 作为 contract 实现
-  - `services.AgentService` 明确保留为兼容 facade + runtime state holder
+  - The handler-facing contract is closed out to `modules/agent/delivery.HandlerService`
+  - The runtime still reuses `services.AgentService` as the contract implementation
+  - `services.AgentService` is explicitly retained as a compatibility facade + runtime state holder
 - `analytics`
-  - handler-facing contract 已收口到 `modules/analytics/delivery.HandlerService`
-  - runtime 仍复用 `services.StatisticsService` 作为 contract 实现
-  - `services.StatisticsService` 明确保留为兼容 facade + event bus glue
+  - The handler-facing contract is closed out to `modules/analytics/delivery.HandlerService`
+  - The runtime still reuses `services.StatisticsService` as the contract implementation
+  - `services.StatisticsService` is explicitly retained as a compatibility facade + event bus glue
 - `routing / session transfer`
-  - handler-facing contract 已收口到 `modules/routing/delivery.HandlerService`
-  - runtime 已改为 `modules/routing/delivery.HandlerServiceAdapter`
-  - 旧 `services.SessionTransferService` 已删除
+  - The handler-facing contract is closed out to `modules/routing/delivery.HandlerService`
+  - The runtime now uses `modules/routing/delivery.HandlerServiceAdapter`
+  - The old `services.SessionTransferService` is deleted
 - `conversation / websocket runtime`
-  - websocket 持久化入口已显式收口到 `modules/conversation/delivery.WebSocketMessageWriter`
-  - 主 runtime 与 lightweight realtime runtime 都通过 `WebSocketMessageAdapter` 注入 conversation 模块
-  - `WebSocketHub` 已删除对 `sessions/messages` 的 gorm 直写 fallback，只保留 conversation delivery 路径
+  - The websocket persistence entrypoint is explicitly closed out to `modules/conversation/delivery.WebSocketMessageWriter`
+  - Both the main runtime and the lightweight realtime runtime inject the conversation module through `WebSocketMessageAdapter`
+  - `WebSocketHub` has deleted the gorm direct-write fallback for `sessions/messages`, keeping only the conversation delivery path
 - `ai`
-  - handler-facing contract 已收口到 `modules/ai/delivery.HandlerService`
-  - `AIAssembly` 已拆分为 handler-facing service 与 runtime-facing service
-  - 默认 handler 主路径已提升到 orchestrated enhanced AI，而不是直接暴露旧 `AIServiceInterface`
-  - server/runtime/router/websocket 主链路已改为依赖 `modules/ai/delivery.RuntimeService` 或局部 runtime contract，不再透传 `services.AIServiceInterface`
-  - 旧 `services/AIServiceInterface` / `EnhancedAIServiceInterface` 已删除
+  - The handler-facing contract is closed out to `modules/ai/delivery.HandlerService`
+  - `AIAssembly` is split into a handler-facing service and a runtime-facing service
+  - The default handler main path has been promoted to orchestrated enhanced AI instead of directly exposing the old `AIServiceInterface`
+  - The server/runtime/router/websocket main chain now depends on `modules/ai/delivery.RuntimeService` or local runtime contracts and no longer passes `services.AIServiceInterface` through
+  - The old `services/AIServiceInterface` / `EnhancedAIServiceInterface` are deleted
 - `suggestion`
-  - handler-facing contract 已收口到 `modules/suggestion/delivery.HandlerService`
-  - runtime 已改为 `modules/suggestion/delivery.NewHandlerService(db)`
-  - 旧 `services.SuggestionService` 已删除，DTO alias 与 helper 已下沉到 module application / contract
+  - The handler-facing contract is closed out to `modules/suggestion/delivery.HandlerService`
+  - The runtime now uses `modules/suggestion/delivery.NewHandlerService(db)`
+  - The old `services.SuggestionService` is deleted; DTO aliases and helpers have sunk into module application / contract
 - `gamification`
-  - handler-facing contract 已收口到 `modules/gamification/delivery.HandlerService`
-  - runtime 已改为 `modules/gamification/delivery.NewHandlerService(db)`
-  - 旧 `services.GamificationService` 已删除，评分 / 徽章逻辑与 DTO alias 已下沉到 module application / contract
-- 边界守护
-  - CI 已增加 `scripts/check-module-boundaries.sh`
-  - 当前自动校验 `ticket` / `agent` / `analytics` / `customer` / `automation` / `knowledge` / `routing` / `ai` / `suggestion` / `gamification` 的 handler constructor、router dependency、runtime wiring，以及 `conversation` 的 websocket persistence wiring，都必须停留在 module delivery contract
+  - The handler-facing contract is closed out to `modules/gamification/delivery.HandlerService`
+  - The runtime now uses `modules/gamification/delivery.NewHandlerService(db)`
+  - The old `services.GamificationService` is deleted; points / badge logic and DTO aliases have sunk into module application / contract
+- Boundary guards
+  - CI has added `scripts/check-module-boundaries.sh`
+  - It currently auto-verifies that the handler constructors, router dependencies, and runtime wiring of `ticket` / `agent` / `analytics` / `customer` / `automation` / `knowledge` / `routing` / `ai` / `suggestion` / `gamification`, plus the `conversation` websocket persistence wiring, must all stay on module delivery contracts
 
 ## M3 legacy-service-retirement
 
-- [x] 为仍需过渡的运行态入口补窄接口或 adapter，而不是继续保留 handler 直连旧 service
-- [x] 将旧 service 中可迁移的业务规则搬到 module application / delivery 层
-- [x] 已收口能力直接删除 legacy service，而不是保留 facade
-- [x] 为适配层增加测试，确保迁移前后行为一致
+- [x] Add narrow interfaces or adapters for runtime entrypoints still in transition, instead of keeping handlers directly wired to old services
+- [x] Move migratable business rules from old services into the module application / delivery layers
+- [x] Delete the legacy service outright for closed-out capabilities instead of keeping a facade
+- [x] Add tests for the adapter layer to ensure identical behavior before and after migration
 
-验收：
+Acceptance:
 
-- 已完成收口的能力不再保留双入口；仍未完成的能力也有明确的冻结边界
+- Closed-out capabilities no longer keep dual entrypoints; unfinished capabilities have explicit freeze boundaries
 
-当前已落地：
+Currently landed:
 
 - `routing`
-  - 已为 `modules/routing/delivery.SessionTransferAdapter` 补 waiting lifecycle、assignment/history、transaction-scoped repository 行为测试
-  - handler/runtime 主路径已切到 `modules/routing/delivery.HandlerServiceAdapter`
-  - 旧 `services/SessionTransferService` 已删除，不再保留兼容 facade
+  - Behavior tests were added for `modules/routing/delivery.SessionTransferAdapter` covering waiting lifecycle, assignment/history, and transaction-scoped repository behavior
+  - The handler/runtime main path has switched to `modules/routing/delivery.HandlerServiceAdapter`
+  - The old `services/SessionTransferService` is deleted and no compatibility facade is retained
 - `ticket`
-  - handler/runtime 主路径已切到 `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)`
-  - 旧 `services/TicketService` 已删除，不再保留兼容 facade
+  - The handler/runtime main path has switched to `modules/ticket/delivery.NewHandlerServiceWithDependencies(...)`
+  - The old `services/TicketService` is deleted and no compatibility facade is retained
 - `ai`
-  - handler/runtime 主路径已切到 `modules/ai/delivery.HandlerService` 与 `AIAssembly.RuntimeService`
-  - 旧 `services/AIServiceInterface` / `services.OrchestratedAIService` 已删除，runtime 只保留局部窄接口
+  - The handler/runtime main path has switched to `modules/ai/delivery.HandlerService` and `AIAssembly.RuntimeService`
+  - The old `services/AIServiceInterface` / `services.OrchestratedAIService` are deleted; the runtime keeps only local narrow interfaces
 - `conversation`
-  - `WebSocketHub` 已删除对 `sessions/messages` 的 gorm 直写 fallback
-  - websocket 持久化只允许经过 `modules/conversation/delivery.WebSocketMessageWriter`
+  - `WebSocketHub` has deleted the gorm direct-write fallback for `sessions/messages`
+  - Websocket persistence must go through `modules/conversation/delivery.WebSocketMessageWriter`
 
 ## M4 core-module-migrations
 
-- [x] 优先迁移 `conversation`
-- [x] 优先迁移 `routing`
-- [x] 优先迁移 `ticket`
-- [x] 优先迁移 `ai`
-- [x] 为每个模块拆分 1 到 3 个可独立提交的小任务包
+- [x] Migrate `conversation` first
+- [x] Migrate `routing` first
+- [x] Migrate `ticket` first
+- [x] Migrate `ai` first
+- [x] Split each module into 1 to 3 independently committable small task packages
 
-验收：
+Acceptance:
 
-- 核心链路模块率先完成收口，后续模块可复用迁移模式
+- Core-chain modules close out first, and later modules can reuse the migration pattern
 
-建议任务包：
+Suggested task packages:
 
 - `conversation`
-  - C1: 将 websocket message persistence 之外的会话写路径继续收口到 `modules/conversation/application`
-  - C2: 继续压缩 `WebSocketHub` 内部的会话/协议编排，避免重新长出 conversation 私有写路径
+  - C1: Keep closing out the conversation write paths beyond websocket message persistence into `modules/conversation/application`
+  - C2: Keep shrinking the conversation/protocol orchestration inside `WebSocketHub`, so conversation-private write paths do not regrow
 - `routing`
-  - R1: 将 waiting queue / assignment / cancel 的运行态编排继续下沉到 `modules/routing/application`
-  - R2: 为 routing runtime adapter 补迁移前后行为一致性测试
+  - R1: Keep sinking the waiting queue / assignment / cancel runtime orchestration into `modules/routing/application`
+  - R2: Add before/after behavior-consistency tests for the routing runtime adapter
 - `ticket`
-  - T1: 继续为 module delivery orchestration 补跨模块行为测试
-  - T2: 审查是否还有遗留注释、文档或调用点引用已删除的 `TicketService`
+  - T1: Keep adding cross-module behavior tests for module delivery orchestration
+  - T2: Review for leftover comments, docs, or call sites referencing the deleted `TicketService`
 - `ai`
-  - A1: 将 websocket / router 仍共享的 runtime surface 继续切薄为显式 contract
-  - A2: 为 AI handler/runtime 双入口补回归测试，锁定 assembly 边界
+  - A1: Keep slicing the runtime surface still shared by websocket / router into explicit contracts
+  - A2: Add regression tests for the AI handler/runtime dual entrypoints, locking the assembly boundary
 
 ## M5 boundary-enforcement-and-scorecard
 
-- [x] 增加迁移完成度表
-- [x] 为目录职责与依赖方向补文档
-- [x] 在 code review / CI 中增加边界约束检查
-- [x] 明确 `services/*` 的冻结策略与退役条件
+- [x] Add the migration completion scorecard
+- [x] Document directory responsibilities and dependency directions
+- [x] Add boundary constraint checks to code review / CI
+- [x] Define the freeze policy and retirement conditions for `services/*`
 
-验收：
+Acceptance:
 
-- 迁移工作可追踪、可量化，不会长期停留在“正在重构”
+- Migration work is trackable and quantifiable, no longer stuck in "refactoring in progress"
 
-产出：
+Deliverables:
 
 - [10-migration-scorecard.md](./10-migration-scorecard.md)
 - [10-module-boundaries.md](./10-module-boundaries.md)
 
 ## M6 app-server-assembly-hardening
 
-- [x] 将 `app/server/router.go` 按 auth / management / public / realtime 拆分
-- [x] 将 `app/server/runtime.go` 拆为可组合的分阶段装配函数
-- [x] 保持现有行为不变，并通过 `app/server` 与 `app/bootstrap` 测试验证
+- [x] Split `app/server/router.go` by auth / management / public / realtime
+- [x] Split `app/server/runtime.go` into composable phase-based assembly functions
+- [x] Keep current behavior unchanged and verify via `app/server` and `app/bootstrap` tests
 
-验收：
+Acceptance:
 
-- `app/server` 不再依赖单个超大装配文件承载全部启动复杂度
-- 新增模块或新接入面时，有明确的装配落点，而不是继续堆进总入口
+- `app/server` no longer relies on a single giant assembly file to carry all startup complexity
+- New modules or access surfaces have a clear assembly landing point instead of piling into the main entrypoint

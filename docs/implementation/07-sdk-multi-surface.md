@@ -1,69 +1,69 @@
 # 07 SDK Multi Surface
 
-范围：
+Scope:
 
-- Web SDK 收口
-- future API SDK 预留继续细化
-- future App SDK 预留继续细化
-- 对外契约稳定性
+- Wrap up the Web SDK
+- Keep refining the future API SDK reservation
+- Keep refining the future App SDK reservation
+- External contract stability
 
-约束：
+Constraints:
 
-- 当前只真正实现 web 端
-- API/App 仍以 contract、目录、测试替身、说明文档为主
+- Only the web surface is actually implemented today
+- API/App remain focused on contracts, directories, test doubles, and documentation
 
 ## M1 web-sdk-completion
 
-- [x] 补 `core` capability negotiation 测试矩阵
-- [x] 补 reconnect policy 实现与测试
-- [x] 补 token refresh hook 实现与测试
-- [x] 补 `react/vue/vanilla` 对统一 contract 的 smoke tests
-- [x] 收敛当前 lint warning
+- [x] Add a `core` capability negotiation test matrix
+- [x] Add reconnect policy implementation and tests
+- [x] Add token refresh hook implementation and tests
+- [x] Add smoke tests for `react/vue/vanilla` against the unified contract
+- [x] Clean up current lint warnings
 
-验收：
+Acceptance:
 
-- Web SDK 达到可持续演进状态，不再依赖隐性行为
+- The Web SDK reaches a sustainably evolving state and no longer relies on implicit behavior
 
 ## M2 api-sdk-reservation
 
-- [x] 在 `api-client` 中定义 server-side auth contract
-- [x] 定义 retry/backoff contract
-- [x] 定义 idempotency/request middleware contract
-- [x] 定义 bot/admin automation 使用示例
+- [x] Define the server-side auth contract in `api-client`
+- [x] Define the retry/backoff contract
+- [x] Define the idempotency/request middleware contract
+- [x] Define bot/admin automation usage examples
 
-验收：
+Acceptance:
 
-- 后续做 server-to-server SDK 时可以直接沿用已有 contract
+- A later server-to-server SDK can directly reuse the existing contracts
 
 ## M3 app-sdk-reservation
 
-- [x] 在 `app-core` 中定义 offline queue contract
-- [x] 定义 push token registration contract
-- [x] 定义 reconnect/session restore contract
-- [x] 定义 mobile storage abstraction contract
+- [x] Define the offline queue contract in `app-core`
+- [x] Define the push token registration contract
+- [x] Define the reconnect/session restore contract
+- [x] Define the mobile storage abstraction contract
 
-验收：
+Acceptance:
 
-- 后续移动端 SDK 不会直接复制 Web SDK 结构
+- The future mobile SDK will not simply copy the Web SDK structure
 
 ## M4 surface-governance
 
-- [x] 定义 package 命名与发布策略
-- [x] 定义 public API 审核边界
-- [x] 增加 breaking change checklist
-- [x] 增加 examples 与 package README 对齐检查
+- [x] Define package naming and release strategy
+- [x] Define the public API review boundary
+- [x] Add a breaking change checklist
+- [x] Add examples and package README alignment checks
 
-验收：
+Acceptance:
 
-- SDK 对外 surface 有明确治理规则
+- The SDK external surface has explicit governance rules
 
 ## M5 transport-evolution
 
-- [x] 细化 `transport-http` 包结构
-- [x] 细化 `transport-websocket` 包结构
-- [x] 预留 SSE / webhook callback transport contract
-- [x] 预留 API/App/Web 共享 serializer contract
+- [x] Refine the `transport-http` package structure
+- [x] Refine the `transport-websocket` package structure
+- [x] Reserve SSE / webhook callback transport contracts
+- [x] Reserve the API/App/Web shared serializer contract
 
-验收：
+Acceptance:
 
-- transport 层成为真正独立能力，而不是 core 里的零散实现
+- The transport layer becomes a truly independent capability instead of scattered implementations inside core

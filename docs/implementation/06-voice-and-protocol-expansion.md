@@ -1,74 +1,74 @@
 # 06 Voice And Protocol Expansion
 
-范围：
+Scope:
 
-- voice 协议统一入口深化
-- signaling/media provider 落地
-- 录音/转写外部 provider
-- 常见语音协议扩展预留
+- Deepen the unified voice protocol entry
+- Land signaling/media providers
+- External recording/transcription providers
+- Reserve common voice protocol extensions
 
-约束：
+Constraints:
 
-- `voice` 业务层不能反向依赖具体协议 DTO
-- signaling 与 media 必须继续分层
+- The `voice` business layer must not depend backward on concrete protocol DTOs
+- Signaling and media must stay layered
 
 ## V1 protocol-end-to-end
 
-- [x] 为 `sip` 协议入口补 invite -> answer -> hangup 端到端测试
-- [x] 为 `sip-ws` 协议入口补 invite -> dtmf -> hangup 端到端测试
-- [x] 为 `pstn-provider` webhook 入口补 invite -> transfer -> hangup 测试
-- [x] 为 `/api/voice/protocols` 增加契约测试
+- [x] Add invite -> answer -> hangup end-to-end tests for the `sip` protocol entry
+- [x] Add invite -> dtmf -> hangup end-to-end tests for the `sip-ws` protocol entry
+- [x] Add invite -> transfer -> hangup tests for the `pstn-provider` webhook entry
+- [x] Add contract tests for `/api/voice/protocols`
 
-验收：
+Acceptance:
 
-- 新协议入口有完整 HTTP/runtime/voice 链路验证，不只 adapter 单测
+- New protocol entries have full HTTP/runtime/voice chain verification, not just adapter unit tests
 
 ## V2 call-control-semantics
 
-- [x] 在统一协议入口补 hold 事件映射
-- [x] 在统一协议入口补 resume 事件映射
-- [x] 在统一协议入口补 transfer 事件映射到 `voice` use case
-- [x] 明确 DTMF 在 voice/conversation/automation 间的分发策略
+- [x] Add hold event mapping in the unified protocol entry
+- [x] Add resume event mapping in the unified protocol entry
+- [x] Add transfer event mapping to the `voice` use case in the unified protocol entry
+- [x] Clarify the dispatch strategy for DTMF across voice/conversation/automation
 
-当前 DTMF 策略：
+Current DTMF strategy:
 
-- 协议 adapter 先统一归一为 `voiceprotocol.CallEventDTMF`
-- `voice` runtime 负责承接并保留统一入口，不直接写入通话状态
-- 后续如需联动 `conversation` 或 `automation`，应订阅统一 `voice` 事件，而不是反向依赖具体协议 DTO
+- Protocol adapters first normalize events into `voiceprotocol.CallEventDTMF`
+- The `voice` runtime receives and keeps the unified entry, and does not write call state directly
+- If `conversation` or `automation` later needs to react, it should subscribe to unified `voice` events instead of depending backward on concrete protocol DTOs
 
-验收：
+Acceptance:
 
-- 常见呼叫控制事件都能走统一归一化模型
+- Common call control events all flow through the unified normalization model
 
 ## V3 provider-implementation
 
-- [x] 将录音 provider 从 in-memory 抽成独立 mock/provider 包
-- [x] 将转写 provider 从 in-memory 抽成独立 mock/provider 包
-- [x] 为 provider 增加失败重试和错误模型
-- [x] 预留异步 webhook/callback 回写接口
+- [x] Extract the recording provider from in-memory into a standalone mock/provider package
+- [x] Extract the transcription provider from in-memory into a standalone mock/provider package
+- [x] Add failure retry and error models for providers
+- [x] Reserve async webhook/callback write-back interfaces
 
-验收：
+Acceptance:
 
-- 录音与转写 provider 可以独立替换，不影响 voice 用例
+- Recording and transcription providers can be swapped independently without affecting voice use cases
 
 ## V4 media-topology
 
-- [x] 抽象 RTP/SRTP adapter 占位
-- [x] 明确 WebRTC 与 RTP bridge 的 contract
-- [x] 预留 conference/mixer 能力接口
-- [x] 预留 QoS / voice quality metrics 采集点
+- [x] Abstract RTP/SRTP adapter placeholders
+- [x] Clarify the WebRTC and RTP bridge contract
+- [x] Reserve conference/mixer capability interfaces
+- [x] Reserve QoS / voice quality metrics collection points
 
-验收：
+Acceptance:
 
-- 后续从点对点通话扩展到更复杂媒体拓扑时不需要推翻现有结构
+- Extending from point-to-point calls to more complex media topologies later will not require tearing down the current structure
 
 ## V5 protocol-reservation
 
-- [x] 预留 `voiceprotocol.ProtocolH323`
-- [x] 预留 `voiceprotocol.ProtocolFreeSWITCHEventSocket` 或同类 PBX 适配能力
-- [x] 预留 hosted voice vendor webhook adapter contract
-- [x] 为新协议接入编写最小实现模板文档
+- [x] Reserve `voiceprotocol.ProtocolH323`
+- [x] Reserve `voiceprotocol.ProtocolFreeSWITCHEventSocket` or similar PBX adaptation capability
+- [x] Reserve a hosted voice vendor webhook adapter contract
+- [x] Write a minimal implementation template document for onboarding new protocols
 
-验收：
+Acceptance:
 
-- voice 模块不是“只支持 SIP”的隐性设计
+- The voice module is not implicitly designed as "SIP only"

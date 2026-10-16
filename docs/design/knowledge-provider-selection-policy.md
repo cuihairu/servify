@@ -1,82 +1,100 @@
-# 知识库选型口径（立项口径 / 选择链优先级 / 新客户默认）
+# Knowledge Base Selection Policy (project-initiation criteria / selection-chain priority / new-customer default)
 
-> 状态：**已代决待核**（2026-10-15 巡检代决，用户可推翻）。对应
-> todo「知识库选型决策：RAGFlow 立项口径、选择链优先级、新客户默认
-> 口径（待产品确认）」。本文把散在
-> `docs/KNOWLEDGE_BASE_LANDSCAPE.md` §3-§6 与 `docs/deployment.md`
-> 「新客户交付默认知识库口径（2026-09-21 拍板）」的口径收口为单一决策
-> 记录。**结论与现行代码一致，零代码改动**；唯一残留缺口见 §5。
+> Status: **decided on the user's behalf pending confirmation** (decided during the
+> 2026-10-15 inspection; the user may overturn it). Corresponds to the todo item
+> "Knowledge base selection decision: RAGFlow project-initiation criteria,
+> selection-chain priority, new-customer default criteria (pending product
+> confirmation)". This document consolidates the criteria scattered across
+> `docs/KNOWLEDGE_BASE_LANDSCAPE.md` §3-§6 and `docs/deployment.md`
+> ("new-customer delivery default knowledge base criteria (decided 2026-09-21)")
+> into a single decision record. **The conclusion is consistent with the current
+> code, zero code changes**; the only remaining gap is in §5.
 
-## 1. 现状（2026-10-15 实测）
+## 1. Current State (measured 2026-10-15)
 
-- 启动优先级（`apps/server/internal/app/server/ai_runtime.go:91-106`）：
-  `pgvector` 直配 → `local` → 外部链 → 无知识源。pgvector/local 是
-  全局声明、优先于外部链（`:89-95` 注释明确）。
-- 外部选择链（`app/server/knowledge_source.go:64-162`）：
-  **`ragflow → dify → weknora`**，逐跳 `Enabled` 门控 + 可选健康检查
-  + 降级；`requireHealthy` 时无可用源则启动失败。
-- 代码默认：`Knowledge.Provider: ""`（`config/config.go:1287-1292`），
-  三个外部 provider 默认 `Enabled: false` —— 全新安装得到「无知识源」
-  基座装配；`config.yml`（dev）单独 ship `knowledge.provider: "pgvector"`。
-- provider 能力矩阵：pgvector（自托管进程内，需 pg 扩展 + embedding）、
-  local（零外部依赖，sqlite/postgres 双轨）、ragflow（外部服务，
-  API 锚定 v0.27.x）、dify（编排平台的 dataset 附属能力）、
-  weknora（外部服务，唯一 `RebuildableProvider`）。
+- Startup priority (`apps/server/internal/app/server/ai_runtime.go:91-106`):
+  direct `pgvector` → `local` → external chain → no knowledge source.
+  pgvector/local are globally declared and take precedence over the external chain
+  (explicit in the `:89-95` comments).
+- External selection chain (`app/server/knowledge_source.go:64-162`):
+  **`ragflow → dify → weknora`**, with per-hop `Enabled` gating + optional health
+  check
+  + degradation; when `requireHealthy` is set and no source is available,
+  startup fails.
+- Code default: `Knowledge.Provider: ""` (`config/config.go:1287-1292`), the
+  three external providers default to `Enabled: false` — a fresh install yields
+  the "no knowledge source" base assembly; `config.yml` (dev) separately ships
+  `knowledge.provider: "pgvector"`.
+- Provider capability matrix: pgvector (self-hosted in-process, requires a pg
+  extension + embedding), local (zero external dependencies, sqlite/postgres dual
+  track), ragflow (external service, API anchored to v0.27.x), dify (the
+  dataset side-capability of an orchestration platform), weknora (external
+  service, the only `RebuildableProvider`).
 
-## 2. 对比表
+## 2. Comparison Table
 
-### 2.1 新客户默认口径
+### 2.1 New-customer default criteria
 
-| 方案 | 形态 | 优点 | 缺点 |
+| Option | Form | Pros | Cons |
 | --- | --- | --- | --- |
-| A. 代码默认改 `pgvector` | 改 `config.Default()` | 首启即有知识源 | pgvector 需 pg 扩展 + embedding 服务，sqlite 部署形态直接破；隐式引入外部依赖，违「零外部配置」口径 |
-| B. 维持代码默认 `""`，交付模板/文档声明 `pgvector` | 现状 | 安全默认（不意外外呼）；sqlite/评估形态可用；拍板口径落在交付面 | 交付侧需主动声明，文档口径必须跟着交付走 |
-| C. 代码默认改 `local` | 改 `config.Default()` | 零外部依赖、sqlite 可用 | 偏离 2026-09-21 拍板（拍板说的是 pgvector 起步）；向量检索质量弱于外部引擎 |
+| A. Change the code default to `pgvector` | Change `config.Default()` | A knowledge source on first launch | pgvector requires a pg extension + an embedding service, which directly breaks the sqlite deployment form; it implicitly introduces an external dependency, violating the "zero external configuration" criteria |
+| B. Keep the code default `""`, and have the delivery template/docs declare `pgvector` | Current state | Safe default (no unexpected outbound calls); sqlite/evaluation forms remain usable; the decided criteria land on the delivery side | The delivery side must declare it proactively; the documentation criteria must follow delivery |
+| C. Change the code default to `local` | Change `config.Default()` | Zero external dependencies, sqlite usable | Deviates from the 2026-09-21 decision (that decision was to start with pgvector); vector-retrieval quality is weaker than the external engines |
 
-### 2.2 选择链优先级
+### 2.2 Selection-chain priority
 
-| 方案 | 顺序 | 优点 | 缺点 |
+| Option | Order | Pros | Cons |
 | --- | --- | --- | --- |
-| A. 现行 `ragflow → dify → weknora` | 代码现状 | 与 LANDSCAPE §3.1（RAGFlow 首选）/§3.6（Dify 降级）一致；已有 7 个选择链单测锁定 | Dify 排在 weknora 之前（历史兼容位） |
-| B. `ragflow → weknora → dify` | dify 沉底 | 与「Dify 定位降级、不新增投入」更一致 | 改动 7 个单测与三处文档；dify 是存量兼容路径，沉底会破坏存量客户的降级预期 |
+| A. Current `ragflow → dify → weknora` | Code as-is | Consistent with LANDSCAPE §3.1 (RAGFlow first) / §3.6 (Dify as fallback); already locked by 7 selection-chain unit tests | Dify ranks before weknora (a historical-compatibility slot) |
+| B. `ragflow → weknora → dify` | dify sunk to the bottom | More consistent with "Dify is positioned as fallback, with no new investment" | Changes 7 unit tests and three docs; dify is an existing compatibility path, and sinking it breaks existing customers' fallback expectations |
 
-### 2.3 立项口径
+### 2.3 Project-initiation criteria
 
-| 方向 | 结论 | 依据 |
+| Direction | Conclusion | Rationale |
 | --- | --- | --- |
-| RAGFlow | **重解析增强路径，已立项落地**（driver + 验收 + scoped config） | LANDSCAPE §3.1：REST API 最完整、DeepDoc 解析最深、Docker 自托管 |
-| WeKnora | **轻量中文生态路径**（已适配，双路径之一） | LANDSCAPE §3.7、§5.1 |
-| Dify | **兼容保留，不新增投入**（定位=编排平台，dataset 是附属能力） | LANDSCAPE §3.6、§5.3 |
-| MaxKB | 备选观察（客户存量时按需接入） | LANDSCAPE §3.2、§5.2 |
-| FastGPT / QAnything / AnythingLLM | 不立项（定位重复或不推荐） | LANDSCAPE §3.3-§3.5 |
+| RAGFlow | **Heavy re-parsing enhancement path, already initiated and landed** (driver + acceptance + scoped config) | LANDSCAPE §3.1: the most complete REST API, the deepest DeepDoc parsing, Docker self-hosting |
+| WeKnora | **Lightweight Chinese-ecosystem path** (already adapted, one of the dual paths) | LANDSCAPE §3.7, §5.1 |
+| Dify | **Retained for compatibility, no new investment** (positioning = orchestration platform; dataset is a side-capability) | LANDSCAPE §3.6, §5.3 |
+| MaxKB | Watched as an alternative (integrate on demand when customers already have one) | LANDSCAPE §3.2, §5.2 |
+| FastGPT / QAnything / AnythingLLM | Not initiated (overlapping positioning or not recommended) | LANDSCAPE §3.3-§3.5 |
 
-## 3. 推荐（已代决）
+## 3. Recommendation (decided on behalf)
 
-1. **新客户默认口径 = 方案 B**：代码默认保持 `""`（无知识源基座），
-   `pgvector 起步` 作为**交付面口径**由交付模板与 `docs/deployment.md`
-   承担；客户有知识库运营诉求时按解析深度选 WeKnora（轻量中文）或
-   RAGFlow（重解析）增强。理由：pgvector 的 pg 扩展 + embedding 前置
-   条件不能进入隐式代码默认，安全默认（无知识源而非意外外呼）优先。
-2. **选择链优先级 = 方案 A（现行序）**：`pgvector 直配 → local →
-   ragflow → dify → weknora → 无知识源`。dify 留在 weknora 之前是存量
-   兼容位，不与「不新增投入」冲突。
-3. **立项口径 = 推荐口径**：RAGFlow 为唯一新增投入方向（重解析），
-   WeKnora 双路径维持，Dify 冻结能力、MaxKB 观察。
+1. **New-customer default criteria = Option B**: the code default stays `""`
+   (the no-knowledge-source base), and "starting with pgvector" is carried as
+   **delivery-side criteria** by the delivery template and `docs/deployment.md`;
+   when a customer has knowledge-base operation needs, choose WeKnora
+   (lightweight Chinese) or RAGFlow (heavy re-parsing) enhancement by parsing
+   depth. Rationale: pgvector's prerequisites of a pg extension + embedding must
+   not enter the implicit code default; the safe default (no knowledge source
+   rather than unexpected outbound calls) takes priority.
+2. **Selection-chain priority = Option A (the current order)**:
+   `direct pgvector → local → ragflow → dify → weknora → no knowledge source`.
+   dify staying ahead of weknora is an existing-compatibility slot and does not
+   conflict with "no new investment".
+3. **Project-initiation criteria = the recommended criteria**: RAGFlow is the only
+   new investment direction (heavy re-parsing), the WeKnora dual path is
+   maintained, Dify's capabilities are frozen, and MaxKB is watched.
 
-## 4. 落地状态
+## 4. Implementation Status
 
-推荐口径 **与现行代码完全一致**，本轮零代码改动；本文是决策收口与
-引用锚点（原口径散在 LANDSCAPE §3-§6、deployment.md 拍板段两处）。
+The recommended criteria are **fully consistent with the current code**, with zero
+code changes this round; this document is the consolidation of the decision and
+the reference anchors (the original criteria were scattered in two places:
+LANDSCAPE §3-§6 and the decision paragraph of deployment.md).
 
-## 5. 残留缺口
+## 5. Remaining Gap
 
-**真实环境验收证据**：Dify / WeKnora / RAGFlow 的 real 模式端到端证据
-仍依赖外部服务与凭证（见 todo「real 模式知识库验收」，脚本入口
-`*_ACCEPTANCE_MODE=real` 已就绪）；mock 模式证据已入库
-（`docs/acceptance-checklist.md:79-81,107-114`）。**缺的是外部服务
-地址与凭证，不是仓内动作。**
+**Real-environment acceptance evidence**: the real-mode end-to-end evidence for
+Dify / WeKnora / RAGFlow still depends on external services and credentials (see
+the todo item "real-mode knowledge base acceptance"; the script entry point
+`*_ACCEPTANCE_MODE=real` is ready); the mock-mode evidence has already been filed
+(`docs/acceptance-checklist.md:79-81,107-114`). **What is missing is external
+service addresses and credentials, not in-repo work.**
 
-## 6. 推翻方式
+## 6. How to Overturn
 
-口径推翻 = 改本文 + `docs/deployment.md` 拍板段 + `todo.md` 注记；
-若选方案 A/C（改代码默认）才需要动 `config.Default()` 与验收基线。
+Overturning the criteria = editing this document + the decision paragraph of
+`docs/deployment.md` + the note in `todo.md`;
+only if options A/C are chosen (changing the code default) do `config.Default()`
+and the acceptance baseline need to change.

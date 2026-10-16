@@ -1,42 +1,53 @@
-# 租户级配额限流口径（translation.quota 的 unit/window）
+# Tenant-Level Quota Rate-Limiting Policy (translation.quota unit/window)
 
-> 状态：**已代决待核**（2026-10-15 巡检代决，用户可推翻；推翻只需改本文，
-> 无代码耦合）。对应 todo「Phase 3 语音 → 租户级配额限流」卡点
-> 「unit/window 口径未注册，需产品拍板」。本文给出对比表与单个明确推荐；
-> enforcement 已按 §4 落地（2026-10-15，默认 `enabled: false`）；租户/
-> 工作区覆盖限额链按 §4.4 落地（2026-10-16，同轮代决）。
+> Status: **decided on the user's behalf pending confirmation** (decided by delegation
+> during the 2026-10-15 inspection; the user may overturn it; overturning only
+> requires editing this document, with no code coupling). Corresponds to the
+> Phase 3 voice → tenant-level quota rate-limiting todo item's blocker
+> "unit/window criteria not registered, pending product decision". This document
+> provides a comparison table and a single clear recommendation;
+> enforcement was landed per §4 (2026-10-15, default `enabled: false`);
+> the tenant/workspace override limit chain was landed per §4.4 (2026-10-16,
+> decided on behalf in the same round).
 
-## 1. 现状（2026-10-15 实测）
+## 1. Current State (measured 2026-10-15)
 
-- `translation.quota` **只有方向登记，无任何 schema**：全仓 grep `Quota`
-  在 Go/YAML/SQL/TS 零命中；唯一出处是
-  `docs/realtime-translation-design.md` §3.2（「按租户配置开关与配额
-  （复用 configscope 租户覆盖模式）」）与 §4.6（「按租户配额限流，
-  超配额 429」）。
-- 仓库现有两套「窗口」词汇，均无 `unit`/`window` 字符串枚举：
-  - 限流器：`RateLimitingConfig.RequestsPerMinute + Burst`
-    （`apps/server/internal/config/config.go:474-495`），窗口隐式为 1 分钟
-    （`ratePerSec: rpm/60.0`），token bucket，按 IP/API-Key 键控，
-    system scope。
-  - 会话风险窗口：`*_window_{minutes|hours|days}` int 字段后缀
-    （`config.go:439-443`，5 处先例），单位即字段名后缀。
-- 计量现状：翻译 token 用量已有观测面（`TranslateResult.TokenUsage` →
+- `translation.quota` **has only a direction registration, no schema at all**:
+  a repo-wide grep for `Quota`
+  yields zero hits in Go/YAML/SQL/TS; the only sources are
+  `docs/realtime-translation-design.md` §3.2 ("per-tenant configuration switches and
+  quotas
+  (reusing the configscope tenant-override pattern)") and §4.6 ("per-tenant quota
+  rate-limiting,
+  429 when over quota").
+- The repo already has two sets of "window" vocabulary, neither with a
+  `unit`/`window` string enum:
+  - Rate limiter: `RateLimitingConfig.RequestsPerMinute + Burst`
+    (`apps/server/internal/config/config.go:474-495`), window implicitly 1 minute
+    (`ratePerSec: rpm/60.0`), token bucket, keyed by IP/API-Key,
+    system scope.
+  - Session risk window: `*_window_{minutes|hours|days}` int field suffix
+    (`config.go:439-443`, 5 precedents), the unit is the field-name suffix.
+- Measurement status: translation token usage already has an observation surface
+  (`TranslateResult.TokenUsage` →
   `ai_llm_tokens_total{provider, token_type}`、
-  `voice_translation_sentences_total{outcome}`），但 **无 tenant 标签**，
-  且 Prometheus 计数器按进程累计、多实例间不可汇总。
-- 无任何用量记账表/迁移（23 个迁移中无 quota/usage 相关）。
+  `voice_translation_sentences_total{outcome}`), but **has no tenant label**,
+  and Prometheus counters accumulate per process and cannot be aggregated
+  across instances.
+- No usage ledger table/migration exists (no quota/usage-related entries among the
+  23 migrations).
 
-## 2. 对比表
+## 2. Comparison Table
 
-| 方案 | 形态 | 优点 | 缺点 |
+| Option | Form | Pros | Cons |
 | --- | --- | --- | --- |
-| A. 复用限流器口径（`requests_per_minute + burst`） | 现行 `RateLimitingConfig` 同形 | 零新概念，复用现成 middleware | token bucket 是平滑速率语义，不是「预算 + 周期重置」的配额账本；只支持分钟窗；无 token 用量维度；按 IP/API-Key 键控非租户 |
-| B. 单位后缀 int 字段（`limit` + `window_minutes/hours/days`） | 沿用 session-risk 命名法 | 仓库内 5 处先例 | 计量单位（次数 vs token）与时间窗口正交，后缀法表达不了二维；想加窗口档位就加字段，字段爆炸 |
-| C. `limit + unit + window` 显式枚举 | `unit: requests\|tokens`，`window: hour\|day\|month`，固定滚动窗口 | 计量单位 × 时间窗口正交表达完整；枚举可校验可注册（对齐 config_template_lint 门禁）；天然挂 configscope 租户覆盖 | 需新建枚举与校验；窗口锚点需要共享存储（见 §4） |
+| A. Reuse the rate-limiter criteria (`requests_per_minute + burst`) | Same shape as the current `RateLimitingConfig` | Zero new concepts, reuse the existing middleware | The token bucket is a smooth-rate semantics, not a "budget + periodic reset" quota ledger; only supports a minute window; no token-usage dimension; keyed by IP/API-Key, not tenant |
+| B. Unit-suffixed int fields (`limit` + `window_minutes/hours/days`) | Follow the session-risk naming scheme | 5 precedents in the repo | The measurement unit (count vs tokens) and the time window are orthogonal; the suffix scheme cannot express two dimensions; adding a window tier means adding a field, fields explode |
+| C. Explicit `limit + unit + window` enums | `unit: requests\|tokens`，`window: hour\|day\|month`，fixed rolling window | Complete orthogonal expression of measurement unit × time window; enums are validatable and registrable (aligned with the config_template_lint gate); naturally attaches to configscope tenant override | New enums and validation needed; the window anchor requires shared storage (see §4) |
 
-## 3. 推荐（已代决）
+## 3. Recommendation (decided on behalf)
 
-**方案 C**。口径定义：
+**Option C**. The criteria are defined as:
 
 ```yaml
 translation:
@@ -47,89 +58,132 @@ translation:
     window: day           # hour | day | month，固定滚动窗口，超配额 429
 ```
 
-- `unit` 与 `window` 正交：`requests` 按翻译调用次数计，`tokens` 按
-  `TokenUsage` 累计计；窗口固定滚动语义（不做 token bucket 平滑）。
-- 默认 `enabled: false`：口径先注册，enforcement 缺口补齐前不产生行为。
-- 与 `docs/realtime-translation-design.md` §3.2/§4.6 对齐：configscope
-  租户覆盖（tenant/workspace 层覆盖 system 值，§4.4 已落地），超配额 429。
+- `unit` and `window` are orthogonal: `requests` counts
+  translation call count, `tokens` counts the
+  `TokenUsage` accumulation; the window uses fixed rolling semantics (no token-bucket
+  smoothing).
+- Default `enabled: false`: the criteria are registered first, and no behavior
+  occurs before the enforcement gap is filled.
+- Aligned with `docs/realtime-translation-design.md` §3.2/§4.6: configscope
+  tenant override (tenant/workspace layer overriding the system value, §4.4
+  landed), 429 when over quota.
 
-**计量存储选型（2026-10-15 已代决）**：Redis 固定窗，不建 DB 用量表。
-理由：本仓生产配置本就钉 redis（config.yml 启动校验拒绝 inmemory），
-免迁移、免列守卫；窗口状态天然瞬态，redis 重启窗口归零重计的后果只是
-多放行一窗请求（429 保护面，非计费面），不产生资损。窗口锚点入键名
-（`servify:quota:translation:{window}:{anchor}:{tenant}`），TTL 兜底
-自清理。meter 故障时 fail-open（放行当次并保持翻译主链路可用——保护面
-不该反过来打死主面）。
+**Measurement storage choice (decided on behalf 2026-10-15)**: Redis fixed window, no
+DB usage table.
+Rationale: this repo's production config already pins redis (config.yml startup
+validation rejects inmemory),
+no migration, no column guard; window state is naturally transient, and the
+consequence of a redis restart resetting the window counter is only allowing one
+extra window of requests (the 429 protection surface, not a billing surface), causing
+no revenue loss. The window anchor goes into the key name
+(`servify:quota:translation:{window}:{anchor}:{tenant}`), with TTL
+fallback self-cleanup. On meter failure, fail-open (allow the current request and
+keep the translation main path available — the protection surface
+must not kill the main surface in turn).
 
-## 4. enforcement（2026-10-15 已落地）
+## 4. Enforcement (landed 2026-10-15)
 
-三缺口按 §3 决议补齐（默认 `enabled: false`，开启需同步 redis 可用）：
+Three gaps were filled per the §3 decision (default `enabled: false`; enabling
+requires redis availability in sync):
 
-1. **租户维度用量记账** → `internal/platform/quotameter`：Redis 固定窗
-   计量器（不建 DB 用量表，§3 计量存储选型决议）；`Usage` 读当前窗口
-   累计、`Add` 原子累加（IncrBy + ExpireNX 兜底 TTL），窗口归零重计
-   容忍边界见 §3 决议段。
-2. **租户键控检查点** → `translation/delivery` `QuotaGate` 装饰器：装配层
-   把它包在翻译门面外（REST translate / 实时自动翻译 / 历史批量标注 /
-   语音通道统一过门），租户从 ctx 认证信息提取（`platformauth`），
-   无租户静默跳过；`ErrTranslationQuotaExceeded` → HTTP 429。`requests`
-   单位先 +1 再比限（被拒调用也占窗，免 check-then-act 竞态）；`tokens`
-   单位事前 `Usage ≥ limit` 拒（不消耗计量）、成功后按
-   `TokenUsage.TotalTokens` 记账（provider 未回传 usage 不记）。批量
-   标注 `tokens` 单位仅事前检查——批量产出无 usage 面，事后记账不可得。
-   meter 故障一律 fail-open（放行 + Warn 日志）。
-3. **共享窗口锚点** → 键名编锚点
-   `servify:quota:translation:{window}:{anchor}:{tenant}`（hour→整点、
-   day→当日、month→当月），多实例共享同一 redis 键自然对齐；TTL =
-   剩余窗口 + 10min 宽限，旧键兜底自清理。
+1. **Tenant-dimension usage ledger** → `internal/platform/quotameter`: a Redis
+   fixed-window
+   meter (no DB usage table, §3 measurement storage choice decision); `Usage` reads the
+   current window
+   accumulation, `Add` atomically accumulates (IncrBy + ExpireNX fallback TTL); the
+   window reset-and-reaccumulate
+   tolerance boundary is in the §3 decision paragraph.
+2. **Tenant-keyed checkpoint** → `translation/delivery` `QuotaGate` decorator: the
+   assembly layer
+   wraps it around the translation facade (REST translate / real-time auto
+   translation / historical batch annotation /
+   the voice channel all pass through the gate uniformly), with the tenant
+   extracted from the ctx authentication info (`platformauth`),
+   silently skipped when no tenant; `ErrTranslationQuotaExceeded` → HTTP 429. The
+   `requests`
+   unit is incremented +1 before comparing against the limit (rejected calls also
+   occupy the window, avoiding check-then-act races); the `tokens`
+   unit is rejected upfront on `Usage ≥ limit` (not consuming the meter), and after
+   success is recorded by
+   `TokenUsage.TotalTokens` (not recorded when the provider returns no usage). For
+   batch
+   annotation the `tokens` unit is only checked upfront — batch output has no usage
+   surface, so post-hoc accounting is unavailable.
+   Meter failures always fail-open (allow + Warn log).
+3. **Shared window anchor** → the key name encodes the anchor
+   `servify:quota:translation:{window}:{anchor}:{tenant}` (hour→top of the hour,
+   day→current day, month→current month); multiple instances sharing the same redis
+   key naturally align; TTL =
+   remaining window + 10min grace period, old keys self-clean as a fallback.
 
-**装配校验**（`buildTranslationQuotaGate`）：enabled=true 时校验
-unit/window/limit 与 redis 可用性，非法即启动失败（fail-fast）。四份
-config 模板已同步（schema 注册过 config_template_lint 门禁）。
+**Assembly validation** (`buildTranslationQuotaGate`): when enabled=true, validate
+unit/window/limit and redis availability, fail-fast on illegality. The four
+config templates are synced (schema registration passed the config_template_lint gate).
 
-### 4.4 configscope 租户覆盖（2026-10-16 已代决落地）
+### 4.4 configscope tenant override (landed by delegation 2026-10-16)
 
-`§3` 与 realtime-translation-design §3.2 的「configscope 租户覆盖」对齐
-承诺补齐（原缺口记为「待真实需求排期」，本轮按代决权限直接落地，用户可
-推翻——推翻只改本文与本节实现）：
+The alignment commitment for the "configscope tenant override" in `§3` and
+realtime-translation-design §3.2 is filled
+(the original gap was recorded as "pending real-requirement scheduling", and this
+round it is landed directly under delegation authority; the user may
+overturn — overturning only changes this document and this section's implementation):
 
-1. **存储**：迁移 `000024_translation_quota_scoped_config` 给
-   `tenant_configs` / `workspace_configs` 各加一列
-   `translation_quota_json` text（对齐 `rag_flow_json` /
-   `session_risk_json` 列形态，sqlite 走 AutoMigrate），与
+1. **Storage**: migration `000024_translation_quota_scoped_config` adds one column
+   each to
+   `tenant_configs` / `workspace_configs`:
+   `translation_quota_json` text (aligned with the `rag_flow_json` /
+   `session_risk_json` column shapes, sqlite goes through AutoMigrate), aligned
+   column-by-column with
    `models.TenantConfig.TranslationQuotaJSON` /
-   `models.WorkspaceConfig.TranslationQuotaJSON` 逐列对齐（列级对账
-   守卫 `TestMigrationChainCoversAllModelColumns` 通过）。列内仅存
-   `{limit: N}`（`config.TranslationQuotaOverrideConfig`）。
-2. **解析**：`configscope.Resolver.ResolveTranslationQuotaLimit(ctx)` 三层
-   合并——system 默认（`translation.quota.limit`）+ 租户覆盖 + 工作区
-   覆盖（工作区优先，与 portal/openai/session_risk 的层级口径一致）；
-   覆盖值 `<= 0` 视为未设置回落上一层，provider 出错或无覆盖行同样回落
-   （保护面不因覆盖读取失败误拒服务）。租户与工作区身份取自
-   `platformauth` ctx，provider 形态复用现有 gorm provider。
-3. **检查点**：`QuotaGate` 增 `QuotaLimitSource func(ctx) int64` 端口，
-   每请求解析当次限额（`NewQuotaGate` 保持静态限额语义，
-   `NewQuotaGateWithLimitSource` 接解析器）；`Translate` /
-   `BatchTranslate` 两面统一走 `limitFor(ctx)`。装配层
-   `buildTranslationQuotaGate` 在有主库时构造 resolver 注入，无主库部署
-   形态传 nil（只按系统默认限额把关，零行为差异）。
-4. **只覆盖 `limit`**：`enabled` / `unit` / `window` 保持系统级——
-   `window` 已进入 Redis 计量键名，按租户切窗需另一组计量键与键空间
-   治理，收益不足以抵复杂度；`unit` 与计量语义绑定（requests 预占窗 /
-   tokens 事后记账），租户级混用会产生口径歧义。
+   `models.WorkspaceConfig.TranslationQuotaJSON` (the column-level reconciliation
+   guard `TestMigrationChainCoversAllModelColumns` passes). The column only stores
+   `{limit: N}` (`config.TranslationQuotaOverrideConfig`).
+2. **Resolution**: `configscope.Resolver.ResolveTranslationQuotaLimit(ctx)` three-layer
+   merge — system default (`translation.quota.limit`) + tenant override + workspace
+   override (workspace first, consistent with the portal/openai/session_risk layering
+   criteria); an
+   override value `<= 0` is treated as unset and falls back to the previous layer, as
+   does a provider error or no override row
+   (the protection surface must not wrongly deny service due to override read
+   failures). Tenant and workspace identity comes from the
+   `platformauth` ctx; the provider shape reuses the existing gorm provider.
+3. **Checkpoint**: `QuotaGate` gains a `QuotaLimitSource func(ctx) int64` port,
+   resolving the per-request limit on each request
+   (`NewQuotaGate` keeps the static-limit semantics,
+   `NewQuotaGateWithLimitSource` takes the resolver); both the `Translate` and
+   `BatchTranslate` sides go through `limitFor(ctx)` uniformly. The assembly layer
+   `buildTranslationQuotaGate` constructs the resolver injection when a primary
+   database exists, and passes nil for no-primary-database deployment forms
+   (guarding only by the system default limit, zero behavioral difference).
+4. **Only override `limit`**: `enabled` / `unit` / `window` stay system-level —
+   `window` is already in the Redis meter key name, and per-tenant window switching
+   would require another set of meter keys and key-space governance, with benefit
+   not worth the complexity; `unit` is bound to metering semantics (requests
+   pre-occupy the window /
+   tokens are recorded post-hoc), and per-tenant mixing would create criteria
+   ambiguity.
 
-**本轮明确不做**（后续缺口）：
+**Explicitly not done this round** (remaining gaps):
 
-- **管理端写面**：覆盖值目前只有读路径生效（覆盖行需直接写
-  tenant_configs / workspace_configs）；管理端 scope 表单、字段校验与
-  审计段需 `scoped_config_handler` 新 scope 分支 + admin 前端表单，属
-  产品面而非 enforcement 缺口，单独立项。
-- **实时/历史路径的租户 plumbing**：这些路径的 ctx 尚未携带租户时按
-  无租户跳过（过门但不计量）；REST translate 端点已带认证租户全量生效。
+- **Admin-plane write surface**: override values currently only take effect on the
+  read path (override rows require directly writing
+  tenant_configs / workspace_configs); the admin
+  scope form, field validation, and
+  audit section require a new scope branch in `scoped_config_handler` + admin frontend
+  forms, which belong to the
+  product surface rather than an enforcement gap, and are initiated separately.
+- **Tenant plumbing for the real-time/historical paths**: when these paths' ctx
+  does not yet carry a tenant, they are skipped as no-tenant
+  (passing through the gate without metering); the REST translate endpoint already has
+  an authenticated tenant and takes full effect.
 
-## 5. 推翻方式
+## 5. How to Overturn
 
-口径推翻 = 改本文 + 改 `todo.md` 对应注记 + `translation.quota.enabled`
-回 false（默认即关，无数据回滚成本；meter 键靠 TTL 自清理）。覆盖限额
-链推翻（§4.4）= 清空 `translation_quota_json` 覆盖行即回到系统单值口径
-（列可留，无覆盖行=无覆盖；migration 为纯加列，无回滚需求）。
+Overturning the criteria = editing this document + editing the corresponding note in
+`todo.md` + setting `translation.quota.enabled`
+back to false (default off, no data rollback cost; meter keys self-clean via TTL).
+Overriding the limit
+chain (§4.4) = clearing the `translation_quota_json` override rows returns to the
+system single-value criteria
+(the column can stay, no override row = no override; the migration is a pure
+add-column, no rollback needed).

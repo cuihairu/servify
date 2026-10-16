@@ -1,6 +1,6 @@
 # 04 SDK And Channel Adapters
 
-范围：
+Scope:
 
 - sdk core contracts
 - current web sdk refactor
@@ -9,20 +9,20 @@
 - channel adapters
 - sip adapter
 
-约束：
+Constraints:
 
-- 当前只实现 web sdk
-- 但目录和 contracts 必须支持未来 api sdk 和 app sdk
+- Only the web sdk is implemented for now
+- But the directory layout and contracts must support a future api sdk and app sdk
 
 ## S1 sdk target structure
 
-- [x] 评审当前 `sdk/packages` 结构
-- [x] 确认现有包映射：
+- [x] Review the current `sdk/packages` structure
+- [x] Confirm the existing package mapping:
   - [x] `core`
   - [x] `react`
   - [x] `vue`
   - [x] `vanilla`
-- [x] 设计目标结构：
+- [x] Design the target structure:
   - [x] `core`
   - [x] `transport-http`
   - [x] `transport-websocket`
@@ -32,118 +32,118 @@
   - [x] `api-client`
   - [x] `app-core`
 
-验收：
+Acceptance:
 
-- 目标结构文档化
-- 不要求一次性重命名现有包
+- The target structure is documented
+- Existing packages are not required to be renamed all at once
 
 ## S2 sdk core contracts
 
-- [x] 在 `sdk/packages/core` 中增加 contracts 分层
-- [x] 定义 `ClientSession`
-- [x] 定义 `Transport`
-- [x] 定义 `EventEmitter`
-- [x] 定义 `AuthProvider`
-- [x] 定义 `Capability`
-- [x] 定义统一错误模型
+- [x] Add a contracts layer to `sdk/packages/core`
+- [x] Define `ClientSession`
+- [x] Define `Transport`
+- [x] Define `EventEmitter`
+- [x] Define `AuthProvider`
+- [x] Define `Capability`
+- [x] Define a unified error model
 
-验收：
+Acceptance:
 
-- core 不含浏览器专属 UI 逻辑
-- 已补 capability、transport、web binding 基础测试，便于后续 API/App SDK 复用 contract
+- core contains no browser-specific UI logic
+- Basic capability, transport, and web binding tests have been added so later API/App SDKs can reuse the contract
 
 ## S3 transport split
 
-- [x] 把 websocket 逻辑从泛化 core 中进一步抽到 transport contract
-- [x] 预留 `transport-http`
-- [x] 预留 reconnect policy
-- [x] 预留 token refresh hook
+- [x] Further extract websocket logic from the generalized core into the transport contract
+- [x] Reserve `transport-http`
+- [x] Reserve a reconnect policy
+- [x] Reserve a token refresh hook
 
-验收：
+Acceptance:
 
-- transport 与 framework binding 解耦
+- transport is decoupled from framework bindings
 
 ## S4 current web sdk refactor
 
-- [x] `react` 仅依赖 core contracts
-- [x] `vue` 仅依赖 core contracts
-- [x] `vanilla` 仅依赖 core contracts
-- [x] 将浏览器专属逻辑收口到 web binding
+- [x] `react` depends only on core contracts
+- [x] `vue` depends only on core contracts
+- [x] `vanilla` depends only on core contracts
+- [x] Consolidate browser-specific logic into the web binding
 
-验收：
+Acceptance:
 
-- core 仍可被未来 api/app sdk 复用
+- core can still be reused by future api/app SDKs
 
 ## S5 future api sdk reservation
 
-- [x] 创建 `sdk/packages/api-client` 占位
-- [x] 新增 README 说明目标用途
-- [x] 约定使用场景：
+- [x] Create the `sdk/packages/api-client` placeholder
+- [x] Add a README describing the intended purpose
+- [x] Agreed usage scenarios:
   - [x] server-to-server api calls
   - [x] admin automation clients
   - [x] bot integrations
 
-验收：
+Acceptance:
 
-- 明确这是保留设计，不实现具体功能
+- Make clear this is a reserved design with no concrete features implemented
 
 ## S6 future app sdk reservation
 
-- [x] 创建 `sdk/packages/app-core` 占位
-- [x] 新增 README 说明目标用途
-- [x] 约定使用场景：
+- [x] Create the `sdk/packages/app-core` placeholder
+- [x] Add a README describing the intended purpose
+- [x] Agreed usage scenarios:
   - [x] mobile app session
   - [x] push token integration
   - [x] reconnect and offline queue
 
-验收：
+Acceptance:
 
-- 明确这是保留设计，不实现具体功能
+- Make clear this is a reserved design with no concrete features implemented
 
 ## S7 sdk capability negotiation
 
-- [x] 定义 capability model
-- [x] 第一批 capability：
+- [x] Define the capability model
+- [x] First batch of capabilities:
   - [x] chat
   - [x] realtime
   - [x] knowledge
   - [x] remote_assist
   - [x] voice
-- [x] 在 web sdk 中先实现 capability exposure
+- [x] Implement capability exposure in the web sdk first
 
-验收：
+Acceptance:
 
-- future api/app sdk 可共享 capability 协议
+- The future api/app SDKs can share the capability protocol
 
 ## S8 channel adapter contracts
 
-- [x] 在服务端定义统一 `InboundEvent`
-- [x] 在服务端定义统一 `OutboundEvent`
-- [x] 约定 adapter responsibilities
-- [x] web adapter 映射到 conversation
-- [x] 预留 telegram/wecom/whatsapp adapter contract
+- [x] Define a unified `InboundEvent` on the server side
+- [x] Define a unified `OutboundEvent` on the server side
+- [x] Agree on adapter responsibilities
+- [x] The web adapter maps to conversation
+- [x] Reserve telegram/wecom/whatsapp adapter contracts
 
-验收：
+Acceptance:
 
-- 新接入渠道不需要改 ticket 业务核心
-- web channel 已有默认消息映射测试，后续渠道只需要实现 adapter contract
+- Newly added channels do not require changes to the ticket business core
+- The web channel already has default message-mapping tests; later channels only need to implement the adapter contract
 
 ## S9 sip adapter
 
-- [x] 创建 `internal/platform/sip`
-- [x] 定义 `SIPAdapter`
-- [x] 定义 `InboundCall`
-- [x] 映射 invite -> inbound event
-- [x] 映射 hangup -> inbound event
-- [x] 映射 dtmf -> inbound event
-- [x] 预留 `sip-ws` signaling adapter
-- [x] 预留 `pstn-provider` signaling adapter
-- [x] 抽象 `voiceprotocol.CallSignalingAdapter`
-- [x] 抽象 `voiceprotocol.MediaSessionAdapter`
+- [x] Create `internal/platform/sip`
+- [x] Define `SIPAdapter`
+- [x] Define `InboundCall`
+- [x] Map invite -> inbound event
+- [x] Map hangup -> inbound event
+- [x] Map dtmf -> inbound event
+- [x] Reserve the `sip-ws` signaling adapter
+- [x] Reserve the `pstn-provider` signaling adapter
+- [x] Abstract `voiceprotocol.CallSignalingAdapter`
+- [x] Abstract `voiceprotocol.MediaSessionAdapter`
 
-验收：
+Acceptance:
 
-- SIP 通过 adapter 接入，不进入聊天逻辑分支
-- 已有默认 SIP adapter，可把 invite、hangup、dtmf 归一化到统一 inbound event
-- SIP、SIP-WS、PSTN webhook 可以共享 signaling adapter 语义
-- runtime 已通过 `voiceprotocol.Registry` 统一注册 signaling/media adapter，并暴露统一协议事件入口
+- SIP connects through the adapter and does not enter chat logic branches
+- A default SIP adapter exists and can normalize invite, hangup, and dtmf into the unified inbound event
+- SIP, SIP-WS, and PSTN webhooks can share signaling adapter semantics
+- The runtime registers signaling/media adapters uniformly via `voiceprotocol.Registry` and exposes a unified protocol event entrypoint
