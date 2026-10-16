@@ -1,3 +1,5 @@
+> [English](web-sdk.en.md) | **中文**
+
 # Web SDK
 
 Servify Web SDK 的接入文档：浏览器端实时聊天、工单、远程协助、语音通道的完整 API 与配置面。

@@ -1,3 +1,5 @@
+> [English](mobile-sdk-platform-spec.en.md) | **中文**
+
 # 移动端 SDK 平台规格：Android/iOS 选型工程化与核心 API 表面
 
 状态：开工技术方案（不含实现）。[mobile-sdk-design.md](/mobile-sdk-design) 回答"做什么、为什么、按什么顺序"；本文回答"具体长什么形状"——分层架构、两平台选型的工程化细节、V1 冻结的 API 表面、接入流程的可执行细化。实现代码不在本文范围，但本文是 M0/M1/M2 开工时的对照基线：代码评审按本文逐条验收，偏离需先改本文。

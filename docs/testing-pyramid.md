@@ -1,3 +1,5 @@
+> [中文](testing-pyramid.zh.md) | **English**
+
 # Testing Pyramid
 
 ## Integration build tag coverage

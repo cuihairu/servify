@@ -1,3 +1,5 @@
+> [English](remote-assistance-mvp.en.md) | **中文**
+
 # 远程协助最小可交付链路
 
 本文用于收口 `Gap C / G3-3`：定义 Servify 当前阶段可对外表达的最小远程协助链路，以及对应的验收口径。

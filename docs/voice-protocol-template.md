@@ -1,3 +1,5 @@
+> [English](voice-protocol-template.en.md) | **中文**
+
 # Voice Protocol Integration Template
 
 新协议接入时，优先复用统一 `voiceprotocol` 契约，而不是把协议 DTO 直接带进 `voice` 业务层。

@@ -1,3 +1,5 @@
+> [English](auth-surface-policy.en.md) | **中文**
+
 # Auth Surface Policy
 
 本文定义 Servify HTTP 路由的授权表面分类，目标是把“这个入口到底该不该匿名、该不该走 management token、该不该只允许 service”从零散 handler 逻辑里收口到统一规则。

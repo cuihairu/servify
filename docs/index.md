@@ -27,6 +27,8 @@ features:
   - title: 后台运营
     details: 在统一后台管理坐席、知识库、权限、安全策略和产品运行配置。
 ---
+> [English](index.en.md) | **中文**
+
 
 ## 产品概览
 

@@ -1,3 +1,5 @@
+> [English](RAGFLOW_INTEGRATION.en.md) | **中文**
+
 # 外部知识库集成指南：RAGFlow 知识库 provider（ragflowkp）
 
 ## 项目概述

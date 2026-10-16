@@ -1,3 +1,5 @@
+> [English](generated-assets.en.md) | **中文**
+
 # Generated Assets
 
 本文件说明 Servify 中需要提交到仓库的生成物、对应生成入口、以及 CI 如何校验它们。

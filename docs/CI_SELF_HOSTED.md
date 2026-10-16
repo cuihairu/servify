@@ -1,3 +1,5 @@
+> [English](CI_SELF_HOSTED.en.md) | **中文**
+
 # GitHub Hosted CI
 
 当前仓库已切换为 GitHub Hosted Runner，不再依赖仓库私有 self-hosted runner。

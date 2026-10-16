@@ -1,3 +1,5 @@
+> [English](mobile-sdk-cocoapods-evaluation.en.md) | **中文**
+
 # CocoaPods 兼容层评估（M3 刀 4，设计文档 §3 分发形态决策的收尾）
 
 结论先行：**暂不建 CocoaPods spec，继续 XCFramework + SwiftPM 二进制分发单轨**；

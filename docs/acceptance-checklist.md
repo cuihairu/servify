@@ -1,3 +1,5 @@
+> [English](acceptance-checklist.en.md) | **中文**
+
 # Servify 验收清单
 
 这份清单用来防止把“代码里有入口”误判成“功能已经可交付”，不为证明“看起来差不多做完了”。

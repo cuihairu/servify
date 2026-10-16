@@ -1,3 +1,5 @@
+> [English](webrtc-deployment.en.md) | **中文**
+
 # WebRTC / 远程协助部署指南
 
 本文回答一个高频问题：**部署 Servify 的远程协助能力，需要额外部署什么？** 并给出 STUN/TURN、防火墙端口与验证步骤的完整清单。

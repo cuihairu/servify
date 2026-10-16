@@ -1,3 +1,5 @@
+> [English](current-architecture.en.md) | **中文**
+
 # 当前架构分析
 
 本文记录当前仓库的真实架构状态，用于衔接根目录 `ARCHITECTURE.md` 中的目标设计和 `docs/implementation/` 下的实施 backlog。

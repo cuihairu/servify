@@ -1,3 +1,5 @@
+> [English](delivery-priorities.en.md) | **中文**
+
 # Servify Delivery Priorities
 
 这份文档不负责罗列全部实现 backlog，而是回答一个更直接的问题：

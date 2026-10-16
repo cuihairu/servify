@@ -1,3 +1,5 @@
+> [English](ai-fallback-behavior.en.md) | **中文**
+
 # AI Fallback Behavior
 
 当前 AI 编排层的降级规则如下：

@@ -1,3 +1,5 @@
+> [English](acceptance-weknora-docker.en.md) | **中文**
+
 # WeKnora Docker 验收报告
 
 **日期**: 2026-04-19
