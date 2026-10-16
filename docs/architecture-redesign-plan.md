@@ -1,30 +1,28 @@
-> [English](architecture-redesign-plan.en.md) | **中文**
+# Architecture Redesign Plan
 
-# 架构重设计计划
+> ⚠️ **Snapshot note (2026-10-04 doc reconciliation)**: This is the execution framework for the services→modules migration period. Its core goals (closing the services/modules boundary, stabilizing the runtime assembly / router / provider structure) have been delivered in subsequent batches: `internal/services` has been removed entirely, and all business capabilities are closed out under `internal/modules/*` (capped at 27 modules). The current authoritative architecture snapshot is [current-architecture.md](./current-architecture.md); the V1.0 spec is [v1-convergence-plan.md](./v1-convergence-plan.md). This document is archived as migration history only.
 
-> ⚠️ **快照注记（2026-10-04 文档对账）**：本文是 services→modules 迁移期的执行框架，其核心目标（services/modules 边界收口、runtime assembly/router/provider 结构稳定）已在后续批次中落地：`internal/services` 已整体移除，业务能力全部收口 `internal/modules/*`（27 模块封顶）。当前权威架构快照见 [current-architecture.md](./current-architecture.md)，V1.0 口径见 [v1-convergence-plan.md](./v1-convergence-plan.md)，本文仅作迁移史存档。
+This is the execution framework for the next round of architecture redesign. It does not enumerate a new feature backlog. The goal is to first align the doc spec, current architecture, migration order, and acceptance rules, before deciding on specific code changes.
 
-本文是下一轮架构重设计的执行框架，不列新的功能 backlog。目标是先把文档口径、当前架构、迁移顺序和验收规则对齐，再决定具体代码改动。
+## Goals
 
-## 目标
+This round of redesign prioritizes solving four classes of problems:
 
-本轮重设计优先解决四类问题：
+1. Stop conflating the current real architecture with the target architecture.
+2. Continue contracting the boundary between `services` and `modules`.
+3. Split runtime assembly, router surface, and provider boundary into maintainable, stable structures.
+4. Bind redesign results to executable checks and acceptance evidence, rather than leaving them in design docs only.
 
-1. 让当前真实架构和目标架构不再混写。
-2. 继续收缩 `services` 与 `modules` 的边界。
-3. 把 runtime assembly、router surface、provider boundary 拆成可维护的稳定结构。
-4. 将重设计结果绑定到可执行检查和验收证据，而不是只停留在设计文档。
+## Non-goals
 
-## 非目标
+Currently not doing:
 
-当前不做这些事：
+- Do not split the backend into microservices.
+- Do not rewrite every handler or every service.
+- Do not use architecture redesign to substitute for closing the current P1 acceptance.
+- Do not expand new product capabilities to mask evidence gaps in the existing main path.
 
-- 不把后端拆成微服务。
-- 不重写所有 handler 或所有 service。
-- 不用架构重设计替代当前 P1 验收收口。
-- 不扩张新产品能力来掩盖已有主链路的证据缺口。
-
-## 设计主线
+## Design spine
 
 ```mermaid
 flowchart TD
@@ -49,86 +47,86 @@ flowchart TD
     VERIFY --> DELIVERY
 ```
 
-## Phase 0 文档基线
+## Phase 0 Document baseline
 
-先完成文档整理，避免后续代码改动没有共同语境。
+Finish doc organization first, so subsequent code changes share a common context.
 
-交付物：
+Deliverables:
 
 - `docs/current-architecture.md`
 - `docs/architecture-redesign-plan.md`
-- 文档站导航补齐 `09` 到 `12` 和 `10-*` 迁移治理文档
-- `docs/implementation/README.md` 的阅读顺序更新
+- Fill in doc-site navigation for `09` through `12` and the `10-*` migration governance docs
+- Update the reading order in `docs/implementation/README.md`
 
-验收：
+Acceptance:
 
-- 能从文档站直接进入当前架构、目标架构、重设计计划和模块迁移治理。
-- 任一后续任务都能指向一个明确状态源。
+- Reach current architecture, target architecture, redesign plan, and module migration governance directly from the doc site.
+- Every subsequent task can point to one clear source of truth.
 
-## Phase 1 Runtime Assembly 收口
+## Phase 1 Runtime assembly closeout
 
-目标是让 `internal/app/server` 继续保持 assembly root，但避免跨域逻辑重新堆进单个文件。
+Goal: keep `internal/app/server` as the assembly root, but prevent cross-domain logic from piling back into a single file.
 
-当前已完成：
+Already done:
 
-- `router.go` 已拆出 auth / management / public / realtime。
-- `runtime.go` 已拆出 `runtime_assembly.go` 和若干专门 runtime 文件。
+- `router.go` has been split out auth / management / public / realtime.
+- `runtime.go` has been split into `runtime_assembly.go` plus several dedicated runtime files.
 
-下一步：
+Next:
 
-- 为 assembly helper 明确命名规则：`wire<Capability>Runtime` 只装配依赖，不写业务规则。
-- 将 worker-only concrete service 继续限制在 worker accessor 中。
-- 将 realtime / voice / AI 这类跨域 runtime 单独保留 runtime contract，不暴露 concrete hub/provider 给 handler。
+- Establish a naming rule for assembly helpers: `wire<Capability>Runtime` only wires dependencies, does not write business rules.
+- Continue confining worker-only concrete services to the worker accessor.
+- Keep cross-domain runtimes like realtime / voice / AI behind a dedicated runtime contract; do not expose concrete hub/provider to handlers.
 
-验收：
+Acceptance:
 
-- 新增 route surface 时不需要修改 unrelated runtime helper。
-- 新增 module handler 时默认只触碰 module delivery、runtime assembly 和对应 router surface。
+- Adding a route surface does not require touching unrelated runtime helpers.
+- Adding a module handler by default touches only module delivery, runtime assembly, and the corresponding router surface.
 
-## Phase 2 Module Boundary 收紧
+## Phase 2 Module boundary tightening
 
-目标是把已收口模块从“contracted/stabilized”继续推进到“legacy service 可退役或明确保留职责”。
+Goal: push already-closed modules from "contracted/stabilized" to "legacy service can be retired or explicitly retains a responsibility."
 
-优先顺序：
+Priority order:
 
-1. 已有 delivery 主路径但仍保留 facade 的能力。
-2. 仍由 `services` 承担 subscriber 或 runtime glue 的能力。
-3. realtime / voice 这类非典型迁移区域。
+1. Capabilities that already have a delivery main path but still keep a facade.
+2. Capabilities where `services` still carries subscriber or runtime glue.
+3. Atypical migration areas like realtime / voice.
 
-执行规则：
+Execution rules:
 
-- 新业务逻辑优先进入 `modules/*/application`。
-- handler 只消费 `modules/*/delivery` 或 handler-local contract。
-- legacy service 如无 runtime 必要职责，应删除，不保留空壳 facade。
+- New business logic goes into `modules/*/application` first.
+- Handlers consume only `modules/*/delivery` or a handler-local contract.
+- If a legacy service has no necessary runtime responsibility, delete it; do not keep an empty-shell facade.
 
-验收：
+Acceptance:
 
-- `scripts/check-module-boundaries.sh` 覆盖新增稳定模块。
-- `docs/implementation/10-migration-scorecard.md` 与规则文件一致。
+- `scripts/check-module-boundaries.sh` covers newly stabilized modules.
+- `docs/implementation/10-migration-scorecard.md` stays consistent with the rules file.
 
-## Phase 3 Provider Boundary 收口
+## Phase 3 Provider boundary closeout
 
-目标是明确 dev/demo/prod 的 provider 边界，让 mock、disabled、compatibility 不再混入默认生产语义。
+Goal: make the dev/demo/prod provider boundary explicit so mock, disabled, and compatibility do not mix into default production semantics.
 
-重点区域：
+Key areas:
 
-- event bus: `inmemory` 与 `redis` 的运行边界
-- AI / knowledge: Dify、WeKnora compatibility、pgvector、自定义 provider
-- voice: disabled、mock、Twilio、Deepgram
-- storage: local filesystem 与未来 S3/MinIO
-- session IP intelligence: heuristic 与 HTTP provider
+- event bus: `inmemory` vs `redis` runtime boundary
+- AI / knowledge: Dify, WeKnora compatibility, pgvector, custom provider
+- voice: disabled, mock, Twilio, Deepgram
+- storage: local filesystem vs future S3/MinIO
+- session IP intelligence: heuristic vs HTTP provider
 
-验收：
+Acceptance:
 
-- 生产配置模板不隐式启用 mock provider。
-- 健康检查和 baseline check 能暴露 provider 状态。
-- 文档明确 compatibility provider 不等于默认产品主路径。
+- Production config templates do not implicitly enable mock providers.
+- Health checks and baseline checks expose provider state.
+- Docs make explicit that a compatibility provider is not the default product main path.
 
-## Phase 4 Route Surface 与权限治理
+## Phase 4 Route surface and permission governance
 
-目标是让路由分面成为架构约束，而不是文件拆分而已。
+Goal: make route surfacing an architectural constraint, not just a file split.
 
-当前分面：
+Current surfaces:
 
 - auth
 - management
@@ -136,27 +134,27 @@ flowchart TD
 - realtime
 - static
 
-下一步：
+Next:
 
-- 每个新增路由必须先选择 surface。
-- management surface 默认经过 auth、scope、principal kind、permission、audit。
-- public surface 必须登记到 security surface catalog，并有路径级限流策略。
-- service-only surface 必须避免被 management 权限误复用。
+- Every new route must first select a surface.
+- The management surface goes through auth, scope, principal kind, permission, and audit by default.
+- The public surface must be registered in the security surface catalog and have a path-level rate-limit policy.
+- The service-only surface must not be mistakenly reused by management permissions.
 
-验收：
+Acceptance:
 
-- route security warning 不再依赖人工记忆。
-- 新增公开路由缺少登记或限流时可以被检查发现。
+- Route security warnings no longer rely on human memory.
+- New public routes that lack registration or rate limiting can be caught by a check.
 
-## Phase 5 Product Workflow 对齐
+## Phase 5 Product workflow alignment
 
-目标是让架构围绕主产品链路收束（V1 范围见 [v1-product-scope.md](./v1-product-scope.md)）：
+Goal: converge the architecture around the main product path (see V1 scope in [v1-product-scope.md](./v1-product-scope.md)):
 
 ```text
 Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程
 ```
 
-远程协助保留为 `人工接管` 之后的增强方向，不进入 V1 主链路验收。这条 V1 链路涉及：
+Remote assistance is retained as an enhancement direction after `人工接管`, and does not enter V1 main-path acceptance. This V1 path involves:
 
 - SDK session bootstrap
 - conversation / realtime
@@ -165,14 +163,14 @@ Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程
 - ticket command/query
 - audit / metrics / acceptance evidence
 
-验收：
+Acceptance:
 
-- 主链路的文档、API、SDK、管理端入口和验收清单使用同一套术语。
-- `docs/acceptance-checklist.md` 的状态能回溯到真实请求或运行证据。
+- The main path's docs, API, SDK, admin entry, and acceptance checklist use the same terminology.
+- The status in `docs/acceptance-checklist.md` can be traced back to real requests or runtime evidence.
 
-## Phase 6 验证收口
+## Phase 6 Verification closeout
 
-所有架构重设计任务都必须绑定至少一种验证方式：
+Every architecture redesign task must be bound to at least one verification method:
 
 - module boundary check
 - route surface check
@@ -181,20 +179,19 @@ Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程
 - acceptance manifest
 - docs build
 
-最低完成口径：
+Minimum completion spec:
 
-1. 文档更新完成。
-2. 边界规则或测试能防止回退。
-3. 对应验收清单或 scorecard 同步更新。
+1. Documentation updates complete.
+2. Boundary rules or tests prevent regression.
+3. The corresponding acceptance checklist or scorecard is updated in sync.
 
-## 当前下一步
+## Current next step
 
-文档整理完成后，优先继续执行 `todo.md` 中当前恢复点：
+After doc organization is complete, prioritize continuing the current recovery point in `todo.md`:
 
 - `P1-1 AI / Knowledge 验收收口`
 
-同时并行维护模块迁移治理：
+In parallel, maintain module migration governance:
 
-- 保持 `10-migration-scorecard.md` 与 `scripts/module-boundaries.rules` 一致。
-- 对仍保留的 legacy service 标注保留原因和退役条件。
-
+- Keep `10-migration-scorecard.md` consistent with `scripts/module-boundaries.rules`.
+- Annotate retained legacy services with their retention reason and retirement conditions.

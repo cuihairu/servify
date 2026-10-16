@@ -1,199 +1,197 @@
-> [English](security-baseline-operations.en.md) | **中文**
-
 # Security Baseline For Operations
 
-本文件用于推进 `11 / T5 security-baseline-for-operations`，先把当前高风险接口、已有控制和最小上线基线收口成统一清单。
+This document drives `11 / T5 security-baseline-for-operations`, first consolidating current high-risk interfaces, existing controls, and the minimum go-live baseline into one list.
 
-## 高风险接口盘点
+## High-risk interface inventory
 
-### Management Surface 写接口
+### Management Surface write interfaces
 
-范围：
+Scope:
 
-- `/api/*` 下的工单、客户、坐席、转接、集成、自动化、知识库等写操作
+- Write operations under `/api/*` for tickets, customers, agents, transfers, integrations, automation, knowledge base, etc.
 - `/api/v1/ai/knowledge/upload`
 - `/api/v1/ai/knowledge/sync`
 - `/api/v1/ai/knowledge-provider/enable`
 - `/api/v1/ai/knowledge-provider/disable`
 - `/api/v1/ai/circuit-breaker/reset`
 
-风险：
+Risk:
 
-- 会改变业务主数据、路由行为或 AI/knowledge 运行状态
-- 错误授权会直接造成跨租户写入、配置污染或服务降级
+- Changes business main data, routing behavior, or AI/knowledge runtime state
+- Misauthorization causes cross-tenant writes, config pollution, or service degradation directly
 
-当前控制：
+Current controls:
 
 - `AuthMiddleware`
 - `EnforceRequestScope`
 - `RequirePrincipalKinds("agent", "admin", "service")`
 - `RequireResourcePermission(...)`
-- 管理面写请求统一经过 `AuditMiddleware`
+- Management-plane write requests uniformly pass through `AuditMiddleware`
 
 ### Service Surface
 
-范围：
+Scope:
 
 - `/api/v1/metrics/ingest`
 
-风险：
+Risk:
 
-- 属于机器入口，若 token 泄漏可能被用于伪造监控数据或造成放大写入
+- This is a machine entry point; if the token leaks, it can be used to forge monitoring data or cause amplified writes
 
-当前控制：
+Current controls:
 
 - `AuthMiddleware`
 - `EnforceRequestScope`
 - `RequirePrincipalKinds("service")`
-- 全局 HTTP rate limiting middleware 可按路径单独限流
+- Global HTTP rate limiting middleware supports per-path rate limiting
 
 ### Public Surface
 
-范围：
+Scope:
 
 - `/public/portal/config`
 - `/public/kb/*`
 - `/public/csat/*`
-- `/api/v1/auth/*` 中的匿名入口（`login` / `register` / `refresh` / `2fa/verify`（匿名 OTP 挑战步，沿用 auth 前缀限流 25rpm）/ `oidc/start|callback|status`）
+- Anonymous entries under `/api/v1/auth/*` (`login` / `register` / `refresh` / `2fa/verify` (anonymous OTP challenge step, using the auth prefix rate limit 25rpm) / `oidc/start|callback|status`)
 - `/api/v1/ws`
-- `/api/v1/ws/voice`（语音翻译通道；沿用 `/api/v1/ws` 前缀限流条目）
+- `/api/v1/ws/voice` (voice translation channel; uses the `/api/v1/ws` prefix rate limit entry)
 - `/uploads/*`
 
-风险：
+Risk:
 
-- 匿名暴露，容易成为枚举、抓取、滥用或流量放大入口
+- Anonymously exposed; easily becomes an entry for enumeration, scraping, abuse, or traffic amplification
 
-当前控制：
+Current controls:
 
-- 路由表面已与 management / service 分离，避免复用后台 JWT 语义
-- 全局 HTTP rate limiting middleware 已挂到基础路由
-- 运行时现已维护代码级 `security surface catalog`，用于校验公开/匿名表面是否被显式登记，避免新增开放路由只留在文档评审中
+- The route surface has been separated from management / service to avoid reusing backend JWT semantics
+- Global HTTP rate limiting middleware is already mounted on the base routes
+- The runtime now maintains a code-level `security surface catalog`, used to verify whether public/anonymous surfaces are explicitly registered, avoiding new open routes being left to doc review only
 
-## 已落地的安全基线
+## Security baseline already in place
 
-### 认证与授权
+### Authentication and authorization
 
-- 管理面与 service 面统一走 `internal/platform/auth`
-- `end_user` token 被显式拒绝进入 management surface
-- request scope 会校验 token scope 与 header/query scope 冲突，阻止请求扩大作用域
-- `security/users/*` 与 `security/tokens/*` 在资源权限之外，现已继续按目标 user 关联的 `Agent` / `Customer` scope 校验 tenant/workspace 归属；跨 scope 目标统一按不存在处理
+- Management plane and service plane both go through `internal/platform/auth`
+- `end_user` tokens are explicitly rejected from entering the management surface
+- Request scope validates token scope against header/query scope conflicts, blocking requests from expanding their scope
+- `security/users/*` and `security/tokens/*`, beyond resource permissions, now continue to validate tenant/workspace ownership via the target user's associated `Agent` / `Customer` scope; cross-scope targets are uniformly treated as nonexistent
 
-### 审计
+### Audit
 
-- 管理面写请求默认记录 actor、principal、tenant、workspace、resource、request metadata
-- 审计查询接口：`GET /api/audit/logs`
-- 审计中间件现已对 `password`、`secret`、`api_key`、`token` 等敏感字段做统一脱敏，避免把明文 secrets 写入审计库
-- auth 公开面（`/api/v1/auth/*`：登录、注册、refresh、2FA 挑战、登出）统一挂载含失败留痕的审计中间件：成功与 4xx/5xx 一并落库（`success=false` + 真实 status_code），失败登录、被风险策略拦截的登录都可对账；凭据字段沿用同一脱敏规则
+- Management-plane write requests record actor, principal, tenant, workspace, resource, and request metadata by default
+- Audit query interface: `GET /api/audit/logs`
+- The audit middleware now uniformly redacts sensitive fields like `password`, `secret`, `api_key`, `token`, avoiding plaintext secrets being written into the audit store
+- The auth public surface (`/api/v1/auth/*`: login, register, refresh, 2FA challenge, logout) uniformly mounts an audit middleware with failure logging: both successes and 4xx/5xx are written to the store (`success=false` + real status_code); failed logins and logins blocked by risk policy are both reconcilable; credential fields use the same redaction rules
 
-### 登录风险执行（P2-5 第二刀）
+### Login risk enforcement (P2-5 second cut)
 
-风险判定依赖 `security.session_ip_intelligence` 情报源返回的网络标签：内建启发式只产 `public` / `private` / `loopback` / `unknown` 四类安全标签，一律判为低风险；只有接入外部情报源、来源被标注为 `hosting`、`proxy` 等富标签时才判定为高风险来源。`security.session_risk.login_enforcement` 档位：
+Risk determination depends on the network labels returned by the `security.session_ip_intelligence` source: built-in heuristics only produce the four security labels `public` / `private` / `loopback` / `unknown`, all judged as low-risk; only when an external intelligence source is connected and the source is labeled with rich labels like `hosting`, `proxy` is it judged as a high-risk source. The `security.session_risk.login_enforcement` tiers:
 
-- `off`（默认）：不执行，登录行为与既有版本完全一致
-- `step_up`：高风险来源登录强制第二因子——已绑定 TOTP 的用户进入挑战步（即使 2FA 总开关关闭）；未绑定 TOTP 的用户直接拒绝
-- `block`：高风险来源登录凭据验证通过后仍拒绝（403，响应不回显判定依据）
+- `off` (default): no enforcement; login behavior is identical to existing versions
+- `step_up`: high-risk-source logins require a second factor — users with TOTP bound enter the challenge step (even if the 2FA master switch is off); users without TOTP bound are rejected directly
+- `block`: high-risk-source logins are still rejected after credential verification passes (403, response does not reveal the determination basis)
 
-情报源未启用或档位未配置时零行为变化。真实运行验收：`make auth-audit-acceptance`（stub 情报源标注 hosting → block 阶段 403 拦截、错误密码 401；off 阶段同库重启正常登录 200；经 `GET /api/audit/logs` 对账三类登录行与 `[REDACTED]` 脱敏）。
+When the intelligence source is not enabled or the tier is not configured, there is zero behavior change. Real runtime acceptance: `make auth-audit-acceptance` (stub intelligence source labeled hosting → block stage 403 interception, wrong password 401; off stage same-store restart normal login 200; reconcile via `GET /api/audit/logs` for three login row types and `[REDACTED]` redaction).
 
-### refresh token 重放处置（P2-5 第三刀）
+### Refresh token replay handling (P2-5 third cut)
 
-refresh token 每次刷新即轮换（session 行 `token_version` 递增），旧 token 一律拒绝。`security.session_risk.refresh_reuse_policy` 档位决定重放（reuse）的处置深度：
+Every refresh rotates the refresh token (the session row `token_version` increments), and old tokens are rejected uniformly. The `security.session_risk.refresh_reuse_policy` tier determines the handling depth of replay (reuse):
 
-- `off`（默认）：旧 token 重放被拒绝但会话保留，合法客户端的最新 token 可继续刷新（既有行为）
-- `revoke_family`：重放是会话泄漏信号——检测到"token 声明的版本小于库内当前版本"时吊销整个会话（家族），该家族内包括合法客户端手里的最新 token 一并失效，迫使重新登录；重放者与被攻击者无差别处置（fail-closed）
+- `off` (default): old token replay is rejected but the session is retained, and the legitimate client's latest token can continue refreshing (existing behavior)
+- `revoke_family`: replay is a session-leak signal — when "token's claimed version is less than the store's current version" is detected, the whole session family is revoked, including the latest token held by the legitimate client, forcing re-login; the replier and the victim are treated without distinction (fail-closed)
 
-一个 session 即一个家族：登录后所有 refresh 轮换共享同一 session 行。版本大于库内当前值的伪造/异常 token 只被拒绝，不触发吊销；吊销失败的请求同样拒绝（不静默放过）。对外统一 401，不回显吊销状态与版本差异；重放拒绝经 auth 面 audit 中间件留痕。真实运行验收：`make refresh-reuse-acceptance`（off 阶段重放 401 且会话存活；revoke_family 阶段重放 401 且家族最新 token 一并 401、重新登录正常；经 `GET /api/audit/logs?action=auth.refresh` 对账拒绝行与成功行）。
+One session is one family: all refresh rotations after login share the same session row. Forged/abnormal tokens whose version is greater than the store's current value are only rejected, not triggering revocation; requests that fail revocation are also rejected (no silent pass-through). Externally a uniform 401, not revealing revocation state or version differences; replay rejection is logged via the auth-plane audit middleware. Real runtime acceptance: `make refresh-reuse-acceptance` (off stage replay 401 and session survives; revoke_family stage replay 401 and the family's latest token is also 401, re-login works; reconcile via `GET /api/audit/logs?action=auth.refresh` for rejection rows and success rows).
 
-### scoped config 审批回滚链路（P2-5 第四刀）
+### Scoped config approval rollback path (P2-5 fourth cut)
 
-scoped config（tenant/workspace 作用域配置文档）的写路径已有完整治理语义：PUT/rollback/approve/verify 全部强制 change control（`change_ref` + `reason`，JSON body 或对应 header）；rollback 一律判定高风险，要求独立审批（`validateScopedConfigApproval`：审批人 ≠ 执行人，否则 403）；verify 要求验证人 ≠ 原操作人（403），且 `passed` 结论必须覆盖 verify 模板全部 `required` checks 并附 evidence。能力面早已存在，第四刀补的是**真实运行验收**：
+The write path for scoped config (tenant/workspace scope config documents) already has full governance semantics: PUT/rollback/approve/verify all enforce change control (`change_ref` + `reason`, JSON body or corresponding header); rollback is always judged as high-risk, requiring independent approval (`validateScopedConfigApproval`: approver ≠ executor, otherwise 403); verify requires verifier ≠ original operator (403), and the `passed` conclusion must cover all `required` checks of the verify template plus evidence. The capability surface has long existed; the fourth cut adds **real runtime acceptance**:
 
-- `make approval-rollback-acceptance` 起真实服务（sqlite），以"预置双管理员"的种子流程构造 operator 与 reviewer（第二个注册请求 `role=admin` 被降级 `customer` 的注册收敛逻辑本身即验收点；提权动作走种子式 DB 更新后重新登录，等价生产环境预置互审管理员的运维流程），然后走完整治理链路：
-  - 未认证 PUT → 401；PUT 缺 `change_ref` → 400 `Change control required`
-  - 两次 update（medium，无需审批）落库，`change_control.change_ref` 回显一致
-  - rollback 未携带审批 → 400；operator 自审后回滚 → 403 `Approval reviewer separation required`
-  - reviewer 记录审批 → operator 携审批执行 `?confirm=true` 回滚 → 200；GET 确认恢复的是目标快照的完整 AfterJSON（而非中间版本）
-  - operator 对自己执行的 update/rollback 提交 verify → 403 `Verification reviewer separation required`；reviewer verify（动态取 history 模板的 required checks 全部 passed + evidence）→ 200
-  - history 对账：operation/`can_rollback`/`verification_status` 元数据收口；审计对账：`scoped_config.tenant.{update,rollback,approve,verify}` 成功行计数、`resource_type=scoped_config`、actor_user_id 区分操作人/审批人/验证人
-- manifest 按 `provider=approval-rollback` 校验 14 项 checks 与证据文件（`scripts/validate-acceptance-manifest.sh`）
+- `make approval-rollback-acceptance` starts a real service (sqlite), constructs operator and reviewer via a "pre-seeded dual admin" seed flow (the second registration request with `role=admin` being downgraded to `customer` by the registration convergence logic is itself an acceptance point; the privilege-escalation action goes through a seed-style DB update and re-login, equivalent to the ops flow of pre-seeding mutual-review admins in production), then walks the full governance path:
+  - Unauthenticated PUT → 401; PUT missing `change_ref` → 400 `Change control required`
+  - Two updates (medium, no approval needed) land in the store, `change_control.change_ref` echoed consistently
+  - Rollback without approval → 400; operator self-review then rollback → 403 `Approval reviewer separation required`
+  - Reviewer records approval → operator carries the approval and executes `?confirm=true` rollback → 200; GET confirms what is restored is the target snapshot's complete AfterJSON (not an intermediate version)
+  - Operator submits verify for an update/rollback they executed themselves → 403 `Verification reviewer separation required`; reviewer verify (dynamically fetches the history template's required checks, all passed + evidence) → 200
+  - history reconciliation: operation/`can_rollback`/`verification_status` metadata closed out; audit reconciliation: `scoped_config.tenant.{update,rollback,approve,verify}` success row counts, `resource_type=scoped_config`, actor_user_id distinguishing operator/approver/verifier
+- The manifest validates 14 checks and evidence files per `provider=approval-rollback` (`scripts/validate-acceptance-manifest.sh`)
 
-### 速率限制
+### Rate limiting
 
-- `registerBaseMiddleware` 已统一挂载 `RateLimitMiddlewareFromConfig`
-- 支持全局限流、按路径前缀限流、按 header key 限流，以及 IP / key 白名单
-- 默认开发配置 `config.yml` 已启用基础限流，并为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/ai/query`、`/api/v1/metrics/ingest`、`/api/` 提供独立路径级限流
-- 生产环境仍应基于 `config.production.secure.example.yml` 或等价部署配置收紧阈值、域名和 secrets 注入方式，而不是直接把开发配置原样上线
+- `registerBaseMiddleware` uniformly mounts `RateLimitMiddlewareFromConfig`
+- Supports global rate limiting, per-path-prefix rate limiting, per-header-key rate limiting, and IP / key allowlists
+- The default dev config `config.yml` already enables basic rate limiting, and provides independent path-level rate limiting for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/ai/query`, `/api/v1/metrics/ingest`, `/api/`
+- Production environments should still tighten thresholds, domains, and secrets injection based on `config.production.secure.example.yml` or equivalent deployment config, rather than taking the dev config to production as-is
 
-### 启动期告警
+### Startup alerts
 
-- `InitLogging` 现在会在启动时输出基础安全告警
-- 当前已覆盖默认或空 `jwt.secret`、开放式 `CORS=*`、关闭限流、空 OpenAI API key、启用外部 knowledge provider 但缺少必要 credentials 等场景
-- 若启用了限流但没有为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/metrics/ingest`、`/api/` 配置独立路径级限流，也会输出 warning，避免公开入口、高成本 service 面和管理面只落在全局限流下
-- 启动期仍为 warning-only，不阻断本地开发或测试启动；部署前应再执行 `check-security-baseline --strict` 做显式失败校验
+- `InitLogging` now outputs basic security alerts at startup
+- Currently covers scenarios like default or empty `jwt.secret`, open `CORS=*`, rate limiting disabled, empty OpenAI API key, external knowledge provider enabled but missing necessary credentials, etc.
+- If rate limiting is enabled but no independent path-level rate limiting is configured for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/metrics/ingest`, `/api/`, a warning is also output, avoiding public entries, high-cost service surfaces, and management surfaces falling under global rate limiting only
+- Startup-time is still warning-only, not blocking local dev or test startup; before deployment, run `check-security-baseline --strict` for an explicit failing check
 
-### 部署前校验入口
+### Pre-deployment check entry points
 
-- CLI：`go -C apps/server run ./cmd -c config.yml check-security-baseline --strict`
-- 脚本：`sh ./scripts/check-security-baseline.sh config.yml`
-- Make：`make security-check CONFIG=config.production.secure.example.yml`
-- 该检查复用启动期 `SecurityWarnings` 规则，但在 `--strict` 下会以非零退出，适合 CI、CD 或上线前人工校验
+- CLI: `go -C apps/server run ./cmd -c config.yml check-security-baseline --strict`
+- Script: `sh ./scripts/check-security-baseline.sh config.yml`
+- Make: `make security-check CONFIG=config.production.secure.example.yml`
+- This check reuses the startup-time `SecurityWarnings` rules, but under `--strict` exits non-zero, suitable for CI, CD, or manual pre-release validation
 
-## 建议的最小生产配置
+## Recommended minimum production config
 
-建议至少开启以下限流基线：
+Recommend enabling at least the following rate-limit baseline:
 
-- 全局 `security.rate_limiting.enabled = true`
-- `/api/`：保护管理面写操作与批量读取
-- `/api/v1/auth/`：单独更严格限流，优先保护登录、注册、refresh 这类匿名认证入口
-- `/api/v1/ai/`：单独更严格限流，尤其是 `knowledge/upload`、`knowledge/sync`
-- `/api/v1/metrics/ingest`：单独限流，并优先使用 service token 或专用 header key
-- `/public/`：按匿名入口单独限流，避免爬取与爆破
-- `/uploads/`：单独限流，避免文件枚举、热点资源刷取或带宽放大
+- Global `security.rate_limiting.enabled = true`
+- `/api/`: protects management-plane write operations and batch reads
+- `/api/v1/auth/`: separate stricter rate limiting, prioritizing protection for anonymous auth entries like login, register, refresh
+- `/api/v1/ai/`: separate stricter rate limiting, especially `knowledge/upload`, `knowledge/sync`
+- `/api/v1/metrics/ingest`: separate rate limiting, preferring service token or dedicated header key
+- `/public/`: separate rate limiting per anonymous entry, avoiding scraping and credential stuffing
+- `/uploads/`: separate rate limiting, avoiding file enumeration, hot-resource scraping, or bandwidth amplification
 
-建议同时满足以下约束：
+Recommend simultaneously satisfying these constraints:
 
-- `jwt.secret`、OpenAI / Dify / WeKnora API key 不使用代码默认值
-- secrets 只通过环境变量或外部 secret manager 注入
-- 管理面必须部署在 TLS 后
-- `security.cors.allowed_origins` 不使用生产环境全量 `*`
-- `X-Request-ID` 由网关或入口统一注入，便于审计追踪
+- `jwt.secret`, OpenAI / Dify / WeKnora API keys do not use code defaults
+- Secrets are injected only via environment variables or an external secret manager
+- The management plane must be deployed behind TLS
+- `security.cors.allowed_origins` does not use the production-wide `*`
+- `X-Request-ID` is uniformly injected by the gateway or ingress, for audit traceability
 
-## 仍待补齐的缺口
+## Gaps still to close
 
-- 当前已具备单用户查询、批量安全态预览、单用户 / 批量用户 token 吊销、独立 refresh token、单 token revoke list、revoke list 查询，以及 auth session 列表查询、单 session 吊销与按用户批量 session 吊销入口；session 列表现已返回基础 client metadata（`device_fingerprint` / `user_agent` / `client_ip` / `last_seen_at`）以及衍生字段（`network_label` / `location_label` / `risk_score` / `risk_level` / `risk_reasons`），并补充 `family_public_ip_count` / `family_device_count` / `active_session_count` / `family_hot_refresh_count` / `reference_session_id` / `ip_drift` / `device_drift` / `rapid_ip_change` / `rapid_device_change` / `refresh_recency` / `rapid_refresh_activity` 这类同账号并发、漂移、短窗口切换与 refresh 活跃度上下文；denylist 过期记录会由后台 worker 自动清理，`security.session_risk` 也已成为正式配置面
-- 上述 `security/users/*` 与 `security/tokens/*` 管理入口现已补 tenant/workspace 目标用户隔离，不再允许 scoped 请求跨租户枚举、吊销或查看其它 `Agent` / `Customer` 关联用户的 token / session 记录
-- 当前剩余缺口应视为后续增强，而不是本轮 T5 阻塞：真实 Geo/IP 情报富化、更强异常模型、按环境/租户差异化策略
-- 本轮已完成的部分是：Geo/IP 已具备可注入 adapter、HTTP provider、配置项、router wiring 以及 auth / management 两侧自动化覆盖；后续再接具体外部情报厂商时，不应回退为“基础能力未完成”
-- 外部开放接口已开始通过代码级 `security surface catalog` 做最小登记校验；后续仍可继续增强为更细粒度的公开接口审批和自动化审查
-- scoped config 关键配置变更现已强制要求 `change_ref` 与 `reason`，并把这些字段带入审计 request metadata 与 history 元数据；这补上了最小变更追踪基线
-- 高风险 scoped config 变更现已补真实执行前审批约束：命中 provider endpoint、knowledge mapping、session risk 核心阈值或 rollback 这类高风险场景时，执行接口不仅必须提供 `approval_ref`，还必须能按 `approval_ref + change_ref` 查到已记录审批事件，且审批人与执行人必须分离
-- scoped config 现已补执行后 verification 入口，可对单条 update / rollback 审计记录写入 `passed` / `failed` 结论，并在 history 列表与详情中回显 `verification_status`、最新 verification 与 verification policy
-- 当前 verification 已补模板化检查项与最小双人复核约束：reviewer 不能与原始执行人相同，verification 请求必须提交与 `verification_template.checks` 对齐的 `checks`，`passed` 必须带 evidence 且所有必填检查项都要 `passed`，`failed` 必须带 notes 且至少要有一个检查项 `failed`
-- `verification_template` 已进一步按字段风险拆分，并返回根级 `changed_paths` 以及单 check 的 `risk_level` / `changed_paths`，便于对 provider endpoint、KB mapping、session risk threshold 这类高风险配置执行标准化验收
-- 写入响应、history 列表、单条详情和 verify 响应会同步返回 `change_risk` 与 `approval_policy`，把当前配置变更的风险等级、触发原因、审批记录落库状态以及最新审批人信息直接暴露给前端或自动化脚本
-- 同一批响应现在还会统一返回 `governance_status` / `governance_policy`，把审批前置和执行后验证合并为单一治理状态；verify 响应会进一步返回 source change 的治理完成状态
-- history 列表、单条详情和 verify 响应会同步返回 `verification_template` 与更细粒度的 `verification_policy`，用于前端或自动化脚本按模板执行变更后验证
-- history 列表现在还能按 `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action` 直接筛选治理队列，并返回 `governance_summary` 汇总，方便运营或安全值班直接拉取待办视图
-- 后续仍需把关键配置变更沉淀成完整的“执行前审批 / 执行后验证 / 回滚记录”操作手册，并补自动化验收与更细粒度审批编排
+- Currently available: single-user query, batch security-state preview, single-user / batch-user token revocation, independent refresh token, single token revoke list, revoke list query, plus auth session list query, single-session revocation, and batch session revocation per user; the session list now returns basic client metadata (`device_fingerprint` / `user_agent` / `client_ip` / `last_seen_at`) and derived fields (`network_label` / `location_label` / `risk_score` / `risk_level` / `risk_reasons`), and adds context like `family_public_ip_count` / `family_device_count` / `active_session_count` / `family_hot_refresh_count` / `reference_session_id` / `ip_drift` / `device_drift` / `rapid_ip_change` / `rapid_device_change` / `refresh_recency` / `rapid_refresh_activity` for same-account concurrency, drift, short-window switching, and refresh activity; denylist expired records are cleaned up by a background worker, and `security.session_risk` is now an official config surface
+- The above `security/users/*` and `security/tokens/*` management entries now add tenant/workspace target-user isolation, no longer allowing scoped requests to enumerate, revoke, or view token/session records of users associated with other `Agent` / `Customer` across tenants
+- The remaining gaps above should be treated as follow-up enhancements, not as blockers for this T5 round: real Geo/IP intelligence enrichment, stronger anomaly models, differentiated policies per environment/tenant
+- What was completed this round: Geo/IP now has an injectable adapter, HTTP provider, config entry, router wiring, and automation coverage on both auth and management sides; when connecting specific external intelligence vendors later, do not regress to "basic capabilities incomplete"
+- External open interfaces now begin using a code-level `security surface catalog` for minimal registration validation; follow-up can continue to enhance this into finer-grained public-interface approval and automated review
+- Scoped config key config changes now require `change_ref` and `reason`, and carry these fields into audit request metadata and history metadata; this closes the minimum change-tracking baseline
+- High-risk scoped config changes now have real pre-execution approval constraints: when hitting high-risk scenarios like provider endpoint, knowledge mapping, session risk core thresholds, or rollback, the execution interface must not only provide `approval_ref`, but must be able to look up a recorded approval event by `approval_ref + change_ref`, and the approver and executor must be separated
+- Scoped config now has a post-execution verification entry, which can write a `passed` / `failed` conclusion for a single update / rollback audit record, and echo `verification_status`, the latest verification, and the verification policy in the history list and detail
+- Current verification now has templated check items and a minimum two-person review constraint: the reviewer cannot be the same as the original executor, the verification request must submit `checks` aligned with `verification_template.checks`, `passed` must carry evidence and all required checks must be `passed`, `failed` must carry notes and at least one check must be `failed`
+- `verification_template` is further split by field risk, and returns root-level `changed_paths` plus per-check `risk_level` / `changed_paths`, for standardized acceptance of high-risk configs like provider endpoint, KB mapping, session risk threshold
+- Write responses, history lists, single detail, and verify responses now synchronously return `change_risk` and `approval_policy`, directly exposing the current config change's risk level, trigger reason, approval record persistence state, and latest approver info to the frontend or automation scripts
+- The same batch of responses now also uniformly returns `governance_status` / `governance_policy`, merging pre-execution approval and post-execution verification into a single governance state; the verify response further returns the source change's governance completion state
+- History lists, single detail, and verify responses now synchronously return `verification_template` and finer-grained `verification_policy`, for the frontend or automation scripts to execute post-change verification per template
+- The history list can now also be filtered directly by `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action` to pull the governance queue, and returns a `governance_summary` aggregate, so ops or security on-call can directly pull the to-do view
+- Follow-up still needs to distill key config changes into a complete "pre-execution approval / post-execution verification / rollback record" ops manual, and add automated acceptance and finer-grained approval orchestration
 
-## 审计与回滚操作约束
+## Audit and rollback operational constraints
 
-- 审计导出默认只适合轻量排障或留档；单次 `GET /api/audit/logs/export` 默认最多导出 `1000` 条，服务端硬上限 `5000`
-- 超过轻量导出规模时，不应通过反复分页脚本直接从在线管理面拉全量历史；应走离线归档或后续异步导出方案
-- 在线审计库当前默认保留 `180` 天，后台 worker 会按批次清理过期记录；涉及安全事件、权限变更、关键配置变更的长期留档仍需落到外部归档策略
-- scoped config rollback 不能视为普通“恢复按钮”:
-  - 必须先用 `GET /api/security/config/{scope}/history/:audit_id` 查看 snapshot diff
-  - 高风险回滚必须提交 `approval_ref`，且审批人与执行人分离
-  - 执行后还要补 `verify` 结论，确认 portal / provider / session risk 等受影响路径已经恢复
-- 运营值班在执行 rollback 前后，至少要留存三类证据：source audit ID、rollback audit ID、verification audit ID
-- 治理链路的端到端真实验收入口：`make approval-rollback-acceptance`（P2-5 第四刀，见上文 scoped config 审批回滚链路一节）
+- Audit export is by default only suitable for lightweight troubleshooting or archiving; a single `GET /api/audit/logs/export` defaults to exporting at most `1000` rows, with a server hard cap of `5000`
+- When exceeding the lightweight export scale, do not pull the full history directly from the online management plane via repeated pagination scripts; go through offline archiving or a follow-up async export approach
+- The online audit store currently retains `180` days by default; a background worker cleans up expired records in batches; long-term archiving involving security events, permission changes, and key config changes still needs to land in an external archiving policy
+- Scoped config rollback cannot be treated as an ordinary "restore button":
+  - Must first use `GET /api/security/config/{scope}/history/:audit_id` to view the snapshot diff
+  - High-risk rollback must submit `approval_ref`, and the approver and executor must be separated
+  - After execution, a `verify` conclusion must also be completed, confirming that affected paths like portal / provider / session risk have recovered
+- On-call ops must retain at least three types of evidence before and after rollback: source audit ID, rollback audit ID, verification audit ID
+- The end-to-end real-runtime acceptance entry for the governance path: `make approval-rollback-acceptance` (P2-5 fourth cut, see the scoped config approval rollback path section above)
 
-## 代码落点
+## Code landing points
 
-- 路由与表面分类：`apps/server/internal/app/server/router.go`
-- 基础中间件装配：`apps/server/internal/app/server/middleware.go`
-- 速率限制：`apps/server/internal/middleware/ratelimit.go`
-- 审计中间件：`apps/server/internal/platform/audit/gin_middleware.go`
-- 启动安全告警：`apps/server/internal/app/bootstrap/security.go`
-- 部署前严格校验：`apps/server/cmd/cli/check_security_baseline.go`
-- 路由安全表面目录与覆盖校验：`apps/server/internal/app/server/security_surface.go`
+- Route and surface classification: `apps/server/internal/app/server/router.go`
+- Base middleware wiring: `apps/server/internal/app/server/middleware.go`
+- Rate limiting: `apps/server/internal/middleware/ratelimit.go`
+- Audit middleware: `apps/server/internal/platform/audit/gin_middleware.go`
+- Startup security alerts: `apps/server/internal/app/bootstrap/security.go`
+- Pre-deployment strict check: `apps/server/cmd/cli/check_security_baseline.go`
+- Route security surface catalog and coverage check: `apps/server/internal/app/server/security_surface.go`

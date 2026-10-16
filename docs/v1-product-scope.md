@@ -1,31 +1,29 @@
-> [English](v1-product-scope.en.md) | **中文**
+# V1 Product Convergence: Web Standalone-site Intelligent Customer Service
 
-# V1 产品收敛：Web 独立站智能客服
+This document defines Servify's first-version product goal. It primarily constrains product boundaries and documentation narrative; it does not replace a concrete implementation backlog.
 
-本文定义 Servify 第一版产品目标。它优先约束产品边界和文档叙事，不替代具体 implementation backlog。
+## Goal in One Sentence
 
-## 一句话目标
+V1 first serves one clear scenario:
 
-V1 先服务一个明确场景：
+> Embed a Web intelligent customer service entry into a corporate website, brand standalone site, SaaS site, or docs site, so visitors can ask questions instantly, the AI answers first based on site knowledge, escalates to a human when necessary, and settles complex issues into tickets for continued handling.
 
-> 给企业官网、品牌独立站、SaaS 官网或文档站嵌入一个 Web 智能客服入口，让访客能即时提问，AI 基于站点知识首答，必要时转人工，并把复杂问题沉淀为工单继续处理。
+This means the first version is an independently deployable, Web-first, AI-collaborative intelligent customer service product — not a platformized customer service middle platform or an omnichannel contact center.
 
-这意味着第一版是一个可独立部署、Web 优先、AI 协同的智能客服产品，不做平台化客服中台与全渠道联络中心。
+## Design Judgments After the AI Updates
 
-## AI 更新后的设计判断
+As of 2026-06-19, OpenAI's latest model guide lists `gpt-5.5` as the latest model and recommends the Responses API for reasoning, tool calling, and multi-turn tasks. The official capabilities continue to emphasize structured output, prompt caching, hosted tools, file search, the Agents SDK's orchestration, handoff, guardrails, and tracing capabilities.
 
-截至 2026-06-19，OpenAI 最新模型指南已把 `gpt-5.5` 作为最新模型，并建议推理、工具调用、多轮任务优先使用 Responses API。官方能力也继续强调结构化输出、prompt caching、hosted tools、file search、Agents SDK 的编排、handoff、guardrails 与 tracing 能力。
+These updates will not turn Servify into a "more complex Agent platform". The practical impact is:
 
-这些更新不会把 Servify 变成“更复杂的 Agent 平台”，实际影响是：
+- V1's AI layer should be thinner: let the model carry stronger understanding, rewriting, summarization, and tool selection, while the business system keeps only clear contracts.
+- V1's output should be more structured: intent recognition, whether to escalate, knowledge sources, confidence, and ticket summaries should go through structured results wherever possible rather than relying on natural-language parsing.
+- V1's knowledge chain should be more replaceable: the capability shapes of OpenAI file search / hosted tools can be referenced, but Servify's core should still keep the `KnowledgeProvider` abstraction, serving independent deployment and private knowledge bases.
+- V1 does not need multi-Agent workflows first: the handoff, guardrails, and tracing ideas of the Agents SDK are worth borrowing, but the first-version product should not make a "multi-Agent orchestration platform" a user-visible capability.
+- V1 should control cost and latency: visitor first answers prioritize low latency and short responses; complex summarization, escalation suggestions, and ticket consolidation use higher reasoning or stronger models.
+- V1's prompts should be shorter and more outcome-first: no more stacking lengthy process prompts; instead make the goal, boundaries, available evidence, and output format explicit.
 
-- V1 的 AI 层应该更薄：让模型承担更强的理解、改写、总结和工具选择，业务系统只保留清晰 contract。
-- V1 的输出应该更结构化：意图识别、是否转人工、知识来源、置信度、工单摘要应尽量走结构化结果，而不是靠自然语言解析。
-- V1 的知识链路应该更可替换：可以参考 OpenAI file search / hosted tools 的能力形态，但 Servify 核心仍应保持 `KnowledgeProvider` 抽象，服务独立部署和私有知识库。
-- V1 不需要先做多 Agent 工作流：Agents SDK 的 handoff、guardrails、tracing 思路值得借鉴，但第一版产品不应把“多 Agent 编排平台”作为用户可见能力。
-- V1 应控制成本和延迟：访客首答优先低延迟、短回答；复杂总结、转人工建议、工单归纳再使用更高 reasoning 或更强模型。
-- V1 的 prompt 应更短、更 outcome-first：不再堆叠冗长流程提示，而是明确目标、边界、可用证据和输出格式。
-
-参考资料：
+References:
 
 - [OpenAI latest model guide](https://developers.openai.com/api/docs/guides/latest-model.md)
 - [Migrate to the Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
@@ -34,168 +32,168 @@ V1 先服务一个明确场景：
 - [Prompt guidance](https://developers.openai.com/api/docs/guides/prompt-guidance)
 - [Agents SDK](https://developers.openai.com/api/docs/guides/agents)
 
-## V1 推荐 AI 运行模式
+## V1 Recommended AI Runtime Mode
 
-第一版更合理的 AI 设计是“一个主编排器 + 少量明确工具 + 结构化输出”，不走“多 Agent 编排平台”：
+The more reasonable AI design for the first version is "one main orchestrator + a few explicit tools + structured output", not a "multi-Agent orchestration platform":
 
-1. 一个主对话编排器负责理解访客问题、检索知识、调用必要工具、产出结构化决策。
-2. 工具保持很少：
-   - 检索知识
-   - 查询当前会话/客户上下文
-   - 创建或建议创建工单
-   - 请求人工接管
-3. 模型输出尽量结构化，至少包括：
+1. One main conversation orchestrator is responsible for understanding visitor questions, retrieving knowledge, calling necessary tools, and producing structured decisions.
+2. The tool set stays very small:
+   - Retrieve knowledge
+   - Query the current conversation/customer context
+   - Create or suggest creating a ticket
+   - Request human takeover
+3. Model output is structured wherever possible, at least including:
    - `answer`
    - `citations`
    - `confidence`
    - `next_action`
    - `handoff_reason`
    - `ticket_summary`
-4. `next_action` 只保留少数稳定状态：
+4. `next_action` keeps only a few stable states:
    - `answer`
    - `clarify`
    - `handoff`
    - `ticket`
-5. 访客首答优先使用较低推理成本；需要总结、归因、长文本归纳时再提高 reasoning。
+5. Visitor first answers prioritize lower reasoning cost; raise reasoning when summarization, attribution, or long-text consolidation is needed.
 
-这套设计比“多个专用 agent 相互转来转去”更适合 V1，因为它：
+This design fits V1 better than "multiple specialized agents handing off to each other", because it:
 
-- 更容易调试和评估
-- 更容易做可观测性和审计
-- 更容易控制延迟和成本
-- 更符合网站客服的高频短会话形态
+- Is easier to debug and evaluate
+- Is easier to make observable and auditable
+- Is easier to control on latency and cost
+- Better matches the high-frequency short-conversation shape of website customer service
 
-## V1 保留的核心功能
+## Core Capabilities Kept in V1
 
-### 1. Web 嵌入入口
+### 1. Web Embedding Entry
 
-目标是让一个独立站可以用最小成本接入：
+The goal is to let a standalone site integrate at minimal cost:
 
-- 一段 script 或 SDK 配置即可挂载客服入口
-- 支持访客会话、消息收发、实时状态、基础访客信息
-- 支持页面上下文透传，例如当前 URL、页面标题、语言、来源入口
-- 支持品牌基础配置，例如名称、欢迎语、主题色、离线提示
-- 支持公开配置和公开知识入口，但不能暴露管理能力
+- One script or SDK configuration mounts the customer service entry
+- Supports visitor conversations, message send/receive, real-time state, basic visitor information
+- Supports page-context passthrough, e.g. current URL, page title, language, entry source
+- Supports basic brand configuration, e.g. name, welcome message, theme color, offline notice
+- Supports public configuration and a public knowledge entry, but must not expose management capabilities
 
-### 2. AI 首答与知识问答
+### 2. AI First Answer and Knowledge Q&A
 
-AI 在 V1 里的角色是“客服协同助手”，不是完全自治的业务执行者：
+The AI's role in V1 is a "customer service collaboration assistant", not a fully autonomous business executor:
 
-- 根据知识库回答产品、使用、售后、文档类问题
-- 不确定时先澄清，而不是编造答案
-- 回答应带可追溯来源或至少保留来源引用给客服侧查看
-- 对明显需要人工的问题给出转人工建议
-- 对敏感、越权、无知识依据的问题走拒答或降级策略
-- 对长对话生成面向坐席的摘要，而不是让人工从头读完整历史
+- Answer product, usage, after-sales, and documentation questions from the knowledge base
+- Clarify first when uncertain, rather than fabricating answers
+- Answers should carry traceable sources, or at least keep source references visible to the customer service side
+- Give escalation-to-human suggestions for questions that clearly need humans
+- Route sensitive, over-privileged, or ungrounded questions through refusal or degradation strategies
+- Generate agent-facing summaries for long conversations, instead of making a human read the entire history from scratch
 
-### 3. 知识库管理
+### 3. Knowledge Base Management
 
-V1 需要把知识库做成客服首答的核心资产：
+V1 needs to make the knowledge base a core asset of customer service first answers:
 
-- 支持文档创建、更新、删除（当前 HTTP 已暴露 CRUD 与索引任务管理：`GET/POST /:id/index-jobs`、`POST /index-jobs/:job_id/retry`，含 source 登记；搜索预览仍为 P1 增强项）
-- 支持站点 FAQ、产品说明、帮助文档、售后政策等内容沉淀
-- 支持 provider 可替换，不把核心逻辑绑定到 Dify、WeKnora、pgvector 或某个模型厂商
-- 支持索引状态、检索命中、fallback 情况的可观测信息
+- Support document create, update, and delete (CRUD and index task management are already exposed over HTTP today: `GET/POST /:id/index-jobs`, `POST /index-jobs/:job_id/retry`, including source registration; search preview is still a P1 enhancement)
+- Support site FAQ, product documentation, help docs, after-sales policy, and other content retention
+- Support replaceable providers; do not bind core logic to Dify, WeKnora, pgvector, or a specific model vendor
+- Support observability information for index status, retrieval hits, and fallback situations
 
-### 4. 人工接管与坐席工作台
+### 4. Human Takeover and Agent Workspace
 
-AI 解决不了的问题必须能回到人：
+Problems the AI cannot solve must be able to return to humans:
 
-- 坐席可以查看会话上下文和历史消息
-- 坐席可以接管当前会话并继续回复
-- 支持转派给其他坐席或队列
-- 支持基础在线状态、负载和分配策略
-- AI 应能生成给坐席看的摘要和建议，而不是替坐席隐式执行高风险动作
+- Agents can view conversation context and message history
+- Agents can take over the current conversation and continue replying
+- Support transfer to other agents or queues
+- Support basic online status, load, and assignment strategies
+- The AI should generate summaries and suggestions for agents to see, rather than implicitly executing high-risk actions on the agent's behalf
 
-### 5. 工单全流程
+### 5. Ticket Full Lifecycle
 
-V1 的“解决问题”不能停在聊天窗口：
+V1's "problem solved" must not stop at the chat window:
 
-- 会话可以升级或沉淀为工单
-- 工单保留客户、会话、AI 摘要、处理人、状态、评论
-- 坐席能继续跟进、关闭、回看关联会话
-- 后台能看到基础统计和处理状态
+- Conversations can be escalated or settled into tickets
+- Tickets retain customer, conversation, AI summary, assignee, status, and comments
+- Agents can continue following up, closing, and reviewing the associated conversation
+- The back office can see basic statistics and processing state
 
-### 6. 后台运营与安全基线
+### 6. Back-office Operations and Security Baseline
 
-第一版后台只保留交付必要能力：
+The first-version back office keeps only delivery-necessary capabilities:
 
-- 坐席、客户、会话、知识库、工单的基础管理
-- 登录、权限、token 失效、审计日志
-- AI provider、knowledge provider、fallback、健康检查和指标入口
-- 明确 dev/demo/mock 与 production 配置边界
+- Basic management of agents, customers, conversations, knowledge bases, and tickets
+- Login, permissions, token invalidation, audit logs
+- AI provider, knowledge provider, fallback, health check, and metrics entry points
+- A clear dev/demo/mock versus production configuration boundary
 
-## 能力优先级
+## Capability Priority
 
-为了避免 V1 再次发散，能力按下面三层收口：
+To prevent V1 from diverging again, capabilities are converged into the three layers below.
 
-### P0 必须交付
+### P0 Must Deliver
 
-- Web widget / SDK 接入
-- 访客会话与消息
-- AI 知识问答与来源引用
-- 人工接管、转派、关闭
-- 工单创建、跟进、关闭
-- 知识库管理与索引
-- 后台基础安全和审计
+- Web widget / SDK integration
+- Visitor conversations and messages
+- AI knowledge Q&A with source citations
+- Human takeover, transfer, close
+- Ticket creation, follow-up, close
+- Knowledge base management and indexing
+- Baseline back-office security and auditing
 
-### P1 可以增强
+### P1 Can Enhance
 
-- 会话摘要、客服建议、自动打标
-- 更好的访客信息采集与页面上下文利用
-- 更明确的协助态 UI
-- 基础运营分析，例如 deflection、handoff rate、top unanswered questions
+- Conversation summaries, agent suggestions, auto-tagging
+- Better visitor information collection and page-context utilization
+- A clearer assistance-state UI
+- Basic operations analytics, e.g. deflection, handoff rate, top unanswered questions
 
-### P2 先不纳入 V1
+### P2 Not Included in V1 Yet
 
-- 多渠道
-- 语音
-- 多 Agent
-- 完整远程协助工作台
-- 平台化租户能力
-- 深业务系统集成市场
+- Multi-channel
+- Voice
+- Multi-Agent
+- Full remote assistance workspace
+- Platformized tenant capabilities
+- Deep business-system integration marketplace
 
-## V1 不做的功能
+## Features Not Done in V1
 
-以下能力可以保留架构预留，但不应成为第一版产品承诺：
+The capabilities below may keep architecture reservations, but must not become first-version product promises:
 
-- 多租户 SaaS 平台、套餐计费、租户自助开通
-- WhatsApp、微信、Telegram、App、电话、SIP 等多渠道接入
-- 语音机器人、呼叫中心、录音转写生产链路
-- 完整 co-browsing、屏幕共享、远控工作台
-- 多 Agent 自治工作流、复杂任务规划、跨系统自动执行
-- CRM、订单、支付、物流等深业务系统的标准集成市场
-- Provider marketplace 或面向开发者的插件平台
+- Multi-tenant SaaS platform, plan billing, tenant self-provisioning
+- Multi-channel integration for WhatsApp, WeChat, Telegram, App, phone, SIP
+- Voice bots, call centers, recording transcription production chains
+- Full co-browsing, screen sharing, remote-control workbench
+- Multi-Agent autonomous workflows, complex task planning, cross-system automatic execution
+- A standard integration marketplace for deep business systems like CRM, orders, payments, and logistics
+- A provider marketplace or a developer-facing plugin platform
 
-这些不是永远不做，排期上必须在 Web 独立站客服主链路之后。
+These are not "never"; in scheduling they must come after the Web standalone-site customer service main chain.
 
-## 远程协助在 V1 的位置
+## Remote Assistance's Place in V1
 
-远程协助仍然可以保留为差异化方向，但在 V1 不应压过网站智能客服主链路：
+Remote assistance can still be kept as a differentiator, but in V1 it must not outweigh the website intelligent customer service main chain:
 
-- 可以表达为“会话内协助、引导、联合排查和持续接管”
-- 可以保留 WebSocket / WebRTC runtime、连接状态和后续扩展入口
-- 不应承诺已经交付完整远控或 co-browsing 产品
+- Can be expressed as "in-conversation assistance, guidance, joint troubleshooting, and continuous takeover"
+- Can keep the WebSocket / WebRTC runtime, connection states, and later extension entry points
+- Must not promise a delivered full remote-control or co-browsing product
 
-也就是说，V1 先把“Web 接入 -> AI 首答 -> 人工接管 -> 转派协作 -> 工单全流程”做成稳定产品，再把远程协助增强成独立工作台。
+In other words, V1 first makes "Web integration → AI first answer → human takeover → transfer collaboration → ticket full lifecycle" a stable product, then enhances remote assistance into a standalone workspace.
 
-## V1 成功标准
+## V1 Success Criteria
 
-第一版可以按以下标准判断是否收敛完成：
+The first version can be judged converged against these criteria:
 
-- 独立站能通过 Web widget 发起真实会话。
-- AI 能基于知识库回答常见问题，并在无依据时明确降级。
-- 坐席能在同一会话里接管、回复、转派和关闭。
-- 会话能沉淀为工单，工单能继续跟进和关闭。
-- 管理员能维护知识、坐席、基础配置、安全和运行状态。
-- 生产配置不依赖隐式 mock / in-memory / legacy 能力伪装交付。
-- README、文档站、官网和验收清单都围绕这条链路表达，不再把后续扩展写成当前承诺。
+- A standalone site can start a real conversation through the Web widget.
+- The AI can answer common questions from the knowledge base and degrades explicitly when ungrounded.
+- Agents can take over, reply, transfer, and close within the same conversation.
+- Conversations can settle into tickets; tickets can be followed up and closed.
+- Administrators can maintain knowledge, agents, basic configuration, security, and runtime state.
+- Production configuration does not rely on implicit mock / in-memory / legacy capabilities pretending to deliver.
+- README, docs site, website, and acceptance checklist all express this chain, no longer writing later extensions as current promises.
 
-## 文档收敛规则
+## Documentation Convergence Rules
 
-后续整理文档时按这个顺序判断：
+When organizing documentation later, judge in this order:
 
-1. 先看本文，确认能力是否属于 V1。
-2. 属于 V1 的内容，进入 README、文档首页、部署、验收和 delivery priorities。
-3. 不属于 V1 但有架构价值的内容，放入 architecture 或 implementation backlog。
-4. 不属于 V1 且还没有真实实现证据的内容，只能作为 future direction，不能写成已交付能力。
+1. Read this document first to confirm whether a capability belongs to V1.
+2. Content belonging to V1 goes into README, docs homepage, deployment, acceptance, and delivery priorities.
+3. Content not in V1 but with architectural value goes into architecture or implementation backlog.
+4. Content not in V1 and without real implementation evidence can only be a future direction, never written as a delivered capability.

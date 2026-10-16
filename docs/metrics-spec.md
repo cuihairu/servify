@@ -1,82 +1,80 @@
-> [English](metrics-spec.en.md) | **中文**
+# Metrics Spec
 
-# 统计口径文档
+## 1. Session Statistics
 
-## 1. 会话统计
-
-| 指标 | 定义 | 数据来源 | 计算口径 |
+| Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
-| 活跃会话数 | 状态为 active 的会话 | `sessions.status = 'active'` | 实时计数 |
-| 等待客服数 | 状态为 waiting_human 的会话 | `sessions.status = 'waiting_human'` | 实时计数 |
-| 已结束会话数 | 状态为 ended 的会话 | `sessions.status = 'ended'`（落库值；domain 层 closed 经 conversation/infra 映射为 ended） | 数据口径；当前 DashboardStats 契约未透出该指标 |
-| 平均响应时间 | 客服首次回复的平均耗时 | `agents.avg_response_time` | 取 agent 表平均值 |
+| Active sessions | Sessions whose status is active | `sessions.status = 'active'` | Real-time count |
+| Waiting-for-agent sessions | Sessions whose status is waiting_human | `sessions.status = 'waiting_human'` | Real-time count |
+| Ended sessions | Sessions whose status is ended | `sessions.status = 'ended'` (stored value; the domain-level closed is mapped to ended by conversation/infra) | Data spec; the current DashboardStats contract does not expose this metric |
+| Average response time | Average time to the agent's first reply | `agents.avg_response_time` | Average over the agent table |
 
-## 2. 工单统计
+## 2. Ticket Statistics
 
-| 指标 | 定义 | 数据来源 | 计算口径 |
+| Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
-| 工单总数 | 所有工单 | `tickets` 表 | 按时间范围计数 |
-| 按状态分布 | open/assigned/in_progress/resolved/closed | `tickets.status` | 分组计数 |
-| 按优先级分布 | low/normal/high/urgent | `tickets.priority` | 分组计数 |
-| 按分类分布 | 自定义分类 | `tickets.category` | 分组计数 |
-| 工单创建趋势 | 按日/周/月聚合 | `tickets.created_at` | 时间序列计数 |
+| Total tickets | All tickets | `tickets` table | Counted over the time range |
+| Distribution by status | open/assigned/in_progress/resolved/closed | `tickets.status` | Grouped count |
+| Distribution by priority | low/normal/high/urgent | `tickets.priority` | Grouped count |
+| Distribution by category | Custom categories | `tickets.category` | Grouped count |
+| Ticket creation trend | Aggregated by day/week/month | `tickets.created_at` | Time-series count |
 
-## 3. 满意度统计
+## 3. Satisfaction Statistics
 
-| 指标 | 定义 | 数据来源 | 计算口径 |
+| Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
-| 平均评分 | 所有评分的加权平均 | `customer_satisfactions.rating` | `AVG(rating)` |
-| 评价总数 | 满意度记录条数 | `customer_satisfactions` | `COUNT(*)` |
-| 好评率 | 评分 >= 4 的占比 | `rating >= 4` 的计数 / 总数 | `positive_rate` |
-| 差评率 | 评分 <= 2 的占比 | `rating <= 2` 的计数 / 总数 | `negative_rate` |
-| 评分分布 | 1~5 星各档计数 | `GROUP BY rating` | 分布直方图 |
-| 满意度趋势 | 按日聚合的平均评分和评价数 | `GROUP BY DATE(created_at)` | 时间序列 |
+| Average rating | Weighted average of all ratings | `customer_satisfactions.rating` | `AVG(rating)` |
+| Total ratings | Number of satisfaction records | `customer_satisfactions` | `COUNT(*)` |
+| Positive rate | Share of ratings >= 4 | Count of `rating >= 4` / total | `positive_rate` |
+| Negative rate | Share of ratings <= 2 | Count of `rating <= 2` / total | `negative_rate` |
+| Rating distribution | Count per 1~5 star bucket | `GROUP BY rating` | Distribution histogram |
+| Satisfaction trend | Average rating and rating count aggregated by day | `GROUP BY DATE(created_at)` | Time series |
 
-### 评分分类标准
-- 好评：rating >= 4（4 星和 5 星）
-- 中评：rating = 3（3 星）
-- 差评：rating <= 2（1 星和 2 星）
+### Rating classification criteria
+- Positive: rating >= 4 (4 and 5 stars)
+- Neutral: rating = 3 (3 stars)
+- Negative: rating <= 2 (1 and 2 stars)
 
-## 4. AI 使用量统计
+## 4. AI Usage Statistics
 
-| 指标 | 定义 | 数据来源 | 计算口径 |
+| Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
-| AI 使用次数 | AI 处理的消息/查询数 | `daily_stats.ai_usage_count` | 按日累加 |
-| AI 自动解决率 | AI 独立解决（未转人工）的会话占比 | 转人工率倒数 | `(1 - transfer_rate) * 100` |
-| AI 平均响应时间 | AI 回复的平均耗时 | `daily_stats` | 聚合平均 |
+| AI usage count | Messages/queries handled by AI | `daily_stats.ai_usage_count` | Accumulated by day |
+| AI auto-resolution rate | Share of sessions resolved by AI alone (no human handoff) | Inverse of the transfer rate | `(1 - transfer_rate) * 100` |
+| AI average response time | Average time for AI replies | `daily_stats` | Aggregated average |
 
-## 5. 客服绩效统计
+## 5. Agent Performance Statistics
 
-| 指标 | 定义 | 数据来源 | 计算口径 |
+| Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
-| 在线客服数 | 状态为 online 的客服 | `agents.status = 'online'` | 实时计数 |
-| 忙碌客服数 | 已达最大并发或状态为 busy | `agents.status = 'busy'` | 实时计数 |
-| 客服评分 | 分配给客服的满意度平均分 | `customer_satisfactions` JOIN `tickets` | 按客服分组 AVG |
-| 客服负载 | 当前处理会话数 / 最大并发数 | `agents.current_load / max_concurrent` | 实时比率 |
+| Online agents | Agents whose status is online | `agents.status = 'online'` | Real-time count |
+| Busy agents | Agents at max concurrency or with status busy | `agents.status = 'busy'` | Real-time count |
+| Agent rating | Average satisfaction score assigned to the agent | `customer_satisfactions` JOIN `tickets` | Grouped by agent, AVG |
+| Agent load | Current sessions / max concurrency | `agents.current_load / max_concurrent` | Real-time ratio |
 
-## 6. 时间范围与筛选
+## 6. Time Ranges and Filters
 
-statistics 族接口（`/api/statistics/*`，除 dashboard 外）要求以下查询参数：
+The statistics API family (`/api/statistics/*`, except dashboard) requires the following query parameters:
 
-| 参数 | 类型 | 说明 |
+| Parameter | Type | Description |
 |------|------|------|
-| `start_date` | YYYY-MM-DD | 起始日期（必填） |
-| `end_date` | YYYY-MM-DD | 结束日期（必填） |
-| `tenant_id` | string | 租户筛选（从 auth context 自动注入） |
-| `workspace_id` | string | 工作区筛选（从 auth context 自动注入） |
+| `start_date` | YYYY-MM-DD | Start date (required) |
+| `end_date` | YYYY-MM-DD | End date (required) |
+| `tenant_id` | string | Tenant filter (injected automatically from the auth context) |
+| `workspace_id` | string | Workspace filter (injected automatically from the auth context) |
 
-满意度接口（`/api/satisfactions/stats`）使用：
+The satisfaction API (`/api/satisfactions/stats`) uses:
 
-| 参数 | 类型 | 说明 |
+| Parameter | Type | Description |
 |------|------|------|
-| `date_from` | ISO 8601 | 起始时间 |
-| `date_to` | ISO 8601 | 结束时间 |
+| `date_from` | ISO 8601 | Start time |
+| `date_to` | ISO 8601 | End time |
 
-## 7. 前后端字段映射
+## 7. Frontend/Backend Field Mapping
 
 ### Dashboard API (`/api/statistics/dashboard`)
 
-后端 `DashboardStats`（`modules/analytics/contract/types.go`）按 json tag 原样透出，前端 `stats.<json_tag>` 一一对应：
+The backend `DashboardStats` (`modules/analytics/contract/types.go`) is exposed as-is per its json tags; the frontend `stats.<json_tag>` maps one to one:
 
 ```
 total_customers / total_agents / total_tickets / total_sessions

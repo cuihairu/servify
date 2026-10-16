@@ -1,12 +1,10 @@
-> [English](ai-observability-policy.en.md) | **中文**
-
 # AI Observability And Policy Hooks
 
-当前 AI 编排层已预留以下控制点：
+The current AI orchestration layer has reserved the following control points:
 
-- tracing span 标签：`ai.task_type`、`ai.retrieval.enabled`、`ai.provider`、`ai.tokens.total`、`ai.latency.ms`
-- module metrics：provider usage、provider error、policy rejection、last error category
-- `PolicyHook`：可接入内容安全、租户策略、拒答规则
-- `PromptAuditRecorder`：可记录 prompt version、任务类型、消息数量、检索命中数
+- tracing span tags: `ai.task_type`, `ai.retrieval.enabled`, `ai.provider`, `ai.tokens.total`, `ai.latency.ms`
+- module metrics: provider usage, provider error, policy rejection, last error category
+- `PolicyHook`: can hook in content safety, tenant policy, refusal rules
+- `PromptAuditRecorder`: can record prompt version, task type, message count, retrieval hit count
 
-当前这些接口是 contract-first 预留，默认不绑定外部审计或策略系统。
+These interfaces are currently contract-first reservations, not bound to any external audit or policy system by default.

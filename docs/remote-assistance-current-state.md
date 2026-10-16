@@ -1,28 +1,26 @@
-> [English](remote-assistance-current-state.en.md) | **中文**
+# Remote Assistance Current State Inventory
 
-# 远程协助现状盘点
+> ⚠️ **This document has been superseded by [remote-assistance-status.md](./remote-assistance-status.md)**: the `assist` permission group now carries the seven endpoints of `/api/remote-assist/*` (remote assistance has landed, `router_management.go` RequireResourcePermission("assist")). This document is kept as an archive of the 2026-09 "capability inventory / gap identification" point in time.
 
-> ⚠️ **本文已被 [remote-assistance-status.md](./remote-assistance-status.md) 取代**：assist 权限组现已挂 `/api/remote-assist/*` 七端点（远程协助已落地，`router_management.go` RequireResourcePermission("assist")）。本文保留为 2026-09「能力盘点/差距识别」时点存档。
+This document closes `Gap C / G3-2`: an inventory of which capabilities Servify currently has — on the server side, the admin side, and in product expression — that can already serve as a foundation for remote assistance, which remain only low-level capabilities, and which product entry points are still missing.
 
-本文用于收口 `Gap C / G3-2`：盘点 Servify 当前在服务端、管理端和产品表达层面，哪些能力已经可以作为远程协助基础，哪些仍然只是底层能力，哪些产品入口还缺失。
+## Conclusion First
 
-## 结论先行
+The current repo already has multiple foundational capabilities required for remote assistance, but they have not yet been converged into a standalone "remote assistance workspace" or a clear product operation flow.
 
-当前仓库已经具备远程协助所需的多块基础能力，但它们还没有被收束成一个单独的“远程协助工作台”或一条清晰的产品操作流。
+The current state can be understood as:
 
-可以把现状理解为：
+- The server side already has foundational capabilities such as sessions, messages, transfers, suggestions, voice, WebSocket, and WebRTC statistics.
+- The admin side already has scattered entry points such as session management, routing management, voice management, and ticket detail.
+- The admin conversation page has already gained the minimal "start assistance / end assistance" entry, and can display session-level WebSocket / WebRTC connection states.
+- The product narrative has already begun to uniformly emphasize remote assistance.
+- But the admin side still has no page explicitly named "remote assistance", and has not yet chained the "start assistance → continuous takeover → transfer/create ticket" operation path into a single entry point.
 
-- 服务端已经有会话、消息、转接、建议、语音、WebSocket、WebRTC 统计等基础能力
-- 管理端已经有会话管理、路由管理、语音管理、工单详情等分散入口
-- 管理端会话页已经补上“发起协助 / 结束协助”的最小入口，并能展示会话级 WebSocket / WebRTC 连接状态
-- 产品叙事已经开始统一强调远程协助
-- 但管理端还没有一个明确叫“远程协助”的页面，也还没有把“发起协助 -> 持续接管 -> 转接/建单”的操作路径串成单一入口
+## Existing Server-side Entry Points
 
-## 服务端现有入口
+### 1. Conversation and Human Takeover Main Path
 
-### 1. 会话与人工接管主路径
-
-当前最接近远程协助主链路的服务端入口是会话与转接相关 API：
+The server-side entry points closest to the remote assistance main chain today are the conversation and transfer-related APIs:
 
 - `GET /api/omni/sessions/:session_id`
 - `GET /api/omni/sessions/:session_id/messages`
@@ -31,15 +29,15 @@
 - `POST /api/omni/sessions/:session_id/transfer`
 - `POST /api/omni/sessions/:session_id/close`
 
-这些入口说明：
+These entry points show:
 
-- Servify 已经有“围绕 session 连续处理问题”的主线
-- 人工接管、消息承接和转接都发生在同一个会话上下文里
-- 这条链路天然适合承接“远程协助前、中、后”的业务状态
+- Servify already has a main line of "continuously handling issues around a session".
+- Human takeover, message reception, and transfers all happen within the same session context.
+- This chain naturally fits carrying the business states of "before, during, and after remote assistance".
 
-### 2. 转接与等待队列
+### 2. Transfer and Waiting Queue
 
-当前路由层还有一组更偏运营调度的入口：
+The routing layer currently also has a set of more operations-scheduling-oriented entry points:
 
 - `GET /api/session-transfer/waiting`
 - `GET /api/session-transfer/history/:session_id`
@@ -47,34 +45,34 @@
 - `POST /api/session-transfer/cancel`
 - `POST /api/session-transfer/process-queue`
 
-这些入口说明：
+These entry points show:
 
-- 系统已经支持把“一个会话交给谁继续处理”单独管理
-- 远程协助结束后，继续转接给更合适处理人的能力已经有后端基础
-- 但它当前更像 routing / queue 能力，还不是以“远程协助”命名的产品流程
+- The system already supports managing "who continues handling a session" separately.
+- After remote assistance ends, the capability to continue transferring to a more suitable handler already has a server-side foundation.
+- But it currently behaves more like a routing/queue capability, not a product flow named "remote assistance".
 
-### 3. 建议与辅助能力
+### 3. Suggestions and Assist Capabilities
 
-`assist` 权限下当前挂的是建议能力：
+Under the `assist` permission, what currently hangs is the suggestion capability:
 
 - `GET /api/assist/suggest`
 - `POST /api/assist/suggest`
 
-这意味着：
+This means:
 
-- “assist” 这个权限名已经存在
-- 但当前 `/api/assist/*` 更偏建议与知识辅助，不等于完整的远程协助产品入口
+- The permission name "assist" already exists.
+- But the current `/api/assist/*` leans toward suggestions and knowledge assistance; it is not the full remote assistance product entry point.
 
-### 4. 实时 runtime 与观测入口
+### 4. Real-time Runtime and Observability Entry Points
 
-当前服务端已暴露远程协助相关的实时基础能力：
+The server currently exposes remote-assistance-related real-time foundational capabilities:
 
 - `GET /api/v1/ws`
 - `GET /api/v1/ws/stats`
 - `GET /api/v1/webrtc/stats`
 - `GET /api/v1/webrtc/connections`
 
-同时还有语音协议与记录相关入口：
+Along with voice protocol and recording-related entry points:
 
 - `GET /api/voice/protocols`
 - `POST /api/voice/recordings/start`
@@ -83,120 +81,120 @@
 - `POST /api/voice/transcripts`
 - `GET /api/voice/transcripts`
 
-这些入口说明：
+These entry points show:
 
-- 实时连接、WebRTC 连接观测、语音录制和转写都已经是系统能力
-- 但其中很多仍是“基础 runtime / protocol 能力”，不是直接面向客服的远程协助产品交互
+- Real-time connections, WebRTC connection observation, voice recording, and transcription are all already system capabilities.
+- But many of them remain "foundational runtime / protocol capabilities", not remote assistance product interactions directly facing customer service.
 
-## 管理端现有入口
+## Existing Admin-side Entry Points
 
-### 1. 已有的相关页面
+### 1. Related Pages That Already Exist
 
-管理端当前没有单独的“远程协助”菜单，但能力分散在以下页面：
+The admin side currently has no standalone "remote assistance" menu, but the capabilities are scattered across the following pages:
 
 - `/conversation`
-  - 会话查看、消息读取与发送
-  - 最小远程协助入口：发起/结束协助、信令状态提示、远端媒体占位
+  - Conversation viewing, message reading and sending
+  - Minimal remote assistance entry: start/end assistance, signaling state hints, remote media placeholder
 - `/routing`
-  - 等待队列、转接历史、转坐席处理
+  - Waiting queue, transfer history, transfer to agent for handling
 - `/voice`
-  - 协议、录音、转写相关管理
+  - Protocol, recording, transcription-related management
 - `/ticket/detail/:id`
-  - 会话与工单关联查看
+  - Conversation and ticket association viewing
 - `/security`
-  - 会话安全与设备/IP 风险视图
+  - Session security and device/IP risk view
 
-### 2. 管理端已接到的服务调用
+### 2. Service Calls the Admin Side Has Already Wired
 
-从前端 service 看，当前已经接了：
+Looking at the frontend services, the following are already wired:
 
 - `conversation.ts`
-  - 获取会话
-  - 获取/发送消息
-  - 指派坐席
-  - 转接会话
-  - 关闭会话
+  - Get conversations
+  - Get/send messages
+  - Assign agents
+  - Transfer conversations
+  - Close conversations
 - `sessionTransfer.ts`
-  - 获取等待队列
-  - 获取转接历史
-  - 发起转接
-  - 取消转接
-  - 处理队列
+  - Get waiting queue
+  - Get transfer history
+  - Initiate transfer
+  - Cancel transfer
+  - Process queue
 - `voice.ts`
-  - 列协议
-  - 开始/停止录音
-  - 查询录音
-  - 查询转写
+  - List protocols
+  - Start/stop recording
+  - Query recordings
+  - Query transcriptions
 
-这说明管理端已有一组远程协助能力，只是分散、还没被产品层统一命名和聚合。
+This shows the admin side already has a set of remote assistance capabilities; they are just scattered, not yet uniformly named and aggregated by the product layer.
 
-## 当前最明显的缺口
+## The Most Obvious Gaps Today
 
-### 1. 缺统一产品入口
+### 1. Missing Unified Product Entry Point
 
-当前没有：
+What is currently missing:
 
-- “远程协助”独立菜单
-- 远程协助状态页
-- 脱离会话页后仍可持续操作的专门协助工作台
+- A standalone "remote assistance" menu
+- A remote assistance status page
+- A dedicated assistance workspace that can sustain operations after leaving the conversation page
 
-因此用户现在能在会话页进入最小协助态，但看到的仍不是一条完整、独立的产品工作流。
+So users can currently enter the minimal assistance state from the conversation page, but what they see is still not a complete, standalone product workflow.
 
-### 2. 缺状态机与操作语义
+### 2. Missing State Machine and Operation Semantics
 
-当前代码里已经有：
+What the current code already has:
 
-- 会话
-- 指派
-- 转接
-- 关闭
-- 工单
+- Conversation
+- Assignment
+- Transfer
+- Close
+- Ticket
 
-但还缺明确的产品语义，例如：
+But what is still missing is explicit product semantics, such as:
 
-- 何时算“发起远程协助”
-- 协助中和普通人工会话有什么区别
-- 协助完成后是结束、转接还是建工单
+- When "remote assistance is initiated" counts
+- What the difference is between in-assistance and a normal human conversation
+- After assistance completes, whether it ends, transfers, or creates a ticket
 
-### 3. 缺最小演示链路
+### 3. Missing Minimal Demo Chain
 
-目前可以证明：
+What can currently be proven:
 
-- WebSocket / WebRTC runtime 可用
-- 会话与消息可用
-- 转接可用
-- 工单可继续推进
+- WebSocket / WebRTC runtime is usable
+- Conversations and messages are usable
+- Transfers are usable
+- Tickets can continue to advance
 
-但还缺一条面向产品演示的最小链路说明，例如：
+But what is still missing is a minimal product-demo-oriented chain description, for example:
 
-1. 客户进入 Web 会话
-2. AI 首答失败或需要指导
-3. 人工接管
-4. 发起远程协助
-5. 完成操作或联合排查
-6. 继续转接或转工单
+1. The customer enters a Web conversation
+2. The AI first answer fails or guidance is needed
+3. Human takeover
+4. Initiate remote assistance
+5. Complete the operation or joint troubleshooting
+6. Continue transferring or convert to a ticket
 
-### 4. 缺管理端专门视图
+### 4. Missing Dedicated Admin-side View
 
-当前仍没有明确证据表明管理端已经具备：
+What is still missing clear evidence that the admin side already has:
 
-- 完整的远程协助专用面板
-- 协助过程状态提示
-- 协助后结果记录字段
-- 协助与工单之间的显式衔接视图
+- A complete remote assistance dedicated panel
+- Assistance process state hints
+- Post-assistance result record fields
+- An explicit linkage view between assistance and tickets
 
-这也是 `G3-3` 需要继续定义的范围。
+This is also the scope `G3-3` needs to continue defining.
 
-## 当前判断
+## Current Judgment
 
-因此，当前最准确的产品口径应当是：
+Therefore, the most accurate product spec right now should be:
 
-- Servify 已经具备远程协助所需的实时与会话基础能力
-- 这些能力已经可以支撑“从聊天升级到实时协作”的产品方向
-- 但管理端与产品体验层仍缺统一入口、清晰状态机和最小可交付演示链路
+- Servify already has the real-time and conversation foundational capabilities required for remote assistance.
+- These capabilities can already support the product direction of "upgrading from chat to real-time collaboration".
+- But the admin side and the product experience layer still lack a unified entry point, a clear state machine, and a minimal deliverable demo chain.
 
-下一步应继续推进：
+Next steps should continue advancing:
 
-1. 定义最小可交付的远程协助链路
-2. 明确演示步骤、验收证据和页面入口
-3. 决定是先做统一会话页增强，还是单独增加远程协助页面
+1. Define the minimal deliverable remote assistance chain
+2. Clarify demo steps, acceptance evidence, and page entry points
+3. Decide whether to first enhance the unified conversation page or add a standalone remote assistance page

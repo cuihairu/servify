@@ -1,84 +1,82 @@
-> [English](delivery-priorities.en.md) | **中文**
-
 # Servify Delivery Priorities
 
-这份文档不负责罗列全部实现 backlog，而是回答一个更直接的问题：
+This document is not responsible for listing the full implementation backlog; it answers a more direct question:
 
-当前仓库里，什么事情最值得先做，才能把“代码存在”推进到“可以交付”。
+In the current repository, what is most worth doing first to move from "code exists" to "deliverable".
 
-它和 [acceptance-checklist.md](./acceptance-checklist.md) 的关系是：
+Its relationship to [acceptance-checklist.md](./acceptance-checklist.md):
 
-- `acceptance-checklist.md` 负责记录每条能力的验收证据与状态
-- 本文负责定义当前阶段的执行顺序、取舍原则和恢复入口
+- `acceptance-checklist.md` is responsible for recording acceptance evidence and status of each capability
+- This document is responsible for defining the current stage's execution order, trade-off principles, and recovery entry points
 
-## 当前判断
+## Current Judgment
 
-当前第一版产品目标已经收敛为 [Web 独立站智能客服](./v1-product-scope.md)：Web widget 接入、AI 基于知识库首答、人工接管、转接协作、工单全流程和必要后台运营。
+The current first-version product goal has converged on [Web standalone-site intelligent customer service](./v1-product-scope.md): Web widget access, AI first answer based on the knowledge base, human handover, transfer collaboration, full ticket workflow, and necessary back-office operations.
 
-本文旧版列出的三类收口风险均已处理完毕：
+The three closure risks listed in the old version of this document have all been handled:
 
-1. 生产路径 `inmemory` / `mock` / `legacy` 兼容实现已收口（P0 批次，`services` 目录已整体移除）。
-2. 主链路验收收口已完成（P1 批次 + V1.0 收敛 B1–B4 过闸，见 [acceptance-checklist.md](./acceptance-checklist.md)）。
-3. 文档/待办/实现漂移已通过 V1.0 收敛 B0 文档声明批与文档对账规则治理。
+1. The production path `inmemory` / `mock` / `legacy` compatibility implementations are closed out (P0 batch; the `services` directory was removed wholesale).
+2. Main-chain acceptance closure is complete (P1 batch + V1.0 convergence B1–B4 through the gate; see [acceptance-checklist.md](./acceptance-checklist.md)).
+3. Documentation/todo/implementation drift has been governed through the V1.0 convergence B0 document declaration batch and the documentation reconciliation rules.
 
-后续演进的取舍按「演进方向」执行：Routing 打分引擎、Ticket 关闭前拦截等，不插队扩张已冻结面（语音、多渠道）。
+Trade-offs for follow-up evolution are executed by "evolution direction": the Routing scoring engine, pre-close ticket interception, and so on — without cutting in line to expand already frozen surfaces (voice, multi-channel).
 
-## 执行顺序
+## Execution Order
 
-> 以下 P0/P1/P2/P3 顺序为历史执行序列，已全部执行完毕，仅作方法论留档；当前活跃 backlog 以 [todo.md](../todo.md) 为准。
+> The P0/P1/P2/P3 order below is the historical execution sequence, fully executed, and is kept only as methodology archive; the current active backlog is in [todo.md](../todo.md).
 
-### P0 先收运行时硬伤（已完成）
+### P0 First Close Out Runtime Hard Defects (Complete)
 
-优先级最高的是会直接影响运行边界和部署可信度的事项：
+The highest priority is anything that directly affects the runtime boundary and deployment credibility:
 
-1. 事件总线 durability 边界
-2. Agent presence / load / assignment 的多实例边界
-3. 配置、启动、健康检查、依赖装配的真实性
-4. mock / disabled / compatibility 实现与 production 边界是否清晰
+1. Event bus durability boundary
+2. Multi-instance boundary for agent presence / load / assignment
+3. The reality of configuration, startup, health checks, and dependency assembly
+4. Whether the mock / disabled / compatibility implementations have a clear production boundary
 
-### P1 再补主链路验收收口（已完成）
+### P1 Then Close Out Main-Chain Acceptance (Complete)
 
-在 P0 没有继续扩大风险前，下一步是把主链路从“代码和测试基本在”推进到“有证据证明能交付”：
+Before P0 keeps expanding the risk, the next step is to push the main chain from "code and tests basically there" to "evidence exists that it is deliverable":
 
-1. AI / Knowledge 主链路
-2. Auth 自助 session 链路
-3. 会话工作台主操作
-4. 其它仍处于 `部分通过 / 未验 / 阻塞` 的高价值链路
+1. AI / Knowledge main chain
+2. Auth self-service session chain
+3. Session workspace main operations
+4. Other high-value chains still in `部分通过 / 未验 / 阻塞` (partially passed / unverified / blocked)
 
-### P2/P3 最后做增强项（已完成）
+### P2/P3 Finally the Enhancements (Complete)
 
-企业级增强、能力扩展、产品面继续铺开，必须建立在前两层已经稳定的前提上。
+Enterprise-grade enhancements, capability expansion, and further product surface rollout must be built on the premise that the first two layers are already stable.
 
-例如：
+For example:
 
-- 新 provider 扩展
-- 更复杂的多实例治理
-- 更完整的远程协助产品化工作台
-- SDK / channel / voice 的能力面扩张
-- 多 Agent 自治工作流或面向开发者的平台化扩展
+- New provider extensions
+- More complex multi-instance governance
+- A more complete remote assistance productized workspace
+- Capability surface expansion of SDK / channel / voice
+- Multi-agent autonomous workflows or platform-oriented extensions for developers
 
-## 当前优先任务
+## Current Priority Tasks
 
-V1.0 收敛批次（B0–B4）已全部过闸，无进行中的优先任务。恢复工作时的入口：
+The V1.0 convergence batch (B0–B4) has all passed the gate; there are no in-progress priority tasks. Entry points when resuming work:
 
-1. 演进方向开列：Routing 打分引擎、Ticket 关闭前拦截规则、薄壳模块文档面收口剩余项。
-2. 实施时按 [todo.md](../todo.md) 的批次纪律登记与过闸。
+1. Evolution direction backlog: the Routing scoring engine, pre-close ticket interception rules, remaining thin-shell module documentation surface closure items.
+2. When implementing, register and gate batches per [todo.md](../todo.md)'s batch discipline.
 
-如果中断恢复，以 [todo.md](../todo.md) 中最近一个 `[-]` 项为主，不要按记忆跳转。
+If resuming after an interruption, use the most recent `[-]` item in [todo.md](../todo.md) as the anchor, and do not jump around from memory.
 
-## 取舍原则
+## Trade-off Principles
 
-出现下面几种冲突时，统一按此原则决策：
+When the following kinds of conflict appear, decide uniformly by these principles:
 
-1. 优先修“交付边界错误”，而不是继续补“功能入口更多”。
-2. 优先补真实运行证据，而不是只补单元测试。
-3. 优先让文档与实现对齐，而不是维持乐观状态。
-4. 能明确声明限制时，不要伪装成已支持企业能力。
+1. Prefer fixing a "delivery boundary error" over continuing to add "more feature entry points".
+2. Prefer adding real runtime evidence over only adding unit tests.
+3. Prefer aligning documentation with implementation over maintaining an optimistic state.
+4. When a limitation can be clearly declared, do not disguise it as supported enterprise capability.
 
-## 配套文档
+## Companion Documents
 
 1. [todo.md](../todo.md)
 2. [acceptance-checklist.md](./acceptance-checklist.md)
-3. [implementation/README.md](./implementation/README.md)
+3. [implementation/README.md](/zh/implementation/README.md)
 4. [demo-and-mock-boundaries.md](./demo-and-mock-boundaries.md)
 5. [operator-runbook.md](./operator-runbook.md)

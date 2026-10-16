@@ -1,17 +1,15 @@
-> [English](audit-log-policy.en.md) | **中文**
-
 # Audit Log Policy
 
-本文件定义当前审计日志的最小查询与保留策略。
+This file defines the minimal query and retention policy for the current audit log.
 
-## 查询入口
+## Query Entry Points
 
-- 管理面查询：`GET /api/audit/logs`
-- 管理面单条查询：`GET /api/audit/logs/:id`
-- 管理面差异预览：`GET /api/audit/logs/:id/diff`
-- 管理面全链校验：`GET /api/audit/verify`（对整条哈希链做逐条校验，verifier 未装配时 404）
+- Admin surface query: `GET /api/audit/logs`
+- Admin surface single-record query: `GET /api/audit/logs/:id`
+- Admin surface diff preview: `GET /api/audit/logs/:id/diff`
+- Admin surface full-chain verification: `GET /api/audit/verify` (entry-by-entry verification over the whole hash chain; 404 when the verifier is not assembled)
 
-支持过滤：
+Supported filters:
 
 - `action`
 - `resource_type`
@@ -23,67 +21,67 @@
 - `to=<RFC3339>`
 - `page`
 - `page_size`
-- 以及通过统一 request scope 投影的 `tenant_id` / `workspace_id`
+- plus `tenant_id` / `workspace_id` projected through the unified request scope
 
-## 当前记录范围
+## Current Recording Scope
 
-当前统一覆盖：
+Currently covered uniformly:
 
-- 管理面 `/api/*` 的成功写请求
-- 记录主体类型、操作者、动作、资源、请求元数据、请求载荷
+- Successful write requests on the admin surface `/api/*`
+- Records of subject type, operator, action, resource, request metadata, request payload
 
-当前未完全覆盖：
+Currently not fully covered:
 
-- 匿名 public surface
-- 仅只读查询请求
-- 每个 handler 的精细 `before/after` 业务快照
-- 审计查询导出的更高级格式或离线任务化能力
+- The anonymous public surface
+- Read-only query requests
+- Fine-grained per-handler `before/after` business snapshots
+- More advanced export formats or offline-task capability for audit query export
 
-差异预览说明：
+Diff preview notes:
 
-- `GET /api/audit/logs/:id/diff` 会在当前 request scope 下读取单条审计记录
-- 若 `before_json` / `after_json` 可解析为 JSON，对象字段级变更会返回 `changed_paths` 与 `changes`
-- 当前为通用 JSON diff，适合排障与快速预览；更细的领域级 diff 仍可按资源类型继续增强
+- `GET /api/audit/logs/:id/diff` reads a single audit record under the current request scope
+- If `before_json` / `after_json` can be parsed as JSON, object field-level changes return `changed_paths` and `changes`
+- Currently a generic JSON diff, suitable for troubleshooting and quick previews; a finer domain-level diff can still be enhanced per resource type
 
-导出说明：
+Export notes:
 
-- `GET /api/audit/logs/export` 复用与列表接口一致的过滤参数，并额外支持 `limit`
-- `limit` 默认 `1000`，最大 `5000`；超过上限会被服务端截断，避免管理面直接做无限量导出
-- 当前导出格式为 CSV，适合临时排查、留档或交给运营侧做轻量二次分析
-- 若后续导出量继续增大，建议补异步导出任务、对象存储落盘和权限水印
+- `GET /api/audit/logs/export` reuses filter parameters consistent with the list endpoint, and additionally supports `limit`
+- `limit` defaults to `1000`, maximum `5000`; anything above the cap is truncated by the server, preventing the admin surface from doing unlimited exports directly
+- The current export format is CSV, suitable for ad-hoc investigation, retention, or handing to operations for lightweight secondary analysis
+- If the export volume keeps growing, adding asynchronous export tasks, object storage persistence, and permission watermarks is recommended
 
-## 保留策略
+## Retention Policy
 
-当前建议基线：
+Current recommended baseline:
 
-- 默认保留 180 天在线审计日志
-- 超过 180 天的记录应归档或清理
-- 涉及安全事件、权限变更、关键配置变更的日志应支持更长保留期
+- 180 days of online audit log retention by default
+- Records beyond 180 days should be archived or purged
+- Logs involving security incidents, permission changes, and critical configuration changes should support longer retention
 
-当前仓库状态：
+Current repository state:
 
-- 已具备持久化模型与查询接口
-- 已接入定时清理 worker，默认按 180 天保留窗口删除过期记录
-- 清理逻辑按批次扫描并删除 `created_at < cutoff` 的记录；命中保留边界时不会误删等于 cutoff 的日志
-- 已接入冷热分层归档（见下节），未配置归档目录时保持纯删除行为
+- Persistence model and query endpoints are in place
+- A scheduled cleanup worker is wired in, deleting expired records on the default 180-day retention window
+- The cleanup logic scans and deletes `created_at < cutoff` records in batches; hitting the retention boundary never mistakenly deletes logs equal to cutoff
+- Hot/cold tiered archiving is wired in (see next section); with no archive directory configured it stays pure deletion behavior
 
-## 冷热分层归档
+## Hot/Cold Tiered Archiving
 
-- 配置 `security.audit.archive_dir` 指向持久化目录后，清理 worker 在删除每批过期记录前先把整批行落为 gzip JSON 快照（冷层）；目录为空（默认）时不归档，行为与既往一致
-- 快照文件名形如 `audit-archive-<UTC时间戳>-<首行ID>-<末行ID>.json.gz`，按时间与 id 天然有序，可直接按文件对账
-- 行内完整保留 `prev_hash` / `entry_hash`——冷层数据与热层同一条哈希链，归档后仍可用链式校验对账，不出现「冷层不可审计」的断链
-- 归档失败即中断本轮清理且不删除：热层清库先归档后删除，不存在「未归档先删除」的数据丢失窗口；故障排除后下一轮自动重试
-- 归档写入采用临时文件 + rename 原子落盘，进程中断不会留下半截快照被误当完整冷层数据
-- 后续可将 `archive_dir` 指向对象存储挂载点，或在此基础上再补外部归档任务，不需要改动清理语义
+- After configuring `security.audit.archive_dir` to point at a persistent directory, the cleanup worker first writes each whole batch of expired rows as a gzip JSON snapshot (cold tier) before deletion; an empty directory (the default) means no archiving, behavior identical to before
+- Snapshot files are named like `audit-archive-<UTC时间戳>-<首行ID>-<末行ID>.json.gz`, naturally ordered by time and id, allowing direct reconciliation per file
+- Rows fully retain `prev_hash` / `entry_hash` — the cold tier and the hot tier are on the same hash chain, so after archiving, chain-style verification can still reconcile, without a "cold tier is unauditable" broken chain
+- An archive failure interrupts this cleanup round without deleting: the hot tier archives before deleting, so there is no "deleted before archived" data-loss window; the next round retries automatically after the fault is resolved
+- Archive writes use a temporary file + rename for an atomic persist; a killed process never leaves a half-written snapshot to be mistaken for complete cold-tier data
+- Later, `archive_dir` can point at an object storage mount, or an external archive task can be added on top, without changing the cleanup semantics
 
-## 与配置回滚的配合
+## Coordination with Configuration Rollback
 
-- `scoped_config` 的 `update` / `rollback` 会把 before / after 快照写入审计库，供 `history`、`diff` 和回滚预览复用
-- 高风险 rollback 仍需显式 `confirm=true`、`change_ref`、`reason`，并在命中高风险规则时补真实 `approval_ref`
-- rollback 执行后应继续通过 `POST /api/security/config/{scope}/verify/:audit_id` 回填验证结论；审计导出不承担治理职能
+- The `update` / `rollback` of `scoped_config` writes before / after snapshots into the audit store, reused by `history`, `diff`, and rollback previews
+- High-risk rollbacks still require explicit `confirm=true`, `change_ref`, `reason`, plus a real `approval_ref` when a high-risk rule is hit
+- After a rollback is executed, the verification conclusion should continue to be written back via `POST /api/security/config/{scope}/verify/:audit_id`; audit export carries no governance function
 
-## 后续实现建议
+## Follow-up Implementation Suggestions
 
-1. 冷热分层归档已落地（`security.audit.archive_dir`）；权限变更、配置变更等高价值事件如需更长保留期，可基于冷层快照再建独立的长期归档策略
-2. 为权限变更、配置变更扩展更稳定的长期归档策略，而不是只依赖在线库
-3. 为大体量导出补异步任务、对象存储落盘和权限水印
+1. Hot/cold tiered archiving has landed (`security.audit.archive_dir`); if high-value events such as permission changes and configuration changes need longer retention, an independent long-term archive policy can be built on top of the cold-tier snapshots
+2. Extend a more stable long-term archive policy for permission changes and configuration changes, instead of relying only on the online store
+3. Add asynchronous tasks, object storage persistence, and permission watermarks for large-volume exports

@@ -1,38 +1,36 @@
-> [English](acceptance-weknora-docker.en.md) | **中文**
+# WeKnora Docker Acceptance Report
 
-# WeKnora Docker 验收报告
+**Date**: 2026-04-19
+**Environment**: Docker Compose (Servify + PostgreSQL + Redis + WeKnora Mock)
 
-**日期**: 2026-04-19
-**环境**: Docker Compose (Servify + PostgreSQL + Redis + WeKnora Mock)
+> Note (2026-10-08 doc reconciliation): the compose mount technical details in §1/§2 below have been **superseded by the 2026-09-29 mount fix** — the mount points are now `/root/{logs,uploads,config.yml}` (see `infra/compose/docker-compose.yml:71-76`, guarded by both a runtime test and the checklist); `expandViperEnvVars()` in this document is now named `expandEnvVarsInConfig` (`bootstrap/config.go:164`). The acceptance conclusions below are retained as history.
 
-> 注（2026-10-08 文档对账）：本文 §1/§2 的 compose 挂载技术细节已被 **2026-09-29 挂载修正取代**——挂载点现为 `/root/{logs,uploads,config.yml}`（见 `infra/compose/docker-compose.yml:71-76`，有 runtime 测试与 checklist 双守卫）；文中 `expandViperEnvVars()` 现名 `expandEnvVarsInConfig`（`bootstrap/config.go:164`）。验收结论保留为历史存档。
+## Acceptance Results
 
-## 验收结果
+### Core functions passed
 
-### 核心功能通过
-
-| 功能项 | 状态 | 说明 |
+| Item | Status | Notes |
 |--------|------|------|
-| 配置加载 | ✅ 通过 | 环境变量 `${WEKNORA_ENABLED}` 正确展开 |
-| 服务启动 | ✅ 通过 | 服务正常启动，health check 通过 |
-| Knowledge Provider 启用 | ✅ 通过 | `knowledge_provider_enabled: true` |
-| WeKnora 连接 | ✅ 通过 | `knowledge_provider: "weknora"` |
-| Health Check | ✅ 通过 | `knowledge_provider_healthy: true` |
-| 控制面 API | ✅ 通过 | enable/disable 正常工作 |
-| 查询降级 | ✅ 通过 | fallback 机制正常 |
+| Config loading | ✅ passed | env var `${WEKNORA_ENABLED}` expands correctly |
+| Service startup | ✅ passed | service starts normally, health check passes |
+| Knowledge Provider enabled | ✅ passed | `knowledge_provider_enabled: true` |
+| WeKnora connection | ✅ passed | `knowledge_provider: "weknora"` |
+| Health Check | ✅ passed | `knowledge_provider_healthy: true` |
+| Control-plane API | ✅ passed | enable/disable work normally |
+| Query fallback | ✅ passed | fallback mechanism works |
 
-### 部分通过
+### Partially passed
 
-| 功能项 | 状态 | 说明 |
+| Item | Status | Notes |
 |--------|------|------|
-| 知识上传 | ⚠️ 部分 | 配置正确，需真实 WeKnora 服务完成端到端测试 |
-| 知识同步 | ⚠️ 部分 | 配置正确，需真实 WeKnora 服务完成端到端测试 |
+| Knowledge upload | ⚠️ partial | config correct; needs a real WeKnora service to complete end-to-end testing |
+| Knowledge sync | ⚠️ partial | config correct; needs a real WeKnora service to complete end-to-end testing |
 
-## 修复内容
+## Fixes Made
 
-### 1. 配置文件挂载
+### 1. Config file mount
 
-**文件**: `infra/compose/docker-compose.yml`
+**File**: `infra/compose/docker-compose.yml`
 
 ```yaml
 volumes:
@@ -41,15 +39,15 @@ volumes:
   - ../../config.yml:/app/config.yml:ro  # 新增
 ```
 
-### 2. 环境变量展开
+### 2. Environment variable expansion
 
-**文件**: `apps/server/internal/app/bootstrap/config.go`
+**File**: `apps/server/internal/app/bootstrap/config.go`
 
-新增 `expandViperEnvVars()` 函数，在 Viper 解析配置前展开 `${VAR}` 环境变量占位符。
+Added the `expandViperEnvVars()` function, which expands `${VAR}` env var placeholders before Viper parses the config.
 
-### 3. 环境变量对齐
+### 3. Environment variable alignment
 
-**文件**: `infra/compose/docker-compose.yml`
+**File**: `infra/compose/docker-compose.yml`
 
 ```yaml
 environment:
@@ -57,9 +55,9 @@ environment:
   - SERVIFY_JWT_SECRET=${JWT_SECRET:-default-secret-key}  # 新增
 ```
 
-### 4. 配置文件简化
+### 4. Config file simplification
 
-**文件**: `config.yml`
+**File**: `config.yml`
 
 ```yaml
 weknora:
@@ -70,7 +68,7 @@ weknora:
   knowledge_base_id: "${WEKNORA_KB_ID}"
 ```
 
-## 运行证据
+## Runtime Evidence
 
 ```bash
 # 服务状态
@@ -92,8 +90,8 @@ $ curl -s -H "Authorization: Bearer $TOKEN" \
 }
 ```
 
-## 后续工作
+## Follow-up Work
 
-1. 使用真实 WeKnora 服务完成 upload/sync 端到端测试
-2. 更新 CI/CD 配置以包含 WeKnora Docker 环境
-3. 补充 E2E 测试用例覆盖完整链路
+1. Complete upload/sync end-to-end testing with a real WeKnora service
+2. Update CI/CD configuration to include the WeKnora Docker environment
+3. Add E2E test cases to cover the full chain

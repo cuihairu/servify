@@ -1,74 +1,72 @@
-> [English](perf-baseline.en.md) | **中文**
+# Performance and Capacity Baseline (P2-8)
 
-# 性能与容量基线（P2-8）
+servify's first-version capacity baseline: answering "how much load can this service actually take", with numeric conclusions that are re-runnable and backed by evidence, not a feel-based "it runs".
 
-servify 的第一版容量基线：回答"这个服务到底能承受多少负载"，结论有数字、可复跑、有证据，不靠感觉上的"能跑"。
+## Baseline Environment
 
-## 基线环境
-
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
-| 数据库 | sqlite（本地文件，AutoMigrate） |
-| LLM | 内嵌 mock（OpenAI 兼容 `chat/completions`，恒定响应，无网络延迟） |
-| 知识库 | 无外部 provider（默认态，`knowledge/upload` 与 `sync` 返回 503 是预期口径） |
-| 限流 | 放宽至 `requests_per_minute=100000 / burst=10000`（避免限流器成为被测对象） |
-| 主机 | 单机（本机 127.0.0.1 回环，无网络损耗） |
+| Database | sqlite (local file, AutoMigrate) |
+| LLM | embedded mock (OpenAI-compatible `chat/completions`, constant response, no network latency) |
+| Knowledge base | no external provider (default state; `knowledge/upload` and `sync` returning 503 is the expected convention) |
+| Rate limiting | relaxed to `requests_per_minute=100000 / burst=10000` (to keep the rate limiter from becoming the measured object) |
+| Host | single machine (local 127.0.0.1 loopback, no network loss) |
 
-基线口径说明：基线测的是**应用层的相对容量与延迟形态**，不含真实 LLM 往返（AI 场景的下游延迟为 mock 的亚毫秒级）。接入真实 LLM 后，AI 查询延迟应以 p95 + LLM 网络延迟估算。
+Baseline convention note: the baseline measures the **relative capacity and latency shape of the application layer**, excluding real LLM round trips (the downstream latency of the AI scenario is the mock's sub-millisecond level). After attaching a real LLM, AI query latency should be estimated as p95 + LLM network latency.
 
-## 工具链
+## Toolchain
 
-- `scripts/perfbench`（Go 标准库实现，零三方压测依赖）：四场景负载器 + 手写 WebSocket 客户端（RFC 6455 握手与帧编解码）。
-- `scripts/test-perf-baseline.sh`：编排脚本——构建 → mock LLM → 派生压测配置（`perfbench -gen-config-src <源配置> -gen-config-dst <输出路径>`，yaml Node API 保留生产配置注释与占位符）→ sqlite 起服 → 401 负例 → admin → 四场景 → 结果校验 → manifest 写入。
-- 两档规模：`smoke`（CI 驱动测试秒级）与 `full`（容量基线）。
+- `scripts/perfbench` (implemented with the Go standard library, zero third-party load-test dependencies): a four-scenario load generator + a hand-written WebSocket client (RFC 6455 handshake and frame codec).
+- `scripts/test-perf-baseline.sh`: orchestration script — build → mock LLM → derive the load-test config (`perfbench -gen-config-src <源配置> -gen-config-dst <输出路径>`, the yaml Node API preserves production config comments and placeholders) → start the server on sqlite → 401 negative sample → admin → four scenarios → result verification → manifest write.
+- Two scale tiers: `smoke` (seconds-level for CI-driven tests) and `full` (capacity baseline).
 
 ```bash
 make perf-baseline                     # smoke 档（CI 同款）
 PERF_SCALE=full make perf-baseline     # full 档（容量基线）
 ```
 
-## 场景与规模（full 档）
+## Scenarios and Scale (full tier)
 
-| 场景 | 负载 | 并发 |
+| Scenario | Load | Concurrency |
 | --- | --- | --- |
-| tickets-mixed | 600 轮 ×（创建工单 + 发评论 + 列表查询）= 1800 ops | 16 |
-| ai-query | 200 次 `POST /api/v1/ai/query` | 16 |
-| upload-knowledge | 100 ×（文件上传 multipart + 知识文档上传）= 200 ops | 16 |
-| ws-connections | 200 条 WebSocket 连接（阶梯建连，25 条/批）+ 每连接一条 text-message 往返 + `/api/v1/ws/stats` 对账 | 25/批 |
+| tickets-mixed | 600 rounds × (create ticket + post comment + list query) = 1800 ops | 16 |
+| ai-query | 200 × `POST /api/v1/ai/query` | 16 |
+| upload-knowledge | 100 × (multipart file upload + knowledge document upload) = 200 ops | 16 |
+| ws-connections | 200 WebSocket connections (staircase connection setup, 25 per batch) + one text-message round trip per connection + `/api/v1/ws/stats` reconciliation | 25/batch |
 
-## 基线数据（2026-09-18，full 档）
+## Baseline Data (2026-09-18, full tier)
 
-数据来源：`scripts/test-results/perf-baseline/results.json`（manifest `provider=perf`）。
+Data source: `scripts/test-results/perf-baseline/results.json` (manifest `provider=perf`).
 
-| 场景 | ops | 错误 | p50 | p95 | p99 | max | 吞吐 |
+| Scenario | ops | Errors | p50 | p95 | p99 | max | Throughput |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | tickets-mixed | 1800 | 0 | 23.75ms | 267.47ms | 831.48ms | 1886.45ms | 208 ops/s |
 | ai-query | 200 | 0 | 18.48ms | 1033.03ms | 1259.94ms | 2075.33ms | 83 ops/s |
 | upload-knowledge | 200 | 0 | 8.59ms | 32.01ms | 35.89ms | 38.19ms | 1213 ops/s |
-| ws-connections | 200 连接 | 0 | 4.83ms（握手 p50） | 9.26ms | 10.90ms | 13.26ms | 往返 6.41ms |
+| ws-connections | 200 connections | 0 | 4.83ms (handshake p50) | 9.26ms | 10.90ms | 13.26ms | round trip 6.41ms |
 
-WebSocket 对账：客户端建连 200/200，服务端 `/api/v1/ws/stats` 报告 `connected_clients=200`，一致。
+WebSocket reconciliation: client connection setup 200/200, the server's `/api/v1/ws/stats` reports `connected_clients=200`, consistent.
 
-## 结论与解读
+## Conclusions and Interpretation
 
-1. **ticket 主链路**：并发 16 下无错误，p50 25ms 内；p99 尾延迟 0.8s 量级，形态为 sqlite 单写锁在高并发写入下的排队（SQLite 串行写）。并发压力再上一个数量级时，第一个瓶颈是数据库写吞吐，而非应用层。生产部署（postgres）该尾延迟应显著收敛——本基线不含 postgres 数据，替换后建议重跑对照。
-2. **AI 查询**：mock 下游亚毫秒延迟时 p95 仍达 1.0s——主要延迟来自查询管线本身（会话加载、超时/重试保护路径、运行时组装），而非 LLM。这是当前 AI 链路的真实成本下限，接真实 LLM 后延迟只会更高。
-3. **文件上传**：吞吐最高的场景（1213 ops/s，p99 36ms），multipart 解析与本地盘写入不构成近期瓶颈。
-4. **WebSocket**：200 连接全量建立且服务端统计精确对账（对账读取按峰值轮询：hub 登记在握手 101 之后异步完成，慢机上瞬时快照可能少计），握手 p50 5ms、消息往返 6.4ms。连接管理器在该规模无压力；容量上限探测（数万连接）不在本档位，需要独立的高连接数档位与系统级 fd 调优。
-5. **限流**：压测前必须通过 `perfbench -gen-config` 放宽，否则限流器先于应用层到顶，测出的"容量"是限流阈值。
+1. **Ticket main chain**: no errors at concurrency 16, p50 within 25ms; p99 tail latency is at the 0.8s level, the shape being sqlite's single write lock queuing under high-concurrency writes (SQLite serial writes). With another order of magnitude of concurrency pressure, the first bottleneck is database write throughput, not the application layer. In production deployment (postgres), this tail latency should converge significantly — this baseline does not include postgres data, and a comparison rerun is recommended after switching.
+2. **AI query**: with the mock downstream at sub-millisecond latency, p95 still reaches 1.0s — the main latency comes from the query pipeline itself (session loading, timeout/retry protection paths, runtime assembly), not the LLM. This is the true cost floor of the current AI chain; after attaching a real LLM, the latency can only be higher.
+3. **File upload**: the highest-throughput scenario (1213 ops/s, p99 36ms); multipart parsing and local disk writes are not a near-term bottleneck.
+4. **WebSocket**: all 200 connections established and the server-side statistics reconcile exactly (reconciliation reads poll to the peak: hub registration completes asynchronously after the handshake 101, so an instantaneous snapshot on a slow machine may undercount), handshake p50 5ms, message round trip 6.4ms. The connection manager is under no pressure at this scale; probing the capacity ceiling (tens of thousands of connections) is not in this tier and needs a dedicated high-connection tier plus system-level fd tuning.
+5. **Rate limiting**: before load testing it must be relaxed via `perfbench -gen-config`, otherwise the rate limiter tops out before the application layer, and the measured "capacity" is the rate limit threshold.
 
-## 已知边界
+## Known Boundaries
 
-- 基线于 sqlite 上取得；postgres（生产驱动）数据未覆盖，属已知差异而非等价结论。
-- AI 场景使用 mock LLM；真实 LLM 的延迟与限流（429）未纳入。
-- knowledge provider 为空是预期口径：上传/同步端点 503（`knowledge provider is not enabled`）已按预期处理（perfbench 记 note 不计错误），接入 pgvector/WeKnora 后该维度应重测。
-- full 档在本机约 4 分钟；smoke 档秒级，随 CI（`TestPerfBaselineScriptWritesEvidence`）每次提交守护链路可用性。
+- The baseline was obtained on sqlite; postgres (the production driver) data is not covered, which is a known difference, not an equivalence conclusion.
+- The AI scenario uses a mock LLM; the latency and rate limiting (429) of a real LLM are not included.
+- The empty knowledge provider is the expected convention: the upload/sync endpoints' 503 (`knowledge provider is not enabled`) has been handled as expected (perfbench records a note, not an error); this dimension should be retested after pgvector/WeKnora is attached.
+- The full tier takes about 4 minutes locally; the smoke tier is seconds-level and, with CI (`TestPerfBaselineScriptWritesEvidence`), guards chain availability on every commit.
 
-## 复跑
+## Reproduction
 
 ```bash
 PERF_SCALE=full make perf-baseline
 bash scripts/validate-acceptance-manifest.sh scripts/test-results/perf-baseline/manifest.json
 ```
 
-对比基线时关注：同场景 p95/p99 的数量级变化（>2x 需要解释）、WS 对账是否仍然一致、错误是否为 0。
+When comparing against the baseline, watch: order-of-magnitude changes in the same scenario's p95/p99 (>2x needs an explanation), whether the WS reconciliation still matches, and whether errors are 0.

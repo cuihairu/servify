@@ -1,35 +1,33 @@
-> [English](mobile-sdk-integration.en.md) | **中文**
+# Mobile SDK Integration Guide (Android / iOS)
 
-# 移动端 SDK 接入指南（Android / iOS）
+Both platform SDKs share the same protocol and server (WS `wss://<host>/api/v1/ws` + guest ticket `POST /api/v1/tickets`),
+with API semantics mirrored one for one. This page targets integrators; protocol details see `sdk/PROTOCOL.md` (frame contract) and
+[platform spec §4](/mobile-sdk-platform-spec) (frozen API surface); architecture and decisions see the [design doc](/mobile-sdk-design).
 
-双端 SDK 同一套协议与服务端（WS `wss://<host>/api/v1/ws` + 访客工单 `POST /api/v1/tickets`），
-API 语义逐一镜像。本页面向接入方；协议细节见 `sdk/PROTOCOL.md`（帧契约）与
-[平台规格 §4](/mobile-sdk-platform-spec)（API 冻结面），架构与决策见[设计文档](/mobile-sdk-design)。
-
-## 1. 前置要求
+## 1. Prerequisites
 
 | | Android | iOS |
 |---|---|---|
-| 系统版本 | minSdk 24+ | iOS 15+ |
-| 权限/配置 | 宿主 manifest 已有 `INTERNET`（绝大多数 App 已有） | 无 Info.plist 新增项（不启用推送时）；强制 ATS/WSS |
-| 依赖注入 | 零三方（白名单：kotlin-stdlib、kotlinx-coroutines、kotlinx-serialization-json、okhttp、Compose） | 零三方（SwiftUI/Combine 全系统库，Package.swift 无 dependencies 结构性保证） |
-| 体积增量 | ≤ 1.5MB（R8 口径） | ≤ 2MB（XCFramework zip 口径） |
+| OS version | minSdk 24+ | iOS 15+ |
+| Permissions/config | Host manifest already has `INTERNET` (most apps already do) | No Info.plist additions (when push not enabled); ATS/WSS enforced |
+| Dependency injection | Zero third-party (allowlist: kotlin-stdlib, kotlinx-coroutines, kotlinx-serialization-json, okhttp, Compose) | Zero third-party (SwiftUI/Combine are all system libraries; Package.swift having no dependencies is a structural guarantee) |
+| Size delta | ≤ 1.5MB (R8 measure) | ≤ 2MB (XCFramework zip measure) |
 
-服务端侧：`wss://<host>/api/v1/ws` 握手与 `POST /api/v1/tickets` 免认证可达；移动端原生 WS
-不发送 Origin 头，若服务端开了 Origin 白名单需放行空 Origin。
+Server side: `wss://<host>/api/v1/ws` handshake and `POST /api/v1/tickets` reachable without auth; mobile native WS
+does not send an Origin header; if the server has an Origin allowlist enabled, empty Origin must be allowed.
 
-## 2. 获取 SDK 产物
+## 2. Getting the SDK artifacts
 
-当前为仓库内分发（无正式发布渠道前，不内置自动发版）：
+Currently in-repo distribution (no automatic release built in before an official publishing channel exists):
 
-- **Android**：CI `android-probe` job 的 AAR 产物（artifact `servify-sdk-aar`），或本地构建：
-  `cd sdk/android && ./gradlew :servify-sdk:assembleRelease`（产物 `servify-sdk/build/outputs/aar/`）。
-- **iOS**：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`），CI `ios-macos` job 产物，
-  或本地构建：`scripts/check-ios-sdk-size.sh`（产物 `sdk/ios/build/ServifyKit.xcframework`）。
-- CocoaPods 不提供（M3 评估结论：SPM/XCFramework 单轨，按需重建触发条件见
-  [评估文档](/mobile-sdk-cocoapods-evaluation)）。
+- **Android**: the AAR artifact from the CI `android-probe` job (artifact `servify-sdk-aar`), or build locally:
+  `cd sdk/android && ./gradlew :servify-sdk:assembleRelease` (artifact at `servify-sdk/build/outputs/aar/`).
+- **iOS**: XCFramework (static, `BUILD_LIBRARY_FOR_DISTRIBUTION`), produced by the CI `ios-macos` job,
+  or built locally: `scripts/check-ios-sdk-size.sh` (artifact at `sdk/ios/build/ServifyKit.xcframework`).
+- CocoaPods is not provided (M3 evaluation conclusion: SPM/XCFramework single track; conditions for retriggering the evaluation see the
+  [evaluation doc](/mobile-sdk-cocoapods-evaluation)).
 
-引入方式：
+Import methods:
 
 ```kotlin
 // Android：libs/ 放入 AAR
@@ -41,7 +39,7 @@ implementation(files("libs/servify-sdk-release.aar"))
 // 或本地路径 SwiftPM 引用（远程 URL 引用需仓库根的 Package.swift，暂不适用——见评估文档）
 ```
 
-## 3. 最小接入（≤10 行）
+## 3. Minimal integration (≤10 lines)
 
 ### Android
 
@@ -60,13 +58,13 @@ class MainActivity : ComponentActivity() {
 }
 ```
 
-- `show(hostActivity)`：浮钮（右下角 56dp，主色取 `branding.primaryColor`）+ 面板；
-  `hide()` 收起面板但**连接保持**，期间到达的坐席/AI 消息计入未读（浮钮角标）。
-- 宿主 Activity 需为 `ComponentActivity`（面板经 ComposeView 挂载）；未桥接的宿主自动降级：
-  浮钮仍显示，面板不挂载。
-- AAR 自带 consumer-rules.pro（kotlinx.serialization 的 R8 规则），宿主无需手工配置。
+- `show(hostActivity)`: floating button (bottom-right 56dp, primary color from `branding.primaryColor`) + panel;
+  `hide()` collapses the panel but the **connection is retained**; agent/AI messages arriving in the meantime count as unread (floating button badge).
+- The host Activity must be a `ComponentActivity` (the panel is mounted via ComposeView); non-bridged hosts degrade automatically:
+  the floating button still shows, the panel is not mounted.
+- The AAR ships consumer-rules.pro (R8 rules for kotlinx.serialization); hosts need no manual configuration.
 
-### iOS（SwiftUI）
+### iOS (SwiftUI)
 
 ```swift
 struct ContentView: View {
@@ -77,25 +75,25 @@ struct ContentView: View {
 }
 ```
 
-- 需要门面级控制（事件订阅/工单/推送注册）时：`let chat = ServifyChat.create(config:)`
-  后用 `ServifyView(chat: chat)` 挂载。
-- 收起（点 ✕ / scrim）连接保持；展开即清未读并回放 hide 期间累积的消息。
+- When facade-level control (event subscription / tickets / push registration) is needed: after `let chat = ServifyChat.create(config:)`
+  mount with `ServifyView(chat: chat)`.
+- Collapse (tap ✕ / scrim) retains the connection; expand clears unread and replays messages accumulated during hide.
 
-## 4. 配置参考（`ServifyConfig`）
+## 4. Config reference (`ServifyConfig`)
 
-| 字段 | 类型 | 默认 | 说明 |
+| Field | Type | Default | Description |
 |---|---|---|---|
-| `apiUrl` | String | 必填 | 服务端地址，须 `https://`/`wss://` 前缀（否则构造期报 `config_invalid`）；无尾斜杠、无路径后缀，SDK 自行拼 WS 与 REST 路径 |
-| `guestToken` | String? | null | 访客 token（服务端 `POST /api/v1/guest/session` 签发，宿主后端持 service key 换取；`security.guest_token.required=false`（默认）时握手不消费，开启后强制校验签名/时效/会话绑定、失败 401 拒升级） |
-| `branding` | Branding | 全默认 | 品牌化四件套，见下表 |
-| `presentationStyle` | Drawer / FullScreen | Drawer | 面板形态 |
-| `loggingEnabled` | Bool | false | 调试日志 |
-| `pushTokenProvider` | 闭包 | null/nil | 推送 token 获取闭包（宿主 FCM/APNs 集成面）；null = 推送不启用 |
+| `apiUrl` | String | Required | Server address, must have `https://`/`wss://` prefix (otherwise `config_invalid` at construction time); no trailing slash, no path suffix — the SDK appends WS and REST paths itself |
+| `guestToken` | String? | null | Guest token (issued by the server via `POST /api/v1/guest/session`; the host backend exchanges for it holding a service key; when `security.guest_token.required=false` (default) the handshake does not consume it; once enabled, signature/ttl/session-binding are strictly validated, failure 401 rejects escalation) |
+| `branding` | Branding | All defaults | Branding four-piece set, see table below |
+| `presentationStyle` | Drawer / FullScreen | Drawer | Panel form |
+| `loggingEnabled` | Bool | false | Debug logging |
+| `pushTokenProvider` | Closure | null/nil | Push token fetching closure (host FCM/APNs integration surface); null = push not enabled |
 
-**Branding 四件套**：`title`（组件标题，默认「在线客服」）、`primaryColor`（Int/UInt32，ARGB，默认 `0xFF2563EB` 品牌蓝）、
-`welcomeText`（欢迎行）、`offlineText`（断线系统提示行，null = 不出提示行）。
+**Branding four-piece set**: `title` (component title, default「在线客服」), `primaryColor` (Int/UInt32, ARGB, default `0xFF2563EB` brand blue),
+`welcomeText` (welcome line), `offlineText` (disconnection system prompt line, null = no prompt line shown).
 
-## 5. 工单创建 / 推送注册 / 离线提示（M3 API）
+## 5. Ticket creation / push registration / offline hint (M3 API)
 
 ```kotlin
 // Android
@@ -123,64 +121,63 @@ _ = await chat.registerPushToken()
 _ = await chat.syncReadState() // 增强面：提交服务端已读游标
 ```
 
-语义：
+Semantics:
 
-- **createTicket**：服务端自动组装会话摘要（最近 10 条，`[访客]`/`[AI]`/`[客服]` 标注）随单
-  提交，成功返回 `TicketReceipt(ticketId)`，会话内出现系统提示行"工单 #N 已创建…"；
-  失败返回 null 且 `error` 流给出错误（IO→`network`、非 2xx/畸形→`ticket_failed`）。也可从
-  会话面板标题栏"工单"按钮发起（表单：标题必填 + 描述选填）。
-- **registerPushToken**：未配置 provider→`error` 流 `unsupported`；provider 返回 null
-  （宿主未授权，正常态）→静默 false，**非错误**；取到 token→真实上报
-  `POST {apiUrl}/api/v1/push/register`（2xx→`true`；IO/HTTP 失败→`false`，可重报）。
-  服务端下发编排与 FCM/APNs 传输已就位（离线访客收推送），端到端真实凭证联调进行中。
-- **offlineText**：断线（重连耗尽/握手失败）后自动追加系统提示行；用户主动关闭面板不提示。
-- **syncReadState**（可选增强）：把 SDK 内部对账（断线补拉）确认的最新服务端消息 ID 提交为
-  服务端已读游标 `POST {apiUrl}/api/v1/sessions/{id}/read`。SDK 的未读角标 V1 仍由客户端
-  推导（本方法不改变其行为）；只有当宿主需要**跨设备/跨入口一致未读**（如自有服务端按
-  游标展示未读）时才需要调用——典型时机：会话页回前台、用户点开推送。无已对账消息→静默
-  false（正常态）；IO/HTTP 失败→`error` 流 `network` + false，可在下次时机重试；游标只前进
-  不后退，重复提交幂等。
+- **createTicket**: the server auto-assembles a conversation summary (last 10 entries, tagged `[访客]`/`[AI]`/`[客服]`) submitted with the ticket;
+  success returns `TicketReceipt(ticketId)` and a system prompt line appears in the conversation "工单 #N 已创建…";
+  failure returns null and the `error` flow gives the error (IO→`network`, non-2xx/malformed→`ticket_failed`). Can also be initiated from the
+  "工单" button in the conversation panel title bar (form: title required + description optional).
+- **registerPushToken**: provider not configured → `error` flow `unsupported`; provider returns null
+  (host not authorized, normal state) → silently false, **not an error**; token obtained → actually reports to
+  `POST {apiUrl}/api/v1/push/register` (2xx→`true`; IO/HTTP failure→`false`, re-reportable).
+  Server-side dispatch orchestration and FCM/APNs delivery are in place (offline guests receive push); end-to-end real-credential integration is in progress.
+- **offlineText**: automatically appends a system prompt line after disconnection (reconnect exhausted / handshake failure); no prompt when the user closes the panel manually.
+- **syncReadState** (optional enhancement): submits the latest server message ID confirmed by the SDK's internal reconciliation (disconnection catch-up) as the
+  server read cursor `POST {apiUrl}/api/v1/sessions/{id}/read`. The SDK's unread badge in V1 is still client-derived
+  (this method does not change its behavior); call it only when the host needs **cross-device/cross-entry consistent unread**
+  (e.g. its own backend shows unread by cursor) — typical timing: conversation page returns to foreground, user taps a push. No reconciled messages → silently
+  false (normal state); IO/HTTP failure → `error` flow `network` + false, retryable at the next opportunity; the cursor only moves
+  forward, never backward; repeated submissions are idempotent.
 
-## 6. 事件流（`chat.events`）
+## 6. Event flows (`chat.events`)
 
-| 流 | 内容 |
+| Flow | Content |
 |---|---|
-| `messages` | 消息（含流式增量标记 `isStreaming`；System 提示行不来自服务端帧） |
-| `unreadCount` | 未读数（面板可见期间为 0） |
+| `messages` | Messages (with streaming increment flag `isStreaming`; System prompt lines do not come from server frames) |
+| `unreadCount` | Unread count (0 while the panel is visible) |
 | `connectionState` | idle / connecting / connected / reconnecting(n) / disconnected |
-| `agentAssigned` | 坐席接入 |
-| `waitingInQueue` | 排队提示 |
-| `error` | 错误事件（码表见下） |
+| `agentAssigned` | Agent takeover |
+| `waitingInQueue` | Queue notification |
+| `error` | Error events (code table below) |
 
-Android 为 Kotlin Flow（`collect`），iOS 为 `EventStream`/`StateStream`（`for await`）。
-订阅即时生效：订阅前发生的历史经 `historySnapshot()` 获取（内存级会话连续性，面板
-hide 期间消息不丢）。
+Android uses Kotlin Flow (`collect`), iOS uses `EventStream`/`StateStream` (`for await`).
+Subscriptions take effect immediately: history that occurred before subscribing is obtained via `historySnapshot()` (in-memory conversation continuity; messages are not lost while the panel is hidden).
 
-## 7. 错误码
+## 7. Error codes
 
-`config_invalid`（构造期抛出）/ `network` / `server_unavailable` / `handshake_rejected` /
-`send_timeout` / `unsupported` / `ticket_failed`——双端 `ServifyError` 七码一致。详细语义见
-[平台规格 §4.5](/mobile-sdk-platform-spec)。
+`config_invalid` (thrown at construction time) / `network` / `server_unavailable` / `handshake_rejected` /
+`send_timeout` / `unsupported` / `ticket_failed` — both platforms' `ServifyError` share the same seven codes. Detailed semantics see
+[platform spec §4.5](/mobile-sdk-platform-spec).
 
-## 8. 接入自验清单
+## 8. Integration self-check list
 
-1. `wss://<host>/api/v1/ws?session_id=test` 握手 101；
-2. `apiUrl` 无尾斜杠、无路径后缀；
-3. 混淆构建（Android R8）/ 裁剪构建（iOS）通过——无需接入方额外配置；
-4. 退后台 → 回前台：会话页状态与未读计数无丢失；
-5. 工单创建后管理面 tickets 列表可见（含 AI 摘要列）；
-6. 体积对账：AAR ≤ 1.5MB / XCFramework ≤ 2MB。
+1. `wss://<host>/api/v1/ws?session_id=test` handshake 101;
+2. `apiUrl` has no trailing slash, no path suffix;
+3. Obfuscated build (Android R8) / stripped build (iOS) passes — no extra integrator config needed;
+4. Background → foreground: conversation page state and unread count are not lost;
+5. After ticket creation, the tickets list is visible in the admin console (including the AI summary column);
+6. Size reconciliation: AAR ≤ 1.5MB / XCFramework ≤ 2MB.
 
-常见问题（握手 400/403、反复断线、无回显）对照表见
-[平台规格 §5.4](/mobile-sdk-platform-spec)。
+Common issues (handshake 400/403, repeated disconnects, no echo) reference table see
+[platform spec §5.4](/mobile-sdk-platform-spec).
 
-## 9. V1 边界（明确不做的，防止接入误期许）
+## 9. V1 boundaries (explicitly out of scope, to prevent integrator mis-expectations)
 
-离线发送队列、消息撤回/编辑、富媒体消息（图片/文件）、坐席移动端、多语言内置
-（V1 中文，Branding 预留 i18n 钩子）。断连期间的客户消息不自动补发（发送超时按
-失败标记，手动重发）——**重连成功后 SDK 自动增量补拉**（`GET
-/api/v1/sessions/:session_id/messages`，`after_id` 游标 + has_more 续拉）：断连
-期间坐席/AI 的消息自动合并进 history 并计未读，接入方无需自行对账；服务端未读
-游标端点同样已就位（`POST /api/v1/sessions/:session_id/read` +
-`GET .../unread`），SDK V1 未读以客户端推导为准（服务端游标是宿主需要跨入口
-一致未读时的增强面）。Keychain 凭证存储不在 V1（匿名 session 无凭证）。
+Offline send queue, message recall/edit, rich media messages (images/files), agent mobile client, built-in multi-language
+(V1 is Chinese; Branding reserves i18n hooks). Customer messages during disconnection are not auto-resent (send timeouts are marked
+failed, manual resend) — **after a successful reconnect the SDK auto-incrementally catches up** (`GET
+/api/v1/sessions/:session_id/messages`, `after_id` cursor + has_more continuation): agent/AI messages
+during disconnection are auto-merged into history and counted as unread; integrators need no reconciliation of their own; the server unread
+cursor endpoint is also in place (`POST /api/v1/sessions/:session_id/read` +
+`GET .../unread`); SDK V1 unread is client-derived as the baseline (the server cursor is the enhancement surface for hosts needing cross-entry
+consistent unread). Keychain credential storage is not in V1 (anonymous sessions have no credentials).

@@ -1,449 +1,447 @@
-> [English](release-0.1.0-acceptance.en.md) | **中文**
-
 # Servify 0.1.0 Release Acceptance
 
-> 注：本文为 **v0.1.0 历史版本验收规范**（已被 v1.0.0 取代，现行口径见 [acceptance-checklist.md](./acceptance-checklist.md)）。文内 `internal/services/*` 证据路径为当时时点——该目录已随 P3-2 整体移除，测试迁移落点见 acceptance-checklist。
+> Note: this document is the **v0.1.0 historical release acceptance spec** (superseded by v1.0.0; the current spec is in [acceptance-checklist.md](./acceptance-checklist.md)). The `internal/services/*` evidence paths below reflect the time when this doc was written — that directory has since been removed wholesale under P3-2, and the test migration landing points are noted in the acceptance-checklist.
 
-这份文档定义 `Servify v0.1.0` 的发布验收范围、准入门槛、必测功能、证据要求和已知边界。
+This document defines the release acceptance scope, entry gates, mandatory test functions, evidence requirements, and known boundaries for `Servify v0.1.0`.
 
-版本定位：
+Version positioning:
 
-- `v0.1.0` 是首个公开预览版
-- 目标是：可安装、可部署、可演示、主链路可跑通
-- 不是：企业生产稳定版，不等同于 `v1.0`
+- `v0.1.0` is the first public preview
+- Goal: installable, deployable, demoable, with the main chain runnable
+- Not: an enterprise production-stable version; not equivalent to `v1.0`
 
-发布表达建议：
+Suggested release messaging:
 
-- 可以说：核心客服主链路、AI 基础能力、后台基础运营能力已具备预览版交付条件
-- 不应说：已完成企业级生产稳定交付
+- It is fine to say: the core customer-service main chain, AI baseline capabilities, and baseline admin operations are ready for preview delivery
+- It is not fine to say: enterprise-grade production-stable delivery is complete
 
 ## 1. Release Gate
 
-`v0.1.0` 发布前，以下条件必须同时成立：
+Before releasing `v0.1.0`, all of the following must hold simultaneously:
 
-1. `make build` 通过
-2. `make release-check CONFIG=./config.yml` 通过
-3. 核心客服主链路验收全部达到 `通过`
-4. Auth 自助 session 链路达到 `通过`
-5. AI / Knowledge 至少 1 条真实 provider 主路径达到 `通过`
-6. 本文档、`acceptance-checklist.md`、README、deployment 文档完成同步
-7. Release Note 明确写出已知限制和非目标
+1. `make build` passes
+2. `make release-check CONFIG=./config.yml` passes
+3. Core customer-service main chain acceptance all reaches `passed`
+4. Auth self-service session chain reaches `passed`
+5. At least 1 real provider main path for AI / Knowledge reaches `passed`
+6. This document, `acceptance-checklist.md`, README, and deployment docs are synced
+7. The release note explicitly states known limitations and non-goals
 
-一票否决项：
+Veto items:
 
-- 服务无法启动
-- 数据库迁移失败
-- 核心接口返回 500 或结构与契约不符
-- 核心状态流转无数据证据
-- 鉴权/权限中间件失效
-- 外部 knowledge provider 不可用时没有 fallback 或错误不可控
+- Service fails to start
+- Database migration fails
+- Core interface returns 500 or a structure that does not match the contract
+- Core state transitions have no data evidence
+- Auth/permission middleware fails
+- When the external knowledge provider is unavailable there is no fallback or the error is uncontrollable
 
-## 2. 当前版本边界
+## 2. Current Version Boundaries
 
-`v0.1.0` 明确不承诺以下事项：
+`v0.1.0` explicitly does not commit to the following:
 
-- 多实例高可用与跨实例一致性
-- 持久化消息队列语义下的异步 durability
-- 完整 co-browsing 远程协助产品
-- 真实 voice provider 的生产级接入
-- 客户侧推荐问题 / 上下文联想问题
-- 企业级容量、压测、备份恢复基线
+- Multi-instance HA and cross-instance consistency
+- Async durability under persistent message queue semantics
+- A complete co-browsing remote-assistance product
+- Production-grade integration with a real voice provider
+- Customer-side recommended questions / context-associated questions
+- Enterprise-grade capacity, load testing, and backup/recovery baselines
 
-已知实现边界，必须在 release note 中明确：
+Known implementation boundaries that must be called out explicitly in the release note:
 
-- 默认 event bus 仍为进程内实现
-- voice runtime 默认 wiring 仍存在 mock/provider 边界
-- agent runtime 仍有内存态 / legacy compatibility 残留
-- compatibility / mock 资产只用于 dev/demo/验收辅助，不等同于正式生产能力
+- The default event bus is still an in-process implementation
+- The voice runtime default wiring still has a mock/provider boundary
+- The agent runtime still has in-memory state / legacy compatibility residue
+- Compatibility / mock assets are only for dev/demo/acceptance assistance; they are not equivalent to production capability
 
-## 3. 验收证据规则
+## 3. Acceptance Evidence Rules
 
-每个功能项必须同时具备以下 4 类证据，否则不能标记为 `通过`：
+Every function item must have all 4 types of evidence below; otherwise it cannot be marked as `passed`:
 
-1. 代码入口：路由、页面、CLI 或 SDK 调用存在
-2. 自动化证据：单测、集成测试或脚本校验存在
-3. 运行证据：真实启动、真实请求、真实返回
-4. 数据证据：数据库、状态流转、文件或外部依赖的前后变化可见
+1. Code entry: a route, page, CLI, or SDK call exists
+2. Automated evidence: unit tests, integration tests, or script validation exist
+3. Runtime evidence: real startup, real request, real response
+4. Data evidence: before/after changes in DB, state transitions, files, or external dependencies are visible
 
-建议记录格式：
+Suggested recording format:
 
-| 字段 | 内容 |
+| Field | Content |
 | --- | --- |
-| 功能项 | 例如“发送会话消息” |
-| 页面/API | 明确入口 |
-| 前置条件 | 数据、账号、依赖服务 |
-| 操作步骤 | 请求或操作过程 |
-| 预期结果 | 状态码、响应、状态变化 |
-| 自动化证据 | 测试文件或命令 |
-| 人工证据 | curl、截图、日志、DB 查询 |
-| 是否为 0.1.0 blocker | 是 / 否 |
-| 状态 | 未验 / 部分通过 / 通过 / 阻塞 |
+| Function item | e.g. "Send conversation message" |
+| Page/API | explicit entry |
+| Preconditions | data, account, dependent services |
+| Steps | request or operation process |
+| Expected result | status code, response, state change |
+| Automated evidence | test files or commands |
+| Manual evidence | curl, screenshot, logs, DB query |
+| Whether a 0.1.0 blocker | yes / no |
+| Status | unverified / partially passed / passed / blocked |
 
-## 4. 功能包验收范围
+## 4. Function Package Acceptance Scope
 
-`v0.1.0` 按 8 个功能包验收。
+`v0.1.0` is accepted as 8 function packages.
 
-### 4.1 基础运行
+### 4.1 Baseline Runtime
 
-目标：
+Goals:
 
-- 仓库可以构建
-- 服务可以启动
-- 健康、就绪、指标面可访问
-- 发布前最小基线检查可执行
+- The repo can be built
+- The service can be started
+- Health, readiness, and metrics surfaces are accessible
+- The pre-release minimal baseline check is executable
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. 数据库迁移
-2. 标准构建
-3. 服务启动
-4. 健康检查
-5. 就绪检查
-6. 指标暴露
-7. 安全基线检查
-8. 可观测性基线检查
-9. Release readiness 检查
+1. Database migration
+2. Standard build
+3. Service startup
+4. Health check
+5. Readiness check
+6. Metrics exposure
+7. Security baseline check
+8. Observability baseline check
+9. Release readiness check
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API/命令 | 是否 blocker |
+| Function item | Page/API/command | Blocker |
 | --- | --- | --- |
-| 数据库迁移 | `make migrate` | 是 |
-| 标准构建 | `make build` | 是 |
-| 服务启动 | `go -C apps/server run ./cmd/server` | 是 |
-| 健康检查 | `GET /health` | 是 |
-| 就绪检查 | `GET /ready` | 是 |
-| Prometheus 指标 | `GET <metricsPath>` | 是 |
-| 安全基线检查 | `make security-check CONFIG=...` | 是 |
-| 可观测性基线检查 | `make observability-check CONFIG=...` | 是 |
-| 发布前检查 | `make release-check CONFIG=...` | 是 |
+| Database migration | `make migrate` | yes |
+| Standard build | `make build` | yes |
+| Service startup | `go -C apps/server run ./cmd/server` | yes |
+| Health check | `GET /health` | yes |
+| Readiness check | `GET /ready` | yes |
+| Prometheus metrics | `GET <metricsPath>` | yes |
+| Security baseline check | `make security-check CONFIG=...` | yes |
+| Observability baseline check | `make observability-check CONFIG=...` | yes |
+| Pre-release check | `make release-check CONFIG=...` | yes |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/health_enhanced_test.go`
 - `apps/server/cmd/cli/check_security_baseline_test.go`
 - `apps/server/cmd/cli/check_observability_baseline_test.go`
 - `scripts/check-release-readiness.sh`
 
-### 4.2 认证与登录
+### 4.2 Authentication and Login
 
-目标：
+Goals:
 
-- 管理员能够登录系统
-- token 轮转正确
-- 自助 session 管理有效
-- 未授权访问能被阻断
+- An admin can log in to the system
+- Token rotation is correct
+- Self-service session management works
+- Unauthorized access is blocked
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. 登录
-2. refresh token 轮转
-3. 当前会话列表
-4. 退出当前会话
-5. 退出其它会话
-6. 未授权拦截
+1. Login
+2. Refresh token rotation
+3. Current session list
+4. Log out current session
+5. Log out other sessions
+6. Unauthorized interception
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| 登录 | `POST /api/v1/auth/login` | 是 |
-| Refresh 轮转 | `POST /api/v1/auth/refresh` | 是 |
-| 当前会话列表 | `GET /api/v1/auth/sessions` | 是 |
-| 退出当前会话 | `POST /api/v1/auth/sessions/logout-current` | 是 |
-| 退出其它会话 | `POST /api/v1/auth/sessions/logout-others` | 是 |
-| 未授权拦截 | 访问受保护 API | 是 |
+| Login | `POST /api/v1/auth/login` | yes |
+| Refresh rotation | `POST /api/v1/auth/refresh` | yes |
+| Current session list | `GET /api/v1/auth/sessions` | yes |
+| Log out current session | `POST /api/v1/auth/sessions/logout-current` | yes |
+| Log out other sessions | `POST /api/v1/auth/sessions/logout-others` | yes |
+| Unauthorized interception | Accessing a protected API | yes |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/auth_handler_test.go`
 - `apps/server/internal/services/auth_service_test.go`
 - `apps/server/internal/middleware/auth_extended_test.go`
 
-### 4.3 客户咨询主链路
+### 4.3 Customer Consultation Main Chain
 
-目标：
+Goals:
 
-- 从会话进入到消息处理、人工接管、转接、关闭全程贯通
+- End-to-end from conversation entry through message handling, human takeover, transfer, and close
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. 工作台概览可见会话
-2. 会话详情可读
-3. 消息列表可读
-4. 发送消息成功
-5. 接管会话成功
-6. 转接会话成功
-7. 关闭会话成功
+1. Workspace overview shows conversations
+2. Conversation detail is readable
+3. Message list is readable
+4. Sending a message succeeds
+5. Taking over a conversation succeeds
+6. Transferring a conversation succeeds
+7. Closing a conversation succeeds
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| 工作台概览 | `GET /api/omni/workspace` | 是 |
-| 会话详情 | `GET /api/omni/sessions/:id` | 是 |
-| 消息列表 | `GET /api/omni/sessions/:id/messages` | 是 |
-| 发送消息 | `POST /api/omni/sessions/:id/messages` | 是 |
-| 接管会话 | `POST /api/omni/sessions/:id/assign` | 是 |
-| 转接会话 | `POST /api/omni/sessions/:id/transfer` | 是 |
-| 关闭会话 | `POST /api/omni/sessions/:id/close` | 是 |
+| Workspace overview | `GET /api/omni/workspace` | yes |
+| Conversation detail | `GET /api/omni/sessions/:id` | yes |
+| Message list | `GET /api/omni/sessions/:id/messages` | yes |
+| Send message | `POST /api/omni/sessions/:id/messages` | yes |
+| Take over conversation | `POST /api/omni/sessions/:id/assign` | yes |
+| Transfer conversation | `POST /api/omni/sessions/:id/transfer` | yes |
+| Close conversation | `POST /api/omni/sessions/:id/close` | yes |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/conversation_workspace_handler_test.go`
 - `apps/server/internal/services/websocket_test.go`
 
-人工验收最低要求：
+Minimum manual acceptance requirements:
 
-1. 真实登录管理端
-2. 打开工作台
-3. 查看一条真实会话
-4. 发一条客服消息
-5. 执行一次接管
-6. 执行一次转接
-7. 执行一次关闭
+1. Really log in to the admin console
+2. Open the workspace
+3. View one real conversation
+4. Send one agent message
+5. Perform one takeover
+6. Perform one transfer
+7. Perform one close
 
-### 4.4 工单全流程
+### 4.4 Ticket Full Flow
 
-目标：
+Goals:
 
-- 咨询无法即时解决时，能够进入工单全流程
+- When a consultation cannot be resolved immediately, it can enter the ticket full flow
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. 创建工单
-2. 工单列表
-3. 工单详情
-4. 更新工单
-5. 指派工单
-6. 添加评论
-7. 关闭工单
-8. 工单统计
-9. 工单导出
+1. Create ticket
+2. Ticket list
+3. Ticket detail
+4. Update ticket
+5. Assign ticket
+6. Add comment
+7. Close ticket
+8. Ticket statistics
+9. Ticket export
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| 创建工单 | `POST /api/tickets` | 是 |
-| 工单列表 | `GET /api/tickets` | 是 |
-| 工单详情 | `GET /api/tickets/:id` | 是 |
-| 更新工单 | `PUT /api/tickets/:id` | 是 |
-| 指派工单 | `POST /api/tickets/:id/assign` | 是 |
-| 添加评论 | `POST /api/tickets/:id/comments` | 是 |
-| 关闭工单 | `POST /api/tickets/:id/close` | 是 |
-| 工单统计 | `GET /api/tickets/stats` | 是 |
-| 导出工单 | `GET /api/tickets/export` | 是 |
+| Create ticket | `POST /api/tickets` | yes |
+| Ticket list | `GET /api/tickets` | yes |
+| Ticket detail | `GET /api/tickets/:id` | yes |
+| Update ticket | `PUT /api/tickets/:id` | yes |
+| Assign ticket | `POST /api/tickets/:id/assign` | yes |
+| Add comment | `POST /api/tickets/:id/comments` | yes |
+| Close ticket | `POST /api/tickets/:id/close` | yes |
+| Ticket statistics | `GET /api/tickets/stats` | yes |
+| Export ticket | `GET /api/tickets/export` | yes |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/ticket_handler_test.go`
 - `apps/server/internal/modules/ticket/application/command_service_test.go`
 - `apps/server/internal/modules/ticket/application/query_service_test.go`
 
-### 4.5 AI 与知识库
+### 4.5 AI and Knowledge Base
 
-目标：
+Goals:
 
-- AI 至少具备稳定问答能力
-- 外部 knowledge provider 可控制、可上传、可同步
-- provider 异常时 fallback 可工作
+- AI has at least stable Q&A capability
+- The external knowledge provider is controllable, uploadable, and syncable
+- Fallback works when the provider errors
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. AI 查询
-2. AI 状态
-3. AI 指标
-4. 知识上传
-5. 知识同步
-6. 启用 provider
-7. 禁用 provider
-8. 熔断器重置
-9. fallback 行为
+1. AI query
+2. AI status
+3. AI metrics
+4. Knowledge upload
+5. Knowledge sync
+6. Enable provider
+7. Disable provider
+8. Circuit breaker reset
+9. Fallback behavior
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| AI 查询 | `POST /api/v1/ai/query` | 是 |
-| AI 状态 | `GET /api/v1/ai/status` | 是 |
-| AI 指标 | `GET /api/v1/ai/metrics` | 否 |
-| 知识上传 | `POST /api/v1/ai/knowledge/upload` | 是 |
-| 知识同步 | `POST /api/v1/ai/knowledge/sync` | 是 |
-| 启用 provider | `PUT /api/v1/ai/knowledge-provider/enable` | 是 |
-| 禁用 provider | `PUT /api/v1/ai/knowledge-provider/disable` | 是 |
-| 熔断器重置 | `POST /api/v1/ai/circuit-breaker/reset` | 否 |
-| provider fallback | AI 主链路 | 是 |
+| AI query | `POST /api/v1/ai/query` | yes |
+| AI status | `GET /api/v1/ai/status` | yes |
+| AI metrics | `GET /api/v1/ai/metrics` | no |
+| Knowledge upload | `POST /api/v1/ai/knowledge/upload` | yes |
+| Knowledge sync | `POST /api/v1/ai/knowledge/sync` | yes |
+| Enable provider | `PUT /api/v1/ai/knowledge-provider/enable` | yes |
+| Disable provider | `PUT /api/v1/ai/knowledge-provider/disable` | yes |
+| Circuit breaker reset | `POST /api/v1/ai/circuit-breaker/reset` | no |
+| Provider fallback | AI main chain | yes |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/ai_handler_comprehensive_test.go`
 - `apps/server/internal/services/orchestrated_ai_fallback_integration_test.go`
 
-人工验收最低要求：
+Minimum manual acceptance requirements:
 
-1. 至少一条真实 provider 查询成功
-2. 至少一条真实文档上传成功
-3. 至少一条真实同步成功
-4. 至少一条 provider 异常时 fallback 成功
+1. At least one real provider query succeeds
+2. At least one real document upload succeeds
+3. At least one real sync succeeds
+4. At least one fallback succeeds when the provider errors
 
-### 4.6 管理端基础运营
+### 4.6 Admin Console Baseline Operations
 
-目标：
+Goals:
 
-- 后台有最小运营链路，不是纯演示壳
+- The console has a minimal operations chain; it is not a pure demo shell
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. Dashboard 可读真实数据
-2. Customer 核心 CRUD
-3. Agent 核心运营操作
+1. Dashboard reads real data
+2. Customer core CRUD
+3. Agent core operations
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| Dashboard 统计 | `GET /api/statistics/dashboard` | 是 |
-| 创建客户 | `POST /api/customers` | 否 |
-| 客户列表 | `GET /api/customers` | 否 |
-| 客户详情 | `GET /api/customers/:id` | 否 |
-| 更新客户 | `PUT /api/customers/:id` | 否 |
-| 客户备注 | `POST /api/customers/:id/notes` | 否 |
-| 客户标签 | `PUT /api/customers/:id/tags` | 否 |
-| 客服列表 | `GET /api/agents` | 否 |
-| 客服上线 | `POST /api/agents/:id/online` | 否 |
-| 客服下线 | `POST /api/agents/:id/offline` | 否 |
-| 客服状态更新 | `PUT /api/agents/:id/status` | 否 |
-| 在线客服列表 | `GET /api/agents/online` | 否 |
+| Dashboard statistics | `GET /api/statistics/dashboard` | yes |
+| Create customer | `POST /api/customers` | no |
+| Customer list | `GET /api/customers` | no |
+| Customer detail | `GET /api/customers/:id` | no |
+| Update customer | `PUT /api/customers/:id` | no |
+| Customer notes | `POST /api/customers/:id/notes` | no |
+| Customer tags | `PUT /api/customers/:id/tags` | no |
+| Agent list | `GET /api/agents` | no |
+| Agent online | `POST /api/agents/:id/online` | no |
+| Agent offline | `POST /api/agents/:id/offline` | no |
+| Agent status update | `PUT /api/agents/:id/status` | no |
+| Online agent list | `GET /api/agents/online` | no |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/customer_handler_test.go`
 - `apps/server/internal/handlers/agent_handler_test.go`
 - `apps/server/internal/handlers/agent_handler_extended_test.go`
 - `apps/server/internal/services/statistics_service_test.go`
 
-### 4.7 实时能力
+### 4.7 Realtime Capabilities
 
-目标：
+Goals:
 
-- 证明 WebSocket / WebRTC 基础能力为真实运行能力，不是伪实现
+- Prove that the WebSocket / WebRTC baseline capabilities are real runtime capabilities, not faked implementations
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. WebSocket 建连
-2. WebSocket 收发消息
-3. WebSocket 统计
-4. WebRTC 基础协商链路
-5. WebRTC 统计
-6. WebRTC 连接列表
+1. WebSocket connection
+2. WebSocket send/receive
+3. WebSocket statistics
+4. WebRTC baseline negotiation chain
+5. WebRTC statistics
+6. WebRTC connection list
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| WebSocket 建连 | `GET /api/v1/ws` | 是 |
-| WebSocket 统计 | `GET /api/v1/ws/stats` | 否 |
-| WebRTC 统计 | `GET /api/v1/webrtc/stats` | 否 |
-| WebRTC 连接列表 | `GET /api/v1/webrtc/connections` | 否 |
+| WebSocket connection | `GET /api/v1/ws` | yes |
+| WebSocket statistics | `GET /api/v1/ws/stats` | no |
+| WebRTC statistics | `GET /api/v1/webrtc/stats` | no |
+| WebRTC connection list | `GET /api/v1/webrtc/connections` | no |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/services/websocket_test.go`
 - `apps/server/internal/services/websocket_processing_test.go`
 - `apps/server/internal/services/webrtc_test.go`
 - `apps/server/internal/services/webrtc_stats_test.go`
 
-### 4.8 公开入口
+### 4.8 Public Entry Points
 
-目标：
+Goals:
 
-- 如果 README 和官网对外描述了公开入口，则必须具备最小可验收能力
+- If the README and website describe public entry points to the outside world, then at minimum acceptable capability must exist
 
-必须验收的功能：
+Functions that must be accepted:
 
-1. Portal config 可匿名访问
-2. Public knowledge 可匿名访问
-3. Public CSAT 可匿名访问并提交
+1. Portal config accessible anonymously
+2. Public knowledge accessible anonymously
+3. Public CSAT accessible and submittable anonymously
 
-验收项：
+Acceptance items:
 
-| 功能项 | 页面/API | 是否 blocker |
+| Function item | Page/API | Blocker |
 | --- | --- | --- |
-| Portal 配置 | `GET /public/portal/config` | 否 |
-| Public knowledge 列表 | `GET /public/kb/docs` | 否 |
-| Public knowledge 详情 | `GET /public/kb/docs/:id` | 否 |
-| Public CSAT 查询 | `GET /public/csat/:token` | 否 |
-| Public CSAT 提交 | `POST /public/csat/:token/respond` | 否 |
+| Portal config | `GET /public/portal/config` | no |
+| Public knowledge list | `GET /public/kb/docs` | no |
+| Public knowledge detail | `GET /public/kb/docs/:id` | no |
+| Public CSAT query | `GET /public/csat/:token` | no |
+| Public CSAT submit | `POST /public/csat/:token/respond` | no |
 
-自动化证据最小集合：
+Minimum set of automated evidence:
 
 - `apps/server/internal/handlers/csat_public_handler.go`
-- 对应公开入口 handler 测试
+- Corresponding public entry handler tests
 
-## 5. 0.1.0 可以不阻塞发布的功能
+## 5. Functions That May Not Block the `0.1.0` Release
 
-以下功能可以继续存在于 backlog，但不应阻塞 `v0.1.0`：
+The following functions may continue to exist in the backlog, but should not block `v0.1.0`:
 
-1. 客户侧推荐问题 / 上下文联想问题
-2. Satisfaction 后台全量运营面
-3. 宏、自动化、激励、排班
-4. 更完整的 session transfer 运营后台
-5. 真实 voice provider 接入
-6. 多实例 HA
-7. 容量压测与性能基线
-8. 企业级备份恢复演练
+1. Customer-side recommended questions / context-associated questions
+2. Satisfaction console full operations surface
+3. Macros, automation, gamification, shifts
+4. A more complete session transfer admin console
+5. Real voice provider integration
+6. Multi-instance HA
+7. Capacity load testing and performance baselines
+8. Enterprise-grade backup/recovery drills
 
-## 6. 文档验收范围
+## 6. Documentation Acceptance Scope
 
-`v0.1.0` 发布前，以下文档必须同步：
+Before releasing `v0.1.0`, the following docs must be synced:
 
-| 文档 | 要求 |
+| Doc | Requirement |
 | --- | --- |
-| `README.md` | 明确版本定位、核心能力、已知限制 |
-| `docs/local-development.md` | 本地运行步骤可执行 |
-| `docs/deployment.md` | 最小部署、配置分层、依赖说明清晰 |
-| `docs/acceptance-checklist.md` | 对应功能项状态已回填 |
-| `docs/release-versioning.md` | 版本与 changelog 流程正确 |
-| `docs/demo-and-mock-boundaries.md` | demo/mock/prod 边界清晰 |
+| `README.md` | version positioning, core capabilities, and known limitations are explicit |
+| `docs/local-development.md` | local run steps are executable |
+| `docs/deployment.md` | minimal deployment, config layering, and dependency notes are clear |
+| `docs/acceptance-checklist.md` | corresponding function item statuses are backfilled |
+| `docs/release-versioning.md` | version and changelog process is correct |
+| `docs/demo-and-mock-boundaries.md` | demo/mock/prod boundaries are clear |
 
-## 7. Release Note 必须包含的内容
+## 7. Content the Release Note Must Include
 
-发布 `v0.1.0` 时，release note 至少应包含：
+When releasing `v0.1.0`, the release note must at least include:
 
-1. 版本定位：首个公开预览版
-2. 已具备能力：
-   - 核心客服主链路
-   - AI 基础问答与知识链路
-   - 后台基础运营面
-   - WebSocket/WebRTC 基础能力
-3. 已知限制：
-   - event bus durability 边界
-   - voice/provider 边界
-   - 单实例优先
-   - 非生产级完整远程协助产品
-4. 升级/部署说明
-5. 已验证环境与执行方式
+1. Version positioning: the first public preview
+2. Capabilities in place:
+   - Core customer-service main chain
+   - AI baseline Q&A and knowledge chain
+   - Console baseline operations surface
+   - WebSocket/WebRTC baseline capabilities
+3. Known limitations:
+   - event bus durability boundary
+   - voice/provider boundary
+   - single-instance priority
+   - not a production-grade complete remote-assistance product
+4. Upgrade/deployment instructions
+5. Verified environment and execution method
 
-## 8. 当前建议执行顺序
+## 8. Currently Suggested Execution Order
 
-如果以 `v0.1.0` 为目标，建议按以下顺序补齐：
+If `v0.1.0` is the target, the following order is suggested to close out:
 
-1. 基础运行缺口：`GET /ready`、`GET <metricsPath>`、`make build`
-2. Auth 自助 session 链路打通
-3. 会话工作台走通
-4. 工单高频操作全流程
-5. AI / Knowledge 真实 provider 验收收口
-6. `acceptance-checklist.md` 回填
-7. README / deployment / release note 同步
+1. Baseline runtime gaps: `GET /ready`, `GET <metricsPath>`, `make build`
+2. Auth self-service session chain connected
+3. Conversation workspace connected
+4. Ticket high-frequency operations full flow
+5. AI / Knowledge real provider acceptance closed out
+6. `acceptance-checklist.md` backfilled
+7. README / deployment / release note synced
 
-## 9. 最终发布判断标准
+## 9. Final Release Decision Criteria
 
-满足以下条件即可发布 `v0.1.0`：
+The following conditions must be met to release `v0.1.0`:
 
-1. 所有 blocker 功能项在本文件和 `acceptance-checklist.md` 中均为 `通过`
-2. 所有 release gate 命令通过
-3. 已知限制已公开说明
-4. 未把 demo/mock 能力误描述为生产稳定能力
+1. All blocker function items are `passed` in this file and in `acceptance-checklist.md`
+2. All release gate commands pass
+3. Known limitations are publicly stated
+4. Demo/mock capabilities are not misdescribed as production-stable capabilities
 
-若 blocker 中仍有 `部分通过`、`未验` 或 `阻塞`，则不应发布 `v0.1.0`
+If any blocker still has `partially passed`, `unverified`, or `blocked`, then `v0.1.0` must not be released.

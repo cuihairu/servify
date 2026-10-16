@@ -1,85 +1,55 @@
-> [English](backup-and-recovery.en.md) | **中文**
+# Servify Backup and Recovery (P2-3)
 
-# Servify 备份与恢复（P2-3）
+> Last updated: 2026-09-17 (P2-3 finalized)
+> Maintenance rule: this document states the backup/recovery convention for data assets. **Any code change that alters the backup format,
+> recovery semantics, or migration rollback strategy must update this document accordingly**; the recovery path is
+> anchored by drills (see "Drills and Evidence" at the end).
 
-> 最后更新：2026-09-17（P2-3 定稿）
-> 维护规则：本文档声明数据资产的备份/恢复口径。**任何改变备份格式、
-> 恢复语义或迁移回滚策略的代码变更必须同步更新本文档**；恢复链路由
-> 演练锚定（见文末"演练与证据"）。
+## Conclusion
 
-## 结论
+Servify's recovery convention splits into two tracks by deployment form:
 
-Servify 的恢复口径按部署形态分两轨：
+- **sqlite single-node form** (default/demo/small deployments): the database and uploaded assets undergo a full logical backup and byte-verified restore via the `cmd/dbrecovery` tool; the corresponding implementation is the `internal/platform/recovery` package.
+- **postgres production form**: consistent backups go through the `pg_dump`/`pg_restore` SOP (this document's "PostgreSQL restore steps"). The db subcommand of `dbrecovery` **explicitly rejects the postgres dialect** — pouring a sqlite JSONL backup into the production database is more dangerous than having no backup at all, so the tool blocks it before the connection is established.
 
-- **sqlite 单机形态**（默认/演示/小型部署）：数据库与上传资产经
-  `cmd/dbrecovery` 工具做全量逻辑备份与逐字节校验恢复；对应实现为
-  `internal/platform/recovery` 包。
-- **postgres 生产形态**：一致性备份走 `pg_dump`/`pg_restore` SOP
-  （本文"PostgreSQL 恢复步骤"）。`dbrecovery` 的 db 子命令**显式
-  拒绝 postgres 方言**——把 sqlite JSONL 备份误灌生产库比没有备份
-  更危险，工具在建立连接前就拦截。
+**The only convention for rolling back a migration is "restore the backup"**: versioned migrations ship no down files (the embed comment in `apps/server/internal/app/bootstrap/migrate_runner.go` is that doctrine), and a failed migration does not run reverse SQL but instead restores the database to the pre-migration backup point. The executable postgres evidence for this convention lives in the CI Integration job's "Backup & restore drill (pg_dump/pg_restore)" step: DROP the whole database → recreate → `pg_restore` → the water level of the migration chain head version (currently `23|f`; CI reconciles the chain head dynamically rather than hardcoding it) comes back with the backup.
 
-**迁移回滚的唯一口径是"恢复备份"**：版本化迁移不提供 down 文件
-（`apps/server/internal/app/bootstrap/migrate_runner.go` 的 embed
-注释即该教义），失败迁移不走反向 SQL，而是把数据库恢复到迁移前
-的备份点。该口径的 postgres 可执行证据在 CI Integration job 的
-"Backup & restore drill (pg_dump/pg_restore)" 步骤：DROP 整库 →
-重建 → `pg_restore` → 迁移链头部版本的水位（当前 `23|f`；CI 动态
-对账链头，不硬编码）随备份回来。
+## Backup Objects and Manifest Format
 
-## 备份对象与清单格式
+### Database (sqlite)
 
-### 数据库（sqlite）
+`dbrecovery db-backup -out DIR`:
 
-`dbrecovery db-backup -out DIR`：
+- One JSONL file per user table (`<table>.jsonl`), values uniformly encoded (`[]byte`/`time.Time` → strings), with the schema column list recorded in each table's entry in `manifest.json` (`name/columns/rows/file/sha256`).
+- `manifest.json` records the dialect, timestamp, per-table row counts, per-file sha256, and the **auto-increment sequence position** (`sqlite_sequence`) — the sequence is replayed after restore so that newly inserted rows cannot collide with restored primary keys (the drill check `db_sequence_no_collision`).
+- Restore (`db-restore -backup DIR`) runs inside a **single connection + single transaction**: it verifies every dump file's sha256 in full first, then `PRAGMA foreign_keys=OFF` → per-table DELETE + backfill → sequence replay → commit. Any failure rolls the whole thing back, leaving the target database as it was.
 
-- 每张用户表一个 JSONL 文件（`<table>.jsonl`），值经统一编码
-  （`[]byte`/`time.Time` → 字符串），schema 列清单记录在
-  `manifest.json` 的每表条目（`name/columns/rows/file/sha256`）。
-- `manifest.json` 记录方言、时间、逐表行数、每文件 sha256 与
-  **自增序列位置**（`sqlite_sequence`）——恢复后重放序列，防止新
-  插入行撞上已恢复主键（演练 checks 的 `db_sequence_no_collision`）。
-- 恢复（`db-restore -backup DIR`）在**单连接 + 单事务**内执行：
-  先整体校验每个 dump 文件 sha256，再 `PRAGMA foreign_keys=OFF` →
-  逐表 DELETE+回灌 → 序列重放 → 提交。任何一步失败整体回滚，
-  目标库保持原状。
+### Uploaded files (uploads)
 
-### 上传文件（uploads）
+`dbrecovery files-backup -dir UPLOADS -archive FILE`:
 
-`dbrecovery files-backup -dir UPLOADS -archive FILE`：
+- The directory is packed into tar.gz, with `path/size/mode/sha256` recorded per file in the manifest (default path `<archive>.manifest.json`).
+- Restore (`files-restore`) first verifies that the sha256 of the byte streams inside the archive match the manifest before writing to disk; after restore, `VerifyFiles` reconciles — missing / added / tampered files are all called out by name (the drill check `files_verify_detects_tamper`).
 
-- 目录打成 tar.gz，逐文件记录 `path/size/mode/sha256` 到 manifest
-  （默认路径 `<archive>.manifest.json`）。
-- 恢复（`files-restore`）先校验归档内字节流的 sha256 与 manifest
-  一致再落盘；恢复后用 `VerifyFiles` 对账——缺失/新增/篡改都会被
-  点名（演练 checks 的 `files_verify_detects_tamper`）。
+### Critical tables
 
-### 关键表
+The restore-priority tables scoped by todo P2-3 (the drill reconciles them per table):
+`users`, `sessions`, `messages`, `tickets`, `audit_logs`.
 
-todo P2-3 圈定的恢复优先级表（演练逐表对账）：
-`users`、`sessions`、`messages`、`tickets`、`audit_logs`。
+### Knowledge document assets (held by external providers)
 
-### 知识文档资产（外部 provider 持有）
-
-知识文档正文不在 servify 备份范围内：接入 Dify/WeKnora 后，文档
-内容与其向量索引由 provider 侧持有并依赖 provider 自身的快照/导出
-能力；servify 库内只保存映射与元数据（`servify_weknora_mappings`、
-`knowledge_sync_logs` 等），随数据库备份一并恢复。**provider 凭据
-与 KB ID 记录在配置中，恢复演练不覆盖 provider 侧数据**——这是
-P2-3 的明确边界，不是遗漏。
+Knowledge document bodies are outside the scope of the servify backup: once Dify/WeKnora is integrated, the document content and its vector index are held on the provider side and rely on the provider's own snapshot/export capability; the servify database keeps only the mappings and metadata (`servify_weknora_mappings`, `knowledge_sync_logs`, etc.), which are restored along with the database backup. **Provider credentials and KB IDs are recorded in configuration, and the restore drill does not cover provider-side data** — this is an explicit boundary of P2-3, not an omission.
 
 ## RPO / RTO
 
-| 形态 | 备份手段 | 建议频率 | RPO | RTO |
+| Form | Backup means | Suggested frequency | RPO | RTO |
 | --- | --- | --- | --- | --- |
-| sqlite 单机 | `db-backup` + `files-backup` | 每日一次 + 版本升级/迁移前必做 | ≤ 1 天（迁移窗口前为 0） | 分钟级（恢复为单事务 + 文件解包） |
-| postgres | `pg_dump -Fc` | 每日一次 + 版本升级/迁移前必做 | ≤ 1 天 | 分钟级（restore 全量回灌） |
+| sqlite single-node | `db-backup` + `files-backup` | Once daily + mandatory before any version upgrade/migration | ≤ 1 day (0 just before the migration window) | Minutes (restore is a single transaction + file unpack) |
+| postgres | `pg_dump -Fc` | Once daily + mandatory before any version upgrade/migration | ≤ 1 day | Minutes (restore does a full backfill) |
 
-备份产物（备份目录、tar.gz 与 manifest）应落到**数据库所在主机之外**
-的存储（对象存储/另一台主机）。本仓库只提供备份与恢复的执行工具与
-校验语义，不做异地投递。
+Backup artifacts (the backup directory, the tar.gz, and the manifest) should land on storage **off the host that holds the database** (object storage / another machine). This repository only provides the tools that execute backup and restore along with the verification semantics; it does not do off-site transfer.
 
-## sqlite 恢复步骤
+## sqlite Restore Steps
 
 ```bash
 # 备份（迁移/升级前必做；go.mod 在 apps/server/，统一用 -C 指定模块目录）
@@ -92,7 +62,7 @@ go -C apps/server run ./cmd/dbrecovery files-restore -archive /backup/files-2026
   -manifest /backup/files-2026-09-17.tar.gz.manifest.json -dest /data/uploads
 ```
 
-## PostgreSQL 恢复步骤
+## PostgreSQL Restore Steps
 
 ```bash
 # 备份
@@ -112,34 +82,15 @@ docker compose -f infra/compose/docker-compose.yml exec -T postgres \
   psql -U postgres -d servify -tAc "SELECT version, dirty FROM schema_migrations"
 ```
 
-迁移水位随备份恢复是**特性而非事故**：回滚迁移 = 回到旧 schema +
-旧数据的一致快照，恢复后无需也不应再跑迁移补账。若恢复点是更老的
-schema，服务启动会按迁移 Runner 正常补跑其后的版本——这同样以备份
-恢复为起点，而不是手工 down。
+The migration water level returning with the backup is a **feature, not an incident**: rolling back a migration means going back to a consistent snapshot of the old schema plus the old data, so no further migration should or needs to be run to make up the accounts after restore. If the restore point is an older schema, the service startup will run the later versions as normal through the migration Runner — this too starts from a backup restore rather than a manual down.
 
-## 失败迁移处置
+## Handling a Failed Migration
 
-1. 迁移中断且 `schema_migrations.dirty = true`：**不要**手工改水位，
-   直接按上文恢复到迁移前备份。
-2. 迁移前无备份：postgres 可尝试手工修复 dirty 事务内的部分变更，
-   但该操作不属于受支持口径——唯一的受支持路径是"先有备份再迁移"。
-   迁移窗口的操作顺序因此固定为：备份 → 迁移 → 验证
-   （`SELECT version, dirty FROM schema_migrations`）。
+1. The migration was interrupted and `schema_migrations.dirty = true`: **do not** edit the water level by hand — restore from the pre-migration backup as described above.
+2. No backup before the migration: postgres can attempt a manual repair of part of the changes inside the dirty transaction, but that operation is not part of the supported convention — the only supported path is "have a backup first, then migrate". The operation order inside a migration window is therefore fixed: backup → migrate → verify (`SELECT version, dirty FROM schema_migrations`).
 
-## 演练与证据
+## Drills and Evidence
 
-- **sqlite 演练**：`make backup-restore-acceptance`（或直接
-  `scripts/test-backup-restore.sh`）。驱动
-  `TestBackupRestoreDrillSQLite`：播种关键表 → 备份 → 注入迁移窗口
-  增量 + 损坏（篡改消息、清空审计日志、多插工单）→ 恢复 → 逐表
-  行数/内容/自增序列对账；上传资产分支做篡改+删除+新增检测与
-  字节级恢复。证据落 `scripts/test-results/backup-restore/`
-  （summary.txt、db-manifest.json、files-manifest.json、manifest.json），
-  manifest 由 `scripts/validate-acceptance-manifest.sh` 的
-  `backup-restore` case 逐项校验并随仓库留档。
-- **postgres 演练**：CI Integration job（pgvector/pgvector:pg15）
-  播种 → `pg_dump -Fc` → 删光 users → `DROP DATABASE WITH (FORCE)`
-  → 重建 → `pg_restore` → 校验 `schema_migrations` 等于迁移链头部
-  版本（当前 `23|f`，CI 动态取链头对账、不硬编码）与行数
-  回到备份时刻。
-- 两轨任一失败 CI 即红：恢复链路不是文档承诺，是门禁约束。
+- **sqlite drill**: `make backup-restore-acceptance` (or `scripts/test-backup-restore.sh` directly). Drives `TestBackupRestoreDrillSQLite`: seed the critical tables → backup → inject migration-window deltas + corruption (tamper with messages, clear the audit log, insert extra tickets) → restore → reconcile per-table row counts / content / auto-increment sequence; the uploaded-assets branch performs tamper + delete + add detection and byte-level restore. Evidence lands in `scripts/test-results/backup-restore/` (summary.txt, db-manifest.json, files-manifest.json, manifest.json), and the manifest is validated item by item by the `backup-restore` case in `scripts/validate-acceptance-manifest.sh` and kept in the repository.
+- **postgres drill**: the CI Integration job (pgvector/pgvector:pg15) seeds → `pg_dump -Fc` → deletes all users → `DROP DATABASE WITH (FORCE)` → recreates → `pg_restore` → verifies that `schema_migrations` equals the migration chain head version (currently `23|f`; CI takes the chain head dynamically for reconciliation, nothing hardcoded) and that row counts return to the backup point.
+- If either track fails, CI goes red: the recovery path is not a promise in documentation, it is a gate constraint.

@@ -1,48 +1,46 @@
-> [English](mobile-sdk-cocoapods-evaluation.en.md) | **中文**
+# CocoaPods Compatibility Layer Evaluation (M3 cut 4, wrap-up of the design doc §3 distribution-form decision)
 
-# CocoaPods 兼容层评估（M3 刀 4，设计文档 §3 分发形态决策的收尾）
+Conclusion first: **no CocoaPods spec for now; stay on the single track of XCFramework + SwiftPM binary distribution**;
+turn the compatibility layer into an on-demand item of "build it when an integrator explicitly asks"; trigger conditions and build recipe are in §4.
 
-结论先行：**暂不建 CocoaPods spec，继续 XCFramework + SwiftPM 二进制分发单轨**；
-把兼容层转为"有接入方明确要求时再建"的按需项，触发条件与建法见 §4。
+## 1. Current State
 
-## 1. 现状
+- Distribution form: XCFramework (static, `BUILD_LIBRARY_FOR_DISTRIBUTION`) + Swift Package Manager
+  binary distribution. The CI `ios-macos` job produces the XCFramework on every push (artifact `servify-kit-xcframework`)
+  and passes the size gate (≤ 2MB, M2 acceptance ②; `ios-swift` is a source test job and produces no artifacts).
+- There is no `.podspec` in the repository; the integration documentation (M4 deliverable) only needs to cover the SwiftPM integration path.
 
-- 分发形态：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`）+ Swift Package Manager
-  二进制分发。CI `ios-macos` job 在每次 push 产出 XCFramework（artifact `servify-kit-xcframework`）
-  并过体积门禁（≤ 2MB，M2 验收②；`ios-swift` 是源码测试 job，不出产物）。
-- 仓库内无 `.podspec`；接入文档（M4 产出）只需覆盖 SwiftPM 接入路径。
+## 2. Evaluation Dimensions
 
-## 2. 评估维度
-
-| 维度 | SwiftPM（现状） | 增设 CocoaPods 兼容层 |
+| Dimension | SwiftPM (current) | Adding a CocoaPods compatibility layer |
 | --- | --- | --- |
-| 接入面 | Xcode 13+ 全覆盖（项目要求 iOS 15） | 仅老工程（CocoaPods-only）需要 |
-| 维护成本 | 0（已随 CI 落地） | spec 版本对齐、podspec lint、`pod trunk`/私有 repo 流程各一套 |
-| 二进制引用 | `binaryTarget` 直接指 XCFramework | `vendored_frameworks` 同一份产物，无技术差异 |
-| CI 增量 | — | 每次 SDK 变更需要 podspec 校验步骤；发布节奏（版本号/tag）与"不自动发版"纪律叠加人工步骤 |
-| 风险 | — | spec 与 SwiftPM 版本漂移是长期税；早期接入方为零时纯负担 |
+| Integration surface | Fully covered by Xcode 13+ (the project requires iOS 15) | Only needed by legacy projects (CocoaPods-only) |
+| Maintenance cost | 0 (already landed with CI) | A spec version alignment, a podspec lint, and a `pod trunk`/private repo flow, one of each |
+| Binary reference | `binaryTarget` points directly at the XCFramework | `vendored_frameworks` with the same artifact, no technical difference |
+| CI increment | — | Every SDK change needs a podspec validation step; the release cadence (version number/tag) stacks manual steps on top of the "no automatic release" discipline |
+| Risk | — | Spec vs SwiftPM version drift is a long-term tax; with zero early integrators it is pure burden |
 
-## 3. 判定
+## 3. Verdict
 
-M3 里程碑内**无已知接入方被 CocoaPods-only 工程阻塞**；兼容层在零消费者的现状下
-只有成本没有收益——这与设计文档"避免无消费面的预留字段"同一纪律。SwiftPM 主路径
-已覆盖 iOS 15（2023+ Xcode 默认全部支持），纯 CocoaPods 工程在现代基线里占比极低。
+Within the M3 milestone, **no known integrator is blocked by a CocoaPods-only project**; with zero consumers the
+compatibility layer carries only cost and no benefit — the same discipline as the design doc's "avoid reserved fields with no consumer surface". The SwiftPM main path
+already covers iOS 15 (all 2023+ Xcode defaults support it), and pure CocoaPods projects make up a very small share of the modern baseline.
 
-## 4. 按需重建的触发条件与建法
+## 4. Trigger Conditions and Build Recipe for On-Demand Rebuild
 
-触发条件（任一）：出现第一个 CocoaPods-only 接入方；或接入调研中 ≥ 2 家明确以
-CocoaPods 为前提。
+Trigger conditions (either one): the first CocoaPods-only integrator appears; or ≥ 2 prospects in
+integration research explicitly require CocoaPods as a premise.
 
-到时建法（一次到位，不做半兼容）：
+Build recipe at that time (do it right in one pass, no half-compatible version):
 
-1. `ServifyKit.podspec`：`vendored_frameworks` 指向 CI 产出的同一份 XCFramework
-  （不双打包）；`deployment_target = 'ios15.0'`；`swift_version = '5.10'`。
-2. spec 校验进 CI ios job（`pod lib lint --allow-warnings` 或至少 `pod spec lint`），
-   挂在体积门禁之后。
-3. 版本号与 SwiftPM tag 同源（单一事实：git tag），发布仍由维护者手动执行
-  （仓库不内置自动发版，M4 验收③口径不变）。
+1. `ServifyKit.podspec`: `vendored_frameworks` points at the same XCFramework produced by CI
+  (no double packaging); `deployment_target = 'ios15.0'`; `swift_version = '5.10'`.
+2. Spec validation joins the CI ios job (`pod lib lint --allow-warnings` or at least `pod spec lint`),
+  hung after the size gate.
+3. Version numbers share the same source as the SwiftPM tag (single source of truth: git tag), and releases are still executed manually by maintainers
+  (the repository does not ship automatic releases; the M4 acceptance ③ convention is unchanged).
 
-## 5. 记录
+## 5. Record
 
-- 评估人：SDK 里程碑推进（M3 刀 4）；日期：2026-09-23。
-- 复核时点：M4 接入文档站定稿时复核一次"是否出现 CocoaPods 诉求"。
+- Evaluator: SDK milestone advancement (M3 cut 4); date: 2026-09-23.
+- Recheck point: recheck once at M4 integration documentation site finalization on "whether a CocoaPods demand has appeared".

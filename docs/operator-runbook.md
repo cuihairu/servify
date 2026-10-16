@@ -1,61 +1,59 @@
-> [English](operator-runbook.en.md) | **中文**
-
 # Servify Operator Runbook
 
-> 本文档面向运维人员和 SRE，覆盖 Servify 从部署、日常运维到故障排查的完整操作手册。
+> This document is aimed at operations staff and SREs. It covers Servify's complete operations manual, from deployment and daily operations through troubleshooting.
 >
-> 相关文档：
+> Related documents:
 >
-> - [部署指南](deployment.md) — 构建、配置与部署流程
-> - [安全基线](security-baseline-operations.md) — 安全检查与生产配置清单
-> - [可观测性运维手册](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md) — 告警排查与指标参考
-> - [统计口径](metrics-glossary.md) — Dashboard 指标定义
+> - [Deployment Guide](deployment.md) — build, configuration, and deployment flow
+> - [Security Baseline](security-baseline-operations.md) — security checks and production configuration checklist
+> - [Observability Operations Manual](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md) — alert triage and metrics reference
+> - [Metrics Glossary](metrics-glossary.md) — dashboard metric definitions
 
 ---
 
-## 目录
+## Table of Contents
 
-1. [环境与角色说明](#1-环境与角色说明)
-2. [部署流程](#2-部署流程)
-3. [发布前检查](#3-发布前检查)
-4. [配置管理](#4-配置管理)
-5. [密钥与凭证管理](#5-密钥与凭证管理)
-6. [数据库迁移](#6-数据库迁移)
-7. [健康检查与探针](#7-健康检查与探针)
-8. [监控与告警](#8-监控与告警)
-9. [日志查询](#9-日志查询)
-10. [常见故障排查](#10-常见故障排查)
-11. [回滚操作](#11-回滚操作)
-12. [扩缩容](#12-扩缩容)
-13. [安全运维操作](#13-安全运维操作)
-14. [日常运维任务清单](#14-日常运维任务清单)
+1. [Environments and Roles](#1-environments-and-roles)
+2. [Deployment Flow](#2-deployment-flow)
+3. [Pre-Release Checks](#3-pre-release-checks)
+4. [Configuration Management](#4-configuration-management)
+5. [Secrets and Credential Management](#5-secrets-and-credential-management)
+6. [Database Migrations](#6-database-migrations)
+7. [Health Checks and Probes](#7-health-checks-and-probes)
+8. [Monitoring and Alerting](#8-monitoring-and-alerting)
+9. [Log Queries](#9-log-queries)
+10. [Common Troubleshooting](#10-common-troubleshooting)
+11. [Rollback Procedures](#11-rollback-procedures)
+12. [Scaling](#12-scaling)
+13. [Security Operations](#13-security-operations)
+14. [Daily Operations Task List](#14-daily-operations-task-list)
 
 ---
 
-## 1. 环境与角色说明
+## 1. Environments and Roles
 
-### 环境分层
+### Environment Layering
 
-| 环境 | 用途 | 配置文件 | 数据 |
+| Environment | Purpose | Configuration File | Data |
 |------|------|----------|------|
-| 本地开发 | 开发调试 | `config.yml` | 本地 PostgreSQL / Redis |
-| 测试 / Staging | 集成验证 | `config.staging.example.yml` -> `config.staging.yml` | 独立测试数据库 |
-| 生产 | 线上服务 | `config.production.yml` | 生产数据库 |
+| Local development | Development and debugging | `config.yml` | Local PostgreSQL / Redis |
+| Test / Staging | Integration verification | `config.staging.example.yml` -> `config.staging.yml` | Separate test database |
+| Production | Live service | `config.production.yml` | Production database |
 
-### 角色与职责
+### Roles and Responsibilities
 
-| 角色 | 权限 | 典型操作 |
+| Role | Permissions | Typical Operations |
 |------|------|----------|
-| Operator | 部署、监控、故障恢复 | 部署、回滚、扩缩容、日志查询 |
-| SRE | 告警响应、性能调优 | 告警处理、容量规划、预案演练 |
-| Admin | 管理后台操作 | 用户管理、权限分配、审计查询 |
-| Developer | 代码变更、发布打包 | 构建、测试、提交发布 |
+| Operator | Deployment, monitoring, incident recovery | Deploy, roll back, scale, query logs |
+| SRE | Alert response, performance tuning | Handle alerts, capacity planning, runbook drills |
+| Admin | Admin console operations | User management, permission assignment, audit queries |
+| Developer | Code changes, release packaging | Build, test, submit for release |
 
 ---
 
-## 2. 部署流程
+## 2. Deployment Flow
 
-### 2.1 首次部署
+### 2.1 First Deployment
 
 ```bash
 # 1. 准备配置文件
@@ -80,7 +78,7 @@ curl http://localhost:8080/health
 curl http://localhost:8080/ready
 ```
 
-### 2.2 Docker Compose 部署
+### 2.2 Docker Compose Deployment
 
 ```bash
 # 基础部署（API + DB + Redis）
@@ -103,7 +101,7 @@ docker compose \
   up -d
 ```
 
-### 2.3 Fly.io 部署
+### 2.3 Fly.io Deployment
 
 ```bash
 # 初始化
@@ -125,37 +123,37 @@ fly status
 fly logs
 ```
 
-### 2.4 Kubernetes 部署
+### 2.4 Kubernetes Deployment
 
-参照 `docs/deployment.md` 第 5.4 节中的 Deployment 和 Service YAML 模板。关键要点：
+Refer to the Deployment and Service YAML templates in section 5.4 of `docs/deployment.md`. Key points:
 
-- 设置 `readinessProbe` 指向 `/ready`，`livenessProbe` 指向 `/health`
-- 通过 `Secret` 对象注入敏感配置
-- 副本数保持 `replicas: 1`：当前交付边界为单实例优先，多副本会产生重复副作用或实时推送丢失（见 `docs/deployment.md` §5 与 `docs/multi-instance-boundary.md` 的收口条件）
+- Set `readinessProbe` to point at `/ready`, and `livenessProbe` to point at `/health`
+- Inject sensitive configuration via `Secret` objects
+- Keep the replica count at `replicas: 1`: the current delivery boundary is single-instance-first; multiple replicas cause duplicate side effects or lost real-time push (see `docs/deployment.md` §5 and the convergence conditions in `docs/multi-instance-boundary.md`)
 
 ---
 
-## 3. 发布前检查
+## 3. Pre-Release Checks
 
-每次发布前必须通过以下检查，确保部署质量。
+Every release must pass the following checks before going out, to ensure deployment quality.
 
-### 3.1 一键发布检查
+### 3.1 One-Shot Release Check
 
 ```bash
 make release-check CONFIG=config.production.yml
 ```
 
-该命令会串行执行以下五项检查：
+This command runs the following five checks serially:
 
-1. **Local Check** — 本地环境、仓库卫生、生成物一致性
-2. **Security Check** — 安全基线（JWT secret、CORS、限流、密钥注入）
-3. **Observability Check** — 可观测性基线（metrics、tracing、dashboard、alert、runbook）
-4. **Regression Tests** — 核心 Go 回归测试
-5. **Build Verification** — `make build` 构建验证与产物检查
+1. **Local Check** — local environment, repository hygiene, generated-artifact consistency
+2. **Security Check** — security baseline (JWT secret, CORS, rate limiting, secret injection)
+3. **Observability Check** — observability baseline (metrics, tracing, dashboard, alert, runbook)
+4. **Regression Tests** — core Go regression tests
+5. **Build Verification** — `make build` build verification and artifact inspection
 
-### 3.1A Staging 演练口径
+### 3.1A Staging Drill Convention
 
-在进入正式生产前，建议先对 staging 配置执行同一轮检查：
+Before entering production, it is recommended to run the same round of checks against the staging configuration:
 
 ```bash
 cp config.staging.example.yml config.staging.yml
@@ -164,14 +162,14 @@ make observability-check CONFIG=config.staging.yml
 make release-check CONFIG=config.staging.yml
 ```
 
-当前仓库内置的 `config.staging.example.yml` 已满足 strict baseline，用于演练：
+The repository's built-in `config.staging.example.yml` already satisfies the strict baseline, for drill use:
 
-- staging 环境标签
-- staging 域名级 CORS
-- 启用 RBAC、限流、审计与 observability
-- secrets 仍通过环境变量注入，而不是写死在文件里
+- staging environment tag
+- staging domain-level CORS
+- RBAC, rate limiting, audit, and observability enabled
+- secrets still injected via environment variables, not hard-coded in the file
 
-### 3.2 分项检查
+### 3.2 Individual Checks
 
 ```bash
 # 本地环境校验
@@ -190,40 +188,40 @@ make repo-hygiene
 go -C apps/server test ./cmd/cli ./internal/app/bootstrap ./internal/releasecheck
 ```
 
-### 3.3 检查失败处理
+### 3.3 Handling Check Failures
 
-| 检查项 | 失败原因 | 处理方式 |
+| Check Item | Failure Cause | Handling |
 |--------|----------|----------|
-| Security: JWT secret | 使用了默认值 | 生成强随机密钥并注入环境变量 |
-| Security: CORS | 配置为 `*` | 限制为实际域名 |
-| Security: Rate limiting | 未启用 | 在配置中开启限流 |
-| Observability: Metrics | 端点不可达 | 检查 `/metrics` 路由和 Prometheus 配置 |
-| Observability: Dashboard | 资产缺失 | 确认 `deploy/observability/dashboards/` 文件存在 |
-| Repo hygiene | 追踪了运行时产物 | 执行 `make clean-runtime` 并更新 `.gitignore` |
+| Security: JWT secret | Default value used | Generate a strong random secret and inject it via environment variable |
+| Security: CORS | Configured as `*` | Restrict to actual domains |
+| Security: Rate limiting | Not enabled | Enable rate limiting in the configuration |
+| Observability: Metrics | Endpoint unreachable | Check the `/metrics` route and the Prometheus configuration |
+| Observability: Dashboard | Assets missing | Confirm files exist under `deploy/observability/dashboards/` |
+| Repo hygiene | Runtime artifacts tracked | Run `make clean-runtime` and update `.gitignore` |
 
-补充说明：
+Additional notes:
 
-- `config.yml` 现在用于本地开发的同时，也保持通过当前 `security` / `observability` strict baseline 检查，便于在本地直接跑通自检。
-- 这不意味着可以把 `config.yml` 直接视为生产配置；生产仍应从 `config.production.secure.example.yml` 或等价部署配置出发，显式收紧 CORS、密钥注入和限流阈值。
+- `config.yml` now serves local development while also passing the current `security` / `observability` strict baseline checks, so self-checks can be run straight through locally.
+- This does not mean `config.yml` can be treated directly as production configuration; production should still start from `config.production.secure.example.yml` or an equivalent deployment configuration, explicitly tightening CORS, secret injection, and rate-limit thresholds.
 
 ---
 
-## 4. 配置管理
+## 4. Configuration Management
 
-### 4.1 配置分层
+### 4.1 Configuration Layering
 
-Servify 配置遵循四层作用域，优先级从高到低：
+Servify configuration follows a four-layer scope, in descending priority order:
 
-| 层级 | 来源 | 典型内容 |
+| Layer | Source | Typical Content |
 |------|------|----------|
-| Runtime 覆盖 | 环境变量、启动参数 | 密钥、连接串、临时开关 |
-| Workspace 级 | 数据库 | 工作区特定的 AI provider、路由策略 |
-| Tenant 级 | 数据库 | 租户级门户配置、SLA 阈值 |
-| System 级 | config.yml | 系统默认值、基础设施配置 |
+| Runtime override | Environment variables, startup parameters | Secrets, connection strings, temporary toggles |
+| Workspace level | Database | Workspace-specific AI providers, routing policy |
+| Tenant level | Database | Tenant-level portal configuration, SLA thresholds |
+| System level | config.yml | System defaults, infrastructure configuration |
 
-详细规则见 [`docs/configuration-scopes.md`](configuration-scopes.md)。
+See [`docs/configuration-scopes.md`](configuration-scopes.md) for the detailed rules.
 
-### 4.2 关键配置项
+### 4.2 Key Configuration Items
 
 ```yaml
 # config.yml 关键配置结构
@@ -297,28 +295,28 @@ log:
   format: "json"
 ```
 
-### 4.3 配置变更流程
+### 4.3 Configuration Change Flow
 
-1. 修改 `config.yml` 或对应环境变量
-2. 运行 `make security-check CONFIG=config.yml` 验证
-3. 重启服务生效
-4. 配置变更会记录在审计日志中
+1. Modify `config.yml` or the corresponding environment variables
+2. Run `make security-check CONFIG=config.yml` to validate
+3. Restart the service for the change to take effect
+4. Configuration changes are recorded in the audit log
 
 ---
 
-## 5. 密钥与凭证管理
+## 5. Secrets and Credential Management
 
-### 5.1 必需密钥
+### 5.1 Required Secrets
 
-| 密钥 | 生成方式 | 轮换影响 |
+| Secret | Generation Method | Rotation Impact |
 |------|----------|----------|
-| `JWT_SECRET` | `openssl rand -hex 32` | 轮换后所有已登录用户需重新登录 |
-| `OPENAI_API_KEY` | OpenAI 平台获取 | 轮换后 AI 功能短暂不可用直到新 key 生效 |
-| `DB_PASSWORD` | 强随机密码 | 需同步更新数据库和配置 |
+| `JWT_SECRET` | `openssl rand -hex 32` | After rotation, all logged-in users must log in again |
+| `OPENAI_API_KEY` | Obtain from the OpenAI platform | After rotation, AI features are briefly unavailable until the new key takes effect |
+| `DB_PASSWORD` | Strong random password | The database and configuration must be updated together |
 
-### 5.2 密钥注入方式
+### 5.2 Secret Injection Methods
 
-**推荐：环境变量**
+**Recommended: environment variables**
 
 ```bash
 export JWT_SECRET=$(openssl rand -hex 32)
@@ -339,26 +337,26 @@ echo "your-jwt-secret" > ./secrets/jwt_secret
 fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 ```
 
-### 5.3 密钥轮换
+### 5.3 Secret Rotation
 
-详细的密钥生命周期和轮换流程见 [`docs/token-lifecycle-and-key-rotation.md`](token-lifecycle-and-key-rotation.md)。
+See [`docs/token-lifecycle-and-key-rotation.md`](token-lifecycle-and-key-rotation.md) for the detailed secret lifecycle and rotation flow.
 
-JWT 密钥轮换步骤：
+JWT secret rotation steps:
 
-1. 生成新密钥：`openssl rand -hex 32`
-2. 更新环境变量或 Secret
-3. 重启服务：新 token 使用新密钥签名，旧 token 在过期前仍然有效
-4. 如需立即失效所有旧 token：调用 `POST /api/agents/:id/revoke-tokens`
+1. Generate a new secret: `openssl rand -hex 32`
+2. Update the environment variable or Secret
+3. Restart the service: new tokens are signed with the new secret, old tokens remain valid until they expire
+4. To invalidate all old tokens immediately: call `POST /api/agents/:id/revoke-tokens`
 
 ---
 
-## 6. 数据库迁移
+## 6. Database Migrations
 
-### 6.1 自动迁移
+### 6.1 Automatic Migration
 
-Servify 使用 GORM AutoMigrate，服务启动时会自动创建缺失的表和列。
+Servify uses GORM AutoMigrate; missing tables and columns are created automatically when the service starts.
 
-### 6.2 手动迁移
+### 6.2 Manual Migration
 
 ```bash
 # 运行迁移
@@ -368,7 +366,7 @@ make migrate DB_HOST=localhost DB_PORT=5432 DB_USER=postgres DB_PASSWORD=xxx DB_
 make migrate-seed DB_HOST=localhost DB_PORT=5432 DB_USER=postgres DB_PASSWORD=xxx DB_NAME=servify
 ```
 
-### 6.3 迁移问题排查
+### 6.3 Migration Troubleshooting
 
 ```bash
 # 检查数据库连接
@@ -383,19 +381,19 @@ make migrate
 
 ---
 
-## 7. 健康检查与探针
+## 7. Health Checks and Probes
 
-### 7.1 端点说明
+### 7.1 Endpoint Description
 
-| 端点 | 用途 | 检查内容 | 超时建议 |
+| Endpoint | Purpose | What It Checks | Recommended Timeout |
 |------|------|----------|----------|
-| `GET /health` | 存活探针 (Liveness) | 进程存活 | 5s |
-| `GET /ready` | 就绪探针 (Readiness) | DB + Redis + 可选 LLM / knowledge provider 连接 | 10s |
-| `GET /metrics` | Prometheus 指标 | 全量运行时指标 | 15s |
+| `GET /health` | Liveness probe | Process is alive | 5s |
+| `GET /ready` | Readiness probe | DB + Redis + optional LLM / knowledge provider connections | 10s |
+| `GET /metrics` | Prometheus metrics | Full runtime metrics | 15s |
 
-### 7.2 探针配置建议
+### 7.2 Probe Configuration Recommendations
 
-**Kubernetes：**
+**Kubernetes:**
 
 ```yaml
 livenessProbe:
@@ -413,7 +411,7 @@ readinessProbe:
   periodSeconds: 15
 ```
 
-**Docker Compose：**
+**Docker Compose:**
 
 ```yaml
 healthcheck:
@@ -424,9 +422,9 @@ healthcheck:
   start_period: 40s
 ```
 
-### 7.3 /ready 失败排查
+### 7.3 /ready Failure Troubleshooting
 
-当 `/ready` 返回非 200 时，检查以下依赖：
+When `/ready` returns a non-200, check the following dependencies:
 
 ```bash
 # PostgreSQL
@@ -441,9 +439,9 @@ curl -s http://$WEKNORA_HOST:9000/health
 
 ---
 
-## 8. 监控与告警
+## 8. Monitoring and Alerting
 
-### 8.1 可观测性架构
+### 8.1 Observability Architecture
 
 ```
 Servify :8080/metrics
@@ -457,57 +455,54 @@ Servify :8080/metrics
 Servify --OTLP--> OTel Collector :4317 --> Jaeger :16686
 ```
 
-### 8.2 预置 Dashboard
+### 8.2 Prebuilt Dashboards
 
-导入路径：`deploy/observability/dashboards/`
+Import path: `deploy/observability/dashboards/`
 
-| Dashboard | 文件 | 内容 |
+| Dashboard | File | Content |
 |-----------|------|------|
-| 基础设施面板 | `servify-service.json` | HTTP 速率/延迟、限流丢弃、事件总线吞吐、Worker 任务、Go Runtime |
-| 业务面板 | `servify-business.json` | 会话、工单、路由、AI 请求量（含 strategy 维度）/延迟/Token、策略分布、降级占比 |
+| Infrastructure panel | `servify-service.json` | HTTP rate/latency, rate-limit drops, event bus throughput, Worker jobs, Go runtime |
+| Business panel | `servify-business.json` | Sessions, tickets, routing, AI request volume (including strategy dimension)/latency/tokens, strategy distribution, fallback ratio |
 
-### 8.3 告警规则
+### 8.3 Alert Rules
 
-定义文件：`deploy/observability/alerts/rules.yaml`
+Definition file: `deploy/observability/alerts/rules.yaml`
 
-| 告警 | 级别 | 触发条件 | 紧急程度 |
+| Alert | Level | Trigger Condition | Urgency |
 |------|------|----------|----------|
-| HighHTTP5xxRate | Critical | 5xx > 5% 持续 5 分钟 | 立即响应 |
-| HighP99Latency | Warning | P99 > 5s 持续 10 分钟 | 30 分钟内响应 |
-| HighRateLimitDrops | Info | 限流丢弃速率 > 10/s 持续 5 分钟 | 当班关注 |
-| HighGoroutineCount | Warning | goroutines > 10000 持续 10 分钟 | 30 分钟内响应 |
-| EventBusHandlerFailures | Warning | 事件 handler 失败速率 > 0 持续 5 分钟 | 30 分钟内响应 |
-| EventBusDeadLetters | Info | 出现死信事件持续 10 分钟 | 当班关注 |
-| WorkerJobFailures | Warning | Worker 失败速率 > 0 持续 10 分钟 | 30 分钟内响应 |
-| AIProviderDegraded | Critical | AI 失败率 > 20% 持续 5 分钟 | 立即响应 |
-| AIHighLatency | Warning | AI P95 > 10s 持续 10 分钟 | 30 分钟内响应 |
-| AIFallbackRatioHigh | Warning | AI fallback 占比 > 50% 持续 10 分钟（不含转人工） | 30 分钟内响应 |
+| HighHTTP5xxRate | Critical | 5xx > 5% for 5 minutes | Respond immediately |
+| HighP99Latency | Warning | P99 > 5s for 10 minutes | Respond within 30 minutes |
+| HighRateLimitDrops | Info | rate-limit drop rate > 10/s for 5 minutes | On-call attention |
+| HighGoroutineCount | Warning | goroutines > 10000 for 10 minutes | Respond within 30 minutes |
+| EventBusHandlerFailures | Warning | event handler failure rate > 0 for 5 minutes | Respond within 30 minutes |
+| EventBusDeadLetters | Info | dead-letter events present for 10 minutes | On-call attention |
+| WorkerJobFailures | Warning | Worker failure rate > 0 for 10 minutes | Respond within 30 minutes |
+| AIProviderDegraded | Critical | AI failure rate > 20% for 5 minutes | Respond immediately |
+| AIHighLatency | Warning | AI P95 > 10s for 10 minutes | Respond within 30 minutes |
+| AIFallbackRatioHigh | Warning | AI fallback ratio > 50% for 10 minutes (excluding transfer-to-human) | Respond within 30 minutes |
 
-生产口径补充：
+Production convention additions:
 
-- 上述阈值以 `deploy/observability/alerts/rules.yaml` 为准，runbook 只做解释和响应优先级说明
-- 若 staging 演练需要更宽阈值，应在告警平台或环境级 Prometheus 规则中调整，不要直接改写 production baseline 文件
-- 告警规则、Grafana dashboard、`deploy/observability/runbook/operational-runbook.md`
-  三者由 CI 一致性测试（`apps/server/internal/observability/metrics/consistency_test.go`）
-  保证一致；已定义但未接线的指标登记在 `deploy/observability/known-gaps.md`，
-  其对应告警与面板已摘除，接线完成后恢复
-- `config.production.secure.example.yml` 现已显式给出 `monitoring.metrics_path` 与 tracing 基线，避免生产模板只靠代码默认值通过 strict 检查
+- The thresholds above are governed by `deploy/observability/alerts/rules.yaml`; this runbook only explains them and describes response priority
+- If staging drills need wider thresholds, adjust them in the alert platform or at the environment-level Prometheus rules; do not edit the production baseline file directly
+- The alert rules, Grafana dashboards, and `deploy/observability/runbook/operational-runbook.md` are kept consistent by a CI consistency test (`apps/server/internal/observability/metrics/consistency_test.go`); metrics that are defined but not yet wired up are registered in `deploy/observability/known-gaps.md`, and their corresponding alerts and dashboard panels have been removed, to be restored once wiring is complete
+- `config.production.secure.example.yml` now explicitly sets `monitoring.metrics_path` and the tracing baseline, so the production template no longer passes the strict checks by relying on code defaults alone
 
-### 8.4 告警排查详细手册
+### 8.4 Detailed Alert Triage Manual
 
-详见 [`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md)。
+See [`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md) for details.
 
-### 8.5 指标参考
+### 8.5 Metrics Reference
 
-详见 [`docs/metrics-glossary.md`](metrics-glossary.md)。
+See [`docs/metrics-glossary.md`](metrics-glossary.md) for details.
 
 ---
 
-## 9. 日志查询
+## 9. Log Queries
 
-### 9.1 日志格式
+### 9.1 Log Format
 
-Servify 输出 JSON 结构化日志，包含以下关联字段：
+Servify outputs JSON structured logs containing the following correlation fields:
 
 ```json
 {
@@ -523,7 +518,7 @@ Servify 输出 JSON 结构化日志，包含以下关联字段：
 }
 ```
 
-### 9.2 日志查询方式
+### 9.2 Log Query Methods
 
 ```bash
 # Docker Compose
@@ -543,22 +538,22 @@ docker compose logs servify | grep "tenant_id.*tenant-1"
 docker compose logs servify | grep '"level":"error"' | jq .
 ```
 
-### 9.3 日志级别
+### 9.3 Log Levels
 
-| 级别 | 使用场景 | 生产建议 |
+| Level | Use Case | Production Recommendation |
 |------|----------|----------|
-| `debug` | 开发调试 | 不要在生产使用 |
-| `info` | 正常请求、启动、关闭 | 推荐 |
-| `warn` | 可恢复的异常、降级 | 关注 |
-| `error` | 需要人工介入的问题 | 必须处理 |
+| `debug` | Development and debugging | Do not use in production |
+| `info` | Normal requests, startup, shutdown | Recommended |
+| `warn` | Recoverable anomalies, degradation | Watch |
+| `error` | Problems requiring human intervention | Must be handled |
 
 ---
 
-## 10. 常见故障排查
+## 10. Common Troubleshooting
 
-### 10.1 服务无法启动
+### 10.1 Service Fails to Start
 
-**症状**：进程启动后立即退出或无法访问
+**Symptom**: the process exits immediately after starting, or is unreachable
 
 ```bash
 # 检查端口占用
@@ -574,15 +569,15 @@ redis-cli ping
 docker compose logs servify | head -50
 ```
 
-**常见原因**：
-- 端口被占用：更换端口或停止冲突进程
-- 数据库连接失败：检查 DB_HOST、DB_PORT、DB_PASSWORD
-- Redis 连接失败：检查 Redis 是否启动
-- 配置文件错误：检查 config.yml 格式
+**Common causes**:
+- Port already in use: change the port or stop the conflicting process
+- Database connection failure: check DB_HOST, DB_PORT, DB_PASSWORD
+- Redis connection failure: check whether Redis is running
+- Configuration file error: check the config.yml format
 
-### 10.2 高 5xx 错误率
+### 10.2 High 5xx Error Rate
 
-**症状**：HighHTTP5xxRate 告警触发
+**Symptom**: the HighHTTP5xxRate alert fires
 
 ```bash
 # 1. 查看 /metrics 中的错误分类
@@ -598,14 +593,14 @@ docker compose logs --since 30m servify | grep '"level":"error"'
 curl -s http://localhost:8080/metrics | grep go_sql_open_connections
 ```
 
-**常见原因**：
-- 数据库连接池耗尽：增加连接池大小或减少慢查询
-- 外部依赖（LLM、knowledge provider）不可用：知识源按 provider 直通（pgvector/local）+ ragflow→dify→weknora 选择链，检查 circuit breaker 状态
-- 部署后配置错误：回滚或修正配置
+**Common causes**:
+- Database connection pool exhausted: increase the pool size or reduce slow queries
+- External dependency (LLM, knowledge provider) unavailable: the knowledge source selection chain is direct per provider (pgvector/local) + ragflow→dify→weknora; check the circuit breaker state
+- Configuration error after deployment: roll back or correct the configuration
 
-### 10.3 AI 功能异常
+### 10.3 AI Features Misbehaving
 
-**症状**：AIProviderDegraded 告警或 AI 请求失败
+**Symptom**: the AIProviderDegraded alert fires or AI requests fail
 
 ```bash
 # 检查 AI 指标
@@ -622,15 +617,15 @@ curl -X POST http://localhost:8080/api/v1/ai/circuit-breaker/reset \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**处理方式**：
-- Rate limited：降低请求频率或升级 API tier
-- Auth failed：轮换 API Key
-- Timeout：增加超时配置或启用 circuit breaker
-- 临时降级：启用 fallback provider
+**Handling**:
+- Rate limited: lower the request rate or upgrade the API tier
+- Auth failed: rotate the API Key
+- Timeout: increase the timeout configuration or enable the circuit breaker
+- Temporary degradation: enable the fallback provider
 
-### 10.4 数据库性能下降
+### 10.4 Database Performance Degradation
 
-**症状**：P99 延迟升高或查询超时
+**Symptom**: P99 latency rises or queries time out
 
 ```bash
 # 检查连接池使用
@@ -643,9 +638,9 @@ psql -h localhost -U postgres -c "SELECT count(*) FROM pg_stat_activity"
 psql -h localhost -U postgres -c "SELECT query, mean_exec_time FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10"
 ```
 
-### 10.5 事件处理失败
+### 10.5 Event Processing Failures
 
-**症状**：EventBusHandlerFailures 告警
+**Symptom**: the EventBusHandlerFailures alert fires
 
 ```bash
 # 检查失败事件类型
@@ -656,16 +651,16 @@ curl -s http://localhost:8080/metrics | grep eventbus_failed_total
 docker compose logs servify | grep "dead_letter"
 ```
 
-**处理方式**：
-- 瞬时错误：事件会被自动重试或进入死信队列
-- 持续错误：定位并修复 handler 代码，重新部署
-- 死信重放目前仅有内部实现（`internal/observability/async/replay.go`），未暴露 HTTP 接口；如需重放需走内部调用或新增接口
+**Handling**:
+- Transient errors: events are automatically retried or enter the dead-letter queue
+- Persistent errors: locate and fix the handler code, then redeploy
+- Dead-letter replay currently has only an internal implementation (`internal/observability/async/replay.go`) with no HTTP interface exposed; replay requires an internal call or a new interface
 
 ---
 
-## 11. 回滚操作
+## 11. Rollback Procedures
 
-### 11.1 Docker Compose 回滚
+### 11.1 Docker Compose Rollback
 
 ```bash
 # 1. 查看当前运行的镜像版本
@@ -682,7 +677,7 @@ curl http://localhost:8080/health
 curl http://localhost:8080/ready
 ```
 
-### 11.2 Fly.io 回滚
+### 11.2 Fly.io Rollback
 
 ```bash
 # 查看部署历史
@@ -695,7 +690,7 @@ fly deploy --detach --image servify:previous-version
 fly rollback
 ```
 
-### 11.3 Kubernetes 回滚
+### 11.3 Kubernetes Rollback
 
 ```bash
 # 查看部署历史
@@ -711,11 +706,11 @@ kubectl rollout undo deployment/servify --to-revision=3
 kubectl rollout status deployment/servify
 ```
 
-### 11.4 数据库回滚注意事项
+### 11.4 Database Rollback Notes
 
-- Servify 使用 GORM AutoMigrate，**只能向前兼容**，不支持自动回滚
-- 如需回滚数据库变更，需手动编写并执行 SQL
-- 建议在发布前备份数据库：
+- Servify uses GORM AutoMigrate, which is **forward-compatible only** and does not support automatic rollback
+- To roll back database changes, SQL must be written and executed manually
+- Back up the database before a release:
 
 ```bash
 pg_dump -h $DB_HOST -U postgres servify > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -723,23 +718,23 @@ pg_dump -h $DB_HOST -U postgres servify > backup_$(date +%Y%m%d_%H%M%S).sql
 
 ---
 
-## 12. 扩缩容
+## 12. Scaling
 
-### 12.1 垂直扩容
+### 12.1 Vertical Scaling
 
-调整单个实例资源配置：
+Adjust the resource allocation of a single instance:
 
-| 资源 | 最低 | 推荐 | 高负载 |
+| Resource | Minimum | Recommended | High Load |
 |------|------|------|--------|
-| CPU | 1 核 | 2 核 | 4 核 |
-| 内存 | 1 GB | 2 GB | 4 GB |
-| 数据库内存 | 1 GB | 2 GB | 4 GB |
+| CPU | 1 core | 2 cores | 4 cores |
+| Memory | 1 GB | 2 GB | 4 GB |
+| Database memory | 1 GB | 2 GB | 4 GB |
 
-### 12.2 扩容边界
+### 12.2 Scaling Boundaries
 
-当前交付边界为**单实例优先**（`docs/deployment.md` §5：`replicas: 1`，不通过多副本满足扩容诉求——多副本会产生重复副作用或实时推送丢失）。扩容在单实例边界内进行：
+The current delivery boundary is **single-instance-first** (`docs/deployment.md` §5: `replicas: 1`; scaling demand is not met with multiple replicas — multiple replicas cause duplicate side effects or lost real-time push). Scaling happens within the single-instance boundary:
 
-**Kubernetes：**
+**Kubernetes:**
 
 ```bash
 # 垂直扩容：调整资源规格
@@ -749,16 +744,16 @@ kubectl set resources deployment/servify --limits=cpu=4,memory=8Gi
 kubectl rollout restart deployment/servify
 ```
 
-**Fly.io：**
+**Fly.io:**
 
 ```bash
 # 调整实例规格（不增加实例数）
 fly scale vm shared-cpu-2x
 ```
 
-多副本 / 水平拆分的诉求，需先满足 `docs/multi-instance-boundary.md` 的收口条件（Redis+DB 共享、worker 租约、WebSocket 跨实例路由等），在该文档列为待办收口项，当前不做。
+Demands for multiple replicas / horizontal splitting must first satisfy the convergence conditions in `docs/multi-instance-boundary.md` (Redis+DB sharing, worker leases, cross-instance WebSocket routing, etc.); that document lists these as pending convergence items and they are not done now.
 
-### 12.3 数据库扩容
+### 12.3 Database Scaling
 
 ```bash
 # PostgreSQL 增加连接数
@@ -773,9 +768,9 @@ database:
 
 ---
 
-## 13. 安全运维操作
+## 13. Security Operations
 
-### 13.1 用户 Token 失效
+### 13.1 Invalidating User Tokens
 
 ```bash
 # 使指定用户的 token 失效
@@ -791,7 +786,7 @@ curl -X POST http://localhost:8080/api/customers/:id/revoke-tokens \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### 13.2 审计日志查询
+### 13.2 Audit Log Queries
 
 ```bash
 # 查询审计日志（支持过滤）
@@ -809,9 +804,9 @@ curl "http://localhost:8080/api/audit/logs?action=create&resource_type=ticket&pa
 # page_size      — 每页条数（默认 20）
 ```
 
-### 13.3 速率限制调整
+### 13.3 Rate Limit Adjustments
 
-编辑 `config.yml` 后重启：
+Edit `config.yml` and restart:
 
 ```yaml
 security:
@@ -839,7 +834,7 @@ security:
         burst: 10
 ```
 
-### 13.4 安全基线检查
+### 13.4 Security Baseline Check
 
 ```bash
 # CLI 检查
@@ -852,17 +847,17 @@ sh ./scripts/check-security-baseline.sh config.yml
 make security-check CONFIG=config.yml
 ```
 
-### 13.5 Session Risk 阈值调整
+### 13.5 Session Risk Threshold Adjustments
 
-`security.session_risk` 控制 auth session 风险启发式的时间窗口与分级阈值。建议：
+`security.session_risk` controls the time windows and grading thresholds of the auth session risk heuristics. Recommendations:
 
-- 生产环境优先收紧 `hot_refresh_window_minutes` 与 `rapid_change_window_hours`
-- 若业务经常经过共享出口或 NAT 网关，谨慎调整 `multi_public_ip_threshold`
-- 若要更早将 session 标为高风险，可降低 `high_risk_score`
-- 若希望开发 / staging / production 使用不同基线，优先通过 `server.environment + security.session_risk_profiles.{environment}` 设定环境级默认值，再用 tenant/workspace scoped config 做细化
-- 当前 auth 自助 `/api/v1/auth/sessions` 已有回归测试验证环境级 profile 会实际影响 `risk_level` 输出
+- In production, tighten `hot_refresh_window_minutes` and `rapid_change_window_hours` first
+- If the business often traverses shared egress or NAT gateways, adjust `multi_public_ip_threshold` cautiously
+- To mark sessions as high risk earlier, lower `high_risk_score`
+- If you want development / staging / production to use different baselines, prefer setting environment-level defaults via `server.environment + security.session_risk_profiles.{environment}`, then refine with tenant/workspace scoped config
+- The current auth self-service `/api/v1/auth/sessions` already has regression tests verifying that the environment-level profile actually affects the `risk_level` output
 
-示例：
+Example:
 
 ```yaml
 security:
@@ -886,16 +881,16 @@ security:
       high_risk_score: 4
 ```
 
-### 13.6 Geo/IP 富化 Provider 接入
+### 13.6 Geo/IP Enrichment Provider Integration
 
-`security.session_ip_intelligence` 用于给 auth / management 的 session 风险视图接入外部 Geo/IP 情报。建议：
+`security.session_ip_intelligence` is used to wire external Geo/IP intelligence into the auth / management session risk view. Recommendations:
 
-- 仅在完成隐私与合规评审后启用
-- `base_url` 使用服务端可达的内部网关或受控第三方 endpoint
-- 优先让 provider 直接返回 `network_label` / `location_label`
-- 保持较短 timeout，失败时系统会自动回退到本地 heuristic 分类
+- Enable it only after privacy and compliance review is complete
+- For `base_url`, use an internal gateway reachable from the server or a controlled third-party endpoint
+- Prefer having the provider return `network_label` / `location_label` directly
+- Keep the timeout short; on failure the system automatically falls back to local heuristic classification
 
-示例：
+Example:
 
 ```yaml
 security:
@@ -909,40 +904,40 @@ security:
 
 ---
 
-## 14. 日常运维任务清单
+## 14. Daily Operations Task List
 
-### 每日
+### Daily
 
-- [ ] 检查 Grafana Dashboard 是否有异常指标
-- [ ] 检查是否有未处理的 Critical 告警
-- [ ] 确认 `/health` 和 `/ready` 端点正常
+- [ ] Check Grafana Dashboard for anomalous metrics
+- [ ] Check for unhandled Critical alerts
+- [ ] Confirm the `/health` and `/ready` endpoints are normal
 
-### 每周
+### Weekly
 
-- [ ] 审计日志回顾，关注异常操作模式
-- [ ] 检查磁盘空间和数据库大小
-- [ ] 确认备份是否正常执行
-- [ ] Review Worker 和 EventBus 失败趋势
+- [ ] Audit log review, watching for abnormal operation patterns
+- [ ] Check disk space and database size
+- [ ] Confirm backups are executing normally
+- [ ] Review Worker and EventBus failure trends
 
-### 每月
+### Monthly
 
-- [ ] 密钥轮换评估（特别是 JWT_SECRET 和 API Key）
-- [ ] 安全基线检查：`make security-check CONFIG=config.production.yml`
-- [ ] 可观测性基线检查：`make observability-check CONFIG=config.production.yml`
-- [ ] 容量规划评估（CPU、内存、数据库连接数趋势）
-- [ ] 更新告警阈值（根据实际流量模式）
+- [ ] Secret rotation assessment (especially JWT_SECRET and API Keys)
+- [ ] Security baseline check: `make security-check CONFIG=config.production.yml`
+- [ ] Observability baseline check: `make observability-check CONFIG=config.production.yml`
+- [ ] Capacity planning assessment (CPU, memory, database connection count trends)
+- [ ] Update alert thresholds (based on actual traffic patterns)
 
-### 发布前
+### Before a Release
 
-- [ ] 执行 `make release-check CONFIG=config.production.yml`
-- [ ] 备份数据库
-- [ ] 准备回滚方案
-- [ ] 通知相关团队
-- [ ] 发布后验证：`/health`、`/ready`、关键业务流程
+- [ ] Run `make release-check CONFIG=config.production.yml`
+- [ ] Back up the database
+- [ ] Prepare a rollback plan
+- [ ] Notify the relevant teams
+- [ ] Post-release verification: `/health`, `/ready`, key business flows
 
 ---
 
-## 快速命令参考
+## Quick Command Reference
 
 ```bash
 # 构建

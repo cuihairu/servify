@@ -1,151 +1,146 @@
-> [English](public-surface-security-checklist.en.md) | **中文**
-
 # Public Surface Security Checklist
 
-本文用于推进 `11 / T5 security-baseline-for-operations` 中“对外开放接口基础安全清单”。
+This document drives the "baseline security checklist for externally exposed interfaces" under `11 / T5 security-baseline-for-operations`.
 
-适用范围：
+Scope:
 
 - `/public/*`
-- 匿名 websocket / realtime 建连入口
-- 匿名认证入口，如 `/api/v1/auth/login`、`/api/v1/auth/register`、`/api/v1/auth/refresh`、`/api/v1/auth/2fa/verify`、`/api/v1/auth/oidc/*`
-- 公开文件访问入口，如 `/uploads/*`
-- 未来开放给第三方或终端用户的公开 API
+- Anonymous websocket / realtime connection entry points
+- Anonymous authentication entry points such as `/api/v1/auth/login`, `/api/v1/auth/register`, `/api/v1/auth/refresh`, `/api/v1/auth/2fa/verify`, `/api/v1/auth/oidc/*`
+- Public file access entry points such as `/uploads/*`
+- Public APIs that may later be opened to third parties or end users
 
-## 新增开放接口前必须确认
+## What Must Be Confirmed Before Adding an Exposed Interface
 
-1. 这个接口是否真的需要匿名访问？
-2. 是否可以改成 `management surface` 或 `service surface`？
-3. 是否会泄漏 tenant、workspace、agent、customer 等内部标识？
-4. 是否需要分页、过滤或结果裁剪，避免批量枚举？
-5. 是否需要单独路径级 rate limiting，而不是只依赖全局限流？
-6. 是否会返回 provider、基础设施或内部拓扑信息？
-7. 是否需要审计访问事件或异常流量？
+1. Does this interface really need anonymous access?
+2. Can it be turned into a `management surface` or `service surface` instead?
+3. Would it leak internal identifiers such as tenant, workspace, agent, customer?
+4. Does it need pagination, filtering, or result trimming to prevent bulk enumeration?
+5. Does it need dedicated path-level rate limiting rather than relying only on the global limit?
+6. Would it return provider, infrastructure, or internal topology information?
+7. Do access events or anomalous traffic need auditing?
 
-## 最小检查项
+## Minimum Checklist
 
-### 输入
+### Input
 
-- 只接受明确 schema 的参数
-- 对 query、path、header 做长度和格式限制
-- 不信任客户端传入的 tenant / workspace scope
+- Accept only parameters with an explicit schema
+- Apply length and format limits to query, path, and header
+- Do not trust client-supplied tenant / workspace scope
 
-### 输出
+### Output
 
-- 不返回 secret、token、内部配置、provider 凭据
-- 不暴露不必要的内部 ID、数据库主键、文件系统路径
-- 错误信息不回显内部堆栈、SQL 或第三方 provider 细节
+- Never return secrets, tokens, internal configuration, or provider credentials
+- Do not expose unnecessary internal IDs, database primary keys, or filesystem paths
+- Error messages must not echo internal stacks, SQL, or third-party provider details
 
-### 流量控制
+### Traffic Control
 
-- 必须评估是否需要单独路径级 rate limiting
-- 对可触发高成本计算、检索、上传的接口使用更严格配额
-- 若支持 websocket / streaming，应限制并发连接或单位时间连接数
+- Must assess whether dedicated path-level rate limiting is needed
+- Use stricter quotas on interfaces that can trigger expensive computation, retrieval, or uploads
+- If websocket / streaming is supported, cap concurrent connections or connections per unit time
 
-### 浏览器暴露面
+### Browser Exposure
 
-- 检查 CORS 是否只允许必要 origin
-- 多 origin 白名单时服务端按请求回显命中的 Origin（并带 `Vary: Origin`），
-  白名单外一律不带 `Access-Control-Allow-Origin`；不得输出多值 ACAO 头
-  （2026-09 P2-5 第一刀修复：此前 `strings.Join` 输出非法多值头，浏览器一律拒绝）
-- 若接口可被页面嵌入或脚本调用，确认是否需要额外 origin / referer 限制
+- Check that CORS allows only the necessary origins
+- With a multi-origin allowlist, the server echoes back the matched Origin per request (with `Vary: Origin`),
+  and anything outside the allowlist gets no `Access-Control-Allow-Origin` at all; a multi-valued ACAO header must never be emitted
+  (fixed in the first cut of 2026-09 P2-5: the previous `strings.Join` emitted an illegal multi-valued header that browsers universally reject)
+- If the interface can be embedded by pages or called from scripts, confirm whether extra origin / referer restrictions are needed
 
-### 可观测性
+### Observability
 
-- 为异常流量、`429`、`401`、`403` 建立基础监控
-- 能通过 `X-Request-ID` 或等效请求标识追踪问题
+- Set up basic monitoring for anomalous traffic, `429`, `401`, `403`
+- Be able to trace issues via `X-Request-ID` or an equivalent request identifier
 
-## 当前接口建议
+## Recommendations for Current Interfaces
 
 ### `/public/portal/config`
 
-- 仅返回品牌和 locale 信息
-- 不携带 tenant 内部配置、provider 参数或 feature flag 明细
-- 保留独立限流
+- Return only branding and locale information
+- Do not include internal tenant configuration, provider parameters, or feature flag details
+- Keep the dedicated rate limit
 
 ### `/public/kb/*`
 
-- 只暴露已公开发布的知识内容
-- 结果集必须支持分页 / 限制条数
-- 关注抓取、枚举和全文爬取风险
-- 运行基线要求为 `/public/kb/` 配置独立路径级限流
+- Expose only knowledge content that has been publicly published
+- Result sets must support pagination / row limits
+- Watch for scraping, enumeration, and full-text crawling risks
+- The runtime baseline requires a dedicated path-level rate limit for `/public/kb/`
 
 ### `/public/csat/*`
 
-- 避免通过可预测 ID 枚举他人满意度数据
-- 对提交频率做独立限制
-- 运行基线要求为 `/public/csat/` 配置独立路径级限流
+- Avoid enumerating other people's satisfaction data via predictable IDs
+- Apply a separate limit on submission frequency
+- The runtime baseline requires a dedicated path-level rate limit for `/public/csat/`
 
 ### `/public/suggestions/*`
 
-- 只返回 `is_public` 知识文档标题，不携带工单/其他客户信息
-- 曝光归因每次成功响应落一行 `suggestion_exposure_logs`（写放大面），必须独立路径级限流（P2-0 RQ-5；staging 45rpm/生产 30rpm 基线）
-- 专用前缀在 `rate_limiting.paths` 中必须排在 `/public/` 之前（中间件按首个匹配前缀取限流）
+- Return only `is_public` knowledge document titles; no ticket / other-customer information
+- Exposure attribution writes one row to `suggestion_exposure_logs` per successful response (a write-amplification surface), so a dedicated path-level rate limit is mandatory (P2-0 RQ-5; staging 45rpm / production 30rpm baseline)
+- The dedicated prefix must be listed before `/public/` in `rate_limiting.paths` (the middleware takes the limit from the first matching prefix)
 
-### `/api/v1/auth/*` 匿名入口
+### Anonymous `/api/v1/auth/*` entry points
 
-- `/login`、`/register`、`/refresh` 必须有独立路径级限流
-- `/2fa/verify`（匿名 OTP 挑战步）与 `/oidc/start|callback|status` 同属本面：2FA 校验口重点防 OTP 暴力枚举（沿用 auth 前缀限流 25rpm），OIDC callback 重点防开放重定向与 state 伪造
-- 不在错误响应里泄漏账号存在性、内部状态或策略细节
-- 对暴力尝试、refresh 滥用、批量注册建立告警
-- 全局 `security.max_body_bytes` 对超限请求直接 413（生产模板 16MB）
+- `/login`, `/register`, `/refresh` must have dedicated path-level rate limits
+- `/2fa/verify` (the anonymous OTP challenge step) and `/oidc/start|callback|status` belong to this surface as well: the 2FA verification endpoint focuses on preventing OTP brute-force enumeration (keeping the auth-prefix rate limit of 25rpm), while the OIDC callback focuses on preventing open redirects and state forgery
+- Do not leak account existence, internal state, or policy details in error responses
+- Set up alerts for brute-force attempts, refresh abuse, and bulk registration
+- The global `security.max_body_bytes` returns a direct 413 for oversized requests (16MB in the production template)
 
 ### `/api/v1/ws`
 
-- 匿名建连入口要控制建连频率和并发数
-- 不应在握手阶段暴露内部状态、调度信息或租户敏感元数据
-- 运行基线要求为 `/api/v1/ws` 配置独立路径级限流
-- `security.websocket_allowed_origins` 非空时，带 Origin 头且不在白名单内的
-  建连一律 403；空列表保持放行（原生 WebView 等匿名访客来源不可枚举），
-  无 Origin 头的非浏览器客户端放行（由后续 token/租户校验兜底）
+- The anonymous connection entry point must control connection frequency and concurrency
+- Internal state, scheduling information, or tenant-sensitive metadata must not be exposed during the handshake
+- The runtime baseline requires a dedicated path-level rate limit for `/api/v1/ws`
+- When `security.websocket_allowed_origins` is non-empty, any connection carrying an Origin header outside the allowlist gets a 403; an empty list stays permissive (anonymous visitor origins such as native WebViews cannot be enumerated);
+  non-browser clients without an Origin header are let through (caught later by token/tenant validation)
 
 ### `/api/v1/ws/voice`
 
-- 语音翻译通道（Phase 2 刀二b-2）：与 `/api/v1/ws` 同款匿名建连面，
-  同一访客 token 信任域（`guest_token.required` 开启时同源校验）
-- 装配层门控：`ai.asr` 未配置不注册路由（hub 握手 503 为直构兜底），
-  部署未启用语音能力时该面不存在
-- 握手只回 `session_id` 缺失（400）/ speaker 非法（400）/ token 失败
-  （401）/ 通道未装配（503），不回内部状态或 provider 细节；流级错误
-  经 `voice-error` 的 code 词表（`disabled` / `asr_unavailable` /
-  `stream_broken`）下发后收线
-- 与 `/api/v1/ws` 共用同一 upgrader，`security.websocket_allowed_origins`
-  白名单（及无 Origin 头放行）口径完全一致
-- 路径级限流沿用 `/api/v1/ws` 前缀条目（该前缀按前缀匹配覆盖
-  `/api/v1/ws/voice`，不另设独立条目以免同一次建连被重复计限）
+- The voice translation channel (Phase 2 cut 2b-2): an anonymous connection surface of the same kind as `/api/v1/ws`, in the same visitor token trust domain (same-origin check when `guest_token.required` is enabled)
+- Wiring-layer gate: routes are not registered when `ai.asr` is not configured (the hub handshake 503 is the directly-constructed fallback), so the surface does not exist when the deployment has no voice capability
+- The handshake returns only missing `session_id` (400) / invalid speaker (400) / token failure
+  (401) / channel not wired (503), never internal state or provider details; stream-level errors
+  are delivered via the `voice-error` code vocabulary (`disabled` / `asr_unavailable` /
+  `stream_broken`) and then the line is closed
+- Shares the same upgrader as `/api/v1/ws`; the `security.websocket_allowed_origins`
+  allowlist (and the no-Origin-header pass-through) convention is fully identical
+- Path-level rate limiting reuses the `/api/v1/ws` prefix entry (that prefix matches by prefix and covers
+  `/api/v1/ws/voice`; no separate entry is created to avoid the same connection being counted twice)
 
 ### `/uploads/*`
 
-- 只暴露确有公开需求的上传资产
-- 不回显真实磁盘路径或内部存储 key 规则
-- 运行基线要求为 `/uploads/` 配置独立路径级限流
-- 本地存储模式只允许命中具体文件：目录列举、缺失路径与存储根路径一律 404
-  （2026-09 P2-5 第一刀起不再挂 gin Static）
+- Expose only uploaded assets with a genuine public need
+- Do not echo real disk paths or internal storage key rules
+- The runtime baseline requires a dedicated path-level rate limit for `/uploads/`
+- Local storage mode only allows hits on concrete files: directory listing, missing paths, and the storage root path all return 404
+  (gin Static is no longer mounted since the first cut of 2026-09 P2-5)
 
-## 运行时安全基线（2026-09 P2-5 第一刀落地）
+## Runtime Security Baseline (Landed in the First Cut of 2026-09 P2-5)
 
-以下能力已随 `security.headers` / `security.max_body_bytes` /
-`security.websocket_allowed_origins` 配置节落地，并有真实运行验收
-（`scripts/test-public-surface-acceptance.sh`，provider=`public-surface`）：
+The following capabilities have landed along with the `security.headers` / `security.max_body_bytes` /
+`security.websocket_allowed_origins` config sections, with real-run acceptance
+(`scripts/test-public-surface-acceptance.sh`, provider=`public-surface`):
 
-- 统一安全响应头：`X-Content-Type-Options: nosniff`、`X-Frame-Options`、
-  `Referrer-Policy`、可选 CSP、可选 HSTS（默认关闭：TLS 通常由反向代理终结，
-  HSTS 由代理注入）。安全头中间件挂在限流/body 上限之前，`429`/`413` 等
-  中止响应同样携带安全头。
-- 全局请求体上限 `security.max_body_bytes`：Content-Length 超限直接 413，
-  分块传输由 `http.MaxBytesReader` 在读取时兜底失败。
-- CORS 多 origin 白名单按请求回显 + `Vary: Origin`。
-- WS 建连 Origin 白名单。
-- 本地 `/uploads/*` 只服务具体文件，目录与缺失一律 404。
+- Unified security response headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options`,
+  `Referrer-Policy`, optional CSP, optional HSTS (off by default: TLS is usually terminated at a reverse proxy,
+  and HSTS is injected by the proxy). The security-header middleware is mounted before rate limiting / the body cap, so aborted responses such as `429`/`413`
+  also carry the security headers.
+- Global request body cap `security.max_body_bytes`: a Content-Length over the cap returns a direct 413,
+  and chunked transfer is caught at read time by `http.MaxBytesReader`.
+- CORS multi-origin allowlist echoes per request + `Vary: Origin`.
+- WS connection Origin allowlist.
+- Local `/uploads/*` serves only concrete files; directories and misses all return 404.
 
-生产与 staging 模板（`config.production.secure.example.yml` /
-`config.staging.example.yml`）已显式开启上述基线；开发模板 `config.yml`
-保持默认关闭以维持既有部署行为。
+The production and staging templates (`config.production.secure.example.yml` /
+`config.staging.example.yml`) explicitly enable the baseline above; the development template `config.yml`
+keeps it off by default to preserve existing deployment behavior.
 
-## 与现有文档的关系
+## Relation to Existing Documentation
 
-- 路由表面分类：[auth-surface-policy.md](auth-surface-policy.md)
-- 运行安全基线：[security-baseline-operations.md](security-baseline-operations.md)
-- token / key 轮换：[token-lifecycle-and-key-rotation.md](token-lifecycle-and-key-rotation.md)
-- 运行时验收：`make public-surface-acceptance`（证据留档
-  `scripts/test-results/public-surface/`，manifest provider=`public-surface`）
+- Route surface classification: [auth-surface-policy.md](auth-surface-policy.md)
+- Runtime security baseline: [security-baseline-operations.md](security-baseline-operations.md)
+- token / key rotation: [token-lifecycle-and-key-rotation.md](token-lifecycle-and-key-rotation.md)
+- Runtime acceptance: `make public-surface-acceptance` (evidence archived under
+  `scripts/test-results/public-surface/`, manifest provider=`public-surface`)

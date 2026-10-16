@@ -1,0 +1,366 @@
+# 实时翻译设计（语音 + 聊天文本）
+
+> 状态：预研设计 + Phase 0 已落地（聊天文本翻译）+ Phase 1 全部落地
+> （刀一偏好存储与 REST 面、刀二 hub message-translated 帧、刀三 viewer
+> 角色双面 + 坐席 → 访客方向翻译、收尾历史消息批量标注、消费半边 core
+> 事件面 + 管理端工作台渲染）+ Phase 2 刀一已落地（ASR/TTS provider
+> 抽象与配置面，`platform/asr`/`platform/tts`）+ 刀二 provider 面已落地
+> （OpenAI 兼容口进 factory switch：`platform/asr/openai` 实时转写 WS +
+> `platform/tts/openai` 逐句合成）+ 刀二b-1 管线半边已落地（分句器 +
+> 每说话方语音管线 + 逐句翻译上下文尾窗）+ 刀二b-2 服务端语音通道已落地
+> （独立 WS 通道 `/api/v1/ws/voice`：音频上行 + 字幕/音频下行帧族，
+> 装配层 `ai.asr` 配置门控）+ 刀二b-3 协议三件套已落地（PROTOCOL §9 +
+> fixtures 语音帧族四样例 + 三端回放：core `VoiceChannel` 消费半边 +
+> Android/iOS 会话核心忽略断言）+ 刀二c Web 语音上行/字幕渲染已落地
+> （core `MicCapture` 采集 + demo 挂件麦克风按钮/字幕气泡/译文播放；
+> Android/iOS 上行与字幕渲染按产品节奏后续刀）。
+> 本文是"大模型实时翻译"能力的设计基准：整体链路、延迟预算与分句策略、
+> 模型选型与成本、隐私与安全、备选方案与取舍、分阶段落地计划。
+>
+> 与现状的接口关系：LLM 出站统一走 `platform/llm`（`LLMProvider`，
+> openai 兼容 / anthropic / mock 三 provider，`factory.New` 唯一构造入口）；
+> 实时通道复用 WS hub（`platform/realtime/websocket_hub.go`，按 session 广播）
+> 与 WebRTC/TURN 设施（远程协助语音/屏幕同链路）。
+
+## 0. 目标与非目标
+
+**目标**：跨语言客服会话中，双方用各自语言实时沟通——
+1. 聊天文本：对方消息即时以我的语言显示（译文可折叠/对照原文）；
+2. 语音通话：我说中文、对方听英语（字幕 + 合成语音双形态）。
+
+**非目标（本期）**：文档级长文本翻译（走批处理）；离线端侧翻译模型；
+自动多语言知识库索引（已有 RAG 链路独立演进）。
+
+## 1. 整体链路
+
+### 1.1 聊天文本翻译（Phase 0，已落地）
+
+```
+客户端（坐席 admin / 访客 SDK）
+  └─ 对到达的消息调用 POST /api/v1/translation/translate {text, target_lang, source_lang?}
+       └─ modules/translation（application.Service）
+            ├─ 参数校验（必填/4000 字符上限/BCP-47 语言标签）
+            ├─ 提示词组装（system 定纪律 + user 携语言指令与待译文本）
+            └─ llm.LLMProvider.Chat（与首答/Copilot 同 provider 同参数）
+                 └─ 译文回显（text/source_lang/target_lang）
+```
+
+- 服务端无状态、单条消息粒度；"实时性"来自客户端逐消息即时调用（目标
+  P50 < 800ms，见延迟预算），不需要为文本链路引入流式。
+- 落点：`apps/server/internal/modules/translation/`（application/delivery，
+  domain/infra 为后续阶段占位）；路由挂管理面
+  （agent/admin/service + EnforceRequestScope），`docs` API 注解齐全。
+  （Phase 0.5 起改为双面单一注册：AuthMiddleware 即可、无主体种类限制，
+  见 §6。）
+- 复用面：provider 配置（`ai.*`）、超时/参数（`llmfactory.RuntimeParams`）、
+  错误口径（参数 400 / 未装配 503 / 上游 502 / 超时 504）。
+
+### 1.2 语音实时翻译（Phase 2+，目标链路）
+
+```
+采集端（浏览器/SDK）
+  ├─ getUserMedia(Audio) → ScriptProcessor → pcm16 24kHz 单声道小端分片
+  │    （刀二c 落地面：raw pcm16 走独立 WS 二进制帧 `/api/v1/ws/voice`，
+  │     PROTOCOL §9。选 ScriptProcessor 而非原设的 AudioWorklet+Opus：
+  │     AudioWorklet 的 processor 模块经 Blob URL 加载，会被服务端
+  │     `default-src 'self'` CSP 拦截；ScriptProcessor 无模块加载全浏览器
+  │     可用，代价仅主线程回调——已弃用但各厂商无移除时间表。Opus 编码
+  │     留给移动端/带宽受限形态再评估，Web 面先以 raw pcm16 走通）
+  ▼
+服务端 translation pipeline（每说话方一条）
+  1. 流式识别 ASR        ：WebSocket 流式协议（Deepgram/火山/阿里/AssemblyAI，
+                          或 self-host Whisper/faster-whisper + 分块）
+                          → partial hypotheses（增量）+ final（带 segment 边界）
+  2. 分句与稳定化        ：标点/语义双触发切句（见 §2），partial→final 去抖
+  3. 大模型翻译          ：llm.LLMProvider（与 Phase 0 同 provider 体系），
+                          逐句翻译 + 上一句尾作为上下文防割裂；
+                          可选 ChatStream 首 token 提前下发
+  4. 分发
+     ├─ 字幕：WS 下行帧 translation-delta / translation-final（按 session 广播，
+     │        payload 含 speaker/seq/text/lang，客户端做增量渲染）
+     └─ 播报：TTS（OpenAI TTS / Azure / ElevenLabs，OpenAI 兼容口优先）
+              → 服务端混音下发（WebRTC track）或客户端本地播放（URL/音频帧）
+```
+
+关键设计决策：
+- **识别与翻译在服务端串联**，不在客户端做 ASR——服务端已有 provider 抽象、
+  审计与限流位置，且两端（坐席/访客）能力不对等（访客端弱设备）。
+- **TTS 优先走"服务端合成、WebRTC 下发"**的备选被否决为 Phase 3：先落地
+  "字幕 + 客户端播放"（TTS 返回音频 URL 或 base64，客户端 Audio 播放），
+  避开服务端混音/回声消除复杂度；WebRTC 音轨下发在 Phase 3 与远程协助
+  媒体桥接（RA-7）共用 SFU-lite 基建（**2026-10-15 RA-7 已落地**：
+  `webrtc_service.go` 的 trackForwarder 转发注册表 + 桥接加轨重协商，
+  音轨下发可复用——服务端把 TTS 音频写成 `TrackLocalStaticRTP` 挂轨即走
+  同一条 fan-out/重协商链路，见 docs/remote-assistance-status.md）。
+  **2026-10-15 服务端面已落地**（客户端消费随后）：语音通道上的
+  `webrtc-request` 信令（`voice_webrtc.go`，帧词表 PROTOCOL §9.3）建
+  sendonly PCMU 轨（`voice_media.go`：wav 解码 → 重采样 → G.711 μ-law →
+  RTP 40ms 节拍）；译文音频按"对侧说话方"路由进音轨，`VoiceSink.AudioFormat()`
+  协商 TTS 按 wav 合成（无音轨消费方回落 mp3，Phase 2 帧契约零变更）；
+  建连失败回 `webrtc-error` 不收线（纯 WS 兜底）。
+- **每说话方一条 pipeline**，双向翻译 = 两条 pipeline 独立运行，避免
+  单 pipeline 语言状态互相污染。
+- **语音走独立 WS 通道 `/api/v1/ws/voice`（刀二b-2 已落地）**：上行二进制
+  帧 = pcm16 24kHz 单声道分片，下行 `translation-delta` / `translation-final` /
+  `translation-audio` / `voice-error`（JSON，WebSocketMessage 同形信封）。
+  不复用会话 WS（`/api/v1/ws`）：持续音频帧会挤穿其 256 帧下行缓冲的慢
+  客户端踢线语义（PROTOCOL §6.1），独立通道让会话 WS 契约零变更。通道在
+  装配层配置门控（`ai.asr` 未配置不注册路由，hub 握手 503 兜底）；下行
+  帧载荷带 `speaker`，同会话双方连接都收（客户端按方向过滤渲染）。
+  `voice-error` 帧的 code 词表：`disabled`（AI 面未配置/会话无偏好）、
+  `asr_unavailable`（ASR 建联失败）、`stream_broken`（上行流破损）——错误
+  帧后服务端收线，客户端以"连接关闭"为流终止单一信号。协议三件套
+  （PROTOCOL §9 条目 + fixtures + 三端回放）按 §5 流程随客户端消费刀
+  （b-3）同 PR 落地。
+
+### 1.3 会话语言偏好（Phase 1 刀一落地存储，刀三落地 viewer 角色双面）
+
+自动翻译的开关是**会话级**的：坐席为某个客服会话设一次目标语言，该会话之后
+到达的消息才走自动翻译。因此偏好存储是 Phase 1 的前置依赖（Phase 0 的
+`translate` 端点是"一次性、无状态"口径，不依赖任何存储）。
+
+```
+双面单一注册点（AuthMiddleware 认证即可，与 translate 端点同款；
+读向由服务端按认证主体推导，不接受请求方自报）：
+  ├─ agent/admin/service 主体 → agent 读向（坐席读译文的目标语言）
+  └─ end_user 主体 → visitor 读向（访客读译文的目标语言；
+       强制会话绑定：token 的 session_id 必须与路径一致，否则 403）
+       GET    /api/v1/translation/preferences/:session_id   查询（未设置=200 空串）
+       PUT    /api/v1/translation/preferences/:session_id   upsert 目标语言
+       DELETE /api/v1/translation/preferences/:session_id   清除（幂等）
+            └─ modules/translation
+                 ├─ application.PreferenceService（校验/规范化：BCP-47 子集、小写）
+                 └─ infra.GormPreferenceRepository
+                      （pg 迁移 000016：(session_id, viewer_role) 复合唯一 /
+                        sqlite AutoMigrate）
+```
+
+设计口径（与 assist/macro 等模块同款，避免同一仓两套租户语义）：
+
+- **租户/工作区取自认证 ctx**，不接受请求方自报；读写面按 scope 收紧，
+  scope 为空即不过滤（本地 dev / 存量链路兼容）。
+- **跨 scope 命中与不存在同语义**（不回显存在性）：upsert 撞上他租户同
+  `(conversation_session_id, viewer_role)` 的行时返回 409，而不是覆盖或
+  报错"已存在"。同一会话两个读向各一条偏好（刀三：agent 与 visitor 各自
+  独立读写、互不覆盖）。
+- **偏好表与会话表解耦**：允许先于首条消息设置偏好（会话由首条消息建行），
+  因此本表不挂 conversations 外键。
+- **未设置不是错误**：读取返回 `target_lang=""` + 200；清除无行也返回 200。
+  自动翻译链路据此"无偏好即不翻译"（见 §1.4）。
+- 语言标签与 `translate` 端点同口径：BCP-47 常用子集、统一小写
+  （`zh-CN` → `zh-cn`），非法标签 400。
+
+### 1.4 会话消息自动翻译帧（Phase 1 刀二/刀三，服务端双向已落地）
+
+```
+访客 WS text-message 落库（刀二，hub 路径，agent 读向）
+  └─ hub 异步（与 AI 首答同样走 goroutine，不阻塞广播）
+       ├─ 读该会话语言偏好：无偏好 → 静默跳过（不发帧、不记错误）
+       ├─ Translate(原文 → target_lang)：与 Phase 0 同 provider/同出站参数
+       └─ 广播 message-translated（按 session_id，与原文广播同通道）
+            Data: {original, content, source_lang, target_lang}
+
+坐席 HTTP 发送消息成功（刀三，发送口路径，visitor 读向）
+  └─ ConversationWorkspaceHandler.SendMessage 落库/广播后异步旁路
+       （同一 RealtimeTranslateService 契约、同一帧型；30s 超时）
+```
+
+帧契约要点：
+
+- **独立帧而非改写 `text-message`**：不识别新帧的既有客户端行为完全不变
+  （core SDK 的 switch 落 default 忽略），译文与原文并存、可对照折叠。
+- **关联靠 `original`**：翻译是落库后的异步旁路，没有消息 ID 可挂（当前
+  会话写入口只返回 error，不回传 message id）。客户端按"内容相同、且是本会话
+  最近一条未挂译文的消息"匹配；同内容连续重复消息的匹配结果可能后到覆盖，
+  属已知边界。
+- **失败只记 Warn**：翻译是增强能力，不影响消息主链路；provider 未配置
+  （`ErrTranslationUnavailable`）视为"功能未开启"静默跳过，避免未部署 AI 的
+  部署每条消息刷警告。
+- **方向边界**：两个方向都已落地（刀二 hub 落库路径 = 访客 → 坐席，消费
+  agent 读向；刀三 `ConversationWorkspaceHandler.SendMessage` 发送口路径
+  = 坐席 → 访客，消费 visitor 读向）。同一应用服务
+  （`RealtimeTranslateService`）构造期绑定读向的两个实例，非新链路。
+
+### 1.5 历史消息批量标注（Phase 1 收尾，已落地）
+
+工作台历史分页（`GET /api/omni/sessions/:id/messages`，注意 omni 面无
+`/v1` 前缀）在该会话设有
+agent 读向偏好时，把页内**访客侧**（sender ≠ agent）未带译文的非空消息
+合并为一次批量翻译，译文以 §4.4 的 metadata 保留键
+（`translation`/`translation_lang`）附在响应 DTO 上：
+
+```
+ListMessages 加载 + 时间序整理
+  └─ annotateHistory（同步，响应前）
+       ├─ HistoryTranslateService.TargetLang（agent 读向）：无偏好 → 静默原样返回
+       ├─ 过滤：sender == agent / 空内容 / 已带 translation 键 → 跳过
+       ├─ 按语言键查 messages.metadata 的 translations 缓存 → 命中即盖章
+       │    响应键、不触 LLM（重翻页免重译）
+       ├─ 未命中段合并一次批量翻译：application.BatchTranslate 多段合并单次
+       │    LLM 调用（编号分段协议 <<<SEG n>>>，标记序列必须恰好 1..N，
+       │    失配/注入扰动 → 自动退回逐条 Translate，fail fast 上抛）
+       └─ 译文写响应 DTO 并按语言键持久化；任何失败静默（历史加载不受影响）
+```
+
+口径要点：
+
+- **按语言键落库**：会话消息存储有 `metadata` 列（JSON 文本，迁移
+  `000023`），保留键 `translations` 存「语言 → 译文」表；批量译文按
+  读向语言键写入。**偏好随时可改不构成语言陈旧**——每个语言键写入即
+  不可变（源内容发后不可改），切语言只是查不到对应键、现译现写，旧键
+  不动，无需回滚。代价是每新增一个语言读一遍全量历史（成本治理见
+  §3.2 Phase 3 配额）。
+- **响应键仍不落库**：§4.4 的 `translation`/`translation_lang` 只写响应
+  DTO——访客补拉不应携带坐席读向的译文，语言读向由服务端按认证主体推导。
+  持久化的只是按语言键的中性缓存表，不编码读向归属。
+- **持久化失败静默**：译文持久化是增强能力，存储失败不影响本次响应
+  标注；下次翻页未命中会再译再写（幂等，同语言键先到先得）。
+- **批量退路保底**：分段协议失配（模型漏段/乱序/空段/正文注入段标记）时
+  整批退回逐条 `Translate`，行为不差于单条链路；provider 错误 fail fast。
+- **段数上限**：单批 ≤ `MaxBatchTexts`（20），超限返回哨兵错误
+  `ErrTranslationBatchTooLarge`；历史分页 ≤ 200 由调用方分批。
+
+### 1.6 客户端消费面（Phase 1 消费半边，已落地）
+
+服务端在 Phase 1 刀二/刀三/收尾把译文都产出到了，剩下的是两端各取所需：
+
+```
+core SDK（访客侧，实时）
+  └─ WS message-translated 帧 → 独立 message-translated 事件（§4.5）
+       └─ 渲染方按 original 关联到最近一条未挂译文的消息，原文兜底
+  └─ 历史补拉（VisitorMessage.metadata）→ readMessageTranslation 读 §4.4 键
+
+管理端工作台（坐席侧，实时 + 历史）
+  └─ 顶部语言下拉 → GET/PUT/DELETE 偏好端点（管理端主体落 agent 读向）
+       └─ 切语言后重拉历史（响应键按请求读向现算，必须重拉才生效）
+  └─ 访客消息按 metadata.translation 并排展示译文 + translation_lang 标签
+       └─ 无译文键 → 只显示原文（翻译是增强，不是替代）
+```
+
+口径要点：
+
+- **两条载体分工**：实时走 §4.5 独立帧（携带 `session_id` + 语言对，无需
+  回查），历史走 §4.4 metadata 保留键（分页 DTO 天然携带，零额外请求）。
+  管理端没有会话消息 WS 订阅（只有远程协助信令 socket），故它只用后者。
+- **读向一致性**：管理端主体固定落 agent 读向，与服务端历史标注的读向一致；
+  若误配成 visitor 读向，译文不会出现（但不会串到对面）——服务端按认证
+  主体推导角色，请求方无法越权写对方读向。
+- **移动端待接**：Android / iOS 目前对 `message-translated` 显式
+  `UnknownIgnored`（`sdk/protocol-fixtures/11-message-translated.json`
+  的 `mobile` 断言声明该偏差），接入时更新断言与 PROTOCOL §4.5 状态行。
+
+## 2. 延迟预算与分句策略
+
+### 2.1 预算（语音端到端，说出 → 对方看到/听到）
+
+| 环节 | 预算（P50） | 说明 |
+| --- | --- | --- |
+| 采集+编码+上行 | ≤ 120ms | Web 面为 ScriptProcessor 回调 + pcm16 分片（≈85–170ms 粒度）+ 网络往返；Opus 20ms 帧形态见 §1.2 采集端注 |
+| ASR partial | ≤ 300ms | 流式协议天然增量；partial 只驱动"正在说"反馈 |
+| 分句触发 | 0–700ms | 静音 500ms 或标点/语义边界即触发，见下 |
+| LLM 翻译 | ≤ 600ms | 逐句短文本；ChatStream 首 token ≤ 300ms 可提前下发 |
+| 字幕下行 | ≤ 50ms | WS 既有链路 |
+| **字幕合计** | **≈ 0.8–1.7s** | 体验及格线 2s 内；final 落定 ≤ 1.5s |
+| TTS 合成 | ≤ 800ms | 逐句合成；流式 TTS（chunked）Phase 3 |
+| **语音合计** | **≈ 1.5–2.5s** | 同声传译的"滞后半句"体验，可接受起点 |
+
+文本链路（Phase 0）：单次 REST + 单次 Chat，预算 P50 ≤ 800ms（30s 硬超时，
+超时 504）。逐句预算超限不重试整段，只重试当前句。
+
+### 2.2 分句策略（语音）
+
+双触发，先到先切：
+1. **静音触发（主）**：VAD 尾点静音 ≥ 500ms 切句（ASR 流多自带 VAD 事件）；
+2. **边界触发（辅）**：final 文本以 。？！.?!? 结尾，或长度 ≥ 60 字切句
+   （防长句霸屏与翻译超时）。
+
+稳定化规则：
+- partial 只更新"正在说"行，不进翻译；仅 final 进翻译队列；
+- final 追加到达（同句二次 final）按 seq 去重覆盖；
+- 翻译上下文携带**上一句原文+译文尾窗**（≤ 200 字符）控制时延与费用。
+
+## 3. 模型选型与成本
+
+### 3.1 选型原则
+
+- **翻译 LLM**：与现有 `ai.provider` 体系同源（OpenAI 兼容口优先），
+  逐句短翻译用小而快的模型即可（如 gpt-4o-mini / 旗-haiku 档），
+  不需要旗舰模型；温度沿用全局（建议部署配置 ≤ 0.3 保一致性）。
+- **ASR**：托管流式 API（Deepgram / AssemblyAI / 火山 / 阿里）起步，
+  按可用区与合规二选一；self-host（faster-whisper）作降级备选，
+  延迟与运维成本更高，仅在数据不出域要求下启用。
+- **TTS**：OpenAI 兼容 TTS 口起步（tts-1 档），Azure/ElevenLabs 备选。
+
+### 3.2 成本量级（公开价目近似，仅供容量规划）
+
+按一次 30 分钟双语通话（双方各说 15 分钟，约 2.5k 词/方）估算：
+- ASR 流式：约 $1–3/小时 → $0.5–1.5；
+- 翻译 LLM（小模型，逐句约 300 in + 300 out tokens）：$0.01–0.05 级，可忽略；
+- TTS（tts-1 档）：约 $15/1M 字符 → $0.1–0.3。
+即**语音翻译主要成本在 ASR+TTS（≈$1–2/通话小时）**，文本翻译成本可忽略
+（单条消息 < $0.0001）。
+
+控制手段：按租户配置开关与配额（复用 configscope 租户覆盖模式）、
+逐句预算熔断（超时句降级为仅字幕/仅原文，Phase 2 刀二d 已落地：单句 5s
+超时走既有降级面）、会话级 token 计量落 business metrics（既有
+`rt.BusinessMetrics` 口，刀二d 已落地：`voice_translation_sentences_total`
++ 复用 `ai_llm_tokens_total`；租户配额限流仍属 Phase 3）。
+
+## 4. 隐私与安全
+
+1. **数据最小化**：语音 pipeline 只保留 final 文本与译文（partial 即弃）；
+   译文/原文默认不落库（字幕是会态数据）。聊天翻译：实时帧链路仍无状态；
+   工作台历史标注会把译文按语言键写入 `messages.metadata`（保留键
+   `translations`，§1.5），即**访客原文的译文会随历史持久化**——租户
+   数据本就存在自有库内（与原文同表），但保留键表可在租户侧清理策略中
+   单独回收。录音/回放仅当用户显式同意（对齐远程协助 RA-4 consent）。
+2. **传输**：全链路 TLS（客户端→服务端已有）；ASR/TTS 出站仅经服务端，
+   密钥不落客户端；provider 域名与 key 走 `ai.*` 既有配置面与租户覆盖。
+3. **提示注入**：待译文本视为数据不视为指令——system 明确"只输出译文"；
+   Phase 0 提示词已含分隔与"不加解释"纪律；后续对消息内嵌 prompt 注入
+   样例做 golden 用例回归。
+4. **权限与审计**：翻译端点在管理面鉴权链（AuthMiddleware +
+   EnforceRequestScope + RequirePrincipalKinds）之下；写操作审计沿用
+   AuditMiddleware；语音链路帧按 session 归属广播（hub 既有按
+   session_id 隔离），不新增跨会话通道。
+5. **合规**：PII 不经第三方 ASR/TTS 需在租户级提供 self-host 降级
+   （Whisper 本地 ASR + 开源 TTS），列为 Phase 3 可选项而非首发。
+6. **滥用面**：输入长度（4000 字符）与频次限制；后续按租户配额
+   （translation.quota）限流，超配额 429。
+
+## 5. 备选方案与取舍
+
+| 方案 | 描述 | 取舍 |
+| --- | --- | --- |
+| A. 客户端整体翻译（浏览器内置 Translator API / 端侧模型） | 端到端零服务端成本、零延迟 | 能力碎片化（浏览器覆盖不一）、无审计/一致性与术语控制、无法支撑语音播报；仅作为未来访客端"免费档"补充，不作为主链路 |
+| B. 专用翻译 API（DeepL / 云厂商 MT） | 质量/延迟最优、便宜 | 引入第二套 provider 体系与出站面；通用客服语域 LLM 小模型质量已够；LLM 还能承接语气保持与占位符纪律。保留为 `ai.provider=deepl` 式扩展位，不首发 |
+| C. 语音端到端模型（GPT-4o realtime / 双向语音模型） | 单模型省去 ASR/TTS 拼装 | 延迟与体验最优但成本高一个量级、供应商锁定强、无法复用既有 per-utterance 审计；Phase 3 评估 |
+| D. 服务端混音下发（翻译语音走 WebRTC track） | 对方"听到"翻译音轨最自然 | 依赖服务端 SFU 媒体桥接（远程协助 RA-7 同基建）；先做客户端播放（Phase 2），D 并入 RA-7 之后（Phase 3） |
+
+**选定路线**：Phase 0 文本 LLM 翻译（已落地）→ Phase 2 服务端 ASR+LLM+TTS
+拼装、字幕先行 → Phase 3 借 RA-7 媒体基建切 WebRTC 音轨下发，并评估端到端
+语音模型（C）作高端档。
+
+## 6. 分阶段落地计划
+
+| 阶段 | 范围 | 依赖 |
+| --- | --- | --- |
+| **Phase 0（已落地）** | 聊天文本翻译：`modules/translation` + `POST /api/v1/translation/translate`；mock provider 单测全覆盖 | 无新增依赖（复用 `platform/llm`） |
+| **Phase 0.5（服务端半边已落地）** | 访客面同端点：路由单一注册点、AuthMiddleware 即可（访客 token 可调，`router_auth.go`）；剩 SDK 半边：`metadata.translation` 字段约定 + SDK 便捷调用 | SDK 契约（`sdk/PROTOCOL.md` + fixtures） |
+| **Phase 1 刀一（已落地）** | 会话语言偏好存储 + 管理面 REST 面（`translation/infra` GORM 仓储、pg 迁移 000015、`GET/PUT/DELETE /api/v1/translation/preferences/:session_id`）；见 §1.3 | 无新增依赖 |
+| **Phase 1 刀二（服务端半边已落地）** | WS 自动翻译帧：hub 在消息落库后异步翻译并广播 `message-translated`（按会话语言偏好）；见 §1.4 | 刀一的偏好存储（已就绪） |
+| **Phase 1 刀三（已落地）** | 偏好表 viewer 角色维度（迁移 000016，`(session_id, viewer_role)` 复合唯一）+ 双面单一注册点（end_user 经会话绑定校验读写 visitor 读向）+ 坐席 → 访客方向自动翻译（`SendMessage` 发送口异步旁路） | 刀二 |
+| **Phase 1 收尾（已落地）** | 历史消息批量子段翻译：工作台历史分页按 agent 读向批量翻译访客消息，译文以 §4.4 metadata 保留键附在响应 DTO（响应键不落库）；见 §1.5 | 刀三 |
+| **Phase 1 跨页缓存（已落地）** | 历史译文持久化：`messages.metadata` JSON 列（pg 迁移 000023），保留键 `translations` 按语言键缓存批量译文——重翻页命中即免 LLM，未命中现译现写；§4.4 响应键仍只写响应（访客补拉不携带坐席读向译文）；见 §1.5 | 收尾（已就绪） |
+| **Phase 1 消费半边（已落地）** | core SDK 消费 `message-translated` 帧（`WSMessage` 联合成员 + 同名事件 + `MessageTranslation` 载荷，见 §4.5）；管理端工作台消费历史 metadata 译文并提供坐席读向语言下拉（读写偏好端点）——见 §1.6 | 刀二/刀三/收尾的服务端面（均已就绪） |
+| **Phase 2 刀一（已落地）** | ASR/TTS provider 抽象与配置面：`platform/asr`（流式会话 + 事件通道契约，VAD/partial/final 事件种种类对齐 §2.2 分句策略）+ `platform/tts`（逐句整段合成契约）+ 各自 mock 与 factory（llm 同款收口：唯一构造入口、mock 不进 switch）+ `ai.asr.*`/`ai.tts.*` 配置面（provider 空 = 未启用，装配层跳过接线） | 无新增依赖（契约 + mock 零网络） |
+| **Phase 2 刀二 provider 面（已落地）** | OpenAI 兼容口优先（§3.1）：`platform/asr/openai`（实时转写 WS 协议 `/v1/realtime?intent=transcription`：服务端 VAD 尾点静音 500ms 对齐 §2.2、pcm16 24kHz 单声道、协议事件 → 契约事件映射、server error/读断 → `EventError` 会话破损）+ `platform/tts/openai`（`POST {base_url}/audio/speech` 逐句整段合成，非 2xx 包装 `ErrUpstream` 供 §3.2 预算熔断识别）；两者 `base_url` 可指向兼容网关（ws URL 由 https→wss 推导），进入 factory switch（`ai.asr.provider=openai`）。语音管线（final → 分句翻译 → 字幕帧 → TTS 消费）是刀二b | 无新增依赖（gorilla/websocket 已在依赖树） |
+| **Phase 2 刀二b-1 管线半边（已落地）** | 分句器 `modules/translation/domain.SentenceAssembler`（§2.2 双触发先到先切：标点/60 字上限沿字符位单趟扫描、VAD 尾点 Flush、同 seq 二次 final 覆盖、轮切换防御性收残）+ 语音管线 `application.VoicePipeline`（每说话方一条：ASR 事件流 → 分句 → 逐句翻译带上一句原文+译文尾窗 ≤ 200 字 → TTS 逐句合成；`VoiceSink` 产出接口交付层适配，partial 只透传"正在说"；翻译失败句降级原文不合成、TTS 失败句仅字幕，管线不断）+ `TranslateCommand.Context` 上下文尾窗提示词扩展。WS 面（音频上行 + 字幕帧族，过 PROTOCOL §5 流程）是刀二b-2 | 无新增依赖 |
+| **Phase 2 刀二b-2 服务端语音通道（已落地）** | 独立 WS 通道 `/api/v1/ws/voice`（§1.2：音频帧不挤会话 WS 下行缓冲）：`delivery/voice_contract.go`（`VoiceStreamStarter`/`VoiceAudioStream` 契约 + app 类型别名桥接）+ `delivery/voice_adapter.go`（每流组装"ASR 会话 + 语音管线"，说话方→读向对偶：visitor 说话查 agent 读向）+ `platform/realtime/voice_hub.go`（握手校验 session_id/speaker/token、按会话广播、慢客户端踢线与会话 WS 同口径、voice-error 收线、失败零帧）+ 装配接线（`ai.asr` 配置门控：未配置不注册路由；guest token 校验与会话 WS 同源）+ 安全面目录登记 `public-realtime-voice`（`app/server/security_surface.go`，与 `/api/v1/ws` 同信任域、限流沿用其前缀条目）。下行帧族协议三件套（PROTOCOL §9 + fixtures + 三端回放）是刀二b-3 | 无新增依赖 |
+| **Phase 2 刀二b-3 协议三件套（已落地）** | `sdk/PROTOCOL.md` §9（语音通道握手/上行形态/下行帧族四帧 + `turn_seq`/`seq` 语义 + `voice-error` 词表与连接级语义 + 三端消费状态）+ `sdk/protocol-fixtures/` 语音帧族四样例（12-15，`channel: "voice"` 标注）+ 三端回放：core `VoiceChannel`（`sdk/packages/core/src/voice.ts`：握手参数拼装、下行四帧必需字段校验 → `voice:delta/final/audio/error` 事件（载荷线序 snake_case）、`sendAudio` 二进制上行、无自动重连）+ fixtures 回放断言（四帧全载荷事件 + 会话通道对误入语音帧忽略）+ Android/iOS 会话核心 `UnknownIgnored` 断言（端级偏差声明；语音通道客户端与三端上行/字幕渲染消费是后续刀） | 无新增依赖（core 零新增 npm 依赖） |
+| **Phase 2 刀二c Web 上行 + 字幕渲染（已落地）** | core `MicCapture`（`sdk/packages/core/src/voice-capture.ts`）：纯函数三件（`floatToPcm16` clamp 量化 / `resampleLinear` 线性插值重采样 / `pcm16ToLeBytes` DataView 显式小端）+ `MicCapture` 采集图（getUserMedia → ScriptProcessor → 零增益 mute → destination；generation 作废在途 start 防 stop 竞态；`capture_denied`/`capture_unavailable`/`capture_already_active` 错误归一；ports 注入对齐 webSocketFactory 口径）+ vanilla UMD 全局挂载（`window.Servify.MicCapture/VoiceChannel` 等六件——UMD exports 被 window.Servify 类赋值覆盖，named 导出在浏览器不可达，工具集挂类上）+ demo 挂件（`apps/demo-sdk/widget.js`）：麦克风按钮（能力探测降级，旧缓存包不出现）+ 会话 id 一处生成多通道共用 + `voice:delta` 直播行（每说话方一条）+ `voice:final` 终句字幕（译文+原文小字+降级标注）+ `voice:audio` 播报（自动播放被拦退化 ▶ 按钮）+ 会话通道断线联动语音收线。移动端上行/字幕渲染仍按产品节奏 | 无新增依赖（core/vanilla 零新增 npm 依赖） |
+| **Phase 2 刀二d 成本控制收口（已落地）** | §3.2 控制手段落地：逐句预算熔断——`VoicePipeline` 对翻译/TTS 各加单句超时（5s，远小于 provider 传输层 30s 兜底，P50 预算 600ms/800ms 的裕量上限），超限句按既有降级面走（翻译超限降级原文、合成超限仅字幕），管线不断；会话拆除中的在途句不产出字幕不计降级（收线≠熔断）。业务计量——`VoiceObserver` 观测面（产出 outcome 词表 `translated`/`caption_only`/`degraded` + 逐句 token 消费）经 delivery 桥接 `rt.BusinessMetrics` 既有口：新计数器 `voice_translation_sentences_total{outcome}`，token 复用 `ai_llm_tokens_total{provider,token_type}`；`TranslateResult` 增可选计量字段 `provider`/`token_usage`（omitempty，PROTOCOL §5 已注）。租户配置开关维持既有 `ai.asr` 装配门控；租户配额限流仍属 Phase 3 | 无新增依赖 |
+| Phase 3 | WebRTC 音轨下发翻译语音（与 RA-7 SFU-lite 共基建）；端到端语音模型评估；租户配额与 self-host 降级 | 远程协助媒体桥接落地 |
+
+各阶段验收：单测（mock provider 零网络）+ golden 回归（提示词劣化检测）+
+验收脚本证据（对齐仓内 `scripts/test-*-acceptance.sh` 模式）。

@@ -1,5 +1,3 @@
-> [中文](release-versioning.zh.md) | **English**
-
 # Release Versioning
 
 ## Server version injection

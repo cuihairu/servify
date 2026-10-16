@@ -1,43 +1,41 @@
-> [English](remote-assistance-mvp.en.md) | **中文**
+# Remote Assistance Minimum Deliverable Path
 
-# 远程协助最小可交付链路
+This document closes `Gap C / G3-3`: defining the minimum remotely assistable path Servify can express externally at the current stage, and the corresponding acceptance spec.
 
-本文用于收口 `Gap C / G3-3`：定义 Servify 当前阶段可对外表达的最小远程协助链路，以及对应的验收口径。
+## Goals
 
-## 目标
+This minimum path only proves the following, it does not chase a full remote-control product:
 
-这条最小链路只为证明以下几点，不追完整远控产品：
+- Servify can already place customer sessions, manual takeover, real-time collaboration basics, transfers, and the full ticket flow in one continuous service path
+- The admin console already has enough existing pages and interfaces to support one demo round
+- Product narrative and actual capability do not contradict each other
 
-- Servify 已经能把客户会话、人工接管、实时协作基础、转接和工单全流程放在一条连续服务链路里
-- 管理端已经有足够的现有页面与接口支撑一轮演示
-- 产品叙事和实际能力不会互相打架
+## Minimum path definition
 
-## 最小链路定义
+The current recommendation defines the minimum remotely assistable path as:
 
-当前建议把远程协助的最小可交付链路定义为：
+1. Customer initiates a session from the Web entry
+2. AI or plain text communication cannot directly resolve the issue
+3. Agent takes over the current session in the conversation page
+4. Agent continues sending messages in the same session, and if necessary transfers to a more suitable agent
+5. If real-time collaboration basics are needed, confirm the WebSocket / WebRTC runtime is connected, and the voice/real-time protocol-side entry is available
+6. After assistance is complete, the session can continue to be closed, or the issue can be distilled into ticket details for continued progression
 
-1. 客户从 Web 入口发起会话
-2. AI 或普通文字沟通无法直接解决问题
-3. 客服在会话页接管当前 session
-4. 客服在同一会话里继续发送消息、必要时转派给更合适坐席
-5. 若需要实时协作基础，可确认 WebSocket / WebRTC runtime 已连通，语音/实时协议侧入口可用
-6. 协助完成后，会话可以继续关闭，或者把问题沉淀到工单详情继续推进
+This path emphasizes:
 
-这条链路强调的是：
+- "Escalation to assistance" happens within an existing session context
+- After assistance it stays within Servify's internal path, not jumping to external systems
+- Right now acknowledge "real-time collaboration basics are in place" first, rather than fabricating a heavyweight assistance UI that has not been implemented yet
 
-- “升级到协助”发生在已有会话上下文里
-- 协助后仍留在 Servify 内部链路，不跳到外部系统
-- 现在先承认“实时协作基础已具备”，而不是虚构一个尚未实现的重型协助 UI
+## Corresponding pages and interfaces
 
-## 对应页面与接口
+### 1. Session reception and takeover
 
-### 1. 会话接待与接管
-
-管理端页面：
+Admin console pages:
 
 - `/conversation`
 
-核心接口：
+Core interfaces:
 
 - `GET /api/omni/sessions/:session_id`
 - `GET /api/omni/sessions/:session_id/messages`
@@ -46,18 +44,18 @@
 - `POST /api/omni/sessions/:session_id/transfer`
 - `POST /api/omni/sessions/:session_id/close`
 
-当前产品语义：
+Current product semantics:
 
-- 这是远程协助最接近“主工作台”的现有入口
-- 当前已能完成查看会话、发送消息、接管、转派、关闭等动作
+- This is the existing entry closest to a "main workbench" for remote assistance
+- It can currently complete actions like viewing sessions, sending messages, takeover, transfer, and close
 
-### 2. 转接与调度
+### 2. Transfer and dispatch
 
-管理端页面：
+Admin console pages:
 
 - `/routing`
 
-核心接口：
+Core interfaces:
 
 - `GET /api/session-transfer/waiting`
 - `GET /api/session-transfer/history/:session_id`
@@ -65,17 +63,17 @@
 - `POST /api/session-transfer/cancel`
 - `POST /api/session-transfer/process-queue`
 
-当前产品语义：
+Current product semantics:
 
-- 当一线客服无法继续处理时，远程协助不应该断链，而是能进入转接调度
+- When a front-line agent cannot continue handling, remote assistance should not break the chain but be able to enter transfer dispatch
 
-### 3. 实时协作基础
+### 3. Real-time collaboration basics
 
-管理端页面：
+Admin console pages:
 
 - `/voice`
 
-服务端观测/协议入口：
+Server-side observability/protocol entries:
 
 - `GET /api/v1/ws/stats`
 - `GET /api/v1/webrtc/stats`
@@ -87,79 +85,79 @@
 - `POST /api/voice/recordings/stop`
 - `GET /api/voice/transcripts`
 
-当前产品语义：
+Current product semantics:
 
-- 这部分证明系统具备实时协作、语音和连接观测基础
-- 但当前仍主要是 runtime / protocol / operations 能力，不等于独立的“远程协助 UI”
+- This part proves the system has real-time collaboration, voice, and connection observability basics
+- But currently it is still mainly runtime / protocol / operations capability, not equal to a standalone "remote assistance UI"
 
-### 4. 协助后工单全流程
+### 4. Post-assistance full ticket flow
 
-管理端页面：
+Admin console pages:
 
 - `/ticket/detail/:id`
 
-核心接口：
+Core interfaces:
 
 - `GET /api/tickets/:id`
 - `GET /api/tickets/:id/conversations`
 - `POST /api/tickets/:id/comments`
 - `POST /api/tickets/:id/close`
 
-当前产品语义：
+Current product semantics:
 
-- 当问题不能在会话内即时收口时，可以把上下文继续沉淀到工单
-- 工单详情页可继续查看关联会话，而不是让协助记录彻底断开
+- When an issue cannot be resolved immediately in the session, the context can continue to be distilled into a ticket
+- The ticket detail page can continue viewing associated sessions, rather than the assistance record being completely disconnected
 
-## 当前不纳入 MVP 承诺的内容
+## Content currently not included in the MVP commitment
 
-以下内容当前不应被写成“已经交付”的能力：
+The following should not currently be written as "already delivered" capabilities:
 
-- 独立的“远程协助”菜单或工作台
-- 标准化 co-browsing / 屏幕共享操作界面
-- 协助中的专门状态机字段，例如 `assisting` / `assistance_completed`
-- 协助结果模板、协助记录表或专门报表
+- A standalone "remote assistance" menu or workbench
+- Standardized co-browsing / screen-sharing operation interfaces
+- Dedicated state machine fields during assistance, e.g. `assisting` / `assistance_completed`
+- Assistance result templates, assistance record tables, or dedicated reports
 
-这些属于后续产品增强项，不应和当前最小交付范围混在一起。
+These belong to later product enhancement items and should not be mixed with the current minimum deliverable scope.
 
-## 最小验收口径
+## Minimum acceptance spec
 
-### 自动化证据
+### Automated evidence
 
-至少应继续保留以下自动化证据：
+At minimum continue retaining the following automated evidence:
 
-- Web 会话与实时基础
+- Web sessions and real-time basics
   - `go test ./apps/server/internal/handlers -run 'Test(ConversationWorkspaceHandler_(ListMessages|SendMessage|AssignAgent|Transfer|CloseSession|GetSession)|AuthHandlerRefreshToken|AuthHandlerSelfServiceSessions)'`
-- 公开入口与实时入口运行证据
-  - 验收清单里已有 `GET /api/v1/ws/stats`、`GET /api/v1/webrtc/stats`、`GET /api/v1/webrtc/connections`、语音协议入口等实跑记录
-- 工单关联会话
-  - `ticket` 详情页与 `GET /api/tickets/:id/conversations` 已有后端测试覆盖
+- Public entries and real-time entry runtime evidence
+  - The acceptance checklist already has actual-run records for `GET /api/v1/ws/stats`, `GET /api/v1/webrtc/stats`, `GET /api/v1/webrtc/connections`, and voice protocol entries
+- Ticket-associated sessions
+  - The `ticket` detail page and `GET /api/tickets/:id/conversations` already have backend test coverage
 
-### 人工演示步骤
+### Manual demo steps
 
-最小人工演示建议按下面顺序执行：
+The minimum manual demo is recommended in the following order:
 
-1. 打开 `/conversation`，选中一个活跃 session
-2. 发送一条消息，确认会话上下文可持续
-3. 执行“接管会话”
-4. 执行一次“转派会话”或查看 `/routing` 中等待队列/转接历史
-5. 验证实时基础仍在线：
-   - 查看 `/voice`
-   - 或调用 `GET /api/v1/ws/stats`、`GET /api/v1/webrtc/stats`
-6. 打开关联工单详情 `/ticket/detail/:id`，确认会话上下文仍可追踪
+1. Open `/conversation`, select an active session
+2. Send a message, confirm the session context persists
+3. Execute "take over session"
+4. Execute one "transfer session" or view the waiting queue/transfer history in `/routing`
+5. Verify the real-time basics are still online:
+   - View `/voice`
+   - Or call `GET /api/v1/ws/stats`, `GET /api/v1/webrtc/stats`
+6. Open the associated ticket detail `/ticket/detail/:id`, confirm the session context is still traceable
 
-### 通过标准
+### Pass criteria
 
-本轮对“远程协助 MVP”的通过定义为：
+This round's pass for "remote assistance MVP" is defined as:
 
-- 会话、接管、转派、关闭动作可在同一条 session 主链路里完成
-- 实时基础能力有明确入口和运行证据
-- 协助后可以继续进入转接或工单，而不是断在会话页
-- README、文档站首页、专题页与当前实现口径一致
+- Session, takeover, transfer, close actions can all be completed in the same session main path
+- Real-time basic capability has a clear entry and runtime evidence
+- After assistance it can continue into transfer or tickets, rather than breaking at the session page
+- README, doc site home page, topic page, and current implementation use the same spec
 
-## 下一步增强方向
+## Next enhancement directions
 
-如果后续继续迭代，优先顺序建议是：
+If iteration continues later, the recommended priority order is:
 
-1. 在管理端增加更明确的“远程协助”入口或会话页增强态
-2. 给协助过程补状态机和记录模型
-3. 把演示链路升级为真正的产品验收脚本
+1. Add a clearer "remote assistance" entry or conversation-page enhanced state in the admin console
+2. Add a state machine and record model for the assistance process
+3. Upgrade the demo path to a real product acceptance script

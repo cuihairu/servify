@@ -1,0 +1,475 @@
+# Servify 验收清单
+
+这份清单用来防止把“代码里有入口”误判成“功能已经可交付”，不为证明“看起来差不多做完了”。
+
+验收时，每个功能项都必须同时具备以下 4 类证据，否则一律不算完成：
+
+1. 代码入口：路由、命令或调用入口明确存在。
+2. 自动化测试：至少有相关单测、集成测试或命令级验证。
+3. 运行证据：服务真实启动，接口可访问，请求与响应符合预期。
+4. 数据证据：涉及数据库、状态流转、文件或外部依赖时，能看到前后状态变化。
+
+## 状态定义
+
+- `未验`：只确认代码入口存在，没有实际跑通。
+- `部分通过`：编译或单测通过，但关键业务链路、异常路径或数据落库未验。
+- `通过`：具备代码、测试、运行、数据四类证据。
+- `阻塞`：缺配置、依赖、权限、环境或数据，暂时无法验。
+
+## 使用方式
+
+先准备运行环境：
+
+```bash
+make migrate DB_HOST=localhost DB_PORT=5432 DB_USER=postgres DB_PASSWORD=password DB_NAME=servify
+make run-cli CONFIG=./config.yml
+make run-knowledge-provider CONFIG=./config.weknora.yml
+make run-weknora CONFIG=./config.weknora.yml
+# `run-knowledge-provider` 是通用 alias；两者都仅用于 WeKnora compatibility / mock 验收
+# 默认知识库 provider 仍以 Dify 为主
+```
+
+常用基础验证命令：
+
+```bash
+make build
+make build-knowledge-provider
+make build-weknora
+make test
+go test -tags weknora ./apps/server/cmd ./apps/server/internal/handlers ./apps/server/pkg/weknora/...
+```
+
+每个条目都按下面模板记录：
+
+| 字段 | 内容 |
+| --- | --- |
+| 功能项 | 例如“创建工单” |
+| 入口 | 路由 / CLI / 页面 |
+| 前置条件 | 数据库、配置、鉴权、依赖服务 |
+| 操作步骤 | 明确到请求参数或操作动作 |
+| 预期结果 | 状态码、返回体、状态变化 |
+| 自动化证据 | 相关测试文件或命令 |
+| 人工证据 | curl 结果、截图、日志、DB 查询结果 |
+| 状态 | 未验 / 部分通过 / 通过 / 阻塞 |
+
+## 当前已确认的最小事实
+
+这些是当前已经实际验证过的，不代表“全量功能完成”：
+
+| 项目 | 证据 | 状态 |
+| --- | --- | --- |
+| Knowledge provider compatibility CLI 可构建 | `make build-knowledge-provider` 或 `make build-weknora` 通过 | 通过 |
+| WeKnora 相关 handler/pkg 基础测试 | `go test -tags weknora ./apps/server/cmd ./apps/server/internal/handlers ./apps/server/pkg/weknora/...` 通过 | 通过 |
+| 本地最小环境检查 | `make local-check` 通过 | 通过 |
+| 发布前最小自检 | `make release-check CONFIG=./config.yml` 通过；当前默认根配置路径已通过临时 SQLite 库完成迁移、启动、`/health`、`/ready`、`/metrics` 烟测，不再依赖本机预装 Postgres 才能复现这条最小发布自检 | 通过 |
+| 客服主链路聚焦自动化验证 | `go test -tags integration ./apps/server/internal/handlers -run 'Test(WorkspaceHandler_GetOverview_.*|StatisticsHandler_Dashboard_And_TimeRange|TicketHandler_Create_Get_List_Assign)'`、`go test ./apps/server/internal/handlers -run 'Test(ConversationWorkspaceHandler_(ListMessages|SendMessage|AssignAgent|Transfer|CloseSession|GetSession)|AuthHandlerRefreshToken|AuthHandlerSelfServiceSessions)'`、`go test ./apps/server/internal/modules/auth/application -run 'Test(AuthServiceLoginAndRefreshRotateSession|AuthServiceSelfManageSessions)'（WorkspaceService/StatisticsService 用例已随 services 迁移拆并）` 通过 | 通过 |
+| 主链路人工运行验证当前阻塞 | 该条记录保留为历史人工验收事实：当时 `nc -z localhost 5432` 返回非零；`go -C apps/server run ./cmd/server --port 18080` 实际报错 `dial tcp 127.0.0.1:5432: connect: connection refused`；`redis-cli -h localhost -p 6379 ping` 返回 `Connection refused`；当前本机 Docker daemon 也不可用。补充说明：这不再阻塞默认 `config.yml` 下的 `make release-check`，因为发布前最小自检现已具备 SQLite 临时库回退路径 | 阻塞 |
+| 主链路人工运行验证第二轮 | 本机已拉起 `redis-server` 与 `postgresql@15`；`make migrate` 完成；`go -C apps/server run ./cmd/server --port 18080` 启动成功；`curl http://localhost:18080/health` 返回 healthy；`scripts/seed-data.sh http://localhost:18080` 完成；随后已实际完成 `admin / admin123` 登录、Dashboard 查询、Workspace 查询、Ticket 列表/详情查询、补建 agent 实体后完成 Ticket assign，并通过 WebSocket 向 `g1-session-1` 写入消息再经 `/api/omni/sessions/g1-session-1/messages` 读回。2026-09-27 复跑并逐项留证后升级为通过：本机 postgres 现仅余 `postgresql-client-18`（服务端二进制 `initdb`/`postgres` 缺失且无 sudo 装包），按口径回退 `DB_DRIVER=sqlite`（服务启动即 AutoMigrate），redis 沿用系统实例（`PONG`）；`SERVIFY_JWT_SECRET=dev-secret go -C apps/server run ./cmd/server --host 127.0.0.1 --port 18080` 起新空库后 `seed-data.sh` 完成，实际复跑 admin 登录（token 在证据内掩码）、`/api/statistics/dashboard`（断言 `total_tickets=10`）、`/api/omni/workspace`（断言 `online_agents=3`）、`/api/tickets`（断言 10 条）、`GET /api/tickets/1` → `POST /api/tickets/1/assign {"agent_id":3}` → 复读断言 `agent_id` 2→3（种子建单时 agent 全在线被自动路由派给客服1 属真实运行行为，故对账口径为改派前后）；WS 经 `/api/v1/ws?session_id=g1-session-1` 发 `text-message`（`data.content` 契约）收到 `101` 握手与同文回显帧（其后 AI 首答降级帧如实留档，外部 LLM 凭证缺失属预期），`/api/omni/sessions/g1-session-1/messages` 读回含访客原文（`sender=customer`）。限流 60rpm/burst10 以 sleep 步进满足——不用 `X-API-Key` 白名单键，该键会令 AuthMiddleware 走 service-principal 分支（`platform/auth/gin_middleware.go:41`）短路 Bearer JWT 致 401。14 步命令与输出证据入库 [summary.txt](../scripts/test-results/main-link-round2/summary.txt)（01-14 证据文件同目录） | 通过 |
+| 主链路人工运行验证第三轮 | 本机以 `DB_USER=cui DB_NAME=servify` 完成 `make migrate`；启动 `SERVIFY_JWT_SECRET=dev-secret DB_USER=cui DB_NAME=servify go -C apps/server run ./cmd/server --port 18080`；`curl http://localhost:18080/health` 返回 healthy；更新后的 `scripts/seed-data.sh http://localhost:18080` 会创建 agent 实体并自动置为 online；随后已实际完成 `admin / admin123` 登录、`/api/statistics/dashboard`、`/api/omni/workspace`、`/api/omni/sessions/g1-session-2`、`/api/tickets`、`POST /api/tickets/30/assign`，并确认工单详情 `agent_id` 已更新为 `4` | 通过 |
+| AI 主链路人工运行验证第一轮 | 以 `admin / admin123` 登录后，实际完成 `GET /api/v1/ai/status`、`POST /api/v1/ai/query`、`GET /api/v1/ai/metrics`；其中 `status` 返回 `type=orchestrated_enhanced`、`fallback_enabled=true`，`query` 返回 `strategy=fallback`，证明在外部 knowledge provider 不可用时主链路仍可响应；当前脚本留档也已覆盖 `ai-query-after-disable.json` 与 `ai-metrics-after-fallback.json`，用于补充 fallback 响应与指标证据。2026-09-15 补充：fallback 三类证据（日志 / 响应 / 状态）已可由 `make ai-fallback-acceptance` 一键真实留证，manifest 入库 [ai-fallback/manifest.json](../scripts/test-results/ai-fallback/manifest.json) | 通过 |
+| AI 控制面人工运行验证第二轮 | 使用启用外部 knowledge provider 的临时配置启动服务，实际完成 `PUT /api/v1/ai/knowledge-provider/enable`、`PUT /api/v1/ai/knowledge-provider/disable`、`POST /api/v1/ai/circuit-breaker/reset`；同时确认 `GET /api/v1/ai/status` 返回 `knowledge_provider_enabled=true`、`knowledge_provider=<active-provider>`、`knowledge_provider_healthy=true|false`，且 `disable -> status -> enable -> status` 的状态切换能被证据文件留档，说明控制路由已暴露且运行时能清楚标识当前知识源健康度；本轮另已补 `scoped AI handler` 状态保持回归，覆盖 enable/disable 之后后续请求仍能看到同一 runtime 开关状态；2026-09-27 已在 Linux 本机以 WeKnora 全栈 mock 混合栈（compose 起 weknora-mock 容器 + native servify/sqlite）经 `scripts/test-weknora-integration.sh`（mock 模式）真实跑通 disable→fallback query（strategy=fallback）→enable→circuit-breaker reset 全控制面，`ai/status` 全程上报 `knowledge_provider=weknora enabled=true healthy=true`，证据入库 [weknora-acceptance/manifest.json](../scripts/test-results/weknora-acceptance/manifest.json)（`bash scripts/validate-acceptance-manifest.sh` 通过）；2026-09-29 全容器化复跑（servify 也进容器，四容器整栈）同链全绿，manifest [weknora-acceptance-container/manifest.json](../scripts/test-results/weknora-acceptance-container/manifest.json) | 通过 |
+| AI 知识链路人工运行验证第三轮 | 本机启动临时知识库 provider 测试环境后，以启用外部 knowledge provider 的临时配置启动服务；随后实际完成 `POST /api/v1/ai/knowledge/upload`、`POST /api/v1/ai/knowledge/sync`，并确认 `GET /api/v1/ai/status` 返回 `knowledge_provider_enabled=true`、当前激活 `knowledge_provider` 以及 `knowledge_provider_healthy=true`，说明 Servify 到外部知识源的上传 / 同步协议路径已跑通；当前另已补自动化回归，锁定 `enable` 之后 `UploadKnowledgeDocument` 会真正进入 provider 路径而不是被错误地判成 `knowledge provider is not enabled`，且 `SyncKnowledgeBase()` 在 provider 未启用时不再返回假成功；2026-09-27 已在 Linux 本机 WeKnora 全栈 mock 混合栈内真实跑通 upload/sync：`POST /api/v1/ai/knowledge/upload`、`POST /api/v1/ai/knowledge/sync` 均 200，对端为 compose weknora-mock 容器（重写后的真实协议实现，容器日志留下 upload 协议留痕），manifest 记录 `knowledge_upload_ok=true`、`knowledge_sync_ok=true`，证据 [knowledge-upload.json](../scripts/test-results/weknora-acceptance/knowledge-upload.json)、[knowledge-sync.json](../scripts/test-results/weknora-acceptance/knowledge-sync.json)；2026-09-29 全容器化复跑（servify 也进容器）upload/sync 同绿（[weknora-acceptance-container/knowledge-upload.json](../scripts/test-results/weknora-acceptance-container/knowledge-upload.json)、[knowledge-sync.json](../scripts/test-results/weknora-acceptance-container/knowledge-sync.json)） | 通过 |
+| 配置加载口径修复回归验证 | 新增 `TestLoadConfigFindsRepoRootConfigFromNestedDir`，确认从 `apps/server` 这类嵌套目录启动时，`LoadConfig()` 仍能读到仓库根 `config.yml` | 通过 |
+| 运营高价值链路人工运行验证第一轮 | 以 `admin / admin123` 登录后，实际完成 `POST /api/customers`、`GET /api/customers/:id`、`PUT /api/customers/:id`、`POST /api/customers/:id/notes`、`PUT /api/customers/:id/tags`、`GET /api/customers/stats`、`GET /api/agents`、`POST /api/agents/:id/online`、`PUT /api/agents/:id/status`、`GET /api/agents/online`、`GET /api/agents/stats`、`GET /api/security/users/:id`、`POST /api/security/users/:id/revoke-tokens`、`GET /api/security/users/:id/sessions`、`GET /api/audit/logs?action=customers.create`、`GET /api/audit/logs/:id`、`GET /api/audit/logs/:id/diff`、`GET /api/audit/logs/export?action=customers.create&limit=5`；其中审计查询在默认限流下触发过一次 `429`，随后使用白名单 `X-API-Key: internal-test-key` 验证通过。2026-09-27 复跑逐项留证后升级为通过：本机 postgres 仅余 client-18（无服务端二进制），按口径回退 `DB_DRIVER=sqlite`（服务启动 AutoMigrate），redis 沿用系统实例（PONG）；19 步全序列以新空库 + `seed-data.sh` 复跑全绿（客户创建 201/详情/更新/备注/标签/统计、客服列表 ≥3/上线/状态 busy/在线列表/统计、安全用户详情/批量吊销 token/会话列表、审计 `customers.create` 列表 ≥1 条/`customers.update` 详情/diff/CSV 导出含表头），限流 60rpm/burst10 以 sleep 3 步进规避（种子后 sleep 12 回填）——**不再用 `X-API-Key` 白名单键**：该键令 AuthMiddleware 走 service-principal 分支（`platform/auth/gin_middleware.go:41`）短路 Bearer JWT 致 401，旧记录的白名单做法按当前代码已不可行；端点演进：旧记录的 `POST /api/security/users/:id/revoke-tokens` 单用户口与批量 `POST /api/security/users/revoke-tokens {"user_ids":[..]}` 并存未替换（`user_security_handler.go:800-801` 同时注册两口），本轮按现口径复跑；token 证据内掩码。19 步命令与输出 + manifest（provider=`operations-round1`，`validate-acceptance-manifest.sh` 新分支 + accept/reject Go 测试对）入库 [manifest.json](../scripts/test-results/operations-round1/manifest.json)、[summary.txt](../scripts/test-results/operations-round1/summary.txt) | 通过 |
+| system 级 `DailyStats` 作用域回归 | 原 services 内 StatisticsService_UpdateDailyStats_* 用例已随 services 迁移拆并；现证据为 `go test -tags integration ./apps/server/internal/modules/analytics/infra -run 'TestGormRepositoryScoped(DashboardIgnoresGlobalDailyStats|TimeRangeIgnoresGlobalDailyStats|AgentPerformanceStaysScoped)'` 通过；已覆盖 scoped 读取不消费全局 `DailyStats`，以及 scoped 重算不会把 system 级日汇总写成局部数据 | 通过 |
+| 审计保留与轻量导出约束自动化回归 | `go test ./apps/server/internal/platform/audit -run 'TestGormRetentionServiceCleanup'`、`go test ./apps/server/internal/handlers -run 'TestAuditHandlerExportCSV(ClampsLimit|RejectsInvalidFilters)$'` 通过；已覆盖 `created_at < cutoff` 保留边界与导出 `limit` 最大值 `5000` 的服务端截断行为 | 通过 |
+| scoped config rollback / verify 治理链路自动化回归 | `go test ./apps/server/internal/handlers -run 'TestScopedConfigHandler(RollbackRestoresSnapshot|RollbackRequiresConfirmation|RollbackRequiresChangeControl|RollbackRequiresApprovalRefForHighRiskChange)$'` 通过；已覆盖显式确认、`change_ref` / `reason`、高风险 `approval_ref` 与 rollback 审计快照恢复约束 | 通过 |
+| session risk 环境级策略与 Geo/IP provider 管理面回归 | `go test -tags integration ./apps/server/internal/handlers -run 'TestUserSecurityHandler_ListUserSessionsUses(ScopedRiskPolicy|EnvironmentRiskProfile|InjectedIPIntelligence)$'` 通过；已覆盖 management `user-security` 会话列表对 tenant scoped risk、environment risk profile 和可注入 IP intelligence provider 的直接证据 | 通过 |
+| HTTP Geo/IP provider 契约回归 | `go test ./apps/server/internal/handlers -run 'TestHTTPSessionIPIntelligenceDescribeIP(SupportsNestedDataPayload|UsesCustomAuthHeaderWithoutBearerPrefix|ReturnsEmptyOnFailure|$)'` 通过；已覆盖嵌套 `data` JSON、非 `Authorization` 自定义鉴权头，以及上游失败时回退空结果的 adapter 契约 | 通过 |
+| WeKnora 验收脚本 guard 与证据输出回归 | `go test ./scripts -run 'TestWeKnoraIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)$'` 通过；已锁定 `real` 模式对本地/私网 WeKnora 地址的拒绝策略，并覆盖 `mock` 模式的 `summary.txt`、`ai-status.json`、`knowledge-upload.json`、`knowledge-sync.json` 等关键证据文件输出 | 通过 |
+| Dify 验收脚本 guard 与证据输出回归 | `go test ./scripts -run 'TestDifyIntegrationScript(RealModeRejectsLocalHost|MockModeWritesEvidence)$'` 通过；已锁定 `real` 模式对本地/私网 Dify 地址的拒绝策略，并覆盖 `mock` 模式的 `summary.txt`、`dify-dataset.json`、`ai-status.json`、`knowledge-upload.json`、`knowledge-sync.json`、`ai-metrics.json` 等关键证据文件输出 | 通过 |
+| Knowledge provider 验收统一入口回归 | `make dify-acceptance`、`make weknora-acceptance`、`make knowledge-provider-acceptance` 已接入统一入口；CI `script-checks` 也已执行对应 `go test ./scripts` 门禁，确保脚本 guard 与证据输出能力不会回退 | 通过 |
+| 远程协助产品叙事文档对齐 | 已统一更新 [README](https://github.com/cuihairu/servify/blob/main/README.md)、[文档首页](index.md)、[remote-assistance.md](remote-assistance.md)；现在一致强调”远程协助 = 实时指导/联合排查/人工接管/工单全流程中的产品能力”，并明确区分当前已具备的实时基础与尚未承诺的完整 co-browsing 工作台 | 通过 |
+| v0.1.0 blocker 修复验收 | 1) AI/Knowledge 路由始终注册（`router.go` 移除 `externalKnowledgeProviderEnabled` 条件）2) `make test` 正确失败（移除 `|| true`）3) 工单错误码映射（新增 `ticketErrorToStatusCode` 函数区分 404/400/409/500）4) release-check 扩展（新增 build 验证、二进制检查、路由验证）5) security baseline 调整（v0.1.0 允许 fallback 模式） | 通过 |
+| 远程协助现状入口盘点 | 已新增 [remote-assistance-current-state.md](remote-assistance-current-state.md)，盘点了服务端现有会话、转接、assist、voice、WebSocket/WebRTC 入口，以及管理端 `/conversation`、`/routing`、`/voice`、`/ticket/detail`、`/security` 相关页面；同时明确当前缺口在“缺统一产品入口、缺状态机、缺最小演示链路”，而不是基础 runtime 缺失 | 通过 |
+| 远程协助 MVP 链路与验收口径 | 已新增 [remote-assistance-mvp.md](remote-assistance-mvp.md)，把最小可交付链路定义为“Web 会话 -> 人工接管 -> 转派/实时协作基础 -> 工单全流程”，并明确了对应页面、API 和人工演示步骤；当前不再把缺少独立 co-browsing 工作台误判成“没有远程协助产品方向” | 通过 |
+| staging 口径 release readiness 演练 | 已新增 [config.staging.example.yml](https://github.com/cuihairu/servify/blob/main/config.staging.example.yml)，并已在 [operator-runbook.md](operator-runbook.md) 和 [deployment.md](deployment.md) 回写 staging 基线与执行步骤。2026-09-15 本机复验口径修正：`make observability-check CONFIG=config.staging.example.yml` 复验通过；但 `config.staging.example.yml` 含占位凭证且缺 `database` 段，`make security-check`（5 条 issue）与 `make release-check`（security strict 阶段非零退出）对它**如实拒绝**——早期“实际通过”的记录与当前真实行为不符，已按复验结果更正；带真实凭证配置的正例路径见“安全基线真实配置留证（P1-4）” | 通过 |
+| 生产模板与告警阈值对齐 | 已补齐 [config.production.secure.example.yml](https://github.com/cuihairu/servify/blob/main/config.production.secure.example.yml) 中显式的 `metrics_path` / tracing 基线，并把 `deploy/observability/alerts/rules.yaml` 中的 10 条告警阈值同步回写到 [operator-runbook.md](operator-runbook.md)、[deployment.md](deployment.md) 与 [observability operational runbook](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md) | 通过 |
+| demo/mock/in-memory 资产边界清点 | 已新增 [demo-and-mock-boundaries.md](demo-and-mock-boundaries.md)，明确盘点 `apps/demo`、`apps/demo-sdk`、`scripts/demo-setup.sh`、`scripts/seed-data.sh`、`infra/compose/weknora-mock`、`scripts/test-weknora-integration.sh`、进程内 event bus、voice mock provider、Telegram/WeChat stub 的保留原因、prod-safe 判断与退出条件；现已能区分“可保留的演示/回归资产”和“不可误判为正式能力的占位实现” | 通过 |
+| 运营高价值链路人工运行验证第二轮 | 本机以 `DB_USER=cui DB_NAME=servify go run ./apps/server/cmd/server --port 18081` 启动服务，并继续使用 `admin / admin123` 登录；随后实际完成 `POST /api/sla/configs` 创建 urgent 配置、`POST /api/sla/configs` 创建 high 配置、`GET /api/sla/configs/:id`、`GET /api/sla/configs?page=1&page_size=20`、`PUT /api/sla/configs/:id`、`DELETE /api/sla/configs/:id`、`GET /api/sla/configs/priority/urgent`、`POST /api/sla/check/ticket/22`、`GET /api/sla/violations?page=1&page_size=20`、`POST /api/sla/violations/1/resolve`、`GET /api/sla/stats`；其中 ticket `22` 基于新建 urgent 配置命中 `resolution` 违约，`resolve` 后统计中的 `unresolved_violations` 变为 `0`；同时补充回归测试，确保 `CheckTicketSLA` 首次创建和重复返回违约时都会带上真实 `ticket` / `sla_config` 关联数据 | 通过 |
+| 公开入口与实时入口人工运行验证第一轮 | 本机继续以 `DB_USER=cui DB_NAME=servify go run ./apps/server/cmd/server --port 18081` 启动服务；未登录访问 `GET /public/portal/config` 返回 `brand_name=Servify` 等公开配置；以 `admin / admin123` 登录后创建并显式发布知识文档 `G1-4 Public KB`，随后 `GET /public/kb/docs?search=G1-4&page=1&page_size=10` 与 `GET /public/kb/docs/16` 可公开读取；补充说明：当前公开知识库已收紧为“仅暴露显式 `is_public=true` 的文档”，管理端新建文档默认保持内部可见；使用 Node `ws` 客户端连到 `ws://127.0.0.1:18081/api/v1/ws?session_id=g1-4-ws` 后成功收到同会话回显消息，且在连接存活期间 `GET /api/v1/ws/stats` 返回 `connected_clients=1`。补充说明：当前 `/api/v1/ws` 仍为公开 realtime 入口，但已要求显式传入 `session_id`，不会再为缺失参数的请求自动生成匿名会话；同时通过插入一条缺失的 `customers.user_id=6` 扩展记录，实际完成 `GET /public/csat/g1-4-public-csat-token` 与 `POST /public/csat/g1-4-public-csat-token/respond`，确认公开问卷可读取并可提交，提交后再次读取可见 `status=completed`；Voice 基础路径方面，已实际完成 `GET /api/voice/protocols`、`POST /api/voice/recordings/start`、`GET /api/voice/recordings/:recordingID`、`POST /api/voice/recordings/stop`、`POST /api/voice/transcripts`、`GET /api/voice/transcripts?call_id=g1-4-call`、`POST /api/voice/protocols/sip/call-events/invite|answer|hangup`、`POST /api/voice/protocols/webrtc/media-events/session_started`；WebRTC 连接链路方面，已补齐 `ws` 对 `webrtc-offer/answer/candidate` 的真实 runtime wiring，并修复 `WebSocketClient.readPump()` 的 `512B` 入站限制，否则正常 SDP offer 会直接触发断连；随后使用本地生成的真实 SDP offer 连到 `ws://127.0.0.1:18081/api/v1/ws?session_id=g1-4-webrtc-real`，成功收到 `webrtc-answer` 与多条 `webrtc-candidate`，且 `GET /api/v1/webrtc/stats?session_id=g1-4-webrtc-real` 返回 `connection_state=connecting`、`ice_connection_state=checking`，`GET /api/v1/webrtc/connections` 返回 `connection_count=1` | 通过 |
+| 会话工作台真实运行验收（P1-3） | 本机以 `DB_DRIVER=sqlite` + `SERVIFY_JWT_SECRET=dev-secret` 启动真实服务（`go -C apps/server run ./cmd/server`），`scripts/seed-data.sh` 建 `admin/admin123` 后执行 `make workspace-acceptance`：脚本以 python3 标准库 WS 客户端走真实 `GET /api/v1/ws` 访客入口建会话（`text-message` 契约为 `data.content`，顶层 content 会被服务端静默丢弃——首轮运行曾因此 404，已修正脚本并收紧 mock 契约），随后真实完成会话详情、消息列表、坐席回复、接管、转接（`status=transferred`）、关闭（`status=closed`+`ended_at`）、工作台概览，以及未知会话 404 / 空消息 400 / 未认证 401 三条拒绝路径；manifest 已入库 [workspace-acceptance/manifest.json](../scripts/test-results/workspace-acceptance/manifest.json)，mock 回归 `go test ./scripts -run TestWorkspaceAcceptance` 通过 | 通过 |
+| Ticket 高频操作真实运行验收（P1-5） | 同一真实服务实例上执行 `make ticket-acceptance`：真实完成创建工单（`ticket-acceptance-*`）、更新（priority=high / agent_id / tags 全部生效）、添加评论、关闭（`status=closed`+`closed_at`）、统计（`total>=1`）、CSV 导出（留档 [ticket-export.csv](../scripts/test-results/ticket-acceptance/ticket-export.csv)，含验收工单行），以及未知工单 404 / 缺标题 400 / 未认证 401 三条拒绝路径；manifest 已入库 [ticket-acceptance/manifest.json](../scripts/test-results/ticket-acceptance/manifest.json)，mock 回归 `go test ./scripts -run TestTicketAcceptance` 通过 | 通过 |
+| 安全基线真实配置留证（P1-4） | 新增 `scripts/test-security-acceptance.sh`（`make security-acceptance` 一键留证）：负例 `config.staging.example.yml` 原样跑 `check-security-baseline --strict` 被拒绝（占位凭证触发 5 条 issue、非零退出），正例基于 `config.production.secure.example.yml` 补部署 `database` 段并经 `${ENV}` 展开注入凭证后 strict 通过；默认开发配置 `config.yml` 的 strict 结果仅留档（预期有警告，不作硬性条件）。前置修复：Makefile 原用 `sh` 调用 bash 语法脚本，POSIX sh（dash）下 `${BASH_SOURCE[0]}`/`[[` 直接报错——8 处统一改为 `bash` 调用。manifest 已入库 [security-baseline/manifest.json](../scripts/test-results/security-baseline/manifest.json)，`validate-acceptance-manifest.sh` 新增 `security-baseline` provider 分支，mock 回归 `go test ./scripts -run TestSecurityAcceptanceScriptWritesEvidence` 通过 | 通过 |
+| 运行基线真实运行验收（P1-4） | 新增 `scripts/test-runtime-baseline-acceptance.sh`（`make runtime-baseline-acceptance` 一键留证）：真实完成 `make build`（产物 `bin/servify` 直接用于起服）、sqlite 启动真实服务（`SERVIFY_PORT=18091`、临时 DB 文件、`bin/servify` 无 `go run` 中间层——首轮曾因 `go run` 子进程未被 kill 连带残留占用端口导致二次运行打到旧服务，已改为直接运行构建产物并加端口预检），随后真实验证 `GET /ready`（`200` 且 `ready=true`）、`GET /metrics`（`200`，176 行 Prometheus 文本）、注册 admin 后 `GET /api/v1/messages/platforms`（`200` 且 `total_platforms` 字段在）、无 token 请求 `401` 拒绝路径；manifest 已入库 [runtime-baseline/manifest.json](../scripts/test-results/runtime-baseline/manifest.json)，`validate-acceptance-manifest.sh` 新增 `runtime-baseline` provider 分支，mock 回归 `go test ./scripts -run TestRuntimeBaselineAcceptanceScriptWritesEvidence` 通过 | 通过 |
+| AI fallback 真实运行验收（P1-1） | 新增 `scripts/test-ai-fallback-acceptance.sh`（`make ai-fallback-acceptance` 一键留证），凑齐“fallback 有实际日志、响应、状态三类证据”的本地真实留证：sqlite 起真实服务且不配任何外部 AI provider（`SERVIFY_PORT=18092`），注册 admin 后依次真实验证 `GET /api/v1/ai/status`（`200` 且 `fallback_enabled=true`、`knowledge_provider=""`，状态证据）、`POST /api/v1/ai/query`（`200` 且 `strategy=fallback`、中文回复内容非空，响应证据——fallback 由 openai provider 真实收到 `401 auth_failed` 触发）、`GET /api/v1/ai/metrics`（`200` 且 `fallback_usage_count` 字段在，指标证据），日志证据为 `server-log.txt` 中新增的 fallback 专属日志行（`strategy=fallback` warn，含触发错误详情）与 GIN query access log；无 token 请求 `401` 拒绝路径一并留档。前置代码修复：fallback 回退分支原先**没有任何日志语句**（fallback 发生时运维无感知），已在 `orchestrated_ai_enhanced.go` 补 `strategy=fallback` warn 日志并配套日志断言回归；已如实记录的结构性事实：`/api/v1/ai/metrics` 走全局服务实例，而 query 每请求构建独立 service，故 metrics 端点的 `fallback_usage_count` 不累积 per-request fallback 次数（指标证据以其结构与真实 200 为准，计数口径见此说明）。manifest 已入库 [ai-fallback/manifest.json](../scripts/test-results/ai-fallback/manifest.json)，`validate-acceptance-manifest.sh` 新增 `ai-fallback` provider 分支，mock 回归 `go test ./scripts -run TestAIFallbackAcceptanceScriptWritesEvidence` 通过 | 通过 |
+| 客户侧推荐问题真实运行验收（P2-0） | 新增 `scripts/test-suggestion-acceptance.sh`（`make suggestion-acceptance` 一键留证），sqlite 起真实服务（`SERVIFY_PORT=18095`）后：注册 admin 经 `/api/knowledge-docs` 创建 4 篇知识文档（3 公开 + 1 私有，公开篇目间隔创建保证 recency 可辨）；随后匿名（无 Authorization）依次真实验证 `GET /public/suggestions/initial`（`200`，恰好返回 3 篇公开标题且按更新时间逆序、私有标题不出现、`meta.strategy=public_knowledge_recency`）、`GET /public/suggestions/next?query=密码`（`200`，仅命中密码文档、账单与私有标题不出现、`meta.strategy=public_knowledge_scored`、`doc_candidates=1`）、`POST /public/suggestions/next`（JSON body `query=账单` 命中账单文档）、缺 `query` 参数返回 `400`；全部证据经 `manifest.json` 留档并通过 `validate-acceptance-manifest.sh` 新增的 `suggestion` provider 分支校验，mock 回归 `go test ./scripts -run TestSuggestionAcceptanceScriptWritesEvidence` 通过。配套链路：后端公开路由 + security surface 目录项、`@servify/core`/`@servify/vanilla` SDK `getInitialQuestions`/`getNextQuestions`、demo widget“猜你想问”chips（点击即发送、发送后刷新联想）| 通过 |
+
+说明：
+
+- 上述结果只能证明构建链和部分测试是通的。
+- 不能据此推出所有 API、权限、迁移、前端、数据链路都已完成。
+- `G1-1` 曾受本地 Postgres/Redis 环境阻塞，但该阻塞已在后续验证轮次解除。
+- 当前 `G1-1` 已补到一轮完整真实运行证据，原先暴露出的 3 个缺口里：
+  - `scripts/seed-data.sh` 固定 `customer_id` 导致用户关联错位，已修复为基于真实注册返回的用户 ID 建票。
+  - `scripts/seed-data.sh` 未创建 agent 实体，已修复为自动创建 `/api/agents` 记录。
+  - `/api/omni/sessions/:id` 曾在仅有消息落库时返回 `conversation not found`，已补最小会话读模型兜底。
+- 当前 `G1-2` 已拿到 AI 主链路、fallback、控制接口以及基于本地 provider mock 的知识上传 / 同步 / 知识文档管理面 CRUD 协议证据（2026-09-27 于 Linux 本机 `make ragflow-acceptance` 全链真实复验并入库 manifest + 响应 + mock 协议留痕）。
+- 当前 `G1-2` 仍未拿到“真实 Dify 主路径 + WeKnora 兼容路径”的完整双路径运行证据；现阶段已证明 Servify 对外部 knowledge provider API 的调用路径可用，并已分别补齐 Dify 主路径与 WeKnora 兼容路径的验收脚本入口，但这仍不等同于真实生产级外部环境已完成验收。
+- 当前 `knowledge-docs` 管理接口已具备持久化 CRUD，且 `Create/Update` 已开始自动 upsert 当前外部 knowledge provider；`Delete` 仍受 provider 能力约束，行为保持“支持删除则同步删，不支持则显式失败并保留本地文档”。知识文档管理与 AI 外部检索的一致性边界已比之前清晰：2026-09-27 已在 Linux 本机经 `make ragflow-acceptance`（ragflow mock 对端）真实跑通管理面 CRUD 全链（创建/更新自动外部 upsert 并留痕、更新删旧建新、删除按外部 id 清理且本地移除），同刀修复 `knowledgeDocFromDomain` 从不透传 `provider_id/external_id` 的观测缺口（响应 DTO 字段此前恒为空串）。真实外部 provider（Dify / RAGFlow / WeKnora 实实例）运行证据仍依赖环境凭证。
+- 当前已开始持久化内部知识文档与外部 provider `document_id` 的映射，`knowledge-docs` 删除链路也会优先使用外部 ID；Dify 与 WeKnora 现均可基于外部 `document_id` 执行精准删除——WeKnora 缺失的真实删除实现已补齐（`pkg/weknora` 客户端新增 `DeleteDocument`，对接 `DELETE /api/v1/knowledge/:kb_id/documents/:doc_id` 端点；`knowledgeprovider/weknora` Provider 已实现真实删除并在 capability matrix 中对外声明 `deletion` 能力），两大 knowledge provider 的删除能力声明已对齐，均有单测回归覆盖，真实 WeKnora 服务端到端运行证据仍待外部环境。
+- 当前已补 `scripts/test-weknora-integration.sh` 的证据输出能力：可通过 `WEKNORA_ACCEPTANCE_MODE=mock|real` 与 `EVIDENCE_DIR=...` 生成 `summary.txt`、`ai-status.json`、`ai-query.json`、`knowledge-provider-disable.json`、`ai-status-after-disable.json`、`ai-query-after-disable.json`、`ai-metrics-after-fallback.json`、`knowledge-provider-enable.json`、`ai-status-after-enable.json`、`circuit-breaker-reset.json`、`knowledge-upload.json`、`knowledge-sync.json` 等验收留档；其中 `real` 模式当前主要服务于 WeKnora 兼容路径，会把 “WeKnora 健康可用 + AI 服务具备外部 knowledge provider 能力 + 控制面切换成功 + fallback 查询成功 + upload/sync 成功” 作为硬性通过条件；2026-09-27 上述证据输出能力已在 Linux 本机以全栈 mock 混合栈（compose weknora-mock 容器 + 端口覆盖入口 + native servify/sqlite）真实跑通一遍并整套入库（17 个证据文件 + manifest，`check-acceptance-evidence.sh` 全绿），此前这些文件名仅被脚本单测以假响应验证过输出格式；同刀把 `infra/compose/weknora-mock` 从 catch-all 假实现重写为按客户端契约逐端点的有状态协议实现（`TestWeKnoraMockProtocolSurface` 守护），否则栈内 upload/sync 必因 `success=false` 失败而 health 仍正常。
+- 当前已新增 `scripts/test-dify-integration.sh`：可通过 `DIFY_ACCEPTANCE_MODE=mock|real` 与 `EVIDENCE_DIR=...` 生成 `summary.txt`、`dify-dataset.json`、`ai-status.json`、`ai-query.json`、`knowledge-upload.json`、`knowledge-sync.json`、`ai-metrics.json` 等主路径验收留档；其中 `real` 模式要求当前激活 provider 为 `dify`，且 Dify dataset 健康、主路径 upload/sync 成功。
+- 当前已新增 `scripts/test-ragflow-acceptance.sh`（RAGFlow driver 立项刀，2026-09-21）：`RAGFLOW_ACCEPTANCE_MODE=mock|real` 双模式，mock 模式全自含（真服务 + 内嵌 python3 RAGFlow mock + sqlite）已入 CI 白名单与 `make ragflow-acceptance`；real 模式要求当前激活 provider 为 `ragflow`（选择链最高优先），RAGFlow dataset 健康、检索命中、upload/sync 成功，并拒绝 localhost/私网地址。
+- 当前 `real` 模式还会主动拒绝 `localhost` / 私网地址，以及健康检查中显式暴露 `service=weknora-mock` 的上游，避免把本地 mock 环境误填成真实 WeKnora 兼容路径运行证据。
+- `LoadConfig()` 现已补默认搜索 `.`、`..`、`../..`，避免从 `apps/server` 启动时读不到仓库根配置，导致验收口径和实际部署口径漂移。
+- 当前仍不能据此推出 `G1-2` 到 `G1-4` 已完成，它们需要各自独立验收与证据回填。
+
+## 一票否决项
+
+以下任何一项失败，都不能对外宣称“已完成”：
+
+- 服务无法启动。
+- 数据库迁移失败。
+- 核心路由返回 500 或返回结构与契约不符。
+- 创建后无法查询，或更新后状态不变化。
+- 鉴权与权限中间件失效。
+- 外部 knowledge provider 不可用时没有回退或错误不可控。
+- 关键流程只有 happy path，没有异常路径验证。
+
+## 全量验收矩阵
+
+以下清单按代码实际暴露的功能面整理，主要依据：
+
+- [README](https://github.com/cuihairu/servify/blob/main/README.md)
+- [router.go](../apps/server/internal/app/server/router.go)
+
+### 1. 基础运行与可观测性
+
+代码入口：
+
+- [health.go](../../../apps/server/internal/app/server/health.go)
+- [main.go（cmd/server）](../../../apps/server/cmd/server/main.go)
+- [run.go（cmd/cli）](../../../apps/server/cmd/cli/run.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 健康检查 | `GET /health` | 服务启动后直接请求 | `200` 且返回健康信息 | [health_enhanced_test.go](../apps/server/internal/handlers/health_enhanced_test.go) | 通过 |
+| 就绪检查 | `GET /ready` | 在依赖就绪后请求 | `200`；依赖异常时不应误报健康。2026-09-15 真实复验：sqlite 真实服务上返回 `200` 且 `ready=true`（`services.ai/database=ready`），证据清单见 [runtime-baseline/manifest.json](../scripts/test-results/runtime-baseline/manifest.json) | [health_enhanced_test.go](../apps/server/internal/handlers/health_enhanced_test.go) | 通过 |
+| Prometheus 指标 | `GET <metricsPath>` | 启动后访问 metrics | 返回文本指标；包含 runtime/AI/DB 指标。2026-09-15 真实复验：默认 `/metrics`（`monitoring.enabled` 默认开启）返回 176 行 Prometheus 文本（go runtime 等），证据清单见 [runtime-baseline/manifest.json](../scripts/test-results/runtime-baseline/manifest.json) | [ai_handler.go](../apps/server/internal/handlers/ai_handler.go) | 通过 |
+| 安全基线严格校验 | `make security-check CONFIG=...` | 使用部署配置执行校验 | 无 warning 时返回 `0`；有高风险配置时非零退出。2026-09-15 已在本机真实复验：`config.staging.example.yml` 原样 strict 校验被拒绝（5 条 issue，非零退出），`config.production.secure.example.yml` 补 `database` 段 + 注入环境变量后 strict 通过；并新增 `make security-acceptance` 一键留证（manifest 已入库 [security-baseline/manifest.json](../scripts/test-results/security-baseline/manifest.json)） | [check_security_baseline_test.go](../apps/server/cmd/cli/check_security_baseline_test.go)、[test-security-acceptance.sh](../scripts/test-security-acceptance.sh) | 通过 |
+| 可观测性基线严格校验 | `make observability-check CONFIG=...` | 使用部署配置执行校验 | metrics/tracing 配置与 dashboard/alert/runbook/collector 资产齐备时返回 `0` | [check_observability_baseline_test.go](../apps/server/cmd/cli/check_observability_baseline_test.go) | 通过 |
+| 发布前最小自检 | `make release-check CONFIG=./config.yml` | 执行统一自检脚本 | local/security/observability/focused Go tests 全部通过 | [check-release-readiness.sh](../scripts/check-release-readiness.sh) | 通过 |
+| CLI 标准构建 | `make build` | 执行构建 | 生成二进制，无编译错误。2026-09-15 真实复验：`make build` 通过且 `bin/servify` 可直接启动真实服务（验收脚本即用该产物起服），证据清单见 [runtime-baseline/manifest.json](../scripts/test-results/runtime-baseline/manifest.json) | `make build` | 通过 |
+| CLI knowledge provider compatibility 构建 | `make build-knowledge-provider` | 执行构建 | 生成二进制，无编译错误 | `make build-knowledge-provider` | 通过 |
+| 本地最小环境检查 | `make local-check` | 执行环境校验脚本 | 所有关键依赖通过 | [Makefile](../Makefile) | 通过 |
+
+### 2. 实时能力
+
+代码入口：
+
+- [router.go](../apps/server/internal/app/server/router.go)
+- [handlers.go](../apps/server/internal/handlers/handlers.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| WebSocket 建连 | `GET /api/v1/ws` | 带 `session_id` 建立连接 | 成功升级协议，可收发消息 | [websocket_test.go](../apps/server/internal/platform/realtime/websocket_test.go) | 通过 |
+| WebSocket 统计 | `GET /api/v1/ws/stats` | 建连前后各请求一次 | client 数量正确变化 | [websocket_processing_test.go](../apps/server/internal/platform/realtime/websocket_processing_test.go) | 通过 |
+| WebRTC 统计 | `GET /api/v1/webrtc/stats` | 建立会话后请求 | 返回连接统计 | [webrtc_stats_test.go](../apps/server/internal/platform/realtime/webrtc_stats_test.go) | 通过 |
+| WebRTC 连接列表 | `GET /api/v1/webrtc/connections` | 建立多连接后请求 | 返回当前连接列表 | [webrtc_test.go](../apps/server/internal/platform/realtime/webrtc_test.go) | 通过 |
+| 远程协助会话与标注 | `/api/remote-assist/sessions` `/api/remote-assist/sessions/:id/end` `/api/remote-assist/sessions/:id/annotations` | WS 建真实访客会话后发起协助、增删标注、带录制元数据结束 | 会话发起/列表/详情/标注增删查/结束全链路可管理；缺会话 404、非法 shape 400、重复结束 409。2026-09-18 真实复验：20 项检查全过（含未认证 401 与标注升序对账），负例错误文本精确留档；首轮复验曾发现删除不存在标注返回 500（裸错误未映射），已修复为 `ErrAssistAnnotationNotFound` 映射 404 并复验通过，证据清单见 [remote-assist/manifest.json](../scripts/test-results/remote-assist/manifest.json) | [test-remote-assist-acceptance.sh](../scripts/test-remote-assist-acceptance.sh)、[test_remote_assist_acceptance_test.go](../scripts/test_remote_assist_acceptance_test.go) | 通过 |
+| 平台消息路由统计 | `GET /api/v1/messages/platforms` | 模拟不同平台消息后请求 | 平台维度统计正确。2026-09-15 真实复验：admin 注册后请求返回 `200` 且 `{"data":{"total_platforms":0,...},"success":true}`（无平台接入时为 0 属预期），无 token 请求 `401`，证据清单见 [runtime-baseline/manifest.json](../scripts/test-results/runtime-baseline/manifest.json) | [router_stats_test.go](../apps/server/internal/platform/realtime/router_stats_test.go)、[message_handler_test.go](../apps/server/internal/handlers/message_handler_test.go) | 通过 |
+
+### 3. AI 与外部知识库
+
+代码入口：
+
+- [router.go](../apps/server/internal/app/server/router.go)
+- [ai_handler.go](../apps/server/internal/handlers/ai_handler.go)
+- [WEKNORA_INTEGRATION.md](WEKNORA_INTEGRATION.md)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| AI 查询 | `POST /api/v1/ai/query` | 发起普通问题请求 | 返回回答，结构稳定 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
+| AI 状态 | `GET /api/v1/ai/status` | 请求状态接口 | 返回 AI 服务当前状态 | [ai_handler_test.go](../apps/server/internal/handlers/ai_handler_test.go) | 通过 |
+| AI 指标 | `GET /api/v1/ai/metrics` | 调用多次查询后请求 | query count、latency 等可见 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
+| 知识上传 | `POST /api/v1/ai/knowledge/upload` | 上传合法文档 | 上传成功并返回任务或文档信息 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go)、[ai_scoped_handler_test.go](../apps/server/internal/app/server/ai_scoped_handler_test.go)；2026-09-27 Linux 本机 `make ragflow-acceptance`（全自含：真实 servify + 内嵌 ragflow mock 对端）真实运行留痕：两次上传均 `200 success=true`，第二次在 mock 留下按 `<标题>.txt` 查重删除再重建（删旧建新）协议留痕；证据 [knowledge-upload.json](../scripts/test-results/ragflow-acceptance/knowledge-upload.json)、[knowledge-upload-repeat.json](../scripts/test-results/ragflow-acceptance/knowledge-upload-repeat.json)、[ragflow-mock-requests.jsonl](../scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl)；真实外部 provider（ragflow 实实例）运行证据仍依赖环境凭证 | 通过 |
+| 知识同步 | `POST /api/v1/ai/knowledge/sync` | 触发同步 | 返回同步结果，无 500 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go)、[ai_scoped_handler_test.go](../apps/server/internal/app/server/ai_scoped_handler_test.go)；2026-09-27 Linux 本机 `make ragflow-acceptance` 真实运行留痕：sync 返回 `200 success=true`，mock 留下 documents 推送与 chunks 解析触发留痕；证据 [knowledge-sync.json](../scripts/test-results/ragflow-acceptance/knowledge-sync.json)、[summary.txt](../scripts/test-results/ragflow-acceptance/summary.txt)、[ragflow-mock-requests.jsonl](../scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl)；真实外部 provider 运行证据仍依赖环境凭证 | 通过 |
+| 启用 Knowledge Provider | `PUT /api/v1/ai/knowledge-provider/enable` | 启用外部知识增强能力 | 状态切换成功 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
+| 禁用 Knowledge Provider | `PUT /api/v1/ai/knowledge-provider/disable` | 禁用外部知识增强能力 | 状态切换成功 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
+| 熔断器重置 | `POST /api/v1/ai/circuit-breaker/reset` | 先制造失败再重置 | 熔断状态恢复 | [ai_handler_comprehensive_test.go](../apps/server/internal/handlers/ai_handler_comprehensive_test.go) | 通过 |
+| 外部 Knowledge Provider 不可用回退 | AI 查询主链路 | 关闭当前 knowledge provider 或制造超时 | 系统进入 fallback，而不是整体不可用 | [orchestrated_ai_fallback_integration_test.go](../apps/server/internal/modules/ai/delivery/orchestrated_ai_fallback_integration_test.go)；真实运行留档见 [ai-fallback/manifest.json](../scripts/test-results/ai-fallback/manifest.json)（含 fallback 日志 / 响应 / 状态三类证据） | 通过 |
+| pgvector 自建知识库 | `knowledge.provider=pgvector` | runner-docker 上 `pgvector/pgvector:pg15`（端口 5433）真库验收：以 `knowledge.provider=pgvector` 临时配置起服，`GET /api/v1/ai/status` 上报 `knowledge_provider=pgvector`、enable 后 `healthy=true`；上传 3 篇主题文档后经 psql 证据确认 `vector=0.8.6` 扩展、`knowledge_docs` 4 行（含长文档切出的 2 个 chunk）、`vector_dims(embedding)=1536`、`schema_migrations=8`；语义检索"打印机卡纸"命中打印机文档两个 chunk（score≈0.97），无关 query 被阈值过滤。验收脚本 `make pgvector-acceptance`，manifest 入库 [pgvector/manifest.json](../scripts/test-results/pgvector/manifest.json)；本刀同时修复了两个装配缺口：`pgvector.NewProvider` 此前全仓库非测试零调用（`knowledge.provider` 配置键无人消费），以及 `golang-migrate` 的 postgres driver `Close()` 会连带关闭服务主连接池（迁移改走专用连接） | 通过 |
+| RAGFlow 知识库（ragflowkp driver） | `ragflow.enabled=true`（选择链最高优先 ragflow → dify → weknora → pgvector） | mock 模式全自含验收（构建真实 servify + 内嵌 python3 RAGFlow mock 留痕 + sqlite 自起）：`GET /api/v1/ai/status` 上报 `knowledge_provider=ragflow`、检索命中、上传×2 验证删旧建新（按 `<标题>.txt` 文件名查重）、sync、mock 请求留痕断言（retrieval / documents CRUD / chunks 解析触发 / Bearer 鉴权）、`/api/knowledge-docs` 管理面 CRUD 全链（创建/更新外部 upsert 留痕、删旧建新、删除按外部 id 清理并本地移除）；集成文档见 [RAGFLOW_INTEGRATION.md](RAGFLOW_INTEGRATION.md)。验收脚本 `make ragflow-acceptance`，2026-09-27 已在 Linux 本机以含上述断言的新版脚本全链真实跑通并入库（manifest + summary + 关键响应 + mock 协议留痕 + 服务日志；带验收 JWT 的 admin-auth.json 不入库），manifest 入库 [ragflow-acceptance/manifest.json](../scripts/test-results/ragflow-acceptance/manifest.json)；real 模式（需真实 RAGFlow v0.27.x 环境，拒私网）端到端运行证据仍待外部环境 | 部分通过（mock 已验，real 待环境） |
+| WeKnora 知识库（weknorakp driver） | `weknora.enabled=true`（选择链 ragflow → dify → **weknora** → pgvector；注意 repo 根 `config.yml` 的 `knowledge.provider=pgvector` 会令 `BuildAIAssembly` 提前走 pgvector 分支，外部 provider 验收需用无该键的临时最小配置起服） | 全栈 mock 混合栈验收（compose 以 `*_PUBLISH_PORT` 端口覆盖入口起 weknora-mock 容器（9000/9001、redis 走 `REDIS_PUBLISH_PORT` 避让本机占用）+ native servify（临时最小配置 + sqlite））：`scripts/test-weknora-integration.sh` mock 模式全链真实跑通——`ai/status` 上报 `knowledge_provider=weknora enabled=true healthy=true`、ai/query、provider disable→fallback query（strategy=fallback）→enable→熔断复位、`/api/v1/ai/knowledge/upload|sync` 均 200 且 mock 容器日志留下 upload 协议留痕；mock 本体已从「catch-all 回 `{"status":"ok"}` 掩盖失败」重写为按 `pkg/weknora` 客户端契约逐端点实现（health/search/上传/删除/知识库详情，有状态可检索），契约测试 `TestWeKnoraMockProtocolSurface`（scripts/ 下纯 Go、不依赖 docker）守住请求/响应形态与成功/失败语义，`docker_compose_publish_ports_test.go` 守住端口覆盖入口默认值与 overlay 不重复声明；集成文档见 [WEKNORA_INTEGRATION.md](WEKNORA_INTEGRATION.md)。manifest 入库 [weknora-acceptance/manifest.json](../scripts/test-results/weknora-acceptance/manifest.json)（validate-acceptance-manifest 通过）；2026-09-29 全容器化复跑（`docker build --network=host` 破除容器内下载瓶颈后 servify 也进容器——独立容器挂仅 weknora 段最小配置 + sqlite，与 postgres/redis/weknora-mock 同栈四容器）全链同绿，manifest 入库 [weknora-acceptance-container/manifest.json](../scripts/test-results/weknora-acceptance-container/manifest.json)；已知边界：compose 模板 `servify` 服务定义的 config 挂载路径（`/app` 与镜像二进制 `/root` 不符）与 healthcheck 依赖 curl（运行时镜像未装）两处潜伏缺陷已于同日修正（挂载对齐末阶段 WORKDIR `/root`、探针改 busybox wget），`docker_compose_servify_runtime_test.go` 双守卫测试钉住（探针必须 wget、挂载容器路径必须落在 Dockerfile 末阶段 WORKDIR 下）并端到端复证（compose 原生三容器 healthy + wget 探针 ExitCode=0 + 挂载 canary 往返，证据 [compose-servify-fix/summary.txt](../scripts/test-results/compose-servify-fix/summary.txt)）；real 模式（需真实 WeKnora 环境，拒私网）端到端运行证据仍待外部环境 | 部分通过（mock 已验，real 待环境） |
+| 本地自含知识引擎（local driver + embedding/local + ai/local 三 local） | `knowledge.provider=local`（配合 `embedding.provider=local` 与 `ai.provider=local` 组成零外部依赖离线链路；sqlite 部署形态可用） | 全自含验收（零外部服务、零 mock、零网络出站：构建真实 servify + sqlite + 三 local 临时配置自起）：`make local-knowledge-acceptance` 真实跑通——`GET /api/v1/ai/status` 上报 `knowledge_provider=local`、enable 后 `healthy=true`；上传 3 篇主题文档真实分块+确定性哈希嵌入落库（sqlite3 证据：`provider_id='local'` 行 embedding 非空、长文档切出 `chunk_index>0` chunk、维度 256）；语义检索文档原句命中打印机文档（strategy=local，score≈0.75）且回答逐字来自知识原文（extractive 断言：剥掉 `- 标题: ` 引用前缀后必须是文档原文子串，零编造）；无关 query 被阈值过滤。已登记基线缺口：哈希嵌入为词法级，正例需强词面重合过 0.7 校准门（语义泛化不足）。~~retriever 将会话 id 透传为 `SearchRequest.KnowledgeID` 致非空 session_id 的 ai/query 滤没全局摄入文档~~——已修：retriever 不再把会话 id 当知识库 id，KnowledgeID 留空由 provider 落回默认命名空间（带 session_id 的 ai/query 现可正常检索全局摄入文档，widget 会话链路受益）。manifest 入库 [local-knowledge/manifest.json](../scripts/test-results/local-knowledge/manifest.json)（validate-acceptance-manifest 通过） | 通过 |
+
+### 3A. 认证与会话
+
+代码入口：
+
+- [auth_handler.go](../apps/server/internal/handlers/auth_handler.go)
+- [auth_service_test.go](../apps/server/internal/modules/auth/application/auth_service_test.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 登录与 refresh token 轮转 | `POST /api/v1/auth/login` `POST /api/v1/auth/refresh` | 登录后刷新 token，再尝试复用旧 refresh token | 返回 access/refresh token，新 token 生效，旧 refresh token 失效；真实留档已生成 [manifest.json](../scripts/test-results/auth-session-acceptance/real/manifest.json:1)、[auth-refresh.json](../scripts/test-results/auth-session-acceptance/auth-refresh.json:1)、[auth-refresh-reuse-old.json](../scripts/test-results/auth-session-acceptance/auth-refresh-reuse-old.json:1) | [auth_service_test.go](../apps/server/internal/modules/auth/application/auth_service_test.go)、[auth_handler_test.go](../apps/server/internal/handlers/auth_handler_test.go)、[test_auth_session_acceptance_test.go](../scripts/test_auth_session_acceptance_test.go)、[manifest.json](../scripts/test-results/auth-session-acceptance/real/manifest.json:1) | 通过 |
+| 当前会话列表 | `GET /api/v1/auth/sessions` | 登录后查看当前用户会话 | 返回会话列表、当前会话标记和基础风险字段；真实留档已生成 [auth-sessions-before.json](../scripts/test-results/auth-session-acceptance/auth-sessions-before.json:1) 与 [auth-sessions-after-logout-others.json](../scripts/test-results/auth-session-acceptance/auth-sessions-after-logout-others.json:1)，证明退出其它会话前后状态变化 | [auth_handler_test.go](../apps/server/internal/handlers/auth_handler_test.go)、[test_auth_session_acceptance_test.go](../scripts/test_auth_session_acceptance_test.go)、[manifest.json](../scripts/test-results/auth-session-acceptance/real/manifest.json:1) | 通过 |
+| 退出当前会话/其它会话 | `POST /api/v1/auth/sessions/logout-current` `POST /api/v1/auth/sessions/logout-others` | 执行自助登出 | 当前或其它会话被正确失效；真实留档已生成 [auth-logout-others.json](../scripts/test-results/auth-session-acceptance/auth-logout-others.json:1)、[auth-logout-current.json](../scripts/test-results/auth-session-acceptance/auth-logout-current.json:1) 和 [auth-sessions-after-logout-current.json](../scripts/test-results/auth-session-acceptance/auth-sessions-after-logout-current.json:1)，覆盖其它设备注销与当前 token 失效反证 | [auth_handler_test.go](../apps/server/internal/handlers/auth_handler_test.go)、[auth_service_test.go](../apps/server/internal/modules/auth/application/auth_service_test.go)、[test_auth_session_acceptance_test.go](../scripts/test_auth_session_acceptance_test.go)、[manifest.json](../scripts/test-results/auth-session-acceptance/real/manifest.json:1) | 通过 |
+
+### 4. 客户管理
+
+代码入口：[customer_handler.go](../apps/server/internal/handlers/customer_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 创建客户 | `POST /api/customers` | 提交合法客户资料 | 创建成功，返回 ID | [customer_handler_test.go](../apps/server/internal/handlers/customer_handler_test.go) | 通过 |
+| 客户列表 | `GET /api/customers` | 创建两客户后分页查询，再按 search 筛选唯一客户 | total>=2 且两个 ID 都在列表；search 命中 total=1 且 ID 一致（LOWER LIKE 跨方言修复） | [../scripts/test-customer-agent-acceptance.sh](../scripts/test-customer-agent-acceptance.sh)、[../scripts/test_customer_agent_acceptance_test.go](../scripts/test_customer_agent_acceptance_test.go)、[customer-list.txt](../scripts/test-results/customer-agent/customer-list.txt)、[customer-list-search.txt](../scripts/test-results/customer-agent/customer-list-search.txt)、[manifest.json](../scripts/test-results/customer-agent/manifest.json)（注：本节及后续各验收目录默认仅 `manifest.json` 入库——`*.txt`/`*.json` 运行时产物被 `.gitignore` 排除，下方 `.txt` 证据链接指向本地未入库文件；`auth-session-acceptance`/`voice-pstn-acceptance`/部分 `ragflow-acceptance` 证据为显式例外） | 通过 |
+| 客户统计 | `GET /api/customers/stats` | 准备不同客户样本后查询 | 返回统计信息正确 | customer_service_test.go（历史证据，已随 services 迁移拆并） | 通过 |
+| 客户详情 | `GET /api/customers/:id` | 查询已存在客户 | 返回正确详情 | [customer_handler_test.go](../apps/server/internal/handlers/customer_handler_test.go) | 通过 |
+| 更新客户 | `PUT /api/customers/:id` | 更新字段后重新查询 | 数据被持久化 | [customer_handler_test.go](../apps/server/internal/handlers/customer_handler_test.go) | 通过 |
+| 活动轨迹 | `GET /api/customers/:id/activity` | 客户建两张工单后查询活动，另一无活动客户作空对照 | recent_tickets 含两单且倒序（最新在前），空对照客户 recent_tickets 为空 | [../scripts/test-customer-agent-acceptance.sh](../scripts/test-customer-agent-acceptance.sh)、[../scripts/test_customer_agent_acceptance_test.go](../scripts/test_customer_agent_acceptance_test.go)、[customer-activity-c1.txt](../scripts/test-results/customer-agent/customer-activity-c1.txt)、[customer-activity-c2.txt](../scripts/test-results/customer-agent/customer-activity-c2.txt)、[manifest.json](../scripts/test-results/customer-agent/manifest.json) | 通过 |
+| 添加备注 | `POST /api/customers/:id/notes` | 添加备注后重查 | 备注被记录 | [customer_handler_test.go](../apps/server/internal/handlers/customer_handler_test.go) | 通过 |
+| 更新标签 | `PUT /api/customers/:id/tags` | 更新标签后重查 | 标签覆盖或合并符合设计 | [customer_handler_test.go](../apps/server/internal/handlers/customer_handler_test.go) | 通过 |
+
+### 5. 客服管理
+
+代码入口：[agent_handler.go](../apps/server/internal/handlers/agent_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 创建客服 | `POST /api/agents` | 两个 agent 用户分别建客服实体（不同技能/容量） | 201 创建成功；同用户重复创建 409 already an agent | [../scripts/test-customer-agent-acceptance.sh](../scripts/test-customer-agent-acceptance.sh)、[../scripts/test_customer_agent_acceptance_test.go](../scripts/test_customer_agent_acceptance_test.go)、[agent-create-a1.txt](../scripts/test-results/customer-agent/agent-create-a1.txt)、[agent-create-duplicate.txt](../scripts/test-results/customer-agent/agent-create-duplicate.txt)、[manifest.json](../scripts/test-results/customer-agent/manifest.json) | 通过 |
+| 客服列表 | `GET /api/agents` | 创建后查询 | 返回客服列表 | [agent_handler_test.go](../apps/server/internal/handlers/agent_handler_test.go) | 通过 |
+| 在线客服列表 | `GET /api/agents/online` | 切换在线离线状态后查询 | 仅返回在线客服 | [agent_handler_extended_test.go](../apps/server/internal/handlers/agent_handler_extended_test.go) | 通过 |
+| 客服统计 | `GET /api/agents/stats` | 准备不同负载样本后查询 | 统计值正确 | agent_service_more_test.go（历史证据，已随 services 迁移拆并） | 通过 |
+| 查找可用客服 | `GET /api/agents/find-available` | 全离线查询负例后两客服上线，分别按无技能与 skills=billing 查询 | 空池 404 No available agent found；命中在线客服，技能过滤确定命中含 billing 的客服 | [../scripts/test-customer-agent-acceptance.sh](../scripts/test-customer-agent-acceptance.sh)、[../scripts/test_customer_agent_acceptance_test.go](../scripts/test_customer_agent_acceptance_test.go)、[find-available-empty.txt](../scripts/test-results/customer-agent/find-available-empty.txt)、[find-available-skills.txt](../scripts/test-results/customer-agent/find-available-skills.txt)、[manifest.json](../scripts/test-results/customer-agent/manifest.json) | 通过 |
+| 更新状态 | `PUT /api/agents/:id/status` | 更新在线/忙碌状态 | 状态持久化 | [agent_handler_test.go](../apps/server/internal/handlers/agent_handler_test.go) | 通过 |
+| 上下线切换 | `POST /api/agents/:id/online` `POST /api/agents/:id/offline` | 调用接口并重查 | 状态切换正确 | [agent_handler_test.go](../apps/server/internal/handlers/agent_handler_test.go)、[agent_handler_extended_test.go](../apps/server/internal/handlers/agent_handler_extended_test.go)、agent_service_more_test.go（历史证据，已随 services 迁移拆并） | 通过 |
+| 会话分配/释放 | `POST /api/agents/:id/assign-session` `POST /api/agents/:id/release-session` | WS 建三个未分配会话，手动分配/释放并对账在线客服负载 | assign 后 current_load 0→1，release 后 1→0；满载 500、未分配释放 404、不存在会话/客服 404 | [../scripts/test-customer-agent-acceptance.sh](../scripts/test-customer-agent-acceptance.sh)、[../scripts/test_customer_agent_acceptance_test.go](../scripts/test_customer_agent_acceptance_test.go)、[assign-s1.txt](../scripts/test-results/customer-agent/assign-s1.txt)、[online-after-assign.txt](../scripts/test-results/customer-agent/online-after-assign.txt)、[release-s1.txt](../scripts/test-results/customer-agent/release-s1.txt)、[online-after-release.txt](../scripts/test-results/customer-agent/online-after-release.txt)、[manifest.json](../scripts/test-results/customer-agent/manifest.json) | 通过 |
+
+### 6. 工单
+
+代码入口：[ticket_handler.go](../apps/server/internal/handlers/ticket_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 创建工单 | `POST /api/tickets` | 提交合法工单 | 创建成功，返回 ID | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go) | 通过 |
+| 批量更新工单 | `POST /api/tickets/bulk` | 批量更新多个工单 | 返回批量结果，数据一致 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go)、[command_service_test.go](../apps/server/internal/modules/ticket/application/command_service_test.go) | 通过 |
+| 工单列表 | `GET /api/tickets` | 创建后查询 | 支持筛选和分页 | [query_service_test.go](../apps/server/internal/modules/ticket/application/query_service_test.go)、[ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go) | 通过 |
+| 导出工单 CSV | `GET /api/tickets/export` | 准备样本后导出 | 下载成功，字段完整 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/ticket-acceptance/manifest.json) 与 [ticket-export.csv](../scripts/test-results/ticket-acceptance/ticket-export.csv) | 通过 |
+| 工单统计 | `GET /api/tickets/stats` | 准备不同状态工单后查询 | 统计值正确 | [query_service_test.go](../apps/server/internal/modules/ticket/application/query_service_test.go)、[handler_adapter_test.go](../apps/server/internal/modules/ticket/delivery/handler_adapter_test.go)、真实留档 [manifest.json](../scripts/test-results/ticket-acceptance/manifest.json) | 通过 |
+| 工单详情 | `GET /api/tickets/:id` | 查询已存在工单 | 返回正确详情 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go) | 通过 |
+| 更新工单 | `PUT /api/tickets/:id` | 更新标题、优先级、状态 | 数据被持久化 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go)、[command_service_test.go](../apps/server/internal/modules/ticket/application/command_service_test.go)、真实留档 [manifest.json](../scripts/test-results/ticket-acceptance/manifest.json) | 通过 |
+| 指派工单 | `POST /api/tickets/:id/assign` | 指派给客服 | 负责人变化正确 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go) | 通过 |
+| 添加评论 | `POST /api/tickets/:id/comments` | 添加评论后重查 | 评论可读出 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go)、[command_service_test.go](../apps/server/internal/modules/ticket/application/command_service_test.go)、真实留档 [manifest.json](../scripts/test-results/ticket-acceptance/manifest.json) | 通过 |
+| 关闭工单 | `POST /api/tickets/:id/close` | 关闭后重查 | 状态变为关闭，关闭时间正确 | [ticket_handler_test.go](../apps/server/internal/handlers/ticket_handler_test.go)、[command_service_test.go](../apps/server/internal/modules/ticket/application/command_service_test.go)、真实留档 [manifest.json](../scripts/test-results/ticket-acceptance/manifest.json) | 通过 |
+
+### 6A. 会话工作台
+
+代码入口：
+
+- [conversation_workspace_handler.go](../apps/server/internal/handlers/conversation_workspace_handler.go)
+- [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 会话详情 | `GET /api/omni/sessions/:id` | 查询已存在会话 | 返回正确会话详情与状态 | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+| 消息列表 | `GET /api/omni/sessions/:id/messages` | 查询会话消息 | 返回按时间顺序排列的消息列表 | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+| 发送消息 | `POST /api/omni/sessions/:id/messages` | 在工作台发送消息 | 消息写入持久层并触发 realtime 推送 | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+| 指派会话 | `POST /api/omni/sessions/:id/assign` | 指派客服接管 | 返回成功并更新会话归属 | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+| 转接会话 | `POST /api/omni/sessions/:id/transfer` | 转接到另一位客服 | 返回成功并更新转接结果 | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+| 关闭会话 | `POST /api/omni/sessions/:id/close` | 关闭当前会话 | 会话状态切为 `closed` | [conversation_workspace_handler_test.go](../apps/server/internal/handlers/conversation_workspace_handler_test.go)、真实留档 [manifest.json](../scripts/test-results/workspace-acceptance/manifest.json) | 通过 |
+
+### 7. 会话转接
+
+代码入口：[session_transfer_handler.go](../apps/server/internal/handlers/session_transfer_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 转人工 | `POST /api/session-transfer/to-human` | 真实访客 WS 建会话后发起转接：有在线客服时直转（success=true 且分配客服），无可用客服时自动入队（is_waiting=true）；重复转接幂等命中等待记录 | 直转与排队语义正确区分，幂等重放仍 200 | [../scripts/test-session-transfer-acceptance.sh](../scripts/test-session-transfer-acceptance.sh)、[../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 指定客服转接 | `POST /api/session-transfer/to-agent` | 指定在线客服转接，并对离线客服发起转接作负例 | 转接成功且 new_agent_id 为目标客服；离线目标 500 `not online` 拒绝 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[to-agent-offline-rejected.txt](../scripts/test-results/session-transfer/to-agent-offline-rejected.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 查询转接历史 | `GET /api/session-transfer/history/:session_id` | 转接后按会话查询单会话历史，再查近期历史列表 | 单会话历史 count>=1，近期列表 count>=2 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[history-s1.txt](../scripts/test-results/session-transfer/history-s1.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 查询等待队列 | `GET /api/session-transfer/waiting` | 无可用客服时转人工制造排队后查询 | 返回等待记录且 count=1 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[waiting-list.txt](../scripts/test-results/session-transfer/waiting-list.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 取消等待 | `POST /api/session-transfer/cancel` | 对排队会话取消并二次重放取消 | 两次均 200，等待队列 count=0 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[cancel-waiting-again.txt](../scripts/test-results/session-transfer/cancel-waiting-again.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 处理排队 | `POST /api/session-transfer/process-queue` | 客服回到在线后手动处理等待队列 | processed>=1 且等待队列清空 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[process-queue.txt](../scripts/test-results/session-transfer/process-queue.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+| 自动转接检查 | `POST /api/session-transfer/check-auto` | 携带会话消息触发自动转接检查 | 200 且 should_transfer 为布尔结论 | [../scripts/test_session_transfer_acceptance_test.go](../scripts/test_session_transfer_acceptance_test.go)、[check-auto.txt](../scripts/test-results/session-transfer/check-auto.txt)、[manifest.json](../scripts/test-results/session-transfer/manifest.json) | 通过 |
+
+### 8. 满意度与公开问卷
+
+代码入口：
+
+- [satisfaction_handler.go](../apps/server/internal/handlers/satisfaction_handler.go)
+- [csat_public_handler.go](../apps/server/internal/handlers/csat_public_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 创建满意度记录 | `POST /api/satisfactions` | 建客户与工单后提交评价（rating=5） | 201 创建成功且回显评分 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-create.txt](../scripts/test-results/satisfaction/satisfaction-create.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 满意度列表 | `GET /api/satisfactions` | 创建评价后分页查询 | total>=1 且分页结构完整 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-list.txt](../scripts/test-results/satisfaction/satisfaction-list.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 满意度统计 | `GET /api/satisfactions/stats` | 单条 rating=5 评价后查询统计 | total_ratings>=1、average_rating>0、rating_distribution 与样本一致（rating5=1） | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-stats.txt](../scripts/test-results/satisfaction/satisfaction-stats.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 调查列表 | `GET /api/satisfactions/surveys` | 关闭工单触发调度后查询调查清单 | 该工单的调查已出现且 status=sent | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[surveys-list.txt](../scripts/test-results/satisfaction/surveys-list.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 重发调查 | `POST /api/satisfactions/surveys/:id/resend` | 对已调度的调查重发 | 200 且重新生成 survey_token | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[survey-resend.txt](../scripts/test-results/satisfaction/survey-resend.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 查看满意度详情 | `GET /api/satisfactions/:id` | 按创建返回的评价 ID 查询 | 200 且 ID 一致；删除后同查询 404 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-detail.txt](../scripts/test-results/satisfaction/satisfaction-detail.txt)、[satisfaction-detail-after-delete.txt](../scripts/test-results/satisfaction/satisfaction-detail-after-delete.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 更新满意度 | `PUT /api/satisfactions/:id` | 更新评论内容 | 200 且 comment 回显更新值 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-update.txt](../scripts/test-results/satisfaction/satisfaction-update.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 删除满意度 | `DELETE /api/satisfactions/:id` | 删除评价后按工单与详情双路复查 | 删除 204；按工单查 204（无评价）、详情 404，数据证据留档 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-delete.txt](../scripts/test-results/satisfaction/satisfaction-delete.txt)、[satisfaction-by-ticket-after-delete.txt](../scripts/test-results/satisfaction/satisfaction-by-ticket-after-delete.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 按工单查询满意度 | `GET /api/tickets/:id/satisfaction` | 工单已有评价时查询 | 200 且返回的评价 ID 与创建一致 | [../scripts/test-satisfaction-acceptance.sh](../scripts/test-satisfaction-acceptance.sh)、[../scripts/test_satisfaction_acceptance_test.go](../scripts/test_satisfaction_acceptance_test.go)、[satisfaction-by-ticket.txt](../scripts/test-results/satisfaction/satisfaction-by-ticket.txt)、[manifest.json](../scripts/test-results/satisfaction/manifest.json) | 通过 |
+| 公开问卷查看 | `GET /public/csat/:token` | 使用有效 token 访问 | 返回问卷内容 | [csat_public_handler.go](../apps/server/internal/handlers/csat_public_handler.go) | 通过 |
+| 公开问卷提交 | `POST /public/csat/:token/respond` | 提交问卷响应 | 返回成功并持久化 | [csat_public_handler.go](../apps/server/internal/handlers/csat_public_handler.go) | 通过 |
+
+### 9. 工作台、宏、集成、自定义字段
+
+代码入口：
+
+- [workspace_handler.go](../apps/server/internal/handlers/workspace_handler.go)
+- [macro_handler.go](../apps/server/internal/handlers/macro_handler.go)
+- [app_market_handler.go](../apps/server/internal/handlers/app_market_handler.go)
+- [custom_field_handler.go](../apps/server/internal/handlers/custom_field_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 工作台概览 | `GET /api/omni/workspace` | 请求工作台概览 | 返回聚合视图 | [workspace_handler_test.go](../apps/server/internal/handlers/workspace_handler_test.go)、workspace_service_test.go（历史证据，已随 services 迁移拆并） | 通过 |
+| 宏列表/创建/更新/删除/应用 | `/api/macros` 系列 | 依次执行 CRUD 与 apply | 规则可持久化且可实际应用 | [macro_handler_test.go](../apps/server/internal/handlers/macro_handler_test.go) [test-macro-integration-customfield-acceptance.sh](../scripts/test-macro-integration-customfield-acceptance.sh)、[test_macro_integration_customfield_acceptance_test.go](../scripts/test_macro_integration_customfield_acceptance_test.go)、[macro-create.txt](../scripts/test-results/macro-integration-customfield/macro-create.txt)、[macro-apply.txt](../scripts/test-results/macro-integration-customfield/macro-apply.txt)、[manifest.json](../scripts/test-results/macro-integration-customfield/manifest.json) | 通过 |
+| 应用集成列表/创建/更新/删除 | `/api/apps/integrations` 系列 | 执行 CRUD | 集成配置生效并可回读 | [app_market_handler_test.go](../apps/server/internal/handlers/app_market_handler_test.go) [test-macro-integration-customfield-acceptance.sh](../scripts/test-macro-integration-customfield-acceptance.sh)、[test_macro_integration_customfield_acceptance_test.go](../scripts/test_macro_integration_customfield_acceptance_test.go)、[integration-create.txt](../scripts/test-results/macro-integration-customfield/integration-create.txt)、[integration-search.txt](../scripts/test-results/macro-integration-customfield/integration-search.txt)、[manifest.json](../scripts/test-results/macro-integration-customfield/manifest.json) | 通过 |
+| 自定义字段列表/详情/创建/更新/删除 | `/api/custom-fields` 系列 | 执行 CRUD | 字段定义持久化并可用于工单等实体 | [custom_field_handler_test.go](../apps/server/internal/handlers/custom_field_handler_test.go) [test-macro-integration-customfield-acceptance.sh](../scripts/test-macro-integration-customfield-acceptance.sh)、[test_macro_integration_customfield_acceptance_test.go](../scripts/test_macro_integration_customfield_acceptance_test.go)、[customfield-create.txt](../scripts/test-results/macro-integration-customfield/customfield-create.txt)、[customfield-get.txt](../scripts/test-results/macro-integration-customfield/customfield-get.txt)、[manifest.json](../scripts/test-results/macro-integration-customfield/manifest.json) | 通过 |
+
+### 10. 统计、SLA、排班
+
+代码入口：
+
+- [statistics_handler.go](../apps/server/internal/modules/analytics/delivery/statistics_handler.go)
+- [sla_handler.go](../apps/server/internal/handlers/sla_handler.go)
+- [shift_handler.go](../apps/server/internal/handlers/shift_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 仪表盘统计 | `GET /api/statistics/dashboard` | 准备样本数据后查询 | 返回聚合概览 | [statistics_handler_test.go](../apps/server/internal/modules/analytics/delivery/statistics_handler_test.go)、statistics_service_test.go（历史证据，已随 services 迁移拆并） | 通过 |
+| 时间范围统计 | `GET /api/statistics/time-range` | 指定日期范围查询 | 返回按时间切片聚合 | statistics_service_test.go（历史证据，已随 services 迁移拆并）、[statistics_handler_test.go](../apps/server/internal/modules/analytics/delivery/statistics_handler_test.go) | 通过 |
+| 客服绩效统计 | `GET /api/statistics/agent-performance` | 准备客服样本后查询 | 返回绩效排序 | statistics_service_test.go（历史证据，已随 services 迁移拆并） [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[stats-agent-perf.txt](../scripts/test-results/statistics/stats-agent-perf.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+| 工单分类统计 | `GET /api/statistics/ticket-category` | 准备不同分类工单 | 分类聚合正确 | [statistics_handler_test.go](../apps/server/internal/modules/analytics/delivery/statistics_handler_test.go) [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[stats-category.txt](../scripts/test-results/statistics/stats-category.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+| 工单优先级统计 | `GET /api/statistics/ticket-priority` | 准备不同优先级工单 | 优先级聚合正确 | [statistics_handler_test.go](../apps/server/internal/modules/analytics/delivery/statistics_handler_test.go) [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[stats-priority.txt](../scripts/test-results/statistics/stats-priority.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+| 客户来源统计 | `GET /api/statistics/customer-source` | 准备不同来源客户 | 来源聚合正确 | [statistics_handler_test.go](../apps/server/internal/modules/analytics/delivery/statistics_handler_test.go) [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[stats-source.txt](../scripts/test-results/statistics/stats-source.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+| 每日统计更新 | `POST /api/statistics/update-daily` | 指定日期触发更新 | 更新成功且可被后续查询读到 | statistics_service_test.go（历史证据，已随 services 迁移拆并） [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[daily-update.txt](../scripts/test-results/statistics/daily-update.txt)、[daily-update-default.txt](../scripts/test-results/statistics/daily-update-default.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+| SLA 配置 CRUD | `/api/sla/configs` 系列 | 执行配置增删改查 | 配置生效并可回读 | [sla_handler_test.go](../apps/server/internal/handlers/sla_handler_test.go) | 通过 |
+| SLA 优先级配置查询 | `GET /api/sla/configs/priority/:priority` | 查询指定优先级 | 返回正确规则 | [sla_handler_test.go](../apps/server/internal/handlers/sla_handler_test.go) | 通过 |
+| SLA 违约列表 | `GET /api/sla/violations` | 准备违约工单后查询 | 返回违约记录 | [sla_handler_test.go](../apps/server/internal/handlers/sla_handler_test.go) | 通过 |
+| SLA 违约解决 | `POST /api/sla/violations/:id/resolve` | 解决违约后重查 | 状态变化正确 | [sla_handler_test.go](../apps/server/internal/handlers/sla_handler_test.go) | 通过 |
+| SLA 统计 | `GET /api/sla/stats` | 准备样本后查询 | 返回 SLA 统计视图 | [sla_handler_test.go](../apps/server/internal/handlers/sla_handler_test.go) | 通过 |
+| 工单 SLA 检查 | `POST /api/sla/check/ticket/:ticket_id` | 对指定工单执行检查 | 返回 SLA 判定结果 | [sla_handler_check_ticket_test.go](../apps/server/internal/handlers/sla_handler_check_ticket_test.go) | 通过 |
+| 排班 CRUD 与统计 | `/api/shifts` 系列 | 创建、查询、更新、删除、统计 | 排班记录和统计正确 | [shift_handler_test.go](../apps/server/internal/handlers/shift_handler_test.go) [test-statistics-acceptance.sh](../scripts/test-statistics-acceptance.sh)、[test_statistics_acceptance_test.go](../scripts/test_statistics_acceptance_test.go)、[shift-create.txt](../scripts/test-results/statistics/shift-create.txt)、[shift-stats-active.txt](../scripts/test-results/statistics/shift-stats-active.txt)、[manifest.json](../scripts/test-results/statistics/manifest.json) | 通过 |
+
+### 10A. 审计与安全
+
+代码入口：
+
+- [audit_handler.go](../apps/server/internal/handlers/audit_handler.go)
+- [user_security_handler.go](../apps/server/internal/handlers/user_security_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 用户安全态查询 | `GET /api/security/users/:id` | 查询指定用户安全状态 | 返回 `user_id`、`role`、`status`、`token_version` 等字段 | [user_security_handler_test.go](../apps/server/internal/handlers/user_security_handler_test.go) | 通过 |
+| 用户 token 失效 | `POST /api/security/users/:id/revoke-tokens` | 触发旧 token 失效 | `token_version` 增加，后续状态可回读 | [user_security_handler_test.go](../apps/server/internal/handlers/user_security_handler_test.go) | 通过 |
+| 用户会话列表 | `GET /api/security/users/:id/sessions` | 查询指定用户会话 | 返回会话列表或空列表，结构稳定 | [user_security_handler_test.go](../apps/server/internal/handlers/user_security_handler_test.go) | 通过 |
+| 审计日志列表 | `GET /api/audit/logs` | 按 action 等条件查询 | 返回审计记录列表及分页信息 | [audit_handler_test.go](../apps/server/internal/handlers/audit_handler_test.go) | 通过 |
+| 审计日志详情 | `GET /api/audit/logs/:id` | 查询单条审计记录 | 返回指定审计记录 | [audit_handler_test.go](../apps/server/internal/handlers/audit_handler_test.go) | 通过 |
+| 审计日志差异预览 | `GET /api/audit/logs/:id/diff` | 查看变更 diff | 返回变更路径或明确无差异 | [audit_handler_test.go](../apps/server/internal/handlers/audit_handler_test.go) | 通过 |
+| 审计日志导出 | `GET /api/audit/logs/export` | 导出过滤后的日志 | 返回 CSV 内容 | [audit_handler_test.go](../apps/server/internal/handlers/audit_handler_test.go) | 通过 |
+
+### 11. 自动化、知识库、辅助建议、激励
+
+代码入口：
+
+- [automation_handler.go](../apps/server/internal/handlers/automation_handler.go)
+- [knowledge_doc_handler.go](../apps/server/internal/handlers/knowledge_doc_handler.go)
+- [suggestion_handler.go](../apps/server/internal/handlers/suggestion_handler.go)
+- [gamification_handler.go](../apps/server/internal/handlers/gamification_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 自动化触发器列表/创建/删除 | `/api/automations` 系列 | 执行 CRUD | 触发器生效并可管理。2026-09-18 真实复验：事件名归一化（ticket_updated→ticket.updated）回读、非法事件/空名/delay 错位三负例 400 精确文本、删除后列表归零、删除不存在 404，证据清单见 [automation-gamification/manifest.json](../scripts/test-results/automation-gamification/manifest.json) | [automation_handler_test.go](../apps/server/internal/handlers/automation_handler_test.go)、[test_automation_gamification_acceptance_test.go](../scripts/test_automation_gamification_acceptance_test.go) | 通过 |
+| 自动化运行记录 | `GET /api/automations/runs` | 触发自动化后查询 | 可查看运行结果。2026-09-18 真实复验：dry-run 匹配且不落副作用、真实运行命中后工单标签落库、runs 列表含 status=success 审计记录，与触发器同脚本验收，证据清单见 [automation-gamification/manifest.json](../scripts/test-results/automation-gamification/manifest.json) | automation_service_more_test.go（历史证据，已随 services 迁移拆并）、[test_automation_gamification_acceptance_test.go](../scripts/test_automation_gamification_acceptance_test.go) | 通过 |
+| 自动化批量运行 | `POST /api/automations/run` | 触发批量运行 | 返回执行结果，失败项可见。2026-09-18 真实复验：`{event,ticket_ids,dry_run}` 返回 tickets_processed/matches/results，手动运行不存在触发器 400，证据清单见 [automation-gamification/manifest.json](../scripts/test-results/automation-gamification/manifest.json) | automation_service_more_test.go（历史证据，已随 services 迁移拆并）、[test_automation_gamification_acceptance_test.go](../scripts/test_automation_gamification_acceptance_test.go) | 通过 |
+| 知识文档 CRUD | `/api/knowledge-docs` 系列 | 执行 CRUD | 文档可持久化；在已启用且支持对应能力的 knowledge provider 下，创建/更新会同步外部索引，删除若不支持则显式失败 | [knowledge_doc_handler_test.go](../apps/server/internal/handlers/knowledge_doc_handler_test.go)、[service_test.go](../apps/server/internal/modules/knowledge/application/service_test.go)；2026-09-27 Linux 本机 `make ragflow-acceptance`（ragflow mock 已启用为当前 provider）全链验证：创建 `201` 且响应 `external_id` 非空、mock documents POST 携带 `<标题>.txt` 留痕；更新 `200` 触发删旧建新（外部映射 doc-6→doc-7，旧外部 id 进入 mock DELETE 留痕）；删除 `200`（mock DELETE 携带末次外部 id）且回读 `404`。本刀同时修复 `knowledgeDocFromDomain` 从不透传 `provider_id/external_id` 的观测缺口（DTO 字段此前恒为空串），delivery 适配器补回归断言；证据 [knowledge-docs-create.json](../scripts/test-results/ragflow-acceptance/knowledge-docs-create.json)、[knowledge-docs-get.json](../scripts/test-results/ragflow-acceptance/knowledge-docs-get.json)、[knowledge-docs-update.json](../scripts/test-results/ragflow-acceptance/knowledge-docs-update.json)、[knowledge-docs-delete.json](../scripts/test-results/ragflow-acceptance/knowledge-docs-delete.json)、[knowledge-docs-get-after-delete.json](../scripts/test-results/ragflow-acceptance/knowledge-docs-get-after-delete.json)、[ragflow-mock-requests.jsonl](../scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl)；真实外部 provider 运行证据仍依赖环境凭证 | 通过 |
+| 公开知识库查询 | `/public/kb/docs` 系列 | 访问公开知识文档 | 可读且权限边界正确 | [knowledge_doc_handler_test.go](../apps/server/internal/handlers/knowledge_doc_handler_test.go) | 通过 |
+| 辅助建议 | `GET /api/assist/suggest` `POST /api/assist/suggest` | 传入上下文获取建议 | 返回建议结果。2026-09-18 真实复验：创建标题含 printer 的工单后，GET `?query=printer` 与 POST `{"query":"printer"}` 均命中该工单且 intent 非空，未认证 401，与远程协助同脚本验收，证据清单见 [remote-assist/manifest.json](../scripts/test-results/remote-assist/manifest.json) | [suggestion_handler_test.go](../apps/server/internal/handlers/suggestion_handler_test.go)、[test_remote_assist_acceptance_test.go](../scripts/test_remote_assist_acceptance_test.go) | 通过 |
+| 激励排行 | `GET /api/gamification/leaderboard` | 准备积分样本后查询 | 排名正确。2026-09-18 真实复验：两个客服各配 resolved 工单+CSAT 后分数精确对账（3 单+3 条 5 分 CSAT=130 分 rank1；1 单+1 条 4 分 CSAT=50 分）、日期窗回显、非法日期 400、部门过滤与空部门，未认证 401；已知边界：days 窗上界秒级截断，同秒落库样本会被边界比较排除（验收脚本以 sleep 2 错开），证据清单见 [automation-gamification/manifest.json](../scripts/test-results/automation-gamification/manifest.json) | [gamification_handler_test.go](../apps/server/internal/handlers/gamification_handler_test.go)、[test_automation_gamification_acceptance_test.go](../scripts/test_automation_gamification_acceptance_test.go) | 通过 |
+
+### 12. 语音
+
+代码入口：[voice_handler.go](../apps/server/internal/handlers/voice_handler.go)
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 协议列表 | `GET /api/voice/protocols` | 请求协议列表 | 返回已注册协议 | [voice_handler_test.go](../apps/server/internal/handlers/voice_handler_test.go) | 通过 |
+| 协议信令事件 | `POST /api/voice/protocols/:protocol/call-events/:event` | 发送 invite/answer/hangup 等事件 | 事件被正确映射和处理 | [voice_handler_integration_test.go](../apps/server/internal/handlers/voice_handler_integration_test.go) | 通过 |
+| 协议媒体事件 | `POST /api/voice/protocols/:protocol/media-events/:event` | 发送媒体事件 | 媒体状态正确更新 | [voice_handler_integration_test.go](../apps/server/internal/handlers/voice_handler_integration_test.go) | 通过 |
+| 开始录音 | `POST /api/voice/recordings/start` | 启动录音 | 返回 recording ID | [service_test.go](../apps/server/internal/modules/voice/application/service_test.go) | 通过 |
+| 停止录音 | `POST /api/voice/recordings/stop` | 停止录音后查询 | 录音状态完成 | [recording_service_test.go](../apps/server/internal/modules/voice/application/recording_service_test.go) | 通过 |
+| 获取录音 | `GET /api/voice/recordings/:recordingID` | 查询录音详情 | 返回录音元数据 | [recording_service_test.go](../apps/server/internal/modules/voice/application/recording_service_test.go) | 通过 |
+| 转写追加 | `POST /api/voice/transcripts` | 追加语音转写片段 | 转写被保存 | [transcript_service_test.go](../apps/server/internal/modules/voice/application/transcript_service_test.go) | 通过 |
+| 转写列表 | `GET /api/voice/transcripts` | 追加后查询 | 返回转写内容 | [transcript_service_test.go](../apps/server/internal/modules/voice/application/transcript_service_test.go) | 通过 |
+
+### 13. 性能与容量基线
+
+P2-8：从"能跑"提升到"知道能承受多少负载"。基线口径与结论详见 [perf-baseline.md](./perf-baseline.md)；
+证据与 manifest 在 [scripts/test-results/perf-baseline/](../scripts/test-results/perf-baseline/)（provider=perf）。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| ticket 高并发读写 | `perfbench -scenario tickets`（`POST /api/tickets` + 评论 + 列表，并发 16，1800 ops） | full 档压测 | 0 错误，p50/p95/p99 记录在 results.json | [test-perf-baseline.sh](../scripts/test-perf-baseline.sh) + [perfbench](../scripts/perfbench/main.go) | 通过 |
+| AI 查询延迟 | `perfbench -scenario ai`（`POST /api/v1/ai/query`，并发 16，200 ops） | full 档压测（mock LLM） | 0 错误，延迟分布入基线 | 同上 | 通过 |
+| 文件上传与知识同步 | `perfbench -scenario upload`（multipart 上传 + knowledge upload/sync） | full 档压测 | 0 错误；无 provider 时 503 按预期记 note | 同上 | 通过 |
+| WebSocket 连接数 | `perfbench -scenario ws`（200 连接阶梯建连 + text-message 往返） | full 档压测 | 200/200 建连，`/api/v1/ws/stats` 对账一致 | 同上 | 通过 |
+| 压测链路守护 | `TestPerfBaselineScriptWritesEvidence`（CI script-checks） | smoke 档真跑全链路 | manifest 全 true、overall=passed | [test_perf_baseline_test.go](../scripts/test_perf_baseline_test.go) | 通过 |
+| 基线 manifest 校验 | `validate-acceptance-manifest.sh`（provider=perf case） | 对入库 manifest 复验 | 校验通过 | [validate_acceptance_manifest_test.go](../scripts/validate_acceptance_manifest_test.go) 正反例 | 通过 |
+
+### 14. V1.0 收敛能力（B1~B3 批次，docs/v1-convergence-plan.md）
+
+V1.0 收敛改造（2026-10-04 前过闸）新增/收口的能力面。切片登记与提交号见
+[todo.md](../todo.md)；本节逐项补齐验收矩阵行。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 知识来源登记 | `GET/POST /api/knowledge-docs/sources`、`DELETE /sources/:id` | 登记来源（枚举类型校验）、文档挂源、删除被引用来源 | 类型枚举外 400；删除仍被文档引用的来源被拒绝（引用守卫）；tenant/workspace scope 隔离 | [service_sources_version_test.go](../apps/server/internal/modules/knowledge/application/service_sources_version_test.go)、[source_repository_integration_test.go](../apps/server/internal/modules/knowledge/infra/source_repository_integration_test.go)、[knowledge_sources_index_jobs_test.go](../apps/server/internal/handlers/knowledge_sources_index_jobs_test.go)（B3-1a，a66da78） | 通过 |
+| 文档版本与索引任务 | `POST /:id/index-jobs`、`GET /:id/index-jobs`、`POST /index-jobs/:job_id/retry` | 内容变更触发版本自增；重建索引；失败重试 | 标题/内容变更版本 +1、纯元数据不动；任务落执行时文档版本（`document_version`）；状态/错误可见、失败可重试 | 同上（B3-1a，a66da78）；迁移 000018 双路径（versioned SQL + AutoMigrate） | 通过 |
+| AI 首答持久化与反馈回传 | `POST /api/v1/ai/feedback`；ai_answers / answer_feedback | REST/WS 首答落库（旁路，失败静默）；提交反馈；访客跨会话反馈 | REST 响应与 WS ai-response 帧透出 `answer_id`；来源快照只落 document_id/title/score 不落 content 全文；end_user（含 guest token）强制会话绑定——token `sid` 与答案会话不一致 400 | [feedback_test.go](../apps/server/internal/modules/ai/application/feedback_test.go)、[answer_recording_test.go](../apps/server/internal/modules/ai/delivery/answer_recording_test.go)、[answer_repository_integration_test.go](../apps/server/internal/modules/ai/infra/answer_repository_integration_test.go)、[feedback_handler_test.go](../apps/server/internal/modules/ai/delivery/feedback_handler_test.go)（B3-1b，0a7a152） | 通过 |
+| guest token REST 主体推导 | `Authorization: Bearer <guest token>`（任意 AuthMiddleware 面） | guest token 调 REST 端点 | `principal_kind=end_user`、`session_id=sid` 上下文注入；WS 握手仍走独立 validator 不受影响 | [guest_token_test.go TestGuestTokenViaAuthMiddleware](../apps/server/internal/platform/auth/guest_token_test.go)、[principal_test.go](../apps/server/internal/platform/auth/principal_test.go)（B3-2，f7b99e5） | 通过 |
+| 检索分析读口 | `GET /api/v1/ai/retrieval-analytics?days=&limit=` | 窗口聚合查询 | top 问答（带引用命中）/ 零命中问题 / 低置信问题（< 0.65）/ 反馈计数；窗口默认 7 天上限 90 天、榜单默认 10 上限 50 | [feedback_test.go TestRetrievalAnalyticsAggregation](../apps/server/internal/modules/ai/application/feedback_test.go)、[feedback_handler_test.go TestRetrievalAnalyticsEndpoint](../apps/server/internal/modules/ai/delivery/feedback_handler_test.go)（B3-1b，0a7a152） | 通过 |
+| citation 可视化与访客反馈入口 | widget ai-response 终帧；admin Knowledge 页 | 终帧带 sources/answer_id 渲染引用行与"Was this helpful?"；admin 来源/版本/任务抽屉/检索分析页 | 引用行 `📄 标题 · relevance 0.91`；反馈条仅在带 answer_id 且注入 accessToken 时出现（匿名 demo 不显示）；admin typecheck+build 绿 | [widget.js](../apps/demo-sdk/widget.js)（B3-2，f7b99e5）；admin Knowledge 页（78361f1，`npm run typecheck`+`build`） | 通过（前端自动化=typecheck/build/单测，浏览器端到端人工复核） |
+| Routing 统一分配事件路径 | conversation.Service.AssignAgent / Transfer | 直派接管、改派后查事件流 | 分别发布 `routing.agent_assigned` / `routing.transfer_completed`（aggregate `routing:<id>`，与 EventBusSubscriber 投影口径一致）；等待队列进队不加事件（进队非分配） | [service_test.go TestServiceAssignAgent / TestServiceTransfer](../apps/server/internal/modules/conversation/application/service_test.go)（B2 gate，21fc7de） | 通过 |
+| PII 数据边界与保留策略 | customer 导出/擦除；retention | 导出全覆盖、擦除全 PII（文本 “[已擦除]”）、过期擦除/窗内保留/幂等 | 导出/擦除幂等、404 精确；保留策略过期擦除、窗内保留 | [data_boundary_repository_test.go](../apps/server/internal/modules/customer/infra/data_boundary_repository_test.go)、retention 四用例（B2 gate ①②，todo.md B2 登记） | 通过 |
+
+### 15. 发布后批次 C1 web 嵌入集成指南（ferry 真嵌验收）
+
+任务清单与拍板段见 [todo.md](../todo.md) C1；验收口径=ferry 侧按
+[embedding-guide.md](embedding-guide.md) 真嵌一遍跑通。
+
+| 功能项 | 入口 | 验收步骤 | 预期结果 | 自动化证据 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| web 嵌入真嵌验收（C1-4） | [docs/embedding-guide.md](embedding-guide.md)（§1 嵌入方式 / §2 快速开始 / §3 会话互认 / §4 工单上下文 / §5 事件回调 / §6 部署形态 / §7 主题全表） | ferry 侧真嵌：①两示例页（light/dark）组件展开与宿主观感一致；②组件 snippet 嵌入自有页面；③访客聊天→建单（`POST /api/v1/tickets`）；④宿主后端同步客户上下文（`POST /api/customers*`）；⑤webhook 注册与 `ticket.created/assigned/closed` 回流验签；⑥远程主题下发（`themeUrl`） | 指南内 curl/最小示例可跟跑；2026-10-10 我侧契约核对通过：路由注册逐项对上（`/api/v1/ws`、`/api/v1/tickets`、`/api/v1/guest/session`、`/api/v1/ai/knowledge/upload`、`/api/customers*`、`/api/webhooks*`）、widget `data-*` 全表 19 项与 §7.4 逐项一致、§7.1-7.3 参数消费点（icon 六档/position 四档/themeFromColor/themeUrl/auto）落地；全量门禁绿（Go 153 包 + admin lint/typecheck）。2026-10-10 ferry 回报：真嵌完成（commits 18d045b + 46d81e7）——配置门控 FERRY_SUPPORT_URL/FERRY_SUPPORT_SERVICE_KEY + widget 直嵌方案 A + ferry 侧 `GET /api/panel/support` 签 guest token（servify 侧无 `/api/panel/support` 路由与 `FERRY_SUPPORT_*` 配置键，签 guest token 的服务端口为 `POST /api/v1/guest/session`）+ 服务端客户上下文同步；实机全链路：customer 建（source=ferry）→WS 会话+消息收发+AI 流式响应→POST /api/v1/tickets 201（session 绑定 ferry_user_2）→agent 视图可见；guest token 三层绑定验讫（正确 200/错会话 401/无 token 401）；步骤⑤webhook 回流验签已补验（[test-webhook-acceptance.sh](../scripts/test-webhook-acceptance.sh) 真链路 HMAC-SHA256 验签通过，证据 [webhook-acceptance/manifest.json](../scripts/test-results/webhook-acceptance/manifest.json)，b8f881e）；步骤⑥themeUrl 留痕：ferry 场景 theme=auto 未走，指南 §7.3 我侧核对已对上 | [sdk_route_drift_test.go](../apps/server/internal/app/server/sdk_route_drift_test.go)、[sdk_route_contract_test.go](../apps/server/internal/app/server/sdk_route_contract_test.go)、[widget.test.mjs](../apps/demo-sdk/widget.test.mjs)、[test-webhook-acceptance.sh](../scripts/test-webhook-acceptance.sh)；ferry 侧 18d045b 单测 + 46d81e7 鉴权回归 7 例 | 已完成（2026-10-10，ferry 回报勾收；⑤servify 侧脚本补验） |
+
+## 权限与异常路径必须额外验
+
+即使主流程通过，也不能直接判定完成，还必须补下面这些：
+
+- 未登录访问 `/api/*` 是否被正确拦截。
+- 权限不足访问不同资源是否返回正确错误。
+- 非法参数是否返回 `400` 而不是 `500`。
+- 查不存在 ID 是否返回 `404` 或明确错误。
+- 外部依赖失败时是否有降级、重试或熔断行为。
+- 重复提交、并发操作、幂等等是否符合预期。
+
+相关入口见 [router.go](../apps/server/internal/app/server/router.go) 中的鉴权与资源权限中间件注册。
+
+## 建议的验收执行顺序
+
+1. 环境级：`make migrate`、`make build`、`make build-knowledge-provider`、服务启动。
+2. 存活级：`/health`、`/ready`、metrics。
+3. 核心业务级：客户、客服、工单、会话转接。
+4. 增值能力级：AI、知识库、自动化、统计、SLA。
+5. 扩展能力级：语音、公开问卷、公开知识库。
+6. 负向与权限级：未授权、非法参数、外部依赖失效。
+
+## 对外宣称“已完成”的最低门槛
+
+至少满足以下条件，才能说“该模块完成验收”：
+
+- 核心路由的 happy path 与异常路径都跑通。
+- 自动化测试能覆盖该模块主要读写路径。
+- 数据落库、状态流转、导出或副作用经过实际核验。
+- 对应条目在本清单中被逐项标记为 `通过`，并附证据。
+
+否则，最多只能说：
+
+- “代码入口已存在”
+- “构建已通过”
+- “部分测试已通过”
+- “功能仍待联调/待验收”

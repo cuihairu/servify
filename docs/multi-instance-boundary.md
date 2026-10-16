@@ -1,126 +1,127 @@
-> [English](multi-instance-boundary.en.md) | **中文**
+# Servify Multi-instance and HA Boundary (P2-1)
 
-# Servify 多实例与高可用边界（P2-1）
+> Last updated: 2026-09-17 (P2-1 finalized)
+> Maintenance rule: this document declares the runtime topology boundary face by face. **Any code change
+> that alters one of the faces below must synchronously update this document and the deployment spec in
+> [deployment.md](deployment.md)**; the event bus broadcast semantics are anchored by tests (see "Evidence" at the end).
 
-> 最后更新：2026-09-17（P2-1 定稿）
-> 维护规则：本文档逐面声明运行时拓扑边界。**任何改变下列某一面的代码
-> 变更必须同步更新本文档与 [deployment.md](deployment.md) 的部署口径**；
-> event bus 广播语义由测试锚定（见文末"证据"）。
+## Conclusion
 
-## 结论
+**Servify is currently single-instance-first**: production deployments run with
+`replicas: 1`. Multi-instance coordination holds only on the faces explicitly
+marked "multi-instance safe" below; the remaining faces produce duplicate side
+effects or functional failure under multiple replicas, with no protection in the current version.
 
-**Servify 当前是单实例优先（single-instance-first）**：生产部署按
-`replicas: 1` 运行。多实例协同只在下文明确标注"多实例安全"的面成立；
-其余面在多副本下会产生重复副作用或功能失效，且当前版本不做防护。
+This is a deliberate delivery boundary, not "unfinished multi-instance support":
+which faces are already shared state (carried by Redis/DB) and which are process-local
+state (the single-instance constraint) — this document aligns them face by face against code facts.
 
-这是明确的交付边界，不是"未完成的多实例支持"：哪些面已经是
-共享状态（Redis/DB 承载），哪些面是进程内状态（单实例约束），
-本文档逐面对齐代码事实。
+## Face-by-face Boundary
 
-## 逐面边界
+### 1. Agent presence / load / assignment — multi-instance safe ✅
 
-### 1. Agent presence / load / assignment —— 多实例安全 ✅
+- Presence (online/busy), load, and post-transfer session load are all stored in Redis
+  (`agent/infra/redis_registry.go`, 30s heartbeat, 60s TTL).
+- After an instance crashes, its agents' state auto-expires with the TTL; `cleanupInactiveAgents` of
+  `agentRuntimeMaintenance` (runs on every instance, idempotent operations) does the fallback cleanup.
+- The behavior of two instances mutually observing presence and transfer load while sharing
+  Redis + DB is locked by `agent/infra/redis_registry_multi_instance_test.go`
+  (the original integration test `services/agent_service_redis_integration_test.go` was deleted
+  with the P3-2 removal of `internal/services`; an equivalent anchor was restored on 2026-10-14).
+- Status messages (`servify:agent:status`) are only presence notifications: cross-instance echo is
+  merged via `InMemoryRegistry.MergeRemote` — metadata defers to the remote snapshot, while load
+  accounting, session tables, and online timestamps stay local (load is owned by the instance holding
+  the sessions). The pub/sub broadcast includes the publisher itself; on 2026-10-15 this anchor caught
+  a real race in CI with a full rebuild (the echo landing between the local load change and its Redis
+  sync → the increment was reset to a stale snapshot); the reproduction window and merge semantics are
+  locked by `agent/infra/redis_registry_status_echo_test.go`.
+- Prerequisite: all instances must connect to **the same Redis** (the shared client injected by `BuildRuntime`).
 
-- presence（online/busy）、负载、会话转接后的 load 都存 Redis
-  （`agent/infra/redis_registry.go`，30s 心跳、60s TTL）。
-- 实例崩溃后其 agent 状态随 TTL 过期自动消失，`agentRuntimeMaintenance`
-  的 `cleanupInactiveAgents`（每实例运行、操作幂等）做兜底清理。
-- 两实例共享 Redis + DB 时互相观测 presence 与 transfer load 的行为
-  由 `agent/infra/redis_registry_multi_instance_test.go` 锁定
-  （原 integration 测试 `services/agent_service_redis_integration_test.go`
-  已随 P3-2 `internal/services` 移除而删除，2026-10-14 按模块现结构补回等价锚）。
-- 状态消息（`servify:agent:status`）只是 presence 通知：跨实例回灌经
-  `InMemoryRegistry.MergeRemote` 合并——元数据以远端快照为准，负载记账、
-  会话表与上线时间保留本地（负载归持有会话的实例所有）。pub/sub 广播
-  含发布者自己，2026-10-15 该锚点在 CI 抓到整条重建版本的真实竞态
-  （回灌落在本地负载变更与其 Redis 同步之间 → 增量被重置成过期快照），
-  复现窗口与合并语义由 `agent/infra/redis_registry_status_echo_test.go` 锁定。
-- 前提：所有实例必须连**同一个 Redis**（`BuildRuntime` 注入的共享 client）。
+### 2. WebSocket / WebRTC Real-time Routing — single-instance hard constraint ❌
 
-### 2. WebSocket / WebRTC 实时路由 —— 单实例硬约束 ❌
+- The `WebSocketHub` connection table is a process-local map (`platform/realtime/websocket_hub.go`,
+  struct definition :88); `SendToSession` (:559) can only deliver to sessions this instance holds.
+- WebRTC signaling and voice media negotiation are likewise forwarded in-process through the hub.
+- Failure mode under multiple replicas: the customer's WS is connected to instance A while the agent
+  is connected to instance B → real-time pushes are mutually invisible (HTTP messages still land in the DB).
+- Therefore: **all participants needing real-time interaction (customer + agent) must land on the same
+  instance**. Rolling updates (maxSurge > 0) also create transient dual instances; real-time conversations
+  can lose pushes within the rolling window — see the deployment strategy notes in deployment.md.
 
-- `WebSocketHub` 的连接表是进程内 map（`platform/realtime/websocket_hub.go`，
-  struct 定义 :88），`SendToSession`（:559）只能投递到**本实例**持有连接的会话。
-- WebRTC 信令、语音媒体协商同样经 hub 进程内转发。
-- 多副本下的失效模式：客户 WS 连在实例 A、坐席连在实例 B →
-  实时推送互相不可见（HTTP 消息仍会入库，但实时性丢失）。
-- 因此：**所有需要实时互动的参与方（客户+坐席）必须落到同一实例**。
-  滚动更新（maxSurge > 0）也会造成瞬时双实例，实时会话在滚动窗口内
-  可能丢推送——见 deployment.md 的部署策略说明。
+### 3. Event Bus — broadcast semantics (Redis provider) ⚠️
 
-### 3. Event bus —— 广播语义（Redis provider）⚠️
+The delivery model of the Redis provider (`eventbus/redis_bus.go`):
 
-Redis provider（`eventbus/redis_bus.go`）的投递模型：
+- Publish: the event is XAdded to a per-event stream (persisted, MaxLen ≈10000,
+  queryable for troubleshooting) + a notification is PUBLISHed to `servify:events:pubsub`.
+- Every instance's `subscribeLoop` subscribes to the notification channel, and on receiving
+  a notification each instance reads from the stream and invokes **local** handlers.
+- **The semantics are broadcast, not competing consumption**: N instances → each event is handled once
+  by each instance's subscribers (N-fold side effects). There is no `consumerGroup` constant in the code,
+  and XREADGROUP is never called.
+- Consumption is not guaranteed delivered: when a notification is lost (the instance happens to be
+  reconnecting pub/sub), that instance skips this event; there is no pending/ACK/replay mechanism.
+  The records in the stream remain usable for troubleshooting, but are not automatically redistributed.
+- InMemory provider: purely process-local and lost on process restart (dev/demo semantics).
 
-- Publish：事件 XAdd 到 per-event stream（持久化，MaxLen ≈10000，
-  排障可回查）+ PUBLISH 一条通知到 `servify:events:pubsub`。
-- 每个实例的 `subscribeLoop` 都订阅通知频道，收到通知后各自从 stream
-  读取并调用**本地** handlers。
-- **语义是广播，不是竞争消费**：N 个实例 → 每条事件被每个实例的
-  订阅方各处理一次（N 倍副作用）。代码中无 `consumerGroup` 常量，也未
-  调用 XREADGROUP。
-- 消费不保证送达：通知丢失（实例正好在重连 pub/sub）时该实例跳过
-  这条事件，没有 pending/ACK/重放机制。stream 里的记录仍可用于
-  排障，但不会被自动重新分发。
-- InMemory provider：纯进程内，进程重启即丢（dev/demo 语义）。
+Inference: **side effects written onto the bus by subscribers (e.g. webhook enqueueing) must be
+evaluated as "executed once per N instances"**. The current webhook subscriber (see the next section)
+has no event-level dedup, so under multiple instances the same event creates N pending deliveries
+for each matching endpoint.
 
-推论：**把订阅方写到 bus 上的副作用（如 webhook 入队）必须按
-"N 实例各执行一次"来评估**。当前 webhook 订阅方（见下节）没有
-event 级去重，多实例下同一事件会为每个匹配端点建 N 条 pending 投递。
+### 4. Worker Claiming and Idempotency — differs per worker ⚠️
 
-### 4. Worker 认领与幂等 —— 逐 worker 差异 ⚠️
+Worker state is fully persisted in DB and resumes from DB after process restart — **the restart-recovery
+semantics hold** ✅. The difference is task claiming under multiple instances:
 
-Worker 状态全部落 DB，进程重启后从 DB 续跑——**重启恢复语义成立** ✅。
-差异在多实例下的任务认领：
-
-| Worker | 认领机制 | 多实例行为 |
+| Worker | Claim mechanism | Multi-instance behavior |
 |--------|----------|------------|
-| WaitingQueueWorker（routing 等待队列） | **原子租约**：`UPDATE ... WHERE claimed_at IS NULL OR < lease` CAS + 租约超时回收 + 失败归还（`routing/infra/gorm_repository.go` `ClaimQueueEntries`） | ✅ 竞争消费，无重复 |
-| AutomationTimerWorker | 认领读非原子（`ClaimDueTimers` 无锁 Find），执行后 `CompleteTimer` 按 `status=pending` CAS | ⚠️ 动作可能被执行多次，只有一次计入 done（副作用去重靠动作自身幂等） |
-| WebhookDeliveryWorker | 认领读非原子（`ClaimDueDeliveries` 无锁 Find，无 status CAS） | ❌ 重复投递到客户 endpoint |
-| SurveyEmailWorker / StatisticsWorker / SLAMonitorWorker / QualityReviewWorker | 周期扫描式，无认领 | ⚠️ 重复扫描/聚合/发信（发信类风险最高） |
-| EmailPollWorker | IMAP 单邮箱轮询 | ⚠️ 多实例竞争同一邮箱，重复摄取风险 |
+| WaitingQueueWorker (routing waiting queue) | **Atomic lease**: `UPDATE ... WHERE claimed_at IS NULL OR < lease` CAS + lease-timeout reclaim + failure return (`ClaimQueueEntries` in `routing/infra/gorm_repository.go`) | ✅ Competing consumption, no duplicates |
+| AutomationTimerWorker | Non-atomic claim read (`ClaimDueTimers` is a lock-free Find); after execution `CompleteTimer` CASes on `status=pending` | ⚠️ Actions may execute multiple times, only one counts as done (side-effect dedup relies on the action's own idempotency) |
+| WebhookDeliveryWorker | Non-atomic claim read (`ClaimDueDeliveries` is a lock-free Find, no status CAS) | ❌ Duplicate delivery to the customer endpoint |
+| SurveyEmailWorker / StatisticsWorker / SLAMonitorWorker / QualityReviewWorker | Periodic scan style, no claiming | ⚠️ Duplicate scans/aggregation/emails (email-sending ones carry the highest risk) |
+| EmailPollWorker | IMAP single-mailbox polling | ⚠️ Multiple instances contend for the same mailbox; duplicate ingestion risk |
 
-HTTP 层补充：**rate limiter 是进程内 token bucket**
-（`middleware/ratelimit.go`），多副本下实际限额 = 配置值 × 副本数；
-需要全局限流时必须前置网关层限流。
+HTTP-layer addition: **the rate limiter is a process-local token bucket**
+(`middleware/ratelimit.go`); under multiple replicas the effective limit = configured value × replica count;
+a gateway-layer rate limiter must be placed in front when global limiting is needed.
 
-## 部署口径
+## Deployment Spec
 
-- 生产：`replicas: 1`（deployment.md 已对齐）。HA 需求通过
-  **进程级重启恢复**（worker 状态在 DB、事件在 Redis stream、
-  presence TTL 自动收敛）+ 快速拉起满足，不通过多副本满足。
-- 事件总线：生产用 `event_bus.provider = "redis"`；`inmemory` 仅限
-  dev/demo（该边界见 P0-1 与 config 示例；production 启动校验与装配层
-  拒绝 `inmemory`，staging 无独立校验分支——P3-3）。
-- 单实例进程崩溃的最大损失面：in-flight HTTP 请求、未投递的实时
-  推送（会话数据已入库，重连后可见）、pub/sub 通知窗口内的事件消费
-  （stream 记录仍在）。
+- Production: `replicas: 1` (already aligned in deployment.md). HA needs are met through **process-level
+  restart recovery** (worker state in DB, events in Redis streams, presence TTL auto-convergence)
+  plus fast bring-up, not through multiple replicas.
+- Event bus: production uses `event_bus.provider = "redis"`; `inmemory` is dev/demo only (this boundary
+  is covered by P0-1 and the config examples; production startup validation and the assembly layer reject
+  `inmemory`; staging has no independent validation branch — P3-3).
+- Maximum loss surface of a single-instance process crash: in-flight HTTP requests, undelivered real-time
+  pushes (conversation data is already persisted and visible after reconnect), and event consumption
+  within the pub/sub notification window (stream records remain).
 
-## 升级路径（按面拆账，不一次性承诺）
+## Upgrade Path (accounted for per face, not committed all at once)
 
-1. **Worker 竞争消费**：把 `ClaimDueDeliveries` / `ClaimDueTimers`
-   改成与 `ClaimQueueEntries` 相同的原子租约模式（仓库内已有正面
-   样板，改动集中在 infra 层 + 回归测试）。
-2. **Event bus 竞争消费**：启用 Redis stream consumer group
-   （XREADGROUP + pending list ACK），消费语义从"每实例广播"
-   变为"组内竞争"；需要补死信与重放策略。
-3. **实时路由跨实例**：WS hub 增加 Redis pub/sub 跨实例广播层，
-   或引入 sticky session 约束；二者都需要先明确重连/迁移语义。
-4. **全局限流**：token bucket 迁 Redis（INCR+EXPIRE）或前置网关。
+1. **Worker competing consumption**: change `ClaimDueDeliveries` / `ClaimDueTimers` to the same atomic
+   lease pattern as `ClaimQueueEntries` (a positive in-repo example already exists; changes concentrate
+   in the infra layer + regression tests).
+2. **Event bus competing consumption**: enable Redis stream consumer groups (XREADGROUP + pending
+   list ACK), changing consumption semantics from "broadcast per instance" to "compete within a group";
+   dead-letter and replay strategies need to be added.
+3. **Cross-instance real-time routing**: add a Redis pub/sub cross-instance broadcast layer to the WS hub,
+   or introduce sticky-session constraints; both need reconnect/migration semantics clarified first.
+4. **Global rate limiting**: move the token bucket to Redis (INCR+EXPIRE) or put a gateway in front.
 
-任一项落地后更新本文档对应面与 deployment.md。
+Once any item lands, update the corresponding face in this document and in deployment.md.
 
-## 证据
+## Evidence
 
-- 广播语义测试锚点：`platform/eventbus/redis_bus_multi_instance_test.go`
-  —— 两个 `RedisBus` 实例共享同一 Redis，一条事件两边订阅方都收到
-  （锁定本文档第 3 节的声明，防止未来静默改成竞争消费或丢失广播）。
-- Agent 多实例证据：`agent/infra/redis_registry_multi_instance_test.go`
-  —— 两个 `RedisRegistry` 实例共享同一 Redis 与 DB，互见 presence、transfer
-  load 与实例崩溃后的 TTL 过期（原锚 `services/agent_service_redis_integration_test.go`
-  已随 P3-2 删除，2026-10-14 补回等价锚）。
-- 回灌合并语义证据：`agent/infra/redis_registry_status_echo_test.go`
-  —— online 回灌不得覆盖本地负载/会话/上线时间（2026-10-15）。
-- routing 租约样板：`routing/infra/gorm_repository.go`
-  `ClaimQueueEntries` / `ReleaseQueueClaim`。
+- Broadcast semantics test anchor: `platform/eventbus/redis_bus_multi_instance_test.go` — two `RedisBus`
+  instances sharing one Redis; one event is received by both instances' subscribers (locks the claim in
+  section 3 of this document, preventing a silent future change to competing consumption or a lost broadcast).
+- Agent multi-instance evidence: `agent/infra/redis_registry_multi_instance_test.go` — two `RedisRegistry`
+  instances sharing one Redis and DB, mutually observing presence, transfer load, and TTL expiry after
+  instance crash (the original anchor `services/agent_service_redis_integration_test.go` was deleted with
+  P3-2; an equivalent anchor was restored on 2026-10-14).
+- Echo merge semantics evidence: `agent/infra/redis_registry_status_echo_test.go` — an online echo
+  must not overwrite local load/sessions/online timestamp (2026-10-15).
+- Routing lease reference implementation: `routing/infra/gorm_repository.go`
+  `ClaimQueueEntries` / `ReleaseQueueClaim`.

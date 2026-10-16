@@ -1,61 +1,59 @@
-> [English](configuration-scopes.en.md) | **中文**
-
 # Configuration Scopes
 
-本文件定义 Servify 当前配置的作用域边界、覆盖顺序和变更约束，用于推进 `11 / T4 configuration-scopes`。
+This document defines the scope boundaries, override order, and change constraints of Servify's current configuration, to advance `11 / T4 configuration-scopes`.
 
-目标：
+Goals:
 
-- 区分哪些配置只能是系统级
-- 区分哪些配置应该下沉到 tenant / workspace
-- 避免把 secrets、provider endpoint、业务策略、运行态开关继续混在同一个 `config.yml`
-- 为后续配置持久化、审计、回滚提供统一规则
+- Distinguish which configurations can only be system-level
+- Distinguish which configurations should sink down to tenant / workspace
+- Avoid continuing to mix secrets, provider endpoints, business policy, and runtime switches in the same `config.yml`
+- Provide unified rules for subsequent configuration persistence, audit, and rollback
 
-## 当前配置来源
+## Current Configuration Sources
 
-当前仓库存在 4 类配置来源：
+The repo currently has 4 kinds of configuration sources:
 
-1. 代码默认值
-   - 入口：`apps/server/internal/config/config.go`
-   - 用途：保证本地开发和缺省启动可运行
-   - 限制：只能承载安全的默认值，不能承载生产 secrets
+1. Code defaults
+   - Entry: `apps/server/internal/config/config.go`
+   - Purpose: guarantee local dev and default startup are runnable
+   - Limitation: can only carry safe defaults, cannot carry production secrets
 
-2. 系统启动配置文件
-   - 入口：`config.yml`、`config.weknora.yml`
-   - 装载：`apps/server/internal/app/bootstrap/config.go`
-   - 用途：部署级基础设施和系统默认策略；其中 `config.weknora.yml` 主要用于 WeKnora compatibility 回归；知识库选择链为 ragflow → dify → weknora → pgvector 直配（RAGFlow 与 WeKnora 为正统知识库双路径，Dify 为编排平台 dataset 兼容保留；选型全景见 KNOWLEDGE_BASE_LANDSCAPE，RAGFlow 集成见 RAGFLOW_INTEGRATION）
+2. System startup config files
+   - Entry: `config.yml`, `config.weknora.yml`
+   - Load: `apps/server/internal/app/bootstrap/config.go`
+   - Purpose: deployment-level infrastructure and system default policy; of these `config.weknora.yml` is mainly for WeKnora compatibility regression; the knowledge-base selection chain is ragflow → dify → weknora → pgvector direct (RAGFlow and WeKnora are the canonical knowledge-base dual paths, Dify retained as orchestration-platform dataset compatibility; the full selection landscape is in KNOWLEDGE_BASE_LANDSCAPE, the RAGFlow integration is in RAGFLOW_INTEGRATION)
 
-3. 环境变量覆盖
-   - 入口：Viper `AutomaticEnv()`
-   - 用途：容器部署、CI、secret 注入
-   - 限制：应只覆盖系统级配置，不应承载 tenant / workspace 业务策略
+3. Environment variable overrides
+   - Entry: Viper `AutomaticEnv()`
+   - Purpose: container deployment, CI, secret injection
+   - Limitation: should only override system-level config, should not carry tenant / workspace business policy
 
-4. 数据库存储的 scoped 配置对象
-   - 当前已存在：
+4. Database-stored scoped configuration objects
+   - Currently existing:
      - `SLAConfig`
      - `CustomField`
      - `AppIntegration`
-   - 特征：已带 `tenant_id` / `workspace_id`，可按上下文过滤
+   - Characteristic: already carry `tenant_id` / `workspace_id`, filterable by context
 
-另外还存在一类非持久化的运行态作用域输入：
+There is also one more kind of non-persistent runtime scope input:
 
-- JWT / request context 中的 `tenant_id`、`workspace_id`
-- AI / knowledge 请求中的临时参数，例如 `knowledge_id`
-- 路由、转接、会话中的临时执行态参数
+- `tenant_id`, `workspace_id` in JWT / request context
+- Temporary parameters in AI / knowledge requests, e.g. `knowledge_id`
+- Temporary execution-state parameters in routing, transfer, session
 
-这些属于 runtime scope，而不是长期配置。
+These belong to runtime scope, not long-term configuration.
 
-## 作用域模型
+## Scope Model
 
 ### 1. System Scope
 
-定义：
+Definition:
 
-- 整个部署实例共享
-- 只能由运维、部署流程或系统管理员修改
-- 不随 tenant / workspace 切换
+- Shared by the entire deployment instance
+- Only modifiable by ops, deployment processes, or system administrators
+- Does not switch with tenant / workspace
 
-典型内容：
+Typical content:
 
 - `server`
 - `database`
@@ -64,141 +62,141 @@
 - `log`
 - `monitoring`
 - tracing / exporter endpoint
-- 全局 CORS baseline
-- 全局 rate limiting baseline
-- 上传根目录、文件系统路径
-- AI / knowledge provider 的基础 endpoint、client credentials、全局超时
+- Global CORS baseline
+- Global rate limiting baseline
+- Upload root path, filesystem paths
+- AI / knowledge provider base endpoints, client credentials, global timeouts
 
-存放原则：
+Storage principles:
 
-- 首选配置文件 + 环境变量
-- secrets 只通过环境变量或外部 secret manager 注入
-- 不应存入租户配置表
+- Prefer config file + environment variables
+- Secrets are injected only via environment variables or an external secret manager
+- Should not be stored in tenant config tables
 
 ### 2. Tenant Scope
 
-定义：
+Definition:
 
-- 同一部署中的某个业务租户共享
-- 对租户下所有 workspace 生效
-- 允许被 workspace 做更细粒度覆盖
+- Shared by one business tenant within the same deployment
+- Takes effect for all workspaces under the tenant
+- Allowed to be overridden at finer granularity by workspaces
 
-典型内容：
+Typical content:
 
-- tenant 默认 AI provider 选择
-- tenant 默认 knowledge provider / knowledge base namespace
-- tenant 默认 routing / SLA / automation 策略
-- tenant 默认 portal branding
-- tenant 级集成开关和 capability 策略
-- tenant 级安全策略补充，例如 API surface allowlist、公开知识库开关
+- Tenant default AI provider selection
+- Tenant default knowledge provider / knowledge base namespace
+- Tenant default routing / SLA / automation policy
+- Tenant default portal branding
+- Tenant-level integration switches and capability policy
+- Tenant-level security policy supplements, e.g. API surface allowlist, public knowledge base switches
 
-存放原则：
+Storage principles:
 
-- 应进入数据库配置对象或专门的 tenant config 模型
-- 不应继续写死在 `config.yml`
-- 若涉及 credentials，优先存“secret reference”而不是明文
+- Should go into database config objects or a dedicated tenant config model
+- Should no longer be hard-coded in `config.yml`
+- If credentials are involved, prefer storing a "secret reference" over plaintext
 
 ### 3. Workspace Scope
 
-定义：
+Definition:
 
-- tenant 下某个具体工作空间的业务配置
-- 优先服务于客服团队、业务线、渠道面差异
+- Business configuration of a specific workspace under a tenant
+- Prioritizes service-team, business-line, and channel-face differences
 
-典型内容：
+Typical content:
 
 - `CustomField`
 - `SLAConfig`
 - `AppIntegration`
-- workspace 级 routing policy
-- workspace 级 AI prompt/profile
-- workspace 级 knowledge source 选择
-- workspace 级 portal 外观、默认语言、渠道开关
+- Workspace-level routing policy
+- Workspace-level AI prompt/profile
+- Workspace-level knowledge source selection
+- Workspace-level portal appearance, default language, channel switches
 
-存放原则：
+Storage principles:
 
-- 应持久化到数据库
-- 必须带 `tenant_id` + `workspace_id`
-- 必须走审计
+- Should be persisted to the database
+- Must carry `tenant_id` + `workspace_id`
+- Must go through audit
 
 ### 4. Runtime Scope
 
-定义：
+Definition:
 
-- 单次请求、单次任务、单次会话执行时临时生效
-- 不应被当作长期配置持久化
+- Temporarily takes effect during a single request, single task, single session execution
+- Should not be persisted as long-term configuration
 
-典型内容：
+Typical content:
 
-- request context 中的 `tenant_id` / `workspace_id`
-- 本次 AI 请求是否启用 retrieval / fallback
-- 本次转接的优先级、目标技能、notes
-- 本次导出的时间范围、过滤器、排序
+- `tenant_id` / `workspace_id` in the request context
+- Whether retrieval / fallback is enabled for this AI request
+- Priority, target skills, notes of this transfer
+- Time range, filters, sort of this export
 
-存放原则：
+Storage principles:
 
-- 仅存在于 request / job / event / session 上下文
-- 默认不落库
-- 若影响高风险行为，应进入审计日志
+- Exists only in request / job / event / session context
+- Not persisted by default
+- If it affects high-risk behavior, it should go into the audit log
 
-## 配置矩阵
+## Configuration Matrix
 
-### 基础设施与平台
+### Infrastructure & Platform
 
-- `server`：`system`
-- `database`：`system`
-- `redis`：`system`
-- `webrtc.stun_server`：`system`
-- `jwt.secret` / token 生命周期基线：`system`
-- `log` / `monitoring` / tracing exporter：`system`
-- `upload.storage_path`：`system`
+- `server`: `system`
+- `database`: `system`
+- `redis`: `system`
+- `webrtc.stun_server`: `system`
+- `jwt.secret` / token lifecycle baseline: `system`
+- `log` / `monitoring` / tracing exporter: `system`
+- `upload.storage_path`: `system`
 
-### 安全与接入
+### Security & Access
 
-- `security.cors`：`system`
-- `security.rbac.roles`：`system`
-- `security.rate_limiting` 默认值：`system`
-- `security.session_risk` 基线：`system`，允许 `tenant` / `workspace` 在已授权 scope 内细化风险阈值
-- `security.session_risk_profiles.{environment}`：`system`，用于按 `server.environment` 选择部署环境级风险基线，再叠加 tenant / workspace override
-- `security.session_ip_intelligence` provider endpoint / API key / timeout：`system`
-- 某 tenant / workspace 是否允许公开知识库、Portal、特定集成：`tenant` 或 `workspace`
+- `security.cors`: `system`
+- `security.rbac.roles`: `system`
+- `security.rate_limiting` defaults: `system`
+- `security.session_risk` baseline: `system`, allows `tenant` / `workspace` to refine risk thresholds within an authorized scope
+- `security.session_risk_profiles.{environment}`: `system`, used to select the deployment-environment-level risk baseline by `server.environment`, then stacked with tenant / workspace override
+- `security.session_ip_intelligence` provider endpoint / API key / timeout: `system`
+- Whether a tenant / workspace allows public knowledge bases, Portal, specific integrations: `tenant` or `workspace`
 
 ### AI Provider
 
-- provider endpoint、API key、client secret、全局 timeout：`system`
-- 默认 provider registry 与 fallback baseline：`system`
-- tenant 默认 provider 选择、默认模型、默认 prompt profile：`tenant`
-- workspace 针对某业务线的模型选择、temperature、tool policy：`workspace`
-- 单次请求是否强制禁用 retrieval / fallback：`runtime`
+- Provider endpoint, API key, client secret, global timeout: `system`
+- Default provider registry and fallback baseline: `system`
+- Tenant default provider selection, default model, default prompt profile: `tenant`
+- Workspace model selection, temperature, tool policy targeting a business line: `workspace`
+- Whether a single request force-disables retrieval / fallback: `runtime`
 
-结论：
+Conclusions:
 
-- provider credentials 不应成为 workspace 配置
-- workspace 只能覆盖“策略选择”，不能直接持有系统级基础设施参数
+- Provider credentials should not become workspace configuration
+- Workspace can only override "policy selection", cannot directly hold system-level infrastructure parameters
 
 ### Knowledge Provider
 
-- provider endpoint、全局 API key：`system`
-- tenant 默认 `knowledge_base_id` / namespace 映射：`tenant`
-- workspace 默认知识库、检索 threshold / topK / strategy：`workspace`
-- 单次查询临时 `knowledge_id`、临时检索策略：`runtime`
+- Provider endpoint, global API key: `system`
+- Tenant default `knowledge_base_id` / namespace mapping: `tenant`
+- Workspace default knowledge base, retrieval threshold / topK / strategy: `workspace`
+- Per-query temporary `knowledge_id`, temporary retrieval strategy: `runtime`
 
 ### Routing Policy
 
-- 全局兜底策略和实现开关：`system`
-- tenant 默认排队/分配/负载策略：`tenant`
-- workspace 渠道差异、技能优先级、转人工阈值：`workspace`
-- 单次会话的转接 reason / target skills / priority：`runtime`
+- Global fallback policy and implementation switches: `system`
+- Tenant default queueing/assignment/load policy: `tenant`
+- Workspace channel differences, skill priority, human-handoff threshold: `workspace`
+- Per-session transfer reason / target skills / priority: `runtime`
 
 ### Portal / UX / Business Policy
 
-- 系统默认 `portal` 外观和 locale：`system`
-- tenant branding：`tenant`
-- workspace portal 展示、公开帮助中心、渠道入口：`workspace`
+- System default `portal` appearance and locale: `system`
+- Tenant branding: `tenant`
+- Workspace portal display, public help center, channel entries: `workspace`
 
-## 覆盖顺序
+## Override Order
 
-统一覆盖顺序定义为：
+The unified override order is defined as:
 
 1. `runtime`
 2. `workspace`
@@ -206,24 +204,24 @@
 4. `system`
 5. `code default`
 
-解释：
+Explanation:
 
-- `code default` 只负责兜底
-- `system` 负责部署级默认值
-- `tenant` 负责租户级业务默认值
-- `workspace` 负责团队/渠道级差异
-- `runtime` 只做本次执行的临时覆盖
+- `code default` only handles fallback
+- `system` handles deployment-level defaults
+- `tenant` handles tenant-level business defaults
+- `workspace` handles team/channel-level differences
+- `runtime` only does temporary override for this execution
 
-约束：
+Constraints:
 
-- 低层级不能覆盖高层级 secrets
-- `runtime` 不能突破权限边界，只能在已授权 scope 内窄化或临时选择
-- 没有显式 workspace 配置时，应回退到 tenant
-- 没有 tenant 配置时，应回退到 system
+- Lower levels cannot override higher-level secrets
+- `runtime` cannot break permission boundaries, can only narrow or temporarily select within an authorized scope
+- With no explicit workspace config, fall back to tenant
+- With no tenant config, fall back to system
 
-## 当前建议落点
+## Current Recommended Landing Points
 
-### 继续保留在系统配置文件中的内容
+### Content that stays in the system config file
 
 - `server`
 - `database`
@@ -231,113 +229,113 @@
 - `jwt`
 - `log`
 - `monitoring`
-- provider endpoint / credentials
-- upload root path
+- Provider endpoint / credentials
+- Upload root path
 
-### 应逐步从系统配置移出、转入 scoped config 的内容
+### Content that should gradually move out of the system config and into scoped config
 
-- `portal.brand_name`、`logo_url`、颜色、locale
-- AI provider 的默认模型选择与 prompt profile
-- knowledge base 默认映射
-- routing policy
-- workspace 级 integrations enablement
+- `portal.brand_name`, `logo_url`, colors, locale
+- AI provider default model selection and prompt profile
+- Knowledge base default mapping
+- Routing policy
+- Workspace-level integrations enablement
 
-当前代码骨架：
+Current code skeleton:
 
-- `internal/platform/configscope.Resolver` 已支持 `portal`、`OpenAI`、`Dify / RAGFlow / WeKnora knowledge provider` 的 `tenant -> workspace -> runtime` provider 覆盖顺序
-- `ai.provider` 选型（`openai | anthropic | local`）为全局唯一决定，不走作用域覆盖；openai 族的作用域解析结果（key/base_url/model 等）会在编排层写入每次出站 LLM 调用，anthropic 仅消费全局 `ai.anthropic` 段，`local` 为零外部依赖的抽取式问答基线（见 `config.yml` ai.provider 注释）——切换供应商改 `ai.provider` 一处即可，构造统一收口在 `internal/platform/llm/factory`
-- `internal/platform/configscope.Resolver` 现已支持 `session_risk` 的 `system -> tenant -> workspace -> runtime` 风险阈值解析链路
-- 已新增数据库持久化的 `TenantConfig` / `WorkspaceConfig` GORM provider；当前 public portal 已接入这套读取链路
-- 管理面已具备 tenant/workspace scoped config 的最小读写入口，当前覆盖 `portal` / `OpenAI` / knowledge provider / `session_risk`
-- scoped config 写接口现已记录 before/after 快照；tenant/workspace 级 `PUT` / `rollback` / `verify` 还会强制要求 `change_ref` 与 `reason`，并把这些变更控制字段写入审计 request metadata
-- 对命中高风险配置簇的 `PUT` / `rollback`，当前不仅要求提供 `approval_ref`，还要求 `approval_ref + change_ref` 能匹配到已记录的 `scoped_config.{scope}.approve` 审计事件，且审批人与实际执行人必须分离；接口仍支持 JSON body 或 `X-Approval-Ref` header，当前高风险主要覆盖 provider endpoint、knowledge mapping、session risk 核心阈值以及 rollback 操作本身
-- scoped config 同时提供 tenant/workspace 级变更历史列表元数据、单条历史详情的字段路径级差异预览与带 `added/removed/updated` 类型的 current/snapshot 值对，以及要求显式确认的按审计记录回滚入口
-- 管理面现已补执行后验证入口，可为单条 update / rollback 审计记录写入 `passed` / `failed` verification 结果；verification 提交除 `status` / `notes` / `evidence` 外，还需携带与 `verification_template.checks` 对齐的 `checks`
-- 当前 verification 已按模板化检查项收口：`passed` 必须带 evidence，且模板内所有必填检查项都要显式 `passed`；`failed` 必须带 notes，且至少要有一个模板检查项标记为 `failed`
-- `verification_template` 现已同时返回根级 `changed_paths`，并把单个检查项按字段风险细分到 portal public surface / locale、OpenAI endpoint / model、knowledge provider endpoint / KB mapping / health check、session risk score / window / concurrency；每个 check 还会带 `risk_level` 和自身命中的 `changed_paths`
-- 写入响应、history 列表、详情与 verify 响应还会同步返回 `change_control`、`change_risk` 和 `approval_policy`；其中 `change_control` 会带 `approval_ref`，`change_risk` 会给出 `risk_level` / `risk_reasons` / `changed_paths`，`approval_policy` 现在会进一步区分仅提供单号、已落库审批事件和最新审批人等真实审批状态
-- 当前还会同步返回统一的 `governance_status` / `governance_policy`，把审批前置和执行后验证组合成单一状态机；verify 响应会额外返回 `source_governance_status` / `source_governance_policy`
-- 当前 verification 还会执行最小双人复核约束：reviewer 必须带 `user_id`，且不能与原始变更执行人相同；history 列表、详情与 verify 响应会同步给出 `verification_status`、最新 verification 记录、verification history、`verification_template` 和带 `checks_required` / `required_check_ids` / `template_check_count` 的 `verification_policy`
-- `history` 列表还支持直接按 `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action` 查询治理队列，并额外返回 `governance_summary` 与 `applied_filters`，便于管理后台直接渲染待审批/待验证工作台
+- `internal/platform/configscope.Resolver` already supports `portal`, `OpenAI`, `Dify / RAGFlow / WeKnora knowledge provider` with the `tenant -> workspace -> runtime` provider override order
+- `ai.provider` selection (`openai | anthropic | local`) is a single global decision, not going through scope override; the openai-family scope-resolution result (key/base_url/model etc.) is written into each outbound LLM call at the orchestration layer, anthropic only consumes the global `ai.anthropic` section, `local` is a zero-external-dependency extractive-QA baseline (see `config.yml` ai.provider comment) — switching vendors changes one place `ai.provider`, unified construction is collected at `internal/platform/llm/factory`
+- `internal/platform/configscope.Resolver` now supports the `session_risk` `system -> tenant -> workspace -> runtime` risk-threshold resolution chain
+- Database-persisted `TenantConfig` / `WorkspaceConfig` GORM providers have been added; the current public portal already integrates this read path
+- The admin surface has the minimal read/write entry for tenant/workspace scoped config, currently covering `portal` / `OpenAI` / knowledge provider / `session_risk`
+- The scoped config write API now records before/after snapshots; tenant/workspace-level `PUT` / `rollback` / `verify` also strictly require `change_ref` and `reason`, and write these change-control fields into audit request metadata
+- For `PUT` / `rollback` hitting the high-risk config cluster, the current API not only requires `approval_ref`, but also requires `approval_ref + change_ref` to match a recorded `scoped_config.{scope}.approve` audit event, and the approver and the actual executor must be different people; the API still supports JSON body or `X-Approval-Ref` header; the current high-risk coverage mainly includes provider endpoint, knowledge mapping, session risk core thresholds, and the rollback operation itself
+- Scoped config also provides tenant/workspace-level change history list metadata, field-path-level diff preview of a single history detail, current/snapshot value pairs with `added/removed/updated` types, and a rollback-by-audit-record entry requiring explicit confirmation
+- The admin surface has gained a post-execution verification entry, able to write `passed` / `failed` verification results for a single update / rollback audit record; besides `status` / `notes` / `evidence`, verification submission also needs to carry `checks` aligned with `verification_template.checks`
+- Verification is now collected into templated checks: `passed` must carry evidence, and all required check items in the template must be explicitly `passed`; `failed` must carry notes, and at least one template check item must be marked `failed`
+- `verification_template` now returns root-level `changed_paths`, and breaks a single check item down by field risk into portal public surface / locale, OpenAI endpoint / model, knowledge provider endpoint / KB mapping / health check, session risk score / window / concurrency; each check also carries `risk_level` and the `changed_paths` it hit
+- Write responses, history lists, details, and verify responses also return `change_control`, `change_risk`, and `approval_policy`; of these `change_control` carries `approval_ref`, `change_risk` gives `risk_level` / `risk_reasons` / `changed_paths`, and `approval_policy` now further distinguishes real approval states like providing a ticket number only, approval event persisted, and latest approver
+- A unified `governance_status` / `governance_policy` is also returned, combining pre-approval and post-execution verification into a single state machine; the verify response additionally returns `source_governance_status` / `source_governance_policy`
+- Verification now enforces a minimal two-person review constraint: the reviewer must carry `user_id` and must not be the same as the original change executor; history lists, details, and verify responses give `verification_status`, the latest verification record, verification history, `verification_template`, and `verification_policy` carrying `checks_required` / `required_check_ids` / `template_check_count`
+- The `history` list also supports querying the governance queue directly by `governance_status` / `risk_level` / `approval_status` / `verification_status` / `needs_action`, and additionally returns `governance_summary` and `applied_filters`, so the admin console can directly render the pending-approval / pending-verification workbench
 
-### 当前数据库配置对象的建议定位
+### Recommended positioning of the current database config objects
 
-- `SLAConfig`：`workspace`
-- `CustomField`：`workspace`
-- `AppIntegration`：`workspace`
-- 后续应新增：
+- `SLAConfig`: `workspace`
+- `CustomField`: `workspace`
+- `AppIntegration`: `workspace`
+- To be added later:
   - `TenantConfig`
   - `WorkspaceConfig`
-  - 或更细的 `AIConfigOverride` / `RoutingPolicyConfig`
+  - Or finer-grained `AIConfigOverride` / `RoutingPolicyConfig`
 
-## 审计与回滚约束
+## Audit and Rollback Constraints
 
-### 系统级配置
+### System-level config
 
-- 修改入口应视为运维变更
-- 必须通过部署记录、Git 变更或配置中心版本记录留痕
-- 禁止在管理面 API 中直接明文修改系统 secrets
+- Modification entries should be treated as ops changes
+- Must leave traces via deployment records, Git changes, or config-center version records
+- Direct plaintext modification of system secrets in admin APIs is forbidden
 
-### Tenant / Workspace 配置
+### Tenant / Workspace config
 
-- 必须走管理面写接口
-- 必须记录审计日志
-- 必须支持读取最近一次生效版本
-- 修改前后应保留 before / after 快照
+- Must go through the admin write API
+- Must record audit logs
+- Must support reading the most recent effective version
+- Before/after snapshots should be retained around modifications
 
-### Runtime 配置
+### Runtime config
 
-- 默认不持久化
-- 若属于高风险动作，例如强制切 provider、绕过 fallback、切换知识源，应至少记录审计或结构化日志
+- Not persisted by default
+- If it is a high-risk action, e.g. forcing a provider switch, bypassing fallback, switching knowledge source, it should at least record audit or structured logs
 
-### 回滚
+### Rollback
 
-- system 级配置通过配置版本 / 发布回滚处理
-- tenant / workspace 配置通过数据库版本快照或“上一版本恢复”处理
-- runtime 不存在通用回滚，只允许重新发起执行
+- system-level config is handled via config version / release rollback
+- tenant / workspace config is handled via database version snapshots or "restore previous version"
+- runtime has no general rollback, only re-initiating execution
 
-## 当前缺口
+## Current Gaps
 
-- `TenantConfig` / `WorkspaceConfig` 已存在（`internal/models/models.go`），并已接入 public portal 读取链路（见上）；后续可在此基础上扩展更细的 `AIConfigOverride` / `RoutingPolicyConfig`
-- Viper + `config.yml` 仍承载了部分未来应下沉到 tenant/workspace 的业务默认值
-- `portal` 仍是 system 级配置，尚未 tenant/workspace 化
-- AI / knowledge / routing 的 tenant/workspace override 目前规则已定义，但尚未统一实现
-- `DailyStats` 仍是系统级全局聚合，不带 tenant/workspace 维度
+- `TenantConfig` / `WorkspaceConfig` already exist (`internal/models/models.go`), and the public portal read path is integrated (see above); later, finer-grained `AIConfigOverride` / `RoutingPolicyConfig` can be extended on this basis
+- Viper + `config.yml` still carries some business defaults that should later sink to tenant/workspace
+- `portal` is still system-level config, not yet tenant/workspace-ified
+- AI / knowledge / routing tenant/workspace overrides currently have rules defined, but not yet unified implementation
+- `DailyStats` is still a system-level global aggregation, without tenant/workspace dimensions
 
-## 模板治理与环境严格度（P2-2）
+## Template Governance and Environment Strictness (P2-2)
 
-**模板漂移门禁**：`apps/server/internal/config/config_template_lint_test.go`
-把仓库四个模板（`config.yml`、`config.staging.example.yml`、
-`config.production.secure.example.yml`、`config.weknora.yml`）与
-`Config` 结构的 yaml schema 对齐：
+**Template drift gate**: `apps/server/internal/config/config_template_lint_test.go`
+aligns the repo's four templates (`config.yml`, `config.staging.example.yml`,
+`config.production.secure.example.yml`, `config.weknora.yml`) with the
+`Config` structure's yaml schema:
 
-1. **未知键直接失败**——viper 对 schema 外的键静默忽略，typo 会无声
-   回退默认值；本门禁使其在 CI 阶段显式失败。新增配置项时改结构、
-   改模板，测试自动覆盖。
-2. **staging / production 模板的 `database` 节与 `jwt.secret` 必须显式
-   存在且走 `${ENV}` 占位符**——模板缺失会回退代码默认 dev 值并被
-   启动校验拒绝，模板失去可用性；明文凭证不允许进任何模板。
-3. 模板有意省略的非敏感键（走 `GetDefaultConfig` 默认值）是允许的。
+1. **Unknown keys fail directly** — viper silently ignores keys outside the schema, a typo silently
+   falls back to the default; this gate makes it fail explicitly at CI time. When adding config items, change the structure,
+   change the templates, the test covers it automatically.
+2. **The `database` section and `jwt.secret` of the staging / production templates must be explicitly
+   present and use `${ENV}` placeholders** — template absence falls back to code default dev values and gets
+   rejected by the startup validation, the template loses usability; plaintext credentials are not allowed in any template.
+3. Template-intentionally-omitted non-sensitive keys (going through `GetDefaultConfig` defaults) are allowed.
 
-**环境严格度**：`server.environment` 支持 `dev/development`、
-`stage/staging`、`prod/production` 及大小写别名，加载时归一
-（`canonicalEnvironment`），防止拼写绕过严格校验。
+**Environment strictness**: `server.environment` supports `dev/development`,
+`stage/staging`, `prod/production` and case aliases, normalized at load time
+(`canonicalEnvironment`), preventing spelling from bypassing strict validation.
 
-- `development`：已知不安全默认值（dev JWT secret、dev 数据库密码、
-  WeKnora default key）仅产生警告，本地可运行。
-- `staging` 与 `production`：任何不安全默认值直接拒绝启动——占位
-  凭证（`${ENV}` 未注入时展开为空）同样会被拒绝，这是预期行为：
-  预生产与生产不允许带占位凭证起服务。
+- `development`: known-unsafe defaults (dev JWT secret, dev database password,
+  WeKnora default key) only produce warnings, runnable locally.
+- `staging` and `production`: any known-unsafe default rejects startup — placeholder
+  credentials (`${ENV}` expanding to empty when not injected) are also rejected, this is expected behavior:
+  pre-production and production do not allow starting services with placeholder credentials.
 
-**凭证注入路径**：模板中的 secrets 一律 `${ENV_VAR}` 占位，加载链为
-`expandEnvVarsInConfig`（读取前展开）→ viper 解析 → `normalizeConfig`
-（含 environment 归一）→ `Validate` 严格度分级 → `applyConfigEnvOverrides`
-（OPENAI_API_KEY 等显式环境覆盖）。环境变量覆盖只用于系统级配置，
-不承载 tenant/workspace 策略（见"作用域模型"）。
+**Credential injection path**: secrets in templates are always `${ENV_VAR}` placeholders, the load chain is
+`expandEnvVarsInConfig` (expansion before read) → viper parse → `normalizeConfig`
+(including environment normalization) → `Validate` strictness tiering → `applyConfigEnvOverrides`
+(OPENAI_API_KEY and other explicit environment overrides). Environment variable overrides are only used for system-level config,
+do not carry tenant/workspace policy (see "Scope Model").
 
-## 后续实现顺序
+## Subsequent Implementation Order
 
-1. 新增 `TenantConfig` / `WorkspaceConfig` 文档化数据模型
-2. 将 `portal`、AI provider default、knowledge default、routing policy 从 `config.yml` 逐步迁出
-3. 为配置读取建立统一 resolver：`runtime -> workspace -> tenant -> system -> default`
-4. 为配置变更补审计快照与恢复入口
+1. Add `TenantConfig` / `WorkspaceConfig` documented data models
+2. Gradually migrate `portal`, AI provider default, knowledge default, routing policy out of `config.yml`
+3. Build a unified resolver for config reads: `runtime -> workspace -> tenant -> system -> default`
+4. Add audit snapshots and restore entries for config changes

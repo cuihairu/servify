@@ -1,33 +1,31 @@
-> [English](webrtc-deployment.en.md) | **中文**
+# WebRTC / Remote Assistance Deployment Guide
 
-# WebRTC / 远程协助部署指南
+This document answers one frequently asked question: **what extra does deploying Servify's remote assistance capability require?** and gives the complete checklist for STUN/TURN, firewall ports, and verification steps.
 
-本文回答一个高频问题：**部署 Servify 的远程协助能力，需要额外部署什么？** 并给出 STUN/TURN、防火墙端口与验证步骤的完整清单。
+Conclusions first:
 
-先给结论：
+1. **The WebRTC protocol stack (pion/webrtc) needs no separate deployment.** Servify uses [`pion/webrtc/v4`](https://github.com/pion/webrtc) (a pure Go library, see `github.com/pion/webrtc/v4 v4.2.20` in `apps/server/go.mod`), compiled directly into the `bin/servify` single binary at build time; there is no independent WebRTC process or container.
+2. **Three things need planning**: a STUN service (self-hosted coturn or public STUN), server-side UDP firewall rules, and reverse-proxy configuration for the signaling entry point (`/api/v1/ws`).
+3. **Configuration surface**: single STUN key `webrtc.stun_server` + multi-STUN redundancy `stun_servers`; TURN is supported (the time-limited credential shape decided in [TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md) via `webrtc.turn.*`), **disabled by default**; enable it for strict-NAT traversal scenarios per [section 5](#5-self-hosted-coturn-deployment-example) (see [section 4](#4-stun-and-turn-current-state-and-boundary) for details).
 
-1. **WebRTC 协议栈（pion/webrtc）不需要单独部署**。Servify 使用 [`pion/webrtc/v4`](https://github.com/pion/webrtc)（纯 Go 库，见 `apps/server/go.mod` 的 `github.com/pion/webrtc/v4 v4.2.20`），编译期直接打进 `bin/servify` 单二进制，没有任何独立的 WebRTC 进程或容器。
-2. **需要规划的是三件事**：STUN 服务（可自建 coturn 或用公共 STUN）、服务器侧 UDP 防火墙、信令入口（`/api/v1/ws`）的反代配置。
-3. **配置面**：STUN 单键 `webrtc.stun_server` + 多 STUN 冗余 `stun_servers`；TURN 已支持（[TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md) 拍板的 `webrtc.turn.*` 时间限凭据形态），**默认关闭**，跨严格 NAT 场景按[第 5 节](#5-自建-coturn-部署示例)启用（详见[第 4 节](#4-stun-与-turn现状与边界)）。
+## Table of Contents
 
-## 目录
+1. [Architecture and Connection Topology](#1-architecture-and-connection-topology)
+2. [Current Configuration Surface](#2-current-configuration-surface)
+3. [Ports and Firewall Checklist](#3-ports-and-firewall-checklist)
+4. [STUN and TURN: Current State and Boundary](#4-stun-and-turn-current-state-and-boundary)
+5. [Self-hosted coturn Deployment Example](#5-self-hosted-coturn-deployment-example)
+6. [Public STUN and Domestic Alternatives](#6-public-stun-and-domestic-alternatives)
+7. [End-to-end Verification Steps](#7-end-to-end-verification-steps)
+8. [Troubleshooting](#8-troubleshooting)
+9. [Relation to the Remote Assistance REST Surface](#9-relation-to-the-remote-assistance-rest-surface)
 
-1. [架构与连接拓扑](#1-架构与连接拓扑)
-2. [当前配置面](#2-当前配置面)
-3. [端口与防火墙清单](#3-端口与防火墙清单)
-4. [STUN 与 TURN：现状与边界](#4-stun-与-turn现状与边界)
-5. [自建 coturn 部署示例](#5-自建-coturn-部署示例)
-6. [公共 STUN 与国内替代](#6-公共-stun-与国内替代)
-7. [端到端验证步骤](#7-端到端验证步骤)
-8. [故障排查](#8-故障排查)
-9. [与远程协助 REST 面的关系](#9-与远程协助-rest-面的关系)
+## 1. Architecture and Connection Topology
 
-## 1. 架构与连接拓扑
+Servify plays **two roles** in the WebRTC chain:
 
-Servify 在 WebRTC 链路中承担**两个角色**：
-
-- **信令服务器**：浏览器通过 WebSocket（`/api/v1/ws?session_id=...`）与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`，见 `apps/server/internal/platform/realtime/websocket_hub.go`）。
-- **PeerConnection 一端**：服务端进程自己也是一个 PeerConnection 端点（`WebRTCService.CreatePeerConnection`，见 `apps/server/internal/platform/realtime/webrtc_service.go`）。也就是说 ICE 直连发生在**浏览器 ↔ Servify 服务器**之间，媒体/数据流不经过任何第三方，但**服务器必须参与 ICE**，UDP 连通性是服务器侧的网络问题。
+- **Signaling server**: the browser exchanges SDP offer/answer and ICE candidates with Servify over WebSocket (`/api/v1/ws?session_id=...`); message types `webrtc-offer` / `webrtc-answer` / `webrtc-candidate` (see `apps/server/internal/platform/realtime/websocket_hub.go`).
+- **One PeerConnection endpoint**: the server process is itself also a PeerConnection endpoint (`WebRTCService.CreatePeerConnection`, see `apps/server/internal/platform/realtime/webrtc_service.go`). In other words, ICE direct connectivity happens between **browser ↔ Servify server**; media/data flows go through no third party, but **the server must participate in ICE**, so UDP connectivity is a server-side network concern.
 
 ```mermaid
 flowchart LR
@@ -36,11 +34,11 @@ flowchart LR
     B -. "ICE 直连: UDP" ==> S
 ```
 
-信令走 WebSocket：浏览器通过 `/api/v1/ws?session_id=...` 与 Servify 交换 SDP offer/answer 与 ICE candidate（消息类型 `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`；建联后服务端还会主动推送一条 `webrtc-ice-config`，下发 ICE 配置与 TURN 短时凭据，见[第 2 节](#2-当前配置面)）。ICE 直连发生在**浏览器 ↔ Servify 服务器**之间：媒体流量（SRTP/DataChannel）不经过任何第三方，但服务器必须参与 ICE，UDP 连通性是服务器侧的网络问题。STUN 只参与地址发现（双方报出各自的 server-reflexive 地址），不承载媒体流量。
+Signaling goes over WebSocket: the browser exchanges SDP offer/answer and ICE candidates with Servify over `/api/v1/ws?session_id=...` (message types `webrtc-offer` / `webrtc-answer` / `webrtc-candidate`; after connection setup the server also proactively pushes a `webrtc-ice-config` delivering the ICE configuration and short-lived TURN credentials, see [section 2](#2-current-configuration-surface)). ICE direct connectivity happens between **browser ↔ Servify server**: media traffic (SRTP/DataChannel) goes through no third party, but the server must participate in ICE, so UDP connectivity is a server-side network concern. STUN only participates in address discovery (each side reports its own server-reflexive address); it carries no media traffic.
 
-## 2. 当前配置面
+## 2. Current Configuration Surface
 
-`config.yml` 中与 WebRTC 相关的配置（`apps/server/internal/config/config.go` 的 `WebRTCConfig`）：
+WebRTC-related configuration in `config.yml` (the `WebRTCConfig` in `apps/server/internal/config/config.go`):
 
 ```yaml
 webrtc:
@@ -56,51 +54,51 @@ webrtc:
   #   ttl: 5m
 ```
 
-装配链路：`wireRealtimeGateways`（`apps/server/internal/app/server/runtime_assembly.go`）经 `iceturn.Assemble`（`apps/server/internal/platform/iceturn/`）把 STUN 列表与 TURN 配置装配为 `ICEConfig`——TURN 启用时按 `username = 过期 Unix 秒`、`credential = base64(HMAC-SHA1(secret, username))` 生成**短时凭据**（默认 5 分钟）。服务端 PeerConnection 的 `ICEServers` 与客户端下发共用同一份装配结果。
+Wiring: `wireRealtimeGateways` (`apps/server/internal/app/server/runtime_assembly.go`) assembles the STUN list and TURN config into an `ICEConfig` via `iceturn.Assemble` (`apps/server/internal/platform/iceturn/`) — when TURN is enabled, **short-lived credentials** are generated as `username = Unix expiry seconds` and `credential = base64(HMAC-SHA1(secret, username))` (default 5 minutes). The server PeerConnection's `ICEServers` and the client delivery share the same assembly result.
 
-客户端下发：浏览器 WS 建联（`/api/v1/ws`）后，服务端立即推送一条 `webrtc-ice-config` 消息（`data.ice_servers[]`：STUN 项只有 `urls`；TURN 项另带 `username`/`credential`/`ttl` 秒数）。同形 REST 面 `GET /api/v1/rtc/ice-servers`（鉴权同 `/webrtc/stats` 管理面）供客户端在凭据到期前主动刷新。SDK 取用顺序：宿主 `remoteAssist.iceServers` 覆盖口最高 → WS 推送缓存 → REST 兜底。
+Client delivery: after the browser connects WS (`/api/v1/ws`), the server immediately pushes a `webrtc-ice-config` message (`data.ice_servers[]`: STUN entries carry only `urls`; TURN entries additionally carry `username`/`credential`/`ttl` in seconds). A same-shaped REST surface `GET /api/v1/rtc/ice-servers` (same auth as the `/webrtc/stats` admin surface) lets the client refresh proactively before credentials expire. SDK precedence: the host `remoteAssist.iceServers` override wins → WS push cache → REST fall back.
 
-部署要点：
+Deployment notes:
 
-- **中国大陆或无法访问 Google 服务的环境必须改掉默认值**，否则 ICE 地址发现会超时拖慢建连（自建 coturn 见[第 5 节](#5-自建-coturn-部署示例)，公共替代见[第 6 节](#6-公共-stun-与国内替代)）。
-- TURN 启用是零容忍门禁：`turn.url` 配置后 `realm`/`static_auth_secret`/`ttl` 必须完整，缺一拒绝启动（`config.InsecureDefaults` 告警 + 装配层 `iceturn.Config.Validate` 双层 gate）；secret 生产环境只经 env 注入。
+- **Mainland China or environments that cannot reach Google services must change the default**, otherwise ICE address discovery times out and slows connection setup (self-hosted coturn in [section 5](#5-self-hosted-coturn-deployment-example), public alternatives in [section 6](#6-public-stun-and-domestic-alternatives)).
+- TURN enablement is a zero-tolerance gate: once `turn.url` is configured, `realm`/`static_auth_secret`/`ttl` must all be complete; missing any one refuses to start (`config.InsecureDefaults` warning + assembly-layer `iceturn.Config.Validate` double gate); the secret is only injected via env in production.
 
-环境变量（白名单见 `apps/server/internal/app/bootstrap/config.go` 的 `applyConfigEnvOverrides`）：`WEBRTC_STUN_SERVERS`（逗号分隔）、`WEBRTC_TURN_URL`、`WEBRTC_TURN_REALM`、`WEBRTC_TURN_STATIC_AUTH_SECRET`。
+Environment variables (whitelist in `applyConfigEnvOverrides`, `apps/server/internal/app/bootstrap/config.go`): `WEBRTC_STUN_SERVERS` (comma-separated), `WEBRTC_TURN_URL`, `WEBRTC_TURN_REALM`, `WEBRTC_TURN_STATIC_AUTH_SECRET`.
 
-## 3. 端口与防火墙清单
+## 3. Ports and Firewall Checklist
 
-| 方向 | 端口 | 协议 | 用途 | 必需性 |
+| Direction | Port | Protocol | Purpose | Required |
 | --- | --- | --- | --- | --- |
-| 客户端 → Servify | 8080（或你的 `server.port`） | TCP | HTTP API + WebSocket 信令（`/api/v1/ws`） | 必需 |
-| 客户端 → Servify | 部署环境 UDP 临时端口范围（通常 `32768-60999`） | UDP | ICE 直连（SRTP 媒体 / DataChannel） | WebRTC 建连必需 |
-| Servify → STUN | 3478 | UDP | STUN 绑定请求（地址发现） | 使用 STUN 时必需 |
-| 客户端 → coturn | 3478 | UDP/TCP | STUN/TURN 入口（自建时） | 自建 coturn 时必需 |
-| 客户端 → coturn | `49160-49200`（可配） | UDP | TURN 中继端口（仅 TURN 生效时用） | 配置 TURN 时必需 |
+| Client → Servify | 8080 (or your `server.port`) | TCP | HTTP API + WebSocket signaling (`/api/v1/ws`) | Required |
+| Client → Servify | Deployment-environment UDP ephemeral port range (typically `32768-60999`) | UDP | ICE direct connectivity (SRTP media / DataChannel) | Required for WebRTC connection |
+| Servify → STUN | 3478 | UDP | STUN binding requests (address discovery) | Required when using STUN |
+| Client → coturn | 3478 | UDP/TCP | STUN/TURN entry (when self-hosted) | Required when self-hosting coturn |
+| Client → coturn | `49160-49200` (configurable) | UDP | TURN relay ports (only when TURN is active) | Required when TURN is configured |
 
-关于 UDP 临时端口范围的说明（如实边界）：
+Notes on the UDP ephemeral port range (honest boundary):
 
-- 当前代码**没有**通过 pion 的 `SettingEngine.SetEphemeralUDPPortRange` 收敛服务端 UDP 端口，pion 使用系统临时端口（Linux 默认 `net.ipv4.ip_local_port_range`，通常 `32768-60999`）。公网部署时防火墙需放行该范围（或收窄系统范围）。
-- 若 Servify 部署在公网（无 NAT）且客户端也在公网，host candidates 直连通常即可成功，STUN 只是加速路径；若 Servify 在 NAT 后，需要为服务器做 UDP 端口转发或 TURN（见下一节）。
+- The current code does **not** constrain server-side UDP ports via pion's `SettingEngine.SetEphemeralUDPPortRange`; pion uses system ephemeral ports (Linux default `net.ipv4.ip_local_port_range`, typically `32768-60999`). For public deployments, the firewall must allow that range (or the system range must be narrowed).
+- If Servify is deployed on the public internet (no NAT) and the client is also public, host candidate direct connectivity usually succeeds and STUN is only an acceleration path; if Servify sits behind NAT, the server needs UDP port forwarding or TURN (see the next section).
 
-## 4. STUN 与 TURN：现状与边界
+## 4. STUN and TURN: Current State and Boundary
 
-| 能力 | 现状 |
+| Capability | Current state |
 | --- | --- |
-| STUN | ✅ 支持，`webrtc.stun_server` 单键 + `webrtc.stun_servers` 列表 |
-| 多 STUN 冗余 | ✅ `stun_servers` 列表（env `WEBRTC_STUN_SERVERS` 逗号分隔） |
-| TURN（中继） | ✅ **已支持**：`webrtc.turn.*` 时间限凭据（coturn `use-auth-secret` 模式），凭据服务端运行时签发、WS 建联即下发（见[第 2 节](#2-当前配置面)与 [TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md)） |
-| 服务端 UDP 端口收敛 | ❌ 未暴露 `SettingEngine` 配置 |
+| STUN | ✅ Supported, `webrtc.stun_server` single key + `webrtc.stun_servers` list |
+| Multi-STUN redundancy | ✅ `stun_servers` list (env `WEBRTC_STUN_SERVERS` comma-separated) |
+| TURN (relay) | ✅ **Supported**: `webrtc.turn.*` time-limited credentials (coturn `use-auth-secret` mode); credentials are signed at server runtime and delivered at WS connection (see [section 2](#2-current-configuration-surface) and [TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md)) |
+| Server-side UDP port constraint | ❌ No `SettingEngine` configuration exposed |
 
-**这意味着什么**：STUN 能解决"双方都在 NAT 后、但 NAT 类型友好（full-cone/restricted cone）"的打洞；一旦任一侧是对称 NAT（常见于部分企业网、部分移动网络），纯 STUN 会打洞失败，必须走 TURN 中继。TURN 现已支持，**但默认关闭**（`turn.url` 为空）：
+**What this means**: STUN solves the case where both sides are behind NAT but the NAT types are friendly (full-cone/restricted cone); once either side is symmetric NAT (common in some corporate networks and some mobile networks), pure STUN fails and TURN relay is required. TURN is now supported, **but disabled by default** (`turn.url` empty):
 
-- 未启用 TURN 时，部署建议让 **Servify 服务器拥有公网 IP 或一对一 NAT（全端口转发）**——服务端网络条件良好时，浏览器侧即使在对称 NAT 后也大概率能直连（出站方向的打洞由浏览器侧 NAT 完成）。
-- 跨对称 NAT 场景启用 TURN：自建 coturn（`use-auth-secret` 时间限凭据形态，见[第 5 节](#5-自建-coturn-部署示例)）+ 配置 `webrtc.turn.*`（见[第 2 节](#2-当前配置面)），凭据泄露可自愈、无需吊销流程。
+- Without TURN, the deployment recommendation is to give the **Servify server a public IP or 1:1 NAT (full port forwarding)** — with good server-side network conditions, the browser side will most likely achieve direct connectivity even behind symmetric NAT (outbound hole punching is completed by the browser-side NAT).
+- Enable TURN for cross-symmetric-NAT scenarios: self-hosted coturn (the `use-auth-secret` time-limited credential shape, see [section 5](#5-self-hosted-coturn-deployment-example)) + configure `webrtc.turn.*` (see [section 2](#2-current-configuration-surface)); credential leakage is self-healing with no revocation flow needed.
 
-## 5. 自建 coturn 部署示例
+## 5. Self-hosted coturn Deployment Example
 
-自建 coturn 是最可控的方案（一台有公网 IP 的机器即可，STUN 场景对带宽要求极低）。
+Self-hosting coturn is the most controllable option (any machine with a public IP works; the STUN scenario has minimal bandwidth requirements).
 
-**生产形态：`use-auth-secret` 时间限凭据**（[TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md) 拍板；静态长期凭据不进生产）。仓库附带 compose 交付资产，secret 与 app 同源注入：
+**Production shape: `use-auth-secret` time-limited credentials** (decided in [TURN_DEPLOYMENT.md](./TURN_DEPLOYMENT.md); static long-lived credentials do not go to production). The repo ships compose delivery assets with the secret injected from the same source as the app:
 
 ```bash
 export TURN_STATIC_AUTH_SECRET="$(openssl rand -hex 32)"
@@ -108,9 +106,9 @@ export TURN_PUBLIC_URL="turn:<coturn公网IP>:3478"
 docker compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.coturn.yml up -d
 ```
 
-`infra/compose/docker-compose.coturn.yml` 干的事：coturn 独立容器 + host 网络 + `--use-auth-secret --static-auth-secret=${TURN_STATIC_AUTH_SECRET:?}`（缺省拒起）+ 中继段 `--min-port=49160 --max-port=49200`，同时给 servify 服务注入 `WEBRTC_TURN_URL/REALM/STATIC_AUTH_SECRET`。
+What `infra/compose/docker-compose.coturn.yml` does: a standalone coturn container + host network + `--use-auth-secret --static-auth-secret=${TURN_STATIC_AUTH_SECRET:?}` (refuses to start when missing) + relay segment `--min-port=49160 --max-port=49200`, while injecting `WEBRTC_TURN_URL/REALM/STATIC_AUTH_SECRET` into the servify service.
 
-等价的 `docker run` 手工形态：
+Equivalent manual `docker run` shape:
 
 ```bash
 docker run -d --name coturn \
@@ -126,15 +124,15 @@ docker run -d --name coturn \
   --no-cli --simple-log --log-file=stdout
 ```
 
-说明：
+Notes:
 
-- `--network host` 让 coturn 直接使用宿主网络，避免 Docker NAT 干扰地址发现；此时防火墙直接对宿主放行 `3478/udp` 与 `49160-49200/udp`。
-- `--static-auth-secret` 的值必须与 Servify 侧 `WEBRTC_TURN_STATIC_AUTH_SECRET` 完全一致（app 用它签发短时凭据，coturn 用它验签）；**生成后走 env 注入，不进命令行历史与配置文件**。
-- 只做 STUN 用可以去掉 `--use-auth-secret/--static-auth-secret/--min-port/--max-port`（不需要凭据与中继端口）。
-- `--realm` 换成你的域名，并与 app 侧 `webrtc.turn.realm` 保持一致；TURNS（5349/TLS）为可选增强——媒体本身走 DTLS-SRTP 端到端加密，需要时挂证书去掉 `--no-tls --no-dtls`。
-- 云主机 1:1 NAT 场景需补 `--external-ip=<公网IP>`，否则中继地址不可达。
+- `--network host` lets coturn use the host network directly, avoiding Docker NAT interference with address discovery; in this case the firewall allows `3478/udp` and `49160-49200/udp` directly on the host.
+- The `--static-auth-secret` value must exactly match the Servify-side `WEBRTC_TURN_STATIC_AUTH_SECRET` (the app signs short-lived credentials with it, coturn verifies with it); **after generation, inject via env — do not put it in command-line history or config files**.
+- For STUN-only use, `--use-auth-secret/--static-auth-secret/--min-port/--max-port` can be dropped (no credentials or relay ports needed).
+- Replace `--realm` with your domain and keep it consistent with the app-side `webrtc.turn.realm`; TURNS (5349/TLS) is an optional enhancement — the media itself is end-to-end encrypted via DTLS-SRTP, so when needed, mount a certificate and drop `--no-tls --no-dtls`.
+- For cloud-host 1:1 NAT scenarios, add `--external-ip=<public IP>`; otherwise the relay address is unreachable.
 
-systemd 裸机方式的最小 `/etc/turnserver.conf`（同款 auth-secret 形态；secret 建议 `EnvironmentFile` 注入）：
+Minimal `/etc/turnserver.conf` for the systemd bare-metal approach (same auth-secret shape; secret recommended injected via `EnvironmentFile`):
 
 ```conf
 listening-port=3478
@@ -146,7 +144,7 @@ max-port=49200
 no-cli
 ```
 
-**防火墙放行**（以 ufw 为例）：
+**Firewall rules** (using ufw as an example):
 
 ```bash
 ufw allow 3478/udp
@@ -154,7 +152,7 @@ ufw allow 3478/tcp
 ufw allow 49160:49200/udp
 ```
 
-**验证 coturn 本身可用**（在另一台机器上执行，排除本机回路）：
+**Verify coturn itself works** (run on another machine to rule out local loopback):
 
 ```bash
 # 方式一：coturn 自带工具
@@ -165,7 +163,7 @@ turnutils_stun -p 3478 <coturn公网IP>
 # 填入 stun:<coturn公网IP>:3478，能看到 srflx 候选即为可用
 ```
 
-然后在 Servify 侧启用（env 或 config.yml，二者等价）：
+Then enable it on the Servify side (env or config.yml — both are equivalent):
 
 ```yaml
 webrtc:
@@ -177,29 +175,29 @@ webrtc:
     ttl: 5m
 ```
 
-启用后用 WS 探针连 `/api/v1/ws`，建联即应收到 `webrtc-ice-config`，其 TURN 项携带短时 `username`/`credential`（见[第 2 节](#2-当前配置面)与[第 7 节](#7-端到端验证步骤)②）。
+After enabling, connect with a WS probe to `/api/v1/ws`; connection setup should deliver `webrtc-ice-config` immediately, and its TURN entry carries the short-lived `username`/`credential` (see [section 2](#2-current-configuration-surface) and [section 7](#7-end-to-end-verification-steps) ②).
 
-## 6. 公共 STUN 与国内替代
+## 6. Public STUN and Domestic Alternatives
 
-不想自建时可用公共 STUN（**注意：第三方服务无 SLA，生产环境推荐自建**）：
+Public STUN is available when you don't want to self-host (**note: third-party services carry no SLA; production deployments recommend self-hosting**):
 
-| 服务 | 地址 | 适用 |
+| Service | Address | Applicable |
 | --- | --- | --- |
-| Google（默认值） | `stun:stun.l.google.com:19302` | 国际网络 |
-| Nextcloud | `stun:stun.nextcloud.com:443` | 国际网络（443 端口利于穿墙） |
-| 小米（国内） | `stun:stun.miwifi.com:3478` | 中国大陆 |
-| Tencent（国内） | `stun:stun.qq.com:3478` | 中国大陆 |
+| Google (default) | `stun:stun.l.google.com:19302` | International networks |
+| Nextcloud | `stun:stun.nextcloud.com:443` | International networks (port 443 eases firewall traversal) |
+| Xiaomi (domestic) | `stun:stun.miwifi.com:3478` | Mainland China |
+| Tencent (domestic) | `stun:stun.qq.com:3478` | Mainland China |
 
-选择原则：
+Selection principles:
 
-- 中国大陆部署**不要保留 Google 默认值**——`stun.l.google.com` 不可达时，每次建连都要等 ICE 地址发现超时，表现为 WebRTC 建连"能通但很慢"或超时失败。
-- 公共 STUN 只做地址发现、不承载媒体，安全性风险低；可用性风险由[第 7 节](#7-端到端验证步骤)的验证步骤兜底。
+- **Do not keep the Google default for mainland China deployments** — when `stun.l.google.com` is unreachable, every connection waits for ICE address discovery to time out, showing up as WebRTC connection setup "working but very slow" or failing with a timeout.
+- Public STUN only does address discovery and carries no media, so the security risk is low; the availability risk is backstopped by the verification steps in [section 7](#7-end-to-end-verification-steps).
 
-## 7. 端到端验证步骤
+## 7. End-to-end Verification Steps
 
-按顺序执行，每步通过再走下一步（假设服务跑在 `:8080`）：
+Execute in order; proceed to the next step only after the current one passes (assumes the service runs on `:8080`):
 
-**① 服务与信令入口**
+**① Service and signaling entry point**
 
 ```bash
 curl -fsS http://127.0.0.1:8080/health
@@ -208,17 +206,17 @@ curl -fsS http://127.0.0.1:8080/ready
 curl -sS -i --max-time 3 http://127.0.0.1:8080/api/v1/ws?session_id=probe | head -1
 ```
 
-**② 信令回环（WebRTC 消息面）**
+**② Signaling loopback (WebRTC message surface)**
 
-用任意 WS 客户端连 `ws://<host>:8080/api/v1/ws?session_id=webrtc-probe`，连上后应**先收到一条服务端推送的 `webrtc-ice-config`**（ICE 配置与 TURN 短时凭据；未启用 TURN 时只有 STUN 项）。然后发送：
+Connect with any WS client to `ws://<host>:8080/api/v1/ws?session_id=webrtc-probe`; after connecting, you should **first receive a server-pushed `webrtc-ice-config`** (ICE configuration and TURN short-lived credentials; when TURN is not enabled, only STUN entries). Then send:
 
 ```json
 {"type": "webrtc-offer", "data": {"sdp": "<真实浏览器生成的 SDP offer>", "type": "offer"}}
 ```
 
-应收到 `webrtc-answer`（服务端 pion 生成），随后服务端会主动推送 `webrtc-candidate`。
+You should receive `webrtc-answer` (generated by server-side pion), after which the server proactively pushes `webrtc-candidate`.
 
-**③ ICE 连接状态**
+**③ ICE connection state**
 
 ```bash
 curl -fsS "http://127.0.0.1:8080/api/v1/webrtc/stats?session_id=webrtc-probe"
@@ -228,32 +226,32 @@ curl -fsS "http://127.0.0.1:8080/api/v1/webrtc/stats?session_id=webrtc-probe"
 curl -fsS "http://127.0.0.1:8080/api/v1/webrtc/connections"
 ```
 
-仓库验收基线：`make remote-assist-acceptance`（含 WS 真实建会话）与历史验收记录（见 `docs/acceptance-checklist.md` "实时能力"节）确认过 `connection_state=connecting`、`ice_connection_state=checking` 的服务端行为——**服务端 SDP/信令正常时的常态就是停在 checking，等待浏览器侧 UDP 打洞完成**；只有 UDP 全程不通才会从 checking 滑向 failed。
+Repo acceptance baseline: `make remote-assist-acceptance` (including a real WS session) and the historical acceptance record (see the "实时能力" section of `docs/acceptance-checklist.md`) confirmed the server behavior of `connection_state=connecting` and `ice_connection_state=checking` — **when server-side SDP/signaling is normal, the constant state is staying at checking, waiting for browser-side UDP hole punching to complete**; only when UDP is fully unreachable does it slide from checking toward failed.
 
-**④ 判定网络面**
+**④ Determine the network surface**
 
-- `ice_connection_state` 长期 `checking`：信令通、UDP 打洞不通 → 查[第 3 节](#3-端口与防火墙清单)的 UDP 放行与 STUN 可达性。
-- 收不到 `webrtc-answer`：信令面问题，与 STUN/UDP 无关 → 查反代是否正确升级 WebSocket（见 `docs/deployment.md` 生产部署一节的 WS 反代配置）。
+- `ice_connection_state` stuck at `checking` for a long time: signaling works but UDP hole punching does not → check the UDP allow rules and STUN reachability in [section 3](#3-ports-and-firewall-checklist).
+- No `webrtc-answer` received: a signaling-surface problem, unrelated to STUN/UDP → check whether the reverse proxy correctly upgrades WebSocket (see the WS reverse proxy configuration in the production deployment section of `docs/deployment.md`).
 
-## 8. 故障排查
+## 8. Troubleshooting
 
-| 现象 | 可能原因 | 处置 |
+| Symptom | Possible cause | Handling |
 | --- | --- | --- |
-| WS 连上但收不到 `webrtc-answer` | SDP 非法 / 服务端 PeerConnection 创建失败 | 查服务端日志 `failed to create peer connection`；确认 offer 是浏览器生成的真实 SDP |
-| `ice_connection_state` 卡在 `checking` | UDP 未放行 / STUN 不可达 / 对称 NAT | 放行 UDP 端口范围；`turnutils_stun` 验证 STUN；更换 `webrtc.stun_server`（国内换国内源）；必要时让服务器直挂公网 |
-| 建连很慢（数秒级） | 默认 Google STUN 不可达，等超时才回退 host 候选 | 换可达的 STUN（国内环境必改默认值） |
-| `connection_state` 变 `failed` | ICE 全部候选失败 | 服务端是否在严格 NAT 后？做 UDP 端口转发；或启用 TURN（[第 5 节](#5-自建-coturn-部署示例)） |
-| 浏览器侧报 `getUserMedia` 错误 | 媒体采集失败，与部署无关 | 浏览器需 HTTPS/localhost 才能采集摄像头麦克风 |
+| WS connects but no `webrtc-answer` arrives | Invalid SDP / server PeerConnection creation failed | Check server logs for `failed to create peer connection`; confirm the offer is real SDP generated by a browser |
+| `ice_connection_state` stuck at `checking` | UDP not allowed / STUN unreachable / symmetric NAT | Allow the UDP port range; verify STUN with `turnutils_stun`; switch `webrtc.stun_server` (use a domestic source in domestic environments); if necessary, put the server directly on the public internet |
+| Very slow connection setup (seconds) | The default Google STUN is unreachable and it waits for the timeout before falling back to host candidates | Switch to a reachable STUN (the default must be changed in domestic environments) |
+| `connection_state` becomes `failed` | All ICE candidates failed | Is the server behind strict NAT? Set up UDP port forwarding; or enable TURN ([section 5](#5-self-hosted-coturn-deployment-example)) |
+| Browser reports a `getUserMedia` error | Media capture failed; unrelated to deployment | The browser requires HTTPS/localhost to capture camera and microphone |
 
-## 9. 与远程协助 REST 面的关系
+## 9. Relation to the Remote Assistance REST Surface
 
-远程协助的业务面（发起协助会话、标注、结束与录制元数据）是**独立的 REST API**（`/api/remote-assist` 系列，`RequireResourcePermission("assist")` 权限），不依赖 UDP/STUN，普通 HTTPS 即可用；2026-09-18 已完成全链路真实验收（见 `docs/acceptance-checklist.md` "远程协助会话与标注"行）。
+The remote assistance business surface (starting assist sessions, annotations, ending, and recording metadata) is a **separate REST API** (`/api/remote-assist` family, `RequireResourcePermission("assist")` permission), which does not depend on UDP/STUN and works over plain HTTPS; the full-chain real-machine acceptance was completed on 2026-09-18 (see the "远程协助会话与标注" row of `docs/acceptance-checklist.md`).
 
-两者的分工：
+The division of labor between the two:
 
-| 链路 | 承载 | 部署要求 |
+| Chain | Carries | Deployment requirement |
 | --- | --- | --- |
-| `/api/remote-assist/*`（REST） | 会话管理、屏幕标注坐标、录制元数据、结束态 | 仅 HTTPS，无额外网络要求 |
-| `/api/v1/ws` + WebRTC（本文） | 实时音视频 / DataChannel 实时通道 | WS 反代 + UDP + STUN（本文全部内容） |
+| `/api/remote-assist/*` (REST) | Session management, screen annotation coordinates, recording metadata, ending state | HTTPS only, no extra network requirements |
+| `/api/v1/ws` + WebRTC (this document) | Real-time audio/video / DataChannel real-time channel | WS reverse proxy + UDP + STUN (everything in this document) |
 
-即：**只部署 REST 面时远程协助的"管理链路"完整可用；要亮出"实时协作"能力，才需要本文的网络面。**
+In short: **when only the REST surface is deployed, remote assistance's "management chain" is fully usable; the network surface in this document is needed only to light up the "real-time collaboration" capability.**

@@ -3,129 +3,128 @@ layout: home
 
 hero:
   name: Servify
-  text: 面向企业独立部署的智能客服系统
-  tagline: Web 优先，AI 首答，人工接管，工单全流程
+  text: An intelligent customer service system for self-hosted enterprise deployment
+  tagline: Web-first, AI first response, human takeover, end-to-end ticketing
   actions:
     - theme: brand
-      text: 查看 V1 目标
+      text: View V1 Goals
       link: /v1-product-scope
     - theme: alt
-      text: 查看部署文档
+      text: View Deployment Docs
       link: /deployment
 
 features:
-  - title: Web 接入
-    details: 以网站客服入口为起点，把访客接待、实时会话和后续处理串成统一链路。
-  - title: AI 首答与知识问答
-    details: 通过知识库和模型能力完成首答、澄清和建议，让 AI 成为客服流程里的协作角色。
-  - title: 人工接管与转接
-    details: 坐席可以随时接管 AI 会话，并继续转接、协作和推进复杂问题。
-  - title: 工单全流程
-    details: 无法即时解决的问题进入工单继续跟进，让服务从聊天延伸到持续处理。
-  - title: 知识库管理
-    details: 把 FAQ、帮助文档、产品说明和售后政策沉淀成 AI 可用的知识资产。
-  - title: 后台运营
-    details: 在统一后台管理坐席、知识库、权限、安全策略和产品运行配置。
+  - title: Web Access
+    details: Starting from the website support entry point, it chains visitor reception, real-time conversations, and follow-up handling into one unified flow.
+  - title: AI First Response and Knowledge Q&A
+    details: Uses the knowledge base and model capability to deliver first responses, clarification, and suggestions, making AI a collaborative role in the support workflow.
+  - title: Human Takeover and Transfer
+    details: Agents can take over an AI conversation at any time and keep transferring, collaborating, and pushing complex issues forward.
+  - title: End-to-End Ticketing
+    details: Issues that cannot be resolved immediately flow into tickets for continued follow-up, extending service from chat into ongoing handling.
+  - title: Knowledge Base Management
+    details: Turns FAQs, help docs, product descriptions, and after-sales policies into knowledge assets that AI can use.
+  - title: Back-Office Operations
+    details: Manage agents, knowledge bases, permissions, security policies, and product runtime configuration in one unified admin console.
 ---
-> [English](index.en.md) | **中文**
 
-## 产品概览
+## Product Overview
 
-Servify 第一版先针对企业官网、品牌独立站、SaaS 官网和文档站提供 Web 智能客服能力。
+The first release of Servify delivers Web-based intelligent customer service for corporate websites, brand standalone storefronts, SaaS marketing sites, and documentation sites.
 
-它优先把客服主链路做完整，平台化兼容后置：
+It prioritizes completing the core support chain, with platform-level compatibility deferred:
 
 `Web 接入 -> AI 首答 -> 人工接管 -> 转接协作 -> 工单全流程`
 
-当前文档站的重点，也应该围绕这条链路来理解产品，而不是先从 implementation backlog 开始读。
+The focus of this documentation site should likewise be on understanding the product around this chain, rather than starting from the implementation backlog.
 
-远程协助仍然是一个值得保留的增强方向，但在 V1 阶段，它不应压过网站客服入口、AI 首答、转人工和工单全流程这些主能力。
+Remote assistance remains an enhancement direction worth keeping, but in the V1 phase it must not outweigh the core capabilities: the website support entry, AI first response, human handoff, and end-to-end ticketing.
 
-## 为什么是 Servify
+## Why Servify
 
-### 独立部署优先
+### Self-Hosted Deployment First
 
-Servify 适合需要独立部署、可控接入和持续演化的企业客服场景。它默认服务的是单个企业团队，而不是把多租户平台化能力放在产品正中央。
+Servify fits enterprise support scenarios that need self-hosted deployment, controllable integration, and continuous evolution. It serves a single enterprise team by default, rather than putting multi-tenant platform capability at the very center of the product.
 
-### 先把主链路做扎实
+### Solidify the Core Chain First
 
-很多客服系统会在早期同时铺很多功能面，但 V1 真正需要先成立的是：网站接入、知识问答、人工接管和工单继续处理。
+Many customer service systems spread across many feature surfaces early on, but what V1 truly needs to establish first is: website access, knowledge Q&A, human takeover, and continued ticket handling.
 
-当前仓库已经具备远程协助所需的实时基础，包括 Web 会话、消息、WebSocket / WebRTC 相关链路；但文档表达会刻意避免把它夸大成“已完整交付某种重型远控产品”。
+The repository already has the realtime foundations needed for remote assistance, including Web sessions, messages, and the WebSocket / WebRTC related paths; but the documentation deliberately avoids overstating this as "having fully delivered some heavyweight remote-control product".
 
-### AI 和人工不是割裂关系
+### AI and Humans Are Not Separate Silos
 
-AI 负责首答、澄清、知识召回和建议，人工可以随时接管、继续处理和协作，让整个客服体验保持连续。
+AI handles first responses, clarification, knowledge recall, and suggestions; humans can take over, continue, and collaborate at any time, keeping the entire support experience continuous.
 
-## 推荐阅读
+## Recommended Reading
 
-1. [V1 产品收敛](/v1-product-scope)
-2. [Web 嵌入集成指南](/embedding-guide)
-3. [坐席工作台](/agent-workspace)
-4. [工单全流程](/ticket-workflow)
-5. [部署指南](/deployment)
-6. [运维手册](/operator-runbook)
-7. [当前交付优先级](/delivery-priorities)
-8. [实施计划索引](/implementation/)
+1. [V1 Product Scope](/v1-product-scope)
+2. [Web Embedding Integration Guide](/embedding-guide)
+3. [Agent Workspace](/agent-workspace)
+4. [Ticket End-to-End Workflow](/ticket-workflow)
+5. [Deployment Guide](/deployment)
+6. [Operator Runbook](/operator-runbook)
+7. [Current Delivery Priorities](/delivery-priorities)
+8. [Implementation Plan Index](/zh/implementation/)
 
-## 你可以从这里继续
+## Where You Can Go From Here
 
-按使用任务分组，与左侧导航一致。
+Grouped by usage task, consistent with the left navigation.
 
-### 评估与上手
+### Evaluation and Getting Started
 
-- [V1 产品收敛](/v1-product-scope)
-- [当前交付优先级](/delivery-priorities)
-- [本地开发](/local-development)
-- [贡献指南](/contributing)
+- [V1 Product Scope](/v1-product-scope)
+- [Current Delivery Priorities](/delivery-priorities)
+- [Local Development](/local-development)
+- [Contributing Guide](/zh/contributing)
 
-### 嵌入与接入
+### Embedding and Integration
 
-- [Web SDK](/web-sdk)（core / react / vue / vanilla API 与配置全表）
-- [Web 嵌入集成指南](/embedding-guide)（网站客服组件、会话互认、工单上下文、事件回调、主题全表）
-- [移动端 SDK 接入](/mobile-sdk-integration)
-- [语音实时翻译](/realtime-translation-design)
-- [Twilio PSTN 接入](/voice-pstn-twilio)
+- [Web SDK](/web-sdk) (full tables of core / react / vue / vanilla APIs and configuration)
+- [Web Embedding Integration Guide](/embedding-guide) (website support widget, session interop, ticket context, event callbacks, full theme tables)
+- [Mobile SDK Integration](/mobile-sdk-integration)
+- [Realtime Speech Translation](/realtime-translation-design)
+- [Twilio PSTN Integration](/voice-pstn-twilio)
 
-### 坐席与工单
+### Agents and Tickets
 
-- [坐席工作台](/agent-workspace)（转人工队列、接管、回复、转派、会话流水）
-- [工单全流程](/ticket-workflow)（创建、指派、跟进、状态流转、统计导出）
+- [Agent Workspace](/agent-workspace) (human handoff queue, takeover, replies, reassignment, conversation transcripts)
+- [Ticket End-to-End Workflow](/ticket-workflow) (creation, assignment, follow-up, status transitions, statistics and export)
 
-### 部署与运维
+### Deployment and Operations
 
-- [部署指南](/deployment)
-- [运维手册](/operator-runbook)
-- [WebRTC/TURN 部署](/webrtc-deployment)
-- [备份与恢复](/backup-and-recovery)
-- [统计口径](/metrics-glossary)
+- [Deployment Guide](/deployment)
+- [Operator Runbook](/operator-runbook)
+- [WebRTC/TURN Deployment](/webrtc-deployment)
+- [Backup and Recovery](/backup-and-recovery)
+- [Metrics Glossary](/metrics-glossary)
 
-### 安全与合规
+### Security and Compliance
 
-- [运行安全基线](/security-baseline-operations)
-- [配置作用域规则](/configuration-scopes)
-- [Token 生命周期与密钥轮换](/token-lifecycle-and-key-rotation)
-- [开放接口安全清单](/public-surface-security-checklist)
+- [Runtime Security Baseline](/security-baseline-operations)
+- [Configuration Scope Rules](/configuration-scopes)
+- [Token Lifecycle and Key Rotation](/token-lifecycle-and-key-rotation)
+- [Public Surface Security Checklist](/public-surface-security-checklist)
 
-### AI 与知识库
+### AI and Knowledge Base
 
-- [WeKnora 集成](/WEKNORA_INTEGRATION)（知识库 provider 选型全景见 [KNOWLEDGE_BASE_LANDSCAPE](/KNOWLEDGE_BASE_LANDSCAPE)）
-- [RAGFlow 集成](/RAGFLOW_INTEGRATION)
-- [AI 降级行为](/ai-fallback-behavior)
+- [WeKnora Integration](/WEKNORA_INTEGRATION) (for the knowledge provider selection landscape, see [KNOWLEDGE_BASE_LANDSCAPE](/KNOWLEDGE_BASE_LANDSCAPE))
+- [RAGFlow Integration](/RAGFLOW_INTEGRATION)
+- [AI Fallback Behavior](/ai-fallback-behavior)
 
-### 研发与实施细节
+### Development and Implementation Details
 
-- [总体架构设计](/ARCHITECTURE)
-- [当前架构分析](/current-architecture)
-- [实施 Backlog 索引](/implementation/)
-- [测试金字塔](/testing-pyramid)
+- [Overall Architecture Design](/ARCHITECTURE)
+- [Current Architecture Analysis](/current-architecture)
+- [Implementation Backlog Index](/zh/implementation/)
+- [Testing Pyramid](/testing-pyramid)
 - [CI / GitHub Hosted Runner](/CI_SELF_HOSTED)
-- [版本发布策略](/release-versioning)
-- [规划与历史存档](/architecture-redesign-plan)（v0.1.0 Release Notes 等历史文档见侧边栏末组）
+- [Release Versioning Policy](/release-versioning)
+- [Planning and Archived History](/architecture-redesign-plan) (historical documents such as the v0.1.0 Release Notes are in the last sidebar group)
 
-## 常用入口
+## Common Entry Points
 
-- 本地自检：`make local-check`
-- 安全检查：`make security-check CONFIG=./config.yml`
-- 可观测性检查：`make observability-check CONFIG=./config.yml`
-- 发布检查：`make release-check CONFIG=./config.yml`
+- Local self-check: `make local-check`
+- Security check: `make security-check CONFIG=./config.yml`
+- Observability check: `make observability-check CONFIG=./config.yml`
+- Release check: `make release-check CONFIG=./config.yml`

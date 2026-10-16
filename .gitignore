@@ -137,3 +137,4 @@ apps/website/.wrangler/cache/
 /docs/swagger.json
 /docs/swagger.yaml
 
+docs/.vitepress/dist-verify/

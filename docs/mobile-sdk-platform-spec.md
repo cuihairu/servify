@@ -1,14 +1,12 @@
-> [English](mobile-sdk-platform-spec.en.md) | **中文**
+# Mobile SDK Platform Spec: Android/iOS selection engineering and core API surface
 
-# 移动端 SDK 平台规格：Android/iOS 选型工程化与核心 API 表面
+Status: technical design started (no implementation). [mobile-sdk-design.md](/mobile-sdk-design) answers "what to do, why, and in what order"; this document answers "what shape exactly" — layered architecture, engineering details for both platform selections, the V1-frozen API surface, and the executable refinement of the integration flow. Implementation code is out of scope for this document, but this is the reference baseline when M0/M1/M2 start: code review is checked line by line against this document; deviations require changing this document first.
 
-状态：开工技术方案（不含实现）。[mobile-sdk-design.md](/mobile-sdk-design) 回答"做什么、为什么、按什么顺序"；本文回答"具体长什么形状"——分层架构、两平台选型的工程化细节、V1 冻结的 API 表面、接入流程的可执行细化。实现代码不在本文范围，但本文是 M0/M1/M2 开工时的对照基线：代码评审按本文逐条验收，偏离需先改本文。
-
-协议契约见 [sdk/PROTOCOL.md](../sdk/PROTOCOL.md)（帧级事实源）；本文不重复帧定义，只引用。
+Protocol contract see [sdk/PROTOCOL.md](../sdk/PROTOCOL.md) (frame-level source of truth); this document does not repeat frame definitions, only references them.
 
 ---
 
-## 1. 分层架构（两平台同构）
+## 1. Layered architecture (isomorphic across both platforms)
 
 ```
 ┌─ L2 UI 层 ────────────────────────────┐
@@ -27,83 +25,83 @@
 └──────────────────────────────────────┘
 ```
 
-**依赖方向单向：L2 → L1 → L0**。宿主只见 `ServifyChat` 门面（L1+L2 组装），三层都 `internal`，发布面只有门面与配置/事件模型。
+**Dependency direction is one-way: L2 → L1 → L0**. The host only sees the `ServifyChat` facade (L1+L2 assembled); all three layers are `internal`; the published surface is only the facade and the config/event models.
 
-**为什么核心必须 headless（无 UI 可独立运行）**：M0 联调探针要在没有 UI 的情况下跑通 WS 收发与状态机回放；契约回放测试要直接断言 L1 状态转移而非 UI 快照；RN 绑定（react-native 包已在仓）要复用会话核心而不要 Compose/SwiftUI。一个 headless 核心同时服务探针、测试、RN、原生 UI 四个消费者——这是"不复制 Web SDK 结构"（07 号 M3）的正面落点：Web 的结构是"协议+UI 一体的 client 类"，移动端拆成三层。
+**Why the core must be headless (runnable without UI)**: The M0 integration probe must run WS send/receive and state-machine replay without a UI; contract replay tests must directly assert L1 state transitions rather than UI snapshots; the RN binding (react-native package already in the repo) must reuse the conversation core without Compose/SwiftUI. One headless core simultaneously serves four consumers — probe, tests, RN, native UI — this is the positive landing point for "do not copy the Web SDK structure" (07th M3): the Web structure is a "protocol+UI-in-one client class", the mobile side is split into three layers.
 
-## 2. Android 选型工程化（D3 细化）
+## 2. Android selection engineering (D3 refinement)
 
-| 项 | 决策 | 为什么 |
+| Item | Decision | Why |
 |---|---|---|
-| 语言/UI | Kotlin + Jetpack Compose（D3 已定） | 状态驱动渲染与会话页同构 |
-| Kotlin/工具链 | Kotlin 2.x + JDK 17 构建、compileSdk 35 | Compose 2.x 要求；compileSdk 取当前 stable 供 SDK 编译，运行时行为仍由 minSdk 24 兜底（SDK 编译目标高不抬高接入方运行要求） |
-| 交付形态 | 单 AAR、内部多包（`connect`/`model`/`ui`），`api` 面只有门面 | 多 AAR 会把内部分层泄漏成接入方的依赖管理负担；单 AAR + internal 分层让重构自由保留 |
-| 并发模型 | 门面持有应用级 `SupervisorJob` + 内部 `CoroutineScope`；状态暴露 `StateFlow`、事件流 `SharedFlow`；公开挂起函数 | Supervisor 隔离单点失败不拖垮作用域；StateFlow 给 UI 收敛重放语义；接入方不接触任何协程作用域创建 |
-| 持久化 | 快照（sessionId/lastMessageId/savedAt）走 DataStore Preferences；访客 token 走 EncryptedSharedPreferences | 快照无敏感字段用轻量存储即可；token 必须进系统加密存储（D6 安全基线） |
-| 网络 | OkHttp 4.x（`api` 依赖，随宿主去重，D9 白名单） | WSS + 协议层保活 `pingInterval` 一处配置（PROTOCOL.md §2 移动端口径） |
-| R8 | 附 consumer proguard rules：保留消息模型（kotlinx-serialization 反射点）与门面入口 | 接入方开混淆即用，不要求手写规则 |
-| 宿主互操作 | View 体系宿主经 `ComposeView` 承载会话页；Compose 宿主直接调用 | D3 已论证不要求宿主用 Compose |
+| Language/UI | Kotlin + Jetpack Compose (D3 signed off) | State-driven rendering is isomorphic with the conversation page |
+| Kotlin/toolchain | Kotlin 2.x + JDK 17 build, compileSdk 35 | Required by Compose 2.x; compileSdk takes the current stable for SDK compilation, runtime behavior is still backstopped by minSdk 24 (a higher SDK compile target does not raise the integrator's runtime requirement) |
+| Delivery form | Single AAR, internal multi-package (`connect`/`model`/`ui`), `api` surface only the facade | Multiple AARs would leak internal layering as the integrator's dependency management burden; single AAR + internal layering preserves refactoring freedom |
+| Concurrency model | Facade holds an application-level `SupervisorJob` + internal `CoroutineScope`; state exposed as `StateFlow`, event flow as `SharedFlow`; public suspend functions | Supervisor isolates single-point failure without taking down the scope; StateFlow gives the UI convergent replay semantics; integrators do not touch any coroutine scope creation |
+| Persistence | Snapshot (sessionId/lastMessageId/savedAt) via DataStore Preferences; guest token via EncryptedSharedPreferences | Snapshot has no sensitive fields so lightweight storage suffices; the token must go into system encrypted storage (D6 security baseline) |
+| Network | OkHttp 4.x (`api` dependency, deduplicated by host, D9 allowlist) | WSS + protocol-layer keepalive `pingInterval` configured in one place (PROTOCOL.md §2 mobile spec) |
+| R8 | Ships consumer proguard rules: keep message models (kotlinx-serialization reflection points) and facade entry points | Integrators enabling obfuscation can use it as-is, no hand-written rules required |
+| Host interop | View-system hosts carry the conversation page via `ComposeView`; Compose hosts call directly | D3 already argued the host is not required to use Compose |
 
-**CI 与发布边界**：CI 构建矩阵做 compile/lint/契约回放/AAR 体积门禁（≤1.5MB，D9）；**产物发布（Maven Central/直发 AAR）由维护者手动执行，仓库与 CI 不内置任何自动发版步骤**——与 M4 验收口径一致，也是全程发版禁区的延伸。
+**CI and release boundary**: CI build matrix runs compile/lint/contract replay/AAR size gate (≤1.5MB, D9); **artifact publishing (Maven Central / direct AAR distribution) is executed manually by the maintainer; the repo and CI do not build in any automatic release steps** — consistent with the M4 acceptance spec, and an extension of the repo-wide release prohibition.
 
-## 3. iOS 选型工程化（D4 细化）
+## 3. iOS selection engineering (D4 refinement)
 
-| 项 | 决策 | 为什么 |
+| Item | Decision | Why |
 |---|---|---|
-| 语言/UI | Swift + SwiftUI（D4 已定），Swift tools 5.10 | 与 Android 同构的状态驱动；5.10 是 Xcode 15.3 起的 stable tools 线 |
-| 交付形态 | XCFramework + SPM binary target（D4 已定）；源码工程用 SPM 单 target（`ServifyKit`） | 同 Android：发布面收敛为一个产物，源码期分层保重构自由 |
-| 并发模型 | structured concurrency；状态类 `@MainActor`；事件暴露 `AsyncStream`；公开方法 `async` | 与 Kotlin 侧 StateFlow/挂起函数一一映射（D6 跨端同名同义）；`@MainActor` 收敛 UI 状态写竞争 |
-| 持久化 | token 走 Keychain（kSecClassGenericPassword）；快照走 Application Support 下 JSON 文件（无敏感字段） | 对齐 D6 安全基线；避免为快照引入 Keychain 复杂度 |
-| 网络 | `URLSessionWebSocketTask` + `sendPing` 保活（PROTOCOL.md §2） | 零三方依赖（D4/D9） |
-| 隐私 | `PrivacyInfo.xcprivacy` 声明"不采集数据、无追踪"；所需系统权限只有网络（ATS 强制 WSS，不提供明文例外） | App Store 审核一次通过；ATS 例外口子不开是安全姿态也是接入方少填一项 |
-| 宿主互操作 | UIKit 宿主经 `UIHostingController` 承载；sheet 展示会话页（iOS 15 无 `presentationDetents`，自定义高度，D4 已论证） | 双宿主体系都能接 |
+| Language/UI | Swift + SwiftUI (D4 signed off), Swift tools 5.10 | State-driven rendering isomorphic with Android; 5.10 is the stable tools line since Xcode 15.3 |
+| Delivery form | XCFramework + SPM binary target (D4 signed off); source projects use SPM single target (`ServifyKit`) | Same as Android: the published surface converges to one artifact, source-period layering preserves refactoring freedom |
+| Concurrency model | structured concurrency; state classes `@MainActor`; events exposed as `AsyncStream`; public methods `async` | One-to-one mapping with the Kotlin side's StateFlow/suspend functions (D6 cross-platform same name same meaning); `@MainActor` converges UI state write contention |
+| Persistence | token via Keychain (kSecClassGenericPassword); snapshot via a JSON file under Application Support (no sensitive fields) | Aligned with D6 security baseline; avoids introducing Keychain complexity for the snapshot |
+| Network | `URLSessionWebSocketTask` + `sendPing` keepalive (PROTOCOL.md §2) | Zero third-party dependencies (D4/D9) |
+| Privacy | `PrivacyInfo.xcprivacy` declares "no data collection, no tracking"; the only required system permission is network (ATS enforces WSS, no cleartext exception provided) | App Store review passes first time; not opening the ATS exception is a security posture and saves integrators filling one item |
+| Host interop | UIKit hosts carry via `UIHostingController`; sheet presents the conversation page (iOS 15 has no `presentationDetents`, custom height, D4 already argued) | Both host systems can integrate |
 
-## 4. 核心 API 表面规格（V1 冻结面）
+## 4. Core API surface spec (V1 frozen surface)
 
-两平台同名同义（D6）；差异仅语言习惯。**V1 冻结的含义**：本节字段与方法在 M1-M3 只增不改语义；删除或改语义视为 breaking，须过 surface 评审（对齐 sdk/SURFACE_GOVERNANCE 的精神延伸到原生面）。
+Both platforms share the same name and same meaning (D6); differences are only language idioms. **What "V1 frozen" means**: the fields and methods in this section only grow, never change semantics, during M1-M3; deletion or semantic change is a breaking change and must go through surface review (extending the spirit of sdk/SURFACE_GOVERNANCE to the native surface).
 
-### 4.1 配置对象 `ServifyConfig`
+### 4.1 Config object `ServifyConfig`
 
-| 字段 | 类型 | 必填 | 默认 | 行为 |
+| Field | Type | Required | Default | Behavior |
 |---|---|---|---|---|
-| `apiUrl` | String | 是 | — | 服务端根地址；强制 https/wss，http 值构造期直接报错（错误模型 `config_invalid`） |
-| `guestToken` | String? | 否 | null | 访客 token（D6）；null = 匿名 session 模式（过渡形态，PROTOCOL.md §1）；仅在内存 + 安全存储 |
-| `branding.title` | String | 否 | "在线客服" | 会话页标题 |
-| `branding.primaryColor` | Int/Color | 否 | 平台默认主色 | 主题色（按钮、气泡强调） |
-| `branding.welcomeText` | String | 否 | 平台默认欢迎语 | 会话页首条 system 提示 |
-| `presentationStyle` | Enum `{drawer, fullscreen}` | 否 | `drawer` | 抽屉/全屏；小屏自动升级全屏（D8） |
-| `pushTokenProvider` | `(async) -> String?` | 否 | null | M3 推送：宿主提供 FCM/APNs token 获取闭包则启用推送模块（D7 可选性） |
-| `loggingEnabled` | Bool | 否 | false | debug 日志开关；**关闭态不打印消息正文与 token**（D6 脱敏基线） |
+| `apiUrl` | String | Yes | — | Server root address; enforces https/wss, http values error at construction time (error model `config_invalid`) |
+| `guestToken` | String? | No | null | Guest token (D6); null = anonymous session mode (transitional form, PROTOCOL.md §1); only in memory + secure storage |
+| `branding.title` | String | No | "在线客服" | Conversation page title |
+| `branding.primaryColor` | Int/Color | No | Platform default primary color | Theme color (buttons, bubble emphasis) |
+| `branding.welcomeText` | String | No | Platform default welcome message | First system prompt on the conversation page |
+| `presentationStyle` | Enum `{drawer, fullscreen}` | No | `drawer` | Drawer/fullscreen; small screens auto-upgrade to fullscreen (D8) |
+| `pushTokenProvider` | `(async) -> String?` | No | null | M3 push: if the host provides an FCM/APNs token fetching closure, the push module is enabled (D7 optionality) |
+| `loggingEnabled` | Bool | No | false | Debug logging switch; **when off, message bodies and tokens are not printed** (D6 redaction baseline) |
 
-### 4.2 门面方法（`ServifyChat`）
+### 4.2 Facade methods (`ServifyChat`)
 
-| 方法 | 语义 | 备注 |
+| Method | Semantics | Notes |
 |---|---|---|
-| `create(context?, config)` | 构造门面：载入 SessionSnapshot 快照，**不建连接** | 惰性连接（策划 §5）；重复 create 由接入方负责避免（单例语义，文档明示） |
-| `show(hostActivity / presentingVC)` | 拉起会话 UI（抽屉或全屏）；首次调用触发 WS 连接 | UI 参数是宿主当前前台上下文，SDK 不自行推断 |
-| `hide()` | 收起会话 UI，连接保持 | 前后台切换由 SDK 内部处理（策划 §5 时序 4），接入方无需挂钩 |
-| `sendMessage(text)` | 发送 `text-message`；成功判据=收到自己回显帧（PROTOCOL.md §6.3），超时本地标记失败 | V1 仅 text；挂起函数 / async |
-| `createTicket(title, description?)` | 升级为工单（M3）：真实上报 `POST /api/v1/tickets`（§10 #4 已落地），体含 session_id + 标题/描述 + 自动组装的 AI 会话摘要 | 成功返回 `TicketReceipt(ticketId)`；失败返回 null 且 `error` 流给码（IO→`network`、非 2xx/畸形→`ticket_failed`），不静默成功 |
-| `registerPushToken()`（M3） | 调 `pushTokenProvider` 取 token → 按 app-core `PushTokenRegistration` 形状上报 | `pushTokenProvider` 未配置时调用返回 `unsupported` |
-| `syncReadState()`（增强面） | 把补拉链自持的最新服务端消息 ID 提交为服务端已读游标：`POST {apiUrl}/api/v1/sessions/{id}/read`（§10 #3，体 `{"last_read_message_id": "<id>"}`） | 无已确认消息（尚未对账）→静默 false 且零请求（正常态非错误）；IO/HTTP 失败→`error` 流 `network` + false（可重报）；响应体不消费——V1 未读仍以客户端推导为基线，本方法是宿主需要跨设备/跨入口一致未读时的增强提交口；游标只前进不后退，重复/回退提交幂等 |
-| `destroy()` | 断连接、取消作用域、清订阅；快照保留（下次 create 恢复） | 宿主真正退出时调用；普通退后台**不要**调用 |
+| `create(context?, config)` | Constructs the facade: loads the SessionSnapshot, **does not establish a connection** | Lazy connection (plan §5); repeated create is the integrator's responsibility to avoid (singleton semantics, explicitly documented) |
+| `show(hostActivity / presentingVC)` | Brings up the conversation UI (drawer or fullscreen); the first call triggers the WS connection | The UI parameter is the host's current foreground context; the SDK does not infer it itself |
+| `hide()` | Collapses the conversation UI, connection retained | Foreground/background switching is handled internally by the SDK (plan §5 timing 4); integrators do not need to hook anything |
+| `sendMessage(text)` | Sends `text-message`; success criterion = receiving your own echo frame (PROTOCOL.md §6.3), timeout marks local failure | V1 is text-only; suspend function / async |
+| `createTicket(title, description?)` | Escalates to a ticket (M3): actually reports `POST /api/v1/tickets` (§10 #4 already landed), body contains session_id + title/description + auto-assembled AI conversation summary | Success returns `TicketReceipt(ticketId)`; failure returns null and the `error` flow gives the code (IO→`network`, non-2xx/malformed→`ticket_failed`), no silent success |
+| `registerPushToken()` (M3) | Calls `pushTokenProvider` to get the token → reports per the app-core `PushTokenRegistration` shape | Calling when `pushTokenProvider` is not configured returns `unsupported` |
+| `syncReadState()` (enhancement surface) | Submits the latest server message ID held by the catch-up zipper as the server read cursor: `POST {apiUrl}/api/v1/sessions/{id}/read` (§10 #3, body `{"last_read_message_id": "<id>"}`) | No confirmed messages (not yet reconciled) → silently false and zero requests (normal state, not an error); IO/HTTP failure → `error` flow `network` + false (re-reportable); response body is not consumed — V1 unread is still client-derived as the baseline; this method is the enhancement submission port for hosts needing cross-device/cross-entry consistent unread; the cursor only moves forward, never backward, repeated/rollback submissions are idempotent |
+| `destroy()` | Disconnects, cancels the scope, clears subscriptions; the snapshot is retained (restored on next create) | Called when the host truly exits; do **not** call on ordinary backgrounding |
 
-### 4.3 事件流（与 core `ServifyEventMap` 对齐命名）
+### 4.3 Event flow (aligned with core `ServifyEventMap` naming)
 
-| 事件 | 载荷 | 来源 |
+| Event | Payload | Source |
 |---|---|---|
-| `messages` | `ConversationMessage`（策划 D5 消息模型） | `text-message` 回显（去重后）/ `agent-message` / `ai-response` / 流式增量（带 `isStreaming` 标记，UI 据此渲染拼接中的气泡） |
-| `unreadCount` | Int | L1 推导：agent/system 来源且本地未渲染过累加；会话页可见时清零 |
-| `connectionState` | Enum | 见 4.4 |
-| `reconnecting` | attempt: Int | 对齐 core 同名事件 |
-| `agentAssigned` | `{agentId: Long, message: String}` | `transfer_notification`（PROTOCOL.md §4.2） |
-| `waitingInQueue` | `{message: String}` | `waiting_notification`；与 `agentAssigned` 共同驱动状态机 |
-| `error` | `ServifyError`（4.5） | 对齐 core 同名事件 |
-| `ticketCreated` / `ticketUpdated`（M3） | Ticket | 对齐 core 同名事件 |
+| `messages` | `ConversationMessage` (plan D5 message model) | `text-message` echo (after dedup) / `agent-message` / `ai-response` / streaming increments (with `isStreaming` flag, the UI renders in-progress bubbles accordingly) |
+| `unreadCount` | Int | L1 derived: agent/system sources not yet rendered locally accumulate; cleared when the conversation page is visible |
+| `connectionState` | Enum | See 4.4 |
+| `reconnecting` | attempt: Int | Aligned with the core same-name event |
+| `agentAssigned` | `{agentId: Long, message: String}` | `transfer_notification` (PROTOCOL.md §4.2) |
+| `waitingInQueue` | `{message: String}` | `waiting_notification`; together with `agentAssigned` drives the state machine |
+| `error` | `ServifyError` (4.5) | Aligned with the core same-name event |
+| `ticketCreated` / `ticketUpdated` (M3) | Ticket | Aligned with the core same-name event |
 
-**显式排除**：`agent_typing`（core 有、服务端零发射——PROTOCOL.md §5 死分支，移动端不设此事件）；webrtc 系全部。
+**Explicitly excluded**: `agent_typing` (core has it, server never emits — PROTOCOL.md §5 dead branch, mobile does not define this event); all webrtc-family events.
 
-### 4.4 连接状态机
+### 4.4 Connection state machine
 
 ```
 idle ──(首次 show)──> connecting ──> connected ──(断)──> reconnecting(n/5)──> connected
@@ -112,41 +110,41 @@ idle ──(首次 show)──> connecting ──> connected ──(断)──> 
 disconnected ──(用户再次打开会话页)──> connecting
 ```
 
-参数沿用 core 默认：指数退避 1s 起 2 倍封顶 30s、5 次（源码核实，`contracts/reconnect.ts`）。后台切换不产生 disconnected——内部断开 + 回前台自动恢复，对外表现"连接保持"（避免宿主 UI 无谓闪烁）。
+Parameters follow core defaults: exponential backoff starting at 1s, doubling, capped at 30s, 5 attempts (verified in source, `contracts/reconnect.ts`). Background switching does not produce disconnected — internal disconnect + auto-restore on return to foreground, externally manifested as "connection retained" (avoiding pointless host UI flicker).
 
-### 4.5 错误模型
+### 4.5 Error model
 
-两平台呈现：Kotlin `sealed class ServifyError` / Swift `enum ServifyError: Error`，统一携带 `{code, message, retryable}`：
+Both platforms present: Kotlin `sealed class ServifyError` / Swift `enum ServifyError: Error`, uniformly carrying `{code, message, retryable}`:
 
-| code | 场景 | retryable |
+| code | Scenario | retryable |
 |---|---|---|
-| `config_invalid` | apiUrl 非 https、必填缺失 | false |
-| `network` | WS 建连/发送失败、DNS | true |
-| `server_unavailable` | 握手 5xx | true |
-| `handshake_rejected` | 400 session_id 缺失 / Origin 白名单拒绝 | false（配置问题） |
-| `send_timeout` | 发送后超时未见回显 | true |
-| `unsupported` | 调用 M3 能力但配套未启用（如 `pushTokenProvider` 未配置） | false |
-| `ticket_failed` | M3 工单创建失败 | true |
+| `config_invalid` | apiUrl not https, required fields missing | false |
+| `network` | WS connect/send failure, DNS | true |
+| `server_unavailable` | Handshake 5xx | true |
+| `handshake_rejected` | 400 session_id missing / Origin allowlist rejection | false (config problem) |
+| `send_timeout` | Sent but no echo received within timeout | true |
+| `unsupported` | Calling an M3 capability whose dependency is not enabled (e.g. `pushTokenProvider` not configured) | false |
+| `ticket_failed` | M3 ticket creation failure | true |
 
-### 4.6 app-core 契约映射（已预留四契约，落地对应关系）
+### 4.6 app-core contract mapping (four contracts reserved, landing correspondence)
 
-| app-core 契约 | 移动端落点 |
+| app-core contract | Mobile landing point |
 |---|---|
-| `SessionSnapshot {sessionId, lastMessageId?, savedAt}` | create 时载入 / 断连与退后台时落盘（Kotlin DataStore / iOS JSON 文件） |
-| `PushTokenRegistration {token, platform, deviceId, environment?}` | `registerPushToken` 的上报载荷形状（M3） |
-| `MobileStorageAdapter {getItem/setItem/removeItem}` | 存储注入点：默认实现（DataStore/文件），测试与特殊宿主可替换——保持接口同形，替换注入 |
-| `AppReconnectPolicy` | 4.4 重连参数的类型化载体，默认值=core 默认，允许宿主覆盖（覆盖不进 V1 冻结面，标注 experimental） |
+| `SessionSnapshot {sessionId, lastMessageId?, savedAt}` | Loaded at create / persisted on disconnect and backgrounding (Kotlin DataStore / iOS JSON file) |
+| `PushTokenRegistration {token, platform, deviceId, environment?}` | The reported payload shape for `registerPushToken` (M3) |
+| `MobileStorageAdapter {getItem/setItem/removeItem}` | Storage injection point: default implementation (DataStore/file), replaceable for tests and special hosts — keep the interface shape, replace the injection |
+| `AppReconnectPolicy` | The typed carrier for 4.4 reconnect parameters, default value = core default, allows host override (override does not enter the V1 frozen surface, marked experimental) |
 
-## 5. 接入流程细化（M1 验收"≤10 行"的可执行版）
+## 5. Integration flow refinement (executable version of M1 acceptance "≤10 lines")
 
-### 5.1 前置条件
+### 5.1 Prerequisites
 
-- Android：宿主 manifest 已有 `INTERNET` 权限（绝大多数 App 已有）；minSdk ≥ 24 的宿主直接依赖，低于 24 拒绝依赖解析（这是覆盖率决策的代价面，接入文档首行声明）。
-- iOS：宿主 iOS 15+；无 Info.plist 新增项（无推送时）；强制 ATS/WSS。
+- Android: the host manifest already has `INTERNET` permission (most apps already do); hosts with minSdk ≥ 24 depend directly, below 24 refuse dependency resolution (this is the cost side of the coverage decision, declared on the first line of the integration doc).
+- iOS: host iOS 15+; no Info.plist additions (when push is not enabled); ATS/WSS enforced.
 
-### 5.2 最小接入（8 行级，对应 4.2/4.3 API）
+### 5.2 Minimal integration (8-line level, corresponds to 4.2/4.3 API)
 
-Android：
+Android:
 
 ```kotlin
 val servify = ServifyChat.create(context, ServifyConfig(apiUrl = "https://support.example.com"))
@@ -157,7 +155,7 @@ servify.events.unreadCount.observe { badge.count = it }   // 未读（自绘入�
 servify.show(this)                                         // 首次调用触发连接
 ```
 
-iOS：
+iOS:
 
 ```swift
 let servify = ServifyChat.create(config: ServifyConfig(apiUrl: "https://support.example.com"))
@@ -166,29 +164,29 @@ Task { for await n in servify.events.unreadCount { badge.count = n } }
 servify.show(from: self)
 ```
 
-### 5.3 集成检查清单（接入方自验）
+### 5.3 Integration checklist (integrator self-check)
 
-1. WSS 可达：`wss://<host>/api/v1/ws?session_id=test` 握手 101；
-2. `apiUrl` 无尾斜杠、无路径后缀（SDK 自行拼 WS 与未来 REST 路径）；
-3. 混淆构建（Android R8）/ 裁剪构建（iOS）通过——SDK 自带 consumer rules，接入方无需额外配置；
-4. 退后台 → 回前台：会话页状态与未读计数无丢失（SDK 内部处理）；
-5. 体积对账：AAR ≤ 1.5MB / XCFramework ≤ 2MB（D9 预算，接入文档给出生成方法）。
+1. WSS reachable: `wss://<host>/api/v1/ws?session_id=test` handshake 101;
+2. `apiUrl` has no trailing slash, no path suffix (the SDK appends WS and future REST paths itself);
+3. Obfuscated build (Android R8) / stripped build (iOS) passes — the SDK ships consumer rules, integrators need no extra config;
+4. Background → foreground: conversation page state and unread count are not lost (handled internally by the SDK);
+5. Size reconciliation: AAR ≤ 1.5MB / XCFramework ≤ 2MB (D9 budget, the integration doc gives the generation method).
 
-### 5.4 常见接入错误对照
+### 5.4 Common integration errors reference
 
-| 现象 | 原因 | 处置 |
+| Symptom | Cause | Handling |
 |---|---|---|
-| 握手 400 `BadRequest` | 未带 session_id / apiUrl 拼错 | 检查 apiUrl 与 guest token 流程 |
-| 握手 403 | Origin 白名单拒绝（移动端原生 WS 无 Origin 头，服务端白名单需放行空 Origin——**服务端配置项，接入文档明示**） | 白名单加条目或空配置放行 |
-| 连接反复断开（1006 类） | 代理/防火墙掐 WSS 长连 | 检查企业网络；SDK 重连退避自动恢复 |
-| 消息发出无回显 | PROTOCOL.md §6.3 无 ACK——按 send_timeout 标记 | UI 提示重发；勿自动重发（策划 D7 事故边界） |
+| Handshake 400 `BadRequest` | session_id missing / apiUrl misspelled | Check apiUrl and the guest token flow |
+| Handshake 403 | Origin allowlist rejection (mobile native WS has no Origin header, the server allowlist must allow empty Origin — **server config item, explicitly stated in the integration doc**) | Add an allowlist entry or configure to allow empty |
+| Connection repeatedly drops (1006-class) | Proxy/firewall killing WSS long connections | Check corporate network; SDK reconnect backoff auto-recovers |
+| Message sent but no echo | PROTOCOL.md §6.3 has no ACK — mark per send_timeout | UI prompts resend; do not auto-resend (plan D7 incident boundary) |
 
-## 6. 与里程碑的衔接
+## 6. Milestone alignment
 
-| 本文段落 | 服务里程碑 |
+| This document's section | Serves milestone |
 |---|---|
-| §1 分层 / §2 Android 工程 / §3 iOS 工程 | M0 探针按 L1 headless 核心口径实现；M1/M2 工程脚手架按表落地 |
-| §4 API 表面 | M1 冻结 Android 面；M2 iOS 面逐条对照（同名同义）；M3 增量只动 M3 标注项 |
-| §5 接入流程 | M1 验收第②条（≤10 行集成）的直接对照物；接入文档站（M4）以此为本 |
+| §1 Layered / §2 Android engineering / §3 iOS engineering | M0 probe implemented per the L1 headless core spec; M1/M2 engineering scaffolding lands per the tables |
+| §4 API surface | M1 freezes the Android surface; M2 iOS surface checks item by item (same name same meaning); M3 increments only touch M3-marked items |
+| §5 Integration flow | The direct reference for M1 acceptance item ② (≤10 line integration); the integration doc site (M4) uses this as its basis |
 
-本文与 PROTOCOL.md 同属"契约先行"资产：实现阶段的偏离一律先改文档再改代码，评审以文档为基线。
+This document and PROTOCOL.md are both "contract-first" assets: deviations during the implementation phase always change the doc first, then the code; review uses the doc as the baseline.

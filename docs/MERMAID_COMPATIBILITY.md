@@ -1,27 +1,25 @@
-> [English](MERMAID_COMPATIBILITY.en.md) | **中文**
+# Mermaid Compatibility
 
-# Mermaid 兼容性
+The repository's documentation site has switched to VitePress and enabled `vitepress-plugin-mermaid`. ` ```mermaid ` code blocks in Markdown participate in site rendering, but for readability and long-term maintainability, the constraints below must still be followed.
 
-本仓库当前文档站已经切换到 VitePress，并启用了 `vitepress-plugin-mermaid`。Markdown 中的 ` ```mermaid ` 代码块会参与站点渲染，但为了保证可读性和长期可维护性，仍然需要遵守下面的约束。
+## Current Constraints
 
-## 当前约束
+- Diagrams that need faithful long-term preservation should provide both:
+  - the Mermaid source block
+  - a corresponding textual step-by-step explanation
+- When adding a Mermaid diagram in a review or PR, `npm -C docs run build` must be run locally first
+- If the diagram is critical delivery content, prefer attaching an exported PNG/SVG to `docs/public/`
 
-- 需要长期保真保存的图，应同时提供：
-  - Mermaid 源码块
-  - 对应的文字版步骤说明
-- 评审或 PR 中新增 Mermaid 图时，必须先本地执行 `npm -C docs run build`
-- 如果图是关键交付内容，优先附带导出的 PNG/SVG 到 `docs/public/`
+## Recommended Writing Style
 
-## 推荐写法
+1. First write a plain-text section explaining the flow, node meanings, and key branches
+2. Mermaid serves only as auxiliary expression and does not carry the sole information source
+3. Keep diagram size under control; avoid extra-wide layouts and overly deep nesting
+4. Use short phrases for node labels; avoid overly long mixed Chinese-English text that makes line wrapping uncontrollable
 
-1. 先写纯文本的小节说明流程、节点含义和关键分支
-2. Mermaid 仅作为辅助表达，不承担唯一信息源
-3. 控制图规模，避免超宽布局和过深嵌套
-4. 节点文案使用短句，避免中英文混排过长导致换行不可控
+## Minimal Example
 
-## 最小示例
-
-下面这个示例用于验证当前 VitePress 站点中的 Mermaid 渲染链路：
+The example below is used to verify the Mermaid rendering chain in the current VitePress site:
 
 ```mermaid
 flowchart LR
@@ -33,9 +31,9 @@ flowchart LR
   User --> AI --> Agent --> Ticket
 ```
 
-## 后续演进
+## Future Evolution
 
-- 继续补充：
-  - Mermaid 版本与插件版本锁定策略
-  - dark/light theme 可读性校验
-  - CI 最小 Mermaid 渲染冒烟用例
+- Keep adding:
+  - a Mermaid version and plugin version pinning policy
+  - dark/light theme readability verification
+  - a minimal CI Mermaid rendering smoke case

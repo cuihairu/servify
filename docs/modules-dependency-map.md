@@ -1,49 +1,47 @@
-> [English](modules-dependency-map.en.md) | **中文**
+# Modules vs Legacy Services/Models Dependency Map
 
-# Modules 与 legacy services/models 依赖地图
+> Data snapshot: full scan of `apps/server/internal/modules` on 2026-09-15 (command at the end, reproducible).
+> Purpose: decision basis for closing out P1-7 boundaries — where to cut first, in what order, and into what shape.
 
-> 数据口径：2026-09-15 对 `apps/server/internal/modules` 的全量扫描（命令见文末，可复现）。
-> 用途：P1-7 边界收口的决策依据——先切哪里、按什么顺序切、切成什么样。
+## 1. modules → internal/services (legacy service layer)
 
-## 1. modules → internal/services（legacy 服务层）
+**Current state: 0 direct links (closed); final state reached — legacy `internal/services` was removed wholesale with P3-2 (concluded 2026-09-19, 18 cuts), this section's aliases die with it, and the table below is archived as history.**
 
-**当前状态：0 直连（已收口）；最终态达成——legacy `internal/services` 已随 P3-2（2026-09-19 收官，18 刀）整体移除，本节别名随之消亡，下表转历史存档。**
+The cut this round: contract types sink down into each module, and legacy `internal/services` references the same definitions in reverse through **type aliases** — both sides are the same Go type, not two parallel DTOs, so the wire contract and existing tests drift zero.
 
-本轮切法：契约类型下沉到各模块，legacy `internal/services` 通过**类型别名**反向引用同一份定义——两侧是同一个 Go 类型，不是两份平行 DTO，wire contract 与既有测试零漂移。
-
-| 模块 | 契约类型 | 定义位置 | legacy 别名位置 |
+| Module | Contract type | Definition location | Legacy alias location |
 | --- | --- | --- | --- |
 | ai | `AIResponse` | `modules/ai/delivery/contract_types.go` | `services/ai.go` |
-| ai | `AIMetrics`、`EnhancedAIResponse` | `modules/ai/delivery/contract_types.go` | `services/ai_enhanced.go` |
-| customer | `CustomerCreateRequest` 等 9 个请求/响应类型 | `modules/customer/api/contract_types.go`（package `customerapi`） | `services/customer_service.go` |
-| knowledge | `KnowledgeDocCreateRequest` 等 3 个请求类型 | `modules/knowledge/application/contract_types.go` | `services/knowledge_doc_service.go` |
+| ai | `AIMetrics`, `EnhancedAIResponse` | `modules/ai/delivery/contract_types.go` | `services/ai_enhanced.go` |
+| customer | `CustomerCreateRequest` and 8 other request/response types | `modules/customer/api/contract_types.go` (package `customerapi`) | `services/customer_service.go` |
+| knowledge | `KnowledgeDocCreateRequest` and 2 other request types | `modules/knowledge/application/contract_types.go` | `services/knowledge_doc_service.go` |
 
-说明：
+Notes:
 
-- ai 的契约放在 delivery 而非 application，是因为 `modules/ai/application/types.go` 已有一个同名但 shape 不同的 `AIResponse`（orchestrator 内部用），避免重名冲突。
-- customer 的契约放在 `modules/customer/api`（package `customerapi`）而非 application，是因为 swag（API 文档生成）按**包声明名**索引注解里的类型限定符，`application` 在多个模块下重名会歧义；`customer_handler.go` 的注解直接写 `customerapi.CustomerX`，是唯一能让 swag 无 flag 解析成功的挂法。该约束已推广：凡被 swag 注解引用（直接或经 `models.`/`services.` 别名链）的类型，其所在包声明名必须全仓唯一（quality 的 `qualitydomain` 即此例，实证注解可保持 `models.QualityReview` 不动、产物零漂移）；knowledge/ai 的 handler 无 swag 注解，不受此约束。
-- 防回归门禁：`go test ./scripts -run TestModulesDoNotImportLegacyServices`（parser 级检查 import，含测试文件），已纳入 CI script-checks。
-- **2026-09-30 引用面收口**：§2 的 models 侧过渡入口（类型别名、投递状态常量别名、`NewEmbedding` 转发函数）在 modules 内的引用全部清零、改经 owner 包直连（suggestion/ai → `knowledgedomain`，webhook → `voiceinfra`，sla 测试 → `automationdomain`；同类型别名直连，编译期等价、零行为变化），当时由守卫 `TestModulesDoNotUseMigratedTypeAliases` 钉住——parser 级、从 models 包源码动态解析过渡入口集合（新迁移自动纳入，解析为空即守卫自身失败防假绿），含测试文件，已纳入 CI script-checks。**2026-10-14 最终态**：别名本身全部删除（`models/automation.go`、`webhook.go`、`embedding.go` 三文件随迁删除，`models.go` 剥掉 9 段别名与 5 个 owner import；AutoMigrate 注册面、platform provider、handlers 测试等最后引用方改经 owner 包直连，swag 产物零漂移），守卫随之退役——过渡入口集合恒空后原守卫只剩自指失配；改由更强的下层前提接管：`TestModelsDoesNotImportModulePackages`（models 不得 import `internal/modules`，别名/常量别名/转发函数的唯一载体就是 owner 包 import，禁掉前提即禁掉回流，无需维护类型清单）。
+- ai's contracts live in delivery rather than application because `modules/ai/application/types.go` already has a same-named but differently-shaped `AIResponse` (used inside the orchestrator), avoiding a name collision.
+- customer's contracts live in `modules/customer/api` (package `customerapi`) rather than application because swag (API documentation generation) indexes type qualifiers in annotations by **package declaration name**, and `application` is a duplicate name across modules and would be ambiguous; the annotation in `customer_handler.go` writes `customerapi.CustomerX` directly, which is the only hook that lets swag parse successfully without flags. This constraint has been generalized: any type referenced by swag annotations (directly, or through a `models.`/`services.` alias chain) must live in a package whose declaration name is unique repo-wide (quality's `qualitydomain` is exactly this case; the annotation can keep `models.QualityReview` unchanged with zero artifact drift, proven in practice). knowledge/ai handlers have no swag annotations and are not subject to this constraint.
+- Anti-regression gate: `go test ./scripts -run TestModulesDoNotImportLegacyServices` (parser-level import check, including test files), now included in CI script-checks.
+- **2026-09-30 reference surface closed**: the transitional entries on the models side of §2 (type aliases, delivery status constant aliases, the `NewEmbedding` forwarding function) were cleared to zero references inside modules and switched to direct owner-package links (suggestion/ai → `knowledgedomain`, webhook → `voiceinfra`, sla tests → `automationdomain`; same-type alias direct link, compile-time equivalent, zero behavior change), pinned at the time by the guard `TestModulesDoNotUseMigratedTypeAliases` — parser-level, dynamically resolving the transitional entry set from the models package source (new migrations are automatically included; an empty resolution fails the guard itself, preventing false greens), including test files, now in CI script-checks. **2026-10-14 final state**: all the aliases themselves were deleted (`models/automation.go`, `webhook.go`, `embedding.go` removed with the migration; `models.go` stripped of 9 alias blocks and 5 owner imports; the last consumers — AutoMigrate registration surface, platform provider, handlers tests — were switched to direct owner-package links, swag artifacts zero drift), and the guard was retired with them — once the transitional entry set is permanently empty, the old guard is left with only a self-referential mismatch; a stronger lower-level premise now takes over: `TestModelsDoesNotImportModulePackages` (models must not import `internal/modules`; the only carrier of aliases/constant aliases/forwarding functions is an owner-package import, so banning the premise bans the reflux, with no type inventory to maintain).
 
-## 2. modules → internal/models（共享模型层）
+## 2. modules → internal/models (shared model layer)
 
-**当前状态：15 个模块、78 个非测试文件直连 `internal/models`（2026-10-08 复测；本节数字随迁移批次漂移，以复测为准）。** 按引用频次排前的类型：
+**Current state: 15 modules, 78 non-test files link directly to `internal/models` (re-measured 2026-10-08; the numbers in this section drift with migration batches, trust the re-measure).** Top types by reference count:
 
-| 类型 | 引用量 | 分类 |
+| Type | References | Category |
 | --- | --- | --- |
-| `Ticket` / `Session` / `Agent` / `Message` / `User` / `Customer` | 35~260 | 共享领域核心（跨模块fan-out 最大） |
-| `AgentGroup` / `CustomField` / `TicketComment` / `TicketStatus` / `TransferRecord` / `WaitingRecord` | 29~61 | 跨模块次核心 |
-| `WebhookEndpoint` / `WebhookDelivery` | 65~75 | 模块自有（webhook，**已迁入** `modules/webhook/domain/models.go`，legacy 侧 `models.WebhookEndpoint` 等为别名，投递状态常量同迁；legacy 别名 2026-10-14 已删） |
-| `AutomationTrigger` / `AutomationTimer` | 31~87 | 模块自有（automation，**已迁入** `modules/automation/domain/models.go`，含 `AutomationRun`，legacy 别名 2026-10-14 已删） |
-| `QualityReview` | 62 | 模块自有（quality，**已迁入** `modules/quality/domain/models.go`，package 声明用唯一的 `qualitydomain`，legacy 别名 2026-10-14 已删） |
-| `RemoteAssistSession` / `RemoteAssistAnnotation` | 33~46 | 模块自有（assist，**已迁入** `modules/assist/domain/models.go`，package 声明用唯一的 `assistdomain`，legacy 别名 2026-10-14 已删） |
-| `VoiceCall` | 25 | 模块自有（voice，**已迁入** `modules/voice/infra/models.go`，legacy 别名 2026-10-14 已删） |
-| `KnowledgeDoc` | 32 | 模块自有（knowledge，**已迁入** `modules/knowledge/domain/models.go`，含 `KnowledgeIndexJob` 与向量列值对象 `Embedding`，legacy 别名与 `NewEmbedding` 转发函数 2026-10-14 已删） |
-| `DailyStats` | 21 | 统计聚合（analytics 读写、其他模块只读） |
+| `Ticket` / `Session` / `Agent` / `Message` / `User` / `Customer` | 35~260 | Shared domain core (largest cross-module fan-out) |
+| `AgentGroup` / `CustomField` / `TicketComment` / `TicketStatus` / `TransferRecord` / `WaitingRecord` | 29~61 | Cross-module secondary core |
+| `WebhookEndpoint` / `WebhookDelivery` | 65~75 | Module-owned (webhook, **migrated into** `modules/webhook/domain/models.go`, legacy side `models.WebhookEndpoint` etc. are aliases, delivery status constants migrated along; legacy aliases deleted 2026-10-14) |
+| `AutomationTrigger` / `AutomationTimer` | 31~87 | Module-owned (automation, **migrated into** `modules/automation/domain/models.go`, including `AutomationRun`; legacy aliases deleted 2026-10-14) |
+| `QualityReview` | 62 | Module-owned (quality, **migrated into** `modules/quality/domain/models.go`, package declaration uses the unique `qualitydomain`; legacy aliases deleted 2026-10-14) |
+| `RemoteAssistSession` / `RemoteAssistAnnotation` | 33~46 | Module-owned (assist, **migrated into** `modules/assist/domain/models.go`, package declaration uses the unique `assistdomain`; legacy aliases deleted 2026-10-14) |
+| `VoiceCall` | 25 | Module-owned (voice, **migrated into** `modules/voice/infra/models.go`; legacy aliases deleted 2026-10-14) |
+| `KnowledgeDoc` | 32 | Module-owned (knowledge, **migrated into** `modules/knowledge/domain/models.go`, including `KnowledgeIndexJob` and the vector column value object `Embedding`; legacy aliases and the `NewEmbedding` forwarding function deleted 2026-10-14) |
+| `DailyStats` | 21 | Statistics aggregate (analytics reads and writes, other modules read only) |
 
-分层分布（非测试文件数）：
+Layer distribution (non-test file counts):
 
-| 模块 | application | delivery | infra |
+| Module | application | delivery | infra |
 | --- | --- | --- | --- |
 | agent | 3 | 3 | 3 |
 | ai | 1 | 1 | - |
@@ -56,18 +54,18 @@
 | routing | - | 4 | 1 |
 | ticket | 1 | 3 | 1 |
 | webhook | 2 | 2 | 1 |
-| analytics / gamification / suggestion / voice | - | - | 各 1~3 |
+| analytics / gamification / suggestion / voice | - | - | 1~3 each |
 
-## 3. 拆分策略（已定稿，解除 P1-7 阻塞项）
+## 3. Split Strategy (finalized, P1-7 blocking item cleared)
 
-1. **共享领域核心保留为 shared kernel**：`User` / `Ticket` / `Session` / `Agent` / `Message` / `Customer` 等跨模块高频类型不拆散到单一模块，维持在共享模型层（当前 `internal/models`），但对 modules 的引用收口为"只读领域形状"，持久化细节（GORM scope、hook）由各模块 infra 层负责。**引用面收口已达成（2026-09-30），别名最终态清理已完成（2026-10-14）**：modules 内已迁出类型别名引用清零（18 文件机械替换为 owner 包直连），随后 `internal/models` 的过渡别名本体全部删除。门禁也随之换代：`TestModulesDoNotUseMigratedTypeAliases`（集合恒空后自指失配）退役，由 `TestModelsDoesNotImportModulePackages` 接管——parser 级断言 models 不得 import `internal/modules`，modules → models 单向分层不可回退，别名无载体即无回流。
-2. **模块自有类型逐步迁入所属模块**：webhook / automation / quality / assist / voice / knowledge 的自有模型，按"先 delivery/application 引用改为模块内类型 + legacy 别名过渡"的同一套切法迁移，优先级按"引用面小、无跨模块消费"排序：voice → gamification → suggestion → webhook → automation → quality → assist。
-   - **迁移日志**：①2026-09-15 voice 完成——`VoiceCall` / `VoiceRecording` / `VoiceTranscript` 三个 GORM 模型迁入 `modules/voice/infra/models.go`（infra 是 voice 模块内唯一消费方，直接定义在 infra 消掉映射层），`internal/models` 保留类型别名，`bootstrap/migrate.go` 的 AutoMigrate 注册与 webhook 的快照只读经别名零改动；voice/infra 六个文件（含测试）全部去掉 `internal/models` import。②2026-09-15 webhook 完成——`models/webhook.go` 整文件迁入 `modules/webhook/domain/models.go`（`WebhookEndpoint` / `WebhookDelivery` + 四个投递状态常量；模块三层全消费故落 domain 而非 infra），`internal/models` 保留类型与常量别名，migrate 注册与 handlers 测试经别名零改动。③2026-09-15 automation 完成——`models/automation.go` 整文件迁入 `modules/automation/domain/models.go`（`AutomationTrigger` / `AutomationRun` / `AutomationTimer`，`AutomationRun.Trigger` 关联同文件类型随迁自洽），`internal/models` 保留类型别名，migrate 注册、legacy `services/automation_*` 与 handlers 测试经别名零改动。④2026-09-16 quality 完成——`QualityReview` 迁入 `modules/quality/domain/models.go`，包声明用唯一的 `qualitydomain`（首个被 swag 注解引用的迁移对象：`quality_handler.go` 的 `@Success 200 {object} models.QualityReview` 经 models 别名链解析，实证 swag 产物零漂移、29 字段完整），`internal/models` 保留类型别名，migrate 注册与 handlers 测试零改动。⑤2026-09-16 assist 完成——`RemoteAssistSession` / `RemoteAssistAnnotation` 迁入 `modules/assist/domain/models.go`，包声明用唯一的 `assistdomain`（assist_handler.go / assist_recording_handler.go 共 5 处 swag 注解引用 `models.RemoteAssistX`，经别名链解析，实证产物零漂移），migrate 注册与 handlers 零改动。⑥2026-09-16 knowledge 完成（**最后一刀，模块自有类型迁移全部收口**）——`KnowledgeDoc` / `KnowledgeIndexJob` 迁入 `modules/knowledge/domain/models.go`，向量列值对象 `Embedding` / `NewEmbedding` 从 `models/embedding.go` 整文件随迁 `domain/embedding.go`（它是 KnowledgeDoc 的列类型，不随迁则 domain 反向依赖 models 成环）；`internal/models` 保留类型别名与 `NewEmbedding` 转发函数，migrate 注册、pgvector provider、legacy `services/ai*` / `knowledge_doc_service` 与 handlers 经别名零改动；knowledge 的 handler 无 swag 注解，domain 包声明保持通用 `domain` 无需唯一命名；knowledge 模块 6 个文件（infra×1 / delivery×2 + 测试×3）全部去掉 `internal/models` import，`Embedding` 的 Scan/Value 测试随文件迁入 domain 包保住覆盖率。
-   - **顺序纠偏（2026-09-15）**：gamification 与 suggestion 经逐类型核对**没有模块自有 models 类型**——gamification 只消费共享核心（`Ticket` / `CustomerSatisfaction` / `Agent` / `User`），suggestion 只消费 `Ticket` 与 knowledge 自有的 `KnowledgeDoc`（属 knowledge 迁移范围）。二者无需迁移，剩余顺序修正为：~~voice → gamification → suggestion →~~ webhook ✅ → automation ✅ → quality ✅ → assist ✅ → knowledge ✅（全部完成）。
-3. **契约类型已完成的迁移不再回退**：第 1 节的别名是过渡态，最终态是 legacy `internal/services` 里对应兼容层删除时别名一并删除（跟随 P3-2 services/modules 最终边界收口）。P3-2 已于 2026-09-19 收官、services 层整体移除，第 1 节别名随之消亡——该最终态达成（2026-09-30 审定补记）。
-4. **禁止新增**：modules 新代码不得 import `internal/services`（CI 门禁强制）；新增模块默认不引用 `internal/models` 中"模块自有"分类的类型。
+1. **Keep the shared domain core as a shared kernel**: `User` / `Ticket` / `Session` / `Agent` / `Message` / `Customer` and other high-frequency cross-module types are not scattered into a single module; they stay in the shared model layer (currently `internal/models`), but references from modules are closed to "read-only domain shape", with persistence details (GORM scope, hook) handled by each module's infra layer. **Reference surface closure achieved (2026-09-30), alias final-state cleanup complete (2026-10-14)**: references to migrated type aliases inside modules were cleared (18 files mechanically replaced with direct owner-package links), and then all transitional alias bodies in `internal/models` were deleted. The gate also changed generations: `TestModulesDoNotUseMigratedTypeAliases` (self-referential mismatch once the set is permanently empty) retired, and `TestModelsDoesNotImportModulePackages` took over — parser-level assertion that models must not import `internal/modules`, so the modules → models one-directional layering cannot regress; with no carrier, there is no reflux.
+2. **Migrate module-owned types into their owning modules step by step**: webhook / automation / quality / assist / voice / knowledge owned models migrate using the same cut of "first switch delivery/application references to in-module types + transitional legacy aliases", prioritized by "small reference surface, no cross-module consumers": voice → gamification → suggestion → webhook → automation → quality → assist.
+   - **Migration log**: ①2026-09-15 voice complete — the three GORM models `VoiceCall` / `VoiceRecording` / `VoiceTranscript` moved into `modules/voice/infra/models.go` (infra is voice's only consumer, defining them directly in infra eliminates the mapping layer); `internal/models` keeps the type aliases; the AutoMigrate registration in `bootstrap/migrate.go` and webhook's snapshot read-only path are unchanged through the aliases; all six voice/infra files (including tests) dropped the `internal/models` import. ②2026-09-15 webhook complete — `models/webhook.go` moved file-by-file into `modules/webhook/domain/models.go` (`WebhookEndpoint` / `WebhookDelivery` + four delivery status constants; all three module layers consume them, hence domain rather than infra); `internal/models` keeps type and constant aliases; migrate registration and handlers tests unchanged through aliases. ③2026-09-15 automation complete — `models/automation.go` moved file-by-file into `modules/automation/domain/models.go` (`AutomationTrigger` / `AutomationRun` / `AutomationTimer`; `AutomationRun.Trigger`'s association with the same-file type migrates self-consistently); `internal/models` keeps the type aliases; migrate registration, legacy `services/automation_*`, and handlers tests unchanged through aliases. ④2026-09-16 quality complete — `QualityReview` moved into `modules/quality/domain/models.go`, package declaration uses the unique `qualitydomain` (the first migration target referenced by a swag annotation: `quality_handler.go`'s `@Success 200 {object} models.QualityReview` resolves through the models alias chain, proven zero swag artifact drift and all 29 fields intact); `internal/models` keeps the type alias; migrate registration and handlers tests unchanged. ⑤2026-09-16 assist complete — `RemoteAssistSession` / `RemoteAssistAnnotation` moved into `modules/assist/domain/models.go`, package declaration uses the unique `assistdomain` (assist_handler.go / assist_recording_handler.go have 5 swag annotation references to `models.RemoteAssistX`, resolving through the alias chain, proven zero artifact drift); migrate registration and handlers unchanged. ⑥2026-09-16 knowledge complete (**the last cut; module-owned type migration fully closed**) — `KnowledgeDoc` / `KnowledgeIndexJob` moved into `modules/knowledge/domain/models.go`; the vector column value object `Embedding` / `NewEmbedding` moved file-by-file from `models/embedding.go` into `domain/embedding.go` (it is KnowledgeDoc's column type; without moving it, domain would depend back on models into a cycle); `internal/models` keeps the type aliases and the `NewEmbedding` forwarding function; migrate registration, the pgvector provider, legacy `services/ai*` / `knowledge_doc_service`, and handlers unchanged through aliases; knowledge's handler has no swag annotation, so the domain package declaration stays the generic `domain` without needing a unique name; six files of the knowledge module (infra×1 / delivery×2 + tests×3) all dropped the `internal/models` import; `Embedding`'s Scan/Value tests moved with the file into the domain package to preserve coverage.
+   - **Order correction (2026-09-15)**: gamification and suggestion were checked type by type and have **no module-owned models types** — gamification consumes only shared core (`Ticket` / `CustomerSatisfaction` / `Agent` / `User`), and suggestion consumes only `Ticket` and knowledge's own `KnowledgeDoc` (within knowledge's migration scope). Neither needs migration; the remaining order is corrected to: ~~voice → gamification → suggestion →~~ webhook ✅ → automation ✅ → quality ✅ → assist ✅ → knowledge ✅ (all complete).
+3. **Completed contract-type migrations do not roll back**: the aliases in section 1 are a transitional state; the final state is that the aliases are deleted together with the corresponding compatibility layer in legacy `internal/services` when it is removed (following P3-2 services/modules final boundary closure). P3-2 concluded on 2026-09-19 with the services layer removed wholesale, and section 1's aliases died with it — that final state is reached (added as a note on 2026-09-30 review).
+4. **No new additions**: new module code must not import `internal/services` (enforced by CI gate); new modules do not reference "module-owned" category types in `internal/models` by default.
 
-## 4. 复现扫描命令
+## 4. Reproduction Scan Command
 
 ```bash
 # modules -> services 直连（应为空）

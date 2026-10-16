@@ -1,26 +1,24 @@
-> [English](deployment.en.md) | **中文**
+# Servify Deployment Guide
 
-# Servify 部署指南
-
-本指南覆盖从本地开发到生产部署的完整流程。
+This guide covers the complete flow from local development to production deployment.
 
 ---
 
-## 目录
+## Table of Contents
 
-1. [架构概览](#1-架构概览)
-2. [环境要求](#2-环境要求)
-3. [本地开发部署](#3-本地开发部署)
-4. [Docker Compose 部署](#4-docker-compose-部署)
-5. [生产部署](#5-生产部署)
-6. [可观测性配置](#6-可观测性配置)
-7. [密钥与配置管理](#7-密钥与配置管理)
-8. [健康检查与监控](#8-健康检查与监控)
-9. [故障排查](#9-故障排查)
+1. [Architecture Overview](#1-architecture-overview)
+2. [Environment Requirements](#2-environment-requirements)
+3. [Local Development Deployment](#3-local-development-deployment)
+4. [Docker Compose Deployment](#4-docker-compose-deployment)
+5. [Production Deployment](#5-production-deployment)
+6. [Observability Configuration](#6-observability-configuration)
+7. [Secrets and Configuration Management](#7-secrets-and-configuration-management)
+8. [Health Checks and Monitoring](#8-health-checks-and-monitoring)
+9. [Troubleshooting](#9-troubleshooting)
 
 ---
 
-## 1. 架构概览
+## 1. Architecture Overview
 
 ```text
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -46,64 +44,64 @@
               └────────────────────┘
 ```
 
-### 端口分配
+### Port Allocation
 
-| 服务 | 端口 | 说明 |
+| Service | Port | Description |
 |------|------|------|
 | Servify API | 8080 | HTTP + WebSocket |
-| PostgreSQL | 5432 | 主数据库 |
-| Redis | 6379 | 缓存/会话 |
+| PostgreSQL | 5432 | Primary database |
+| Redis | 6379 | Cache/session |
 | OTel Collector | 4317/4318 | OTLP gRPC/HTTP |
-| Jaeger UI | 16686 | 分布式追踪面板 |
-| WeKnora | 9000/9001 | 兼容知识库 provider / mock 验收服务（可选） |
+| Jaeger UI | 16686 | Distributed tracing panel |
+| WeKnora | 9000/9001 | Compatible knowledge base provider / mock acceptance service (optional) |
 
 ---
 
-## 2. 环境要求
+## 2. Environment Requirements
 
-### 最小配置
+### Minimum Configuration
 
-| 组件 | 版本 | 说明 |
+| Component | Version | Description |
 |------|------|------|
-| Go | 1.26.0 | 服务端编译 |
-| Node.js | 24+ | SDK 构建、管理端、网站 |
-| pnpm | 10+ | 管理端包管理器 |
-| Docker | 24+ | 容器化部署（可选） |
-| Docker Compose | v2+ | 编排（可选） |
-| PostgreSQL | 12+ | 主数据库（生产必需） |
-| SQLite | 3+ | 开发/测试回退选项 |
-| Redis | 6+ | 缓存 |
+| Go | 1.26.0 | Server-side compilation |
+| Node.js | 24+ | SDK build, admin console, website |
+| pnpm | 10+ | Admin console package manager |
+| Docker | 24+ | Containerized deployment (optional) |
+| Docker Compose | v2+ | Orchestration (optional) |
+| PostgreSQL | 12+ | Primary database (required for production) |
+| SQLite | 3+ | Development/test fallback option |
+| Redis | 6+ | Cache |
 
-### 推荐 production 配置
+### Recommended Production Configuration
 
-| 资源 | 最低 | 推荐 |
+| Resource | Minimum | Recommended |
 |------|------|------|
-| CPU | 1 核 | 2 核 |
-| 内存 | 1 GB | 2 GB |
-| 磁盘 | 10 GB | 20 GB SSD |
-| PostgreSQL | 1 GB 内存 | 2 GB 内存 |
+| CPU | 1 core | 2 cores |
+| Memory | 1 GB | 2 GB |
+| Disk | 10 GB | 20 GB SSD |
+| PostgreSQL | 1 GB memory | 2 GB memory |
 
 ---
 
-## 3. 本地开发部署
+## 3. Local Development Deployment
 
-### 3.1 克隆仓库
+### 3.1 Clone the Repository
 
 ```bash
 git clone https://github.com/cuihairu/servify.git
 cd servify
 ```
 
-### 3.2 启动依赖服务
+### 3.2 Start Dependency Services
 
-只需 PostgreSQL 和 Redis：
+Only PostgreSQL and Redis are needed:
 
 ```bash
 # 使用 Docker Compose 启动基础设施
 docker compose -f infra/compose/docker-compose.yml up postgres redis -d
 ```
 
-### 3.3 配置
+### 3.3 Configuration
 
 ```bash
 # 使用默认配置（SQLite 开发模式）
@@ -119,12 +117,12 @@ cp config.yml config.local.yml
 #   database.* — PostgreSQL 连接参数（使用 PostgreSQL 时）
 ```
 
-**数据库选项：**
+**Database options:**
 
-- **开发/测试**：默认使用 PostgreSQL；需无本地 PostgreSQL 的开发/测试场景时，可通过 `DB_DRIVER=sqlite` 显式启用 SQLite
-- **生产**：必须使用 PostgreSQL
+- **Development/test**: PostgreSQL is used by default; for development/test scenarios without a local PostgreSQL, SQLite can be enabled explicitly via `DB_DRIVER=sqlite`
+- **Production**: PostgreSQL must be used
 
-### 3.4 运行服务
+### 3.4 Run the Service
 
 ```bash
 # 方式一：Makefile
@@ -138,7 +136,7 @@ go build -o bin/servify ./apps/server/cmd/server
 ./bin/servify
 ```
 
-### 3.5 验证
+### 3.5 Verification
 
 ```bash
 # 健康检查
@@ -156,11 +154,11 @@ make release-check CONFIG=./config.yml
 
 ---
 
-## 4. Docker Compose 部署
+## 4. Docker Compose Deployment
 
-适用于开发、测试、小规模生产场景。
+Suitable for development, testing, and small-scale production scenarios.
 
-### 4.1 基础部署（API + DB + Redis）
+### 4.1 Base Deployment (API + DB + Redis)
 
 ```bash
 # 构建并启动
@@ -173,7 +171,7 @@ docker compose -f infra/compose/docker-compose.yml logs -f servify
 docker compose -f infra/compose/docker-compose.yml down
 ```
 
-### 4.2 带 WeKnora mock 验收环境
+### 4.2 With WeKnora Mock Acceptance Environment
 
 ```bash
 # 启动全套（含 mock WeKnora 服务）
@@ -183,13 +181,13 @@ docker compose \
   up -d
 ```
 
-注意：
+Notes:
 
-- 该 compose 文件当前构建的是 `infra/compose/weknora-mock/`。
-- 它适用于本地协议回归和验收证据采集，不应被当作真实 WeKnora 生产部署模板。
-- 若要执行 `WEKNORA_ACCEPTANCE_MODE=real`，请改连真实 WeKnora 地址。
+- This compose file currently builds `infra/compose/weknora-mock/`.
+- It is intended for local protocol regression and acceptance evidence collection; it should not be treated as a real WeKnora production deployment template.
+- To run `WEKNORA_ACCEPTANCE_MODE=real`, point it at a real WeKnora address instead.
 
-需要额外环境变量：
+Additional environment variables required:
 
 ```bash
 # 知识库选择链 ragflow → dify → weknora → pgvector 直配：
@@ -200,21 +198,21 @@ export WEKNORA_API_KEY=your-weknora-api-key
 export OPENAI_API_KEY=your-openai-api-key
 ```
 
-#### 新客户交付默认知识库口径（2026-09-21 拍板）
+#### Default Knowledge Base Convention for New Customer Delivery (signed off 2026-09-21)
 
-知识库能力按交付节奏分两层，不做互斥单选：
+Knowledge base capability is layered by delivery cadence, not an either/or single choice:
 
-1. **默认（零外部配置）：pgvector 直配**。选择链兜底即 pgvector，交付第一周即可跑通 AI 首答全链路，不阻塞在外部知识库部署上，交付失败率最低。检索质量依赖自建分块，适合文档量小、结构简单的起步阶段。
-2. **增强（客户有知识库运营诉求时）**：轻量中文生态场景接 **WeKnora**（部署轻、中文融合好）；复杂 PDF/合同/表格等重解析场景接 **RAGFlow**（DeepDoc 解析最深，资源占用偏高）。两者配置与验收见各自集成文档，启用即在选择链中按 ragflow → dify → weknora 优先级生效。
+1. **Default (zero external configuration): pgvector direct**. The selection chain falls back to pgvector, so the full AI first-answer path works in the first week of delivery, without blocking on external knowledge base deployment; the delivery failure rate is the lowest. Retrieval quality depends on self-built chunking, suitable for the starting stage with small document volume and simple structure.
+2. **Enhanced (when the customer has knowledge base operation needs)**: for lightweight Chinese-ecosystem scenarios, connect **WeKnora** (lightweight deployment, good Chinese fusion); for heavy-parsing scenarios such as complex PDFs/contracts/tables, connect **RAGFlow** (DeepDoc parsing is the deepest, resource usage is higher). Configuration and acceptance for each are in their respective integration documents; once enabled, they take effect in the selection chain in the priority order ragflow → dify → weknora.
 
-### 4.3 带可观测性栈
+### 4.3 With Observability Stack
 
 ```bash
 # 启动 OTel Collector + Jaeger
 docker compose -f infra/compose/docker-compose.observability.yml up -d
 ```
 
-配置 Servify 连接 OTel（参考 `config.production.secure.example.yml` 中的 `monitoring` 段；默认 `config.yml` 未包含该段）：
+Configure Servify to connect to OTel (see the `monitoring` section in `config.production.secure.example.yml`; the default `config.yml` does not include this section):
 
 ```yaml
 monitoring:
@@ -228,9 +226,9 @@ monitoring:
   metrics_path: "/metrics"
 ```
 
-访问 Jaeger UI：http://localhost:16686
+Access the Jaeger UI: http://localhost:16686
 
-### 4.4 全套本地验收部署（一键启动）
+### 4.4 Full Local Acceptance Deployment (One-Shot Start)
 
 ```bash
 # API + DB + Redis + mock WeKnora + OTel + Jaeger
@@ -243,9 +241,9 @@ docker compose \
 
 ---
 
-## 5. 生产部署
+## 5. Production Deployment
 
-### 5.1 构建生产镜像
+### 5.1 Build the Production Image
 
 ```bash
 # 使用项目 Dockerfile（多阶段构建）
@@ -255,14 +253,14 @@ docker build -t servify:latest .
 docker build -t servify:v0.1.0 -t servify:latest .
 ```
 
-镜像特点：
-- 基于 `golang:1.26-alpine` 编译，`alpine` 运行
-- 静态编译（`CGO_ENABLED=0`），无外部依赖
-- 镜像大小约 20-30 MB
+Image characteristics:
+- Compiled on `golang:1.26-alpine`, running on `alpine`
+- Statically compiled (`CGO_ENABLED=0`), no external dependencies
+- Image size approximately 20-30 MB
 
-### 5.2 Fly.io 部署
+### 5.2 Fly.io Deployment
 
-[Fly.io](https://fly.io) 提供免费额度，适合小规模生产。
+[Fly.io](https://fly.io) offers a free allowance, suitable for small-scale production.
 
 ```bash
 # 安装 CLI
@@ -290,7 +288,7 @@ fly status
 fly logs
 ```
 
-`fly.toml` 配置示例：
+`fly.toml` configuration example:
 
 ```toml
 app = "servify"
@@ -315,17 +313,17 @@ primary_region = "hkg"
     timeout = "5s"
 ```
 
-### 5.3 Railway 部署
+### 5.3 Railway Deployment
 
-[Railway](https://railway.app) 提供免费 $5/月额度。
+[Railway](https://railway.app) offers a free $5/month allowance.
 
-1. 连接 GitHub 仓库
-2. 添加 PostgreSQL 插件
-3. 添加 Redis 插件
-4. 设置环境变量（见 [第 7 节](#7-密钥与配置管理)）
-5. 自动部署
+1. Connect the GitHub repository
+2. Add the PostgreSQL plugin
+3. Add the Redis plugin
+4. Set environment variables (see [Section 7](#7-secrets-and-configuration-management))
+5. Automatic deployment
 
-### 5.4 Kubernetes 部署
+### 5.4 Kubernetes Deployment
 
 #### Deployment
 
@@ -412,15 +410,15 @@ spec:
 
 ---
 
-## 6. 可观测性配置
+## 6. Observability Configuration
 
-Servify 内置 Prometheus 指标、OpenTelemetry 追踪和结构化日志。
+Servify has built-in Prometheus metrics, OpenTelemetry tracing, and structured logging.
 
-### 6.1 Prometheus 指标
+### 6.1 Prometheus Metrics
 
-Servify 在 `/metrics` 端点暴露 Prometheus 格式指标。
+Servify exposes Prometheus-format metrics at the `/metrics` endpoint.
 
-**Prometheus scrape 配置：**
+**Prometheus scrape configuration:**
 
 ```yaml
 scrape_configs:
@@ -431,29 +429,29 @@ scrape_configs:
     metrics_path: '/metrics'
 ```
 
-**核心指标：**
+**Core metrics:**
 
-| 指标 | 类型 | 说明 |
+| Metric | Type | Description |
 |------|------|------|
-| `http_requests_total` | Counter | HTTP 请求总数（method, path, status_code） |
-| `http_request_duration_seconds` | Histogram | 请求延迟 |
-| `conversations_created_total` | Counter | 新建会话数 |
-| `tickets_created_total` | Counter | 新建工单数 |
-| `routing_decisions_total` | Counter | 路由决策数 |
-| `ai_requests_total` | Counter | AI 请求量（provider, model, outcome） |
-| `ai_request_duration_seconds` | Histogram | AI 请求延迟 |
-| `ai_llm_tokens_total` | Counter | Token 消耗量 |
-| `eventbus_published_total` | Counter | 事件发布量 |
-| `eventbus_failed_total` | Counter | 事件处理失败数 |
-| `errors_total` | Counter | 分类错误数（severity, category, module） |
-| `worker_jobs_total` | Counter | Worker job 轮次数（outcome 含单轮业务失败） |
-| `worker_job_duration_seconds` | Histogram | 单轮 job 执行时长 |
+| `http_requests_total` | Counter | Total HTTP requests (method, path, status_code) |
+| `http_request_duration_seconds` | Histogram | Request latency |
+| `conversations_created_total` | Counter | Conversations created |
+| `tickets_created_total` | Counter | Tickets created |
+| `routing_decisions_total` | Counter | Routing decisions |
+| `ai_requests_total` | Counter | AI request volume (provider, model, outcome) |
+| `ai_request_duration_seconds` | Histogram | AI request latency |
+| `ai_llm_tokens_total` | Counter | Token consumption |
+| `eventbus_published_total` | Counter | Events published |
+| `eventbus_failed_total` | Counter | Event processing failures |
+| `errors_total` | Counter | Classified error count (severity, category, module) |
+| `worker_jobs_total` | Counter | Worker job rounds (outcome includes per-round business failures) |
+| `worker_job_duration_seconds` | Histogram | Per-round job execution duration |
 
-### 6.2 Grafana Cloud 接入（推荐免费方案）
+### 6.2 Grafana Cloud Integration (Recommended Free Option)
 
-1. 注册 [Grafana Cloud](https://grafana.com/auth/sign-up/)
-2. 获取 Prometheus remote_write 端点和凭证
-3. 配置 Prometheus remote_write：
+1. Sign up for [Grafana Cloud](https://grafana.com/auth/sign-up/)
+2. Obtain the Prometheus remote_write endpoint and credentials
+3. Configure Prometheus remote_write:
 
 ```yaml
 # prometheus.yml
@@ -472,16 +470,16 @@ scrape_configs:
       - targets: ['servify:8080']
 ```
 
-4. 导入 Dashboard：
-   - Grafana → Dashboards → Import → 上传 `deploy/observability/dashboards/servify-service.json`
-   - 同理导入 `servify-business.json`
+4. Import dashboards:
+   - Grafana → Dashboards → Import → upload `deploy/observability/dashboards/servify-service.json`
+   - Import `servify-business.json` the same way
 
-5. 导入告警规则：
-   - 将 `deploy/observability/alerts/rules.yaml` 内容添加到 Prometheus 配置
+5. Import alert rules:
+   - Add the contents of `deploy/observability/alerts/rules.yaml` to the Prometheus configuration
 
-### 6.3 OpenTelemetry 追踪
+### 6.3 OpenTelemetry Tracing
 
-在 `config.production.secure.example.yml` 中启用（默认 `config.yml` 未包含 `monitoring` 段）：
+Enable it in `config.production.secure.example.yml` (the default `config.yml` does not include the `monitoring` section):
 
 ```yaml
 monitoring:
@@ -493,9 +491,9 @@ monitoring:
     service_name: "servify"
 ```
 
-### 6.4 结构化日志
+### 6.4 Structured Logging
 
-日志输出 JSON 格式，包含 `request_id`、`tenant_id`、`trace_id` 等关联字段：
+Logs are output in JSON format, containing correlation fields such as `request_id`, `tenant_id`, and `trace_id`:
 
 ```json
 {
@@ -513,65 +511,65 @@ monitoring:
 
 ---
 
-## 7. 密钥与配置管理
+## 7. Secrets and Configuration Management
 
-### 7.1 必需密钥
+### 7.1 Required Secrets
 
-| 密钥 | 说明 | 示例 |
+| Secret | Description | Example |
 |------|------|------|
-| `JWT_SECRET` | JWT 签名密钥 | `openssl rand -hex 32` |
+| `JWT_SECRET` | JWT signing secret | `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | OpenAI API Key | `sk-proj-xxx` |
-| `DB_PASSWORD` | PostgreSQL 密码 | 强密码 |
+| `DB_PASSWORD` | PostgreSQL password | strong password |
 
-### 7.2 可选密钥
+### 7.2 Optional Secrets
 
-| 密钥 | 说明 |
+| Secret | Description |
 |------|------|
-| `DIFY_API_KEY` | Dify API Key（Dify dataset 兼容保留；选择链位置见 §4.2 拍板口径） |
+| `DIFY_API_KEY` | Dify API Key (Dify dataset compatibility retained; its selection-chain position is per the §4.2 signed-off convention) |
 | `DIFY_DATASET_ID` | Dify dataset ID |
-| `WEKNORA_API_KEY` | WeKnora compatibility 知识库 API Key |
-| `WEKNORA_TENANT_ID` | WeKnora compatibility 租户 ID |
-| `REDIS_PASSWORD` | Redis 密码（生产建议启用；仅配置文件 `redis.password` 字段，未提供环境变量绑定） |
+| `WEKNORA_API_KEY` | WeKnora compatibility knowledge base API Key |
+| `WEKNORA_TENANT_ID` | WeKnora compatibility tenant ID |
+| `REDIS_PASSWORD` | Redis password (recommended for production; only the config file `redis.password` field, no environment variable binding provided) |
 
-### 7.3 生产配置安全清单
+### 7.3 Production Configuration Security Checklist
 
-使用 `config.production.secure.example.yml` 作为生产基线；使用 `config.staging.example.yml` 作为 staging 演练基线。
+Use `config.production.secure.example.yml` as the production baseline; use `config.staging.example.yml` as the staging drill baseline.
 
-- [ ] `jwt.secret` 使用环境变量引用 `"${SERVIFY_JWT_SECRET}"`
-- [ ] `security.cors.allowed_origins` 限制为实际域名，不用 `*`
-- [ ] `security.rbac.enabled` 设为 `true`
-- [ ] `security.rate_limiting.enabled` 设为 `true`
-- [ ] `log.level` 设为 `info`（不要用 `debug`）
-- [ ] `log.format` 设为 `json`
-- [ ] `ai.openai.api_key` 使用环境变量引用（切换 Anthropic 时同理：`ai.provider: "anthropic"` + `ai.anthropic.api_key`）
+- [ ] `jwt.secret` uses an environment variable reference `"${SERVIFY_JWT_SECRET}"`
+- [ ] `security.cors.allowed_origins` is restricted to actual domains, not `*`
+- [ ] `security.rbac.enabled` is set to `true`
+- [ ] `security.rate_limiting.enabled` is set to `true`
+- [ ] `log.level` is set to `info` (do not use `debug`)
+- [ ] `log.format` is set to `json`
+- [ ] `ai.openai.api_key` uses an environment variable reference (same when switching to Anthropic: `ai.provider: "anthropic"` + `ai.anthropic.api_key`)
 
-在首次部署或调整安全配置后，先执行严格校验：
+After the first deployment or after adjusting security configuration, run the strict validation first:
 
 ```bash
 make security-check CONFIG=config.yml
 ```
 
-该检查会对默认 JWT secret、开放 CORS、关闭限流、匿名入口缺少独立路径级限流、空 provider key 等风险返回非零退出码。
+This check returns a non-zero exit code for risks such as the default JWT secret, open CORS, disabled rate limiting, anonymous entry points lacking independent path-level rate limiting, and empty provider keys.
 
-若本次部署同时涉及 metrics、tracing 或 observability stack，也建议执行：
+If this deployment also involves metrics, tracing, or the observability stack, it is also recommended to run:
 
 ```bash
 make observability-check CONFIG=config.yml
 ```
 
-该检查会校验 `monitoring.metrics_path`、tracing 基本参数，以及 dashboard / alert / runbook / OTel collector 配置资产是否存在。
+This check validates `monitoring.metrics_path`, basic tracing parameters, and whether the dashboard / alert / runbook / OTel collector configuration assets exist.
 
-如果要在发版前一次性跑完当前最小自检，可直接执行：
+To run the current minimal self-check in one shot before a release, execute:
 
 ```bash
 make release-check CONFIG=config.yml
 ```
 
-该入口会串行执行 `local-check`、`security-check`、`observability-check`、聚焦的 Go 回归测试和构建验证（`make build`）。
+This entry point runs `local-check`, `security-check`, `observability-check`, the focused Go regression tests, and build verification (`make build`) serially.
 
-### 7.4 Docker Secrets 方式
+### 7.4 Docker Secrets Approach
 
-服务端**不解析** `*_FILE` 形式的环境变量（如 `JWT_SECRET_FILE`），只读常规环境变量。使用 Docker Secrets 时，需在容器入口自行把 secret 内容导出为常规环境变量：
+The server does **not** resolve `*_FILE`-style environment variables (such as `JWT_SECRET_FILE`); it only reads regular environment variables. When using Docker Secrets, the container entrypoint must export the secret content as a regular environment variable itself:
 
 ```yaml
 # docker-compose.yml 中引用
@@ -586,7 +584,7 @@ secrets:
     file: ./secrets/jwt_secret
 ```
 
-### 7.5 Fly.io / Railway 方式
+### 7.5 Fly.io / Railway Approach
 
 ```bash
 # Fly.io
@@ -597,19 +595,19 @@ fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 
 ---
 
-## 8. 健康检查与监控
+## 8. Health Checks and Monitoring
 
-### 8.1 端点
+### 8.1 Endpoints
 
-| 端点 | 用途 | 检查内容 |
+| Endpoint | Purpose | What It Checks |
 |------|------|---------|
-| `GET /health` | 存活探针 | 进程存活 |
-| `GET /ready` | 就绪探针 | DB + Redis + 可选 LLM / knowledge provider |
-| `GET /metrics` | Prometheus | 全量指标 |
+| `GET /health` | Liveness probe | Process is alive |
+| `GET /ready` | Readiness probe | DB + Redis + optional LLM / knowledge provider |
+| `GET /metrics` | Prometheus | Full metrics |
 
-### 8.2 Docker Compose 健康检查
+### 8.2 Docker Compose Health Check
 
-已内置在 `docker-compose.yml` 中：
+Already built into `docker-compose.yml`:
 
 ```yaml
 healthcheck:
@@ -620,28 +618,28 @@ healthcheck:
   start_period: 40s
 ```
 
-### 8.3 告警规则
+### 8.3 Alert Rules
 
-预定义 14 条告警规则在 `deploy/observability/alerts/rules.yaml`（以该文件为唯一真相）：
+14 predefined alert rules live in `deploy/observability/alerts/rules.yaml` (that file is the single source of truth):
 
-| 告警 | 级别 | 触发条件 |
+| Alert | Level | Trigger Condition |
 |------|------|---------|
-| HighHTTP5xxRate | Critical | 5xx 比例 > 5% 持续 5 分钟 |
-| HighP99Latency | Warning | P99 延迟 > 5s 持续 10 分钟 |
-| HighRateLimitDrops | Info | 限流丢弃速率 > 10/s 持续 5 分钟 |
-| HighGoroutineCount | Warning | goroutines > 10000 持续 10 分钟 |
-| EventBusHandlerFailures | Warning | 事件处理失败持续 5 分钟 |
-| EventBusDeadLetters | Info | dead letter 持续 10 分钟 |
-| WorkerJobFailures | Warning | Worker 失败持续 10 分钟 |
-| AIProviderDegraded | Critical | AI 失败率 > 20% 持续 5 分钟 |
-| AIHighLatency | Warning | AI P95 延迟 > 10s 持续 10 分钟 |
-| AIFallbackRatioHigh | Warning | AI fallback 比例 > 50% |
-| VoiceTranslationDegradedHigh | Warning | 语音翻译降级比例 > 20% |
-| SLOAvailabilityFastBurn | Critical | 可用性 SLO 快烧（14.4x，1 小时烧掉约 2% 的 30 天预算） |
-| SLOAvailabilitySlowBurn | Warning | 可用性 SLO 慢烧（6x，6 小时烧掉约 5% 的 30 天预算） |
-| SLOLatencyFastBurn | Critical | 延迟 SLO 快烧（14.4x，1 小时烧掉约 2% 的 30 天预算） |
+| HighHTTP5xxRate | Critical | 5xx ratio > 5% for 5 minutes |
+| HighP99Latency | Warning | P99 latency > 5s for 10 minutes |
+| HighRateLimitDrops | Info | rate-limit drop rate > 10/s for 5 minutes |
+| HighGoroutineCount | Warning | goroutines > 10000 for 10 minutes |
+| EventBusHandlerFailures | Warning | event processing failures for 5 minutes |
+| EventBusDeadLetters | Info | dead letters for 10 minutes |
+| WorkerJobFailures | Warning | Worker failures for 10 minutes |
+| AIProviderDegraded | Critical | AI failure rate > 20% for 5 minutes |
+| AIHighLatency | Warning | AI P95 latency > 10s for 10 minutes |
+| AIFallbackRatioHigh | Warning | AI fallback ratio > 50% |
+| VoiceTranslationDegradedHigh | Warning | voice translation degradation ratio > 20% |
+| SLOAvailabilityFastBurn | Critical | availability SLO fast burn (14.4x, burning about 2% of the 30-day budget in 1 hour) |
+| SLOAvailabilitySlowBurn | Warning | availability SLO slow burn (6x, burning about 5% of the 30-day budget in 6 hours) |
+| SLOLatencyFastBurn | Critical | latency SLO fast burn (14.4x, burning about 2% of the 30-day budget in 1 hour) |
 
-生产建议直接从 `config.production.secure.example.yml` 启动，并显式保留：
+For production, start directly from `config.production.secure.example.yml` and explicitly keep:
 
 - `monitoring.metrics_path: "/metrics"`
 - `monitoring.tracing.enabled: true`
@@ -651,11 +649,11 @@ healthcheck:
 
 ---
 
-## 9. 故障排查
+## 9. Troubleshooting
 
-### 常见问题
+### Common Problems
 
-**服务无法启动**
+**Service fails to start**
 
 ```bash
 # 检查端口占用
@@ -668,16 +666,16 @@ psql -h localhost -U postgres -d servify -c "SELECT 1"
 redis-cli ping
 ```
 
-**数据库迁移问题**
+**Database migration problems**
 
-Servify 首次启动走 GORM AutoMigrate 自动建表；版本化迁移文件在 `apps/server/internal/app/bootstrap/migrations/`，如需手动执行：
+Servify runs GORM AutoMigrate table creation automatically on first startup; versioned migration files live in `apps/server/internal/app/bootstrap/migrations/`. To execute them manually:
 
 ```bash
 # 标准入口（见 Makefile:106）
 make migrate
 ```
 
-**查看日志**
+**Viewing logs**
 
 ```bash
 # Docker Compose
@@ -687,7 +685,7 @@ docker compose logs -f servify
 tail -f logs/servify.log
 ```
 
-**可观测性不工作**
+**Observability not working**
 
 ```bash
 # 检查 /metrics 端点
@@ -700,13 +698,13 @@ grep -A 5 "tracing:" config.yml
 docker compose -f infra/compose/docker-compose.observability.yml logs otel-collector
 ```
 
-### 运维手册
+### Operations Manual
 
-详细的告警排查步骤见：[`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md)
+For detailed alert triage steps, see: [`deploy/observability/runbook/operational-runbook.md`](https://github.com/cuihairu/servify/blob/main/deploy/observability/runbook/operational-runbook.md)
 
 ---
 
-## 快速参考
+## Quick Reference
 
 ```bash
 # 本地开发

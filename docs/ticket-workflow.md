@@ -1,23 +1,14 @@
-> [English](ticket-workflow.en.md) | **中文**
+# Ticket End-to-End Workflow
 
-# 工单全流程
+Tickets are the persistence surface after a conversation for "actually solving the problem": creation, assignment, follow-up comments, status transitions, closing, statistics, and export. This document covers the agent/admin HTTP API walkthrough path; for the visitor-side no-login ticket-creation entry point, see the ticket context section of the [Web Embedding Integration Guide](/embedding-guide).
 
-工单是会话之后「把问题解决掉」的沉淀面：创建、指派、跟进评论、状态流转、
-关闭、统计与导出。本文覆盖坐席/管理员侧 HTTP API 跟跑链路；访客侧免登录
-建单入口见 [Web 嵌入集成指南](/embedding-guide)的工单上下文一节。
+The interfaces below follow the current repository code (route registration: `apps/server/internal/app/server/router_management.go`, contract definitions: `apps/server/internal/modules/ticket/contract/types.go`); the examples can be run as-is.
 
-文中接口以仓库当前代码为准（路由注册：
-`apps/server/internal/app/server/router_management.go`、契约定义
-`apps/server/internal/modules/ticket/contract/types.go`），示例可直接跟跑。
+## 1. Prepare Credentials and Prerequisite Entities
 
-## 1. 准备凭据与前置实体
+See the [Agent Workspace](/agent-workspace) for the rules on starting the service and registering the first admin (on a fresh instance the first registered user can use `role:"admin"` directly; agent entities are registered in two steps). The examples below reuse the `TOKEN` and `AGENT_ID` from there.
 
-起服务与首个管理员的注册规则见
-[坐席工作台](/agent-workspace)（全新实例首个注册用户
-可直接 `role:"admin"`；坐席实体两步注册）。本文示例沿用那里的 `TOKEN` 与
-`AGENT_ID`。
-
-工单的 `customer_id` 取客户用户的 id：
+A ticket's `customer_id` takes the id of the customer user:
 
 ```sh
 # 注册客户用户（已有客户账号可跳过，用其 user.id）
@@ -27,7 +18,7 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
 # 记下响应里的 user.id，下文写作 CUSTOMER_ID
 ```
 
-## 2. 创建工单
+## 2. Create a Ticket
 
 ```sh
 curl -sS -X POST http://localhost:8080/api/tickets \
@@ -46,20 +37,19 @@ curl -sS -X POST http://localhost:8080/api/tickets \
 # 201，记下响应里的 id，下文写作 TICKET_ID
 ```
 
-字段说明：
+Field notes:
 
-| 字段 | 必填 | 说明 |
+| Field | Required | Description |
 | --- | --- | --- |
-| `title` | 是 | 工单标题 |
-| `customer_id` | 是 | 客户用户 id |
-| `description` / `category` / `priority` / `source` / `tags` | 否 | 描述、分类、优先级、来源渠道、标签 |
-| `session_id` | 否 | 关联原会话，坐席侧可回看（见 §4） |
-| `custom_fields` | 否 | 自定义字段（字段定义见管理端自定义字段配置） |
+| `title` | Yes | Ticket title |
+| `customer_id` | Yes | Customer user id |
+| `description` / `category` / `priority` / `source` / `tags` | No | Description, category, priority, source channel, tags |
+| `session_id` | No | Links the original conversation so the agent side can look back (see §4) |
+| `custom_fields` | No | Custom fields (field definitions live in the admin-side custom field configuration) |
 
-访客侧免登录建单走 `POST /api/v1/tickets`（仅需 `session_id` + `title`，
-分类/优先级/来源由服务端固定默认值，自定义字段与标签不开放给访客）。
+The visitor-side no-login ticket-creation path uses `POST /api/v1/tickets` (only `session_id` + `title` are needed; category / priority / source take fixed server-side defaults, and custom fields and tags are not exposed to visitors).
 
-## 3. 指派与跟进
+## 3. Assignment and Follow-up
 
 ```sh
 # 指派给坐席并调整优先级/标签（字段均可选，传哪个改哪个）
@@ -77,24 +67,23 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/api/tickets/$TICKET_ID
 ```
 
-## 4. 关联会话与状态流转
+## 4. Linked Conversations and Status Transitions
 
-带 `session_id` 创建的工单可回看关联会话，坐席据此还原上下文：
+Tickets created with a `session_id` can look back at the linked conversation, letting the agent reconstruct the context:
 
 ```sh
 curl -sS -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/api/tickets/$TICKET_ID/conversations
 ```
 
-状态面：`open` / `assigned` / `in_progress` / `resolved` / `closed` 五态，
-完整流转规则（`ticket/application/status_policy.go`）：
+Status surface: five states — `open` / `assigned` / `in_progress` / `resolved` / `closed` — with the full transition rules in (`ticket/application/status_policy.go`):
 
 - `open` → `assigned` / `resolved` / `closed`
-- `assigned` → `open`（可退回）/ `in_progress` / `resolved` / `closed`
-- `in_progress` → `open`（可退回）/ `resolved` / `closed`
-- `resolved` / `closed` → `closed`（同态提交幂等放行）
+- `assigned` → `open` (can be sent back) / `in_progress` / `resolved` / `closed`
+- `in_progress` → `open` (can be sent back) / `resolved` / `closed`
+- `resolved` / `closed` → `closed` (same-state submission is idempotently allowed)
 
-`PUT` 改 `status` 走流转；收单用关闭端点（记录关闭原因）：
+`PUT` changing `status` follows the transitions; use the close endpoint to close a ticket (it records the close reason):
 
 ```sh
 curl -sS -X PUT http://localhost:8080/api/tickets/$TICKET_ID \
@@ -106,7 +95,7 @@ curl -sS -X POST http://localhost:8080/api/tickets/$TICKET_ID/close \
   -d '{"reason":"发票已重开并寄出"}'
 ```
 
-批量操作（状态、标签、指派）：
+Batch operations (status, tags, assignment):
 
 ```sh
 curl -sS -X POST http://localhost:8080/api/tickets/bulk \
@@ -115,7 +104,7 @@ curl -sS -X POST http://localhost:8080/api/tickets/bulk \
 # 响应含 updated（成功 id 列表）与 failed（逐条失败原因）
 ```
 
-## 5. 列表检索、统计与导出
+## 5. List Search, Statistics, and Export
 
 ```sh
 # 列表：分页 + 多条件过滤 + 排序 + 自定义字段过滤（cf.前缀）
@@ -131,13 +120,8 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
   'http://localhost:8080/api/tickets/export?limit=1000' -o tickets.csv
 ```
 
-列表过滤参数：`status`/`priority`/`category`/`source`（可多值）、`tag`、
-`agent_id`、`customer_id`、`search`、`page`/`page_size`、`sort_by`/
-`sort_order`，以及 `cf.<字段名>=<值>` 自定义字段过滤。
+List filter parameters: `status`/`priority`/`category`/`source` (multi-value allowed), `tag`, `agent_id`, `customer_id`, `search`, `page`/`page_size`, `sort_by`/`sort_order`, plus `cf.<字段名>=<值>` custom field filtering.
 
-## 6. 权限与审计
+## 6. Permissions and Audit
 
-工单面在 `/api` 管理面统一中间件链内（JWT → scope 校验 → principal 类型
-→ 审计落库），资源权限为 `tickets`。策略口径见
-[接入面与权限策略](/auth-surface-policy)、[审计日志](/audit-log-policy)。
-接待过程中的会话操作见 [坐席工作台](/agent-workspace)。
+The ticket surface sits inside the unified middleware chain of the `/api` management surface (JWT → scope check → principal kind → audit persistence), with `tickets` as the resource permission. For the policy convention see [Auth Surface Policy](/auth-surface-policy) and [Audit Log Policy](/audit-log-policy); for conversation operations during an engagement see the [Agent Workspace](/agent-workspace).

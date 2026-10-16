@@ -1,138 +1,136 @@
-> [English](KNOWLEDGE_BASE_LANDSCAPE.en.md) | **中文**
+# Knowledge Base Selection Landscape and Adaptation Planning
 
-# 知识库选型全景与适配规划
+> Status: research and planning draft (2026-09-20). What actually landed is governed by the selection decisions.
+> Background: Dify is strictly speaking an LLM application orchestration platform, and the knowledge base (dataset) is only an attached capability — adapting Dify back then as a "knowledge base plugin" (the `difykp` driver) was imprecise positioning. This document inventories the current mainstream knowledge base products, evaluates their adaptation cost against the servify knowledge source contract, and gives recommendations for the road ahead.
 
-> 状态：调研规划稿（2026-09-20）。落地以选型决策为准。
-> 背景：Dify 严格说是 LLM 应用编排平台，知识库（dataset）只是其附属能力——当初把 Dify 作为「知识库插件」适配（`difykp` driver）在定位上不够严谨。本文档盘点当前主流知识库产品，评估其与 servify 知识源契约的适配成本，给出后续路线建议。
+## 1. Current State of the servify Knowledge Source Contract
 
-## 1. servify 知识源契约现状
+The unified contract lives at `apps/server/internal/platform/knowledgeprovider/provider.go`:
 
-统一契约位于 `apps/server/internal/platform/knowledgeprovider/provider.go`：
-
-| 操作 | 语义 |
+| Operation | Semantics |
 | --- | --- |
-| `Search` | 检索：请求 → 命中列表（含得分/引用） |
-| `UpsertDocument` | 文档写入/更新，返回外部文档 ID |
-| `DeleteDocument` | 按 ID 删除 |
-| `HealthCheck` | 可用性探测（启动期 require/降级判断依据） |
-| `RebuildIndex`（可选扩展） | 索引重建 |
+| `Search` | Retrieval: request → hit list (with scores / citations) |
+| `UpsertDocument` | Document write/update; returns the external document ID |
+| `DeleteDocument` | Delete by ID |
+| `HealthCheck` | Availability probe (the basis for startup-time require / degradation decisions) |
+| `RebuildIndex` (optional extension) | Index rebuild |
 
-现有七个 driver 实现（`apps/server/internal/platform/knowledgeprovider/` 下）：
+Seven existing driver implementations (under `apps/server/internal/platform/knowledgeprovider/`):
 
-| Driver | 适配对象 | 定位评估 |
+| Driver | Adaptation target | Positioning assessment |
 | --- | --- | --- |
-| `ragflowkp` | RAGFlow（InfiniFlow 开源知识库，锚定 v0.27.x） | **正统知识库**，主推方向之一：文档解析最深、REST API 完整；租户作用域全量对齐 dify/weknora，见 `scripts/test-ragflow-acceptance.sh` |
-| `weknorakp` | WeKnora（腾讯开源知识库） | **正统知识库**，主推方向之一，见 `WEKNORA_INTEGRATION.md` |
-| `pgvector` | 进程内 pgvector（DB + embedding 直配） | 轻量自托管默认路径，无外部依赖 |
-| `difykp` | Dify dataset API | **定位不严谨**：Dify 是编排平台，dataset 是附属功能。作为兼容路径保留，不宜作为知识库主推 |
-| `local` | 进程内本地知识引擎（本地嵌入器 + 余弦） | 零外部依赖离线链路，经 `knowledge.provider=local` 显式声明启用（非测试桩，有独立 `local-knowledge` 验收） |
-| `memory` | 进程内内存实现 | 完整实现契约、但未接入生产装配，仅 provider 切换测试与验收脚本引用 |
-| `mock` | 可控 mock 实现（可注入 search/delete/health 错误） | 仅测试引用，用于契约回归与 mock 验收对端 |
+| `ragflowkp` | RAGFlow (InfiniFlow's open-source knowledge base, anchored at v0.27.x) | **A legitimate knowledge base**, one of the primary directions: the deepest document parsing, a complete REST API; tenant scoping fully aligned with dify/weknora, see `scripts/test-ragflow-acceptance.sh` |
+| `weknorakp` | WeKnora (Tencent's open-source knowledge base) | **A legitimate knowledge base**, one of the primary directions, see `WEKNORA_INTEGRATION.md` |
+| `pgvector` | In-process pgvector (DB + embedding direct setup) | The lightweight self-hosted default path, no external dependencies |
+| `difykp` | Dify dataset API | **Imprecise positioning**: Dify is an orchestration platform and the dataset is an attached feature. Kept as a compatibility path; not fit to be the primary knowledge base recommendation |
+| `local` | In-process local knowledge engine (local embedder + cosine) | A zero-dependency offline path, enabled by explicit declaration via `knowledge.provider=local` (not a test stub; has its own `local-knowledge` acceptance) |
+| `memory` | In-process in-memory implementation | Fully implements the contract but is not wired into production assembly; referenced only by provider-switch tests and acceptance scripts |
+| `mock` | Controllable mock implementation (can inject search/delete/health errors) | Referenced by tests only; used for contract regression and as the acceptance counterpart in mock mode |
 
-选择链由启动/请求级共用的 `selectKnowledgeSource` 门面收敛（刀 23 + RAGFlow 立项刀）：ragflow（健康检查、可降级）→ dify（健康检查、可降级）→ weknora（健康检查）。**pgvector / local 不在选择链内**：二者是全局声明（`knowledge.provider=pgvector|local`）+ 进程内 driver，由 `BuildAIAssembly` 与请求级 `ai_scoped_handler` 的直通分支在选择链之前处理（`knowledge_source.go:60-62` 明确「pgvector 不进此函数：它是全局声明 + 进程内 driver，由调用方直通启动装配的实例」）。新增外部 driver 只需实现契约并接入该门面，选择优先级与装配为既有代码路径。RAGFlow 健康检查失败时的 require 语义：仅当 dify、weknora 均未启用时立即失败，否则沿链降级。
+The selection chain is converged by the `selectKnowledgeSource` facade shared by startup and request level (cut 23 + the RAGFlow kickoff cut): ragflow (health check, degradable) → dify (health check, degradable) → weknora (health check). **pgvector / local are not in the selection chain**: both are global declarations (`knowledge.provider=pgvector|local`) + in-process drivers, handled by the pass-through branches of `BuildAIAssembly` and the request-level `ai_scoped_handler` before the selection chain (`knowledge_source.go:60-62` states explicitly "pgvector does not enter this function: it is a global declaration + an in-process driver, and the caller passes through to the instance assembled at startup"). Adding a new external driver only requires implementing the contract and wiring it into this facade; the selection priority and assembly are existing code paths. The require semantics when the RAGFlow health check fails: it fails immediately only when both dify and weknora are disabled, otherwise it degrades along the chain.
 
-## 2. 选型维度
+## 2. Selection Dimensions
 
-1. **API 完整度**：REST API 是否覆盖契约四操作（检索 / 上传 / 删除 / 健康检查）——决定 driver 适配成本
-2. **部署形态**：自托管（Docker Compose / K8s）契合 servify 的私有化交付模式；SaaS-only 一票否决
-3. **文档解析能力**：复杂 PDF / 合同 / 表格的解析质量直接决定检索质量上限
-4. **检索能力**：混合检索（向量 + 全文）、rerank、引用溯源
-5. **租户 / 权限模型**：多租户知识隔离能力（对齐 servify 的 tenant/workspace scope 治理方向）
-6. **许可证与社区**：开源协议友好度、活跃度、长期维护风险
-7. **资源占用**：embedding/解析服务的 GPU/CPU 要求
+1. **API completeness**: whether the REST API covers the contract's four operations (retrieval / upload / delete / health check) — this determines driver adaptation cost
+2. **Deployment form**: self-hosting (Docker Compose / K8s) fits servify's private-delivery model; SaaS-only is an instant veto
+3. **Document parsing capability**: how well complex PDFs / contracts / tables are parsed directly caps retrieval quality
+4. **Retrieval capability**: hybrid retrieval (vector + full text), rerank, citation tracing
+5. **Tenant / permission model**: multi-tenant knowledge isolation capability (aligned with servify's tenant/workspace scope governance direction)
+6. **License and community**: open-source license friendliness, activity, long-term maintenance risk
+7. **Resource footprint**: GPU/CPU requirements of the embedding/parsing services
 
-## 3. 主流知识库产品盘点（2026-09）
+## 3. Inventory of Mainstream Knowledge Base Products (2026-09)
 
-综合社区横评与官方文档（来源见文末）：
+Synthesized from community comparisons and official documentation (sources listed at the end):
 
-### 3.1 RAGFlow（InfiniFlow）——已立项（首选候选兑现）
+### 3.1 RAGFlow (InfiniFlow) — Project Initiated (First-Choice Candidate Delivered)
 
-- **状态**：driver 已落地（`ragflowkp`），版本锚定 v0.27.x；选择链最高优先（ragflow → dify → weknora；pgvector 直配不在选择链内，为 `knowledge.provider=pgvector` 全局声明直通），租户/工作区作用域全量对齐 dify/weknora
-- **定位**：开源企业级 RAG 引擎，GitHub 18k+ star，以 DeepDoc 深度文档理解（复杂 PDF/表格/版式解析）与检索精度著称
-- **API**：RESTful API 完整（知识库创建、文档上传、检索等，API Key 认证），契约四操作可一一映射
-- **部署**：Docker Compose 自托管，契合私有化交付
-- **适配评估**：四操作映射最直接；检索质量上限高；资源占用偏高（解析服务较重）
-- **风险**：版本迭代快（当前 0.x），API 稳定性靠版本锚定 + 验收脚本（`test-ragflow-acceptance.sh`，mock/real 双模式）护航
+- **Status**: the driver has landed (`ragflowkp`), version anchored at v0.27.x; highest priority in the selection chain (ragflow → dify → weknora; pgvector direct setup is not in the selection chain, it is a pass-through global declaration via `knowledge.provider=pgvector`); tenant/workspace scoping fully aligned with dify/weknora
+- **Positioning**: an open-source enterprise-grade RAG engine, 18k+ GitHub stars, known for DeepDoc deep document understanding (complex PDF/table/layout parsing) and retrieval precision
+- **API**: a complete RESTful API (knowledge base creation, document upload, retrieval, etc., API Key auth); the contract's four operations map one to one
+- **Deployment**: self-hosted with Docker Compose, fits private delivery
+- **Adaptation assessment**: the most direct four-operation mapping; a high retrieval quality ceiling; resource footprint on the heavy side (the parsing service is fairly heavy)
+- **Risk**: fast release cadence (currently 0.x); API stability is guarded by version anchoring + the acceptance script (`test-ragflow-acceptance.sh`, dual mock/real modes)
 
-### 3.2 MaxKB（飞致云 / 1Panel）——次选候选
+### 3.2 MaxKB (Fit2Cloud / 1Panel) — Second-Choice Candidate
 
-- **定位**：企业知识服务与业务落地导向，开箱即用，零编码嵌入第三方系统
-- **API**：支持文档上传/在线文档爬取、自动拆分向量化、RAG 检索；API 面向问答场景为主
-- **部署**：Docker 自托管，资源要求温和
-- **适配评估**：落地快、运维轻；但 API 以「问答」为中心，`Search` 契约需映射其检索接口，细粒度文档管理 API 面较弱
-- **风险**：深度文档解析弱于 RAGFlow
+- **Positioning**: oriented toward enterprise knowledge services and business rollout; out of the box, embeds into third-party systems with zero code
+- **API**: supports document upload / online document crawling, automatic splitting and vectorization, RAG retrieval; the API is mostly oriented to Q&A scenarios
+- **Deployment**: self-hosted with Docker, modest resource requirements
+- **Adaptation assessment**: quick to roll out and light to operate; but the API centers on "Q&A", the `Search` contract has to map onto its retrieval interface, and the fine-grained document management API surface is weak
+- **Risk**: deep document parsing is weaker than RAGFlow's
 
-### 3.3 FastGPT（labring）
+### 3.3 FastGPT (labring)
 
-- **定位**：简易式 RAG + 工作流编排，上传即自动拆分/嵌入/索引，上手最快
-- **适配评估**：与 Dify 同属「编排平台带知识库」形态——若按「Dify 定位不严谨」的口径，FastGPT 作为知识库插件存在同样的定位问题；更适合作为对照而非主推
-- **风险**：定位重复（servify 已有编排层诉求由 AI 模块自身承担）
+- **Positioning**: easy-mode RAG + workflow orchestration; upload auto-splits/embeds/indexes; the fastest to pick up
+- **Adaptation assessment**: it belongs to the same "orchestration platform with a knowledge base" shape as Dify — under the "Dify is imprecisely positioned" convention, FastGPT as a knowledge base plugin has the same positioning problem; better kept as a reference than a primary recommendation
+- **Risk**: redundant positioning (servify's existing orchestration-layer needs are carried by the AI module itself)
 
-### 3.4 QAnything（网易有道）
+### 3.4 QAnything (NetEase Youdao)
 
-- **定位**：轻量本地知识库问答，「子曰」模型 + 两阶段检索
-- **适配评估**：轻量易部署；社区活跃度近年趋缓，长期维护风险需跟进确认
-- **风险**：维护节奏与多租户能力待验证
+- **Positioning**: lightweight local knowledge base Q&A, the "Ziyan" model + two-stage retrieval
+- **Adaptation assessment**: lightweight and easy to deploy; community activity has slowed in recent years, and long-term maintenance risk needs follow-up confirmation
+- **Risk**: maintenance cadence and multi-tenant capability remain unverified
 
 ### 3.5 AnythingLLM
 
-- **定位**：个人 / 小团队本地知识库，轻量部署
-- **适配评估**：面向个人场景，企业级多租户 / 权限 / 审计能力与 servify 交付场景不匹配，不推荐
+- **Positioning**: personal / small-team local knowledge base, lightweight deployment
+- **Adaptation assessment**: aimed at personal scenarios; enterprise-grade multi-tenant / permission / audit capabilities do not match servify's delivery scenarios — not recommended
 
-### 3.6 Dify——定位澄清（现有兼容保留）
+### 3.6 Dify — Positioning Clarified (Existing Compatibility Retained)
 
-- **定位**：LLM 应用编排平台（工作流 / Agent / 应用发布），知识库为其附属子系
-- **适配评估**：现有 `difykp` 经 dataset API 适配为统一契约，兼容保留；但其 dataset 能力（解析、检索配置）弱于专职知识库，且把编排平台当作知识库依赖会放大耦合面（升级编排平台可能波及知识检索）
-- **建议**：文档定位从「知识库插件」修正为「编排平台集成（附带 dataset 兼容）」；新客户默认不主推
+- **Positioning**: an LLM application orchestration platform (workflow / Agent / app publishing); the knowledge base is an attached subsystem
+- **Adaptation assessment**: the existing `difykp` adapts the dataset API to the unified contract and is retained for compatibility; but its dataset capability (parsing, retrieval configuration) is weaker than a dedicated knowledge base, and depending on an orchestration platform as your knowledge base widens the coupling surface (upgrading the orchestration platform can spill into knowledge retrieval)
+- **Recommendation**: the documentation positioning is corrected from "knowledge base plugin" to "orchestration platform integration (dataset compatibility included)"; not recommended by default for new customers
 
-### 3.7 WeKnora（腾讯）——已适配
+### 3.7 WeKnora (Tencent) — Adapted
 
-- 已有完整 driver 与集成文档（`WEKNORA_INTEGRATION.md`），作为正统知识库主推方向之一
-- 与 RAGFlow 的差异化：WeKnora 部署较轻、中文生态融合好；RAGFlow 文档解析更深。两者可并存为双路径
+- A complete driver and integration documentation already exist (`WEKNORA_INTEGRATION.md`); positioned as one of the primary legitimate-knowledge-base directions
+- Differentiation from RAGFlow: WeKnora is lighter to deploy and integrates well with the Chinese ecosystem; RAGFlow has deeper document parsing. The two can coexist as a dual path
 
-### 3.8 向量数据库层（不属于知识库，但相关）
+### 3.8 The Vector Database Layer (Not a Knowledge Base, but Related)
 
-- pgvector（已适配，进程内直配）、Milvus、Qdrant、Weaviate、Chroma 是「知识库引擎」之下的存储/检索层
-- servify 的 `pgvector` driver 走的是「自建检索层」路线（DB + embedding 直配），适合零外部依赖的默认路径；专职知识库产品则把解析/分块/rerank 一并托管
+- pgvector (already adapted, in-process direct setup), Milvus, Qdrant, Weaviate, and Chroma are the storage/retrieval layer beneath "knowledge base engines"
+- servify's `pgvector` driver takes the "build your own retrieval layer" route (DB + embedding direct setup), suited to the zero-dependency default path; dedicated knowledge base products take over parsing / chunking / rerank as a bundle
 
-## 4. 适配评估矩阵
+## 4. Adaptation Assessment Matrix
 
-| 维度 | RAGFlow | MaxKB | WeKnora（现有） | Dify（现有） | pgvector（现有） |
+| Dimension | RAGFlow | MaxKB | WeKnora (existing) | Dify (existing) | pgvector (existing) |
 | --- | --- | --- | --- | --- | --- |
-| 契约四操作 API 映射 | 完整 | 问答为主，文档管理面较弱 | 完整 | dataset API（附属能力） | 直配（进程内实现） |
-| 深度文档解析 | 强（DeepDoc） | 中 | 中 | 中 | 依赖自建分块 |
-| 部署形态 | Docker 自托管 | Docker 自托管 | Docker 自托管 | Docker 自托管 | 无外部依赖 |
-| 多租户隔离 | 知识库级 | 知识库级 | 知识库级 | dataset 级 | 由 servify 数据层承担 |
-| 资源占用 | 偏高 | 中 | 中 | 中高 | 最低 |
-| 定位严谨性 | 知识库 | 知识库 | 知识库 | 编排平台（附属） | 检索层自建 |
+| Contract four-operation API mapping | Complete | Q&A-centric; weak document management surface | Complete | dataset API (attached capability) | Direct setup (in-process implementation) |
+| Deep document parsing | Strong (DeepDoc) | Medium | Medium | Medium | Depends on self-built chunking |
+| Deployment form | Self-hosted on Docker | Self-hosted on Docker | Self-hosted on Docker | Self-hosted on Docker | No external dependencies |
+| Multi-tenant isolation | Knowledge-base level | Knowledge-base level | Knowledge-base level | dataset level | Carried by the servify data layer |
+| Resource footprint | On the high side | Medium | Medium | Medium-high | Lowest |
+| Positioning rigor | Knowledge base | Knowledge base | Knowledge base | Orchestration platform (attached) | Self-built retrieval layer |
 
-> API 端点细节以各官方文档实测为准；接入前按契约四操作逐项 spike 验证。
+> API endpoint details are governed by hands-on testing against each product's official documentation; before integration, spike-verify each contract operation item by item.
 
-## 5. 建议路线
+## 5. Recommended Route
 
-1. **RAGFlow driver 已立项落地**：REST API 最完整、文档解析最深、自托管契合——知识库主推方向之一（与 WeKnora 形成双路径：深度解析场景走 RAGFlow，轻量中文生态走 WeKnora）；后续投入转向真实环境联调与版本跟进（v0.27.x 锚定）
-2. **MaxKB 备选观察**：客户已有 MaxKB 存量时按需接入，不做默认主推
-3. **Dify 定位降级**：文档与产品口径从「知识库插件」修正为「编排平台集成（dataset 兼容保留）」；`selectKnowledgeSource` 门面中 dify 分支保留兼容，不新增能力投入
-4. **pgvector 保持默认轻量路径**：零外部依赖场景的默认选择不变。新客户交付口径已拍板（2026-09-21）：**pgvector 起步（零外部配置，交付首周跑通全链路），客户有知识库运营诉求时按解析深度选 WeKnora（轻量中文）或 RAGFlow（重解析）增强**，口径详见 deployment.md「新客户交付默认知识库口径」
+1. **The RAGFlow driver has been initiated and landed**: the most complete REST API, the deepest document parsing, and a self-hosting fit — one of the primary knowledge base directions (forming a dual path with WeKnora: RAGFlow for deep parsing scenarios, WeKnora for the lightweight Chinese ecosystem); follow-up investment shifts to real-environment integration and version tracking (anchored at v0.27.x)
+2. **MaxKB as a watched alternative**: integrate on demand when a customer already runs MaxKB; not a default recommendation
+3. **Dify demoted in positioning**: the documentation and product convention is corrected from "knowledge base plugin" to "orchestration platform integration (dataset compatibility retained)"; the dify branch in the `selectKnowledgeSource` facade stays for compatibility, with no new capability investment
+4. **pgvector stays the default lightweight path**: the default choice for zero-dependency scenarios is unchanged. The new-customer delivery convention has been signed off (2026-09-21): **start with pgvector (zero external configuration, the full chain runs in the first delivery week); when the customer has knowledge base operational needs, enhance with WeKnora (lightweight, Chinese) or RAGFlow (heavy parsing) by parsing depth** — see deployment.md's "default knowledge base convention for new-customer delivery" for the full convention
 
-## 6. 落地路径（新 driver 模式）
+## 6. Implementation Path (the New-Driver Pattern)
 
-新增 driver 参照 `ragflowkp` / `difykp` / `weknorakp` 既有模式：
+New drivers follow the existing `ragflowkp` / `difykp` / `weknorakp` pattern:
 
-1. `platform/knowledgeprovider/<driver>/`：`Provider` 实现四操作 + `HealthCheck`（HTTP client + API Key 认证；HTTP 细节放 `pkg/<driver>/`，driver 层 mock 接口 seam）
-2. `mapping.go`：外部命中/文档模型 → `KnowledgeHit` / `KnowledgeDocument` 映射
-3. `config` 增配置块（BaseURL / API Key / Timeout），对齐 secure-config 白名单门禁（新增 gate 必改三个白名单测试）
-4. `configscope` 租户/工作区作用域接入（resolver + gorm provider/store 列 + 版本化迁移，参照 `000009_ragflow_scoped_config`）
-5. `selectKnowledgeSource` 门面接入选择链（健康检查 / 降级语义沿用现行契约）
-6. swag 注释与文档同步；验收脚本对齐 `test-ragflow-acceptance.sh` 模式（mock 模式全自含可进 CI，real 模式拒私网）
+1. `platform/knowledgeprovider/<driver>/`: `Provider` implements the four operations + `HealthCheck` (HTTP client + API Key auth; HTTP details go in `pkg/<driver>/`, with a mock interface seam at the driver layer)
+2. `mapping.go`: map external hit/document models → `KnowledgeHit` / `KnowledgeDocument`
+3. Add a `config` block (BaseURL / API Key / Timeout), aligned with the secure-config allowlist gates (a new gate must change three allowlist tests)
+4. Wire into `configscope` tenant/workspace scoping (resolver + gorm provider/store columns + a versioned migration, modeled on `000009_ragflow_scoped_config`)
+5. Wire into the selection chain via the `selectKnowledgeSource` facade (health check / degradation semantics follow the current contract)
+6. Sync swag annotations and documentation; align the acceptance script with the `test-ragflow-acceptance.sh` pattern (mock mode is fully self-contained and CI-runnable; real mode rejects private networks)
 
-## 7. 参考来源
+## 7. Reference Sources
 
-- [MaxKB 与 RAGFlow 企业级平台对比](https://www.maxkb.cn/maxkb-vs-ragflow)
-- [5 大开源 RAG 平台深度横评（知乎）](https://zhuanlan.zhihu.com/p/1921226488444880527)
-- [五大 AI 应用框架深度对比：Dify、FastGPT、RagFlow（百度智能云）](https://cloud.baidu.com/article/4510271)
-- [RAGFlow、Dify、FastGPT、Cherry Studio、AnythingLLM 比较及部署（掘金）](https://juejin.cn/post/7520286373594234880)
-- [RAG+AI 工作流+Agent：LLM 框架全面对比（腾讯云）](https://cloud.tencent.com/developer/article/2441799)
-- [开源知识库 RAG 项目最全细节对比（QAnything/RAGFlow/Dify/FastGPT 等）](https://hustyichi.github.io/2024/07/08/compare)
-- [RAGFlow HTTP API 官方文档](https://ragflow.io)
-- [开源 RAG 框架汇总（火山引擎）](https://developer.volcengine.com/articles/7392432442768326667)
+- [MaxKB vs RAGFlow enterprise platform comparison](https://www.maxkb.cn/maxkb-vs-ragflow)
+- [In-depth comparison of 5 open-source RAG platforms (Zhihu)](https://zhuanlan.zhihu.com/p/1921226488444880527)
+- [In-depth comparison of five AI application frameworks: Dify, FastGPT, RagFlow (Baidu AI Cloud)](https://cloud.baidu.com/article/4510271)
+- [RAGFlow, Dify, FastGPT, Cherry Studio, AnythingLLM compared and deployed (Juejin)](https://juejin.cn/post/7520286373594234880)
+- [RAG + AI workflows + Agents: a comprehensive comparison of LLM frameworks (Tencent Cloud)](https://cloud.tencent.com/developer/article/2441799)
+- [The most detailed comparison of open-source knowledge base RAG projects (QAnything/RAGFlow/Dify/FastGPT etc.)](https://hustyichi.github.io/2024/07/08/compare)
+- [RAGFlow HTTP API official documentation](https://ragflow.io)
+- [Open-source RAG framework roundup (Volcengine)](https://developer.volcengine.com/articles/7392432442768326667)

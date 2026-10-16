@@ -1,93 +1,91 @@
-> [English](repo-hygiene.en.md) | **中文**
-
 # Repo Hygiene
 
-本文件定义 Servify 仓库中源码、生成物、运行时文件的边界，避免工作区被临时文件、二进制和缓存污染。
+This file defines the boundaries in the Servify repository between source code, generated artifacts, and runtime files, to avoid the workspace being polluted by temporary files, binaries, and caches.
 
-## 必须提交的内容
+## Content That Must Be Committed
 
-- 所有源码、配置模板、文档、测试代码
-- 通过 `generated-assets.manifest` 明确声明的生成物
-- 已被仓库设计为“发布面的一部分”的产物，例如 demo SDK 提交产物和 API 文档产物
+- All source code, configuration templates, documentation, and test code
+- Generated artifacts explicitly declared through `generated-assets.manifest`
+- Artifacts the repository is designed as "part of the release surface", for example the committed demo SDK artifacts and API documentation artifacts
 
-## 不应提交的内容
+## Content That Should Not Be Committed
 
-- 本地构建出的二进制，例如根目录 `server`、`server.exe`
-- 运行时上传目录、测试执行时的临时上传文件
-- 本地缓存、日志、覆盖率、临时数据库
-- 可由包管理器或构建命令稳定重建的普通构建缓存
+- Locally built binaries, such as `server` and `server.exe` in the root directory
+- Runtime upload directories, temporary upload files during test execution
+- Local caches, logs, coverage, temporary databases
+- Ordinary build caches that package managers or build commands can rebuild reliably
 
-## 当前明确边界
+## Current Explicit Boundaries
 
 - `generated-assets.manifest`
-  - 这里列出的文件必须存在，并且必须被 Git 跟踪
-- `uploads/`、`apps/server/uploads/`、`internal/handlers/uploads/`
-  - 视为运行时或测试产物，不应进入版本控制
+  - Files listed here must exist and must be tracked by Git
+- `uploads/`, `apps/server/uploads/`, `internal/handlers/uploads/`
+  - Treated as runtime or test artifacts; must not enter version control
 - `./.runtime/`
-  - 作为本地运行时目录根，承载上传文件、临时运行输出等非源码内容
-- `/server`、`/server.exe`
-  - 视为本地构建二进制，不应进入版本控制
+  - The root of the local runtime directory, carrying non-source content such as uploaded files and temporary runtime output
+- `/server`, `/server.exe`
+  - Treated as locally built binaries; must not enter version control
 
-## 测试约定
+## Testing Conventions
 
-- 上传类测试优先使用 `t.TempDir()` 或系统临时目录
-- 如果测试确实依赖静态样本，应放入明确的 fixture / testdata 目录，而不是运行时上传目录
-- 测试结束后应清理自己创建的临时文件
+- Upload-related tests should prefer `t.TempDir()` or the system temporary directory
+- If a test truly depends on static samples, put them in an explicit fixture / testdata directory, not the runtime upload directory
+- Tests should clean up the temporary files they create
 
-## 命名约定
+## Naming Conventions
 
 - `testdata/`
-  - 可提交、稳定、可复用的测试样本
+  - Committable, stable, reusable test samples
 - `fixtures/`
-  - 需要明确语义分组的跨测试样本集合
+  - Cross-test sample collections that need explicit semantic grouping
 - `generated/`
-  - 明确属于生成物且通常需要额外生成入口说明的内容
+  - Content that clearly belongs to generated artifacts and usually needs an additional generation entry explanation
 - `.runtime/`
-  - 本地运行时输出，不提交
+  - Local runtime output, not committed
 
-## 生成物约定
+## Generated Artifact Conventions
 
-- 需要提交的生成物必须有稳定生成入口，并且能在 CI 中校验
-- 新增生成物时，要同时更新：
-  - 生成脚本或命令入口
-  - `generated-assets.manifest` 或等价校验机制
-  - 对应文档说明
-- 当前受控生成物说明见 `docs/generated-assets.md`
+- Generated artifacts that must be committed need a stable generation entry and must be verifiable in CI
+- When adding a generated artifact, also update:
+  - The generation script or command entry
+  - `generated-assets.manifest` or an equivalent verification mechanism
+  - The corresponding documentation
+- See `docs/generated-assets.md` for current governed generated artifacts
 
-## 新增目录时的默认判断
+## Default Judgment When Adding a Directory
 
-- 如果目录内容是源码、文档、fixtures、契约文件，通常应该提交
-- 如果目录内容是运行时输出、缓存、编译结果、下载内容，通常不应提交
-- 如果目录内容介于两者之间，必须先明确“是否可重建”和“CI 是否要校验”
+- If the directory content is source code, documentation, fixtures, or contract files, it should usually be committed
+- If the directory content is runtime output, caches, compilation results, or downloads, it usually should not be committed
+- If the directory content is in between, first pin down "whether it is rebuildable" and "whether CI should verify it"
 
-## 新增目录默认 ignore 约定
+## Default Ignore Conventions for New Directories
 
-- 新增运行时目录：
-  - 默认放入 `.runtime/` 或子应用自己的 runtime 目录
-  - 默认加入 `.gitignore`
-- 新增缓存目录：
-  - 默认加入 `.gitignore`
-  - 名称优先使用 `.cache/`、工具默认缓存目录或子项目本地缓存目录
-- 新增构建输出目录：
-  - 默认不提交
-  - 只有被明确设计为受控生成物时，才允许提交并进入治理流程
-- 新增测试样本目录：
-  - 优先使用 `testdata/` 或 `fixtures/`
-  - 默认允许提交
-- 新增生成物目录：
-  - 如果需要提交，补文档、生成命令、CI 校验
-  - 如果不需要提交，加入 `.gitignore`
+- New runtime directories:
+  - Default to placing under `.runtime/` or the sub-app's own runtime directory
+  - Default to adding to `.gitignore`
+- New cache directories:
+  - Default to adding to `.gitignore`
+  - Prefer `.cache/`, the tool's default cache directory, or the sub-project's local cache directory for the name
+- New build output directories:
+  - Default not committed
+  - Only when explicitly designed as a governed generated artifact may they be committed and enter the governance process
+- New test sample directories:
+  - Prefer `testdata/` or `fixtures/`
+  - Committed by default
+- New generated artifact directories:
+  - If they need to be committed, add documentation, the generation command, and CI verification
+  - If they do not need to be committed, add them to `.gitignore`
 
-## 根目录治理
+## Root Directory Governance
 
-- 根目录优先放入口级内容，例如：
-  - 顶层文档
-  - 顶层配置样例
-  - 顶层构建入口
-  - 跨应用共享脚本与清单
-- 应用内部样本、运行时文件、模块私有文档应尽量回到各自子目录
-- 新增根目录文件前，先判断是否属于：
-  - 全仓库入口
-  - 跨目录共享规则
-  - 发布或构建主链路
-- 如果不属于以上三类，通常不应放在根目录
+- The root directory should prioritize entry-level content, for example:
+  - Top-level documentation
+  - Top-level configuration examples
+  - Top-level build entry points
+  - Cross-application shared scripts and manifests
+- In-app samples, runtime files, and module-private documentation should return to their own subdirectories as much as possible
+- Before adding a root-level file, first judge whether it belongs to:
+  - A whole-repository entry point
+  - A cross-directory shared rule
+  - The main release or build chain
+- If it belongs to none of the above three, it usually should not go in the root directory

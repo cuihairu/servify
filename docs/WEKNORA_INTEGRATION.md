@@ -1,43 +1,41 @@
-> [English](WEKNORA_INTEGRATION.en.md) | **中文**
+# External Knowledge Base Integration Guide: Knowledge Provider Path (Dify dataset compatible + WeKnora)
 
-# 外部知识库集成指南：知识库 provider 路径（Dify dataset 兼容 + WeKnora）
+## Project Overview
 
-## 项目概述
+This guide explains how Servify connects an external knowledge base into the AI orchestration chain. The current code selection chain uses `RagFlow` as the primary provider, `Dify` as the secondary compatibility path, and `WeKnora` for protocol regression and fallback validation; when no external source is enabled, the system falls back to running without a knowledge source (`knowledge.provider` defaults to empty, and the selection chain returning "no source" means it starts in the no-knowledge-source form). **pgvector / local are not automatic fallback paths**: both require explicit `provider: "pgvector"` / `provider: "local"` declarations in the config file to be enabled (`apps/server/internal/config/config.go:1288-1289`). The selection chain implementation is in `apps/server/internal/app/server/knowledge_source.go`; see [Knowledge Base Landscape](/KNOWLEDGE_BASE_LANDSCAPE) for the full selection overview.
 
-本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。当前代码选择链以 `RagFlow` 为首选 provider，`Dify` 为次选兼容路径，`WeKnora` 用于协议回归与 fallback 验证；未启用外部源时回落无知识源运行（`knowledge.provider` 默认为空，选择链返回「无源」即按无知识源形态启动）。**pgvector / local 不是自动回落路径**：二者需在配置文件显式声明 `provider: "pgvector"` / `provider: "local"` 才会启用（`apps/server/internal/config/config.go:1288-1289`）。选择链实现见 `apps/server/internal/app/server/knowledge_source.go`，选型全景见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
+> **Positioning clarification (2026-09)**: Dify is strictly speaking an LLM application orchestration platform; its dataset knowledge base is only an ancillary capability and is not suitable as the long-term flagship direction for knowledge bases. The mainstream knowledge base selection and adaptation plan (RAGFlow chain head, pgvector direct config as the default path, Dify positioning demoted) is in [Knowledge Base Landscape](/KNOWLEDGE_BASE_LANDSCAPE).
+The document name is kept as `WEKNORA_INTEGRATION` mainly for compatibility with historical links; the content semantics center on the general knowledge provider.
 
-> **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（RAGFlow 链首、pgvector 直配默认路径、Dify 定位降级）见 [知识库选型全景](/KNOWLEDGE_BASE_LANDSCAPE)。
-文档名保留 `WEKNORA_INTEGRATION` 主要是为了兼容历史链接；内容语义以通用 knowledge provider 为主。
+## Integration Plan Completion Status
 
-## 集成计划完成情况
+### Completed Tasks
 
-### 已完成任务
+1. **Project roadmap update**
+   - Updated the phase 2 plan in README.md
+   - Incorporated external knowledge provider integration into the main AI evolution path
+   - Updated the technical architecture diagram and tech stack description
 
-1. **项目路线图更新**
-   - 更新了 README.md 中的第二阶段计划
-   - 将外部知识库 provider 集成纳入 AI 演进主路径
-   - 更新了技术架构图和技术栈说明
+2. **Technical implementation plan design**
+   - `KnowledgeProvider` abstraction and `QueryOrchestrator`
+   - `Dify` provider adapter (`apps/server/internal/platform/knowledgeprovider/dify/`)
+   - `WeKnora` provider adapter (`apps/server/internal/platform/knowledgeprovider/weknora/`)
+   - Degradation strategy and circuit breaker mechanism
 
-2. **技术实施方案设计**
-   - `KnowledgeProvider` 抽象与 `QueryOrchestrator`
-   - `Dify` provider 适配 (`apps/server/internal/platform/knowledgeprovider/dify/`)
-   - `WeKnora` provider 适配 (`apps/server/internal/platform/knowledgeprovider/weknora/`)
-   - 降级策略和熔断器机制
+3. **Development environment configuration**
+   - Dify / WeKnora provider config templates
+   - WeKnora mock acceptance config (`infra/compose/docker-compose.weknora.yml`)
+   - Database initialization script (`scripts/init-db.sql`)
+   - Environment variable config template (`.env.weknora.example`)
+   - Config file template (`config.weknora.yml`)
 
-3. **开发环境配置**
-   - Dify / WeKnora provider 配置模板
-   - WeKnora mock 验收配置 (`infra/compose/docker-compose.weknora.yml`)
-   - 数据库初始化脚本 (`scripts/init-db.sql`)
-   - 环境变量配置模板 (`.env.weknora.example`)
-   - 配置文件模板 (`config.weknora.yml`)
+4. **Compatibility path deployment and management scripts**
+   - One-click startup script (`scripts/start-weknora.sh`)
+   - Knowledge base initialization script (`scripts/init-knowledge-base.sh`; on completion it generates the `scripts/manage-knowledge-base.sh` helper script for search/list/stats)
 
-4. **兼容路径部署和管理脚本**
-   - 一键启动脚本 (`scripts/start-weknora.sh`)
-   - 知识库初始化脚本 (`scripts/init-knowledge-base.sh`；初始化完成时会生成 `scripts/manage-knowledge-base.sh` 辅助脚本，供 search/list/stats 使用)
+## Technical Architecture
 
-## 技术架构
-
-### 集成架构
+### Integration Architecture
 ```
 Servify 智能客服
        ↓
@@ -50,7 +48,7 @@ Servify 智能客服
 （provider=pgvector / local 时配置直通，优先于外部选择链）
 ```
 
-### 服务部署图
+### Service Deployment Diagram
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   Servify   │───▶│   RagFlow   │
@@ -62,11 +60,11 @@ Servify 智能客服
          └────────────▶ WeKnora (compatibility)
 ```
 
-## 快速开始
+## Quick Start
 
-> 当前项目的默认推荐是接入 `RagFlow`（外部专职知识库）或 `pgvector`（零外部依赖、进程内直配）；`Dify` 作为兼容路径保留。仓库里的 `infra/compose/docker-compose.weknora.yml` 仍然保留，用于 WeKnora 协议回归和 fallback 验证，不代表 WeKnora 是主路径。
+> The current project default recommendation is to integrate `RagFlow` (dedicated external knowledge base) or `pgvector` (zero external dependency, in-process direct config); `Dify` is kept as a compatibility path. The repo's `infra/compose/docker-compose.weknora.yml` is still retained, for WeKnora protocol regression and fallback validation; it does not mean WeKnora is the main path.
 
-### 1. 环境准备
+### 1. Environment Preparation
 ```bash
 # 检查环境
 docker --version
@@ -77,7 +75,7 @@ git clone <your-servify-repo>
 cd servify
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment Variables
 ```bash
 # 复制环境变量模板
 cp .env.weknora.example .env
@@ -91,7 +89,7 @@ cp .env.weknora.example .env
 nano .env
 ```
 
-### 3. 启动服务
+### 3. Start Services
 ```bash
 # 一键启动开发环境
 ./scripts/start-weknora.sh dev
@@ -99,13 +97,13 @@ nano .env
 # 等待服务启动完成...
 ```
 
-### 4. 初始化兼容知识库
+### 4. Initialize Compatibility Knowledge Base
 ```bash
 # 创建 WeKnora compatibility 知识库并上传示例文档
 ./scripts/init-knowledge-base.sh
 ```
 
-### 5. 验证 compatibility 集成
+### 5. Verify Compatibility Integration
 ```bash
 # 检查服务健康状态
 curl http://localhost:8080/health
@@ -115,7 +113,7 @@ curl http://localhost:9000/api/v1/health
 ./scripts/manage-knowledge-base.sh search "远程协助"
 ```
 
-### 6. 运行 provider 验收脚本
+### 6. Run Provider Acceptance Scripts
 ```bash
 # Dify 兼容路径 mock 回归
 DIFY_ACCEPTANCE_MODE=mock \
@@ -143,23 +141,23 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 ./scripts/test-weknora-integration.sh
 ```
 
-脚本会输出最小验收证据：
+The scripts emit minimal acceptance evidence:
 
-- Dify 兼容路径：
+- Dify compatibility path:
   - `summary.txt`
   - `manifest.json`
   - `servify-health.json`
-  - `dify-dataset.json`（可用时）
+  - `dify-dataset.json` (when available)
   - `ai-status.json`
   - `ai-query.json`
   - `knowledge-upload.json`
   - `knowledge-sync.json`
   - `ai-metrics.json`
-- WeKnora compatibility 路径：
+- WeKnora compatibility path:
 - `summary.txt`
 - `manifest.json`
 - `servify-health.json`
-- `weknora-health.json`（可用时）
+- `weknora-health.json` (when available)
 - `ai-status.json`
 - `ai-query.json`
 - `knowledge-upload.json`
@@ -172,32 +170,32 @@ EVIDENCE_DIR=./scripts/test-results/weknora-acceptance/real \
 - `ai-status-after-enable.json`
 - `circuit-breaker-reset.json`
 
-其中 `Dify real` 模式会严格拒绝 `localhost`、`127.0.0.1`、`0.0.0.0`、私网地址和 `.local/.internal` 主机名，避免把本地 mock 或内网临时地址误记为真实环境证据；同时要求：
+Among these, `Dify real` mode strictly rejects `localhost`, `127.0.0.1`, `0.0.0.0`, private-network addresses, and `.local/.internal` hostnames, to avoid recording local mock or internal temporary addresses as real-environment evidence; it also requires:
 
-- `dify-dataset` 探针成功
-- `knowledge provider` 当前激活为 `dify`
-- `knowledge_provider_enabled=true` 且 `knowledge_provider_healthy=true`
-- `ai-query` 必须成功，且不能只返回 `strategy=fallback`
-- `knowledge upload` 和 `knowledge sync` 必须都成功
+- `dify-dataset` probe succeeds
+- `knowledge provider` is currently active as `dify`
+- `knowledge_provider_enabled=true` and `knowledge_provider_healthy=true`
+- `ai-query` must succeed, and must not return only `strategy=fallback`
+- `knowledge upload` and `knowledge sync` must both succeed
 
-其中 `WeKnora real` 模式针对兼容路径，按严格口径验收：
+Among these, `WeKnora real` mode is for the compatibility path and uses strict criteria for acceptance:
 
-- `WEKNORA_URL` 不能是 `localhost`、`127.0.0.1`、`0.0.0.0`、私网地址或 `.local/.internal` 主机名
-- 健康检查返回若标识 `service=weknora-mock`，脚本会直接拒绝作为真实证据
-- WeKnora 健康检查必须通过
-- Servify 必须运行在 `enhanced` 模式
-- `knowledge provider` 当前必须为 `weknora`
-- `knowledge_provider_enabled=true` 且 `knowledge_provider_healthy=true`
-- `disable` 后的 fallback 查询必须成功，证明外部 provider 不可用时降级路径可控
-- `knowledge upload` 和 `knowledge sync` 必须都成功
+- `WEKNORA_URL` cannot be `localhost`, `127.0.0.1`, `0.0.0.0`, a private-network address, or a `.local/.internal` hostname
+- If the health check response identifies `service=weknora-mock`, the script directly rejects it as real evidence
+- The WeKnora health check must pass
+- Servify must be running in `enhanced` mode
+- `knowledge provider` must currently be `weknora`
+- `knowledge_provider_enabled=true` and `knowledge_provider_healthy=true`
+- The fallback query after `disable` must succeed, proving that the degradation path is controllable when the external provider is unavailable
+- `knowledge upload` and `knowledge sync` must both succeed
 
-可以通过 `make dify-acceptance`、`make weknora-acceptance` 作为统一入口运行脚本；其中 `knowledge-provider-acceptance` 目前等价于 `make weknora-acceptance`，用于兼容路径回归。
+The scripts can be run through the unified entry points `make dify-acceptance` and `make weknora-acceptance`; `knowledge-provider-acceptance` currently is equivalent to `make weknora-acceptance`, used for compatibility path regression.
 
-只有满足以上条件，才能把结果回填到 `docs/acceptance-checklist.md` 里，分别作为 Dify 兼容路径和 WeKnora compatibility 路径的真实运行证据。
+Only when the above conditions are met can the results be backfilled into `docs/acceptance-checklist.md`, as real runtime evidence for the Dify compatibility path and the WeKnora compatibility path respectively.
 
-`manifest.json` 是机器可读验收索引，包含 provider、mode、关键状态、核心检查结果和实际生成的证据文件列表。真实环境回填时优先以 `manifest.json` 判断是否满足验收门槛，再引用具体响应文件作为人工审阅证据。
+`manifest.json` is the machine-readable acceptance index, containing provider, mode, key statuses, core check results, and the list of evidence files actually generated. When backfilling a real environment, prefer `manifest.json` to judge whether the acceptance threshold is met, then cite specific response files as human-review evidence.
 
-真实环境建议追加执行：
+Recommended additions for a real environment:
 
 ```bash
 # 先运行对应 acceptance 脚本，确保 real 目录下已生成 manifest.json
@@ -208,11 +206,11 @@ make validate-acceptance-manifest MANIFEST=./scripts/test-results/weknora-accept
 make check-acceptance-evidence
 ```
 
-只有 validator 返回成功，才建议把该目录作为“可回填验收清单”的证据集；批量扫描也只会检查已纳入 git 的 manifest，避免把本地临时产物误算成正式证据。
+Only when the validator returns success should the directory be treated as an evidence set eligible for backfilling into the acceptance checklist; the batch scan also only checks manifests already in git, to avoid counting local temporary artifacts as official evidence.
 
-## 开发指南
+## Development Guide
 
-### 项目结构
+### Project Structure
 ```
 servify/
 ├── docs/
@@ -235,9 +233,9 @@ servify/
 └── .env.weknora.example           # 环境变量模板
 ```
 
-### 核心代码示例
+### Core Code Examples
 
-#### Dify provider 使用
+#### Dify provider usage
 ```go
 provider := difyprovider.NewProvider(
     dify.NewClient(&dify.Config{
@@ -253,7 +251,7 @@ provider := difyprovider.NewProvider(
 )
 ```
 
-#### WeKnora compatibility 客户端使用
+#### WeKnora compatibility client usage
 ```go
 // 创建客户端
 client := weknora.NewClient(config, logger)
@@ -275,22 +273,22 @@ docInfo, err := client.UploadDocument(ctx, kbID, &weknora.Document{
 })
 ```
 
-#### AI 服务集成
+#### AI service integration
 ```go
 // 处理用户查询（知识源按 provider 直通 + ragflow→dify→weknora 选择链逐级降级，终点为无知识源运行）
 response, err := aiService.ProcessQuery(ctx, userQuery, sessionID)
 ```
 
-## 监控和维护
+## Monitoring and Maintenance
 
-### 健康检查端点
+### Health Check Endpoints
 - Servify API: `GET http://localhost:8080/health`
-- Dify API: 以 `GET /datasets/:id` 作为 dataset 级健康探针
-- WeKnora API: `GET http://localhost:9000/api/v1/health`（兼容路径）
+- Dify API: uses `GET /datasets/:id` as the dataset-level health probe
+- WeKnora API: `GET http://localhost:9000/api/v1/health` (compatibility path)
 - PostgreSQL: `docker-compose -f infra/compose/docker-compose.yml exec postgres pg_isready`
 - Redis: `docker-compose -f infra/compose/docker-compose.yml exec redis redis-cli ping`
 
-### 日志查看
+### Log Viewing
 ```bash
 # 查看所有服务日志
 docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml logs -f
@@ -303,7 +301,7 @@ docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 tail -f logs/servify.log
 ```
 
-### 性能监控
+### Performance Monitoring
 ```bash
 # 查看服务状态
 docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml ps
@@ -315,25 +313,25 @@ docker stats
 ./scripts/manage-knowledge-base.sh stats
 ```
 
-## 安全配置
+## Security Configuration
 
-### 生产环境配置
-1. **修改默认密钥**：
-   - 更改 JWT_SECRET
-   - 更改 WEKNORA_API_KEY
-   - 更改数据库密码
+### Production Environment Configuration
+1. **Change default secrets**:
+   - Change JWT_SECRET
+   - Change WEKNORA_API_KEY
+   - Change database password
 
-2. **网络安全**：
-   - 限制 CORS 允许的域名
-   - 配置防火墙规则
-   - 使用 HTTPS
+2. **Network security**:
+   - Restrict the CORS allowed origins
+   - Configure firewall rules
+   - Use HTTPS
 
-3. **数据安全**：
-   - 定期备份数据库
-   - 加密敏感数据
-   - 实施访问控制
+3. **Data security**:
+   - Back up the database regularly
+   - Encrypt sensitive data
+   - Implement access control
 
-### 配置示例
+### Configuration Example
 ```yaml
 # 生产环境配置
 security:
@@ -344,29 +342,29 @@ security:
     requests_per_minute: 60
 ```
 
-## 性能优化
+## Performance Optimization
 
-### 推荐配置
-1. **数据库优化**：
-   - 配置连接池
-   - 创建合适的索引
-   - 定期 VACUUM
+### Recommended Configuration
+1. **Database optimization**:
+   - Configure the connection pool
+   - Create appropriate indexes
+   - VACUUM regularly
 
-2. **缓存策略**：
-   - 启用 Redis 缓存
-   - 配置 TTL
-   - 实施缓存预热
+2. **Cache strategy**:
+   - Enable Redis caching
+   - Configure TTL
+   - Implement cache warming
 
-3. **provider 优化**：
-   - 调整 chunk_size
-   - 优化 embedding 模型
-   - 配置检索策略
+3. **Provider optimization**:
+   - Tune chunk_size
+   - Optimize the embedding model
+   - Configure the retrieval strategy
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Problems
 
-#### 1. WeKnora compatibility 服务无法启动
+#### 1. WeKnora compatibility service fails to start
 ```bash
 # 检查端口占用
 lsof -i :9000
@@ -378,7 +376,7 @@ docker-compose config
 docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml logs weknora
 ```
 
-#### 2. 数据库连接失败
+#### 2. Database connection failure
 ```bash
 # 检查数据库状态
 docker-compose -f infra/compose/docker-compose.yml exec postgres pg_isready -U postgres
@@ -388,7 +386,7 @@ docker network ls
 docker network inspect servify-network
 ```
 
-#### 3. 知识库搜索无结果
+#### 3. Knowledge base search returns no results
 ```bash
 # 检查文档是否上传成功（脚本由 init-knowledge-base.sh 初始化时生成）
 ./scripts/manage-knowledge-base.sh list
@@ -398,9 +396,9 @@ curl -H "X-API-Key: default-api-key" \
      http://localhost:9000/api/v1/knowledge/default-kb
 ```
 
-## 更新和维护
+## Updates and Maintenance
 
-### 版本更新
+### Version Updates
 ```bash
 # 停止服务
 docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compose.weknora.yml down
@@ -412,7 +410,7 @@ docker-compose -f infra/compose/docker-compose.yml -f infra/compose/docker-compo
 ./scripts/start-weknora.sh
 ```
 
-### 数据备份
+### Data Backup
 ```bash
 # 备份 PostgreSQL
 docker-compose -f infra/compose/docker-compose.yml exec postgres pg_dump -U postgres servify > backup.sql
@@ -421,44 +419,44 @@ docker-compose -f infra/compose/docker-compose.yml exec postgres pg_dump -U post
 docker cp servify_weknora:/app/data ./backup/weknora_data
 ```
 
-## 相关资源
+## Related Resources
 
-### 官方文档
+### Official Documentation
 - [WeKnora GitHub](https://github.com/Tencent/WeKnora)
-- [WeKnora API 文档](https://github.com/Tencent/WeKnora/blob/main/docs/API.md)
-- [pgvector 文档](https://github.com/pgvector/pgvector)
+- [WeKnora API Documentation](https://github.com/Tencent/WeKnora/blob/main/docs/API.md)
+- [pgvector Documentation](https://github.com/pgvector/pgvector)
 
-### 社区资源
+### Community Resources
 - [WeKnora Issues](https://github.com/Tencent/WeKnora/issues)
-- [PostgreSQL 中文社区](https://www.postgresql.org/community/)
+- [PostgreSQL Chinese Community](https://www.postgresql.org/community/)
 
-## 当前状态与后续方向
+## Current Status and Future Direction
 
-当前仓库里的外部知识库集成已经完成了角色调整：
+The external knowledge base integration in the current repo has completed a role adjustment:
 
-- 外部知识库选择链以 `RagFlow` 为首选，`Dify` 为次选兼容路径（provider=pgvector/local 时配置直通、优先于外部链）
-- `WeKnora` 不再作为系统内核能力存在，而是 `KnowledgeProvider` 的一个兼容实现
-- AI 主流程已经迁移到 `QueryOrchestrator`，只依赖统一检索抽象
-- 标准模式和增强模式都可以在不改 handler 协议的前提下切换到编排式实现
-- 后续如果切换到其他知识库，只需要新增 provider adapter，不需要重写 AI 主流程
+- The external knowledge selection chain uses `RagFlow` as the primary, `Dify` as the secondary compatibility path (when provider=pgvector/local, config passes through directly, taking priority over the external chain)
+- `WeKnora` no longer exists as a system core capability, but as one compatibility implementation of `KnowledgeProvider`
+- The AI main flow has migrated to `QueryOrchestrator`, depending only on the unified retrieval abstraction
+- Both standard mode and enhanced mode can switch to the orchestration implementation without changing the handler protocol
+- If switching to another knowledge base later, only a new provider adapter needs to be added; the AI main flow does not need to be rewritten
 
-更细的实施任务已经迁移到 `docs/implementation/02-ai-and-knowledge.md` 与 `docs/implementation/04-sdk-and-channel-adapters.md`，当前两份 backlog 都已清零。
+More detailed implementation tasks have migrated to `docs/implementation/02-ai-and-knowledge.md` and `docs/implementation/04-sdk-and-channel-adapters.md`; both backlogs are now cleared.
 
-后续增量工作不再单独挂在 WeKnora 文档里，而是归到下面几个长期方向：
+Future incremental work no longer hangs off the WeKnora document alone, but is grouped into the following long-term directions:
 
-1. 新增更多 `KnowledgeProvider` 实现，例如 Milvus、Elasticsearch 或自行开发检索服务（pgvector 已实现：`internal/platform/knowledgeprovider/pgvector/`，经 `knowledge.provider=pgvector` 直配）
-2. 补齐文档上传、批量索引、重建索引等管理能力的统一接口
-3. 把监控、缓存、故障恢复、安全策略沉到平台层，而不是绑定到某一个知识库实现
-4. 让 Web/API/App SDK 统一消费稳定的 AI/knowledge contract，而不是感知具体 provider
+1. Add more `KnowledgeProvider` implementations, e.g. Milvus, Elasticsearch, or a self-developed retrieval service (pgvector is already implemented: `internal/platform/knowledgeprovider/pgvector/`, via `knowledge.provider=pgvector` direct config)
+2. Complete the unified interface for document upload, batch indexing, index rebuild, and other management capabilities
+3. Sink monitoring, caching, fault recovery, and security policies to the platform layer, rather than binding them to a single knowledge base implementation
+4. Let the Web/API/App SDK consume a stable AI/knowledge contract uniformly, rather than being aware of the specific provider
 
-## 支持和反馈
+## Support and Feedback
 
-如有问题或建议，请：
-1. 查看本文档的故障排除部分
-2. 检查 `Dify` 或 WeKnora compatibility 对应 provider 文档
-3. 在项目 Issues 中提交问题
-4. 联系开发团队
+If you have questions or suggestions:
+1. Check the troubleshooting section of this document
+2. Check the corresponding provider docs for `Dify` or WeKnora compatibility
+3. Submit issues in the project Issues
+4. Contact the development team
 
 ---
 
-当前结论：外部知识库默认推荐接入 `RagFlow`（专职知识库，选择链首选）或 `pgvector`（零外部依赖直配）；`Dify` 作为次选兼容路径保留，`WeKnora` 可以继续作为兼容或回退适配器保留，但系统架构已经不再依赖单一 provider。
+Current conclusion: the external knowledge base defaults to recommending `RagFlow` (dedicated knowledge base, selection chain head) or `pgvector` (zero external dependency direct config); `Dify` is kept as the secondary compatibility path, and `WeKnora` can continue to be kept as a compatibility or fallback adapter, but the system architecture no longer depends on a single provider.

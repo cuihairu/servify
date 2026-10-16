@@ -1,108 +1,106 @@
-> [English](mobile-sdk-design.en.md) | **中文**
+# Mobile SDK Planning: Android and iOS Embedded Customer-service Capability
 
-# 移动端 SDK 策划：Android 与 iOS 嵌入式客服能力
+Status: planning document (no implementation). This document answers "what to do, why do it this way, in what order", implementation details are left to the technical design at each phase's kickoff.
 
-状态：策划文档（不含实现）。本文回答"做什么、为什么这样做、按什么顺序做"，实现细节留给各阶段开工时的技术方案。
+Related documents:
 
-关联文档：
-
-- [07 SDK Multi Surface](/implementation/07-sdk-multi-surface)：本文档是其 M3 `app-sdk-reservation` 的落地策划；app-core 已预留的四个契约（offline queue / push token registration / reconnect + session restore / mobile storage）是本文的地基，不再重复发明。
-- [v1 产品范围](/v1-product-scope)：AI 首答、转人工、工单全流程的产品契约。
-- Web SDK 源码：`sdk/packages/core`（协议事实标准）、`apps/demo-sdk/widget.js`（最小接入形态参照）。
+- [07 SDK Multi Surface](/zh/implementation/07-sdk-multi-surface): this document is the landing plan for its M3 `app-sdk-reservation`; the four contracts already reserved in app-core (offline queue / push token registration / reconnect + session restore / mobile storage) are this document's foundation, not reinvented.
+- [v1 product scope](/v1-product-scope): the product contract for AI first answer, human handoff, ticket full flow.
+- Web SDK source: `sdk/packages/core` (protocol source of truth), `apps/demo-sdk/widget.js` (minimal integration form reference).
 
 ---
 
-## 1. 产品定位与边界
+## 1. Product Positioning and Boundaries
 
-### 决策 D1：做嵌入式 SDK，不做独立客服 App
+### Decision D1: build an embedded SDK, not a standalone customer-service app
 
-**结论**：交付物是两个可嵌入宿主 App 的客户端 SDK（Android AAR / iOS XCFramework），宿主在自己的页面里拉起客服会话；不发布独立的"Servify 客服"App。
+**Conclusion**: the deliverables are two client SDKs embeddable into host apps (Android AAR / iOS XCFramework), the host launches customer-service sessions in its own page; no standalone "Servify customer-service" app is published.
 
-**为什么**：
+**Why**:
 
-- 客服会话的价值锚点是"用户在业务流程里遇到问题的那一刻"。独立 App 意味着用户要离开宿主业务场景，上下文（订单页、报错页）断裂，转化率必然差于原地拉起。行业先例（Intercom、Zendesk、美洽）全部是 SDK 形态，独立客服 App 没有存活样本。
-- 独立 App 需要账号体系、应用市场审核、独立发版节奏三件套，每一件都是持续成本；SDK 的发版成本收敛为"接入方升级依赖"，与 servify 现有"严禁发版操作、接入方自取"的交付模式一致。
-- V1 产品范围把"品牌基础配置（名称、欢迎语、主题色、离线提示）"列为渠道要求，嵌入式 SDK 天然由宿主传入品牌配置，独立 App 则要自建配置后台，V1 承担不起。
+- The value anchor of a customer-service session is "the moment the user hits a problem in the business flow". A standalone app means the user leaves the host business context, context (order page, error page) breaks, conversion rate will necessarily be worse than launching in place. Industry precedents (Intercom, Zendesk, Meiqia) are all SDK form; no standalone customer-service app has a surviving sample.
+- A standalone app needs the trio of account system, app market review, independent release cadence; each is a continuous cost; the SDK's release cost converges to "integrator upgrades the dependency", consistent with servify's existing "no release operations, integrator fetches on its own" delivery mode.
+- The v1 product scope lists "brand base configuration (name, welcome message, theme color, offline hint)" as channel requirements; an embedded SDK naturally has the host pass in brand config, a standalone app would need to build its own config console, which v1 cannot afford.
 
-**边界（V1 明确不做）**：
+**Boundaries (v1 explicitly not doing)**:
 
-- 不做坐席端移动 App（坐席工作台保持 Web）；
-- 不做语音/视频（后端 WebRTC 能力先服务远程协助，移动端 V1 不暴露，`createMobileCapabilitySet` 已将 voice/remote_assist 置 off，保持一致）;
-- 不做宿主 App 内的消息转发到系统短信/邮件等系统级集成。
+- No agent-side mobile app (agent workbench stays Web);
+- No voice/video (backend WebRTC capability serves remote assistance first, mobile v1 does not expose, `createMobileCapabilitySet` already sets voice/remote_assist to off, stay consistent);
+- No forwarding of messages from inside the host app to system SMS/email and other system-level integrations.
 
-### 决策 D2：与 Web SDK 能力对齐（协议对齐是硬约束，访客可达面是真实边界）
+### Decision D2: align capabilities with the Web SDK (protocol alignment is a hard constraint, the visitor-reachable surface is the real boundary)
 
-Web 端当前真实具备、移动端 V1 必须对齐的能力（以 `sdk/packages/core` 源码与服务端路由注册为准，不以上线宣传为准）：
+Capabilities the Web currently truly has and mobile v1 must align with (based on `sdk/packages/core` source and server route registration, not launch marketing):
 
-| 能力 | Web 现状 | 移动端 V1 |
+| Capability | Web status | Mobile v1 |
 |---|---|---|
-| 会话窗口 | 浮钮 + 底部面板（widget 自绘，绕过 SDK） | 浮钮 + 底部抽屉 + 全屏会话页 |
-| 消息收发 | WS `text-message`（客户上行）/ `agent-message`（坐席）/ `ai-response` + `ai-response-delta`（AI 首答，流式增量 + 终帧） | 同协议，消息模型逐字段对齐 |
-| WebSocket 链路 | `/api/v1/ws?session_id=`（publicV1 组免认证；`access_token` 参数可选，默认不消费，`security.guest_token.required` 开启后握手强制校验签名/时效/会话绑定，校验失败 401 拒升级），服务端协议层 ping 54s 保活（JSON 心跳已移除，见下文契约核查），指数退避重连（5 次，1s 起 2 倍，封顶 30s） | 同路径；重连策略叠加前后台切换与网络可达性感知；鉴权见 D6 访客 token 方案（✅ 服务端已随刀 8 落地） |
-| 未读与新消息通知 | **无任何实现**（无计数、无角标） | 客户端内未读计数为基线；系统推送为可选模块（D7） |
-| AI 首答与引用 | WS `ai-response` 帧一等携带 `{content, confidence, source}` + 编排附加输出 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略）；流式经 `ai-response-delta` 增量帧（2026-09 服务端已接出） | 增量拼接 + 完成帧替换渲染；引用来源可展开列表；置信门建议（next_action=handoff）透出"转人工"提示 |
-| 转人工状态 | `transfer_notification`（含 message/agent_id）/ `waiting_notification`（入队）两帧；widget 未特判，走"当 bot 文本渲染"的兜底分支。**注意：core SDK 曾声明并处理的 `session_update`/`agent_status` 帧服务端从不发送（死分支，已随 core 清理刀从类型与运行时中移除）** | 状态机改由真实帧驱动：ai_answering →（transfer/waiting_notification）→ waiting_human →（agent-message 到达）→ agent_chatting（见 D5 状态机） |
-| 工单创建入口 | REST `POST /api/tickets`（api-client 有封装，widget 未露出），**管理面端点，访客不可达** | 会话页内"升级为工单"入口，带 AI 摘要预填；依赖访客可用端点（后端配套项，见 §10） |
+| Session window | Floating button + bottom panel (widget self-drawn, bypasses SDK) | Floating button + bottom drawer + full-screen session page |
+| Message send/receive | WS `text-message` (customer uplink) / `agent-message` (agent) / `ai-response` + `ai-response-delta` (AI first answer, streaming increments + final frame) | Same protocol, message model aligned field by field |
+| WebSocket link | `/api/v1/ws?session_id=` (publicV1 group auth-free; the `access_token` parameter is optional, not consumed by default, once `security.guest_token.required` is on the handshake strictly validates signature/freshness/session binding, validation failure 401 rejects upgrade), server protocol layer ping 54s keepalive (JSON heartbeat removed, see contract review below), exponential backoff reconnect (5 times, starting 1s, doubling, capped at 30s) | Same path; reconnect policy stacked with foreground/background switching and network-reachability awareness; auth see D6 guest token scheme (✅ server landed with knife 8) |
+| Unread count & new message notifications | **No implementation at all** (no count, no badge) | In-app unread count is the baseline; system push is an optional module (D7) |
+| AI first answer & citations | WS `ai-response` frame first-class carries `{content, confidence, source}` + orchestration additional outputs `sources`/`strategy`/`next_action`/`handoff_reason` (zero values omitted); streaming via `ai-response-delta` increment frames (server connected 2026-09) | Increment concatenation + completion-frame replacement rendering; citation sources expandable list; confidence-gate suggestion (next_action=handoff) surfaces a "transfer to human" hint |
+| Transfer-to-human status | `transfer_notification` (with message/agent_id) / `waiting_notification` (queued) two frames; widget does not special-case, goes through the "render as bot text" fallback branch. **Note: `session_update`/`agent_status` frames the core SDK once declared and handled are never sent by the server (dead branch, removed from types and runtime with the core cleanup knife)** | State machine driven by real frames instead: ai_answering → (transfer/waiting_notification) → waiting_human → (agent-message arrives) → agent_chatting (see D5 state machine) |
+| Ticket creation entry | REST `POST /api/tickets` (api-client has a wrapper, widget does not expose), **admin surface endpoint, visitor unreachable** | "Escalate to ticket" entry inside the session page, with AI summary pre-filled; depends on visitor-usable endpoints (backend companion item, see §10) |
 
-**REST 面的访客可达性（策划时的关键事实核查）**：服务端现存 REST 端点几乎全部挂在管理面中间件链下（`AuthMiddleware` + `RequirePrincipalKinds("agent","admin","service")` + 资源权限），包括本文曾计划依赖的 `/api/v1/ai/query`、`/api/tickets`、`/api/omni/sessions/:id/messages`。**访客客户端唯一现成通道就是 `/api/v1/ws`**。这直接约束了架构：移动端 V1 的实时收发、AI 首答（含流式）全部走 WS；"增量补拉""工单创建"两类 REST 依赖必须先有访客可用的服务端配套（§10 清单 #1/#4，推送注册同理见 #5），不能按管理面端点的参数形状直接假设可用。
+**REST surface visitor reachability (key fact-check at planning time)**: nearly all existing REST endpoints hang under the admin middleware chain (`AuthMiddleware` + `RequirePrincipalKinds("agent","admin","service")` + resource permissions), including `/api/v1/ai/query`, `/api/tickets`, `/api/omni/sessions/:id/messages` once planned to be depended on by this document. **The only existing channel for the visitor client is `/api/v1/ws`**. This directly constrains the architecture: mobile v1's realtime send/receive, AI first answer (including streaming) all go over WS; the two kinds of REST dependencies "incremental re-pull" and "ticket creation" must first have visitor-usable server companions (§10 list #1/#4, push registration likewise see #5), cannot be assumed usable by directly copying the admin endpoints' parameter shapes.
 
-**为什么逐字段对齐而不是"移动端重新设计消息模型"**：07 号计划 M3 验收语明确"后续移动端 SDK 不会直接复制 Web SDK 结构"，这句话约束的是**代码结构**（不把 JS 的 EventEmitter/SDK 类层级照搬到原生），而不是**协议契约**。跨端协议不一致的代价是服务端要维护两套广播分支，消息历史的可移植性（换端续聊）也会断裂。因此：协议与消息模型对齐是硬约束，运行时结构按各平台惯例重构。对齐基线里的死分支（`session_update`/`agent_status`）不进移动端契约，对着不存在的服务端行为做兼容，只会把幻影帧固化成三端负担；这一历史遗留已随 core 清理刀收口（类型联合与运行时 case 整体移除，四框架包消费面同步摘除，PROTOCOL §5 留边界记录）。
-
----
-
-## 2. Android 技术选型
-
-### 决策 D3：Kotlin + Jetpack Compose，minSdk 24
-
-**语言与 UI**：Kotlin（官方主推语言，协程天然适配 WS 长连接与异步消息流）+ Jetpack Compose（声明式 UI 与客服这种"状态驱动渲染"的消息流高度契合：`messages: List<Message>` 一个状态源驱动整个会话页，无需命令式 diff）。
-
-**为什么不用 XML View 体系**：客服会话页的核心交互是"无限滚动消息列表 + 底部输入栏 + 键盘协同"，View 体系下这三件的组合（RecyclerView + WindowInsets + 输入法高度动画）是出名的碎片化重灾区；Compose 的 `LazyColumn` + `imePadding()` 把这三件事收敛为声明式布局，且与宿主 App 是否使用 Compose 无关（SDK 内部自洽，宿主互操作经 `ComposeView` 即可）。
-
-**minSdk 论证（为什么是 24 而不是 21 或 26）**：
-
-- **21（Android 5.0）被否**：Compose 最低支持 21，但 21-23 设备占比已跌到统计噪声级（Android Studio 新建项目模板默认 minSdk 24）；更关键的是 TLS 与网络安全：API 20 以下不支持 TLS 1.2 默认开启，21-23 上部分厂商 ROM 的 TLS/证书链实现有已知缺陷，客服链路携带访客 token，不值得为千分位设备背安全调试成本。
-- **26（Android 8.0）被否**：虽然 26+ 有通知渠道（NotificationChannel）等便利，但会砍掉约 5-8% 在网设备（存量低端机在新兴市场仍多），而通知渠道的兼容写法只是一层 `if (Build.VERSION.SDK_INT >= 26)` 的薄封装，不足以换取覆盖率损失。
-- **24（Android 7.0）胜出**：覆盖约 97%+ 在网设备；`Java 8` API 全可用（okHttp 4.x 要求 21+，kotlinx.serialization 无版本坎）；Jetpack 全家桶（Lifecycle、Security、DataStore）最低 21-24 区间全覆盖。这是覆盖率与维护成本的最优交点，也与行业 SDK 惯例（Intercom minSdk 24 级别）一致。
-
-**为什么不用跨端框架作为主路径**：
-
-- **Flutter**：引入 Flutter 引擎基座（约 4-6MB 起步）只为一个客服会话页，包体积惩罚不可接受（见 D9 预算）；且 Flutter 与宿主原生页面的混合栈（手势、键盘、深链）是长期摩擦源。
-- **Kotlin Multiplatform**：技术上有吸引力，但 KMP 的 UI 仍需 Compose Multiplatform（iOS 侧尚在演进期）或双端各自写 UI，"共享"收益主要在协议层，而协议层用"共享契约 + 各端代码生成/单测互验"（D5）就能拿到 80% 收益，不必承担 KMP 工具链对接入方构建环境（Gradle 插件版本、Xcode 配置）的传染。
-- **React Native（已有 `@servify/react-native` 绑定）**：定位为 RN 宿主的可选快捷路径（headless 绑定 + app-core 契约已就绪），但 RN 宿主在接入方里是少数派，不作为主推形态。本文档规划的原生 SDK 是默认路径，RN 绑定继续独立演进。
-
-**依赖白名单（Android）**：kotlin-stdlib、kotlinx-coroutines、kotlinx-serialization-json、okHttp（`api` 依赖，宿主大概率已有，gradle 会去重）、Compose Runtime/UI/Foundation（`compileOnly` 语义按宿主版本对齐的方案在 M1 定稿）。禁入：任何 DI 框架（Hilt/Koin，SDK 规模不需要，手工注入即可）、任何图片加载库（V1 消息类型只有 text，附件为 P2）。
+**Why align field by field instead of "redesigning the message model for mobile"**: plan 07's M3 acceptance wording explicitly says "the subsequent mobile SDK will not directly copy the Web SDK structure", this sentence constrains **code structure** (don't copy JS's EventEmitter/SDK class hierarchy to native), not the **protocol contract**. The cost of cross-endpoint protocol inconsistency is that the server maintains two broadcast branches, and message history portability (switching devices to continue chatting) breaks. Therefore: protocol and message model alignment is a hard constraint, runtime structure is restructured per platform convention. Dead branches in the alignment baseline (`session_update`/`agent_status`) do not enter the mobile contract; being compatible with server behavior that doesn't exist only solidifies phantom frames into a three-endpoint burden; this legacy has been closed with the core cleanup knife (type union and runtime case removed wholesale, four-framework package consumer surface removed in sync, PROTOCOL §5 retains the boundary record).
 
 ---
 
-## 3. iOS 技术选型
+## 2. Android Technology Selection
 
-### 决策 D4：Swift + SwiftUI，最低 iOS 15
+### Decision D3: Kotlin + Jetpack Compose, minSdk 24
 
-**为什么 SwiftUI 而不是 UIKit**：与 Android 侧同理，消息流是状态驱动渲染，SwiftUI 的 `List`/`ScrollViewReader` + `ObservableObject` 恰好是一一映射；UIKit 的 `UICollectionView` 组合键盘协同、自动高度 cell 的胶水代码量大且难测。风险控制：SDK 的 UI 面很窄（一个会话页 + 浮钮），SwiftUI 在这个复杂度区间已足够稳。
+**Language & UI**: Kotlin (officially recommended language, coroutines naturally fit WS long connections and async message streams) + Jetpack Compose (declarative UI fits customer-service's "state-driven rendering" message stream: `messages: List<Message>` one state source drives the whole session page, no imperative diff needed).
 
-**最低系统版本论证（为什么是 15 而不是 16 或 17）**：
+**Why not the XML View system**: the core interaction of a customer-service session page is "infinite-scrolling message list + bottom input bar + keyboard coordination"; under the View system the combination of these three (RecyclerView + WindowInsets + input-method height animation) is a notoriously fragmented disaster area; Compose's `LazyColumn` + `imePadding()` converges these three into declarative layout, and is independent of whether the host app uses Compose (SDK internally self-consistent, host interop via `ComposeView` is enough).
 
-- **iOS 17 被否**：砍掉过多存量设备（iOS 16 发布两年后 15 系仍有可观保有量，客服 SDK 的接入方，电商、本地服务，恰是旧设备占比高的品类）。
-- **iOS 16 被否的理由与保留的诱惑**：16 带来 `NavigationStack` 和 `presentationDetents`（半屏抽屉），对会话页很诱人；但两者都有 15 上的替代写法（`NavigationView` + 编程式导航；自定义 `sheet` 高度），放弃的只是 API 优雅度。客服是"低频但关键"功能，接入方对覆盖率极敏感，为导航 API 的优雅度放弃 2-3% 设备，ROI 不成立。
-- **iOS 15 胜出**：覆盖率约 98%；SwiftUI 自 iOS 14 起 `List`/`sheet`/状态管理已可用，15 补齐了 `AsyncImage`、`task` 修饰符、`refreshable` 等稳定化改进；`URLSessionWebSocketTask`（iOS 13+）满足 WS 需求。未来若需 16 独占 API（如富媒体预览），提升 min 版本是一行部署目标修改，成本可逆。
+**minSdk justification (why 24 and not 21 or 26)**:
 
-**为什么不用第三方网络/WS 库（Starscream 等）**：`URLSessionWebSocketTask` 原生覆盖连接、收发、ping（`sendPing`）能力，且随系统自动获得 TLS 与代理配置的正确行为；第三方库引入 1-2 个依赖传递与 App Store 隐私清单负担，无对应收益。
+- **21 (Android 5.0) rejected**: Compose's minimum support is 21, but 21-23 device share has fallen to statistical noise level (Android Studio's new project template defaults to minSdk 24); more critically TLS and network security: below API 20 TLS 1.2 is not enabled by default, 21-23 has known defects in some vendor ROMs' TLS/certificate chain implementations; the customer-service link carries visitor tokens, not worth carrying security debugging costs for permille-level devices.
+- **26 (Android 8.0) rejected**: although 26+ has conveniences like notification channels (NotificationChannel), it would cut about 5-8% of live devices (stock low-end phones are still common in emerging markets), while the notification-channel compatibility pattern is just a thin wrapper of `if (Build.VERSION.SDK_INT >= 26)`, not enough to exchange for coverage loss.
+- **24 (Android 7.0) wins**: covers about 97%+ of live devices; `Java 8` APIs fully available (okHttp 4.x requires 21+, kotlinx.serialization has no version gate); the Jetpack full stack (Lifecycle, Security, DataStore) fully covers the 21-24 range. This is the optimal intersection of coverage and maintenance cost, and consistent with industry SDK conventions (Intercom is at minSdk 24 level).
 
-**分发形态**：XCFramework + Swift Package Manager 二进制分发为主（接入方零 CocoaPods 配置），CocoaPods spec 作为兼容层维护到 M3 评估去留（✅ 已评估，2026-09-23：SPM-only 单轨维持，零已知 CocoaPods-only 接入方不建 spec，按需重建触发条件见 `docs/mobile-sdk-cocoapods-evaluation.md`）。禁入依赖（iOS）：任何三方网络/序列化/DI 库，序列化用 `Codable`。
+**Why not cross-platform frameworks as the main path**:
+
+- **Flutter**: introducing the Flutter engine base (about 4-6MB starting) just for one customer-service session page, package size penalty unacceptable (see D9 budget); and Flutter's mixed stack with host native pages (gestures, keyboard, deep links) is a long-term friction source.
+- **Kotlin Multiplatform**: technically attractive, but KMP's UI still needs Compose Multiplatform (iOS side still in evolution period) or each platform writes its own UI; the "sharing" benefit is mainly at the protocol layer, and the protocol layer can get 80% of the benefit with "shared contract + per-platform codegen/mutual test verification" (D5), without bearing KMP toolchain contagion to integrators' build environments (Gradle plugin versions, Xcode configuration).
+- **React Native (existing `@servify/react-native` binding)**: positioned as an optional fast path for RN hosts (headless binding + app-core contracts already ready), but RN hosts are a minority among integrators, not the promoted form. The native SDK planned by this document is the default path, the RN binding continues independent evolution.
+
+**Dependency whitelist (Android)**: kotlin-stdlib, kotlinx-coroutines, kotlinx-serialization-json, okHttp (`api` dependency, host almost certainly already has it, gradle will dedupe), Compose Runtime/UI/Foundation (`compileOnly` semantics aligned to host-version scheme to be finalized in M1). Forbidden: any DI framework (Hilt/Koin, SDK scale doesn't need it, manual injection is enough), any image loading library (v1 message types only have text, attachments are P2).
 
 ---
 
-## 4. 共享设计：协议与消息模型跨端一致性
+## 3. iOS Technology Selection
 
-### 决策 D5：单一协议事实标准（后端 WS 契约）+ 各端原生实现 + 契约互验测试
+### Decision D4: Swift + SwiftUI, minimum iOS 15
 
-**结构（不共享代码，共享契约）**：
+**Why SwiftUI rather than UIKit**: same reasoning as the Android side, message streams are state-driven rendering, SwiftUI's `List`/`ScrollViewReader` + `ObservableObject` happens to map one-to-one; UIKit's `UICollectionView` combination of keyboard coordination and auto-height cells has a large amount of glue code that is hard to test. Risk control: the SDK's UI surface is narrow (one session page + floating button), SwiftUI is stable enough in this complexity range.
 
-1. **协议事实标准**：后端 `apps/server` 的 WS 契约（`/api/v1/ws`，访客唯一现成通道）+ 访客可达 REST 契约（当前为零，`/api/omni/*`、`/api/v1/ai/query`、`/api/tickets` 均为管理面端点，访客配套端点见 §10 清单）是唯一事实源。
-2. **契约文档化**：`sdk/PROTOCOL.md` 首版已入库（2026-09），逐帧列明消息类型、载荷字段、方向与边界语义，全部条目经服务端源码核实并带文件行号锚点。事实核查的关键产出已固化进契约：core 类型声明的六个死分支帧（`session_update`/`agent_status`/`typing`/`message`/`error`/`system`）单独立表声明"移动端契约不含"（**后续 core 清理刀已将其从类型联合与运行时整体移除，§5 表保留为边界记录**）；心跳双向机制澄清（服务端协议层 Ping 54s，Web core 的 JSON `system/ping` 帧服务端不处理，移动端走平台原生协议层保活；**该 JSON 心跳后续亦已从 core 移除**）；慢客户端 256 帧缓冲踢线、发送成功判据=收到自己回显等边界语义成文。命名混用（`transfer_notification`/`waiting_notification` 用 snake_case、`text-message`/`ai-response`/`ai-response-delta`/`agent-message` 用 kebab-case）**在契约里冻结现状、不借机改名**，改名是服务端 breaking change，V1 不做。
-3. **互验测试**：Android/iOS 各建一组"契约回放测试"，用同一组 JSON 样例（放 `sdk/protocol-fixtures/`，与 core 测试共用）驱动反序列化与状态机断言。服务端 WS 契约变更时，改 fixtures 会让三端测试同时红，这比"人记得三处都改"可靠。
+**Minimum OS version justification (why 15 and not 16 or 17)**:
 
-**消息模型（跨端一致的规范形）**，逐字段对齐 core `Message`（`types.ts:77-88`）：
+- **iOS 17 rejected**: cuts too many stock devices (two years after iOS 16's release the 15 series still has considerable share; customer-service SDK integrators, e-commerce, local services, are exactly categories with high old-device share).
+- **iOS 16 rejected, the reason and the retained temptation**: 16 brings `NavigationStack` and `presentationDetents` (half-screen drawer), very tempting for session pages; but both have 15-era alternatives (`NavigationView` + programmatic navigation; custom `sheet` height), what's given up is only API elegance. Customer service is "low-frequency but critical", integrators are extremely sensitive to coverage, giving up 2-3% of devices for navigation API elegance, ROI doesn't hold.
+- **iOS 15 wins**: coverage about 98%; since iOS 14 SwiftUI's `List`/`sheet`/state management were available, 15 completed stabilization improvements like `AsyncImage`, `task` modifier, `refreshable`; `URLSessionWebSocketTask` (iOS 13+) satisfies WS needs. If 16-exclusive APIs (like rich media preview) are needed in future, raising the min version is a one-line deployment target modification, cost reversible.
+
+**Why no third-party networking/WS library (Starscream etc.)**: `URLSessionWebSocketTask` natively covers connect, send/receive, ping (`sendPing`) capabilities, and automatically gets correct TLS and proxy configuration behavior with the system; third-party libraries introduce 1-2 dependency transitive and App Store privacy manifest burdens, with no corresponding benefit.
+
+**Distribution form**: XCFramework + Swift Package Manager binary distribution as the primary (integrators zero CocoaPods configuration), CocoaPods spec maintained as a compatibility layer until M3 evaluates retention (✅ evaluated, 2026-09-23: SPM-only single track maintained, no known CocoaPods-only integrators so no spec built, on-demand rebuild trigger conditions see `docs/mobile-sdk-cocoapods-evaluation.md`). Forbidden dependencies (iOS): any third-party networking/serialization/DI library, serialization uses `Codable`.
+
+---
+
+## 4. Shared Design: Cross-platform Consistency of Protocol and Message Model
+
+### Decision D5: single protocol source of truth (backend WS contract) + native implementations per platform + contract mutual-verification tests
+
+**Structure (no shared code, shared contract)**:
+
+1. **Protocol source of truth**: the backend `apps/server`'s WS contract (`/api/v1/ws`, the visitor's only existing channel) + visitor-reachable REST contract (currently zero, `/api/omni/*`, `/api/v1/ai/query`, `/api/tickets` are all admin endpoints, visitor companion endpoints see §10 list) is the only source of truth.
+2. **Contract documentation**: `sdk/PROTOCOL.md` first version already in repo (2026-09), listing per-frame message types, payload fields, directions and boundary semantics frame by frame, all entries verified against server source with file-line-number anchors. Key fact-check outputs solidified into the contract: the six dead-branch frames declared by core types (`session_update`/`agent_status`/`typing`/`message`/`error`/`system`) are separately tabled declaring "mobile contract does not include" (**subsequent core cleanup knife removed them wholesale from the type union and runtime, §5 table retained as boundary record**); heartbeat dual-direction mechanism clarified (server protocol layer Ping 54s, Web core's JSON `system/ping` frame is not handled by the server, mobile uses platform-native protocol layer keepalive; **this JSON heartbeat was also subsequently removed from core**); boundary semantics written into the contract like slow-client 256-frame buffer kick, send-success criterion = receiving own echo. Naming mixing (`transfer_notification`/`waiting_notification` using snake_case, `text-message`/`ai-response`/`ai-response-delta`/`agent-message` using kebab-case) **frozen as-is in the contract, not renamed on this occasion**, renaming is a server breaking change, v1 doesn't do it.
+3. **Mutual-verification tests**: Android/iOS each build a set of "contract replay tests", using the same set of JSON samples (placed in `sdk/protocol-fixtures/`, shared with core tests) to drive deserialization and state machine assertions. When the server WS contract changes, changing fixtures makes all three endpoints' tests red simultaneously, more reliable than "humans remembering to change all three places".
+
+**Message model (cross-endpoint canonical form)**, aligned field by field with core `Message` (`types.ts:77-88`):
 
 ```
 ConversationMessage {
@@ -117,7 +115,7 @@ ConversationMessage {
 }
 ```
 
-**会话状态机（转人工链路的核心跨端契约）**，转移事件全部使用服务端真实发送的帧（D2 事实核查结论）：
+**Session state machine (the core cross-platform contract of the transfer-to-human link)**, transition events all use frames the server actually sends (D2 fact-check conclusion):
 
 ```
 ai_answering ──(transfer_notification：已分配坐席)──> agent_chatting
@@ -127,19 +125,19 @@ agent_chatting ──(system 帧或增量补拉发现会话 closed)──> close
 任意状态 ──(WS 断连)──> reconnecting ──(恢复)──> 原状态 + 增量补拉（D7）
 ```
 
-**为什么状态机显式成契约**：Web 端转人工状态散落在 widget 的 if/else 里（无状态机），导致"转人工后 AI 抢答"需要服务端 `HasActiveHumanAgent` 兜底。移动端把状态机做成一等契约后，同一份状态转移表可在 Android/iOS 互验测试中回放，服务端兜底逻辑退化为保险丝而非正确性来源。
+**Why the state machine is explicitly a contract**: the Web's transfer-to-human state is scattered in the widget's if/else (no state machine), causing "AI racing to answer after transfer to human" to need the server's `HasActiveHumanAgent` fallback. After mobile makes the state machine a first-class contract, the same state transition table can be replayed in Android/iOS mutual-verification tests, and server fallback logic degrades to a fuse rather than a correctness source.
 
-**SSE 的角色**：服务端已接出 WS 流式首答，AI 编排层 `HandleStream` 与非流式共用同一条流水线，WS 侧在 `text-message` 链路上以 `ai-response-delta` 增量帧（`{content_delta, done}`，`message_id` 预留）推送增量，完成时补终末 delta（`done=true`）再发完整 `ai-response` 终帧（增量拼接 + 完成帧替换），帧契约与本文档预留位一致；流式能力缺失或流启动即失败时服务端自动回退单发 `ai-response`，移动端 V1 可直接按该契约渲染。这样协议先行、实现跟进，三端不会在服务端接出流式时各自发明帧格式。
+**The role of SSE**: the server has connected WS streaming first answer, the AI orchestration layer `HandleStream` and non-streaming share the same pipeline, the WS side pushes increments on the `text-message` link as `ai-response-delta` increment frames (`{content_delta, done}`, `message_id` reserved), on completion appends a terminal delta (`done=true`) then sends a full `ai-response` final frame (increment concatenation + completion-frame replacement), frame contract consistent with this document's reserved slot; when streaming capability is absent or stream start fails immediately the server auto-falls back to single `ai-response`, mobile v1 can render directly per this contract. This way the protocol goes first and implementation follows, the three endpoints won't each invent frame formats when the server connects streaming.
 
 ---
 
-## 5. 核心 API 与初始化接入流程
+## 5. Core API and Initialization Flow
 
-### 决策 D6：API 形态对齐 Web SDK 的心智模型（config → connect → chat → events），鉴权默认访客 token
+### Decision D6: API form aligned with the Web SDK's mental model (config → connect → chat → events), auth defaults to guest token
 
-两平台 API 表面刻意保持同名同义，降低文档与接入心智的跨端成本；差异仅限语言习惯（Kotlin 协程挂起函数 / Swift async-await）。
+The two platforms' API surfaces deliberately keep same names and same meanings, reducing cross-endpoint documentation and integration mental cost; differences are only language idioms (Kotlin coroutine suspend functions / Swift async-await).
 
-**Android（Kotlin，伪代码）**：
+**Android (Kotlin, pseudocode)**:
 
 ```kotlin
 // 1. 最简接入（访客模式）
@@ -166,7 +164,7 @@ servify.sendMessage("我的订单 #123 退款到账了吗")
 servify.createTicket(title = "退款咨询", description = "…")
 ```
 
-**iOS（Swift，伪代码）**：
+**iOS (Swift, pseudocode)**:
 
 ```swift
 // 1. 最简接入
@@ -188,143 +186,143 @@ try await servify.sendMessage("我的订单 #123 退款到账了吗")
 try await servify.createTicket(title: "退款咨询", description: "…")
 ```
 
-**初始化时序（两平台一致）**：
+**Initialization sequence (same on both platforms)**:
 
-1. `create`：载入持久化快照（app-core `SessionSnapshot` 对齐形：sessionId / lastMessageId / savedAt）；
-2. 惰性连接：首次 `show` 才建 WS（对齐 widget 的惰性策略，多数用户不点客服，不为其建连接）；
-3. 连接成功 → 用 `lastMessageId` 做增量补拉，合并本地消息表 → 未读计数按"agent/system 来源且本地未渲染过"累加。**补拉通道 V1 按"访客可用会话消息端点"设计（§10 清单 #1，✅ 已随 M3 刀 7 落地：`GET /api/v1/sessions/:session_id/messages`）**，现存的 `/api/omni/sessions/:id/messages` 是管理面端点，访客不可达（D2 事实核查），M0 联调探针先用 WS 重放（重连后服务端无历史重发机制，探针阶段以"断连期间静默丢消息"为已知边界记录，不假装有补拉）；
-4. 前后台切换：后台不保活 WS（iOS 后台长连接本就不可靠），回前台时先探测再重连 + 增量补拉。
+1. `create`: load persisted snapshot (app-core `SessionSnapshot` aligned shape: sessionId / lastMessageId / savedAt);
+2. Lazy connect: WS built only on first `show` (aligned with widget's lazy strategy, most users don't click customer service, don't build connections for them);
+3. Connection success → use `lastMessageId` for incremental re-pull, merge local message table → unread count accumulates by "agent/system source and not locally rendered yet". **The re-pull channel v1 is designed as "visitor-usable session message endpoint" (§10 list #1, ✅ landed with M3 knife 7: `GET /api/v1/sessions/:session_id/messages`)**, the existing `/api/omni/sessions/:id/messages` is an admin endpoint, visitor-unreachable (D2 fact check), the M0 joint-debug probe first uses WS replay (the server has no history resend mechanism after reconnect, the probe phase records "silent message loss during disconnect" as a known boundary, doesn't pretend to have re-pull);
+4. Foreground/background switching: no keepalive in background (iOS background long connections are inherently unreliable), on return to foreground first probe then reconnect + incremental re-pull.
 
-**为什么 API 不提供"自定义消息页面视图控制器/Fragment"级别的 UI 注入点**：V1 的定制面收敛为品牌配置（标题、主色、欢迎语），这是行业 SDK 的成熟边界。暴露整页替换钩子等于承诺 UI 契约稳定，会显著拖慢后续迭代；真有深度定制需求的接入方应该走协议层自建 UI（PROTOCOL.md 支持这种用法）。
+**Why the API doesn't provide a "custom message-page ViewController/Fragment"-level UI injection point**: v1's customization surface converges to brand config (title, primary color, welcome message), this is the industry SDK's mature boundary. Exposing whole-page replacement hooks amounts to promising UI contract stability, which would significantly slow subsequent iteration; integrators with real deep-customization needs should build their own UI at the protocol layer (PROTOCOL.md supports this usage).
 
-### 鉴权与安全（决策 D6 续）
+### Auth and Security (Decision D6 continued)
 
-**现状缺口（必须正视，经源码核实）**：WS 路由挂在 publicV1 组（无 AuthMiddleware），握手仅要求 `session_id` 非空即升级连接；URL 里的 `access_token` 参数服务端**不读取**，任何知道 session_id 的客户端都能收听该会话流，Origin 白名单（可配置放行所有来源）是唯一门槛。Web 侧靠"session_id 不出浏览器"侥幸安全，移动端不能复制这个假设（移动端常有多设备/换机/日志脱敏场景，id 泄露面更大）。
+**Current gap (must face it, verified against source)**: the WS route hangs under the publicV1 group (no AuthMiddleware), the handshake only requires `session_id` non-empty to upgrade the connection; the `access_token` parameter in the URL is **not read** by the server, any client knowing session_id can listen to that session stream, the Origin allowlist (configurable to allow all sources) is the only barrier. The Web side relies on "session_id doesn't leave the browser" for lucky security, mobile can't copy this assumption (mobile often has multi-device/device-switch/log-desensitization scenarios, id leakage surface larger).
 
-**V1 方案：访客 token（guest token）**：
+**v1 scheme: guest token**:
 
-1. 后端新增轻量端点（建议 `POST /api/v1/guest/session`）：宿主后端用 server-to-server 凭证（复用 api-client 的 auth contract）换取**短期签名访客 token**（HMAC/JWT，payload 含 session_id 绑定 + 过期时间），下发给客户端；
-2. SDK 连接 WS 时以 `access_token` 参数携带（与 Web 的 `AuthProvider` 形态一致），服务端校验签名与 session 绑定；
-3. 兼容路径：`guestToken` 为空时允许匿名 session_id 模式（与 Web 现状对齐），但在 PROTOCOL.md 标注为"过渡形态，服务端未来可配置关闭"。
+1. Backend adds a lightweight endpoint (suggested `POST /api/v1/guest/session`): the host backend uses server-to-server credentials (reusing api-client's auth contract) to exchange for a **short-lived signed guest token** (HMAC/JWT, payload carries session_id binding + expiry), delivered to the client;
+2. The SDK carries it via the `access_token` parameter when connecting WS (same form as Web's `AuthProvider`), server validates signature and session binding;
+3. Compatibility path: when `guestToken` is empty, anonymous session_id mode is allowed (aligned with Web status quo), but marked in PROTOCOL.md as "transitional form, the server can configure it off in future".
 
-**为什么不在 V1 做完整 OAuth/设备绑定**：客服会话的数据敏感度是"对话内容"，风险敞口是单会话，短期签名 token 已把泄露影响收敛到单会话时效窗口内；全量身份体系是宿主的责任（宿主可经 guest 换取端点把自己的用户身份编译进 token payload），SDK 不越界。
+**Why v1 doesn't do full OAuth/device binding**: customer-service session data sensitivity is "conversation content", the risk exposure is a single session, a short-lived signed token already converges the leakage impact into a single-session time window; a full identity system is the host's responsibility (the host can compile its own user identity into the token payload via the guest exchange endpoint), the SDK doesn't overstep.
 
-**落地状态（2026-09-24，M3 刀 8）**：服务端已按上述方案落地，`POST /api/v1/guest/session` 挂 service 鉴权链（宿主后端持 service API key 调用），签发绑定 session_id 的短期 HS256 token（payload `{typ:"guest", sid, iat, exp}`，自签自验复用 `jwt.secret` 同信任域），**不要求会话行已存在**（行在首条消息持久化时建）；SDK 握手以 `access_token` 携带，hub 侧校验签名+时效+会话绑定三层（token 合法但绑定其他 session 同样 401）。配置 `security.guest_token.required`（默认 false 保持既有部署行为）+ `security.guest_token.ttl`（默认 24h）；required + 默认 jwt.secret 的组合在 config gate 告警、production/staging 拒启动，装配层空白 secret 兜底拒启动（双层 gate）。SDK 侧 `guestToken` 参数形态已先行就位（2214bb5，服务端此前不消费、向后兼容）。
+**Landing status (2026-09-24, M3 knife 8)**: the server has landed per the above scheme, `POST /api/v1/guest/session` hangs under the service auth chain (host backend calls with service API key), issuing a short-lived HS256 token bound to session_id (payload `{typ:"guest", sid, iat, exp}`, self-signed self-verified reusing `jwt.secret`'s trust domain), **does not require the conversation row to already exist** (the row is created when the first message is persisted); the SDK handshake carries it via `access_token`, the hub validates three layers: signature + freshness + session binding (a token valid but bound to another session is also 401). Config `security.guest_token.required` (default false preserving existing deployment behavior) + `security.guest_token.ttl` (default 24h); the combination of required + default jwt.secret warns at the config gate, production/staging rejects startup, wiring layer blank secret fallback rejects startup (double-layer gate). The SDK-side `guestToken` parameter form is already in place (2214bb5, the server didn't consume it before, backward compatible).
 
-**其他安全基线**：token 仅存内存 + 系统安全存储（Android EncryptedSharedPreferences / iOS Keychain），不落普通文件；WS 与 REST 强制 HTTPS/WSS；日志默认脱敏（不打印消息正文与 token，debug 开关显式开启才输出）。
-
----
-
-## 6. UI 形态
-
-### 决策 D8：三形态 = 浮动按钮 + 底部抽屉（默认）/ 全屏会话页（可选 + 小屏自动）
-
-- **浮动按钮**：56dp/56pt 圆形悬浮，位置可配（默认右下角），宿主可完全自绘入口而只调 `servify.show()`，浮钮只是默认入口，不是强绑组件。
-- **底部抽屉（默认会话形态）**：Android 用 ModalBottomSheet（max 高度约 85% 屏高），iOS 用 sheet（`presentationDetents` 的 15 级替代实现）。**为什么默认抽屉**：客服会话是"业务中插曲"，半屏保留宿主上下文，用户可边看订单边问，这是嵌入式 SDK 区别于独立 App 的核心体验（呼应 D1）。
-- **全屏会话页**：宿主配置 `presentationStyle = .fullscreen` 时使用；小屏设备（高度 < 600dp）抽屉自动升级为全屏，避免半屏里键盘挤压出不可用布局。
-- **品牌注入**：主色、标题、欢迎语经 `Branding` 配置进入主题层；不提供 CSS 级/布局级定制（理由见第 5 节）。
-- **消息渲染**：AI 消息与坐席消息视觉区分（AI 带标识与"转人工"按钮）；AI 首答流式渲染，`ai-response-delta` 增量即到即拼，收到 `done=true` 的终末增量后再以 `ai-response` 终帧整体替换（增量拼接结果与终帧内容一致，替换是幂等收口）；流中断语义（终末增量已到但无 ai-response 终帧）= 保留已渲染部分 + 追加"回答中断，请重试"提示行，不静默清空也不自动重发；引用来源（`sources`）以可展开的来源列表渲染（文档标题 + 得分排序），点击在应用内浏览器打开链接，这是对齐 v1 产品范围"回答应带可追溯来源"的移动端承载；置信门建议（`next_action=handoff`）渲染为"转人工"按钮的强调态。
-- **未读呈现**：抽屉收起时浮钮角标计数；宿主自绘入口时经 `events.unreadCount` 自行呈现。
+**Other security baselines**: tokens live only in memory + system secure storage (Android EncryptedSharedPreferences / iOS Keychain), never in plain files; WS and REST enforce HTTPS/WSS; logs redact by default (don't print message bodies and tokens, only output with an explicit debug switch).
 
 ---
 
-## 7. 推送与离线消息
+## 6. UI Form
 
-### 决策 D7：推送是可选模块（FCM/APNs），离线消息 = 推送唤醒 + `lastMessageId` 增量补拉，不引入消息持久化同步协议
+### Decision D8: three forms = floating button + bottom drawer (default) / full-screen session page (optional + auto on small screens)
 
-**为什么推送必须是可选模块而不是内置依赖**：会话进行中用户切走 App，坐席回复到达，没有推送，用户永远看不到，这是移动端相对 Web 的**真实缺口**（Web 没做是因为浏览器推送权限率低且 widget 场景多在当前页面）。但推送依赖宿主集成 FCM/APNs（需要宿主的推送凭证与后台配置），SDK 强绑推送会把无推送诉求的接入方也拖进集成成本。因此：SDK 暴露 `pushTokenProvider` 注册口（对齐 app-core 的 push token registration contract），宿主提供 token 则启用，否则仅应用内通知。
-
-**流程**：
-
-1. 宿主向 SDK 注册 FCM/APNs token → SDK 经 push registration contract 上报后端（绑定 session/customer）；
-2. 会话非前台时坐席/系统消息 → 服务端经 FCM/APNs 发静默+提醒推送；
-3. 用户点推送或 App 回前台 → SDK 重连 + `lastMessageId` 游标增量补拉 → 合并渲染 + 未读计数。
-
-**落地状态（2026-09-24，M3 刀 10）**：流程 3 的客户端面已打通，SDK 双端在重连成功（onOpen）后自动调用增量拉取端点对账断连窗口：`after_id` 游标 + `has_more` 续拉（单页 100、至多 10 页），agent/ai 来源合并进 history 并在面板不可见时计未读（与 WS 帧口径同构，customer 回显与 system 提示不计，customer 首连全量回放进 history）；全失败面静默（404 = 会话行未建过的正常态，IO/HTTP 错不影响 WS）。因 WS 帧不携带服务端消息 ID，游标仅由补拉结果推进、以「sender|content」指纹表（容量 200 环形）去重「游标确立前 WS 已渲染」的窗口，服务端先落库后广播保证 WS 渲染必然已在补拉面内，指纹命中只跳渲染、游标照推进；指纹表不做收尾清空（对账在途时到达的帧会被清空抹掉、制造重复，Kotlin 侧实测复现后移除），由容量淘汰回收。AI 回答不落库、系统提示不走 WS，天然无重复面。
-
-**落地状态（2026-09-24，M3 刀 9）**：流程 3 的未读对齐服务端增强面已就位，`POST /api/v1/sessions/:session_id/read` + `GET /api/v1/sessions/:session_id/unread`（§10 清单 #3，免认证与 #1 同前缀同安全模型）：响应 `{unread_count, last_read_message_id}`，未读口径 = sender ∈ {agent, system} 且消息 ID 大于服务端游标（与上面客户端推导口径逐字对齐，customer 上行与 ai 首答不计）；游标只前进不后退（点开推送/回前台一次性提交本地已读位，重复/回退提交幂等），SDK V1 仍以客户端推导为基线、服务端游标作为宿主需要跨设备/跨入口一致未读时的增强。
-
-**落地状态（2026-09-30，提交半边）**：SDK 双端 `syncReadState()` 已就位（registerPushToken 同构的增强口，V1 冻结面「只增不改」），把补拉链自持的最新服务端消息 ID 提交为服务端已读游标（`POST /read`）；无已确认消息静默 false，IO/HTTP 失败 `network` + false，响应体不消费（本地推导语义不被回显改写）。**读取半边（GET /unread 合并进未读计数）仍登记留白**，它会把未读基线从客户端推导切到服务端游标（改语义，非只增），按 V1 冻结面纪律待宿主实际提出跨设备一致未读需求后再动。
-
-**为什么不用"离线队列反向同步"（客户端消息也可离线发）**：客服对话的发送方是用户，用户在客服页时必然在线；离线发送的典型场景（弱网抖动）用"发送超时 + 本地标记失败 + 手动重发"覆盖即可，与 Web 端行为一致。完整的离线优先同步协议（cursor、冲突消解、幂等去重）是给"服务端→客户端数据面"用的，即上面的增量补拉；客户端→服务端方向 V1 不做队列重放，避免引入"用户以为发了、实际三天后才发出去"的客服场景事故。app-core 的 offline queue contract 保留为 P2 演进位。
+- **Floating button**: 56dp/56pt circular floating, position configurable (default bottom-right), the host can fully self-draw the entry and only call `servify.show()`, the floating button is just the default entry, not a hard-bound component.
+- **Bottom drawer (default session form)**: Android uses ModalBottomSheet (max height ≈ 85% of screen height), iOS uses sheet (a 15-level alternative implementation of `presentationDetents`). **Why drawer by default**: customer-service sessions are "interludes in the business", half-screen preserves host context, the user can look at their order while asking, this is the core experience of an embedded SDK versus a standalone app (echoing D1).
+- **Full-screen session page**: used when the host configures `presentationStyle = .fullscreen`; on small-screen devices (height < 600dp) the drawer auto-upgrades to full-screen, avoiding the keyboard squeezing out an unusable layout in half-screen.
+- **Brand injection**: primary color, title, welcome message enter the theme layer via `Branding` config; no CSS-level/layout-level customization (reasons see section 5).
+- **Message rendering**: AI messages and agent messages visually distinguished (AI carries a badge and a "transfer to human" button); AI first answer streaming rendering, `ai-response-delta` increments concatenate on arrival, after receiving the terminal increment with `done=true`, the whole is replaced by the `ai-response` final frame (the increment-concatenated result is consistent with the final frame content, replacement is an idempotent closure); stream interruption semantics (terminal increment arrived but no ai-response final frame) = keep rendered part + append a "answer interrupted, please retry" hint line, no silent clearing and no auto-resend; citation sources (`sources`) rendered as an expandable source list (document title + score-sorted), clicking opens the link in an in-app browser, this is the mobile carrier of the v1 product scope "answers should carry traceable sources"; the confidence-gate suggestion (`next_action=handoff`) renders as the emphasized state of the "transfer to human" button.
+- **Unread presentation**: drawer collapsed shows the floating button badge count; when the host self-draws the entry, present it via `events.unreadCount` itself.
 
 ---
 
-## 8. 包体积与依赖约束
+## 7. Push and Offline Messages
 
-### 决策 D9：Android AAR 增量 ≤ 1.5MB，iOS XCFramework ≤ 2MB，依赖白名单封闭
+### Decision D7: push is an optional module (FCM/APNs), offline messages = push wake + `lastMessageId` incremental re-pull, no message persistence sync protocol introduced
 
-**为什么体积是硬约束**：客服 SDK 是宿主 App 里性价比最敏感的依赖，它不产生日活，接入方却要为它付出下载转化成本。行业基准：Intercom Android SDK 增量约 2-4MB（含图片库），Servify V1 功能面更窄（无附件、无富媒体、无离线队列实现），应该显著小于这个数，且这是对接入方宣传"轻量"的资格线。
+**Why push must be an optional module rather than a built-in dependency**: when the user switches away from the app mid-session and an agent reply arrives, without push the user never sees it, this is a **real gap** of mobile versus Web (Web didn't do it because browser push permission rates are low and widget scenarios are mostly on the current page). But push depends on the host integrating FCM/APNs (needs the host's push credentials and backend config), SDK hard-binding push drags integrators with no push demand into integration cost. Therefore: the SDK exposes a `pushTokenProvider` registration entry (aligned with app-core's push token registration contract), the host provides a token to enable it, otherwise in-app notifications only.
 
-**预算分解（Android，rar/jar 内字节）**：
+**Flow**:
 
-| 项 | 预算 |
+1. The host registers an FCM/APNs token with the SDK → the SDK reports it to the backend via the push registration contract (binding session/customer);
+2. When the session is not foreground, agent/system messages → the server sends silent + alert push via FCM/APNs;
+3. The user taps the push or the app returns to foreground → the SDK reconnects + `lastMessageId` cursor incremental re-pull → merge render + unread count.
+
+**Landing status (2026-09-24, M3 knife 10)**: flow 3's client side is connected, both SDK endpoints automatically call the incremental pull endpoint to reconcile the disconnect window after reconnect success (onOpen): `after_id` cursor + `has_more` continuation (single page 100, up to 10 pages), agent/ai sources merge into history and count as unread when the panel is invisible (same convention as WS frames, customer echo and system hints don't count, customer first-connect full replay goes into history); total-failure surface silent (404 = conversation row never created, normal state, IO/HTTP errors don't affect WS). Because WS frames don't carry server message IDs, the cursor only advances from re-pull results, deduplicating the "already rendered by WS before cursor established" window with a 「sender|content」 fingerprint table (capacity 200 ring); the server persists before broadcasting, guaranteeing WS rendering is necessarily within the re-pull surface, fingerprint hits only skip rendering and the cursor still advances; the fingerprint table isn't cleared at the end (frames arriving during reconciliation would be erased by clearing, creating duplicates, reproduced in Kotlin testing then removed), reclaimed by capacity eviction. AI answers aren't persisted and system hints don't go over WS, naturally no duplicate surface.
+
+**Landing status (2026-09-24, M3 knife 9)**: flow 3's unread alignment with the server enhancement surface is ready, `POST /api/v1/sessions/:session_id/read` + `GET /api/v1/sessions/:session_id/unread` (§10 list #3, auth-free, same prefix and security model as #1): response `{unread_count, last_read_message_id}`, unread convention = sender ∈ {agent, system} and message ID greater than the server cursor (aligned word-for-word with the client-side derivation above, customer uplink and AI first answer don't count); the cursor only moves forward (opening a push/returning to foreground submits the local read position once, repeated/rollback submissions are idempotent), SDK v1 still uses client-side derivation as the baseline, the server cursor is an enhancement for hosts needing cross-device/cross-entry consistent unread.
+
+**Landing status (2026-09-30, submission half)**: both SDK endpoints' `syncReadState()` is in place (same-shape enhancement entry as registerPushToken, v1 frozen surface "add-only no-modification"), submitting the latest server message ID held by the re-pull chain as the server read cursor (`POST /read`); no confirmed message silently false, IO/HTTP failure `network` + false, response body not consumed (local derivation semantics not overwritten by the echo). **The read half (GET /unread merged into unread count) is still registered as a gap**, it would switch the unread baseline from client derivation to server cursor (changing semantics, not add-only), per the v1 frozen-surface discipline it waits until the host actually raises a cross-device consistent unread need.
+
+**Why not "offline queue reverse sync" (client messages can also be sent offline)**: the sender of a customer-service conversation is the user, and the user is necessarily online when on the customer-service page; typical offline-sending scenarios (weak-network flapping) are covered by "send timeout + local failure marker + manual resend", consistent with the Web's behavior. A full offline-first sync protocol (cursor, conflict resolution, idempotent dedup) is for the "server→client data surface", i.e. the incremental re-pull above; client→server direction v1 doesn't do queue replay, avoiding customer-service scene accidents of "user thought they sent it, actually it went out three days later". app-core's offline queue contract is retained as a P2 evolution slot.
+
+---
+
+## 8. Package Size and Dependency Constraints
+
+### Decision D9: Android AAR increment ≤ 1.5MB, iOS XCFramework ≤ 2MB, closed dependency whitelist
+
+**Why size is a hard constraint**: the customer-service SDK is the most cost-performance-sensitive dependency in the host app, it produces no DAU, yet integrators pay download conversion cost for it. Industry baseline: Intercom Android SDK increment about 2-4MB (including image library), Servify v1's capability surface is narrower (no attachments, no rich media, no offline queue implementation), should be significantly smaller than this number, and this is the qualification line for marketing "lightweight" to integrators.
+
+**Budget breakdown (Android, bytes inside rar/jar)**:
+
+| Item | Budget |
 |---|---|
-| SDK 自身类 + 资源 | ≤ 600KB |
-| Compose UI（仅会话页用到的 runtime/ui/foundation 子集，R8 后增量） | ≤ 600KB |
-| kotlinx-serialization 增量 | ≤ 150KB |
-| 协程增量 | ≤ 150KB |
-| okHttp | 0（`api` 依赖，随宿主去重；独立计不计入 SDK 增量） |
+| SDK's own classes + resources | ≤ 600KB |
+| Compose UI (only the runtime/ui/foundation subset used by the session page, R8 post increment) | ≤ 600KB |
+| kotlinx-serialization increment | ≤ 150KB |
+| Coroutines increment | ≤ 150KB |
+| okHttp | 0 (`api` dependency, deduped with host; counted separately not in SDK increment) |
 
-**R8 规则**：SDK 附带 consumer proguard 规则（保留消息模型与反射点）；kotlinx-serialization 的规则随库自带。
+**R8 rules**: the SDK ships consumer proguard rules (preserving message models and reflection points); kotlinx-serialization's rules come with the library.
 
-**iOS 预算**：XCFramework ≤ 2MB（SwiftUI/Combine 是系统库零增量；主要体积是自身代码 + 协议模型）。App Store 隐私清单：SDK 不采集数据（对话经宿主网络栈到服务端），声明"无追踪"。
+**iOS budget**: XCFramework ≤ 2MB (SwiftUI/Combine are system libraries with zero increment; main size is own code + protocol models). App Store privacy manifest: the SDK collects no data (conversations go through the host's network stack to the server), declares "no tracking".
 
-**依赖冻结机制**：Android 依赖白名单写进构建脚本断言（`dependencies` 锁定列表，CI 校验新增依赖即红）；iOS 零三方依赖由"Package.swift 无 dependencies 声明"结构性保证。任何白名单变更须过一次策划评审，这是 07 号 M4 surface governance 精神在依赖维度的延伸。
+**Dependency freeze mechanism**: the Android dependency whitelist is written into a build script assertion (`dependencies` locked list, CI validates any new dependency is red); iOS zero third-party dependencies structurally guaranteed by "Package.swift has no dependencies declaration". Any whitelist change must go through a planning review, this is the spirit of 07's M4 surface governance extended to the dependency dimension.
 
 ---
 
-## 9. 分阶段里程碑与验收标准
+## 9. Phased Milestones and Acceptance Criteria
 
-### 决策 D10：四阶段，协议先行，Android 先于 iOS
+### Decision D10: four phases, protocol first, Android before iOS
 
-**为什么 Android 先行**：CI 与构建环境自举成本低（本仓库已有 JVM 工具链），先在 Android 上把协议联调跑通，iOS 侧照抄契约回放测试的样例集，减少双端并行时的协议摇摆成本。
+**Why Android first**: CI and build environment bootstrap cost is low (the repo already has a JVM toolchain), first get protocol joint-debugging running on Android, iOS copies the contract replay test sample set, reducing protocol oscillation cost when both endpoints develop in parallel.
 
-**M0 — 协议契约与联调探针（无 UI）**
+**M0 — Protocol contract and joint-debug probe (no UI)**
 
-- 产出：`sdk/PROTOCOL.md` 首版（✅ 已入库）；`sdk/protocol-fixtures/` 样例集；Android 探针 CLI/单测：WS 连接、text-message 收发、ai-response + ai-response-delta 解析（含增量拼接与流中断样例）、transfer/waiting_notification 状态机转移全部经 fixtures 回放通过。
-- 验收：① fixtures 被 core、Android 双端同一套样例喂过且断言一致；② 与后端真实环境完成一次全链路联调（建连 → AI 首答流式 → 转人工 → 坐席回复）；③ 契约文档覆盖当前服务端全部广播消息类型（含 webrtc 类型的"移动端 V1 不消费"显式标注，以及 core SDK 死分支 `session_update`/`agent_status` 的"服务端不发送、客户端契约不含"显式标注，该标注随 core 清理刀固化为 PROTOCOL §5 边界记录，类型面已同步收敛）。
-- 状态（2026-09-22）：**已完成**。③ 由 PROTOCOL.md 达成（3bbee3e2）；① 样例集 10 例 + core 9 测试 / Android 10 测试同一套样例回放断言一致（39f2a67、2b96be6，含 CI `android-probe` job）；② `make mobile-probe-acceptance` 对真实服务跑通全链路并留档 manifest（ff8c49b，内嵌 OpenAI 兼容流式 mock LLM，`scripts/test-results/mobile-probe/manifest.json` overall=passed）。
+- Deliverables: `sdk/PROTOCOL.md` first version (✅ in repo); `sdk/protocol-fixtures/` sample set; Android probe CLI/unit tests: WS connection, text-message send/receive, ai-response + ai-response-delta parsing (including increment concatenation and stream-interruption samples), transfer/waiting_notification state machine transitions all pass via fixtures replay.
+- Acceptance: ① fixtures fed through the same sample set on core and Android with consistent assertions; ② one full-link joint-debug with a real backend environment (connect → AI first answer streaming → transfer to human → agent reply); ③ the contract document covers all the server's current broadcast message types (including the "mobile v1 does not consume" explicit annotation for webrtc types, and the "server doesn't send, client contract doesn't include" explicit annotation for the core SDK's dead branches `session_update`/`agent_status`, this annotation solidified with the core cleanup knife into PROTOCOL §5 boundary record, the type surface has converged in sync).
+- Status (2026-09-22): **completed**. ③ achieved via PROTOCOL.md (3bbee3e2); ① sample set 10 cases + core 9 tests / Android 10 tests replay the same sample set with consistent assertions (39f2a67, 2b96be6, including CI `android-probe` job); ② `make mobile-probe-acceptance` runs the full link against a real service and archives a manifest (ff8c49b, embeds an OpenAI-compatible streaming mock LLM, `scripts/test-results/mobile-probe/manifest.json` overall=passed).
 
 **M1 — Android SDK Alpha**
 
-- 产出：三形态 UI、消息收发、AI 首答（流式渲染 + 引用展示 + 置信门提示）、转人工状态机、未读计数、惰性连接与重连、访客 token 接入（含后端 guest token 端点，**后端配套项，需进后端排期**）。
-- 验收：① 契约回放测试全绿；② demo 宿主 App 集成 ≤ 10 行代码完成初始化 + 拉起；③ AAR 增量 ≤ 1.5MB（CI 体积门禁）；④ 弱网/断网/后台切换手工测试矩阵通过（含流式中断的渲染降级）；⑤ 单元测试覆盖协议层与状态机（覆盖率不设 100% 目标，但状态机转移表必须穷举）。
-- 状态（2026-09-22）：**已完成（Android Alpha；真机手工项待执行，逐条锚定见 `sdk/android/ACCEPTANCE-M1.md`）**。① 同一样例集 core/Android 双端回放断言一致 + SDK 全量 65 测试全绿（39f2a67、2b96be6、42ba7f6）；② demo 集成 3 行（02bb8c1）；③ 体积门禁取 R8 口径（未混淆 Compose 全家桶增量 5MB+ 非验收口径，D9 核查记录），delta ≈1.19MB ≤ 1.5MB，CI 独立 step（02bb8c1）；④ 自动化项（断线重连/发送超时/流中断渲染降级/重连耗尽恢复/握手失败分类）CI 锚定全绿，真机手工项（前后台/飞行模式/蜂窝 WiFi 切换/转人工状态跨断线）⏳ 待执行，断连期间静默丢消息为 V1 已知边界（服务端无历史重发，不假装有补拉）；⑤ 转人工状态机 3 条合法转移 + 非法拒绝、连接状态机 §4.4 转移表（含 idle→connecting→connected、幂等 connect、重连耗尽→disconnected→connect 恢复）穷举（StateMachineTest 4 测试、ConnectionLifecycleTest 5 测试，42ba7f6）。访客 token：SDK 握手参数已就位（2214bb5，PROTOCOL §1 服务端当前不消费、向后兼容），guest token 端点为 §10 #2 后端配套项，进后端排期。
+- Deliverables: three-form UI, message send/receive, AI first answer (streaming rendering + citation display + confidence-gate hint), transfer-to-human state machine, unread count, lazy connection and reconnect, guest token integration (including the backend guest token endpoint, **backend companion item, needs to enter backend scheduling**).
+- Acceptance: ① contract replay tests all green; ② demo host app integration ≤ 10 lines of code for init + launch; ③ AAR increment ≤ 1.5MB (CI size gate); ④ weak-network/disconnect/background-switch manual test matrix passes (including stream-interruption rendering degradation); ⑤ unit tests cover the protocol layer and state machine (no 100% coverage target, but the state machine transition table must be exhaustive).
+- Status (2026-09-22): **completed (Android Alpha; real-device manual items pending execution, anchored item by item in `sdk/android/ACCEPTANCE-M1.md`)**. ① the same sample set core/Android dual-endpoint replay assertions consistent + SDK's full 65 tests all green (39f2a67, 2b96be6, 42ba7f6); ② demo integration 3 lines (02bb8c1); ③ size gate takes the R8 measure (un-obfuscated Compose full-stack increment 5MB+ not the acceptance measure, D9 review record), delta ≈1.19MB ≤ 1.5MB, CI independent step (02bb8c1); ④ automated items (disconnect reconnect/send timeout/stream-interruption rendering degradation/reconnect-exhaustion recovery/handshake failure classification) CI anchored all green, real-device manual items (foreground-background/airplane mode/cellular WiFi switching/transfer state across disconnect) ⏳ pending execution, silent message loss during disconnect is a v1 known boundary (the server has no history resend, doesn't pretend to have re-pull); ⑤ transfer-to-human state machine 3 legal transitions + illegal rejection, connection state machine §4.4 transition table (including idle→connecting→connected, idempotent connect, reconnect-exhausted→disconnected→connect recovery) exhaustive (StateMachineTest 4 tests, ConnectionLifecycleTest 5 tests, 42ba7f6). Guest token: SDK handshake parameter already in place (2214bb5, PROTOCOL §1 server currently doesn't consume it, backward compatible), the guest token endpoint is §10 #2 backend companion item, enters backend scheduling.
 
 **M2 — iOS SDK Alpha**
 
-- 产出：与 M1 能力面一致的 iOS 版本 + Swift Package 分发。
-- 验收：① 同一套 fixtures 回放全绿；② XCFramework ≤ 2MB；③ demo 宿主集成 ≤ 10 行代码；④ Keychain 存储、后台切换、推送注册口联调通过。
-- 状态（2026-09-23）：**已完成（iOS Alpha；③ demo 工程与 ④ Keychain/推送注册口按分层如实标注，逐条锚定见 `sdk/ios/ACCEPTANCE-M2.md`）**。① protocol-fixtures 同一样例集 core/Android/Swift 三端回放断言一致（`FixtureReplayTests` 11 测试），SDK 全量 61 测试 Linux 全绿 + macOS `ios-macos` job 跑 Darwin 面 63（0f99bee 起，dda9e16/a646e2a/51d1bf0）；② 体积门禁取分发形态 zip 后字节 ≤2MB（`scripts/check-ios-sdk-size.sh`，Release + BUILD_LIBRARY_FOR_DISTRIBUTION，SwiftPM 包打包须走 archive，c83199b 核查记录），CI 独立 step；③ 接入面已证（`ServifyView(config:)` 一行拉起），真实 demo 工程需 Xcode 项目文件，待 macOS 环境（M4 接入文档站阶段）落地；④ 后台切换的可见性语义已自动化锚定（unreadCountsOnlyWhileSessionHidden + historySnapshot 回放），流中断渲染降级同 Kotlin 锚定，Keychain 存储/推送注册口为 M3 面且依赖后端配套项（§10 #2/#3），V1 匿名 session 模式无凭证存储需求，如实标注未实现；真机手工项（前后台/飞行模式/蜂窝 WiFi）同 M1 矩阵待执行。状态机穷举同 M1⑤ 口径（转人工 4 + 连接 §4.4 转移表 6 + 退避策略 4）；覆盖率取行级可覆盖面 100%（Darwin 分支由 macos job 覆盖，a646e2a）。
+- Deliverables: an iOS version with the same capability surface as M1 + Swift Package distribution.
+- Acceptance: ① the same fixtures replay all green; ② XCFramework ≤ 2MB; ③ demo host integration ≤ 10 lines of code; ④ Keychain storage, background switching, push registration entry joint-debugging pass.
+- Status (2026-09-23): **completed (iOS Alpha; ③ demo project and ④ Keychain/push registration entry marked truthfully by layer, anchored item by item in `sdk/ios/ACCEPTANCE-M2.md`)**. ① protocol-fixtures same sample set core/Android/Swift three-endpoint replay assertions consistent (`FixtureReplayTests` 11 tests), SDK's full 61 tests all green on Linux + macOS `ios-macos` job runs the Darwin-side 63 (since 0f99bee, dda9e16/a646e2a/51d1bf0); ② size gate takes the distribution form zip'd bytes ≤2MB (`scripts/check-ios-sdk-size.sh`, Release + BUILD_LIBRARY_FOR_DISTRIBUTION, SwiftPM package packaging must go through archive, c83199b review record), CI independent step; ③ integration surface proven (`ServifyView(config:)` one-line launch), real demo project needs Xcode project files, pending macOS environment (M4 integration documentation site phase); ④ background switching visibility semantics already automated-anchored (unreadCountsOnlyWhileSessionHidden + historySnapshot replay), stream-interruption rendering degradation anchored same as Kotlin, Keychain storage/push registration entry are M3 surface and depend on backend companion items (§10 #2/#3), v1 anonymous session mode has no credential storage need, truthfully marked unimplemented; real-device manual items (foreground-background/airplane mode/cellular WiFi) same as M1 matrix pending execution. State machine exhaustive same as M1⑤ (transfer 4 + connection §4.4 transition table 6 + backoff policy 4); coverage takes the line-level coverable surface 100% (Darwin branch covered by the macOS job, a646e2a).
 
-**M3 — 推送 + 工单 + 品牌化收口（双端）**
+**M3 — Push + ticket + brand-finalization closure (both endpoints)**
 
-- 产出：FCM/APNs 可选推送模块、会话页工单创建入口（AI 摘要预填）、Branding 全量配置、CocoaPods 兼容层评估。
-- 验收：① 推送端到端（后台 → 系统 → 点开 → 增量补拉 → 未读归零）双端通过；② 工单创建携带 AI 摘要且坐席侧可见；③ 体积门禁持续绿。
-- 状态（2026-09-23）：**代码面完成（双端；验收① 注册链路已通（刀 5），推送端到端仍待下发/凭证配套，如实标注，不假装可验收；逐条锚定见 `sdk/ACCEPTANCE-M3.md`）**。刀序列：刀 1 Branding offlineText（4fd2ead）→ 刀 2 服务端访客工单端点（48813a6，§10 #4；迁移水位断言随 000011 递增 337f613/9a36216）→ 刀 3a createTicket 门面 + TicketSummary 摘要（7b6ced4）→ 刀 3b 双端 UI 入口（11ae3df，iOS 15 兼容 + 测试时序修正 8d928de）→ 刀 4 pushTokenProvider 注册口 + CocoaPods 评估（5a81558）→ 刀 5 推送注册链路（服务端 §10 #5 注册端点 + SDK 双端真实上报）→ 刀 6 推送下发编排 + FCM/APNs HTTP 传输（代码面全落地：dispatcher 订阅+去重+WS 在线抑制、手搓 JWT 双传输零新依赖、config push 节双层 gate；真实凭证端到端联调 P1-1 如实留白）→ 刀 7 服务端访客消息增量拉取端点（§10 #1：`GET /api/v1/sessions/:session_id/messages`，消息 ID 单调游标 + has_more 探测，会话失效 404 与空增量 200 语义区分；SDK 双端接入随 D7 断线补拉对接） → 刀 8 服务端访客 token 签发 + WS 握手校验接线（§10 #2：签发端点 service 链 + hub 三层校验 + config 双层 gate，D6 方案落地）→ 刀 9 服务端访客未读数/已读游标端点（§10 #3：`POST .../read` + `GET .../unread`，sessions.visitor_read_message_id 游标只前进、未读口径与 D7 客户端逐字对齐，迁移 000013）→ 刀 10 SDK 双端断线补拉接入（D7 流程 3 客户端面打通：onOpen 自动对账 + after_id 游标续拉 + 指纹去重「游标确立前 WS 已渲染」窗口 + agent/ai 静默期计未读；§10 #1 端点消费方就位）。① 注册链路已通：`pushTokenProvider` 未配置→unsupported / provider 返 nil→静默（宿主未授权是正常态）/ 有 token→真实上报 `POST /api/v1/push/register`（2xx→true；IO/HTTP 失败→network+false 可重报；刀 5 双端 6 用例镜像；服务端迁移 000012_push_tokens，幂等键 session_id+platform，token 不回显，三包测试 orchestration 5 + delivery 7 + handlers 5）；端到端链路（后台→系统→点开→增量补拉→未读归零）的服务端下发编排与 FCM/APNs HTTP 传输已随刀 6 代码面落地（订阅 conversation.message_received、sender=agent 过滤、EventID 环形去重、访客 WS 在线抑制、离线才推；config push 节 + 双层 gate），仍缺真实凭证端到端联调（FCM 服务账号 / APNs .p8，P1-1），§10 #1 游标端点已随刀 7 落地（SDK 双端接入已随刀 10 打通）；offlineText 断线提示双端锚定（握手失败/重连耗尽/销毁不提示/不计未读，ConnectionLifecycleTest ↔ ConnectionLifecycleTests 用例名逐一对应）。② 双端贯通：门面 createTicket 自动组 ai_summary（TicketSummary 最近 10 条，[访客]/[AI]/[客服] 标注，System 提示行跳过，空则不带键）+ UI 入口（标题必填/描述选填/提交中禁用/失败重试提示/成功 appendSystemHint 进 history 不计未读）+ 服务端三包测试（orchestration 5 + delivery 3 + handlers 5）；坐席侧可见走管理面既有 tickets 列表/详情（同表同响应链，ai_summary 进 ticketResponse），无新开发面。③ 体积门禁持续绿：Android R8 口径 + iOS 分发 zip 口径 CI 独立 step 每次 push 复核，M3 期间无漂移。CocoaPods 兼容层评估：`docs/mobile-sdk-cocoapods-evaluation.md`，零已知 CocoaPods-only 接入方，SPM-only 单轨维持，按需重建触发条件已记录，复核时点 M4 文档站定稿。真机手工项（推送/前后台/弱网）随验收①外部配套一并待执行。
+- Deliverables: FCM/APNs optional push module, in-session-page ticket creation entry (AI summary pre-filled), Branding full configuration, CocoaPods compatibility layer evaluation.
+- Acceptance: ① push end-to-end (background → system → tap → incremental re-pull → unread cleared) passes on both endpoints; ② ticket creation carries AI summary and is visible agent-side; ③ size gate continuously green.
+- Status (2026-09-23): **code surface complete (both endpoints; acceptance ① registration link connected (knife 5), push end-to-end still pending delivery/credential companions, truthfully marked, doesn't pretend acceptable; anchored item by item in `sdk/ACCEPTANCE-M3.md`)**. Knife sequence: knife 1 Branding offlineText (4fd2ead) → knife 2 server visitor ticket endpoint (48813a6, §10 #4; migration watermark assertion increments with 000011 337f613/9a36216) → knife 3a createTicket facade + TicketSummary summary (7b6ced4) → knife 3b dual-endpoint UI entry (11ae3df, iOS 15 compatibility + test timing fix 8d928de) → knife 4 pushTokenProvider registration entry + CocoaPods evaluation (5a81558) → knife 5 push registration link (server §10 #5 registration endpoint + SDK dual-endpoint real reporting) → knife 6 push delivery orchestration + FCM/APNs HTTP transport (code surface fully landed: dispatcher subscription+dedup+WS-online suppression, hand-rolled JWT dual transport zero new dependencies, config push section double-layer gate; real-credential end-to-end joint-debugging P1-1 truthfully left as a gap) → knife 7 server visitor message incremental pull endpoint (§10 #1: `GET /api/v1/sessions/:session_id/messages`, message ID monotonic cursor + has_more probing, session-invalid 404 vs empty-increment 200 semantics distinguished; SDK dual-endpoint integration with D7 disconnect re-pull) → knife 8 server visitor token issuance + WS handshake validation wiring (§10 #2: issuance endpoint service chain + hub three-layer validation + config double-layer gate, D6 scheme landed) → knife 9 server visitor unread count/read cursor endpoints (§10 #3: `POST .../read` + `GET .../unread`, sessions.visitor_read_message_id cursor only forward, unread convention aligned word-for-word with D7 client, migration 000013) → knife 10 SDK dual-endpoint disconnect re-pull integration (D7 flow 3 client surface connected: onOpen auto-reconcile + after_id cursor continuation + fingerprint dedup "already rendered by WS before cursor established" window + agent/ai silent-period unread count; §10 #1 endpoint consumer in place). ① registration link connected: `pushTokenProvider` unconfigured→unsupported / provider returns nil→silent (host not authorized is a normal state) / has token→real report `POST /api/v1/push/register` (2xx→true; IO/HTTP failure→network+false reportable; knife 5 dual-endpoint 6 test cases mirrored; server migration 000012_push_tokens, idempotent key session_id+platform, token not echoed, three-package tests orchestration 5 + delivery 7 + handlers 5); the end-to-end link (background→system→tap→incremental re-pull→unread cleared)'s server delivery orchestration and FCM/APNs HTTP transport have landed with knife 6's code surface (subscribes conversation.message_received, sender=agent filter, EventID ring dedup, visitor WS online suppression, push only when offline; config push section + double-layer gate), still missing real-credential end-to-end joint-debugging (FCM service account / APNs .p8, P1-1), §10 #1 cursor endpoint landed with knife 7 (SDK dual-endpoint integration already connected with knife 10); offlineText disconnect hint anchored on both endpoints (handshake failure/reconnect exhaustion/destroy no hint/no unread count, ConnectionLifecycleTest ↔ ConnectionLifecycleTests test names correspond one-to-one). ② dual-endpoint through: facade createTicket auto-assembles ai_summary (TicketSummary latest 10 entries, [Visitor]/[AI]/[Agent] labels, System hint lines skipped, empty means no key) + UI entry (title required/description optional/submit-disabled/failure-retry hint/success appendSystemHint into history without unread count) + server three-package tests (orchestration 5 + delivery 3 + handlers 5); agent-side visibility goes through the admin's existing tickets list/detail (same table same response chain, ai_summary into ticketResponse), no new dev surface. ③ size gate continuously green: Android R8 measure + iOS distribution zip measure CI independent step re-checked on every push, no drift during M3. CocoaPods compatibility layer evaluation: `docs/mobile-sdk-cocoapods-evaluation.md`, zero known CocoaPods-only integrators, SPM-only single track maintained, on-demand rebuild trigger conditions recorded, review checkpoint M4 documentation site finalization. Real-device manual items (push/foreground-background/weak network) pending execution together with acceptance ①'s external companions.
 
-**M4 — 稳定化与接入就绪**
+**M4 — Stabilization and integration readiness**
 
-- 产出：接入文档站（VitePress 移动端章节）、断线/弱网自动化测试矩阵、崩溃与性能基线（会话页首帧 < 300ms、内存增量 < 30MB）。
-- 验收：① 双端 demo 连续 72h 长稳（重连循环、前后台往返）无泄漏；② 文档站构建绿并挂载发布位；③对外交付物（AAR/XCFramework 产物流程）就绪，**发布动作本身仍由维护者手动执行，SDK 仓库不内置任何自动发版步骤**。
-- 状态（2026-09-23）：**可交付面完成（② ③ ✅；① 与性能基线为环境依赖项如实标注待执行；逐条锚定与 72h 执行方案见 `sdk/ACCEPTANCE-M4.md`）**。② 接入指南 `docs/mobile-sdk-integration.md`（双端，API 签名经源码核对）+ nav/sidebar 挂载 + 本地 vitepress build 绿 + docs-pages.yml 既有自动发布（6ba98c7）；③ CI 产物归档 servify-sdk-aar / servify-kit-xcframework（`if-no-files-found: error`，retention 30 天，f4a129d）+ 获取路径文档化 + SwiftPM 远程引用边界如实记录（`sdk/ios/Package.swift` 不在仓库根，V1 为 XCFramework 手动嵌入，远程分发待维护者手动建独立 distribution 仓库）；弱网矩阵经缺口分析确认已由 M1-M3 锚定面穷举（高延迟回显/断线重连/耗尽/握手失败/流中断/退避序列，镜像用例逐一对应），延迟注入不触达新路径、不添加时间敏感用例；① 72h 长稳与性能基线（首帧 < 300ms、内存 < 30MB）阻塞于 GitHub Actions 6h job 上限 + 本机无真机/模拟器 + demo 工程待 macOS（M2 验收③同源约束），执行方案（压力脚本/判据/留档口径）已在验收矩阵冻结，环境到位后照单执行。
+- Deliverables: integration documentation site (VitePress mobile chapter), disconnect/weak-network automated test matrix, crash and performance baselines (session page first frame < 300ms, memory increment < 30MB).
+- Acceptance: ① dual-endpoint demo continuous 72h stability (reconnect loops, foreground-background round trips) no leaks; ② documentation site build green and mounted to the publish slot; ③ external deliverables (AAR/XCFramework artifact flow) ready, **the release action itself is still executed manually by the maintainer, the SDK repo does not contain any automatic release steps**.
+- Status (2026-09-23): **deliverable surface complete (② ③ ✅; ① and performance baselines are environment-dependent items truthfully marked pending execution; anchored item by item and 72h execution plan see `sdk/ACCEPTANCE-M4.md`)**. ② integration guide `docs/mobile-sdk-integration.md` (both endpoints, API signatures verified against source) + nav/sidebar mounting + local vitepress build green + docs-pages.yml existing automatic publish (6ba98c7); ③ CI artifact archiving servify-sdk-aar / servify-kit-xcframework (`if-no-files-found: error`, retention 30 days, f4a129d) + fetch path documentation + SwiftPM remote reference boundary truthfully recorded (`sdk/ios/Package.swift` not at repo root, v1 is manual XCFramework embedding, remote distribution pending maintainer manually creating a separate distribution repo); weak-network matrix confirmed via gap analysis to be exhausted by the M1-M3 anchored surface (high-latency echo/disconnect reconnect/exhaustion/handshake failure/stream interruption/backoff sequence, mirrored test cases correspond one-to-one), delay injection doesn't touch new paths and doesn't add time-sensitive test cases; ① 72h stability and performance baselines (first frame < 300ms, memory < 30MB) blocked by GitHub Actions 6h job limit + no real device/emulator locally + demo project pending macOS (M2 acceptance ③ same-source constraint), execution plan (stress script/criteria/evidence-archiving convention) frozen in the acceptance matrix, execute per plan once the environment is in place.
 
-**明确排除项（记录不做的决定，防止范围回弹）**：坐席移动端、语音/视频、富媒体消息（图片/文件）、离线发送队列、消息撤回/编辑、多语言内置（V1 中文，Branding 预留 i18n 钩子）。
+**Explicit exclusions (recording the decisions not to do, preventing scope rebound)**: agent-side mobile, voice/video, rich media messages (image/file), offline send queue, message recall/edit, built-in multilingual (v1 Chinese, Branding reserves i18n hooks).
 
 ---
 
-## 10. 后端配套需求清单（SDK 依赖项，需进服务端排期）
+## 10. Backend Companion Requirements List (SDK dependencies, need to enter server scheduling)
 
-> 共同背景（D2 事实核查）：现存 REST 端点几乎全部挂在管理面中间件链下（认证 + agent/admin/service 主体 + 资源权限），访客唯一现成通道是 `/api/v1/ws`。下列 #1/#2/#5 本质是同一件事的三个面，**为访客开设最小可达面**，服务端排期时建议按"访客配套端点"一个设计评审收敛。
+> Common background (D2 fact check): existing REST endpoints almost all hang under the admin middleware chain (auth + agent/admin/service principal + resource permissions), the visitor's only existing channel is `/api/v1/ws`. The following #1/#2/#5 are essentially three faces of the same thing, **opening the minimal reachable surface for visitors**, server scheduling is recommended to converge them in one design review as "visitor companion endpoints".
 
-| # | 需求 | 服务 SDK 阶段 | 现状 |
+| # | Requirement | Serves SDK phase | Status |
 |---|---|---|---|
-| 1 | 访客可用的会话消息增量拉取端点（`lastMessageId` 游标语义） | M1 | ✅ 已落地（M3 刀 7）：`GET /api/v1/sessions/:session_id/messages?after_id=&limit=` 免认证（与 WS 同 `/api/v1` 前缀）；游标取消息 ID 单调序（自增主键，非 created_at，同秒多条会错序漏拉），空游标=从头拉全量、非法游标契约性拒绝（400 `invalid message cursor`）；limit 默认 50、clamp 上限 200，limit+1 探测 `has_more`；会话不存在→404（与"没有新消息"的 200 空页区分）；安全模型与 WS 一致（session_id 即能力凭证，访客鉴权升级见 #2）；四包测试（infra 游标语义 + application 校验映射 + delivery 分页探测 + handlers 路由/错误映射），覆盖率各包 100% |
-| 2 | 访客 token 签发端点（server-to-server 换取）+ WS 握手校验接线 | M1 | ✅ 已落地（M3 刀 8）：`POST /api/v1/guest/session` 挂 service 鉴权链（宿主后端持 service API key 调用），签发绑定 session_id 的短期 HS256 token（payload typ:"guest"+sid+iat+exp，自签自验复用 jwt.secret 同信任域），不要求会话行已存在（行在首条消息持久化时建）；WS 握手校验由 `security.guest_token.required` 控制（默认 false 保持既有行为，开启后签名+时效+会话绑定三层校验、失败 401 拒升级），`security.guest_token.ttl` 默认 24h；required+默认 jwt.secret 组合 config gate 告警、production/staging 拒启动 + 装配层空白 secret 兜底（双层 gate）；测试：platform/auth 签发校验 + delivery 服务与校验闭包 + hub 401 分支 + config gate + 装配接线五层全覆盖 |
-| 3 | 未读计数（服务端会话级未读数或客户端可推导的已读游标） | M1 | ✅ 已落地（M3 刀 9）：`POST /api/v1/sessions/:session_id/read`（推进游标并回推进后状态）+ `GET /api/v1/sessions/:session_id/unread`（查询当前状态）免认证（与 #1 同 `/api/v1` 前缀同安全模型）；响应 `{unread_count, last_read_message_id}`，未读口径 = sender ∈ {agent, system} 且消息 ID 大于游标（与 D7 客户端推导逐字对齐，customer 上行与 ai 首答不计）；游标取 messages.id 单调序、只前进不后退（回退提交不报错但游标不动），消息必须属于该会话（跨会话锚定 400 `invalid message cursor`，与 #1 同文案），会话不存在 404；存储为 sessions.visitor_read_message_id（迁移 000013，定向列 UPDATE 避开全列更新误写）；D7 客户端「服务端游标为增强」增强面就位 |
-| 4 | 访客可用的工单创建端点，接受 `ai_summary` 字段 | M3 | ✅ 已落地（M3 刀 2，48813a6）：`POST /api/v1/tickets` 免认证（与 WS 同 `/api/v1` 前缀），`session_id`/`title` 必填 + `description`/`ai_summary`；分类/优先级/来源服务端固定默认值，租户 scope 从 session 行继承；迁移 000011_ticket_ai_summary；坐席侧管理面 tickets 列表/详情同表同响应链自然可见（状态史/自动派单/`ticket.created` 事件同构） |
-| 5 | 推送 token 注册 + 会话消息推送下发 | M3 | 注册链路 ✅ 已落地（刀 5）：`POST /api/v1/push/register` 免认证（体 `{session_id, platform, token}`，platform 白名单 ios/android），幂等键 (session_id, platform) 重复注册保活刷新、换平台独立行，token 落库不回显（迁移 000012）；SDK 双端 `registerPushToken()` 真实上报（2xx→true，失败 network+false）。下发编排+HTTP 传输 ✅ 代码面已落地（刀 6）：PushOutboundDispatcher 订阅 conversation.message_received（sender=agent、EventID 去重、WS 在线抑制、离线才推）→ FCM HTTP v1 / APNs token-based 手搓 JWT 传输（零新依赖，httptest 全测）；config push 节（disabled 默认 + 双层 gate：production 凭证缺失告警拒绝启动、装配层畸形凭证 return error）。端到端联调 ⏳ 真实 FCM 服务账号 / APNs .p8 凭证未接入（P1-1），如实标注不可验收 |
-| 6 | （已完成，记录在案）WS `ai-response` 携带 `sources`/`strategy`/`next_action`/`handoff_reason`（零值省略，向后兼容）+ `ai-response-delta` 流式帧（增量/终末增量/完整终帧三段契约，流中断语义明确） | M1 | ✅ 已落地（2026-09 AI 主链路智能化批次），M0 fixtures 可直接从服务端实现提炼 |
+| 1 | Visitor-usable session message incremental pull endpoint (`lastMessageId` cursor semantics) | M1 | ✅ landed (M3 knife 7): `GET /api/v1/sessions/:session_id/messages?after_id=&limit=` auth-free (same `/api/v1` prefix as WS); cursor takes message ID monotonic order (auto-increment primary key, not created_at, multiple entries in the same second would be misordered and missed), empty cursor=pull full from start, invalid cursor contractually rejected (400 `invalid message cursor`); limit default 50, clamp cap 200, limit+1 probes `has_more`; session doesn't exist→404 (distinguished from "no new messages" 200 empty page); security model same as WS (session_id is the capability credential, visitor auth upgrade see #2); four-package tests (infra cursor semantics + application validation mapping + delivery pagination probing + handlers routing/error mapping), 100% coverage per package |
+| 2 | Visitor token issuance endpoint (server-to-server exchange) + WS handshake validation wiring | M1 | ✅ landed (M3 knife 8): `POST /api/v1/guest/session` hangs under the service auth chain (host backend calls with service API key), issues a short-lived HS256 token bound to session_id (payload typ:"guest"+sid+iat+exp, self-signed self-verified reusing jwt.secret's trust domain), doesn't require the conversation row to already exist (the row is created when the first message is persisted); WS handshake validation controlled by `security.guest_token.required` (default false preserving existing behavior, once on it validates three layers: signature+freshness+session binding, failure 401 rejects upgrade), `security.guest_token.ttl` default 24h; the required+default jwt.secret combination warns at the config gate, production/staging rejects startup + wiring layer blank secret fallback (double-layer gate); tests: platform/auth issuance validation + delivery service and validation closures + hub 401 branch + config gate + wiring five layers full coverage |
+| 3 | Unread count (server-side session-level unreadable or client-derivable read cursor) | M1 | ✅ landed (M3 knife 9): `POST /api/v1/sessions/:session_id/read` (advances the cursor and returns the post-advance state) + `GET /api/v1/sessions/:session_id/unread` (queries current state) auth-free (same `/api/v1` prefix and security model as #1); response `{unread_count, last_read_message_id}`, unread convention = sender ∈ {agent, system} and message ID greater than the cursor (aligned word-for-word with D7 client derivation, customer uplink and AI first answer don't count); cursor takes messages.id monotonic order, only forward (rollback submission doesn't error but cursor doesn't move), messages must belong to that session (cross-session anchoring 400 `invalid message cursor`, same wording as #1), session doesn't exist 404; stored as sessions.visitor_read_message_id (migration 000013, targeted-column UPDATE avoiding full-column-update miswrites); D7 client's "server cursor as enhancement" enhancement surface in place |
+| 4 | Visitor-usable ticket creation endpoint, accepts `ai_summary` field | M3 | ✅ landed (M3 knife 2, 48813a6): `POST /api/v1/tickets` auth-free (same `/api/v1` prefix as WS), `session_id`/`title` required + `description`/`ai_summary`; category/priority/source server-fixed defaults, tenant scope inherited from the session row; migration 000011_ticket_ai_summary; agent-side admin tickets list/detail same table same response chain naturally visible (status history/auto-dispatch/`ticket.created` event isomorphic) |
+| 5 | Push token registration + session message push delivery | M3 | Registration link ✅ landed (knife 5): `POST /api/v1/push/register` auth-free (body `{session_id, platform, token}`, platform allowlist ios/android), idempotent key (session_id, platform) repeated registration keepalive refresh, separate rows for platform switch, token persisted but not echoed (migration 000012); SDK dual-endpoint `registerPushToken()` real reporting (2xx→true, failure network+false). Delivery orchestration+HTTP transport ✅ code surface landed (knife 6): PushOutboundDispatcher subscribes conversation.message_received (sender=agent, EventID dedup, WS online suppression, push only when offline) → FCM HTTP v1 / APNs token-based hand-rolled JWT transport (zero new dependencies, httptest full coverage); config push section (disabled default + double-layer gate: production missing credentials warns and rejects startup, wiring layer malformed credentials return error). End-to-end joint-debugging ⏳ real FCM service account / APNs .p8 credentials not connected (P1-1), truthfully marked not acceptable |
+| 6 | (Completed, on record) WS `ai-response` carries `sources`/`strategy`/`next_action`/`handoff_reason` (zero values omitted, backward compatible) + `ai-response-delta` streaming frame (increment/terminal increment/full final frame three-stage contract, stream-interruption semantics clear) | M1 | ✅ landed (2026-09 AI main-link intelligence batch), M0 fixtures can be extracted directly from the server implementation |
 
-> 其中 #6 随 AI 主链路智能化批次完成；#1/#2/#3 是移动端独立配套（游标与鉴权可合并评审），三者已分别随刀 7/刀 8/刀 9 全部落地；#4/#5 服务 M3。
+> Of these #6 completed with the AI main-link intelligence batch; #1/#2/#3 are mobile's independent companions (cursor and auth can be reviewed jointly), the three have all landed with knife 7/knife 8/knife 9 respectively; #4/#5 serve M3.
