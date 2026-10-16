@@ -1,7 +1,5 @@
 > [English](remote-assistance-status.en.md) | **中文**
 
-> [English](remote-assistance-status.en.md) | **中文**
-
 # 远程协助能力矩阵与缺口清单
 
 > 盘点时间：2026-09-25（2026-09-26 更新：RA-1..RA-4 修复与 RA-8 服务端半边已落地，判定同步刷新；2026-10-14 更新：RA-8 SDK 半边（WS 重连后重发 offer）已落地，WebRTC 恢复条目改为已实现；2026-10-15 更新：RA-7 媒体桥接（路线 A SFU-lite）与 RA-5 信令归属定向已落地，屏幕共享端到端在服务端回环链路打通）。本文是远程协助功能的**当前真实状态源**，取代

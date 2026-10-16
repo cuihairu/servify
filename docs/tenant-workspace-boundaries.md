@@ -1,7 +1,5 @@
 > [English](tenant-workspace-boundaries.en.md) | **中文**
 
-> [English](tenant-workspace-boundaries.en.md) | **中文**
-
 # Tenant And Workspace Boundaries
 
 本文件记录当前仓库中核心对象的归属关系与隔离语义，作为 `11 / T1 tenant-and-workspace-boundaries` 的基础盘点。

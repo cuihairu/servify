@@ -1,7 +1,5 @@
 > [English](ARCHITECTURE.en.md) | **中文**
 
-> [English](ARCHITECTURE.en.md) | **中文**
-
 # 架构总览
 
 Servify 当前阶段保持为模块化单体，围绕统一 runtime、AI 编排、业务模块、voice 协议入口和 SDK surface 逐步硬化。

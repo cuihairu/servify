@@ -95,3 +95,4 @@
 - [x] 流式错误文本泄露收口（provider 失败分支不再进 ContentDelta、转人工失败帧固定文案）— c222ee7，llm 四包 + ai + realtime 绿
 - [x] Web SDK 独立文档（8 节 API 与配置全表、data-* 19 项权威单一化、导航登记）— 0c4a1ee，docs build 绿
 - [x] 文档-代码一致性审计（三类分桶、逐条 file:line 取证、审计表落库）— 见 docs/审计-文档一致性.md
+- [x] docs 根目录双语配对（2026-10-16 用户令，59 篇实质文档全部配对：57 篇中文源配 .en.md、2 篇英文源配 .zh.md，源与译文首屏均挂语言切换器，代码块/命令/路径/专有名词原样保留，最长 980 行 <1000 故暂无译版 0 条）— 本轮 commit，docs build 绿 + check-text-encoding 绿

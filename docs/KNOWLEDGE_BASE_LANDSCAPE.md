@@ -1,7 +1,5 @@
 > [English](KNOWLEDGE_BASE_LANDSCAPE.en.md) | **中文**
 
-> [English](KNOWLEDGE_BASE_LANDSCAPE.en.md) | **中文**
-
 # 知识库选型全景与适配规划
 
 > 状态：调研规划稿（2026-09-20）。落地以选型决策为准。

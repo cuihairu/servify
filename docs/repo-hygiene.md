@@ -1,7 +1,5 @@
 > [English](repo-hygiene.en.md) | **中文**
 
-> [English](repo-hygiene.en.md) | **中文**
-
 # Repo Hygiene
 
 本文件定义 Servify 仓库中源码、生成物、运行时文件的边界，避免工作区被临时文件、二进制和缓存污染。

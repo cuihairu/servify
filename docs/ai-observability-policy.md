@@ -1,7 +1,5 @@
 > [English](ai-observability-policy.en.md) | **中文**
 
-> [English](ai-observability-policy.en.md) | **中文**
-
 # AI Observability And Policy Hooks
 
 当前 AI 编排层已预留以下控制点：

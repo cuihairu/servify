@@ -1,7 +1,5 @@
 > [English](backup-and-recovery.en.md) | **中文**
 
-> [English](backup-and-recovery.en.md) | **中文**
-
 # Servify 备份与恢复（P2-3）
 
 > 最后更新：2026-09-17（P2-3 定稿）

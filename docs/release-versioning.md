@@ -1,7 +1,5 @@
 > [中文](release-versioning.zh.md) | **English**
 
-> [中文](release-versioning.zh.md) | **English**
-
 # Release Versioning
 
 ## Server version injection

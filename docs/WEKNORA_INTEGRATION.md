@@ -1,7 +1,5 @@
 > [English](WEKNORA_INTEGRATION.en.md) | **中文**
 
-> [English](WEKNORA_INTEGRATION.en.md) | **中文**
-
 # 外部知识库集成指南：知识库 provider 路径（Dify dataset 兼容 + WeKnora）
 
 ## 项目概述

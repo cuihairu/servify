@@ -1,7 +1,5 @@
 > [English](local-development.en.md) | **中文**
 
-> [English](local-development.en.md) | **中文**
-
 # Local Development
 
 本文件约定 Servify 在 Windows PowerShell、WSL、Linux 与 CI 下的最小开发流程，目标是减少“同一命令在不同环境下行为不同”的问题。

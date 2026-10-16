@@ -1,7 +1,5 @@
 > [English](token-lifecycle-and-key-rotation.en.md) | **中文**
 
-> [English](token-lifecycle-and-key-rotation.en.md) | **中文**
-
 # Token Lifecycle And Key Rotation
 
 本文件用于推进 `11 / T5 security-baseline-for-operations` 中的 token 生命周期、密钥轮换与最小运维规范。

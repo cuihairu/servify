@@ -1,7 +1,5 @@
 > [English](metrics-spec.en.md) | **中文**
 
-> [English](metrics-spec.en.md) | **中文**
-
 # 统计口径文档
 
 ## 1. 会话统计

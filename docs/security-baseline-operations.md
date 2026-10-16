@@ -1,7 +1,5 @@
 > [English](security-baseline-operations.en.md) | **中文**
 
-> [English](security-baseline-operations.en.md) | **中文**
-
 # Security Baseline For Operations
 
 本文件用于推进 `11 / T5 security-baseline-for-operations`，先把当前高风险接口、已有控制和最小上线基线收口成统一清单。

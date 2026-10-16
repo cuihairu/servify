@@ -1,7 +1,5 @@
 > [English](embedding-guide.en.md) | **中文**
 
-> [English](embedding-guide.en.md) | **中文**
-
 # Web 嵌入集成指南
 
 面向把 Servify 客服嵌入自有网站/应用的对接方。覆盖嵌入方式选型、会话互认、

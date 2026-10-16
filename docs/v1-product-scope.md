@@ -1,7 +1,5 @@
 > [English](v1-product-scope.en.md) | **中文**
 
-> [English](v1-product-scope.en.md) | **中文**
-
 # V1 产品收敛：Web 独立站智能客服
 
 本文定义 Servify 第一版产品目标。它优先约束产品边界和文档叙事，不替代具体 implementation backlog。

@@ -29,8 +29,6 @@ features:
 ---
 > [English](index.en.md) | **中文**
 
-> [English](index.en.md) | **中文**
-
 ## 产品概览
 
 Servify 第一版先针对企业官网、品牌独立站、SaaS 官网和文档站提供 Web 智能客服能力。
