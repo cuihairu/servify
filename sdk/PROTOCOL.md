@@ -9,12 +9,12 @@
 | 项 | 契约 |
 |---|---|
 | 端点 | `GET /api/v1/ws`（`router_realtime.go:17`，publicV1 组免认证） |
-| 握手参数 | `session_id`（必填，空则 HTTP 400 `BadRequest`，`websocket_hub.go:247-254`）；`access_token` 参数**服务端不读取**（访客 token 端点落地前的已知缺口，见策划文档 D6） |
-| 唯一门槛 | Origin 白名单 `security.websocket_allowed_origins`（空配置放行所有来源，P2-5） |
+| 握手参数 | `session_id`（必填，空则 HTTP 400 `BadRequest`，`websocket_hub.go:247-254`）；当 `security.guest_token.required=true` 时校验 `access_token`（缺失、无效、过期或会话不匹配均 HTTP 401，`websocket_hub.go:302-313`）；该配置默认 `false`，关闭时保留匿名握手 |
+| 握手门槛 | Origin 白名单 `security.websocket_allowed_origins`（空配置放行所有来源，P2-5）；可选的访客 token 强制校验由 `security.guest_token.required` 控制，两者是独立检查 |
 | 帧编码 | JSON 文本帧，形 `{type, data, session_id?, timestamp?}`（`WebSocketMessage` 序列化） |
 | 服务端广播语义 | 按 `session_id` 定向：`SessionID == ""` 广播全员，否则只投递同会话客户端（`websocket_hub.go:232`） |
 
-**移动端口径**：V1 逐字段沿用该握手形态；访客 token 落地后 `access_token` 开始被消费，客户端无需改握手代码、只需带上参数（向后兼容）。
+**移动端口径**：V1 逐字段沿用该握手形态；客户端可携带 `access_token`，服务端在 `security.guest_token.required=true` 时校验，默认关闭以兼容既有匿名部署。
 
 **第二条通道**：语音翻译走独立端点 `GET /api/v1/ws/voice`（§9）。本文 §1-§7 描述会话通道 `/api/v1/ws`（§8 fixtures 约定为两通道共用）；两条通道零共享（端点、下行缓冲、帧族、帧型命名空间都不同），仅共用传输门槛（Origin 白名单）与帧信封形。
 

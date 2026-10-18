@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -188,7 +189,7 @@ func TestRateLimitMiddlewareFromConfig_PathBased(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddlewareFromConfig_KeyHeaderAndWhitelist(t *testing.T) {
+func TestRateLimitMiddlewareFromConfig_WhitelistUsesSocketPeer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{
@@ -197,8 +198,7 @@ func TestRateLimitMiddlewareFromConfig_KeyHeaderAndWhitelist(t *testing.T) {
 				Enabled:           true,
 				RequestsPerMinute: 1,
 				Burst:             1,
-				KeyHeader:         "X-Forwarded-For",
-				WhitelistKeys:     []string{"trusted-key"},
+				WhitelistIPs:      []string{"192.0.2.10"},
 			},
 		},
 	}
@@ -207,51 +207,33 @@ func TestRateLimitMiddlewareFromConfig_KeyHeaderAndWhitelist(t *testing.T) {
 	router.Use(mw)
 	router.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
 
-	// whitelisted key always allowed
+	// A header claiming to be a trusted IP cannot bypass rate limiting.
 	for i := 0; i < 5; i++ {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodGet, "/test", nil)
-		req.Header.Set("X-Forwarded-For", "trusted-key")
+		req.RemoteAddr = "198.51.100.11:1234"
+		req.Header.Set("X-Forwarded-For", "192.0.2.10")
 		router.ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("whitelisted key request %d = %d", i, w.Code)
+		want := http.StatusOK
+		if i > 0 {
+			want = http.StatusTooManyRequests
+		}
+		if w.Code != want {
+			t.Fatalf("spoofed whitelist header request %d = %d, want %d", i, w.Code, want)
 		}
 	}
 
-	// forwarded IP list keys by first entry; second distinct IP still allowed after first is exhausted
+	// Whitelisting is based on the actual socket peer.
 	w1 := httptest.NewRecorder()
 	req1, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req1.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.9")
+	req1.RemoteAddr = "192.0.2.10:1234"
 	router.ServeHTTP(w1, req1)
 	if w1.Code != http.StatusOK {
-		t.Fatalf("first forwarded request = %d", w1.Code)
-	}
-	w2 := httptest.NewRecorder()
-	req2, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req2.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.9")
-	router.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusTooManyRequests {
-		t.Fatalf("exhausted forwarded key = %d", w2.Code)
-	}
-	w3 := httptest.NewRecorder()
-	req3, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req3.Header.Set("X-Forwarded-For", "203.0.113.8")
-	router.ServeHTTP(w3, req3)
-	if w3.Code != http.StatusOK {
-		t.Fatalf("distinct forwarded key = %d", w3.Code)
-	}
-
-	// header set to empty falls back to client IP
-	w4 := httptest.NewRecorder()
-	req4, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req4.RemoteAddr = "192.0.2.10:5555"
-	router.ServeHTTP(w4, req4)
-	if w4.Code != http.StatusOK {
-		t.Fatalf("client ip fallback = %d", w4.Code)
+		t.Fatalf("whitelisted peer request = %d", w1.Code)
 	}
 }
 
-func TestRateLimitMiddlewareFromConfig_PlainKeyHeader(t *testing.T) {
+func TestRateLimitMiddlewareFromConfig_RequestHeadersCannotRotateBucket(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
 		Security: config.SecurityConfig{
@@ -259,7 +241,6 @@ func TestRateLimitMiddlewareFromConfig_PlainKeyHeader(t *testing.T) {
 				Enabled:           true,
 				RequestsPerMinute: 1,
 				Burst:             1,
-				KeyHeader:         "X-API-Key",
 			},
 		},
 	}
@@ -269,14 +250,48 @@ func TestRateLimitMiddlewareFromConfig_PlainKeyHeader(t *testing.T) {
 
 	w1 := httptest.NewRecorder()
 	req1, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "203.0.113.9:1234"
 	req1.Header.Set("X-API-Key", "key-a")
+	req1.Header.Set("X-Forwarded-For", "203.0.113.9")
 	router.ServeHTTP(w1, req1)
 	w2 := httptest.NewRecorder()
 	req2, _ := http.NewRequest(http.MethodGet, "/test", nil)
-	req2.Header.Set("X-API-Key", "key-a")
+	req2.RemoteAddr = "203.0.113.9:1234"
+	req2.Header.Set("X-API-Key", "key-b")
+	req2.Header.Set("X-Forwarded-For", "198.51.100.8")
 	router.ServeHTTP(w2, req2)
 	if w1.Code != http.StatusOK || w2.Code != http.StatusTooManyRequests {
 		t.Fatalf("key-a requests = %d then %d", w1.Code, w2.Code)
+	}
+}
+
+func TestRateLimiterBoundsAndReclaimsBuckets(t *testing.T) {
+	limiter := newRateLimiter(config.PathRateLimitConfig{RequestsPerMinute: 60, Burst: 1})
+	for i := 0; i < rateLimitMaxBuckets; i++ {
+		limiter.get(fmt.Sprintf("peer-%d", i))
+	}
+	if got := len(limiter.buckets); got != rateLimitMaxBuckets {
+		t.Fatalf("bucket count = %d, want cap %d", got, rateLimitMaxBuckets)
+	}
+	overflowA := limiter.get("overflow-a")
+	overflowB := limiter.get("overflow-b")
+	if overflowA != overflowB || limiter.overflow == nil {
+		t.Fatal("new peers at capacity must share the overflow bucket")
+	}
+	if got := len(limiter.buckets); got != rateLimitMaxBuckets {
+		t.Fatalf("bucket count after overflow = %d, want cap %d", got, rateLimitMaxBuckets)
+	}
+
+	// Force an expiry sweep and ensure old per-peer buckets are reclaimed.
+	for _, bucket := range limiter.buckets {
+		bucket.mu.Lock()
+		bucket.lastSeen = time.Now().Add(-rateLimitIdleTTL - time.Second)
+		bucket.mu.Unlock()
+	}
+	limiter.nextCleanup = time.Now().Add(-time.Second)
+	limiter.get("fresh-peer")
+	if got := len(limiter.buckets); got != 1 {
+		t.Fatalf("bucket count after idle sweep = %d, want 1", got)
 	}
 }
 

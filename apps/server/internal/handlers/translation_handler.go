@@ -92,7 +92,8 @@ func (h *TranslationHandler) respondError(c *gin.Context, err error, start time.
 		Duration:  time.Since(start).String(),
 	}
 	switch {
-	case errors.Is(err, translationdelivery.ErrTranslationUnavailable):
+	case errors.Is(err, translationdelivery.ErrTranslationUnavailable),
+		errors.Is(err, translationdelivery.ErrTranslationQuotaUsageUnavailable):
 		c.JSON(http.StatusServiceUnavailable, body)
 	case errors.Is(err, translationdelivery.ErrTranslationQuotaExceeded):
 		c.JSON(http.StatusTooManyRequests, body)

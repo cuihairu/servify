@@ -147,7 +147,7 @@
 当前进展：
 
 - 已新增 `docs/security-baseline-operations.md`，盘点 management / service / public 三类高风险表面与关键接口
-- 已确认基础路由统一挂载 `RateLimitMiddlewareFromConfig`，具备全局、路径前缀与 header key 级限流能力
+- 基础路由统一挂载 `RateLimitMiddlewareFromConfig`，按 socket 对端 IP 实施全局与路径前缀限流；不可信请求头不能轮换身份或绕过限流
 - 已确认管理面写接口统一叠加 `AuthMiddleware`、`EnforceRequestScope`、`RequirePrincipalKinds`、`RequireResourcePermission` 与 `AuditMiddleware`
 - 审计中间件现已对 `password`、`secret`、`api_key`、`token` 等敏感字段做统一脱敏，避免明文 secrets 落入审计日志
 - 已新增 `docs/token-lifecycle-and-key-rotation.md`，定义 JWT / provider key / service token 的最小生命周期与轮换流程

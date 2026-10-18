@@ -35,6 +35,10 @@ func ParseQuotaUnit(s string) (string, error) {
 // ErrTranslationQuotaExceeded 租户当前窗口配额耗尽（handler 映射 429）。
 var ErrTranslationQuotaExceeded = errors.New("translation quota exceeded for tenant window")
 
+// ErrTranslationQuotaUsageUnavailable means the configured token budget cannot
+// safely meter a non-empty batch call, so the gate refuses it before execution.
+var ErrTranslationQuotaUsageUnavailable = errors.New("translation token quota cannot meter batch usage")
+
 // QuotaMeter 计量端口（quotameter.Meter 结构化满足；测试可 stub）。
 type QuotaMeter interface {
 	Usage(ctx context.Context, scope string) (int64, error)
@@ -92,7 +96,8 @@ func (g *quotaGate) limitFor(ctx context.Context) int64 {
 //   - requests：先原子 +1 再比限（被拒调用也占窗——窗口耗尽后本就整窗
 //     429，计数保守无害，且免 check-then-act 竞态）；
 //   - tokens：先查已用量（≥limit 拒），成功后按 TokenUsage.TotalTokens
-//     记账（provider 未回传 usage 则不记）。
+//     记账（provider 未回传 usage 则不记）。这是软阈值而非硬预算：并发调用
+//     与当前调用本身的用量可能使累计值越过 limit。
 //
 // meter 出错一律 fail-open（放行 + Warn 日志）。
 func (g *quotaGate) Translate(ctx context.Context, cmd TranslateCommand) (TranslateResult, error) {
@@ -131,12 +136,15 @@ func (g *quotaGate) Translate(ctx context.Context, cmd TranslateCommand) (Transl
 }
 
 // BatchTranslate 过门语义：requests 单位按一次调用 +1（计量的是 API 调用
-// 次数而非段数）；tokens 单位仅事前检查——批量产出无 TokenUsage 面，事后
-// 记账不可得（docs/design/tenant-quota-policy.md §3）。
+// 次数而非段数）；非空 tokens 批量调用因结果没有 TokenUsage 面而拒绝，避免
+// 绕过软阈值。空批量没有 provider 调用，可直接透传。
 func (g *quotaGate) BatchTranslate(ctx context.Context, cmd BatchTranslateCommand) (BatchTranslateResult, error) {
 	tenant := platformauth.TenantIDFromContext(ctx)
 	if tenant == "" {
 		return g.next.BatchTranslate(ctx, cmd)
+	}
+	if g.unit == QuotaUnitTokens && len(cmd.Texts) > 0 {
+		return BatchTranslateResult{}, ErrTranslationQuotaUsageUnavailable
 	}
 	limit := g.limitFor(ctx)
 	if g.unit == QuotaUnitRequests {
@@ -147,14 +155,6 @@ func (g *quotaGate) BatchTranslate(ctx context.Context, cmd BatchTranslateComman
 			return BatchTranslateResult{}, ErrTranslationQuotaExceeded
 		}
 		return g.next.BatchTranslate(ctx, cmd)
-	}
-	used, err := g.meter.Usage(ctx, tenant)
-	if err != nil {
-		g.logger.Warnf("translation quota meter failed (fail-open): %v", err)
-		return g.next.BatchTranslate(ctx, cmd)
-	}
-	if used >= limit {
-		return BatchTranslateResult{}, ErrTranslationQuotaExceeded
 	}
 	return g.next.BatchTranslate(ctx, cmd)
 }

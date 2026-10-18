@@ -24,7 +24,7 @@
   `unit`/`window` string enum:
   - Rate limiter: `RateLimitingConfig.RequestsPerMinute + Burst`
     (`apps/server/internal/config/config.go:474-495`), window implicitly 1 minute
-    (`ratePerSec: rpm/60.0`), token bucket, keyed by IP/API-Key,
+    (`ratePerSec: rpm/60.0`), token bucket, keyed by socket peer IP,
     system scope.
   - Session risk window: `*_window_{minutes|hours|days}` int field suffix
     (`config.go:439-443`, 5 precedents), the unit is the field-name suffix.
@@ -41,7 +41,7 @@
 
 | Option | Form | Pros | Cons |
 | --- | --- | --- | --- |
-| A. Reuse the rate-limiter criteria (`requests_per_minute + burst`) | Same shape as the current `RateLimitingConfig` | Zero new concepts, reuse the existing middleware | The token bucket is a smooth-rate semantics, not a "budget + periodic reset" quota ledger; only supports a minute window; no token-usage dimension; keyed by IP/API-Key, not tenant |
+| A. Reuse the rate-limiter criteria (`requests_per_minute + burst`) | Same shape as the current `RateLimitingConfig` | Zero new concepts, reuse the existing middleware | The token bucket is a smooth-rate semantics, not a "budget + periodic reset" quota ledger; only supports a minute window; no token-usage dimension; keyed by socket peer IP, not tenant |
 | B. Unit-suffixed int fields (`limit` + `window_minutes/hours/days`) | Follow the session-risk naming scheme | 5 precedents in the repo | The measurement unit (count vs tokens) and the time window are orthogonal; the suffix scheme cannot express two dimensions; adding a window tier means adding a field, fields explode |
 | C. Explicit `limit + unit + window` enums | `unit: requests\|tokens`，`window: hour\|day\|month`，fixed rolling window | Complete orthogonal expression of measurement unit × time window; enums are validatable and registrable (aligned with the config_template_lint gate); naturally attaches to configscope tenant override | New enums and validation needed; the window anchor requires shared storage (see §4) |
 
@@ -62,6 +62,12 @@ translation:
   translation call count, `tokens` counts the
   `TokenUsage` accumulation; the window uses fixed rolling semantics (no token-bucket
   smoothing).
+- **Token limits are soft thresholds, not hard spend caps.** Usage is recorded after
+  provider success, so concurrent calls and a single call's usage can cross `limit`;
+  missing provider usage and meter failures also cannot be charged. Non-empty batch
+  translation returns `ErrTranslationQuotaUsageUnavailable` before provider execution
+  while the result contract has no token-usage surface. This is an abuse/cost
+  guardrail, not billing or a strict budget.
 - Default `enabled: false`: the criteria are registered first, and no behavior
   occurs before the enforcement gap is filled.
 - Aligned with `docs/realtime-translation-design.md` §3.2/§4.6: configscope
@@ -105,10 +111,12 @@ requires redis availability in sync):
    occupy the window, avoiding check-then-act races); the `tokens`
    unit is rejected upfront on `Usage ≥ limit` (not consuming the meter), and after
    success is recorded by
-   `TokenUsage.TotalTokens` (not recorded when the provider returns no usage). For
-   batch
-   annotation the `tokens` unit is only checked upfront — batch output has no usage
-   surface, so post-hoc accounting is unavailable.
+    `TokenUsage.TotalTokens` (not recorded when the provider returns no usage); this
+    is a **soft threshold**, because usage is only known after the provider call and
+    concurrent calls can overshoot it. For non-empty batch annotation, `tokens` mode
+    returns `ErrTranslationQuotaUsageUnavailable` before invoking the provider because
+    the batch result has no usage surface. Empty batches pass
+    through without a provider call. This remains a guardrail, not a billing cap.
    Meter failures always fail-open (allow + Warn log).
 3. **Shared window anchor** → the key name encodes the anchor
    `servify:quota:translation:{window}:{anchor}:{tenant}` (hour→top of the hour,

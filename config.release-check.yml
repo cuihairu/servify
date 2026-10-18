@@ -215,10 +215,7 @@ security:
     enabled: true
     requests_per_minute: 60
     burst: 10
-    key_header: "X-API-Key" # Header name for whitelist key bypass
     whitelist_ips: []
-    whitelist_keys:
-      - "internal-test-key" # Integration test key
     paths:
       # 专用前缀必须排在 /public/ 之前：中间件按首个匹配前缀取限流
       - enabled: true
@@ -498,4 +495,3 @@ knowledge:
   #   indexing:
   #     chunk_size: 500
   #     chunk_overlap: 50
-

@@ -504,12 +504,8 @@ type RateLimitingConfig struct {
 	RequestsPerMinute int                   `yaml:"requests_per_minute"`
 	Burst             int                   `yaml:"burst"`
 	Paths             []PathRateLimitConfig `yaml:"paths"`
-	// Optional: use specific header value as rate-limit key (e.g., X-Forwarded-For, X-API-Key)
-	KeyHeader string `yaml:"key_header"`
-	// Optional: bypass limit for these IPs (matches client IP)
+	// Optional: bypass limit for socket peer IPs. Forwarded headers are not trusted.
 	WhitelistIPs []string `yaml:"whitelist_ips"`
-	// Optional: bypass limit for these header key values (when KeyHeader set)
-	WhitelistKeys []string `yaml:"whitelist_keys"`
 }
 
 // PathRateLimitConfig allows overriding rate limits for specific path prefixes.

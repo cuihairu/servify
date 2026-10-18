@@ -197,17 +197,11 @@ try await servify.createTicket(title: "退款咨询", description: "…")
 
 ### 鉴权与安全（决策 D6 续）
 
-**现状缺口（必须正视，经源码核实）**：WS 路由挂在 publicV1 组（无 AuthMiddleware），握手仅要求 `session_id` 非空即升级连接；URL 里的 `access_token` 参数服务端**不读取**，任何知道 session_id 的客户端都能收听该会话流，Origin 白名单（可配置放行所有来源）是唯一门槛。Web 侧靠"session_id 不出浏览器"侥幸安全，移动端不能复制这个假设（移动端常有多设备/换机/日志脱敏场景，id 泄露面更大）。
+**当前行为（经源码核实）**：WS 路由为 public，不经过 `AuthMiddleware`；`session_id` 始终必填。`security.guest_token.required=true` 时服务端校验 `access_token`，缺失、无效、过期或会话不匹配均返回 401。该配置默认 `false`，保留既有部署的匿名会话行为。Origin 白名单是独立传输检查（空白名单放行所有来源），不能替代鉴权。
 
-**V1 方案：访客 token（guest token）**：
-
-1. 后端新增轻量端点（建议 `POST /api/v1/guest/session`）：宿主后端用 server-to-server 凭证（复用 api-client 的 auth contract）换取**短期签名访客 token**（HMAC/JWT，payload 含 session_id 绑定 + 过期时间），下发给客户端；
-2. SDK 连接 WS 时以 `access_token` 参数携带（与 Web 的 `AuthProvider` 形态一致），服务端校验签名与 session 绑定；
-3. 兼容路径：`guestToken` 为空时允许匿名 session_id 模式（与 Web 现状对齐），但在 PROTOCOL.md 标注为"过渡形态，服务端未来可配置关闭"。
+**已实现的访客 token 链路（M3，2026-09-24）**：宿主后端使用 service 凭证调用 `POST /api/v1/guest/session` 获取短期签名 token。SDK 以 `access_token` 发送；hub 校验签名、时效和会话绑定。`security.guest_token.required` 控制是否强制校验，`security.guest_token.ttl` 默认 24 小时。端点不要求会话行预先存在；首条消息持久化时会创建会话行。
 
 **为什么不在 V1 做完整 OAuth/设备绑定**：客服会话的数据敏感度是"对话内容"，风险敞口是单会话，短期签名 token 已把泄露影响收敛到单会话时效窗口内；全量身份体系是宿主的责任（宿主可经 guest 换取端点把自己的用户身份编译进 token payload），SDK 不越界。
-
-**落地状态（2026-09-24，M3 刀 8）**：服务端已按上述方案落地，`POST /api/v1/guest/session` 挂 service 鉴权链（宿主后端持 service API key 调用），签发绑定 session_id 的短期 HS256 token（payload `{typ:"guest", sid, iat, exp}`，自签自验复用 `jwt.secret` 同信任域），**不要求会话行已存在**（行在首条消息持久化时建）；SDK 握手以 `access_token` 携带，hub 侧校验签名+时效+会话绑定三层（token 合法但绑定其他 session 同样 401）。配置 `security.guest_token.required`（默认 false 保持既有部署行为）+ `security.guest_token.ttl`（默认 24h）；required + 默认 jwt.secret 的组合在 config gate 告警、production/staging 拒启动，装配层空白 secret 兜底拒启动（双层 gate）。SDK 侧 `guestToken` 参数形态已先行就位（2214bb5，服务端此前不消费、向后兼容）。
 
 **其他安全基线**：token 仅存内存 + 系统安全存储（Android EncryptedSharedPreferences / iOS Keychain），不落普通文件；WS 与 REST 强制 HTTPS/WSS；日志默认脱敏（不打印消息正文与 token，debug 开关显式开启才输出）。
 

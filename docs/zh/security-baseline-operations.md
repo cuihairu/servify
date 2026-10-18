@@ -118,7 +118,8 @@ scoped config（tenant/workspace 作用域配置文档）的写路径已有完�
 ### 速率限制
 
 - `registerBaseMiddleware` 已统一挂载 `RateLimitMiddlewareFromConfig`
-- 支持全局限流、按路径前缀限流、按 header key 限流，以及 IP / key 白名单
+- 支持全局与路径前缀限流，按 socket 对端 IP 分桶；仅 socket 对端 IP 可加入白名单，不信任转发头/请求头作为限流身份。
+- 每个 limiter 的 bucket map 上限为 4096 个对端，满载后新对端共用 overflow bucket；每分钟最多清理一次、回收闲置 10 分钟的 bucket。反向代理后所有客户端会共用代理对端 bucket，除非另行配置可信代理边界。
 - 默认开发配置 `config.yml` 已启用基础限流，并为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/ai/query`、`/api/v1/metrics/ingest`、`/api/` 提供独立路径级限流
 - 生产环境仍应基于 `config.production.secure.example.yml` 或等价部署配置收紧阈值、域名和 secrets 注入方式，而不是直接把开发配置原样上线
 
@@ -144,7 +145,7 @@ scoped config（tenant/workspace 作用域配置文档）的写路径已有完�
 - `/api/`：保护管理面写操作与批量读取
 - `/api/v1/auth/`：单独更严格限流，优先保护登录、注册、refresh 这类匿名认证入口
 - `/api/v1/ai/`：单独更严格限流，尤其是 `knowledge/upload`、`knowledge/sync`
-- `/api/v1/metrics/ingest`：单独限流，并优先使用 service token 或专用 header key
+- `/api/v1/metrics/ingest`：单独限流并使用 service token 鉴权
 - `/public/`：按匿名入口单独限流，避免爬取与爆破
 - `/uploads/`：单独限流，避免文件枚举、热点资源刷取或带宽放大
 

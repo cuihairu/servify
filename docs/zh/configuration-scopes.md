@@ -298,8 +298,8 @@
 
 - `TenantConfig` / `WorkspaceConfig` 已存在（`internal/models/models.go`），并已接入 public portal 读取链路（见上）；后续可在此基础上扩展更细的 `AIConfigOverride` / `RoutingPolicyConfig`
 - Viper + `config.yml` 仍承载了部分未来应下沉到 tenant/workspace 的业务默认值
-- `portal` 仍是 system 级配置，尚未 tenant/workspace 化
-- AI / knowledge / routing 的 tenant/workspace override 目前规则已定义，但尚未统一实现
+- `portal` 读取已部分作用域化：public 配置路由合并 system、tenant、workspace 值；目前还没有统一的管理端 UI 来治理这些覆盖
+- AI / knowledge override 已部分实现，覆盖 OpenAI、Dify、WeKnora、RAGFlow 与翻译配额 `limit`；这不是普适的逐能力覆盖层。Routing policy override 尚未实现，各 provider/配置族仍需逐字段明确作用域与治理规则
 - `DailyStats` 仍是系统级全局聚合，不带 tenant/workspace 维度
 
 ## 模板治理与环境严格度（P2-2）

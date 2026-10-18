@@ -147,7 +147,7 @@ Acceptance:
 Current progress:
 
 - `docs/security-baseline-operations.md` has been added, inventorying the three high-risk surfaces (management / service / public) and key interfaces
-- Base routes are confirmed to uniformly mount `RateLimitMiddlewareFromConfig`, with global, path-prefix, and header-key level rate limiting capability
+- Base routes uniformly mount `RateLimitMiddlewareFromConfig`, with global and path-prefix limits keyed by socket peer IP; untrusted request headers cannot rotate identities or bypass the limiter
 - Management write interfaces are confirmed to uniformly stack `AuthMiddleware`, `EnforceRequestScope`, `RequirePrincipalKinds`, `RequireResourcePermission`, and `AuditMiddleware`
 - The audit middleware now uniformly masks sensitive fields such as `password`, `secret`, `api_key`, and `token`, preventing plaintext secrets from landing in audit logs
 - `docs/token-lifecycle-and-key-rotation.md` has been added, defining minimal lifecycles and rotation flows for JWT / provider keys / service tokens

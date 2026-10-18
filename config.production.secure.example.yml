@@ -109,9 +109,7 @@ security:
     enabled: true
     requests_per_minute: 120
     burst: 30
-    key_header: ""
     whitelist_ips: []
-    whitelist_keys: []
     paths:
       # 专用前缀必须排在 /public/ 之前：中间件按首个匹配前缀取限流
       - enabled: true

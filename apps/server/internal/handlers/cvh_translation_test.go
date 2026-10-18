@@ -89,6 +89,7 @@ func TestCvhTranslationTranslate(t *testing.T) {
 		{"lang invalid", translationdelivery.ErrTranslationLangInvalid, http.StatusBadRequest},
 		{"empty output", translationdelivery.ErrTranslationEmptyOutput, http.StatusBadRequest},
 		{"unavailable", translationdelivery.ErrTranslationUnavailable, http.StatusServiceUnavailable},
+		{"quota usage unavailable", translationdelivery.ErrTranslationQuotaUsageUnavailable, http.StatusServiceUnavailable},
 		{"quota exceeded", translationdelivery.ErrTranslationQuotaExceeded, http.StatusTooManyRequests},
 		{"deadline", context.DeadlineExceeded, http.StatusGatewayTimeout},
 		{"upstream failure", errors.New("upstream boom"), http.StatusBadGateway},

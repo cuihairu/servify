@@ -31,7 +31,8 @@ func (m *stubQuotaMeter) Add(_ context.Context, _ string, amount int64) (int64, 
 
 // stubNext 被装饰的翻译门面 inline mock：回执固定译文，可注入 usage。
 type stubNext struct {
-	usage *llm.TokenUsage
+	usage      *llm.TokenUsage
+	batchCalls int
 }
 
 func (s *stubNext) Translate(_ context.Context, cmd TranslateCommand) (TranslateResult, error) {
@@ -39,6 +40,10 @@ func (s *stubNext) Translate(_ context.Context, cmd TranslateCommand) (Translate
 }
 
 func (s *stubNext) BatchTranslate(ctx context.Context, cmd BatchTranslateCommand) (BatchTranslateResult, error) {
+	s.batchCalls++
+	if len(cmd.Texts) == 0 {
+		return BatchTranslateResult{Texts: []string{}, TargetLang: cmd.TargetLang}, nil
+	}
 	_, _ = s.Translate(ctx, TranslateCommand{Text: cmd.Texts[0], TargetLang: cmd.TargetLang})
 	return BatchTranslateResult{Texts: []string{"ok"}, TargetLang: cmd.TargetLang}, nil
 }
@@ -119,7 +124,7 @@ func TestGateRequestsUnitMeterErrorFailOpen(t *testing.T) {
 		t.Fatalf("meter failure must fail-open, got (%+v, %v)", res, err)
 	}
 	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
-		t.Fatalf("batch meter failure must fail-open: %v", err)
+		t.Fatalf("request-count batch meter failure must fail-open: %v", err)
 	}
 }
 
@@ -156,18 +161,27 @@ func TestGateTokensUnit(t *testing.T) {
 		t.Fatalf("usage-less call must not record, records = %v", meter.records)
 	}
 
-	// 批量面：仅事前检查，不记账（批量产出无 usage 面）。
+	// tokens 配额下批量产出无 usage 面，必须在调用 provider 前拒绝。
 	meter.usage = 100
-	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
-		t.Fatalf("batch over token quota expected ErrTranslationQuotaExceeded, got %v", err)
+	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("unmeterable token batch expected ErrTranslationQuotaUsageUnavailable, got %v", err)
 	}
 	meter.usage = 0
 	before := len(meter.records)
-	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
-		t.Fatalf("batch within token quota: %v", err)
+	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("unmeterable token batch expected ErrTranslationQuotaUsageUnavailable, got %v", err)
 	}
 	if len(meter.records) != before {
 		t.Fatalf("batch must not record tokens (no usage surface), records = %v", meter.records)
+	}
+	if next.batchCalls != 0 {
+		t.Fatalf("unmeterable batch reached provider %d times", next.batchCalls)
+	}
+	if _, err := gate.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{}, TargetLang: "en"}); err != nil {
+		t.Fatalf("empty token batch should pass without usage: %v", err)
+	}
+	if next.batchCalls != 1 {
+		t.Fatalf("empty batch should pass through once, calls = %d", next.batchCalls)
 	}
 }
 
@@ -178,8 +192,8 @@ func TestGateTokensUnitMeterErrorFailOpen(t *testing.T) {
 	if _, err := gate.Translate(tenantCtx(), TranslateCommand{Text: "hi"}); err != nil {
 		t.Fatalf("meter failure must fail-open: %v", err)
 	}
-	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
-		t.Fatalf("batch meter failure must fail-open: %v", err)
+	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("unmeterable token batch must be rejected: %v", err)
 	}
 }
 
@@ -260,8 +274,8 @@ func TestNewQuotaGateWithLimitSourceNilSafety(t *testing.T) {
 	if _, err := gate.Translate(tenantCtx(), TranslateCommand{Text: "hi"}); err != nil {
 		t.Fatalf("nil source must fall back to static limit: %v", err)
 	}
-	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
-		t.Fatalf("nil source batch must pass: %v", err)
+	if _, err := gate.BatchTranslate(tenantCtx(), BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("nil source must not allow unmeterable token batch: %v", err)
 	}
 }
 
@@ -293,8 +307,8 @@ func TestGateLimitSourceOverride(t *testing.T) {
 	if meter2.records != nil {
 		t.Fatalf("rejected call must not consume meter, records = %v", meter2.records)
 	}
-	if _, err := gate2.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaExceeded) {
-		t.Fatalf("tokens batch expected ErrTranslationQuotaExceeded, got %v", err)
+	if _, err := gate2.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("unmeterable tokens batch expected ErrTranslationQuotaUsageUnavailable, got %v", err)
 	}
 
 	// 解析返回 0（覆盖未设置）：回落静态 100 → 放行。
@@ -303,7 +317,7 @@ func TestGateLimitSourceOverride(t *testing.T) {
 	if _, err := gate3.Translate(ctx, TranslateCommand{Text: "hi"}); err != nil {
 		t.Fatalf("unset override must fall back to static limit: %v", err)
 	}
-	if _, err := gate3.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); err != nil {
-		t.Fatalf("unset override batch must pass: %v", err)
+	if _, err := gate3.BatchTranslate(ctx, BatchTranslateCommand{Texts: []string{"a"}, TargetLang: "en"}); !errors.Is(err, ErrTranslationQuotaUsageUnavailable) {
+		t.Fatalf("unset override must not allow unmeterable token batch: %v", err)
 	}
 }

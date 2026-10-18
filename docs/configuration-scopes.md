@@ -298,8 +298,8 @@ Current code skeleton:
 
 - `TenantConfig` / `WorkspaceConfig` already exist (`internal/models/models.go`), and the public portal read path is integrated (see above); later, finer-grained `AIConfigOverride` / `RoutingPolicyConfig` can be extended on this basis
 - Viper + `config.yml` still carries some business defaults that should later sink to tenant/workspace
-- `portal` is still system-level config, not yet tenant/workspace-ified
-- AI / knowledge / routing tenant/workspace overrides currently have rules defined, but not yet unified implementation
+- `portal` reads are partially scoped: the public config route merges system, tenant, and workspace values; a consistent admin UI for managing these overrides is not available
+- AI / knowledge overrides are partially implemented for OpenAI, Dify, WeKnora, RAGFlow, and the translation quota `limit`; this is not a universal per-feature override layer. Routing-policy overrides are not implemented yet, and each provider/config family still needs explicit field-level scope and governance decisions
 - `DailyStats` is still a system-level global aggregation, without tenant/workspace dimensions
 
 ## Template Governance and Environment Strictness (P2-2)

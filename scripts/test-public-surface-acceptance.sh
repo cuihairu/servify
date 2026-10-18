@@ -198,7 +198,6 @@ cfg["security"]["max_body_bytes"] = 4096
 cfg["security"]["websocket_allowed_origins"] = ["https://admin.example.com"]
 cfg["security"]["rate_limiting"]["enabled"] = True
 cfg["security"]["rate_limiting"]["whitelist_ips"] = []
-cfg["security"]["rate_limiting"]["whitelist_keys"] = []
 cfg["security"]["rate_limiting"]["paths"] = [
     {
         "enabled": True,

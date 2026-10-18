@@ -182,10 +182,7 @@ security:
     enabled: true
     requests_per_minute: 60
     burst: 10
-    # 使用 Header 值作为限流 Key（可选：X-API-Key / X-Forwarded-For）
-    key_header: "X-API-Key"
     whitelist_ips: ["127.0.0.1"]
-    whitelist_keys: ["internal-test-key"]
     # 可选：按路径覆盖（前缀匹配，优先匹配）
     paths:
       - enabled: true

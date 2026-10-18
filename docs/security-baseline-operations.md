@@ -118,7 +118,8 @@ The write path for scoped config (tenant/workspace scope config documents) alrea
 ### Rate limiting
 
 - `registerBaseMiddleware` uniformly mounts `RateLimitMiddlewareFromConfig`
-- Supports global rate limiting, per-path-prefix rate limiting, per-header-key rate limiting, and IP / key allowlists
+- Supports global and per-path-prefix rate limiting, keyed by the socket peer IP; only socket peer IPs can be allowlisted. Forwarded/request headers are not trusted as limiter identities.
+- Each limiter bounds its bucket map to 4,096 peers, shares an overflow bucket at capacity, and sweeps buckets idle for 10 minutes at most once per minute. Behind a reverse proxy, clients share the proxy peer bucket unless a trusted-proxy boundary is explicitly added.
 - The default dev config `config.yml` already enables basic rate limiting, and provides independent path-level rate limiting for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/ai/query`, `/api/v1/metrics/ingest`, `/api/`
 - Production environments should still tighten thresholds, domains, and secrets injection based on `config.production.secure.example.yml` or equivalent deployment config, rather than taking the dev config to production as-is
 
@@ -144,7 +145,7 @@ Recommend enabling at least the following rate-limit baseline:
 - `/api/`: protects management-plane write operations and batch reads
 - `/api/v1/auth/`: separate stricter rate limiting, prioritizing protection for anonymous auth entries like login, register, refresh
 - `/api/v1/ai/`: separate stricter rate limiting, especially `knowledge/upload`, `knowledge/sync`
-- `/api/v1/metrics/ingest`: separate rate limiting, preferring service token or dedicated header key
+- `/api/v1/metrics/ingest`: separate rate limiting and service-token authentication
 - `/public/`: separate rate limiting per anonymous entry, avoiding scraping and credential stuffing
 - `/uploads/`: separate rate limiting, avoiding file enumeration, hot-resource scraping, or bandwidth amplification
 
