@@ -84,3 +84,20 @@ SDK 文档依据：`sdk/SURFACE_GOVERNANCE.md:3-27,48-61`；Android 状态与门
 | 3：群平台 connector 与自动归纳 | 在来源端口接入目标群聊平台，处理 thread/reply/edit/delete、成员权限、速率限制、重放幂等；候选生成增加归纳/去重建议但审核仍为人工。 | 先确定群平台与数据保留策略；本仓库现有单会话 WS 不等于外部群聊接入器。 |
 
 “待审核”标注是硬业务不变量：任何返回 pending 候选的 API/WS 都必须携带结构化状态，服务端渲染端在显示正文前强制加标签；不允许由 LLM 自主决定是否披露。拒绝内容不参与向量索引；审核通过原子化地产生正式文档并排 index job，避免“状态已 approved 但搜索不到”或“pending 被默认命中”的窗口。
+
+## 修复记录
+
+### 二、知识库独立实体
+
+- 新增 `KnowledgeBase`（租户/工作区隔离、库级公开标志）与有序 `KnowledgeChunk`，文档可绑定知识库；见 `apps/server/internal/modules/knowledge/domain/models.go:9-55`。
+- 新增知识库/分块 service 与 repository，文档创建时写默认或指定知识库及第 0 块；见 `apps/server/internal/modules/knowledge/application/catalog_service.go:12-43`、`apps/server/internal/modules/knowledge/infra/gorm_repository.go:24-80,83-135`。
+- 迁移 `000025` 为存量 scope 建默认库、回填文档外键，并逐行复制现有文档内容/向量为分块；见 `apps/server/internal/app/bootstrap/migrations/000025_knowledge_bases_chunks.up.sql:1-49`。迁移保留原文档行与内容。
+- 测试：`go test ./internal/modules/knowledge/...` 与 `go test ./internal/app/bootstrap -run 'TestMigrationChain' -count=1` 通过。
+- Commit: `41852ed9d8bec3e9a24bbdbc4ec230d491b1329a`。
+
+### 三、SDK 对外接入门槛
+
+- 增加 session/token 步骤与 Web 分发事实说明；见 `sdk/EXTERNAL-INTEGRATION.md:1-54`。SDK workspace 当前 `private: true`，没有公开 npm/CDN 地址；见 `sdk/package.json:1-18`。
+- 增加从当前 `1.0.0` 开始的变更记录并从 SDK README 链接；见 `sdk/CHANGELOG.md:1-12`、`sdk/README.md:1-5`。
+- 测试：`npm ci` 后 `npm test` 通过（188 项测试）。
+- Commit: `961a5569effbf164f2ae76dca74a75e8e7e78bd3`。
