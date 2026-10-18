@@ -165,13 +165,17 @@ overturn — overturning only changes this document and this section's implement
 
 **Explicitly not done this round** (remaining gaps):
 
-- **Admin-plane write surface**: override values currently only take effect on the
-  read path (override rows require directly writing
-  tenant_configs / workspace_configs); the admin
-  scope form, field validation, and
-  audit section require a new scope branch in `scoped_config_handler` + admin frontend
-  forms, which belong to the
-  product surface rather than an enforcement gap, and are initiated separately.
+- **Admin-plane write surface**: the REST write path
+  (`PUT /security/config/{tenant,workspace}`) already persists
+  `translation_quota`; since 2026-10-18 (delegated decision, recorded here) it
+  also carries the section through the governance machinery — payload merge for
+  risk templates, history diff keys, and a section-aware verification check
+  (`translation_quota_verified` / `translation_quota_override_verified`,
+  medium risk, approval not required since only `limit` is overridden while
+  enabled/unit/window stay system-level). What still does not exist anywhere is
+  the admin frontend itself: the admin has no scoped-config form, field
+  validation, or audit view for any section, so that first write surface stays a
+  product-surface project and is initiated separately.
 - **Tenant plumbing for the real-time/historical paths**: when these paths' ctx
   does not yet carry a tenant, they are skipped as no-tenant
   (passing through the gate without metering); the REST translate endpoint already has

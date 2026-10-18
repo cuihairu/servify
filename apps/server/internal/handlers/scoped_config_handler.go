@@ -1494,6 +1494,14 @@ func scopedConfigVerificationTemplateForChangeSet(operation string, changedSecti
 				EvidenceHint: "登录/refresh 冒烟结果、风控评分样本或阈值读取结果",
 				Required:     true,
 			})
+		case "translation_quota":
+			checks = append(checks, scopedConfigVerificationCheckDefinition{
+				ID:           "translation_quota_verified",
+				Section:      "translation_quota",
+				Title:        "确认翻译配额覆盖值在目标作用域生效且未影响系统级 enabled/unit/window",
+				EvidenceHint: "配额解析结果、QuotaGate 冒烟或 429 行为验证记录",
+				Required:     true,
+			})
 		}
 	}
 	if portalPublicPaths := changedPathsForPrefixes(changedPaths, "portal.brand_name", "portal.logo_url", "portal.primary_color", "portal.secondary_color", "portal.support_email"); len(portalPublicPaths) > 0 {
@@ -1606,6 +1614,17 @@ func scopedConfigVerificationTemplateForChangeSet(operation string, changedSecti
 			Required:     true,
 		})
 	}
+	if translationQuotaPaths := changedPathsForPrefixes(changedPaths, "translation_quota.limit"); len(translationQuotaPaths) > 0 {
+		checks = append(checks, scopedConfigVerificationCheckDefinition{
+			ID:           "translation_quota_override_verified",
+			Section:      "translation_quota",
+			RiskLevel:    "medium",
+			ChangedPaths: translationQuotaPaths,
+			Title:        "确认翻译配额覆盖值与滚动窗口行为符合预期（enabled/unit/window 保持系统级）",
+			EvidenceHint: "配额解析结果、QuotaGate 冒烟或 429 行为验证记录",
+			Required:     true,
+		})
+	}
 	return scopedConfigVerificationTemplate{
 		Operation:       operation,
 		ChangedSections: changedSections,
@@ -1664,6 +1683,9 @@ func scopedConfigChangedSections(before, after *configscope.ScopedConfigDocument
 	if len(diffJSONChanges(before.SessionRisk, after.SessionRisk, "session_risk")) > 0 {
 		sections = append(sections, "session_risk")
 	}
+	if len(diffJSONChanges(before.TranslationQuota, after.TranslationQuota, "translation_quota")) > 0 {
+		sections = append(sections, "translation_quota")
+	}
 	if len(sections) == 0 {
 		sections = presentSections(after)
 	}
@@ -1682,6 +1704,7 @@ func scopedConfigChangedPaths(before, after *configscope.ScopedConfigDocument) [
 	result = append(result, changePaths(diffJSONChanges(before.OpenAI, after.OpenAI, "openai"))...)
 	result = append(result, changePaths(diffJSONChanges(before.WeKnora, after.WeKnora, "weknora"))...)
 	result = append(result, changePaths(diffJSONChanges(before.SessionRisk, after.SessionRisk, "session_risk"))...)
+	result = append(result, changePaths(diffJSONChanges(before.TranslationQuota, after.TranslationQuota, "translation_quota"))...)
 	return normalizeScopedConfigChangedPaths(result)
 }
 
@@ -1725,7 +1748,7 @@ func scopedConfigChangedSectionsFromPaths(paths []string) []string {
 			section = section[:idx]
 		}
 		switch section {
-		case "portal", "openai", "weknora", "session_risk":
+		case "portal", "openai", "weknora", "session_risk", "translation_quota":
 			if _, ok := seen[section]; ok {
 				continue
 			}
@@ -1860,6 +1883,9 @@ func scopedConfigMergedDocument(current *configscope.ScopedConfigDocument, paylo
 	if payload.SessionRisk != nil {
 		merged.SessionRisk = payload.SessionRisk
 	}
+	if payload.TranslationQuota != nil {
+		merged.TranslationQuota = payload.TranslationQuota
+	}
 	return merged
 }
 
@@ -1887,6 +1913,8 @@ func scopedConfigChangeRiskReason(check scopedConfigVerificationCheckDefinition)
 		return "session_risk_window_change"
 	case "session_risk_concurrency_threshold_verified":
 		return "session_risk_concurrency_change"
+	case "translation_quota_override_verified":
+		return "translation_quota_override_change"
 	default:
 		if strings.TrimSpace(check.Section) != "" {
 			return strings.TrimSpace(check.Section) + "_config_change"
@@ -2485,28 +2513,33 @@ func buildScopedConfigDiff(current, snapshot *configscope.ScopedConfigDocument) 
 	openAIChanges := diffJSONChanges(current.OpenAI, snapshot.OpenAI, "openai")
 	weKnoraChanges := diffJSONChanges(current.WeKnora, snapshot.WeKnora, "weknora")
 	sessionRiskChanges := diffJSONChanges(current.SessionRisk, snapshot.SessionRisk, "session_risk")
+	translationQuotaChanges := diffJSONChanges(current.TranslationQuota, snapshot.TranslationQuota, "translation_quota")
 	changes := append(append([]gin.H{}, portalChanges...), openAIChanges...)
 	changes = append(changes, weKnoraChanges...)
 	changes = append(changes, sessionRiskChanges...)
+	changes = append(changes, translationQuotaChanges...)
 	changedPaths := changePaths(changes)
 	return gin.H{
-		"portal_changed":       len(portalChanges) > 0,
-		"openai_changed":       len(openAIChanges) > 0,
-		"weknora_changed":      len(weKnoraChanges) > 0,
-		"session_risk_changed": len(sessionRiskChanges) > 0,
-		"scope_changed":        current.TenantID != snapshot.TenantID || current.WorkspaceID != snapshot.WorkspaceID,
-		"current_sections":     presentSections(current),
-		"snapshot_sections":    presentSections(snapshot),
-		"changed_paths":        changedPaths,
-		"portal_paths":         changePaths(portalChanges),
-		"openai_paths":         changePaths(openAIChanges),
-		"weknora_paths":        changePaths(weKnoraChanges),
-		"session_risk_paths":   changePaths(sessionRiskChanges),
-		"changes":              changes,
-		"portal_changes":       portalChanges,
-		"openai_changes":       openAIChanges,
-		"weknora_changes":      weKnoraChanges,
-		"session_risk_changes": sessionRiskChanges,
+		"portal_changed":            len(portalChanges) > 0,
+		"openai_changed":            len(openAIChanges) > 0,
+		"weknora_changed":           len(weKnoraChanges) > 0,
+		"session_risk_changed":      len(sessionRiskChanges) > 0,
+		"translation_quota_changed": len(translationQuotaChanges) > 0,
+		"scope_changed":             current.TenantID != snapshot.TenantID || current.WorkspaceID != snapshot.WorkspaceID,
+		"current_sections":          presentSections(current),
+		"snapshot_sections":         presentSections(snapshot),
+		"changed_paths":             changedPaths,
+		"portal_paths":              changePaths(portalChanges),
+		"openai_paths":              changePaths(openAIChanges),
+		"weknora_paths":             changePaths(weKnoraChanges),
+		"session_risk_paths":        changePaths(sessionRiskChanges),
+		"translation_quota_paths":   changePaths(translationQuotaChanges),
+		"changes":                   changes,
+		"portal_changes":            portalChanges,
+		"openai_changes":            openAIChanges,
+		"weknora_changes":           weKnoraChanges,
+		"session_risk_changes":      sessionRiskChanges,
+		"translation_quota_changes": translationQuotaChanges,
 	}
 }
 
@@ -2526,6 +2559,9 @@ func presentSections(doc *configscope.ScopedConfigDocument) []string {
 	}
 	if doc.SessionRisk != nil {
 		sections = append(sections, "session_risk")
+	}
+	if doc.TranslationQuota != nil {
+		sections = append(sections, "translation_quota")
 	}
 	return sections
 }
