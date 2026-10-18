@@ -100,3 +100,10 @@
 
 - [x] docs 子目录英文正文补齐（i18n 目录布局后口径：中文在 `docs/zh/`、英文落根 `docs/` 同名路径，切换器由 VitePress `locales` 自动渲染故不手写）——28 篇全部落地：25 篇真译（design 3 + implementation 19 + research 1 + review verification 1 + contributing 1 + superpowers specs 1；contributing 中文源本身已是英文故逐字复制；competitive-survey 的 `title:` 全角冒号译成半角冒号致 frontmatter YAML 解析 build 红、加引号修复；16 张竞品截图复制进 `docs/research/assets/` 后打包正常）+ 2 篇 >1000 行占位页（review/chatgpt-review-2026-10-04 1349 行、superpowers/plans/2025-05-01-pgvector-knowledge-base 3112 行，标「暂无英文译版」+链中文原文）；verify 28/28 clean、docs build 绿、check-text-encoding 绿——残留英文侧栏收录已于同日随 i18n 布局收口补齐
 - [x] docs 站 i18n 目录布局收口（并发会话遗留的在途改动经 R1025PATROL 代决授权合成提交 9efb65a：中文全部迁入 `docs/zh/`（59 根目录 + 28 子目录 + contributing），根 `docs/` 换英文正文并删除 `.en.md`/`.zh.md` 双文件形态，VitePress `locales` 自动渲染切换器；540 个 dist-verify 构建产物剔出 staged 并补 .gitignore；英文侧栏补齐 28 篇收录 + implementation 独立分组 + nav 入口，与 zh 侧栏逐组对齐；28 篇中文原文不再只活在 index）— 9efb65a，docs build 绿 + check-text-encoding 绿 + Docs Pages 38924039803 绿
+- [ ] 审核整改（2026-10-18 独立审核，见 docs/review/luna-review-2026-10-18.md）：
+      按审核报告的三张表逐项处理，**先核对再动手**，每项给 file:line 证据。
+      1) 表一「缺陷」：按风险排序修，高风险优先
+      2) 表二「文档与实现不一致」：以代码为准改文档，或明确标注为规划中
+         **禁止为对齐文档去改业务代码**
+      3) 表三「值得补的能力」：只做评估与分期建议，**不实现**（需用户拍板）
+      每完成一项勾掉并写证据；全部测试通过后 commit+push；不 bump 版本号。
