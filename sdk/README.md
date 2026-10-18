@@ -2,6 +2,8 @@
 
 This workspace currently implements web SDK packages and reserves package slots for future SDK families.
 
+For third-party session bootstrap, visitor-token handling, and current distribution status, see [External integration](EXTERNAL-INTEGRATION.md). SDK release history starts at [CHANGELOG.md](CHANGELOG.md).
+
 ## Current packages
 
 - `packages/core`
