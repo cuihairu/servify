@@ -25,6 +25,7 @@ import {
   revokeUserTokens,
 } from '@/services/security';
 import { getErrorMessage, isFormValidationError } from '@/utils/error';
+import ScopedConfigCard from './ScopedConfigCard';
 
 const parseUserIds = (raw: string): number[] => {
   const seen = new Set<number>();
@@ -621,6 +622,8 @@ const SecurityPage: React.FC = () => {
           scroll={{ x: 1180 }}
         />
       </ProCard>
+
+      <ScopedConfigCard />
 
       <Drawer
         title={

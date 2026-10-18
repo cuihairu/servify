@@ -872,3 +872,196 @@ declare namespace API {
     created_at: string;
   }
 }
+
+declare namespace API {
+  // ---- 作用域配置治理（scoped config：tenant_configs / workspace_configs 覆盖层）----
+
+  /** 租户/工作区作用域覆盖文档；只含已落库分节，写入时按分节合并（非空才覆盖） */
+  interface ScopedConfigDocument {
+    tenant_id?: string;
+    workspace_id?: string;
+    portal?: Record<string, unknown>;
+    openai?: Record<string, unknown>;
+    dify?: Record<string, unknown>;
+    weknora?: Record<string, unknown>;
+    ragflow?: Record<string, unknown>;
+    session_risk?: Record<string, unknown>;
+    /** 翻译配额覆盖：只覆盖 limit；limit<=0 表示回落系统值，enabled/unit/window 保持系统级 */
+    translation_quota?: { limit?: number };
+  }
+
+  interface ScopedConfigChangeControl {
+    change_ref: string;
+    reason: string;
+    approval_ref?: string;
+  }
+
+  interface ScopedConfigChangeRisk {
+    risk_level: 'low' | 'medium' | 'high' | string;
+    risk_reasons?: string[];
+    changed_paths?: string[];
+    approval_required: boolean;
+  }
+
+  interface ScopedConfigApprovalPolicy {
+    required: boolean;
+    approval_ref_required: boolean;
+    approval_ref_present: boolean;
+    approval_recorded: boolean;
+    approval_status: 'not_required' | 'missing' | 'provided' | 'approved' | string;
+    same_actor_allowed: boolean;
+    risk_level?: string;
+    risk_reasons?: string[];
+    changed_paths?: string[];
+    latest_approver_user_id?: number | null;
+    latest_approval?: Record<string, unknown>;
+    latest_approval_audit_id?: number;
+    latest_approval_at?: string;
+  }
+
+  interface ScopedConfigVerificationCheckDefinition {
+    id: string;
+    section?: string;
+    risk_level?: string;
+    changed_paths?: string[];
+    title: string;
+    evidence_hint?: string;
+    required: boolean;
+  }
+
+  interface ScopedConfigVerificationTemplate {
+    operation: string;
+    changed_sections?: string[];
+    changed_paths?: string[];
+    checks?: ScopedConfigVerificationCheckDefinition[];
+  }
+
+  interface ScopedConfigVerificationCheckResult {
+    id: string;
+    status: 'passed' | 'failed' | 'skipped' | string;
+    notes?: string;
+  }
+
+  interface ScopedConfigVerificationRecord {
+    audit_id: number;
+    source_audit_id: number;
+    status: 'passed' | 'failed' | string;
+    notes?: string;
+    evidence?: string[];
+    checks?: ScopedConfigVerificationCheckResult[];
+    created_at: string;
+    actor_user_id?: number;
+    change_control?: ScopedConfigChangeControl;
+  }
+
+  interface ScopedConfigGovernancePolicy {
+    status: string;
+    phase: string;
+    workflow_complete: boolean;
+    approval_required: boolean;
+    approval_status?: string;
+    verification_required: boolean;
+    verification_status: string;
+    blocking_requirements?: string[];
+    risk_level?: string;
+    risk_reasons?: string[];
+    changed_paths?: string[];
+  }
+
+  interface ScopedConfigDiffChange {
+    path: string;
+    type: 'added' | 'removed' | 'updated' | string;
+    current?: unknown;
+    snapshot?: unknown;
+  }
+
+  interface ScopedConfigDiff {
+    portal_changed?: boolean;
+    openai_changed?: boolean;
+    weknora_changed?: boolean;
+    session_risk_changed?: boolean;
+    translation_quota_changed?: boolean;
+    scope_changed?: boolean;
+    current_sections?: string[];
+    snapshot_sections?: string[];
+    changed_paths?: string[];
+    changes?: ScopedConfigDiffChange[];
+  }
+
+  interface ScopedConfigHistoryItem {
+    audit: API.AuditLog;
+    operation: string;
+    has_snapshot: boolean;
+    can_rollback: boolean;
+    preview_path?: string;
+    rollback_path?: string;
+    verify_path?: string;
+    change_control?: ScopedConfigChangeControl | null;
+    change_risk?: ScopedConfigChangeRisk;
+    approval_policy?: ScopedConfigApprovalPolicy;
+    governance_status: string;
+    governance_policy?: ScopedConfigGovernancePolicy;
+    verification_required: boolean;
+    verification_status: string;
+    verification_count?: number;
+    latest_verification?: ScopedConfigVerificationRecord | null;
+    verification_template?: ScopedConfigVerificationTemplate;
+    verification_policy?: Record<string, unknown>;
+  }
+
+  interface ScopedConfigHistoryResponse {
+    data: ScopedConfigHistoryItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    pages: number;
+    governance_summary?: {
+      total_items: number;
+      needs_action_count: number;
+      workflow_complete_count: number;
+      status_counts?: Record<string, number>;
+      risk_level_counts?: Record<string, number>;
+      approval_status_counts?: Record<string, number>;
+      verification_status_counts?: Record<string, number>;
+    };
+    applied_filters?: Record<string, unknown>;
+  }
+
+  interface ScopedConfigHistoryEntry {
+    audit: API.AuditLog;
+    snapshot?: ScopedConfigDocument;
+    current?: ScopedConfigDocument;
+    diff?: ScopedConfigDiff;
+    change_control?: ScopedConfigChangeControl | null;
+    change_risk?: ScopedConfigChangeRisk;
+    approval_policy?: ScopedConfigApprovalPolicy;
+    governance_status: string;
+    governance_policy?: ScopedConfigGovernancePolicy;
+    verification_required: boolean;
+    verification_status: string;
+    verification_path?: string;
+    latest_verification?: ScopedConfigVerificationRecord | null;
+    verification_template?: ScopedConfigVerificationTemplate;
+    verification_policy?: Record<string, unknown>;
+    verifications?: ScopedConfigVerificationRecord[];
+  }
+
+  interface ScopedConfigGovernedWriteResponse {
+    tenant_id: string;
+    workspace_id?: string;
+    config: ScopedConfigDocument;
+    change_control?: ScopedConfigChangeControl | null;
+    change_risk?: ScopedConfigChangeRisk;
+    approval_policy?: ScopedConfigApprovalPolicy;
+    governance_status: string;
+    governance_policy?: ScopedConfigGovernancePolicy;
+  }
+
+  interface ScopedConfigApprovalResponse {
+    tenant_id: string;
+    workspace_id?: string;
+    approval: Record<string, unknown>;
+    change_control?: ScopedConfigChangeControl | null;
+    approval_policy?: Record<string, unknown>;
+  }
+}
