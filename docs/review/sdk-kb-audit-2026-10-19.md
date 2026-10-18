@@ -108,3 +108,9 @@ SDK 文档依据：`sdk/SURFACE_GOVERNANCE.md:3-27,48-61`；Android 状态与门
 - 增加从当前 `1.0.0` 开始的变更记录并从 SDK README 链接；见 `sdk/CHANGELOG.md:1-12`、`sdk/README.md:1-5`。
 - 测试：`npm ci` 后 `npm test` 通过（188 项测试）。
 - Commit: `961a5569effbf164f2ae76dca74a75e8e7e78bd3`。
+
+### 四、对外契约可验证性与能力矩阵
+
+- 更正本审计「全仓无 OpenAPI/Swagger 规格文件」的否定性结论：规格在 `docs/generated/api/swagger.json`（`make docs` pinned swag 生成，CI 漂移守卫），审计检索面漏看了 `docs/generated/`。EXTERNAL-INTEGRATION 增「Contract sources」节，REST 面指向该规格、WS 面声明 PROTOCOL.md 手写事实源；见 `sdk/EXTERNAL-INTEGRATION.md`。
+- 新增跨端能力/版本兼容矩阵 `sdk/CAPABILITY-MATRIX.md`（P2 补齐项）：契约事实源与版本口径（WS 手写+共享 fixtures、REST OpenAPI、同号 1.0.0 无 per-package semver、能力协商缺省）、13 行能力矩阵（聊天/流式/转人工/补拉/未读/已读游标/翻译消费/语音 §9·§9.3/远程协助/推送注册/工单/上传/ICE——逐格带代码锚点）、平台形态与已知边界、分发硬边界；README 挂链接。逐格锚点核验：Web core `websocket.ts` switch/`voice.ts`/`unread.ts`、Android `FrameCodec.kt`/`ServifyChat.syncReadState()`、iOS Swift 镜像、RN `createRNServifySDK`（mobile 能力集）、移动端 `message-translated` 仅 fixtures 回放无消费实现（静默忽略）。
+- 测试：`npm -C sdk test` 通过（199 项）；docs 门未受影响（本项只动 `sdk/` 树与本文）。
