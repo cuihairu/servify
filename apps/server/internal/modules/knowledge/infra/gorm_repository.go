@@ -21,25 +21,106 @@ func NewGormDocumentRepository(db *gorm.DB) *GormDocumentRepository {
 	return &GormDocumentRepository{db: db}
 }
 
+type GormKnowledgeCatalogRepository struct{ db *gorm.DB }
+
+func NewGormKnowledgeCatalogRepository(db *gorm.DB) *GormKnowledgeCatalogRepository {
+	return &GormKnowledgeCatalogRepository{db: db}
+}
+
+func (r *GormKnowledgeCatalogRepository) Create(ctx context.Context, base *domain.KnowledgeBase) error {
+	if base == nil {
+		return gorm.ErrInvalidValue
+	}
+	tenantID, workspaceID := platformauth.TenantIDFromContext(ctx), platformauth.WorkspaceIDFromContext(ctx)
+	if tenantID == "" || workspaceID == "" {
+		return fmt.Errorf("tenant and workspace scope required")
+	}
+	model := &domain.KnowledgeBase{TenantID: tenantID, WorkspaceID: workspaceID, Name: base.Name, IsPublic: base.IsPublic, CreatedAt: base.CreatedAt, UpdatedAt: base.UpdatedAt}
+	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+		return err
+	}
+	base.ID = model.ID
+	return nil
+}
+
+func (r *GormKnowledgeCatalogRepository) List(ctx context.Context) ([]domain.KnowledgeBase, error) {
+	tenantID, workspaceID := platformauth.TenantIDFromContext(ctx), platformauth.WorkspaceIDFromContext(ctx)
+	if tenantID == "" || workspaceID == "" {
+		return nil, fmt.Errorf("tenant and workspace scope required")
+	}
+	var models []domain.KnowledgeBase
+	if err := r.db.WithContext(ctx).Where("tenant_id = ? AND workspace_id = ?", tenantID, workspaceID).Order("id ASC").Find(&models).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.KnowledgeBase, 0, len(models))
+	for _, m := range models {
+		out = append(out, domain.KnowledgeBase{ID: m.ID, Name: m.Name, IsPublic: m.IsPublic, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt})
+	}
+	return out, nil
+}
+
+func (r *GormKnowledgeCatalogRepository) ListByDocument(ctx context.Context, documentID string) ([]domain.Chunk, error) {
+	id, err := parseDocumentID(documentID)
+	if err != nil {
+		return nil, err
+	}
+	var rows []domain.KnowledgeChunk
+	tenantID, workspaceID := platformauth.TenantIDFromContext(ctx), platformauth.WorkspaceIDFromContext(ctx)
+	if tenantID == "" || workspaceID == "" {
+		return nil, fmt.Errorf("tenant and workspace scope required")
+	}
+	q := r.db.WithContext(ctx).Joins("JOIN knowledge_docs ON knowledge_docs.id = knowledge_chunks.document_id").Where("knowledge_docs.tenant_id = ? AND knowledge_docs.workspace_id = ?", tenantID, workspaceID)
+	if err := q.Where("knowledge_chunks.document_id = ?", id).Order("knowledge_chunks.sequence ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]domain.Chunk, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.Chunk{ID: row.ID, DocumentID: row.DocumentID, Sequence: row.Sequence, Content: row.Content, CreatedAt: row.CreatedAt})
+	}
+	return out, nil
+}
+
 func (r *GormDocumentRepository) Create(ctx context.Context, doc *domain.Document) error {
 	tenantID := platformauth.TenantIDFromContext(ctx)
 	workspaceID := platformauth.WorkspaceIDFromContext(ctx)
-	model := &domain.KnowledgeDoc{
-		TenantID:    tenantID,
-		WorkspaceID: workspaceID,
-		ProviderID:  doc.ProviderID,
-		ExternalID:  doc.ExternalID,
-		Title:       doc.Title,
-		Content:     doc.Content,
-		Category:    doc.Category,
-		Tags:        strings.Join(doc.Tags, ","),
-		IsPublic:    doc.IsPublic,
-		SourceID:    doc.SourceID,
-		Version:     doc.Version,
-		CreatedAt:   doc.CreatedAt,
-		UpdatedAt:   doc.UpdatedAt,
+	if tenantID == "" {
+		tenantID = "default"
 	}
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	if workspaceID == "" {
+		workspaceID = "default"
+	}
+	model := &domain.KnowledgeDoc{
+		TenantID:        tenantID,
+		WorkspaceID:     workspaceID,
+		ProviderID:      doc.ProviderID,
+		ExternalID:      doc.ExternalID,
+		Title:           doc.Title,
+		Content:         doc.Content,
+		Category:        doc.Category,
+		Tags:            strings.Join(doc.Tags, ","),
+		IsPublic:        doc.IsPublic,
+		KnowledgeBaseID: doc.KnowledgeBaseID,
+		SourceID:        doc.SourceID,
+		Version:         doc.Version,
+		CreatedAt:       doc.CreatedAt,
+		UpdatedAt:       doc.UpdatedAt,
+	}
+	db := r.db.WithContext(ctx)
+	base := &domain.KnowledgeBase{TenantID: tenantID, WorkspaceID: workspaceID, Name: "Default"}
+	if doc.KnowledgeBaseID != 0 {
+		if err := db.Where("id = ? AND tenant_id = ? AND workspace_id = ?", doc.KnowledgeBaseID, tenantID, workspaceID).First(base).Error; err != nil {
+			return gorm.ErrRecordNotFound
+		}
+	} else if err := db.Where("tenant_id = ? AND workspace_id = ? AND name = ?", tenantID, workspaceID, "Default").FirstOrCreate(base).Error; err != nil {
+		return err
+	}
+	model.KnowledgeBaseID = base.ID
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(model).Error; err != nil {
+			return err
+		}
+		return tx.Create(&domain.KnowledgeChunk{DocumentID: model.ID, Sequence: model.ChunkIndex, Content: model.Content, Embedding: model.Embedding, CreatedAt: model.CreatedAt}).Error
+	}); err != nil {
 		return err
 	}
 	doc.ID = strconv.FormatUint(uint64(model.ID), 10)
@@ -209,18 +290,19 @@ func (r *GormIndexJobRepository) ListByDocument(ctx context.Context, documentID 
 
 func documentFromModel(model domain.KnowledgeDoc) *domain.Document {
 	return &domain.Document{
-		ID:         strconv.FormatUint(uint64(model.ID), 10),
-		ProviderID: model.ProviderID,
-		ExternalID: model.ExternalID,
-		Title:      model.Title,
-		Content:    model.Content,
-		Category:   model.Category,
-		Tags:       splitTags(model.Tags),
-		IsPublic:   model.IsPublic,
-		SourceID:   model.SourceID,
-		Version:    model.Version,
-		CreatedAt:  model.CreatedAt,
-		UpdatedAt:  model.UpdatedAt,
+		ID:              strconv.FormatUint(uint64(model.ID), 10),
+		KnowledgeBaseID: model.KnowledgeBaseID,
+		ProviderID:      model.ProviderID,
+		ExternalID:      model.ExternalID,
+		Title:           model.Title,
+		Content:         model.Content,
+		Category:        model.Category,
+		Tags:            splitTags(model.Tags),
+		IsPublic:        model.IsPublic,
+		SourceID:        model.SourceID,
+		Version:         model.Version,
+		CreatedAt:       model.CreatedAt,
+		UpdatedAt:       model.UpdatedAt,
 	}
 }
 

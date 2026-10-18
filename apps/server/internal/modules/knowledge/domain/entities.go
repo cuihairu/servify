@@ -14,9 +14,18 @@ type Document struct {
 	// SourceID 来源登记归属（B3-1a §8.1），0=未挂来源。
 	SourceID uint
 	// Version 文档版本号（B3-1a §8.2），内容变更自增。
-	Version   int
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Version         int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	KnowledgeBaseID uint
+}
+
+type Chunk struct {
+	ID         uint
+	DocumentID uint
+	Sequence   int
+	Content    string
+	CreatedAt  time.Time
 }
 
 type IndexJobStatus string

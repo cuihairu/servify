@@ -32,3 +32,12 @@ type SourceRepository interface {
 	// CountDocuments 引用该来源的文档数（删除前守卫用）。
 	CountDocuments(ctx context.Context, sourceID uint) (int64, error)
 }
+
+type KnowledgeBaseRepository interface {
+	Create(ctx context.Context, base *domain.KnowledgeBase) error
+	List(ctx context.Context) ([]domain.KnowledgeBase, error)
+}
+
+type ChunkRepository interface {
+	ListByDocument(ctx context.Context, documentID string) ([]domain.Chunk, error)
+}

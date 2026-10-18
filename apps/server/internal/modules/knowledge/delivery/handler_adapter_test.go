@@ -20,7 +20,7 @@ func newDeliveryTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeBase{}, &knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeChunk{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

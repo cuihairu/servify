@@ -3,12 +3,13 @@ package application
 import "time"
 
 type CreateDocumentRequest struct {
-	ID       string
-	Title    string
-	Content  string
-	Category string
-	Tags     []string
-	IsPublic bool
+	ID              string
+	KnowledgeBaseID uint
+	Title           string
+	Content         string
+	Category        string
+	Tags            []string
+	IsPublic        bool
 	// SourceID 来源登记归属（B3-1a §8.1），0=未挂来源。
 	SourceID uint
 }

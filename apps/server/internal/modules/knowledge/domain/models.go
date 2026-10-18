@@ -7,27 +7,51 @@ import "time"
 // knowledge 的 handler 无 swag 注解，本包声明保持通用的 domain（约束见
 // docs/modules-dependency-map.md 第 1 节）。
 type KnowledgeDoc struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	TenantID    string `gorm:"index" json:"tenant_id"`
-	WorkspaceID string `gorm:"index" json:"workspace_id"`
-	ProviderID  string `gorm:"index" json:"provider_id"`
-	ExternalID  string `gorm:"index" json:"external_id"`
-	Title       string `json:"title"`
-	Content     string `gorm:"type:text" json:"content"`
-	Category    string `json:"category"`
-	Tags        string `json:"tags"`
-	IsPublic    bool   `gorm:"default:false;index" json:"is_public"`
+	ID              uint   `gorm:"primaryKey" json:"id"`
+	TenantID        string `gorm:"index" json:"tenant_id"`
+	WorkspaceID     string `gorm:"index" json:"workspace_id"`
+	KnowledgeBaseID uint   `gorm:"index" json:"knowledge_base_id"`
+	ProviderID      string `gorm:"index" json:"provider_id"`
+	ExternalID      string `gorm:"index" json:"external_id"`
+	Title           string `json:"title"`
+	Content         string `gorm:"type:text" json:"content"`
+	Category        string `json:"category"`
+	Tags            string `json:"tags"`
+	IsPublic        bool   `gorm:"default:false;index" json:"is_public"`
 	// SourceID 来源登记（V1.0 收敛 B3-1a，docs/v1-convergence-plan.md §8.1）：
 	// 挂 knowledge_sources 元数据，0=未归属来源。
 	SourceID uint `gorm:"index;default:0" json:"source_id,omitempty"`
 	// Version 文档版本号（§8.2）：内容/元数据变更自增，索引任务关联执行时版本。
 	Version int `gorm:"default:1" json:"version"`
 	// 新增字段 - pgvector 支持
-	Embedding  Embedding `gorm:"type:vector(1536)" json:"embedding,omitempty"`
-	ChunkIndex int       `gorm:"default:0" json:"chunk_index,omitempty"`
-	DocChunkID string    `gorm:"index" json:"doc_chunk_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Embedding     Embedding     `gorm:"type:vector(1536)" json:"embedding,omitempty"`
+	ChunkIndex    int           `gorm:"default:0" json:"chunk_index,omitempty"`
+	DocChunkID    string        `gorm:"index" json:"doc_chunk_id,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+	KnowledgeBase KnowledgeBase `gorm:"foreignKey:KnowledgeBaseID;constraint:OnDelete:SET NULL" json:"-"`
+}
+
+// KnowledgeBase is an isolated knowledge collection owned by one tenant/workspace.
+type KnowledgeBase struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	TenantID    string    `gorm:"index;uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"tenant_id"`
+	WorkspaceID string    `gorm:"index;uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"workspace_id"`
+	Name        string    `gorm:"uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"name"`
+	IsPublic    bool      `gorm:"default:false" json:"is_public"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// KnowledgeChunk stores ordered retrieval units as children of a document.
+type KnowledgeChunk struct {
+	ID         uint         `gorm:"primaryKey" json:"id"`
+	DocumentID uint         `gorm:"not null;index;uniqueIndex:uq_knowledge_chunks_document_sequence" json:"document_id"`
+	Sequence   int          `gorm:"uniqueIndex:uq_knowledge_chunks_document_sequence;not null" json:"sequence"`
+	Content    string       `gorm:"type:text;not null" json:"content"`
+	Embedding  Embedding    `gorm:"type:vector(1536)" json:"embedding,omitempty"`
+	CreatedAt  time.Time    `json:"created_at"`
+	Document   KnowledgeDoc `gorm:"foreignKey:DocumentID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 // KnowledgeIndexJob 知识库索引任务（GORM 持久化模型）。

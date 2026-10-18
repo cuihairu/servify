@@ -21,10 +21,41 @@ func newKnowledgeUnitTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&domain.KnowledgeDoc{}, &domain.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeBase{}, &domain.KnowledgeDoc{}, &domain.KnowledgeChunk{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db
+}
+
+func TestKnowledgeCatalogIsScopedAndDocumentsHaveOrderedChunks(t *testing.T) {
+	db := newKnowledgeUnitTestDB(t)
+	catalog := NewGormKnowledgeCatalogRepository(db)
+	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-a")
+	base := &domain.KnowledgeBase{Name: "Policies", IsPublic: false, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := catalog.Create(ctx, base); err != nil {
+		t.Fatalf("create base: %v", err)
+	}
+	if base.ID == 0 {
+		t.Fatal("knowledge base id was not assigned")
+	}
+	doc := &domain.Document{KnowledgeBaseID: base.ID, Title: "Refunds", Content: "Refund within 30 days", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := NewGormDocumentRepository(db).Create(ctx, doc); err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	chunks, err := catalog.ListByDocument(ctx, doc.ID)
+	if err != nil {
+		t.Fatalf("list chunks: %v", err)
+	}
+	if len(chunks) != 1 || chunks[0].Sequence != 0 || chunks[0].Content != doc.Content {
+		t.Fatalf("unexpected chunks: %+v", chunks)
+	}
+	other := platformauth.ContextWithScope(context.Background(), "tenant-b", "workspace-a")
+	if got, err := catalog.List(other); err != nil || len(got) != 0 {
+		t.Fatalf("cross-tenant bases leaked: got=%+v err=%v", got, err)
+	}
+	if got, err := catalog.ListByDocument(other, doc.ID); err != nil || len(got) != 0 {
+		t.Fatalf("cross-tenant chunks leaked: got=%+v err=%v", got, err)
+	}
 }
 
 func TestGormDocumentRepositoryCRUDUnit(t *testing.T) {

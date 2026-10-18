@@ -41,16 +41,17 @@ func (s *Service) CreateDocument(ctx context.Context, req CreateDocumentRequest)
 	}
 	now := time.Now()
 	doc := &domain.Document{
-		ID:        strings.TrimSpace(req.ID),
-		Title:     title,
-		Content:   content,
-		Category:  strings.TrimSpace(req.Category),
-		Tags:      compact(req.Tags),
-		IsPublic:  req.IsPublic,
-		SourceID:  req.SourceID,
-		Version:   1,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:              strings.TrimSpace(req.ID),
+		KnowledgeBaseID: req.KnowledgeBaseID,
+		Title:           title,
+		Content:         content,
+		Category:        strings.TrimSpace(req.Category),
+		Tags:            compact(req.Tags),
+		IsPublic:        req.IsPublic,
+		SourceID:        req.SourceID,
+		Version:         1,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	if err := s.documents.Create(ctx, doc); err != nil {
 		return nil, err

@@ -34,6 +34,8 @@ func MigrationModels() []interface{} {
 		&models.CustomField{},
 		&models.TicketCustomFieldValue{},
 		&knowledgedomain.KnowledgeDoc{},
+		&knowledgedomain.KnowledgeBase{},
+		&knowledgedomain.KnowledgeChunk{},
 		&knowledgedomain.KnowledgeIndexJob{},
 		&knowledgedomain.KnowledgeSource{}, // V1.0 收敛 B3-1a：知识来源登记（表名 knowledge_sources）
 		&aidomain.AIAnswer{},               // V1.0 收敛 B3-1b：AI 首答持久化（表名 ai_answers）
