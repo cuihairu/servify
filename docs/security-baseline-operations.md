@@ -120,14 +120,14 @@ The write path for scoped config (tenant/workspace scope config documents) alrea
 - `registerBaseMiddleware` uniformly mounts `RateLimitMiddlewareFromConfig`
 - Supports global and per-path-prefix rate limiting, keyed by the socket peer IP; only socket peer IPs can be allowlisted. Forwarded/request headers are not trusted as limiter identities.
 - Each limiter bounds its bucket map to 4,096 peers, shares an overflow bucket at capacity, and sweeps buckets idle for 10 minutes at most once per minute. Behind a reverse proxy, clients share the proxy peer bucket unless a trusted-proxy boundary is explicitly added.
-- The default dev config `config.yml` already enables basic rate limiting, and provides independent path-level rate limiting for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/ai/query`, `/api/v1/metrics/ingest`, `/api/`
+- The default dev config `config.yml` already enables basic rate limiting, and provides independent path-level rate limiting for `/public/suggestions/`, `/public/kb/`, `/public/csat/`, `/public/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/ai/query`, `/api/v1/metrics/ingest`, `/api/v1/remote-assist/`, `/api/`
 - Production environments should still tighten thresholds, domains, and secrets injection based on `config.production.secure.example.yml` or equivalent deployment config, rather than taking the dev config to production as-is
 
 ### Startup alerts
 
 - `InitLogging` now outputs basic security alerts at startup
 - Currently covers scenarios like default or empty `jwt.secret`, open `CORS=*`, rate limiting disabled, empty OpenAI API key, external knowledge provider enabled but missing necessary credentials, etc.
-- If rate limiting is enabled but no independent path-level rate limiting is configured for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/metrics/ingest`, `/api/`, a warning is also output, avoiding public entries, high-cost service surfaces, and management surfaces falling under global rate limiting only
+- If rate limiting is enabled but no independent path-level rate limiting is configured for `/public/`, `/public/kb/`, `/public/csat/`, `/api/v1/auth/`, `/api/v1/ws`, `/uploads/`, `/api/v1/metrics/ingest`, `/api/v1/remote-assist/`, `/api/`, a warning is also output, avoiding public entries, high-cost service surfaces, and management surfaces falling under global rate limiting only
 - Startup-time is still warning-only, not blocking local dev or test startup; before deployment, run `check-security-baseline --strict` for an explicit failing check
 
 ### Pre-deployment check entry points

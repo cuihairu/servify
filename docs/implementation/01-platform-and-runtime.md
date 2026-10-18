@@ -33,7 +33,7 @@ Acceptance:
 
 Recovery point:
 
-- The directory and `App` exist, but the entrypoint is not wired up yet
+- Historical checkpoint (superseded): the entrypoint is now wired — `RunStandalone` (`apps/server/internal/app/bootstrap/standalone.go:84-89`) resolves overrides, then `BuildApp(cfg)` builds and runs `App`
 
 ## P2 config logging observability
 

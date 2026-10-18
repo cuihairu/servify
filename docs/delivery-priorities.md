@@ -19,7 +19,7 @@ The three closure risks listed in the old version of this document have all been
 2. Main-chain acceptance closure is complete (P1 batch + V1.0 convergence B1–B4 through the gate; see [acceptance-checklist.md](./acceptance-checklist.md)).
 3. Documentation/todo/implementation drift has been governed through the V1.0 convergence B0 document declaration batch and the documentation reconciliation rules.
 
-Trade-offs for follow-up evolution are executed by "evolution direction": the Routing scoring engine, pre-close ticket interception, and so on — without cutting in line to expand already frozen surfaces (voice, multi-channel).
+Trade-offs for follow-up evolution are executed by "evolution direction" — without cutting in line to expand already frozen surfaces (voice, multi-channel). The Routing scoring engine and pre-close ticket interception, listed there as evolution items, have both landed.
 
 ## Execution Order
 
@@ -59,7 +59,7 @@ For example:
 
 The V1.0 convergence batch (B0–B4) has all passed the gate; there are no in-progress priority tasks. Entry points when resuming work:
 
-1. Evolution direction backlog: the Routing scoring engine, pre-close ticket interception rules, remaining thin-shell module documentation surface closure items.
+1. Evolution direction backlog: remaining thin-shell module documentation surface closure items. (The Routing scoring engine and pre-close ticket interception rules have landed — `scripts/test-routing-scoring-acceptance.sh` and the Makefile `routing-scoring-acceptance` gate.)
 2. When implementing, register and gate batches per [todo.md](../todo.md)'s batch discipline.
 
 If resuming after an interruption, use the most recent `[-]` item in [todo.md](../todo.md) as the anchor, and do not jump around from memory.

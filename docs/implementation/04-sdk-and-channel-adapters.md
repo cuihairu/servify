@@ -11,8 +11,8 @@ Scope:
 
 Constraints:
 
-- Only the web sdk is implemented for now
-- But the directory layout and contracts must support a future api sdk and app sdk
+- The web SDK shipped first; the API and app SDKs have since been implemented (`sdk/packages/api-client`, `sdk/packages/app-core`, `sdk/packages/react-native`, `sdk/android`, `sdk/ios`; acceptance records in `sdk/ACCEPTANCE-M3.md` / `sdk/ACCEPTANCE-M4.md`)
+- The directory layout and contracts now serve all surfaces
 
 ## S1 sdk target structure
 

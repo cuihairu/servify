@@ -9,8 +9,8 @@
 
 约束：
 
-- 当前只真正实现 web 端
-- API/App 仍以 contract、目录、测试替身、说明文档为主
+- web 端先落地；API 与 App 端面此后也已实现（`sdk/packages/*`、`sdk/android`、`sdk/ios`；验收记录见 `sdk/ACCEPTANCE-M3.md` / `sdk/ACCEPTANCE-M4.md`）
+- 各端面共享同一 contract core（`sdk/packages/core`）与 PROTOCOL fixtures
 
 ## M1 web-sdk-completion
 

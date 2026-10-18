@@ -11,8 +11,8 @@
 
 约束：
 
-- 当前只实现 web sdk
-- 但目录和 contracts 必须支持未来 api sdk 和 app sdk
+- web sdk 先落地；api sdk 与 app sdk 此后也已实现（`sdk/packages/api-client`、`sdk/packages/app-core`、`sdk/packages/react-native`、`sdk/android`、`sdk/ios`；验收记录见 `sdk/ACCEPTANCE-M3.md` / `sdk/ACCEPTANCE-M4.md`）
+- 目录与 contracts 现已服务所有端面
 
 ## S1 sdk target structure
 

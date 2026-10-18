@@ -84,7 +84,7 @@ The signatures below follow the source (`sdk/packages/*/src`).
 
 ### 3.1 Configuration (core)
 
-`WebServifyConfig` (`sdk/packages/core/src/types.ts:6-33`):
+`WebServifyConfig` (alias of `ServifyConfig`, `sdk/packages/core/src/bindings/web-sdk.ts:4`; interface at `sdk/packages/core/src/types.ts:6-36`):
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -95,12 +95,12 @@ The signatures below follow the source (`sdk/packages/*/src`).
 | `sessionId` | `string?` | App-side session mutual recognition: the same id restores the same session |
 | `debug` | `boolean?` | Debug logging |
 | `autoConnect` | `boolean?` | Auto-connect after initialization |
-| `reconnectPolicy` | `Partial<ReconnectPolicy>?` | Reconnect policy; defaults to 5 attempts / 1s start / 2x backoff / 30s cap (`sdk/packages/core/src/contracts/reconnect.ts:8-13`) |
-| `authProvider` | `() => Promise<string>` | Token provider |
-| `onTokenRefreshRequired` | `() => Promise<string>` | Token refresh callback |
-| `remoteAssist` | `WebRTCConfig?` | Remote assistance ICE / audio-video toggles |
-| `webSocketFactory` | `() => WebSocket` | Custom WebSocket factory (for tests) |
-| `capabilities` | `Record<string, unknown>?` | Capability declarations |
+| `reconnectPolicy` | `ReconnectPolicy?` | Reconnect policy; defaults to 5 attempts / 1s start / 2x backoff / 30s cap (`sdk/packages/core/src/contracts/reconnect.ts:8-13`) |
+| `authProvider` | `AuthProvider?` | Token provider (`getToken` / optional `refreshToken`, `sdk/packages/core/src/contracts/auth-provider.ts:13-17`) |
+| `onTokenRefreshRequired` | `() => Promise<void>` | Token refresh callback |
+| `remoteAssist` | `RemoteAssistConfig?` | Remote assistance ICE / audio-video toggles (`sdk/packages/core/src/types.ts:163`) |
+| `webSocketFactory` | `(url: string, protocols?: string \| string[]) => WebSocket` | Custom WebSocket factory (for tests, `sdk/packages/core/src/types.ts:37`) |
+| `capabilities` | `CapabilitySet?` | Capability declarations (`sdk/packages/core/src/contracts/capability.ts:30`) |
 | `echoTimeoutMs` | `number?` | Message receipt timeout |
 
 ### 3.2 core: ServifySDK
@@ -109,33 +109,33 @@ Class definition `sdk/packages/core/src/sdk.ts:33` (`extends EventEmitter<Servif
 
 | Method | Signature | Location |
 | --- | --- | --- |
-| Initialize | `initialize(): Promise<void>` | `sdk.ts:102` |
-| Connect | `connect(): Promise<void>` | `sdk.ts:129` |
-| Disconnect | `disconnect(): void` | — |
-| Start chat | `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>` | `sdk.ts:182` |
-| Send message | `sendMessage(content: string, options?: { type?: 'text'\|'image'\|'file'; … }): Promise<Message>` | `sdk.ts:223` |
-| End session | `endSession(): Promise<void>` | `sdk.ts:278` |
-| Create ticket | `createTicket(ticketData: {…}): Promise<Ticket>` | `sdk.ts:292` |
-| Start remote assistance | `startRemoteAssist(options?: RemoteAssistStartOptions): Promise<RTCPeerConnection>` | `sdk.ts:318` |
-| Accept remote answer | `acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void>` | `sdk.ts:417` |
-| Add ICE | `addRemoteIce(candidate: ServifyRTCIceCandidateInit): Promise<void>` | `sdk.ts:426` |
-| End remote assistance | `endRemoteAssist(): Promise<void>` | `sdk.ts:434` |
-| Assist session id | `setRemoteAssistSession(assistId: string \| number): void` / `getRemoteAssistSession(): string \| null` | `sdk.ts:443,452` |
-| Satisfaction | `submitSatisfaction(satisfaction: {…}): Promise<void>` | `sdk.ts:457` |
-| AI Q&A | `askAI(question: string): Promise<{ answer: string; confidence: number }>` | `sdk.ts:482` |
-| Translation | `translateText(text: string, targetLang: string, options?: {…}): Promise<…>` | `sdk.ts:496` |
-| Initial suggested questions | `getInitialQuestions(limit?: number, options?: { sessionId?: string \| number }): Promise<InitialQuestionsResult>` | `sdk.ts:527` |
-| Autocomplete suggested questions | `getNextQuestions(query: string, options?: { sessionId?: string \| number; limit?: number }): Promise<NextQuestionsResult>` | `sdk.ts:535` |
-| Upload | `uploadFile(file: File): Promise<{ file_url: string; file_name: string; file_size: number }>` | `sdk.ts:544` |
-| Message history | `getMessages(options?: {…}): Promise<Message[]>` | `sdk.ts:558` |
-| Current customer | `getCustomer(): Customer \| null` | `sdk.ts:575` |
-| Current session | `getSession(): ChatSession \| null` | `sdk.ts:580` |
-| Current agent | `getAgent(): Agent \| null` | `sdk.ts:585` |
-| Identity | `getIdentity(): SessionIdentity` | `sdk.ts:589` |
-| State read/write | `getState(): Record<string, unknown>` / `updateState(patch): Record<string, unknown>` | `sdk.ts:597,607` |
-| Connection state | `isConnected(): boolean` | `sdk.ts:612` |
-| Unread count | `get unreadCount(): number` | `sdk.ts:648` |
-| Panel visibility | `markSessionVisible(): void` / `markSessionHidden(): void` | `sdk.ts:653,659` |
+| Initialize | `initialize(): Promise<void>` | `sdk.ts:107` |
+| Connect | `connect(): Promise<void>` | `sdk.ts:134` |
+| Disconnect | `disconnect(): void` | `sdk.ts:201` |
+| Start chat | `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>` | `sdk.ts:208` |
+| Send message | `sendMessage(content: string, options?: { type?: 'text'\|'image'\|'file'; … }): Promise<Message>` | `sdk.ts:249` |
+| End session | `endSession(): Promise<void>` | `sdk.ts:304` |
+| Create ticket | `createTicket(ticketData: {…}): Promise<Ticket>` | `sdk.ts:318` |
+| Start remote assistance | `startRemoteAssist(options?: RemoteAssistStartOptions): Promise<RTCPeerConnection>` | `sdk.ts:344` |
+| Accept remote answer | `acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void>` | `sdk.ts:447` |
+| Add ICE | `addRemoteIce(candidate: ServifyRTCIceCandidateInit): Promise<void>` | `sdk.ts:456` |
+| End remote assistance | `endRemoteAssist(): Promise<void>` | `sdk.ts:464` |
+| Assist session id | `setRemoteAssistSession(assistId: string \| number): void` / `getRemoteAssistSession(): string \| null` | `sdk.ts:473,482` |
+| Satisfaction | `submitSatisfaction(satisfaction: {…}): Promise<void>` | `sdk.ts:487` |
+| AI Q&A | `askAI(question: string): Promise<{ answer: string; confidence: number }>` | `sdk.ts:512` |
+| Translation | `translateText(text: string, targetLang: string, options?: {…}): Promise<…>` | `sdk.ts:526` |
+| Initial suggested questions | `getInitialQuestions(limit?: number, options?: { sessionId?: string \| number }): Promise<InitialQuestionsResult>` | `sdk.ts:557` |
+| Autocomplete suggested questions | `getNextQuestions(query: string, options?: { sessionId?: string \| number; limit?: number }): Promise<NextQuestionsResult>` | `sdk.ts:565` |
+| Upload | `uploadFile(file: File): Promise<{ file_url: string; file_name: string; file_size: number }>` | `sdk.ts:574` |
+| Message history | `getMessages(options?: {…}): Promise<Message[]>` | `sdk.ts:588` |
+| Current customer | `getCustomer(): Customer \| null` | `sdk.ts:605` |
+| Current session | `getSession(): ChatSession \| null` | `sdk.ts:610` |
+| Current agent | `getAgent(): Agent \| null` | `sdk.ts:615` |
+| Identity | `getIdentity(): SessionIdentity` | `sdk.ts:619` |
+| State read/write | `getState(): Record<string, unknown>` / `updateState(patch): Record<string, unknown>` | `sdk.ts:627,637` |
+| Connection state | `isConnected(): boolean` | `sdk.ts:642` |
+| Unread count | `get unreadCount(): number` | `sdk.ts:678` |
+| Panel visibility | `markSessionVisible(): void` / `markSessionHidden(): void` | `sdk.ts:683,689` |
 
 Factories: `createServifySDK(config: ServifyConfig)` (`sdk/packages/core/src/index.ts:46`); the Web surface uses `createWebServifySDK(config: WebServifyConfig)` (react / vue / vanilla all construct via this).
 
@@ -171,7 +171,7 @@ import { VanillaServifySDK } from '@servify/vanilla';
 ```
 
 - Constructor: `new VanillaServifySDK(config: WebServifyConfig)` (`sdk/packages/vanilla/src/index.ts:69`), internally constructed via `createWebServifySDK` and forwarding all events (`index.ts:70-93`)
-- Methods: `init(): Promise<void>` (`index.ts:98`), `connect(): Promise<void>`, `disconnect(): void`, `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>`, `sendMessage(content: string, type?: string): Promise<Message>`, `endChat(): Promise<void>`
+- Methods: `init(): Promise<void>` (`index.ts:97`), `connect(): Promise<void>`, `disconnect(): void`, `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>`, `sendMessage(content: string, type?: string): Promise<Message>`, `endChat(): Promise<void>`
 - Named re-exports of the voice toolkit: `VoiceChannel` / `MicCapture` / `VOICE_SAMPLE_RATE` / `floatToPcm16` / `resampleLinear` / `pcm16ToLeBytes` (`index.ts:22-23`)
 
 ## 4. widget `data-*` Configuration — Full Table
@@ -234,7 +234,7 @@ The vanilla surface forwards the same-named events (`sdk/packages/vanilla/src/in
 | Channel | Endpoint | Description |
 | --- | --- | --- |
 | Real-time | `/api/v1/ws` | Default real-time channel (WebSocket-first) |
-| Voice | `/ws/voice` | Voice channel |
+| Voice | `/api/v1/ws/voice` | Voice channel |
 | Initial suggested questions | `GET /public/suggestions/initial` | `sdk/packages/core/src/api.ts:225` |
 | Autocomplete suggested questions | `GET /public/suggestions/next?…` | `sdk/packages/core/src/api.ts:240` |
 | AI | `/api/v1/ai/query`, `/api/v1/ai/status` | — |
@@ -242,7 +242,7 @@ The vanilla surface forwards the same-named events (`sdk/packages/vanilla/src/in
 | Satisfaction | `/api/satisfactions` | — |
 | Session query/close | `/api/omni/sessions/*` | — |
 
-Suggested-question attribution spec: `getInitialQuestions(limit?, { sessionId? })` and `getNextQuestions(query, { sessionId?, limit? })` both accept `sessionId` (string \| number), on the same mutual-recognition convention as the server-side session (`sdk/packages/core/src/sdk.ts:527,535`).
+Suggested-question attribution spec: `getInitialQuestions(limit?, { sessionId? })` and `getNextQuestions(query, { sessionId?, limit? })` both accept `sessionId` (string \| number), on the same mutual-recognition convention as the server-side session (`sdk/packages/core/src/sdk.ts:557,565`).
 
 ## 6. Theming and Styling
 

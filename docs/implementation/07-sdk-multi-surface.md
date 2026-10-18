@@ -9,8 +9,8 @@ Scope:
 
 Constraints:
 
-- Only the web surface is actually implemented today
-- API/App remain focused on contracts, directories, test doubles, and documentation
+- The web surface shipped first; API and app surfaces are implemented as well (`sdk/packages/*`, `sdk/android`, `sdk/ios`; acceptance records in `sdk/ACCEPTANCE-M3.md` / `sdk/ACCEPTANCE-M4.md`)
+- All surfaces share the single contract core (`sdk/packages/core`) and the PROTOCOL fixtures
 
 ## M1 web-sdk-completion
 

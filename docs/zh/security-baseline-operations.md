@@ -120,14 +120,14 @@ scoped config（tenant/workspace 作用域配置文档）的写路径已有完�
 - `registerBaseMiddleware` 已统一挂载 `RateLimitMiddlewareFromConfig`
 - 支持全局与路径前缀限流，按 socket 对端 IP 分桶；仅 socket 对端 IP 可加入白名单，不信任转发头/请求头作为限流身份。
 - 每个 limiter 的 bucket map 上限为 4096 个对端，满载后新对端共用 overflow bucket；每分钟最多清理一次、回收闲置 10 分钟的 bucket。反向代理后所有客户端会共用代理对端 bucket，除非另行配置可信代理边界。
-- 默认开发配置 `config.yml` 已启用基础限流，并为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/ai/query`、`/api/v1/metrics/ingest`、`/api/` 提供独立路径级限流
+- 默认开发配置 `config.yml` 已启用基础限流，并为 `/public/suggestions/`、`/public/kb/`、`/public/csat/`、`/public/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/ai/query`、`/api/v1/metrics/ingest`、`/api/v1/remote-assist/`、`/api/` 提供独立路径级限流
 - 生产环境仍应基于 `config.production.secure.example.yml` 或等价部署配置收紧阈值、域名和 secrets 注入方式，而不是直接把开发配置原样上线
 
 ### 启动期告警
 
 - `InitLogging` 现在会在启动时输出基础安全告警
 - 当前已覆盖默认或空 `jwt.secret`、开放式 `CORS=*`、关闭限流、空 OpenAI API key、启用外部 knowledge provider 但缺少必要 credentials 等场景
-- 若启用了限流但没有为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/metrics/ingest`、`/api/` 配置独立路径级限流，也会输出 warning，避免公开入口、高成本 service 面和管理面只落在全局限流下
+- 若启用了限流但没有为 `/public/`、`/public/kb/`、`/public/csat/`、`/api/v1/auth/`、`/api/v1/ws`、`/uploads/`、`/api/v1/metrics/ingest`、`/api/v1/remote-assist/`、`/api/` 配置独立路径级限流，也会输出 warning，避免公开入口、高成本 service 面和管理面只落在全局限流下
 - 启动期仍为 warning-only，不阻断本地开发或测试启动；部署前应再执行 `check-security-baseline --strict` 做显式失败校验
 
 ### 部署前校验入口

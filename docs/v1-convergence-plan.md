@@ -2,7 +2,7 @@
 
 > Basis: ChatGPT review (2026-10-04, `docs/review/chatgpt-review-2026-10-04.md`) + this round's re-check (`docs/review/chatgpt-review-2026-10-04-verification.md`).
 > Re-check conclusion: the judgment that product positioning needs convergence is【confirmed】; the architecture is over-platformized and should focus polish on the core customer-service product model and the Agent Workspace【confirmed】.
-> This document turns the review recommendations into an actionable plan. **This document only plans; execution requires a separate sign-off.**
+> This document turns the review recommendations into an actionable plan. **This document only plans; execution requires a separate sign-off.** Execution status (updated 2026-10-19): batches B0–B4 have since been executed and passed their gates (see the README status section and [todo.md](../todo.md)); this document is kept as the planning archive.
 
 ---
 

@@ -84,7 +84,7 @@ export default function App() {
 
 ### 3.1 配置（core）
 
-`WebServifyConfig`（`sdk/packages/core/src/types.ts:6-33`）：
+`WebServifyConfig`（`ServifyConfig` 的别名，`sdk/packages/core/src/bindings/web-sdk.ts:4`；接口定义在 `sdk/packages/core/src/types.ts:6-36`）：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -95,12 +95,12 @@ export default function App() {
 | `sessionId` | `string?` | 应用侧会话互认：同一 id 恢复同一会话 |
 | `debug` | `boolean?` | 调试日志 |
 | `autoConnect` | `boolean?` | 初始化后自动连接 |
-| `reconnectPolicy` | `Partial<ReconnectPolicy>?` | 重连策略，默认 5 次 / 1s 起 / 2x 退避 / 30s 封顶（`sdk/packages/core/src/contracts/reconnect.ts:8-13`） |
-| `authProvider` | `() => Promise<string>` | token 提供者 |
-| `onTokenRefreshRequired` | `() => Promise<string>` | token 刷新回调 |
-| `remoteAssist` | `WebRTCConfig?` | 远程协助 ICE / 音视频开关 |
-| `webSocketFactory` | `() => WebSocket` | 自定义 WebSocket 工厂（测试用） |
-| `capabilities` | `Record<string, unknown>?` | 能力声明 |
+| `reconnectPolicy` | `ReconnectPolicy?` | 重连策略，默认 5 次 / 1s 起 / 2x 退避 / 30s 封顶（`sdk/packages/core/src/contracts/reconnect.ts:8-13`） |
+| `authProvider` | `AuthProvider?` | token 提供者（`getToken` / 可选 `refreshToken`，`sdk/packages/core/src/contracts/auth-provider.ts:13-17`） |
+| `onTokenRefreshRequired` | `() => Promise<void>` | token 刷新回调 |
+| `remoteAssist` | `RemoteAssistConfig?` | 远程协助 ICE / 音视频开关（`sdk/packages/core/src/types.ts:163`） |
+| `webSocketFactory` | `(url: string, protocols?: string \| string[]) => WebSocket` | 自定义 WebSocket 工厂（测试用，`sdk/packages/core/src/types.ts:37`） |
+| `capabilities` | `CapabilitySet?` | 能力声明（`sdk/packages/core/src/contracts/capability.ts:30`） |
 | `echoTimeoutMs` | `number?` | 消息回执超时 |
 
 ### 3.2 core：ServifySDK
@@ -109,33 +109,33 @@ export default function App() {
 
 | 方法 | 签名 | 位置 |
 | --- | --- | --- |
-| 初始化 | `initialize(): Promise<void>` | `sdk.ts:102` |
-| 连接 | `connect(): Promise<void>` | `sdk.ts:129` |
-| 断开 | `disconnect(): void` | — |
-| 开始会话 | `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>` | `sdk.ts:182` |
-| 发消息 | `sendMessage(content: string, options?: { type?: 'text'\|'image'\|'file'; … }): Promise<Message>` | `sdk.ts:223` |
-| 结束会话 | `endSession(): Promise<void>` | `sdk.ts:278` |
-| 建工单 | `createTicket(ticketData: {…}): Promise<Ticket>` | `sdk.ts:292` |
+| 初始化 | `initialize(): Promise<void>` | `sdk.ts:107` |
+| 连接 | `connect(): Promise<void>` | `sdk.ts:134` |
+| 断开 | `disconnect(): void` | `sdk.ts:201` |
+| 开始会话 | `startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>` | `sdk.ts:208` |
+| 发消息 | `sendMessage(content: string, options?: { type?: 'text'\|'image'\|'file'; … }): Promise<Message>` | `sdk.ts:249` |
+| 结束会话 | `endSession(): Promise<void>` | `sdk.ts:304` |
+| 建工单 | `createTicket(ticketData: {…}): Promise<Ticket>` | `sdk.ts:318` |
 | 发起远程协助 | `startRemoteAssist(options?: RemoteAssistStartOptions): Promise<RTCPeerConnection>` | `sdk.ts:318` |
-| 接受远端应答 | `acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void>` | `sdk.ts:417` |
-| 添加 ICE | `addRemoteIce(candidate: ServifyRTCIceCandidateInit): Promise<void>` | `sdk.ts:426` |
-| 结束远程协助 | `endRemoteAssist(): Promise<void>` | `sdk.ts:434` |
-| 协助会话号 | `setRemoteAssistSession(assistId: string \| number): void` / `getRemoteAssistSession(): string \| null` | `sdk.ts:443,452` |
-| 满意度 | `submitSatisfaction(satisfaction: {…}): Promise<void>` | `sdk.ts:457` |
-| AI 问答 | `askAI(question: string): Promise<{ answer: string; confidence: number }>` | `sdk.ts:482` |
-| 翻译 | `translateText(text: string, targetLang: string, options?: {…}): Promise<…>` | `sdk.ts:496` |
-| 初始推荐问 | `getInitialQuestions(limit?: number, options?: { sessionId?: string \| number }): Promise<InitialQuestionsResult>` | `sdk.ts:527` |
-| 联想推荐问 | `getNextQuestions(query: string, options?: { sessionId?: string \| number; limit?: number }): Promise<NextQuestionsResult>` | `sdk.ts:535` |
-| 上传 | `uploadFile(file: File): Promise<{ file_url: string; file_name: string; file_size: number }>` | `sdk.ts:544` |
-| 历史消息 | `getMessages(options?: {…}): Promise<Message[]>` | `sdk.ts:558` |
-| 当前客户 | `getCustomer(): Customer \| null` | `sdk.ts:575` |
-| 当前会话 | `getSession(): ChatSession \| null` | `sdk.ts:580` |
-| 当前坐席 | `getAgent(): Agent \| null` | `sdk.ts:585` |
-| 身份 | `getIdentity(): SessionIdentity` | `sdk.ts:589` |
-| 状态读写 | `getState(): Record<string, unknown>` / `updateState(patch): Record<string, unknown>` | `sdk.ts:597,607` |
-| 连接态 | `isConnected(): boolean` | `sdk.ts:612` |
-| 未读数 | `get unreadCount(): number` | `sdk.ts:648` |
-| 面板可见性 | `markSessionVisible(): void` / `markSessionHidden(): void` | `sdk.ts:653,659` |
+| 接受远端应答 | `acceptRemoteAnswer(answer: ServifyRTCSessionDescriptionInit): Promise<void>` | `sdk.ts:447` |
+| 添加 ICE | `addRemoteIce(candidate: ServifyRTCIceCandidateInit): Promise<void>` | `sdk.ts:456` |
+| 结束远程协助 | `endRemoteAssist(): Promise<void>` | `sdk.ts:464` |
+| 协助会话号 | `setRemoteAssistSession(assistId: string \| number): void` / `getRemoteAssistSession(): string \| null` | `sdk.ts:473,482` |
+| 满意度 | `submitSatisfaction(satisfaction: {…}): Promise<void>` | `sdk.ts:487` |
+| AI 问答 | `askAI(question: string): Promise<{ answer: string; confidence: number }>` | `sdk.ts:512` |
+| 翻译 | `translateText(text: string, targetLang: string, options?: {…}): Promise<…>` | `sdk.ts:526` |
+| 初始推荐问 | `getInitialQuestions(limit?: number, options?: { sessionId?: string \| number }): Promise<InitialQuestionsResult>` | `sdk.ts:557` |
+| 联想推荐问 | `getNextQuestions(query: string, options?: { sessionId?: string \| number; limit?: number }): Promise<NextQuestionsResult>` | `sdk.ts:565` |
+| 上传 | `uploadFile(file: File): Promise<{ file_url: string; file_name: string; file_size: number }>` | `sdk.ts:574` |
+| 历史消息 | `getMessages(options?: {…}): Promise<Message[]>` | `sdk.ts:588` |
+| 当前客户 | `getCustomer(): Customer \| null` | `sdk.ts:605` |
+| 当前会话 | `getSession(): ChatSession \| null` | `sdk.ts:610` |
+| 当前坐席 | `getAgent(): Agent \| null` | `sdk.ts:615` |
+| 身份 | `getIdentity(): SessionIdentity` | `sdk.ts:619` |
+| 状态读写 | `getState(): Record<string, unknown>` / `updateState(patch): Record<string, unknown>` | `sdk.ts:627,637` |
+| 连接态 | `isConnected(): boolean` | `sdk.ts:642` |
+| 未读数 | `get unreadCount(): number` | `sdk.ts:678` |
+| 面板可见性 | `markSessionVisible(): void` / `markSessionHidden(): void` | `sdk.ts:683,689` |
 
 工厂：`createServifySDK(config: ServifyConfig)`（`sdk/packages/core/src/index.ts:46`）；Web 面用 `createWebServifySDK(config: WebServifyConfig)`（react / vue / vanilla 均经此构造）。
 
@@ -171,7 +171,7 @@ import { VanillaServifySDK } from '@servify/vanilla';
 ```
 
 - 构造：`new VanillaServifySDK(config: WebServifyConfig)`（`sdk/packages/vanilla/src/index.ts:69`），内部经 `createWebServifySDK` 构造并转发全部事件（`index.ts:70-93`）
-- 方法：`init(): Promise<void>`（`index.ts:98`）、`connect(): Promise<void>`、`disconnect(): void`、`startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>`、`sendMessage(content: string, type?: string): Promise<Message>`、`endChat(): Promise<void>`
+- 方法：`init(): Promise<void>`（`index.ts:97`）、`connect(): Promise<void>`、`disconnect(): void`、`startChat(options?: { priority?: string; message?: string }): Promise<ChatSession>`、`sendMessage(content: string, type?: string): Promise<Message>`、`endChat(): Promise<void>`
 - 语音工具集 named re-export：`VoiceChannel` / `MicCapture` / `VOICE_SAMPLE_RATE` / `floatToPcm16` / `resampleLinear` / `pcm16ToLeBytes`（`index.ts:22-23`）
 
 ## 4. widget `data-*` 配置全表
@@ -234,7 +234,7 @@ vanilla 面转发同名事件（`sdk/packages/vanilla/src/index.ts:70-93`）。
 | 通道 | 端点 | 说明 |
 | --- | --- | --- |
 | 实时 | `/api/v1/ws` | 默认实时通道（WebSocket-first） |
-| 语音 | `/ws/voice` | 语音通道 |
+| 语音 | `/api/v1/ws/voice` | 语音通道 |
 | 初始推荐问 | `GET /public/suggestions/initial` | `sdk/packages/core/src/api.ts:225` |
 | 联想推荐问 | `GET /public/suggestions/next?…` | `sdk/packages/core/src/api.ts:240` |
 | AI | `/api/v1/ai/query`、`/api/v1/ai/status` | — |
@@ -242,7 +242,7 @@ vanilla 面转发同名事件（`sdk/packages/vanilla/src/index.ts:70-93`）。
 | 满意度 | `/api/satisfactions` | — |
 | 会话查询/关闭 | `/api/omni/sessions/*` | — |
 
-推荐问归因口径：`getInitialQuestions(limit?, { sessionId? })` 与 `getNextQuestions(query, { sessionId?, limit? })` 均接受 `sessionId`（string | number），与服务端会话互认同一口径（`sdk/packages/core/src/sdk.ts:527,535`）。
+推荐问归因口径：`getInitialQuestions(limit?, { sessionId? })` 与 `getNextQuestions(query, { sessionId?, limit? })` 均接受 `sessionId`（string | number），与服务端会话互认同一口径（`sdk/packages/core/src/sdk.ts:557,565`）。
 
 ## 6. 主题与样式
 

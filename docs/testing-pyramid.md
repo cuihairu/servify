@@ -2,7 +2,7 @@
 
 ## Integration build tag coverage
 
-Current `integration` coverage is concentrated in `apps/server/internal/handlers` (HTTP handler to runtime wiring) and spread across `apps/server/internal/modules/*` infra/application/delivery packages plus `internal/platform/realtime` — 38 test files over 15 packages.
+Current `integration` coverage is concentrated in `apps/server/internal/handlers` (HTTP handler to runtime wiring) and spread across `apps/server/internal/modules/*` infra/application/delivery packages plus `internal/platform/realtime` — 41 test files over 15 packages.
 
 Covered areas:
 

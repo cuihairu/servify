@@ -33,7 +33,7 @@
 
 中断点：
 
-- 目录和 `App` 已存在，但入口尚未接入
+- 历史检查点（已被超越）：入口现已接线——`RunStandalone`（`apps/server/internal/app/bootstrap/standalone.go:84-89`）解析 overrides 后由 `BuildApp(cfg)` 构建并运行 `App`
 
 ## P2 config logging observability
 

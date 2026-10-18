@@ -19,7 +19,7 @@
 2. 主链路验收收口已完成（P1 批次 + V1.0 收敛 B1–B4 过闸，见 [acceptance-checklist.md](./acceptance-checklist.md)）。
 3. 文档/待办/实现漂移已通过 V1.0 收敛 B0 文档声明批与文档对账规则治理。
 
-后续演进的取舍按「演进方向」执行：Routing 打分引擎、Ticket 关闭前拦截等，不插队扩张已冻结面（语音、多渠道）。
+后续演进的取舍按「演进方向」执行，不插队扩张已冻结面（语音、多渠道）。其中列出的 Routing 打分引擎与 Ticket 关闭前拦截均已落地。
 
 ## 执行顺序
 
@@ -59,7 +59,7 @@
 
 V1.0 收敛批次（B0–B4）已全部过闸，无进行中的优先任务。恢复工作时的入口：
 
-1. 演进方向开列：Routing 打分引擎、Ticket 关闭前拦截规则、薄壳模块文档面收口剩余项。
+1. 演进方向开列：薄壳模块文档面收口剩余项。（Routing 打分引擎与 Ticket 关闭前拦截规则已落地——`scripts/test-routing-scoring-acceptance.sh` 与 Makefile `routing-scoring-acceptance` 门。）
 2. 实施时按 [todo.md](../todo.md) 的批次纪律登记与过闸。
 
 如果中断恢复，以 [todo.md](../todo.md) 中最近一个 `[-]` 项为主，不要按记忆跳转。

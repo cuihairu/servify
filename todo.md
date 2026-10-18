@@ -112,10 +112,4 @@
   - [x] 表三能力评估（仅建议，未实现）：移动端语音上行/字幕列 Phase 2，先由产品明确翻转 V1 范围，再拆采集权限、上行、字幕消费与双端验收；依据 `mobile.ts:7-14`、`sdk/PROTOCOL.md:35-37`、`todo.md:9`。
   - [x] 表三能力评估（仅建议，未实现）：AI agent-loop 工具接线列 Phase 2，先拍板客户上下文授权与 Handoff 副作用确认，再分 Customer/Ticket 只读上下文与显式转接；依据 `enhanced_service.go:176-181`、`docs/implementation/13-ai-agent-loop.md:9-10`、`todo.md:19`。
   - [x] 表三能力评估（仅建议，未实现）：严格 token 预算列 Phase 0 决策、Phase 1 设计；先扩 usage 合约覆盖 batch，再做原子预留/结算与 meter 故障策略，未具备前不得宣称硬成本封顶；依据 `apps/server/internal/modules/translation/delivery/quota_gate.go:95-100,118-134,141-159`、`docs/design/tenant-quota-policy.md:65-69,111-119`。
-- [ ] 文档时效性清理（2026-10-18 用户令：很多文档已过时）：
-      在本轮审核整改完成之后执行，避免与整改冲突。
-      1) 通读 README / docs，找出与当前代码不符的描述（能力、配置项、命令、路径、版本）
-      2) 以代码为准修正文档；**禁止为对齐文档去改业务代码**
-      3) 已废弃但仍留在文档里的功能，明确标注「已移除」或删除，不要留成"看起来还能用"
-      4) 命令行示例逐条跑一遍，跑不通的改掉或删掉
-      5) 构建通过后 commit+push，回报改动文件清单
+- [x] 文档时效性清理（2026-10-18 用户令：很多文档已过时）——18 篇文档（EN 9 + zh 镜像 9）13 处过期修正、零业务代码改动：v1-convergence-plan/delivery-priorities 加执行状态注记（B0–B4 已过闸，演进 backlog 只留薄壳收口）；implementation/04+07 「仅实现 web sdk」改为 web/API/app 三面落地（sdk/packages/* + sdk/android + sdk/ios，ACCEPTANCE-M3/M4）；implementation/01 入口未接线改为 RunStandalone→BuildApp 已接线（standalone.go:84-89）；backup-and-recovery 迁移链头 23|f→24|f（000024_translation_quota_scoped_config）；web-sdk.md 语音端点 /ws/voice→/api/v1/ws/voice、WebServifyConfig 锚点改别名（bindings/web-sdk.ts:4）、6 个配置字段类型按 types.ts:6-37 重取（AuthProvider/ReconnectPolicy/RemoteAssistConfig/WebSocketFactory/CapabilitySet/onTokenRefreshRequired→void）、ServifySDK 方法表 27 行行号锚点全量重锚（sdk.ts 129→134 等）、vanilla init 98→97；security-baseline-operations 限流路径清单补 /public/suggestions/ 与 /api/v1/remote-assist/（对齐 config.yml 与 security.go:19-29 必需集）；testing-pyramid integration 38→41 个测试文件。方法：README+docs 全量扫描（README 全锚点核验干净）+ 12 项发现逐条 self-verify 后再改；命令示例 make -n 干跑 + 脚本 bash -n 通过；docs build 绿 + check-text-encoding 绿（2310 文件）。

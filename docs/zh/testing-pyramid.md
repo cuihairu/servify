@@ -2,7 +2,7 @@
 
 ## Integration 构建标签覆盖范围
 
-当前 `integration` 覆盖集中在 `apps/server/internal/handlers`（HTTP handler 到运行时装配），并分布在 `apps/server/internal/modules/*` 的 infra/application/delivery 各包以及 `internal/platform/realtime` —— 38 个测试文件分布在 15 个包中。
+当前 `integration` 覆盖集中在 `apps/server/internal/handlers`（HTTP handler 到运行时装配），并分布在 `apps/server/internal/modules/*` 的 infra/application/delivery 各包以及 `internal/platform/realtime` —— 41 个测试文件分布在 15 个包中。
 
 已覆盖区域：
 
