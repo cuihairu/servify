@@ -195,7 +195,7 @@ func TestProvider_Search(t *testing.T) {
 			t.Errorf("default TopK = %d, want 10", provider.config.Search.TopK)
 		}
 		if provider.config.Search.Strategy != "cosine" {
-			t.Errorf("default Strategy = %s, want cosine", provider.config.Search.Strategy)
+			t.Errorf("Strategy = %s, want cosine", provider.config.Search.Strategy)
 		}
 	})
 
@@ -585,8 +585,8 @@ func TestConfig_Defaults(t *testing.T) {
 	if provider.config.Search.TopK != 10 {
 		t.Errorf("default TopK = %d, want 10", provider.config.Search.TopK)
 	}
-	if provider.config.Search.Strategy != "cosine" {
-		t.Errorf("default Strategy = %s, want cosine", provider.config.Search.Strategy)
+	if provider.config.Search.Strategy != "hybrid" {
+		t.Errorf("default Strategy = %s, want hybrid", provider.config.Search.Strategy)
 	}
 	if provider.config.Indexing.ChunkSize != 500 {
 		t.Errorf("default ChunkSize = %d, want 500", provider.config.Indexing.ChunkSize)
@@ -730,6 +730,58 @@ func TestProvider_SearchScoresAndFilters(t *testing.T) {
 	}
 	if hits[0].Score <= 0.5 {
 		t.Fatalf("euclidean score too low: %+v", hits[0])
+	}
+}
+
+func TestFuseRRFUsesBothRankingsWithK60(t *testing.T) {
+	vector := []knowledgeprovider.KnowledgeHit{{DocumentID: "a"}, {DocumentID: "b"}, {DocumentID: "c"}}
+	keyword := []knowledgeprovider.KnowledgeHit{{DocumentID: "c"}, {DocumentID: "b"}, {DocumentID: "d"}}
+	got := fuseRRF(vector, keyword, 4, 60)
+	wantIDs := []string{"c", "b", "a", "d"}
+	if len(got) != len(wantIDs) {
+		t.Fatalf("got %d hits, want %d", len(got), len(wantIDs))
+	}
+	for i, want := range wantIDs {
+		if got[i].DocumentID != want {
+			t.Fatalf("rank %d = %q, want %q (all: %+v)", i+1, got[i].DocumentID, want, got)
+		}
+	}
+	wantScore := 1.0/61 + 1.0/63
+	if got[0].Score < wantScore-1e-12 || got[0].Score > wantScore+1e-12 {
+		t.Fatalf("RRF score = %.12f, want %.12f", got[0].Score, wantScore)
+	}
+}
+
+func TestHybridRetrievalImprovesExactAndChineseQueries(t *testing.T) {
+	db := setupTestDB(t)
+	docs := []knowledgedomain.KnowledgeDoc{
+		{TenantID: "tenant", WorkspaceID: "kb", ProviderID: "pgvector", ExternalID: "semantic", Title: "Printer setup", Content: "A general device setup guide", Embedding: knowledgedomain.NewEmbedding([]float32{1, 0})},
+		{TenantID: "tenant", WorkspaceID: "kb", ProviderID: "pgvector", ExternalID: "exact", Title: "退款错误码 ERR-9281", Content: "订单退款失败时请联系支持", Embedding: knowledgedomain.NewEmbedding([]float32{0, 1})},
+	}
+	if err := db.Create(&docs).Error; err != nil {
+		t.Fatal(err)
+	}
+	provider := NewProvider(db, &mockEmbeddingProvider{dimension: 2, vectors: [][]float32{{1, 0}}}, Config{Search: SearchConfig{TopK: 2}})
+	vectorHits, err := provider.Search(context.Background(), knowledgeprovider.SearchRequest{Query: "ERR-9281", TenantID: "tenant", KnowledgeID: "kb", Strategy: "vector"})
+	if err != nil {
+		t.Fatalf("vector search: %v", err)
+	}
+	if len(vectorHits) != 2 || vectorHits[0].Metadata["external_id"] != "semantic" {
+		t.Fatalf("fixture should rank semantic decoy first in vector mode: %+v", vectorHits)
+	}
+	hybridHits, err := provider.Search(context.Background(), knowledgeprovider.SearchRequest{Query: "ERR-9281", TenantID: "tenant", KnowledgeID: "kb", Strategy: "hybrid"})
+	if err != nil {
+		t.Fatalf("hybrid exact-word search: %v", err)
+	}
+	if len(hybridHits) != 2 || hybridHits[0].Metadata["external_id"] != "exact" {
+		t.Fatalf("hybrid should promote exact error-code match over vector-only result: %+v", hybridHits)
+	}
+	chineseHits, err := provider.Search(context.Background(), knowledgeprovider.SearchRequest{Query: "退款错误码", TenantID: "tenant", KnowledgeID: "kb", Strategy: "hybrid"})
+	if err != nil {
+		t.Fatalf("hybrid Chinese search: %v", err)
+	}
+	if len(chineseHits) == 0 || chineseHits[0].Metadata["external_id"] != "exact" {
+		t.Fatalf("Chinese keyword query did not retrieve matching document: %+v", chineseHits)
 	}
 }
 

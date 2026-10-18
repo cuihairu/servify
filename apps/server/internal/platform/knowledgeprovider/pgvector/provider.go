@@ -3,9 +3,11 @@ package pgvector
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/pgvector/pgvector-go"
 	knowledgedomain "servify/apps/server/internal/modules/knowledge/domain"
@@ -23,7 +25,7 @@ type Config struct {
 type SearchConfig struct {
 	TopK      int
 	Threshold float64
-	Strategy  string // "cosine" or "euclidean"
+	Strategy  string // "hybrid" (default), "vector", "cosine", or "euclidean"
 }
 
 // IndexingConfig 是索引配置
@@ -49,7 +51,7 @@ func NewProvider(db *gorm.DB, emb embedding.Provider, cfg Config) *Provider {
 		cfg.Search.TopK = 10
 	}
 	if cfg.Search.Strategy == "" {
-		cfg.Search.Strategy = "cosine"
+		cfg.Search.Strategy = "hybrid"
 	}
 	if cfg.Indexing.ChunkSize <= 0 {
 		cfg.Indexing.ChunkSize = 500
@@ -91,6 +93,24 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 		strategy = p.config.Search.Strategy
 	}
 	strategy = normalizeSearchStrategy(strategy)
+	if strategy == "hybrid" {
+		vectorHits, err := p.searchVector(ctx, req, queryVector, topK, threshold, "cosine")
+		if err != nil {
+			return nil, err
+		}
+		keywordHits, err := p.searchKeyword(ctx, req, topK)
+		if err != nil {
+			return nil, err
+		}
+		return fuseRRF(vectorHits, keywordHits, topK, 60), nil
+	}
+	if strategy == "vector" {
+		strategy = "cosine"
+	}
+	return p.searchVector(ctx, req, queryVector, topK, threshold, strategy)
+}
+
+func (p *Provider) searchVector(ctx context.Context, req knowledgeprovider.SearchRequest, queryVector []float32, topK int, threshold float64, strategy string) ([]knowledgeprovider.KnowledgeHit, error) {
 
 	// 3. 构建查询
 	query := p.db.WithContext(ctx).Table("knowledge_docs")
@@ -110,16 +130,22 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 		// pgvector 的 <=> 返回余弦距离，距离越小越相似
 		// 余弦相似度 = 1 - 余弦距离
 		pgvectorVec := pgvector.NewVector(queryVector)
-		query = query.Order(fmt.Sprintf("embedding <=> '%s'::vector", pgvectorVec.String()))
+		if p.db.Dialector.Name() != "sqlite" {
+			query = query.Order(fmt.Sprintf("embedding <=> '%s'::vector", pgvectorVec.String()))
+		}
 	case "euclidean":
 		// 欧几里得距离搜索：使用 <-> 操作符
 		pgvectorVec := pgvector.NewVector(queryVector)
-		query = query.Order(fmt.Sprintf("embedding <-> '%s'::vector", pgvectorVec.String()))
+		if p.db.Dialector.Name() != "sqlite" {
+			query = query.Order(fmt.Sprintf("embedding <-> '%s'::vector", pgvectorVec.String()))
+		}
 	default:
 		return nil, fmt.Errorf("unsupported search strategy: %s", strategy)
 	}
 
-	query = query.Limit(topK)
+	if p.db.Dialector.Name() != "sqlite" {
+		query = query.Limit(topK)
+	}
 
 	// 4. 执行查询
 	var docs []knowledgedomain.KnowledgeDoc
@@ -172,7 +198,77 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 		})
 	}
 
+	if p.db.Dialector.Name() == "sqlite" {
+		sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+		if len(hits) > topK {
+			hits = hits[:topK]
+		}
+	}
 	return hits, nil
+}
+
+func (p *Provider) searchKeyword(ctx context.Context, req knowledgeprovider.SearchRequest, topK int) ([]knowledgeprovider.KnowledgeHit, error) {
+	query := p.db.WithContext(ctx).Table("knowledge_docs")
+	if req.TenantID != "" {
+		query = query.Where("tenant_id = ?", req.TenantID)
+	}
+	if req.KnowledgeID != "" {
+		query = query.Where("workspace_id = ?", req.KnowledgeID)
+	}
+	// PostgreSQL uses pg_trgm character-trigram similarity; SQLite LIKE is only
+	// a test/development fallback and does not change the production retrieval path.
+	if p.db.Dialector.Name() == "sqlite" {
+		pattern := "%" + req.Query + "%"
+		query = query.Where("title LIKE ? OR content LIKE ?", pattern, pattern).Limit(topK)
+	} else {
+		query = query.Where("similarity(coalesce(title, '') || ' ' || coalesce(content, ''), ?) > 0", req.Query).
+			Order(clause.Expr{SQL: "similarity(coalesce(title, '') || ' ' || coalesce(content, ''), ?) DESC", Vars: []interface{}{req.Query}}).Limit(topK)
+	}
+	var docs []knowledgedomain.KnowledgeDoc
+	if err := query.Find(&docs).Error; err != nil {
+		return nil, fmt.Errorf("failed to execute keyword search: %w", err)
+	}
+	hits := make([]knowledgeprovider.KnowledgeHit, 0, len(docs))
+	for _, doc := range docs {
+		hits = append(hits, hitFromDoc(doc, 0))
+	}
+	return hits, nil
+}
+
+func hitFromDoc(doc knowledgedomain.KnowledgeDoc, score float64) knowledgeprovider.KnowledgeHit {
+	return knowledgeprovider.KnowledgeHit{DocumentID: fmt.Sprintf("%d", doc.ID), Title: doc.Title, Content: doc.Content, Score: score, Source: doc.ProviderID,
+		Metadata: map[string]interface{}{"tenant_id": doc.TenantID, "workspace_id": doc.WorkspaceID, "external_id": doc.ExternalID, "chunk_index": doc.ChunkIndex, "doc_chunk_id": doc.DocChunkID, "category": doc.Category}}
+}
+
+func fuseRRF(vector, keyword []knowledgeprovider.KnowledgeHit, topK, k int) []knowledgeprovider.KnowledgeHit {
+	if k <= 0 {
+		k = 60
+	}
+	scores := make(map[string]float64, len(vector)+len(keyword))
+	hits := make(map[string]knowledgeprovider.KnowledgeHit, len(vector)+len(keyword))
+	for _, ranked := range [][]knowledgeprovider.KnowledgeHit{vector, keyword} {
+		for i, hit := range ranked {
+			scores[hit.DocumentID] += 1 / float64(k+i+1)
+			if _, ok := hits[hit.DocumentID]; !ok {
+				hits[hit.DocumentID] = hit
+			}
+		}
+	}
+	out := make([]knowledgeprovider.KnowledgeHit, 0, len(hits))
+	for id, hit := range hits {
+		hit.Score = scores[id]
+		out = append(out, hit)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Score == out[j].Score {
+			return out[i].DocumentID < out[j].DocumentID
+		}
+		return out[i].Score > out[j].Score
+	})
+	if topK > 0 && len(out) > topK {
+		out = out[:topK]
+	}
+	return out
 }
 
 // UpsertDocument 创建或更新文档
@@ -350,7 +446,9 @@ func exp64(x float64) float64 {
 func normalizeSearchStrategy(strategy string) string {
 	switch strings.TrimSpace(strings.ToLower(strategy)) {
 	case "", "semantic", "hybrid":
-		return "cosine"
+		return "hybrid"
+	case "vector":
+		return "vector"
 	default:
 		return strings.TrimSpace(strings.ToLower(strategy))
 	}

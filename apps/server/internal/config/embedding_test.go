@@ -23,7 +23,7 @@ func TestKnowledgeConfigDefaults(t *testing.T) {
 	assert.Empty(t, cfg.Knowledge.Provider)
 	assert.Equal(t, 5, cfg.Knowledge.Pgvector.Search.TopK)
 	assert.Equal(t, 0.7, cfg.Knowledge.Pgvector.Search.Threshold)
-	assert.Equal(t, "semantic", cfg.Knowledge.Pgvector.Search.Strategy)
+	assert.Equal(t, "hybrid", cfg.Knowledge.Pgvector.Search.Strategy)
 	assert.Equal(t, 1000, cfg.Knowledge.Pgvector.Indexing.ChunkSize)
 	assert.Equal(t, 200, cfg.Knowledge.Pgvector.Indexing.ChunkOverlap)
 }

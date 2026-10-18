@@ -1318,7 +1318,7 @@ func GetDefaultConfig() *Config {
 				Search: SearchConfig{
 					TopK:      5,
 					Threshold: 0.7,
-					Strategy:  "semantic",
+					Strategy:  "hybrid",
 				},
 				Indexing: IndexingConfig{
 					ChunkSize:    1000,

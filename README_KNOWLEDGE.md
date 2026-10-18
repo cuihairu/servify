@@ -6,7 +6,7 @@
 
 ### 1. 前置条件
 
-- PostgreSQL 数据库已安装并启用 pgvector 扩展
+- PostgreSQL 数据库已安装并启用 pgvector 与 pg_trgm 扩展（迁移会创建扩展）
 - 已配置 Embedding Provider（见下方）
 - 已运行数据库迁移脚本
 
@@ -28,7 +28,7 @@ knowledge:
     search:
       top_k: 5           # 返回结果数量
       threshold: 0.7     # 相似度阈值
-      strategy: semantic    # 搜索策略: semantic（默认）, cosine, euclidean
+      strategy: hybrid      # hybrid（默认）或 vector（纯向量）
     indexing:
       chunk_size: 1000       # 文档分块大小（字符数）
       chunk_overlap: 200     # 分块重叠大小
@@ -98,11 +98,11 @@ embedding:
 
 ### 搜索策略 (Strategy)
 
-- `semantic`: 默认值（`config.yml` 默认口径），查询期归一为 cosine 余弦排序
-- `cosine`: 余弦相似度，适合大多数文本搜索场景
-- `euclidean`: 欧几里得距离，适合需要精确距离计算的场景
+- `hybrid`: 默认值。分别取向量排名和关键词排名，再用 Reciprocal Rank Fusion（RRF）融合；RRF 常数 `k=60`。
+- `vector`: 仅使用 cosine 向量排名。兼容值 `cosine`、`euclidean` 仍可分别选择纯向量距离算法。
+- 每路候选数使用 `top_k`，最终返回融合后的前 `top_k` 条。请求中的 `strategy` 可覆盖配置，调用接口签名不变。
 
-> `semantic` 与 `hybrid` 在查询期归一为 cosine（`normalizeSearchStrategy`），`cosine`/`euclidean` 直接分派 SQL 排序；其余取值报 `unsupported search strategy`。
+关键词路径在 PostgreSQL 使用 `pg_trgm` 的字符三元组相似度，并为标题与正文表达式建立 GIN 索引。PostgreSQL 默认配置没有中文分词器，因此这里**没有使用 tsvector/ts_rank，也不声称提供中文分词**；`pg_trgm` 对中文连续字符按字符片段匹配，适合产品名、错误码、订单号等精确词与短语召回。SQLite 测试环境使用 `LIKE` 作为回退，不代表生产实现。
 
 ### 分块配置 (Indexing)
 

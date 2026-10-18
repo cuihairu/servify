@@ -87,6 +87,13 @@ SDK 文档依据：`sdk/SURFACE_GOVERNANCE.md:3-27,48-61`；Android 状态与门
 
 ## 修复记录
 
+### 一、知识库混合检索
+
+- pgvector provider 新增向量与关键词双路召回，并按 RRF（`k=60`）融合；`strategy: hybrid` 为默认，`strategy: vector` 可选纯向量，`SearchRequest` 签名不变。
+- 关键词路径使用 PostgreSQL `pg_trgm` 字符三元组相似度及 GIN 索引；没有使用 `tsvector/ts_rank`，因为 PostgreSQL 默认不提供中文分词器。中文按字符片段匹配，不宣称有中文分词能力。
+- 新增迁移 `000026_pg_trgm.up.sql`，创建扩展与标题/正文检索索引；配置和检索说明见 `README_KNOWLEDGE.md`。
+- 测试覆盖 RRF 排名与分值、错误码精确词对比纯向量、中文查询回归；`go test ./...`（`apps/server`）通过。
+
 ### 二、知识库独立实体
 
 - 新增 `KnowledgeBase`（租户/工作区隔离、库级公开标志）与有序 `KnowledgeChunk`，文档可绑定知识库；见 `apps/server/internal/modules/knowledge/domain/models.go:9-55`。
