@@ -100,10 +100,22 @@
 
 - [x] docs 子目录英文正文补齐（i18n 目录布局后口径：中文在 `docs/zh/`、英文落根 `docs/` 同名路径，切换器由 VitePress `locales` 自动渲染故不手写）——28 篇全部落地：25 篇真译（design 3 + implementation 19 + research 1 + review verification 1 + contributing 1 + superpowers specs 1；contributing 中文源本身已是英文故逐字复制；competitive-survey 的 `title:` 全角冒号译成半角冒号致 frontmatter YAML 解析 build 红、加引号修复；16 张竞品截图复制进 `docs/research/assets/` 后打包正常）+ 2 篇 >1000 行占位页（review/chatgpt-review-2026-10-04 1349 行、superpowers/plans/2025-05-01-pgvector-knowledge-base 3112 行，标「暂无英文译版」+链中文原文）；verify 28/28 clean、docs build 绿、check-text-encoding 绿——残留英文侧栏收录已于同日随 i18n 布局收口补齐
 - [x] docs 站 i18n 目录布局收口（并发会话遗留的在途改动经 R1025PATROL 代决授权合成提交 9efb65a：中文全部迁入 `docs/zh/`（59 根目录 + 28 子目录 + contributing），根 `docs/` 换英文正文并删除 `.en.md`/`.zh.md` 双文件形态，VitePress `locales` 自动渲染切换器；540 个 dist-verify 构建产物剔出 staged 并补 .gitignore；英文侧栏补齐 28 篇收录 + implementation 独立分组 + nav 入口，与 zh 侧栏逐组对齐；28 篇中文原文不再只活在 index）— 9efb65a，docs build 绿 + check-text-encoding 绿 + Docs Pages 38924039803 绿
-- [ ] 审核整改（2026-10-18 独立审核，见 docs/review/luna-review-2026-10-18.md）：
-      按审核报告的三张表逐项处理，**先核对再动手**，每项给 file:line 证据。
-      1) 表一「缺陷」：按风险排序修，高风险优先
-      2) 表二「文档与实现不一致」：以代码为准改文档，或明确标注为规划中
-         **禁止为对齐文档去改业务代码**
-      3) 表三「值得补的能力」：只做评估与分期建议，**不实现**（需用户拍板）
-      每完成一项勾掉并写证据；全部测试通过后 commit+push；不 bump 版本号。
+- [ ] 审核整改（2026-10-18 独立审核，见 docs/review/luna-review-2026-10-18.md）：按风险修表一、以代码为准修表二、表三只评估分期；不 bump 版本号。全部验证通过后 commit + push。
+  - [x] 表一 P1 限流 key/bucket：核实旧实现以未验证请求头取 key 且 map 无界；改为 socket 对端 IP、每 limiter 上限 4096、闲置 10 分钟后按分钟扫除，满载走共享 overflow bucket，移除 header key 与 key 白名单配置。证据：`apps/server/internal/middleware/ratelimit.go:25-71,115-127,168-184`；回归 `apps/server/internal/middleware/ratelimit_test.go:192-295`；配置/schema `apps/server/internal/config/config.go:502-510`、`config.yml:218-225`。
+  - [x] 表一 P2 token 配额语义：核实 token 为事后记账且 batch 无 usage；明确为软阈值（非硬预算），非空 tokens batch 返回不可计量错误、不调用 provider。证据：`apps/server/internal/modules/translation/delivery/quota_gate.go:35-40,95-102,118-134,138-159`；回归 `apps/server/internal/modules/translation/delivery/quota_gate_test.go:128-184`；规范 `docs/design/tenant-quota-policy.md:61-74,101-119` / `docs/zh/design/tenant-quota-policy.md:50-58,76-87`。
+  - [x] 表二 WS 访客 token：改协议与中英文移动端设计，说明 `guest_token.required` 开启时校验、默认关闭；未改业务代码。证据：`sdk/PROTOCOL.md:11-17`、`docs/mobile-sdk-design.md:198-202`、`docs/zh/mobile-sdk-design.md:198-202`；实现 `websocket_hub.go:302-313` / `runtime_assembly.go:226-232`。
+  - [x] 表二 Portal 作用域：文档改为 public 读取已合并 system/tenant/workspace、管理端治理 UI 尚缺；未改业务代码。证据：`docs/configuration-scopes.md:297-303`、`docs/zh/configuration-scopes.md:297-303`；实现 `router_public.go:16-21`、`resolver.go:154-174`。
+  - [x] 表二 AI/knowledge/routing 作用域：文档改为部分落地，列出 provider/quota 覆盖与 routing policy 缺口；未改业务代码。证据：`docs/configuration-scopes.md:299-303`、`docs/zh/configuration-scopes.md:299-303`；实现 `gorm_provider.go:26-86,118-178`、`resolver.go:221-302,331-359`。
+  - [x] 表三能力评估（仅建议，未实现）：真实 Dify/WeKnora/RAGFlow 验收列 Phase 0，等真实端点/凭证后用现有 real 脚本补证；依据 `todo.md:7`、报告表三。
+  - [x] 表三能力评估（仅建议，未实现）：浏览器双端媒体验收列 Phase 1，先以 Playwright 假媒体覆盖采集/信令/重协商，再把真实设备列手工发布门；依据 `docs/remote-assistance-status.md:16,151`、`webrtc_bridge_test.go:562-565`。
+  - [x] 表三能力评估（仅建议，未实现）：Scoped config 管理端写面列 Phase 1，依赖服务端治理 API 稳定；先做 scope 选择、字段校验、effective value 与审计/历史视图，再逐配置族扩展；依据 `docs/design/tenant-quota-policy.md:166-178`、`scoped_config_handler.go:58-68,167-178`。
+  - [x] 表三能力评估（仅建议，未实现）：移动端语音上行/字幕列 Phase 2，先由产品明确翻转 V1 范围，再拆采集权限、上行、字幕消费与双端验收；依据 `mobile.ts:7-14`、`sdk/PROTOCOL.md:35-37`、`todo.md:9`。
+  - [x] 表三能力评估（仅建议，未实现）：AI agent-loop 工具接线列 Phase 2，先拍板客户上下文授权与 Handoff 副作用确认，再分 Customer/Ticket 只读上下文与显式转接；依据 `enhanced_service.go:176-181`、`docs/implementation/13-ai-agent-loop.md:9-10`、`todo.md:19`。
+  - [x] 表三能力评估（仅建议，未实现）：严格 token 预算列 Phase 0 决策、Phase 1 设计；先扩 usage 合约覆盖 batch，再做原子预留/结算与 meter 故障策略，未具备前不得宣称硬成本封顶；依据 `apps/server/internal/modules/translation/delivery/quota_gate.go:95-100,118-134,141-159`、`docs/design/tenant-quota-policy.md:65-69,111-119`。
+- [ ] 文档时效性清理（2026-10-18 用户令：很多文档已过时）：
+      在本轮审核整改完成之后执行，避免与整改冲突。
+      1) 通读 README / docs，找出与当前代码不符的描述（能力、配置项、命令、路径、版本）
+      2) 以代码为准修正文档；**禁止为对齐文档去改业务代码**
+      3) 已废弃但仍留在文档里的功能，明确标注「已移除」或删除，不要留成"看起来还能用"
+      4) 命令行示例逐条跑一遍，跑不通的改掉或删掉
+      5) 构建通过后 commit+push，回报改动文件清单
