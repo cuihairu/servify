@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS "chat_connector_installations" (
   "conversation_is_group" boolean NOT NULL,
   "updates_endpoint" text NOT NULL,
   "token_env_var" text NOT NULL,
-  "long_poll_ms" integer NOT NULL DEFAULT 25000,
+  "long_poll_ms" bigint NOT NULL DEFAULT 25000,
   "enabled" boolean NOT NULL DEFAULT false,
   "created_at" timestamptz,
   "updated_at" timestamptz
