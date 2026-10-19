@@ -14,20 +14,31 @@ fact that makes it impossible to close with a dependency upgrade.
 
 ```
 npx -y pnpm@10.22.0 --dir apps/admin audit
-3 vulnerabilities found
-Severity: 1 low | 1 moderate | 1 high
+2 vulnerabilities found
+Severity: 1 low | 1 high
 ```
 
-`pnpm audit --prod` reports the same three because `@umijs/max` is declared
+`pnpm audit --prod` reports the same two because `@umijs/max` is declared
 under `dependencies` (UMI is a build-time tool, but the app keeps it in the
-prod section). All three chains are lint / test / bundler toolchain — none of
-them is shipped in the served bundle (evidence below).
+prod section). Both remaining chains are lint / test / bundler toolchain —
+none of them is shipped in the served bundle (evidence below).
 
-`react-router` closed the other two of the original five findings on
-2026-10-15 via `pnpm.overrides` (`react-router@<7.18.0` → `^7.18.0`, resolved
-7.18.4, commit `bdd6cd5`): GHSA-wrjc-x8rr-h8h6 (`<Link>` backslash open
-redirect) and GHSA-337j-9hxr-rhxg (constructor injection). Audit went from 5
-to 3 findings.
+`react-router` closed two of the original five findings on 2026-10-15 via
+`pnpm.overrides` (`react-router@<7.18.0` → `^7.18.0`, resolved 7.18.4,
+commit `bdd6cd5`): GHSA-wrjc-x8rr-h8h6 (`<Link>` backslash open redirect) and
+GHSA-337j-9hxr-rhxg (constructor injection). Audit went from 5 to 3 findings.
+
+`sprintf-js` (GHSA-hp3w-g68c-fv3c, moderate) closed on 2026-10-19 by
+**dependency replacement** rather than a patched release — it has none: the
+only consumer of the vulnerable line (`js-yaml@3.15.2` → `argparse@1.0.10` →
+`sprintf-js@1.0.3`, all reachable only through `@umijs/test`'s jest harness)
+was overridden off it. `argparse@2` has zero dependencies, so pinning
+`@istanbuljs/load-nyc-config>js-yaml` to `^4.3.2` drops `js-yaml@3`,
+`argparse@1` and `sprintf-js` together. Safe because
+`@istanbuljs/load-nyc-config@1.1.0` calls `require('js-yaml').load(...)`, the
+API js-yaml 4 keeps (`safeLoad`, dropped in 4, was never used). `js-yaml@3`
+had exactly one consumer in the tree before the override, and the lockfile
+diff only removes those four packages. Audit went from 3 to 2 findings.
 
 ## 1. `braces` — GHSA-vfj7-8cjw-p6xm (high)
 
@@ -49,27 +60,7 @@ Unblock condition: upstream publishes a `braces` release with a non-zero
 patched version. Then add a `pnpm.overrides` entry, `pnpm install`, run
 `typecheck` + `build`, wait for CI `Admin Checks`, and delete this entry.
 
-## 2. `sprintf-js` — GHSA-hp3w-g68c-fv3c (moderate)
-
-| Field | Value |
-|---|---|
-| Title | denial of service through unbounded precision specifiers |
-| Vulnerable versions | `<=1.1.3` |
-| Patched versions | `<0.0.0` — no fixed release published |
-| Registry latest | `1.1.3` (no `1.2.x` line published at all; `npm view sprintf-js versions` ends at `1.1.3`) |
-| Path | `@umijs/max > umi > @umijs/test > babel-jest > babel-plugin-istanbul > @istanbuljs/load-nyc-config > js-yaml > argparse > sprintf-js` |
-
-Reachability: `@umijs/test` is umi's jest test harness. In the same build
-output `sprintf`, `js-yaml` and `argparse` all appear in 0 files.
-
-Why not an override: no version above `1.1.3` exists in the registry, so
-"upgrade within a range" is not possible either — any range specifier resolves
-back to the vulnerable release.
-
-Unblock condition: upstream publishes a fixed `sprintf-js`. Same procedure as
-above.
-
-## 3. `elliptic` — GHSA-848j-6mx2-7j84 (low)
+## 2. `elliptic` — GHSA-848j-6mx2-7j84 (low)
 
 | Field | Value |
 |---|---|
@@ -97,11 +88,10 @@ above.
 ## Why an `@umijs/max` upgrade does not close any of these
 
 `@umijs/max` 4.7.25 is the current `latest` tag against the installed 4.7.16,
-but upgrading cannot resolve any of the three entries: each chain is structural
-to UMI (`@umijs/lint` eslint tooling, `@umijs/test` jest harness,
-`@umijs/bundler-webpack` node polyfills) and each leaf package has no fixed
-release to resolve to. The blocking fact is the leaf, not the top of the
-chain.
+but upgrading cannot resolve either remaining entry: each chain is structural
+to UMI (`@umijs/lint` eslint tooling, `@umijs/bundler-webpack` node polyfills)
+and each leaf package has no fixed release to resolve to. The blocking fact is
+the leaf, not the top of the chain.
 
 ## Procedure when an upstream fix lands
 
