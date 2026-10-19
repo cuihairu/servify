@@ -15,7 +15,7 @@ import (
 
 var inboxTestDBSeq atomic.Uint64
 
-func newInboxTestDB(t *testing.T) *gorm.DB {
+func newChannelTestDB(t *testing.T) *gorm.DB {
 	dsn := "file:inbox_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" +
 		strconv.FormatUint(inboxTestDBSeq.Add(1), 10) + "?mode=memory&cache=shared"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
@@ -26,14 +26,14 @@ func newInboxTestDB(t *testing.T) *gorm.DB {
 		sqlDB.SetMaxOpenConns(1)
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
-	if err := db.AutoMigrate(&ChatConnectorInbox{}); err != nil {
-		t.Fatalf("migrate inbox: %v", err)
+	if err := db.AutoMigrate(&ChatConnectorInbox{}, &ChatConnectorCapability{}, &ChatConnectorCursor{}); err != nil {
+		t.Fatalf("migrate connector tables: %v", err)
 	}
 	return db
 }
 
 func TestInboxAccept(t *testing.T) {
-	store := NewInboxStore(newInboxTestDB(t))
+	store := NewInboxStore(newChannelTestDB(t))
 	stored, err := store.Accept(context.Background(), messageEvent("evt-1"))
 	if err != nil {
 		t.Fatalf("accept committed: %v", err)
@@ -91,7 +91,7 @@ func TestInboxAccept(t *testing.T) {
 }
 
 func TestInboxAcceptCreateError(t *testing.T) {
-	store := NewInboxStore(newInboxTestDB(t))
+	store := NewInboxStore(newChannelTestDB(t))
 	if err := store.db.Callback().Create().Before("gorm:create").Register("inbox_accept_error",
 		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
@@ -105,7 +105,7 @@ func TestInboxAcceptCreateError(t *testing.T) {
 }
 
 func TestInboxListQuarantined(t *testing.T) {
-	store := NewInboxStore(newInboxTestDB(t))
+	store := NewInboxStore(newChannelTestDB(t))
 	for _, eventID := range []string{"q1", "q2", "q3"} {
 		if _, err := store.Accept(context.Background(), unknownEvent(eventID)); err != nil {
 			t.Fatalf("accept %s: %v", eventID, err)
@@ -152,7 +152,7 @@ func TestInboxListQuarantined(t *testing.T) {
 }
 
 func TestInboxListQuarantinedQueryError(t *testing.T) {
-	store := NewInboxStore(newInboxTestDB(t))
+	store := NewInboxStore(newChannelTestDB(t))
 	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_query_error",
 		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
