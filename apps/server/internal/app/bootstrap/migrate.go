@@ -73,9 +73,10 @@ func MigrationModels() []interface{} {
 		&translationdomain.TranslationLanguagePreference{},
 		// V1.0 收敛 B1：会话服务过程事件流水（Service Timeline）
 		&models.ConversationEvent{},
-		&channel.ChatConnectorInbox{},      // 聊天平台接入契约 Phase 1 收件箱（表名 chat_connector_inboxes，000027）
-		&channel.ChatConnectorCapability{}, // 聊天平台接入契约 Phase 1 能力快照（表名 chat_connector_capabilities，000028）
-		&channel.ChatConnectorCursor{},     // 聊天平台接入契约 Phase 1 游标/ACK 状态（表名 chat_connector_cursors，000028）
+		&channel.ChatConnectorInbox{},        // 聊天平台接入契约 Phase 1 收件箱（表名 chat_connector_inboxes，000027）
+		&channel.ChatConnectorCapability{},   // 聊天平台接入契约 Phase 1 能力快照（表名 chat_connector_capabilities，000028）
+		&channel.ChatConnectorCursor{},       // 聊天平台接入契约 Phase 1 游标/ACK 状态（表名 chat_connector_cursors，000028）
+		&channel.ChatConnectorInstallation{}, // 聊天平台接入契约 安装映射存储（表名 chat_connector_installations，000029）
 	}
 }
 

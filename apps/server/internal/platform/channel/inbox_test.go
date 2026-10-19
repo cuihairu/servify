@@ -26,7 +26,8 @@ func newChannelTestDB(t *testing.T) *gorm.DB {
 		sqlDB.SetMaxOpenConns(1)
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
-	if err := db.AutoMigrate(&ChatConnectorInbox{}, &ChatConnectorCapability{}, &ChatConnectorCursor{}); err != nil {
+	if err := db.AutoMigrate(&ChatConnectorInbox{}, &ChatConnectorCapability{}, &ChatConnectorCursor{},
+		&ChatConnectorInstallation{}); err != nil {
 		t.Fatalf("migrate connector tables: %v", err)
 	}
 	return db
