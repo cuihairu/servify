@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -30,6 +31,7 @@ import servify.sdk.android.model.AgentAssignment
 import servify.sdk.android.model.SenderType
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.fail
 import kotlin.test.assertTrue
 
 /**
@@ -350,10 +352,22 @@ class ServifyChatTest {
         val failure = chat.events.error.awaitWhenSubscribed(ready)
         ready.awaitReady()
 
-        chat.connect()
-
-        assertIs<ServifyError.Network>(withTimeout(5_000) { failure.await() })
-        assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
+        // 10-19 二现预案（事件序列段位）：connect 前同步记录状态机走过的每一段，
+        // 超时失败信息带序列输出而非裸 "Timed out"，可分辨卡在 Connecting 还是
+        // 事件流丢失；预算 5s→10s 与 historySnapshot 同款余量
+        val stateTrace = mutableListOf<String>()
+        val traceJob = launch { chat.events.connectionState.collect { stateTrace += it::class.simpleName ?: "?" } }
+        try {
+            chat.connect()
+            val error = withTimeoutOrNull(10_000) { failure.await() }
+            if (error == null) {
+                fail("network error not emitted within 10s; state trace=$stateTrace")
+            }
+            assertIs<ServifyError.Network>(error)
+            assertEquals(ConnectionState.Disconnected, chat.events.connectionState.value)
+        } finally {
+            traceJob.cancel()
+        }
     }
 
     @Test
