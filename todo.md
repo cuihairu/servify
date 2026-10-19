@@ -4,6 +4,7 @@
 
 ## 未完成
 
+- [ ] 聊天平台接入契约：基于 [平台与协议调研](docs/research/chatbot-platforms-and-protocols.md)，先确定首个目标平台与全量群消息授权/数据保留要求，再定义 Servify 内部 `InboundEvent`、消息生命周期、来源引用、幂等/确认和 connector 能力声明；以 Memex connector 验证，不先发布通用 wire protocol
 - [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）——2026-10-16 复核：环境零凭证（`env | grep -icE 'dify|weknora|ragflow'` = 0）；三家 real 模式就绪但设计性拒绝本地私网（`test-dify-integration.sh:229` / `test-ragflow-acceptance.sh:449` / `test-weknora-integration.sh:236`）→ 解锁条件：真实远端端点 + 凭证——2026-10-19 R2 复核：`env | grep -icE 'dify|weknora|ragflow'` 仍 = 0，状态未变——2026-10-19c 复核【BLOCKED】：env 凭证仍 0（脚本入口与三家 real 模式就绪不变），缺真实远端端点 + 凭证（外部提供）
 - [x] CODECOV_TOKEN — 2026-10-15 用户配置 secret 后首传成功：CI 38731452145（f00eeaa）Go Checks「Upload coverage to Codecov」200（806,532 字节，coverage.out 2251 文件）；步骤恢复必需（fail_ci_if_error=true，移除缺 token 条件跳过——secret 吊销时 CI 如实红）
 - [ ] 移动端语音消费：Android/iOS 语音上行与字幕渲染（按产品节奏）——2026-10-16 复核：V1 范围裁定仍生效（`sdk/packages/core/src/bindings/mobile.ts:13` voice `enabled:false, version:'reserved'`；`sdk/PROTOCOL.md:36` 移动端 V1 不消费不发送），双端仅帧类型定义无 voice 消费代码 → 解锁条件：产品拍板翻转 V1 范围 + 采集/上行/字幕三件套立项——2026-10-19 R2 复核：`mobile.ts:13` voice 仍 `enabled:false, version:'reserved'`、`PROTOCOL.md:36` 仍声明移动端 V1 不消费不发送，状态未变——2026-10-19c 复核【BLOCKED】：`mobile.ts:13` voice 仍 `enabled:false, version:'reserved'`、`PROTOCOL.md:36` V1 口径未翻，缺产品拍板翻转 V1 范围（用户决策）
