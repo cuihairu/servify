@@ -10,6 +10,7 @@ import (
 	translationdomain "servify/apps/server/internal/modules/translation/domain"
 	voiceinfra "servify/apps/server/internal/modules/voice/infra"
 	webhookdomain "servify/apps/server/internal/modules/webhook/domain"
+	"servify/apps/server/internal/platform/channel"
 
 	"gorm.io/gorm"
 )
@@ -72,6 +73,7 @@ func MigrationModels() []interface{} {
 		&translationdomain.TranslationLanguagePreference{},
 		// V1.0 收敛 B1：会话服务过程事件流水（Service Timeline）
 		&models.ConversationEvent{},
+		&channel.ChatConnectorInbox{}, // 聊天平台接入契约 Phase 1 收件箱（表名 chat_connector_inboxes，000027）
 	}
 }
 
