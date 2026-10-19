@@ -102,6 +102,19 @@ func TestBuildRuntimeAssemblesFullGraph(t *testing.T) {
 	}
 }
 
+// 配额门装配失败必须让 BuildRuntime 整体失败（wireAIRuntime 透传），
+// 而不是带着未限流的翻译面继续启动。
+func TestBuildRuntimeTranslationQuotaGateErrorPropagates(t *testing.T) {
+	cfg := newRuntimeTestConfig(t)
+	cfg.Translation.Quota.Enabled = true
+	cfg.Translation.Quota.Unit = "widgets"
+	db := newRuntimeTestDB(t)
+
+	if _, err := BuildRuntime(cfg, logrus.New(), db, nil, eventbus.NewInMemoryBus()); err == nil {
+		t.Fatal("expected invalid quota unit to fail BuildRuntime")
+	}
+}
+
 func TestBuildRuntimeInitializesObservabilityWhenMonitoringEnabled(t *testing.T) {
 	// initializeObservability registers Prometheus collectors on the
 	// process-wide registry; swap in a fresh one so repeated in-process runs

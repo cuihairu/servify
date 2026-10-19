@@ -24,7 +24,7 @@ func newKnowledgeSourcesRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := newTestDBForKnowledgeDocs(t)
-	if err := db.AutoMigrate(&knowledgedomain.KnowledgeSource{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeSource{}, &knowledgedomain.KnowledgeBase{}, &knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeChunk{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate sources: %v", err)
 	}
 	h := NewKnowledgeDocHandler(knowledgedelivery.NewHandlerService(db))

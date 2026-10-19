@@ -2,10 +2,13 @@ package application
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"servify/apps/server/internal/modules/knowledge/domain"
 )
+
+var errRepositoryDown = errors.New("repository down")
 
 type catalogBaseStub struct {
 	created *domain.KnowledgeBase
@@ -52,5 +55,26 @@ func TestCatalogServiceValidatesAndDelegates(t *testing.T) {
 	}
 	if _, err := svc.ListChunks(context.Background(), " "); err == nil {
 		t.Fatal("blank document id accepted")
+	}
+}
+
+func TestCatalogServicePropagatesRepositoryErrors(t *testing.T) {
+	bases, chunks := &catalogBaseStub{err: errRepositoryDown}, &catalogChunkStub{err: errRepositoryDown}
+	svc := NewCatalogService(bases, chunks)
+	if _, err := svc.CreateKnowledgeBase(context.Background(), "Policies", false); err == nil {
+		t.Fatal("create knowledge base error swallowed")
+	}
+	if _, err := svc.ListKnowledgeBases(context.Background()); err == nil {
+		t.Fatal("list knowledge bases error swallowed")
+	}
+	// 正常路径透传（列表映射不经服务层加工）。
+	bases.err = nil
+	bases.list = []domain.KnowledgeBase{{Name: "Policies", IsPublic: true}}
+	got, err := svc.ListKnowledgeBases(context.Background())
+	if err != nil || len(got) != 1 || got[0].Name != "Policies" {
+		t.Fatalf("unexpected bases: %+v err=%v", got, err)
+	}
+	if _, err := svc.ListChunks(context.Background(), "doc-1"); err == nil {
+		t.Fatal("list chunks error swallowed")
 	}
 }

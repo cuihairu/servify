@@ -30,7 +30,7 @@ func newTestDBForKnowledgeDocs(t *testing.T) *gorm.DB {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&knowledgedomain.KnowledgeBase{}, &knowledgedomain.KnowledgeDoc{}, &knowledgedomain.KnowledgeChunk{}, &knowledgedomain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

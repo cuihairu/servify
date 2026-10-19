@@ -21,7 +21,7 @@ func newKnowledgeInfraTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&domain.KnowledgeDoc{}, &domain.KnowledgeIndexJob{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeBase{}, &domain.KnowledgeDoc{}, &domain.KnowledgeChunk{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return db

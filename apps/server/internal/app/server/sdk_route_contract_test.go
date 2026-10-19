@@ -39,6 +39,10 @@ var sdkGuardConditionalRoutes = map[string]string{
 var sdkGuardDocOnlyPaths = map[string]string{
 	"/api/sessions": "demo-sdk README 迁移说明引用的 WebSocket-first 之前的旧端点，服务端现无此路由",
 	"/api/messages": "demo-sdk README 迁移说明引用的 WebSocket-first 之前的旧端点，服务端现无此路由",
+	// 仓库内 OpenAPI 规格文件 docs/generated/api/swagger.json 的路径子串匹配：
+	// 文档（CAPABILITY-MATRIX / EXTERNAL-INTEGRATION）指文件位置而非 HTTP 端点，
+	// 服务端无 /api/swagger.json 路由；若未来真注册该路由，本豁免自然失效可清理。
+	"/api/swagger.json": "规格文件 docs/generated/api/swagger.json 路径子串，非端点（文档指文件位置）",
 }
 
 var (

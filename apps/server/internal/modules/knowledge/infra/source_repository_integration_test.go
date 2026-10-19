@@ -19,7 +19,7 @@ import (
 
 func TestGormSourceRepositoryLifecycle(t *testing.T) {
 	db := newKnowledgeInfraTestDB(t)
-	if err := db.AutoMigrate(&domain.KnowledgeSource{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeSource{}, &domain.KnowledgeBase{}, &domain.KnowledgeDoc{}, &domain.KnowledgeChunk{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate sources: %v", err)
 	}
 	sourceRepo := NewGormSourceRepository(db)

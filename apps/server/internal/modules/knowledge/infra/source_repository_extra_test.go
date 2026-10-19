@@ -19,7 +19,7 @@ import (
 func newSourceRepoTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := newKnowledgeUnitTestDB(t)
-	if err := db.AutoMigrate(&domain.KnowledgeSource{}); err != nil {
+	if err := db.AutoMigrate(&domain.KnowledgeSource{}, &domain.KnowledgeBase{}, &domain.KnowledgeDoc{}, &domain.KnowledgeChunk{}, &domain.KnowledgeIndexJob{}); err != nil {
 		t.Fatalf("automigrate sources: %v", err)
 	}
 	return db

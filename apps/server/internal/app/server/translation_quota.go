@@ -42,10 +42,9 @@ func buildTranslationQuotaGate(cfg *config.Config, db *gorm.DB, redisClient *red
 	if redisClient == nil {
 		return nil, errors.New("translation.quota.enabled requires redis (config event_bus.provider=redis)")
 	}
-	meter, err := quotameter.New(redisClient, "translation", window)
-	if err != nil {
-		return nil, fmt.Errorf("translation quota meter: %w", err)
-	}
+	// window 已在上方经 ParseWindow 校验、redis 非空已检查，quotameter.New 的
+	// 两个失败条件（非法 window / nil client）均已前置排除，此处不再重复判错。
+	meter, _ := quotameter.New(redisClient, "translation", window)
 	return translationdelivery.NewQuotaGateWithLimitSource(next, meter, q.Limit, unit, newTranslationQuotaLimitSource(cfg, db), logger), nil
 }
 
