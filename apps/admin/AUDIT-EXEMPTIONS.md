@@ -56,6 +56,17 @@ so the glob-expansion chain is not shipped.
 Why not an override: there is no patched version to pin to. Pinning
 `braces@3.0.3` would pin the identical vulnerable release and change nothing.
 
+Why not a dependency replacement (the method that closed `sprintf-js`):
+`braces` sits one level under `micromatch`, and every glob engine that could
+be pivoted onto instead carries the same `micromatch`. Installed
+`globby@11.1.0` and `globby@13.2.2` both depend on `fast-glob`; current
+registry lines do the same — `globby@14.0.2` and `globby@15.0.0` depend on
+`fast-glob ^3.3`, and `globby@16.2.4` depends on `fast-glob ^3.3.3` **plus** a
+direct `micromatch ^4.0.8` (`npm view globby@<v> dependencies`, 2026-10-19).
+`fast-glob@3.3.3` itself depends on `micromatch ^4.0.8`. There is no
+brace-free glob line to move the chain onto, so the leaf cannot be eliminated
+from inside this tree.
+
 Unblock condition: upstream publishes a `braces` release with a non-zero
 patched version. Then add a `pnpm.overrides` entry, `pnpm install`, run
 `typecheck` + `build`, wait for CI `Admin Checks`, and delete this entry.
@@ -81,6 +92,15 @@ node crypto signing.
 
 Why not an override: same as above — `6.6.1` is both the installed and the
 registry-ceiling version, and it is the vulnerable ceiling.
+
+Why not a dependency replacement: `elliptic` reaches the tree through **two**
+sibling packages under `crypto-browserify` — `browserify-sign@4.2.6` and
+`create-ecdh@4.0.4` both depend on it (lockfile snapshots, 2026-10-19). Both
+siblings are the ECDSA/ECDH implementations themselves, so no released
+version of either drops `elliptic`; and `node-libs-browser@2.2.1` (registry
+latest) exists precisely to provide this crypto polyfill set, so there is no
+polyfill-free version to override it to. The leaf is structural to
+webpack's node-polyfill layer.
 
 Unblock condition: upstream publishes a fixed `elliptic`. Same procedure as
 above.
