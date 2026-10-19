@@ -38,7 +38,7 @@ type KnowledgeBase struct {
 	TenantID    string    `gorm:"index;uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"tenant_id"`
 	WorkspaceID string    `gorm:"index;uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"workspace_id"`
 	Name        string    `gorm:"uniqueIndex:uq_knowledge_bases_scope_name;not null" json:"name"`
-	IsPublic    bool      `gorm:"default:false" json:"is_public"`
+	IsPublic    bool      `gorm:"not null;default:false" json:"is_public"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
