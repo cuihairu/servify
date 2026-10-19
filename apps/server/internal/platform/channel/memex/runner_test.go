@@ -433,3 +433,156 @@ func TestRunnerReportsCancellationFromStoreError(t *testing.T) {
 	}
 	sl.expectNone(t)
 }
+
+func TestRunnerDeadLettersAfterMaxAttempts(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	sl := newRunnerSleeper()
+	defer sl.cancel()
+
+	polls := newScriptedPolls(t, "__500__", "__500__", "__500__")
+	srv := httptest.NewServer(polls.handler())
+	defer srv.Close()
+
+	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner.MinBackoff = time.Millisecond
+	runner.MaxAttempts = 3
+	err := runner.Run(sl.ctx)
+	var dl *DeadLetterError
+	if !errors.As(err, &dl) {
+		t.Fatalf("run = %v, want DeadLetterError", err)
+	}
+	if dl.Reason != "attempts" || dl.Attempts != 3 || dl.Kind != ErrTransient || dl.Status != http.StatusInternalServerError {
+		t.Errorf("dead letter = %+v", dl)
+	}
+	if got := polls.polls.Load(); got != 3 {
+		t.Errorf("polls = %d, want 3 (the budgetth attempt is the last)", got)
+	}
+	sl.expect(t, 500*time.Microsecond) // jittered(1ms) ∈ [500µs, 1ms]
+	sl.expect(t, time.Millisecond)     // jittered(2ms) ∈ [1ms, 2ms]
+	sl.expectNone(t)
+}
+
+func TestRunnerDeadLettersAfterTimeBudget(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	sl := newRunnerSleeper()
+	defer sl.cancel()
+
+	polls := newScriptedPolls(t, "__500__", "__500__")
+	srv := httptest.NewServer(polls.handler())
+	defer srv.Close()
+
+	base := time.Unix(1697000000, 0)
+	clock := 0
+	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner.MinBackoff = time.Millisecond
+	runner.MaxAttempts = 100 // attempt budget off the table; the clock decides
+	runner.MaxDuration = time.Hour
+	runner.Now = func() time.Time {
+		clock++
+		if clock <= 2 { // streak start, then a deadline check still in budget
+			return base
+		}
+		return base.Add(2 * time.Hour) // the next check lands past the budget
+	}
+	err := runner.Run(sl.ctx)
+	var dl *DeadLetterError
+	if !errors.As(err, &dl) {
+		t.Fatalf("run = %v, want DeadLetterError", err)
+	}
+	if dl.Reason != "budget" || dl.Attempts != 2 {
+		t.Errorf("dead letter = %+v", dl)
+	}
+	if got := polls.polls.Load(); got != 2 {
+		t.Errorf("polls = %d, want 2", got)
+	}
+	sl.expect(t, 500*time.Microsecond)
+	sl.expectNone(t)
+}
+
+func TestRunnerAttemptsResetAfterSuccess(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	sl := newRunnerSleeper()
+	defer sl.cancel()
+
+	script := []string{"__500__", updateBody("m1"), "__500__", "__500__"}
+	polls := newScriptedPolls(t, script...)
+	srv := httptest.NewServer(polls.handler())
+	defer srv.Close()
+
+	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner.MinBackoff = time.Millisecond
+	runner.MaxAttempts = 2
+	err := runner.Run(sl.ctx)
+	var dl *DeadLetterError
+	if !errors.As(err, &dl) || dl.Reason != "attempts" || dl.Attempts != 2 {
+		t.Fatalf("run = %v, want attempts DeadLetterError after a fresh streak", err)
+	}
+	// the second streak ran to its own budget (poll 2 succeeded in between):
+	// without the reset the loop would have stopped at poll 3.
+	if got := polls.polls.Load(); got != 4 {
+		t.Errorf("polls = %d, want 4", got)
+	}
+}
+
+func TestRunnerBudgetsCanBeDisabled(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	sl := newRunnerSleeper()
+	defer sl.cancel()
+
+	polls := newScriptedPolls(t, "__500__", "__500__", "__500__")
+	srv := httptest.NewServer(polls.handler())
+	defer srv.Close()
+
+	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner.MinBackoff = time.Millisecond
+	runner.MaxAttempts = 0 // no attempt budget
+	runner.MaxDuration = 0 // no time budget
+	done := make(chan error, 1)
+	go func() { done <- runner.Run(sl.ctx) }()
+	sl.expect(t, 500*time.Microsecond) // jittered(1ms)
+	sl.expect(t, time.Millisecond)     // jittered(2ms)
+	sl.expect(t, 2*time.Millisecond)   // jittered(4ms)
+	sl.cancel()                        // still looping after 3 failures: only the stop signal ends it
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Errorf("run = %v, want context.Canceled", err)
+	}
+}
+
+func TestDeadLetterErrorTextCarriesNoContent(t *testing.T) {
+	dl := &DeadLetterError{Reason: "attempts", Kind: ErrTransient, Status: 500, Attempts: 10}
+	msg := dl.Error()
+	for _, want := range []string{"attempts", "10", "transient", "500"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("dead letter text %q missing %q", msg, want)
+		}
+	}
+	if (&Runner{}).now().IsZero() {
+		t.Error("zero Runner must fall back to the wall clock")
+	}
+}
+
+func TestNewRunnerPinsContractBudget(t *testing.T) {
+	r := NewRunner(nil)
+	if r.LongPoll != 25*time.Second {
+		t.Errorf("long poll = %v, want 25s under the 30s server cap", r.LongPoll)
+	}
+	if r.MinBackoff != time.Second {
+		t.Errorf("base backoff = %v, want 1s (contract: starting at 1s)", r.MinBackoff)
+	}
+	if r.MaxBackoff != 5*time.Minute {
+		t.Errorf("backoff cap = %v, want 5m (contract: capped at 5m)", r.MaxBackoff)
+	}
+	if r.MaxAttempts != 10 {
+		t.Errorf("max attempts = %d, want 10 (contract: stop after 10 attempts)", r.MaxAttempts)
+	}
+	if r.MaxDuration != 24*time.Hour {
+		t.Errorf("max duration = %v, want 24h (contract: or 24h)", r.MaxDuration)
+	}
+	if r.Sleep == nil || r.Now == nil {
+		t.Error("runner must ship a sleep and a clock")
+	}
+}
