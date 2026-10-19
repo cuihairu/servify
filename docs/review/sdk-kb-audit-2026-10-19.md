@@ -115,3 +115,11 @@ SDK 文档依据：`sdk/SURFACE_GOVERNANCE.md:3-27,48-61`；Android 状态与门
 - 新增跨端能力/版本兼容矩阵 `sdk/CAPABILITY-MATRIX.md`（P2 补齐项）：契约事实源与版本口径（WS 手写+共享 fixtures、REST OpenAPI、同号 1.0.0 无 per-package semver、能力协商缺省）、13 行能力矩阵（聊天/流式/转人工/补拉/未读/已读游标/翻译消费/语音 §9·§9.3/远程协助/推送注册/工单/上传/ICE——逐格带代码锚点）、平台形态与已知边界、分发硬边界；README 挂链接。逐格锚点核验：Web core `websocket.ts` switch/`voice.ts`/`unread.ts`、Android `FrameCodec.kt`/`ServifyChat.syncReadState()`、iOS Swift 镜像、RN `createRNServifySDK`（mobile 能力集）、移动端 `message-translated` 仅 fixtures 回放无消费实现（静默忽略）。
 - 测试：`npm -C sdk test` 通过（199 项）；docs 门未受影响（本项只动 `sdk/` 树与本文）。
 - 更正本审计「`sdk/` 全树无 CHANGELOG」的否定性结论：`sdk/CHANGELOG.md` 已随 `961a556` 落库（审计快照后被同日提交超越），从 1.0.0 起记录变更并声明不隐含公开 registry 发布；但「无 per-package semver 与 git tag」的判断仍成立（全部包同号 1.0.0，`version:sync`/`version:check` 维护），P1 该项仅部分收口，按包分立 CHANGELOG/弃用说明仍缺。
+
+### 五、P1 示例缺口收口（纯 REST/WS）
+
+- 新增 `sdk/examples/rest-ws/index.html`：单文件、零框架、不 import 任何 `@servify/*` 的裸 REST+WS 接入参考，写全六件事——session 获取（`POST /api/v1/guest/session` 为宿主后端侧调用，页面仅消费 `?token=`）、token 绑定（`access_token` 查询参）、WS 握手（`/api/v1/ws` + `session_id`）、历史补拉对账（`GET /api/v1/sessions/{id}/messages?after_id=<cursor>`，首连与每次重连都跑）、错误处理（HTTP 非 2xx 抛错、帧解析失败/畸形帧/历史拉取失败统一走 `handleFrameError`）、断线重连（指数退避 `scheduleReconnect`，服务器无应用层 ACK，发送以回显帧确认）。
+- 烟测门：`sdk/scripts/run-example-smoke-tests.mjs` 增断言锁该示例不 import SDK、六件事各自可见（`test:examples` 门内）。`sdk/EXTERNAL-INTEGRATION.md` 增「Minimal integration without the SDK」节挂链接。
+- 残余：React/Vue/Vanilla 示例仍只展示 UI 接入（vite alias 消费仓内 dist），未含 session/token bootstrap 步骤——纯 REST/WS 参考已覆盖该缺口的产品面，但「所有示例含端到端接入步骤」尚未全量收口；按包 CHANGELOG/semver/弃用说明仍缺（P1 另一项）。
+- 测试：`npm -C sdk test`（199 项）全绿、`test:examples`/`test:surfaces`/`test:governance`/`version:check` 通过、lint 0 error（5 条预存 warning 在未动文件）。
+- Commit: 随「feat: add pure rest-ws integration example」提交。

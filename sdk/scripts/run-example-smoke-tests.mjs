@@ -64,4 +64,18 @@ assertIncludes(vanillaHtml, "../../packages/vanilla/dist/index.js", "sdk/example
 assertIncludes(vanillaHtml, "new Servify(", "sdk/examples/vanilla/index.html");
 assertIncludes(vanillaHtml, "startChat()", "sdk/examples/vanilla/index.html");
 
+// 纯 REST/WS 最小接入样例：不依赖 @servify/*，必须把第三方接入所需的
+// 六件事写全（会话获取、token、WS 握手、历史补拉对账、错误处理、断线重连）。
+const restWsHtml = mustRead("examples/rest-ws/index.html");
+assertExcludes(restWsHtml, "@servify", "sdk/examples/rest-ws/index.html must not import the SDK");
+assertIncludes(restWsHtml, "/api/v1/guest/session", "rest-ws session bootstrap call");
+assertIncludes(restWsHtml, "access_token", "rest-ws token handling");
+assertIncludes(restWsHtml, "/api/v1/ws", "rest-ws websocket endpoint");
+assertIncludes(restWsHtml, "searchParams.set('session_id'", "rest-ws session id handshake param");
+assertIncludes(restWsHtml, "?after_id=", "rest-ws history reconcile cursor");
+assertIncludes(restWsHtml, "WebSocket", "rest-ws websocket client");
+assertIncludes(restWsHtml, "reconnect", "rest-ws reconnect surface");
+assertIncludes(restWsHtml, "scheduleReconnect()", "rest-ws exponential backoff");
+assertIncludes(restWsHtml, "handleFrameError(", "rest-ws frame level error surface");
+
 console.log("SDK example smoke tests passed.");

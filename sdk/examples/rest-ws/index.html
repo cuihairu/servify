@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Servify — minimal REST + WebSocket integration</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0 auto; max-width: 760px; padding: 1rem; }
+  header { border-bottom: 1px solid #e2e8f0; padding-bottom: .75rem; }
+  .hint { font-size: .85rem; color: #64748b; }
+  #log { height: 340px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: .5rem; font-size: .85rem; margin: .75rem 0; background: #f8fafc; }
+  .line { margin: .25rem 0; }
+  .me { color: #1d4ed8; }
+  .agent { color: #15803d; }
+  .ai { color: #7c3aed; }
+  .system { color: #b45309; }
+  .error { color: #b91c1c; }
+  .row { display: flex; gap: .5rem; align-items: flex-end; }
+  textarea, input { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: .5rem; }
+  button { border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 6px; padding: .5rem .9rem; }
+  button:disabled { background: #94a3b8; border-color: #94a3b8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Servify REST + WebSocket</h1>
+  <p class="hint">
+    No SDK import. Wire this up with your own backend: read <code>?api=</code> (Servify base URL),
+    <code>?session=</code> (stable visitor session id) and <code>?token=</code> (guest access token,
+    minted by your backend via <code>POST /api/v1/guest/session</code>). Without <code>?token=</code>
+    the page talks to an anonymous deployment (session creation happens server-side on the first message).
+  </p>
+  <p id="status" class="hint">idle</p>
+</header>
+
+<div id="log" aria-live="polite"></div>
+
+<form id="message-form" class="row">
+  <textarea id="message-input" rows="2" placeholder="Ask something…"></textarea>
+  <button id="send-button" type="submit">Send</button>
+</form>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// 1. Configuration: everything comes from the page URL so the sample stays a
+//    single static file. Your host backend injects the token it minted.
+// ---------------------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const apiUrl = (params.get('api') || 'http://localhost:8080').replace(/\/$/, '');
+const sessionId = params.get('session') || `site-${Math.random().toString(36).slice(2, 10)}`;
+const accessToken = params.get('token') || '';
+
+const wsPath = '/api/v1/ws';
+const log = document.querySelector('#log');
+const statusEl = document.querySelector('#status');
+const form = document.querySelector('#message-form');
+const input = document.querySelector('#message-input');
+
+function setStatus(state) {
+  statusEl.textContent = state;
+}
+
+function appendLine(kind, text) {
+  const line = document.createElement('div');
+  line.className = `line ${kind}`;
+  line.textContent = text;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// 2. HTTP helpers: every call surfaces failures instead of failing silently.
+// ---------------------------------------------------------------------------
+async function apiGet(path) {
+  const response = await fetch(apiUrl + path);
+  if (!response.ok) {
+    throw new Error(`GET ${path} -> HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function apiPost(path, body) {
+  const response = await fetch(apiUrl + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`POST ${path} -> HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+// 3. Session bootstrap (optional): POST /api/v1/guest/session is a server-side
+// call (X-API-Key) in the real flow. This page only uses the token it was
+// handed, and falls back to an anonymous connection when none was supplied.
+function describeSession() {
+  return accessToken
+    ? `session ${sessionId} (guest token bound, expires per your mint response)`
+    : `session ${sessionId} (anonymous handshake, no token)`;
+}
+
+// ---------------------------------------------------------------------------
+// 4. Reconcile: pull the history slice that the socket did not deliver.
+//    Run on first connect and after every reconnect so dropped windows are
+//    back-filled; the cursor advances by the largest message id seen.
+// ---------------------------------------------------------------------------
+let lastMessageId = null;
+let pending = new Map();
+
+function nextCursor(afterId) {
+  return afterId ? `?after_id=${encodeURIComponent(afterId)}` : '';
+}
+
+async function pullHistory(afterId) {
+  try {
+    const payload = await apiGet(`/api/v1/sessions/${encodeURIComponent(sessionId)}/messages${nextCursor(afterId)}`);
+    const messages = Array.isArray(payload) ? payload : payload.messages || [];
+    for (const message of messages) {
+      if (typeof message.id !== 'number' && typeof message.id !== 'string') {
+        continue;
+      }
+      if (lastMessageId !== null && Number(message.id) <= Number(lastMessageId)) {
+        continue;
+      }
+      lastMessageId = Number(message.id);
+      const kind = message.role === 'agent' || message.type === 'agent' ? 'agent' : 'me';
+      appendLine(kind, `history id=${message.id} ${message.content || '-'}`);
+    }
+    appendLine('system', `reconcile: ${messages.length} message(s) pulled (cursor ${lastMessageId})`);
+  } catch (error) {
+    handleFrameError('history', { error: error.message });
+  }
+}
+
+function rememberMessageId(messageId) {
+  if (typeof messageId !== 'number') {
+    return;
+  }
+  if (lastMessageId === null || messageId > lastMessageId) {
+    lastMessageId = messageId;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Frame handling: one switch, unknown types ignored on purpose.
+// ---------------------------------------------------------------------------
+function handleFrameError(type, data) {
+  const detail = data && (data.error || data.message || data.content_delta);
+  appendLine('error', `frame error [${type}]${detail ? `: ${detail}` : ''}`);
+}
+
+let streamBuffer = '';
+
+function handleFrame(message) {
+  if (!message || typeof message.type !== 'string' || !message.data) {
+    return handleFrameError('malformed', message);
+  }
+
+  switch (message.type) {
+    case 'text-message': {
+      const content = message.data.content;
+      if (typeof content === 'string') {
+        rememberMessageId(message.data.id);
+        const label = pending.delete(content) ? 'echo' : 'history echo';
+        appendLine('me', `${label} id=${message.data.id ?? ''} ${content}`);
+      }
+      break;
+    }
+    case 'agent-message':
+      appendLine('agent', `${message.data.sender || 'agent'}: ${message.data.content}`);
+      rememberMessageId(message.data.id);
+      break;
+    case 'ai-response':
+      streamBuffer = '';
+      appendLine('ai', `ai (${message.data.strategy || 'llm'}): ${message.data.content}`);
+      rememberMessageId(message.data.id);
+      break;
+    case 'ai-response-delta':
+      streamBuffer += message.data.content_delta || '';
+      if (message.data.done && !streamBuffer) {
+        appendLine('error', 'ai stream ended without a final frame — keep partial output, do not auto-resend');
+      }
+      streamBuffer = '';
+      break;
+    case 'transfer_notification':
+      appendLine('system', `agent assigned (${message.data.agent_id}): ${message.data.message}`);
+      break;
+    case 'waiting_notification':
+      appendLine('system', `waiting in queue: ${message.data.message}`);
+      break;
+    default:
+      appendLine('system', `ignored frame: ${message.type}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Socket lifecycle: handshake, echo-confirmed sends, backoff reconnect.
+//    The server has no application ACK — a send counts as delivered only
+//    after our own text-message echo comes back, so sends are tracked and
+//    cleared on echo instead of being fire-and-forget.
+// ---------------------------------------------------------------------------
+let socket = null;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let closedByUser = false;
+
+function buildSocketUrl() {
+  const url = new URL(apiUrl + wsPath);
+  url.searchParams.set('session_id', sessionId);
+  if (accessToken) {
+    url.searchParams.set('access_token', accessToken);
+  }
+  return url.toString();
+}
+
+function reconnectDelay(attempt) {
+  return Math.min(1000 * 2 ** attempt, 15000);
+}
+
+function scheduleReconnect() {
+  if (closedByUser) {
+    return;
+  }
+  const attempt = reconnectAttempts;
+  reconnectAttempts += 1;
+  const delay = reconnectDelay(attempt);
+  appendLine('system', `reconnect attempt ${attempt + 1} in ${delay}ms`);
+  reconnectTimer = setTimeout(openSocket, delay);
+}
+
+function openSocket() {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  setStatus('connecting…');
+  socket = new WebSocket(buildSocketUrl());
+
+  socket.addEventListener('open', () => {
+    reconnectAttempts = 0;
+    setStatus('connected');
+    appendLine('system', `connected: ${describeSession()}`);
+    // Back-fill whatever the closed connection lost (also runs on first connect).
+    void pullHistory(lastMessageId);
+  });
+
+  socket.addEventListener('message', (event) => {
+    let frame;
+    try {
+      frame = JSON.parse(event.data);
+    } catch (error) {
+      handleFrameError('parse', { error: error.message });
+      return;
+    }
+    handleFrame(frame);
+  });
+
+  socket.addEventListener('close', (event) => {
+    socket = null;
+    if (event.code !== 1000) {
+      appendLine('system', `closed code=${event.code} reason=${event.reason || '-'}`);
+    }
+    if (!closedByUser) {
+      setStatus('reconnecting…');
+      scheduleReconnect();
+    }
+  });
+
+  socket.addEventListener('error', () => {
+    // 'error' is always followed by 'close'; the close listener drives reconnect.
+    appendLine('error', 'websocket error (handshake rejected or transport failure)');
+  });
+}
+
+function sendText(content) {
+  const text = content.trim();
+  if (!text) {
+    return;
+  }
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    appendLine('error', 'not connected — message not sent');
+    return;
+  }
+  pending.set(text, true);
+  socket.send(JSON.stringify({ type: 'text-message', data: { content: text, session_id: sessionId } }));
+}
+
+// ---------------------------------------------------------------------------
+// 7. Boot
+// ---------------------------------------------------------------------------
+appendLine('system', `target ${apiUrl}, ${describeSession()}`);
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  sendText(input.value);
+  input.value = '';
+});
+openSocket();
+</script>
+</body>
+</html>

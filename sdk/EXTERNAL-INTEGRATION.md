@@ -39,6 +39,17 @@ the full request example and credential guidance in
 [`../docs/embedding-guide.md`](../docs/embedding-guide.md#32-visitor-token-the-ticket-for-authenticated-surfaces-like-feedback)
 and the handshake contract in [`PROTOCOL.md`](PROTOCOL.md).
 
+## Minimal integration without the SDK
+
+Third parties that cannot bundle an npm package can drive the REST + WebSocket
+contract directly. The table above still applies; the reference implementation
+in [`examples/rest-ws/index.html`](examples/rest-ws/index.html) is a single
+framework-free static file that shows the six things a raw integration must do:
+read the session id / access token, open `/api/v1/ws` with `session_id` (and
+`access_token` when required) as query params, back-fill lost history with
+`GET /api/v1/sessions/{id}/messages?after_id=<cursor>`, surface HTTP and frame
+errors, and reconnect with exponential backoff. It imports no SDK package.
+
 ## Distribution status
 
 The current source is an npm workspace, and the workspace root is marked
