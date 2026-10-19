@@ -1,0 +1,417 @@
+package memex
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+
+	"servify/apps/server/internal/platform/channel"
+)
+
+var adapterDBSeq atomic.Uint64
+
+func newAdapterStores(t *testing.T) (*channel.InboxStore, *channel.CapabilityStore, *gorm.DB) {
+	t.Helper()
+	dsn := "file:memex_" + strings.ReplaceAll(t.Name(), "/", "_") + "_" +
+		strconv.FormatUint(adapterDBSeq.Add(1), 10) + "?mode=memory&cache=shared"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+	if err := db.AutoMigrate(&channel.ChatConnectorInbox{}, &channel.ChatConnectorCapability{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	return channel.NewInboxStore(db), channel.NewCapabilityStore(db), db
+}
+
+func adapterConfig() Config {
+	return Config{
+		Platform:       "memex",
+		TenantID:       "tenant-1",
+		WorkspaceID:    "workspace-1",
+		InstallationID: "inst-1",
+		Conversation: channel.ConversationRef{
+			PlatformID: "group:5",
+			Kind:       "group",
+			IsGroup:    true,
+		},
+	}
+}
+
+func enableIngestion(t *testing.T, caps *channel.CapabilityStore) {
+	t.Helper()
+	snapshot := DeclaredCapabilities(time.Now())
+	if err := caps.Record(context.Background(), channel.CapabilityScope{
+		TenantID:               "tenant-1",
+		WorkspaceID:            "workspace-1",
+		Platform:               "memex",
+		InstallationID:         "inst-1",
+		ConversationPlatformID: "group:5",
+	}, snapshot); err != nil {
+		t.Fatalf("record capabilities: %v", err)
+	}
+}
+
+// memexFake is a scripted Memex webhook server: onPull answers the updates
+// endpoint, ACKs are recorded so redelivery semantics stay observable.
+type memexFake struct {
+	t      *testing.T
+	mu     sync.Mutex
+	acked  []string
+	onPull func(w http.ResponseWriter, r *http.Request)
+}
+
+func (f *memexFake) handler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
+			f.t.Errorf("authorization = %q", got)
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/bot/updates":
+			f.onPull(w, r)
+		case r.Method == http.MethodPost && r.URL.Path == "/bot/ack":
+			var body struct {
+				MsgID string `json:"msg_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.MsgID == "" {
+				f.t.Errorf("ack body invalid: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			f.mu.Lock()
+			f.acked = append(f.acked, body.MsgID)
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			f.t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}
+}
+
+func (f *memexFake) ackedMsgs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.acked...)
+}
+
+func TestDeclaredCapabilitiesHonestSurface(t *testing.T) {
+	caps := DeclaredCapabilities(time.Unix(1000, 0))
+	if !caps.IngestionEnabled() {
+		t.Error("declared snapshot must enable ingestion")
+	}
+	if caps.Threads || caps.Replies || caps.Attachments || caps.Edits || caps.Deletes || caps.Reactions {
+		t.Error("memex TEXT surface must declare no rich capabilities")
+	}
+	if len(caps.EventTypes) != 1 || caps.EventTypes[0] != channel.EventTypeMessageCreated {
+		t.Errorf("event types = %v, want [message.created]", caps.EventTypes)
+	}
+	if caps.MessageScope != channel.MessageScopeAllAuthorizedGroups {
+		t.Errorf("message scope = %s, want all_authorized_groups (membership = receive scope)", caps.MessageScope)
+	}
+	if caps.ReceiveMode != channel.ReceiveModePolling {
+		t.Errorf("receive mode = %s, want polling", caps.ReceiveMode)
+	}
+}
+
+func TestTranslatorBuildsContractEvent(t *testing.T) {
+	ev := Translator{Config: adapterConfig()}.Event(
+		time.Unix(1697000001, 0),
+		Update{MsgID: "m1", From: "alice", To: "bot:echo", Text: "hi", TsMS: 1697000000000},
+	)
+	if err := ev.Validate(); err != nil {
+		t.Fatalf("translated event invalid: %v", err)
+	}
+	if ev.EventID != "m1" || ev.EventType != channel.EventTypeMessageCreated {
+		t.Errorf("event id/type = %s/%s", ev.EventID, ev.EventType)
+	}
+	if ev.IdempotencyKey != channel.InboundIdempotencyKey("inst-1", "m1") {
+		t.Errorf("idempotency key = %q", ev.IdempotencyKey)
+	}
+	if ev.Conversation.PlatformID != "group:5" || ev.Sender.PlatformID != "alice" {
+		t.Errorf("conversation/sender = %q/%q", ev.Conversation.PlatformID, ev.Sender.PlatformID)
+	}
+	if ev.Message == nil || ev.Message.Text != "hi" || ev.Message.Kind != "text" ||
+		ev.Message.PlatformID != "m1" {
+		t.Errorf("message content = %+v", ev.Message)
+	}
+	if !ev.OccurredAt.Equal(time.UnixMilli(1697000000000)) {
+		t.Errorf("occurred at = %v", ev.OccurredAt)
+	}
+	if ev.PlatformExtensions["to"] != "bot:echo" {
+		t.Errorf("extensions = %v, want to=bot:echo", ev.PlatformExtensions)
+	}
+}
+
+func TestConnectorPollOnceAcceptsAndAcks(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("timeout_ms"); got != "1500" {
+			t.Errorf("timeout_ms = %q, want 1500", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[
+			{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000},
+			{"msg_id":"m2","from":"bob","to":"bot:echo","text":"yo","ts_ms":1697000001000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	n, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("poll once: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("processed = %d, want 2", n)
+	}
+	acked := fake.ackedMsgs()
+	if len(acked) != 2 || acked[0] != "m1" || acked[1] != "m2" {
+		t.Errorf("acked = %v, want [m1 m2]", acked)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("inbox rows = %d, want 2", len(rows))
+	}
+	for _, row := range rows {
+		if row.TenantID != "tenant-1" || row.WorkspaceID != "workspace-1" ||
+			row.Platform != "memex" || row.InstallationID != "inst-1" ||
+			row.ConversationPlatformID != "group:5" || row.Status != channel.InboxStatusCommitted {
+			t.Errorf("scope/status drifted: %+v", row)
+		}
+	}
+}
+
+func TestConnectorPollOnceRedeliveryDeduplicates(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	payload := `{"ok":true,"updates":[
+		{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000},
+		{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(payload))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	n, err := connector.PollOnce(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("poll once: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("processed = %d, want 2 (duplicate still ACKs)", n)
+	}
+	if acked := fake.ackedMsgs(); len(acked) != 2 {
+		t.Errorf("acked = %v, want both copies acknowledged", acked)
+	}
+	var count int64
+	if err := db.Model(&channel.ChatConnectorInbox{}).Count(&count).Error; err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("inbox rows = %d, want 1 (dedup by idempotency key)", count)
+	}
+}
+
+func TestConnectorPollOnceGatesOnCapabilities(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	// no snapshot recorded: fail closed
+	var pulled atomic.Bool
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		pulled.Store(true)
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if _, err := connector.PollOnce(context.Background(), 0); !errors.Is(err, ErrIngestionDisabled) {
+		t.Errorf("poll without snapshot = %v, want ErrIngestionDisabled", err)
+	}
+	if pulled.Load() {
+		t.Error("disabled ingestion must not reach the platform")
+	}
+
+	// a snapshot with an unknown receive mode stays closed too
+	revoked := DeclaredCapabilities(time.Now())
+	revoked.ReceiveMode = channel.ReceiveModeUnknown
+	if err := caps.Record(context.Background(), channel.CapabilityScope{
+		TenantID:               "tenant-1",
+		WorkspaceID:            "workspace-1",
+		Platform:               "memex",
+		InstallationID:         "inst-1",
+		ConversationPlatformID: "group:5",
+	}, revoked); err != nil {
+		t.Fatalf("record revoked snapshot: %v", err)
+	}
+	if _, err := connector.PollOnce(context.Background(), 0); !errors.Is(err, ErrIngestionDisabled) {
+		t.Errorf("poll with revoked snapshot = %v, want ErrIngestionDisabled", err)
+	}
+
+	enableIngestion(t, caps)
+	if _, err := connector.PollOnce(context.Background(), 0); err != nil {
+		t.Fatalf("poll after enabling: %v", err)
+	}
+}
+
+func TestConnectorPollOnceClientError(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.Close() // dead endpoint: pull must fail before any accept/ack
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if _, err := connector.PollOnce(context.Background(), 0); err == nil {
+		t.Error("poll once: expected client error")
+	}
+}
+
+func TestConnectorPollOnceKeepsUnackedOnSinkFailure(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	if err := db.Callback().Create().Before("gorm:create").Register("memex_sink_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[
+			{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if _, err := connector.PollOnce(context.Background(), 0); err == nil {
+		t.Error("poll once: expected sink error")
+	}
+	if acked := fake.ackedMsgs(); len(acked) != 0 {
+		t.Errorf("acked = %v, want none (ACK only after durable accept)", acked)
+	}
+}
+
+func TestConnectorPollOnceStopsOnAckFailure(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[
+			{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000},
+			{"msg_id":"m2","from":"bob","to":"bot:echo","text":"yo","ts_ms":1697000001000}]}`))
+	}
+	ackCalls := 0
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/bot/ack" {
+			ackCalls++
+			if ackCalls == 1 {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"ok":false,"error":"boom"}`))
+				return
+			}
+		}
+		fake.handler()(w, r)
+	})
+	srv := httptest.NewServer(wrapped)
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	n, err := connector.PollOnce(context.Background(), 0)
+	if err == nil {
+		t.Error("poll once: expected ack error")
+	}
+	if n != 0 {
+		t.Errorf("processed = %d, want 0 (stops at first failure)", n)
+	}
+	// m1 stays unacked for redelivery, m2 untouched.
+	var count int64
+	if err := db.Model(&channel.ChatConnectorInbox{}).Count(&count).Error; err != nil || count != 1 {
+		t.Errorf("inbox rows = %d (%v), want 1", count, err)
+	}
+}
+
+func TestConnectorNotifyGatesOnSendCapability(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		_, _ = w.Write([]byte(`{"ok":true,"msg_id":"out-1"}`))
+	}))
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+
+	// no snapshot at all: fail closed without reaching the platform.
+	if _, err := connector.Notify(context.Background(), "group:5", "hello"); !errors.Is(err, ErrSendDisabled) {
+		t.Errorf("notify without snapshot = %v, want ErrSendDisabled", err)
+	}
+	if called {
+		t.Error("send gate must not reach the platform")
+	}
+
+	enableIngestion(t, caps)
+	// DeclaredCapabilities grants SendText: the send goes out.
+	msgID, err := connector.Notify(context.Background(), "group:5", "hello")
+	if err != nil {
+		t.Fatalf("notify: %v", err)
+	}
+	if msgID != "out-1" {
+		t.Errorf("notify msg id = %q, want out-1", msgID)
+	}
+
+	// capability flipped off afterwards: gate closes again.
+	if err := db.Model(&channel.ChatConnectorCapability{}).Where("1=1").
+		Update("send_text", false).Error; err != nil {
+		t.Fatalf("flip send capability off: %v", err)
+	}
+	if _, err := connector.Notify(context.Background(), "group:5", "hello"); !errors.Is(err, ErrSendDisabled) {
+		t.Errorf("notify with revoked send capability = %v, want ErrSendDisabled", err)
+	}
+}
+
+func TestConnectorCapabilitiesReadError(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	if err := db.Callback().Query().Before("gorm:query").Register("memex_caps_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if _, err := connector.PollOnce(context.Background(), 0); err == nil {
+		t.Error("poll once: expected capabilities read error")
+	}
+	if _, err := connector.Notify(context.Background(), "group:5", "hello"); err == nil {
+		t.Error("notify: expected capabilities read error")
+	}
+}
