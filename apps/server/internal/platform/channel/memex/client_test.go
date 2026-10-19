@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClientUpdates(t *testing.T) {
@@ -192,5 +193,36 @@ func TestClientSendFailureAndMalformedEnvelopeField(t *testing.T) {
 		Updates(context.Background(), 0)
 	if !errors.As(err, &apiErr) || apiErr.Kind != ErrInvalid {
 		t.Errorf("malformed field: err = %v, want invalid AdapterError", err)
+	}
+}
+
+func TestClientRetryAfterHeader(t *testing.T) {
+	cases := []struct {
+		name   string
+		header string
+		want   time.Duration
+	}{
+		{"seconds", "7", 7 * time.Second},
+		{"absent", "", 0},
+		{"not a number", "soon", 0},
+	}
+	for _, tc := range cases {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if tc.header != "" {
+				w.Header().Set("Retry-After", tc.header)
+			}
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"ok":false,"error":"slow down"}`))
+		}))
+		_, err := NewClient(srv.URL, "tok", srv.Client()).Updates(context.Background(), 0)
+		srv.Close()
+		var apiErr *AdapterError
+		if !errors.As(err, &apiErr) {
+			t.Errorf("%s: err = %v, want AdapterError", tc.name, err)
+			continue
+		}
+		if apiErr.RetryAfter != tc.want {
+			t.Errorf("%s: retry after = %v, want %v", tc.name, apiErr.RetryAfter, tc.want)
+		}
 	}
 }

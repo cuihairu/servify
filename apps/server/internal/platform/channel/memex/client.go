@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrorKind is the contract's error-class vocabulary for adapter failures.
@@ -27,12 +28,15 @@ const (
 )
 
 // AdapterError carries the contract's error class for one failed API call so
-// callers can decide retry policy without parsing provider strings.
+// callers can decide retry policy without parsing provider strings. RetryAfter
+// is the server-provided pause for rate-limited calls (parsed from the
+// Retry-After header in whole seconds; 0 when absent or unparsable).
 type AdapterError struct {
-	Kind   ErrorKind
-	Status int
-	Op     string
-	Detail string
+	Kind       ErrorKind
+	Status     int
+	Op         string
+	Detail     string
+	RetryAfter time.Duration
 }
 
 func (e *AdapterError) Error() string {
@@ -143,10 +147,11 @@ func (c *Client) do(ctx context.Context, op, method, path, body string, out inte
 	}
 	if resp.StatusCode != http.StatusOK {
 		return &AdapterError{
-			Kind:   classifyStatus(resp.StatusCode),
-			Status: resp.StatusCode,
-			Op:     op,
-			Detail: errorDetail(data),
+			Kind:       classifyStatus(resp.StatusCode),
+			Status:     resp.StatusCode,
+			Op:         op,
+			Detail:     errorDetail(data),
+			RetryAfter: retryAfter(resp),
 		}
 	}
 	var envelope struct {
@@ -167,6 +172,21 @@ func (c *Client) do(ctx context.Context, op, method, path, body string, out inte
 // maxResponseBytes bounds one API response; a bot inbox batch is TEXT updates,
 // so a larger payload is a broken server, not something to buffer.
 const maxResponseBytes = 8 << 20
+
+// retryAfter reads the Retry-After header in whole seconds. Memex documents
+// no HTTP-date form, so anything unparsable or non-positive yields 0 and the
+// caller falls back to its own backoff.
+func retryAfter(resp *http.Response) time.Duration {
+	v := resp.Header.Get("Retry-After")
+	if v == "" {
+		return 0
+	}
+	secs, err := strconv.Atoi(v)
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
+}
 
 // errorDetail pulls the provider error string out of an error envelope without
 // failing when the body is not the expected shape.
