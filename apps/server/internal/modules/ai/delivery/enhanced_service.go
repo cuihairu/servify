@@ -160,12 +160,24 @@ func (s *OrchestratedEnhancedAIService) aiProviderLabel() string {
 // knowledgeBaseID 两参为 write-only 死存储（SyncKnowledgeBase 与上传走
 // knowledgeProvider.UpsertDocument），已删——weknora 客户端与 kb id 由
 // knowledgeprovider/weknora 的 driver 内部持有。
+// AgentToolPorts 是编排服务向 agent 循环广告的三个工具端口。port 为 nil 时对应
+// 工具不注册——不把只会报 "port is not configured" 的死工具广告给 LLM（ToolPolicy
+// enabled 时 Definitions() 全量注入 agent 循环，模型一调用即烧 step 配额）。
+// 已定口径 2026-10-11：三工具保持死路，当前无生产实现可传；接线时在装配处传入
+// 非 nil port 即恢复注册与广告。
+type AgentToolPorts struct {
+	CustomerLookup aimodule.CustomerLookupPort
+	TicketLookup   aimodule.TicketLookupPort
+	Handoff        aimodule.HandoffPort
+}
+
 func NewOrchestratedEnhancedAIService(
 	base *AIService,
 	llmProvider llm.LLMProvider,
 	knowledgeProvider knowledgeprovider.KnowledgeProvider,
 	knowledgeProviderID string,
 	logger *logrus.Logger,
+	toolPorts ...AgentToolPorts,
 ) *OrchestratedEnhancedAIService {
 	if logger == nil {
 		logger = logrus.New()
@@ -175,9 +187,17 @@ func NewOrchestratedEnhancedAIService(
 	}
 	orchestrator := aimodule.NewQueryOrchestrator(llmProvider, knowledgeProvider)
 	registry := aimodule.NewToolRegistry()
-	registry.Register(aimodule.NewCustomerLookupTool(nil))
-	registry.Register(aimodule.NewTicketLookupTool(nil))
-	registry.Register(aimodule.NewHandoffTool(nil))
+	for _, ports := range toolPorts {
+		if ports.CustomerLookup != nil {
+			registry.Register(aimodule.NewCustomerLookupTool(ports.CustomerLookup))
+		}
+		if ports.TicketLookup != nil {
+			registry.Register(aimodule.NewTicketLookupTool(ports.TicketLookup))
+		}
+		if ports.Handoff != nil {
+			registry.Register(aimodule.NewHandoffTool(ports.Handoff))
+		}
+	}
 	toolExecutor := aimodule.NewToolExecutor(registry, nil)
 	orchestrator.SetToolExecutor(toolExecutor)
 	return &OrchestratedEnhancedAIService{
