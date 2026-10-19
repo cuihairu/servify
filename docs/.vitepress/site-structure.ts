@@ -88,6 +88,7 @@ const engineeringPagesEn = [
   '/acceptance-weknora-docker',
   '/mobile-sdk-design',
   '/mobile-sdk-platform-spec',
+  '/chat-platform-integration-contract',
   '/MERMAID_COMPATIBILITY',
   '/审计-文档一致性',
 ];
@@ -291,6 +292,7 @@ const engineeringPagesZh = [
   '/zh/acceptance-weknora-docker',
   '/zh/mobile-sdk-design',
   '/zh/mobile-sdk-platform-spec',
+  '/zh/chat-platform-integration-contract',
   '/zh/MERMAID_COMPATIBILITY',
   '/zh/审计-文档一致性',
 ];
