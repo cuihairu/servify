@@ -77,24 +77,81 @@ func (s *stubChatConnectorReplayer) ReplayInboxRow(_ context.Context, tenantID, 
 	return s.replayErr
 }
 
+// stubChatConnectorInstallations 记录安装映射写入面调用并回放固定结果，驱动
+// 写入端点的作用域投影、缺省值与错误映射。
+type stubChatConnectorInstallations struct {
+	saved   channel.ChatConnectorInstallation
+	saveErr error
+	calls   int
+}
+
+func (s *stubChatConnectorInstallations) Save(_ context.Context, inst channel.ChatConnectorInstallation) (channel.ChatConnectorInstallation, error) {
+	s.saved = inst
+	s.calls++
+	if s.saveErr != nil {
+		return channel.ChatConnectorInstallation{}, s.saveErr
+	}
+	inst.ID = 7
+	return inst, nil
+}
+
+// stubChatConnectorCapabilities 记录能力快照写入面调用并回放固定结果。
+type stubChatConnectorCapabilities struct {
+	scope     channel.CapabilityScope
+	caps      channel.Capabilities
+	recordErr error
+	records   int
+}
+
+func (s *stubChatConnectorCapabilities) Record(_ context.Context, scope channel.CapabilityScope, caps channel.Capabilities) error {
+	s.scope = scope
+	s.caps = caps
+	s.records++
+	return s.recordErr
+}
+
+// chatConnectorScopeMiddleware 把鉴权作用域注入请求上下文，与真实路由上的
+// AuthMiddleware 同职责（测试面只钉 tenant-1/workspace-1）。
+func chatConnectorScopeMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request = c.Request.WithContext(platformauth.ContextWithScope(c.Request.Context(), "tenant-1", "workspace-1"))
+		c.Next()
+	}
+}
+
 func chatConnectorRouter(lane ChatConnectorQuarantineLane, runtime ChatConnectorRuntimeControl, replay ...ChatConnectorReplayer) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Request = c.Request.WithContext(platformauth.ContextWithScope(c.Request.Context(), "tenant-1", "workspace-1"))
-		c.Next()
-	})
+	r.Use(chatConnectorScopeMiddleware())
 	var replayer ChatConnectorReplayer
 	if len(replay) > 0 {
 		replayer = replay[0]
 	}
-	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(lane, runtime, replayer))
+	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(lane, runtime, replayer, nil, nil))
+	return r
+}
+
+// chatConnectorConfigRouter 只注入配置写入面：避免观测/处置用例为两个写入端
+// 点重复传四个实参。
+func chatConnectorConfigRouter(installs ChatConnectorInstallationStore, grants ChatConnectorCapabilityStore) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(chatConnectorScopeMiddleware())
+	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(nil, nil, nil, installs, grants))
 	return r
 }
 
 func doChatConnectorRequest(r *gin.Engine, method, target string) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(method, target, nil)
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func doChatConnectorJSONRequest(r *gin.Engine, method, target, body string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 	return w
 }
@@ -215,7 +272,7 @@ func TestChatConnectorHandlerListQuarantineClampsLimit(t *testing.T) {
 
 func TestRegisterChatConnectorRoutesNilArguments(t *testing.T) {
 	// 两个 nil 守卫：注册入口必须容忍半装配参数，而不是 panic
-	RegisterChatConnectorRoutes(nil, NewChatConnectorHandler(&stubChatConnectorLane{}, nil, nil))
+	RegisterChatConnectorRoutes(nil, NewChatConnectorHandler(&stubChatConnectorLane{}, nil, nil, nil, nil))
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterChatConnectorRoutes(&r.RouterGroup, nil)
@@ -322,6 +379,8 @@ func TestChatConnectorHandlerUnconfiguredSurfacesReturn404(t *testing.T) {
 		"POST /chat_connectors/reload",
 		"GET /chat_connectors/inbox/unforwarded",
 		"POST /chat_connectors/inbox/1/replay",
+		"POST /chat_connectors/installations",
+		"POST /chat_connectors/capabilities",
 	} {
 		parts := strings.SplitN(target, " ", 2)
 		if w := doChatConnectorRequest(r, parts[0], parts[1]); w.Code != http.StatusNotFound {
@@ -418,5 +477,236 @@ func TestChatConnectorHandlerReplayInboxRow(t *testing.T) {
 	// 未装配 replay 面 → 404
 	if w := doChatConnectorRequest(chatConnectorRouter(nil, nil), http.MethodPost, "/chat_connectors/inbox/7/replay"); w.Code != http.StatusNotFound {
 		t.Fatalf("unconfigured replay code=%d, want 404", w.Code)
+	}
+}
+
+// validInstallationBody 是安装映射写入请求的合法基线，校验用例按字段替换它。
+const validInstallationBody = `{"platform":"telegram","installation_id":"12345:AAAg",` +
+	`"conversation":{"platform_id":"-100123","kind":"group","is_group":true},` +
+	`"updates_endpoint":"https://api.telegram.org","token_env_var":"TELEGRAM_BOT_TOKEN",` +
+	`"long_poll_ms":25000}`
+
+func TestChatConnectorHandlerSaveInstallation(t *testing.T) {
+	installs := &stubChatConnectorInstallations{}
+	r := chatConnectorConfigRouter(installs, nil)
+
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations", validInstallationBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	saved := installs.saved
+	if saved.TenantID != "tenant-1" || saved.WorkspaceID != "workspace-1" {
+		t.Fatalf("scope projected = %q/%q, want tenant-1/workspace-1", saved.TenantID, saved.WorkspaceID)
+	}
+	if saved.Platform != "telegram" || saved.InstallationID != "12345:AAAg" {
+		t.Fatalf("identity drifted: %+v", saved)
+	}
+	if saved.ConversationPlatformID != "-100123" || saved.ConversationKind != "group" || !saved.ConversationIsGroup {
+		t.Fatalf("conversation drifted: %+v", saved)
+	}
+	if saved.UpdatesEndpoint != "https://api.telegram.org" || saved.TokenEnvVar != "TELEGRAM_BOT_TOKEN" {
+		t.Fatalf("wiring drifted: %+v", saved)
+	}
+	if saved.Enabled {
+		t.Fatal("a newly written installation must stay inert (Enabled defaults false)")
+	}
+	if installs.calls != 1 {
+		t.Fatalf("save calls = %d, want 1", installs.calls)
+	}
+	// upsert 后操作者能看到落库行（含自增 id）
+	if !strings.Contains(w.Body.String(), `"id":7`) {
+		t.Fatalf("response must return the saved row: %s", w.Body.String())
+	}
+
+	// 作用域只来自鉴权上下文：body 里的 tenant/workspace 不能越权改写
+	body := validInstallationBody[:len(validInstallationBody)-1] + `,"tenant_id":"evil","workspace_id":"evil"}`
+	w = doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations", body)
+	if w.Code != http.StatusOK || installs.saved.TenantID != "tenant-1" || installs.saved.WorkspaceID != "workspace-1" {
+		t.Fatalf("scope leaked from body: code=%d %+v", w.Code, installs.saved)
+	}
+
+	// 显式开启（Phase 0 联调就是「装上就开」）
+	w = doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations",
+		strings.Replace(validInstallationBody, `"long_poll_ms":25000`, `"long_poll_ms":25000,"enabled":true`, 1))
+	if w.Code != http.StatusOK || !installs.saved.Enabled {
+		t.Fatalf("enabled write code=%d %+v", w.Code, installs.saved)
+	}
+
+	// long_poll_ms 缺省回落存储列默认值
+	w = doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations",
+		strings.Replace(validInstallationBody, `,"long_poll_ms":25000`, "", 1))
+	if w.Code != http.StatusOK || installs.saved.LongPollMS != channel.DefaultLongPollMS {
+		t.Fatalf("default long poll code=%d longPoll=%d, want %d",
+			w.Code, installs.saved.LongPollMS, channel.DefaultLongPollMS)
+	}
+}
+
+func TestChatConnectorHandlerSaveInstallationValidation(t *testing.T) {
+	installs := &stubChatConnectorInstallations{}
+	r := chatConnectorConfigRouter(installs, nil)
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"malformed json", `{not json`, "Invalid request"},
+		{"missing platform", `{"installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":25000}`, "installation platform is required"},
+		{"missing installation id", `{"platform":"telegram","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":25000}`, "installation id is required"},
+		{"missing conversation id", `{"platform":"telegram","installation_id":"i","conversation":{"kind":"group"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":25000}`, "installation conversation id is required"},
+		{"missing conversation kind", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":25000}`, "installation conversation kind is required"},
+		{"missing updates endpoint", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"token_env_var":"T","long_poll_ms":25000}`, "installation updates endpoint is required"},
+		{"missing token env var", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","long_poll_ms":25000}`, "installation token env var is required"},
+		{"blank token env var", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","token_env_var":"   ","long_poll_ms":25000}`, "installation token env var is required"},
+		{"negative long poll", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":-1}`, "installation long poll -1ms must be within 1..30000ms"},
+		{"long poll above cap", `{"platform":"telegram","installation_id":"i","conversation":{"platform_id":"g","kind":"group"},"updates_endpoint":"u","token_env_var":"T","long_poll_ms":60000}`, "installation long poll 60000ms must be within 1..30000ms"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			installs.calls = 0
+			w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations", tc.body)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("code=%d body=%s, want 400", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.want) {
+				t.Fatalf("body missing %q: %s", tc.want, w.Body.String())
+			}
+			if installs.calls != 0 {
+				t.Fatalf("invalid request must not reach the store (calls=%d)", installs.calls)
+			}
+		})
+	}
+}
+
+func TestChatConnectorHandlerSaveInstallationStoreError(t *testing.T) {
+	installs := &stubChatConnectorInstallations{saveErr: errors.New("db down")}
+	r := chatConnectorConfigRouter(installs, nil)
+
+	if w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/installations", validInstallationBody); w.Code != http.StatusInternalServerError {
+		t.Fatalf("store error code=%d, want 500", w.Code)
+	}
+}
+
+func TestChatConnectorHandlerRecordCapabilities(t *testing.T) {
+	grants := &stubChatConnectorCapabilities{}
+	r := chatConnectorConfigRouter(nil, grants)
+
+	body := `{"platform":"telegram","installation_id":"12345:AAAg","conversation_platform_id":"-100123",` +
+		`"receive_mode":"polling","message_scope":"all_authorized_groups","history_read":true,` +
+		`"event_types":["message.created","message.edited","message.deleted","reaction.changed","member.changed"],` +
+		`"threads":false,"replies":true,"attachments":true,"edits":true,"deletes":false,"reactions":true,` +
+		`"send_text":true,"send_rich":true,"rate_limit":"30 messages/min",` +
+		`"verified_at":"2026-10-20T10:00:00Z"}`
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/capabilities", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+	scope := grants.scope
+	if scope.TenantID != "tenant-1" || scope.WorkspaceID != "workspace-1" ||
+		scope.Platform != "telegram" || scope.InstallationID != "12345:AAAg" ||
+		scope.ConversationPlatformID != "-100123" {
+		t.Fatalf("scope projected = %+v, want tenant-1/workspace-1/telegram/12345:AAAg/-100123", scope)
+	}
+	caps := grants.caps
+	if caps.ReceiveMode != channel.ReceiveModePolling || caps.MessageScope != channel.MessageScopeAllAuthorizedGroups {
+		t.Fatalf("grant drifted: %+v", caps)
+	}
+	if !caps.IngestionEnabled() {
+		t.Fatalf("a recorded snapshot with a real observation time must enable ingestion: %+v", caps)
+	}
+	if len(caps.EventTypes) != 5 || caps.EventTypes[0] != channel.EventTypeMessageCreated ||
+		caps.EventTypes[4] != channel.EventTypeMemberChanged {
+		t.Fatalf("event types drifted: %+v", caps.EventTypes)
+	}
+	if !caps.HistoryRead || !caps.Replies || !caps.Attachments || !caps.Edits || !caps.Reactions ||
+		!caps.SendText || !caps.SendRich {
+		t.Fatalf("granted flags lost: %+v", caps)
+	}
+	if caps.Threads || caps.Deletes {
+		t.Fatalf("unset flags leaked: %+v", caps)
+	}
+	if caps.RateLimit != "30 messages/min" {
+		t.Fatalf("rate limit = %q", caps.RateLimit)
+	}
+	if grants.records != 1 || grants.caps.VerifiedAt.IsZero() {
+		t.Fatalf("records=%d verifiedAt=%v, want 1 record with a non-zero observation time",
+			grants.records, grants.caps.VerifiedAt)
+	}
+	// 写后信号：快照是否足以打开摄入
+	if !strings.Contains(w.Body.String(), `"ingestion_enabled":true`) {
+		t.Fatalf("response must report ingestion readiness: %s", w.Body.String())
+	}
+
+	// unknown 词表值允许记录（平台授权结果本身含糊），但必须保持摄入关闭
+	w = doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/capabilities",
+		`{"platform":"telegram","installation_id":"i","conversation_platform_id":"g",`+
+			`"receive_mode":"unknown","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("unknown mode code=%d body=%s", w.Code, w.Body.String())
+	}
+	if grants.caps.IngestionEnabled() {
+		t.Fatalf("an unknown receive mode must keep ingestion closed: %+v", grants.caps)
+	}
+	if !strings.Contains(w.Body.String(), `"ingestion_enabled":false`) {
+		t.Fatalf("response must report the closed gate: %s", w.Body.String())
+	}
+}
+
+func TestChatConnectorHandlerRecordCapabilitiesValidation(t *testing.T) {
+	grants := &stubChatConnectorCapabilities{}
+	r := chatConnectorConfigRouter(nil, grants)
+	valid := `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g",` +
+		`"receive_mode":"polling","message_scope":"all_authorized_groups","event_types":["message.created"],` +
+		`"verified_at":"2026-10-20T10:00:00Z"}`
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"malformed json", `{not json`, "Invalid request"},
+		{"missing platform", `{"installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, "capabilities platform is required"},
+		{"missing installation id", `{"platform":"telegram","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, "capabilities installation id is required"},
+		{"missing conversation id", `{"platform":"telegram","installation_id":"i","receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, "capabilities conversation id is required"},
+		{"blank platform", `{"platform":"  ","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, "capabilities platform is required"},
+		{"unknown receive mode token", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"webhooks","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, `receive_mode \"webhooks\" must be one of`},
+		{"missing receive mode", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`, `receive_mode \"\" must be one of`},
+		{"unknown message scope token", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"all_groups","verified_at":"2026-10-20T10:00:00Z"}`, `message_scope \"all_groups\" must be one of`},
+		{"missing message scope", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","verified_at":"2026-10-20T10:00:00Z"}`, `message_scope \"\" must be one of`},
+		{"event type outside vocabulary", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only","event_types":["message.sent"],"verified_at":"2026-10-20T10:00:00Z"}`, `event type \"message.sent\" is not in the contract vocabulary`},
+		{"missing verified at", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only"}`, "verified_at is required in RFC3339 form"},
+		{"malformed verified at", `{"platform":"telegram","installation_id":"i","conversation_platform_id":"g","receive_mode":"polling","message_scope":"mention_only","verified_at":"2026/10/20"}`, "verified_at is required in RFC3339 form"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			grants.records = 0
+			w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/capabilities", tc.body)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("code=%d body=%s, want 400", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.want) {
+				t.Fatalf("body missing %q: %s", tc.want, w.Body.String())
+			}
+			if grants.records != 0 {
+				t.Fatalf("invalid request must not reach the store (records=%d)", grants.records)
+			}
+		})
+	}
+
+	// 合法基线必须过：校验用例不得误伤正常写入
+	if w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/capabilities", valid); w.Code != http.StatusOK {
+		t.Fatalf("valid body code=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestChatConnectorHandlerRecordCapabilitiesStoreError(t *testing.T) {
+	grants := &stubChatConnectorCapabilities{recordErr: errors.New("db down")}
+	r := chatConnectorConfigRouter(nil, grants)
+
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/capabilities",
+		`{"platform":"telegram","installation_id":"i","conversation_platform_id":"g",`+
+			`"receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("store error code=%d, want 500", w.Code)
 	}
 }

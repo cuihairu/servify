@@ -704,6 +704,8 @@ func TestChatConnectorOpsRoutesRegistered(t *testing.T) {
 		"GET /api/chat_connectors/quarantine/export",
 		"POST /api/chat_connectors/quarantine/:id/dismiss",
 		"POST /api/chat_connectors/reload",
+		"POST /api/chat_connectors/installations",
+		"POST /api/chat_connectors/capabilities",
 	}
 	// 已装配：监督器注入后路由全量在册
 	router := BuildRouter(Dependencies{Config: cfg, ChatConnectors: chatconnector.NewSupervisor(nil, nil, nil)})

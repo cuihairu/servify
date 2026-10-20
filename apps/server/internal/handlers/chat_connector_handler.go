@@ -54,16 +54,41 @@ type ChatConnectorReplayer interface {
 	ReplayInboxRow(ctx context.Context, tenantID, workspaceID string, id uint) error
 }
 
-// ChatConnectorHandler 暴露 quarantine 泳道与连接器运行态的运维面。
-// 各面单独注入：未装配的依赖返回 404 而不是 panic。
-type ChatConnectorHandler struct {
-	lane    ChatConnectorQuarantineLane
-	runtime ChatConnectorRuntimeControl
-	replay  ChatConnectorReplayer
+// ChatConnectorInstallationStore 是安装映射的写入面（由
+// *channel.InstallationStore 实现）。作用域由鉴权上下文注入，请求体改不动
+// 租户/工作区。
+type ChatConnectorInstallationStore interface {
+	Save(ctx context.Context, inst channel.ChatConnectorInstallation) (channel.ChatConnectorInstallation, error)
 }
 
-func NewChatConnectorHandler(lane ChatConnectorQuarantineLane, runtime ChatConnectorRuntimeControl, replay ChatConnectorReplayer) *ChatConnectorHandler {
-	return &ChatConnectorHandler{lane: lane, runtime: runtime, replay: replay}
+// ChatConnectorCapabilityStore 是能力快照的写入面（由 *channel.CapabilityStore
+// 实现）。快照按契约只能来自平台授权结果，所以请求侧必须给出观察时点。
+type ChatConnectorCapabilityStore interface {
+	Record(ctx context.Context, scope channel.CapabilityScope, caps channel.Capabilities) error
+}
+
+// ChatConnectorHandler 暴露连接器运维面：脱敏观测、quarantine/replay 处置、
+// 运行态重启，以及让安装映射与能力快照脱离裸 SQL 的配置写入面。
+// 各面单独注入：未装配的依赖返回 404 而不是 panic。
+type ChatConnectorHandler struct {
+	lane          ChatConnectorQuarantineLane
+	runtime       ChatConnectorRuntimeControl
+	replay        ChatConnectorReplayer
+	installations ChatConnectorInstallationStore
+	grants        ChatConnectorCapabilityStore
+}
+
+func NewChatConnectorHandler(
+	lane ChatConnectorQuarantineLane,
+	runtime ChatConnectorRuntimeControl,
+	replay ChatConnectorReplayer,
+	installations ChatConnectorInstallationStore,
+	grants ChatConnectorCapabilityStore,
+) *ChatConnectorHandler {
+	return &ChatConnectorHandler{
+		lane: lane, runtime: runtime, replay: replay,
+		installations: installations, grants: grants,
+	}
 }
 
 // ListQuarantine 返回当前作用域的 quarantine 泳道（JSON 视图）。
@@ -248,6 +273,185 @@ func (h *ChatConnectorHandler) ReloadConnectors(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"runners": h.runtime.Snapshot()})
 }
 
+// chatConnectorInstallationRequest 是安装映射写入请求体。tenant_id /
+// workspace_id 刻意不在其中：作用域只来自鉴权上下文，请求体无法越权改写。
+type chatConnectorInstallationRequest struct {
+	Platform       string `json:"platform"`
+	InstallationID string `json:"installation_id"`
+	Conversation   struct {
+		PlatformID string `json:"platform_id"`
+		Kind       string `json:"kind"`
+		IsGroup    bool   `json:"is_group"`
+	} `json:"conversation"`
+	UpdatesEndpoint string `json:"updates_endpoint"`
+	TokenEnvVar     string `json:"token_env_var"`
+	LongPollMS      int    `json:"long_poll_ms"`
+	Enabled         bool   `json:"enabled"`
+}
+
+// SaveInstallation 写入或覆盖一条安装映射（upsert）。runner 只按 Enabled 行
+// 挂载，所以「装上但没开」是默认安全态；写入后沿用 POST /reload 生效。
+// 该组路由在 /api 的全局审计中间件之下，组授权变更因此有审计载体。
+func (h *ChatConnectorHandler) SaveInstallation(c *gin.Context) {
+	if h == nil || h.installations == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Chat connector configuration unavailable", Message: "installation store not configured"})
+		return
+	}
+	var req chatConnectorInstallationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
+		return
+	}
+	inst := channel.ChatConnectorInstallation{
+		TenantID:               platformauth.TenantIDFromContext(c.Request.Context()),
+		WorkspaceID:            platformauth.WorkspaceIDFromContext(c.Request.Context()),
+		Platform:               strings.TrimSpace(req.Platform),
+		InstallationID:         strings.TrimSpace(req.InstallationID),
+		ConversationPlatformID: strings.TrimSpace(req.Conversation.PlatformID),
+		ConversationKind:       strings.TrimSpace(req.Conversation.Kind),
+		ConversationIsGroup:    req.Conversation.IsGroup,
+		UpdatesEndpoint:        strings.TrimSpace(req.UpdatesEndpoint),
+		TokenEnvVar:            strings.TrimSpace(req.TokenEnvVar),
+		LongPollMS:             req.LongPollMS,
+		Enabled:                req.Enabled,
+	}
+	// 缺省回落存储列默认值，免得操作者重复填一个默认数。
+	if inst.LongPollMS == 0 {
+		inst.LongPollMS = channel.DefaultLongPollMS
+	}
+	// 校验先行：存储层同样校验，但这类错误在这里就该是 400 而不是 500。
+	if err := inst.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid installation", Message: err.Error()})
+		return
+	}
+	saved, err := h.installations.Save(c.Request.Context(), inst)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to save installation", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"installation": saved, "message": "Installation saved"})
+}
+
+// chatConnectorCapabilitiesRequest 是能力快照写入请求体。能力只能来自平台
+// 授权结果，所以 verified_at 必填：没有观察时点的快照一律保持摄入关闭。
+type chatConnectorCapabilitiesRequest struct {
+	Platform               string   `json:"platform"`
+	InstallationID         string   `json:"installation_id"`
+	ConversationPlatformID string   `json:"conversation_platform_id"`
+	ReceiveMode            string   `json:"receive_mode"`
+	MessageScope           string   `json:"message_scope"`
+	HistoryRead            bool     `json:"history_read"`
+	EventTypes             []string `json:"event_types"`
+	Threads                bool     `json:"threads"`
+	Replies                bool     `json:"replies"`
+	Attachments            bool     `json:"attachments"`
+	Edits                  bool     `json:"edits"`
+	Deletes                bool     `json:"deletes"`
+	Reactions              bool     `json:"reactions"`
+	SendText               bool     `json:"send_text"`
+	SendRich               bool     `json:"send_rich"`
+	RateLimit              string   `json:"rate_limit"`
+	VerifiedAt             string   `json:"verified_at"`
+}
+
+// RecordCapabilities 写入或覆盖一条能力快照（upsert，新观察覆盖旧观察）。
+func (h *ChatConnectorHandler) RecordCapabilities(c *gin.Context) {
+	if h == nil || h.grants == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Chat connector configuration unavailable", Message: "capability store not configured"})
+		return
+	}
+	var req chatConnectorCapabilitiesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
+		return
+	}
+	scope, caps, err := parseChatConnectorCapabilities(req,
+		platformauth.TenantIDFromContext(c.Request.Context()),
+		platformauth.WorkspaceIDFromContext(c.Request.Context()))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid capabilities", Message: err.Error()})
+		return
+	}
+	if err := h.grants.Record(c.Request.Context(), scope, caps); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to record capabilities", Message: err.Error()})
+		return
+	}
+	// ingestion_enabled 是写后的操作者信号：这条快照是否足以打开摄入。
+	c.JSON(http.StatusOK, gin.H{"ingestion_enabled": caps.IngestionEnabled(), "message": "Capability snapshot recorded"})
+}
+
+// parseChatConnectorCapabilities 把请求体转成契约快照并做词表校验。词表在这里
+// 闭合校验而不是依赖存储层：CapabilityStore.Record 不做任何校验，拼错的
+// receive_mode 会静默落库成未知字符串，把摄入关成 fail-closed 且无从看出原因。
+func parseChatConnectorCapabilities(req chatConnectorCapabilitiesRequest, tenantID, workspaceID string) (channel.CapabilityScope, channel.Capabilities, error) {
+	scope := channel.CapabilityScope{
+		TenantID:               tenantID,
+		WorkspaceID:            workspaceID,
+		Platform:               strings.TrimSpace(req.Platform),
+		InstallationID:         strings.TrimSpace(req.InstallationID),
+		ConversationPlatformID: strings.TrimSpace(req.ConversationPlatformID),
+	}
+	switch {
+	case scope.Platform == "":
+		return channel.CapabilityScope{}, channel.Capabilities{}, errors.New("capabilities platform is required")
+	case scope.InstallationID == "":
+		return channel.CapabilityScope{}, channel.Capabilities{}, errors.New("capabilities installation id is required")
+	case scope.ConversationPlatformID == "":
+		return channel.CapabilityScope{}, channel.Capabilities{}, errors.New("capabilities conversation id is required")
+	}
+
+	receiveMode := channel.ReceiveMode(strings.TrimSpace(req.ReceiveMode))
+	switch receiveMode {
+	case channel.ReceiveModePolling, channel.ReceiveModeWebhook, channel.ReceiveModeStream, channel.ReceiveModeUnknown:
+	default:
+		return channel.CapabilityScope{}, channel.Capabilities{},
+			fmt.Errorf("receive_mode %q must be one of polling, webhook, stream, unknown", req.ReceiveMode)
+	}
+
+	messageScope := channel.MessageScope(strings.TrimSpace(req.MessageScope))
+	switch messageScope {
+	case channel.MessageScopeMentionOnly, channel.MessageScopeAllAuthorizedGroups, channel.MessageScopeUnknown:
+	default:
+		return channel.CapabilityScope{}, channel.Capabilities{},
+			fmt.Errorf("message_scope %q must be one of mention_only, all_authorized_groups, unknown", req.MessageScope)
+	}
+
+	eventTypes := make([]channel.EventType, 0, len(req.EventTypes))
+	for _, raw := range req.EventTypes {
+		switch channel.EventType(raw) {
+		case channel.EventTypeMessageCreated, channel.EventTypeMessageEdited, channel.EventTypeMessageDeleted,
+			channel.EventTypeReactionChanged, channel.EventTypeMemberChanged, channel.EventTypeUnknown:
+		default:
+			return channel.CapabilityScope{}, channel.Capabilities{},
+				fmt.Errorf("event type %q is not in the contract vocabulary", raw)
+		}
+		eventTypes = append(eventTypes, channel.EventType(raw))
+	}
+
+	// 缺失与格式错误在这里同样处理：都是「没有可核对的观察时点」。
+	verifiedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(req.VerifiedAt))
+	if err != nil {
+		return channel.CapabilityScope{}, channel.Capabilities{}, errors.New("verified_at is required in RFC3339 form")
+	}
+
+	return scope, channel.Capabilities{
+		ReceiveMode:  receiveMode,
+		MessageScope: messageScope,
+		HistoryRead:  req.HistoryRead,
+		EventTypes:   eventTypes,
+		Threads:      req.Threads,
+		Replies:      req.Replies,
+		Attachments:  req.Attachments,
+		Edits:        req.Edits,
+		Deletes:      req.Deletes,
+		Reactions:    req.Reactions,
+		SendText:     req.SendText,
+		SendRich:     req.SendRich,
+		RateLimit:    strings.TrimSpace(req.RateLimit),
+		VerifiedAt:   verifiedAt,
+	}, nil
+}
+
 // chatConnectorListLimit 取 limit 参数并夹在上限内。
 func chatConnectorListLimit(c *gin.Context) int {
 	limit := intQuery(c, "limit", 50)
@@ -268,6 +472,8 @@ func RegisterChatConnectorRoutes(r *gin.RouterGroup, handler *ChatConnectorHandl
 	{
 		group.GET("/runners", handler.ListRunners)
 		group.POST("/reload", handler.ReloadConnectors)
+		group.POST("/installations", handler.SaveInstallation)
+		group.POST("/capabilities", handler.RecordCapabilities)
 		group.GET("/quarantine", handler.ListQuarantine)
 		group.GET("/quarantine/export", handler.ExportQuarantineCSV)
 		group.POST("/quarantine/:id/dismiss", handler.DismissQuarantined)

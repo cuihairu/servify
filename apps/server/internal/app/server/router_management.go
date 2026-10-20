@@ -123,18 +123,27 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 
 	// 聊天连接器运维面：脱敏观测（quarantine 泳道导出/列表 + 运行态快照）
 	// 与处置（quarantine dismiss + dead-letter 后 reload）。inbox 行本身按
-	// 契约即为无内容面，导出即脱敏产物；未装配的依赖返回 404 而非挂起。
+	// 契约即为无内容面，导出即脱敏产物；配置写入面让安装映射与能力快照脱离
+	// 裸 SQL（写入后的组授权变更落在 /api 的全局审计中间件下）。
+	// 未装配的依赖返回 404 而非挂起。
 	chatConnectorsAPI := api.Group("/")
 	chatConnectorsAPI.Use(middleware.RequireResourcePermission("chat_connectors"))
-	var chatConnectorLane handlers.ChatConnectorQuarantineLane
+	var (
+		chatConnectorLane     handlers.ChatConnectorQuarantineLane
+		chatConnectorInstalls handlers.ChatConnectorInstallationStore
+		chatConnectorGrants   handlers.ChatConnectorCapabilityStore
+	)
 	if deps.DB != nil {
 		chatConnectorLane = channel.NewInboxStore(deps.DB)
+		chatConnectorInstalls = channel.NewInstallationStore(deps.DB)
+		chatConnectorGrants = channel.NewCapabilityStore(deps.DB)
 	}
 	var chatConnectorRuntime handlers.ChatConnectorRuntimeControl
 	if deps.ChatConnectors != nil {
 		chatConnectorRuntime = deps.ChatConnectors
 	}
-	handlers.RegisterChatConnectorRoutes(chatConnectorsAPI, handlers.NewChatConnectorHandler(chatConnectorLane, chatConnectorRuntime, deps.ChatInboxReplay))
+	handlers.RegisterChatConnectorRoutes(chatConnectorsAPI, handlers.NewChatConnectorHandler(
+		chatConnectorLane, chatConnectorRuntime, deps.ChatInboxReplay, chatConnectorInstalls, chatConnectorGrants))
 
 	securityAPI := api.Group("/")
 	securityAPI.Use(middleware.RequireResourcePermission("security"))

@@ -50,6 +50,11 @@ type ChatConnectorInstallation struct {
 // 30ms-based column serves both adapters).
 const longPollCapMS = 30000
 
+// DefaultLongPollMS is the long-poll budget the stored column defaults to, and
+// what an omitted long_poll_ms in a write request gets. It is exported once
+// here so the storage default and the HTTP write surface cannot drift apart.
+const DefaultLongPollMS = 25000
+
 // InstallationScope keys one stored installation.
 type InstallationScope struct {
 	TenantID       string
