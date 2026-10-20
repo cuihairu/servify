@@ -9,10 +9,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okhttp3.mockwebserver.MockResponse
@@ -23,6 +25,7 @@ import org.junit.Test
 import servify.sdk.android.connect.ConnectionState
 import servify.sdk.android.connect.ReconnectPolicy
 import servify.sdk.android.model.SenderType
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -220,25 +223,47 @@ class ConnectionLifecycleTest {
         // 七现 37885639220（2026-10-09）证据歧义暴露后改纯握手计数：requestCount
         // 混入补拉 GET，「请求数=4」无法区分恢复到达/补拉多发。
         // 提前落 Disconnected 同样带计数即刻报（fail-fast 只提前，不改判据）。
-        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener()))
+        // 八现 37918246493 与九现 39385922750（2026-10-20，纯 Go 提交零 Android
+        // 改动）错误消息逐字同签：「握手数=3 + 悬空 Connecting」——既有双证据
+        // 只能二分到「upgrade 未回 or onOpen 丢失」的两可面。结构修（7c51280
+        // 范式）：connect 前挂 stateTrace 轨迹 + server 侧 upgrade 完成信号
+        // （EchoListener 增 onOpenSeen 构造钩子）——烧穿时把两可面拆开：server 已
+        // 完成 upgrade（101 已回）而 client 仍悬空 Connecting → 定死 client 侧
+        // 回调派发饿死；未见 → 101 未回或 MockWebServer upgrade 处理饿死。轨迹
+        // 同时给出完整转移路径（是否曾离 Connecting/bouncing）。判据不变（仍等
+        // Connected/Disconnected），只把下一次烧穿的定位成本降到零。
+        val stateTrace = mutableListOf<String>()
+        val traceJob = launch {
+            chat.events.connectionState.collect { stateTrace += it::class.simpleName ?: "?" }
+        }
+        // server 侧 onOpen 在 MockWebServer 自己的线程跑，与 runBlocking 线程无
+        // 同步关系 → AtomicBoolean；client 侧轨迹收集跑在 runBlocking 单线程事件
+        // 循环上 → ArrayList 无需同步（7c51280 同款）。
+        val serverUpgradeSeen = AtomicBoolean(false)
+        bypass.enqueue(MockResponse().withWebSocketUpgrade(EchoListener(onOpenSeen = { serverUpgradeSeen.set(true) })))
         chat.connect()
         val recovered = withTimeoutOrNull(10_000) {
             chat.events.connectionState.first {
                 it == ConnectionState.Connected || it == ConnectionState.Disconnected
             }
         }
+        traceJob.cancel()
         if (recovered != ConnectionState.Connected) {
             val current = chat.events.connectionState.value
             // 同耗尽段口径=纯握手数（七现 37885639220 requestCount=4 因混入补拉有歧义：
             // 恢复握手确实到达，还是补拉多发一条，无法区分）；≥3 即恢复握手（第 3 次）已到。
             val handshakes = bypass.wsHandshakeCount()
             val surface = if (handshakes >= 3) {
-                "恢复握手已到达 server（握手数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
+                if (serverUpgradeSeen.get()) {
+                    "恢复握手已到达 server（握手数=$handshakes）且 server 侧 upgrade 已完成 → client 侧 upgrade 处理或 onOpen 派发丢失面"
+                } else {
+                    "恢复握手已到达 server（握手数=$handshakes）但 server 侧 upgrade 未完成 → 101 未回或 MockWebServer upgrade 处理饿死面"
+                }
             } else {
                 "恢复握手未到达 server（握手数=$handshakes）→ 恢复 connect 协程/MockWebServer accept 饿死面"
             }
             val how = if (recovered == null) "10s 未达 Connected" else "提前落入 Disconnected"
-            error("[恢复重连] $how：当前状态=$current；$surface")
+            error("[恢复重连] $how：当前状态=$current；状态轨迹=$stateTrace；$surface")
         }
     }
 
@@ -369,8 +394,16 @@ class ConnectionLifecycleTest {
     }
 }
 
-/** 服务器 WS listener：把收到的 text-message 以回显帧发回（回显判据）。 */
-private class EchoListener : WebSocketListener() {
+/**
+ * 服务器 WS listener：把收到的 text-message 以回显帧发回（回显判据）。onOpenSeen
+ * 钩子供用例记录 server 侧 upgrade 完成时点（MockWebServer 线程跑，钩子自带同步）；
+ * 默认 null，既有用例不受影响。
+ */
+private class EchoListener(val onOpenSeen: (() -> Unit)? = null) : WebSocketListener() {
+    override fun onOpen(webSocket: WebSocket, response: Response) {
+        onOpenSeen?.invoke()
+    }
+
     override fun onMessage(webSocket: WebSocket, text: String) {
         webSocket.send(
             """{"type":"text-message","data":{"content":"你好"},"session_id":"test-session","timestamp":"2026-01-01T00:00:00Z"}""",
