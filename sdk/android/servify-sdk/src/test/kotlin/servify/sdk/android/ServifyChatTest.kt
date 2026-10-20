@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import okhttp3.OkHttpClient
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -297,19 +298,65 @@ class ServifyChatTest {
         chat.connect()
         awaitConnected()
 
-        // 触发断线； onFailure → §4.4 connected ─断→ reconnecting(n) 自动恢复
-        val reconnected = async {
-            val reconnecting = withTimeout(5_000) {
+        // 订阅前置：Reconnecting 是 StateFlow 的中间态，晚于发射的 first{} 永远收
+        // 不到。断线重连整链（cancel → onFailure → Reconnecting → 1s backoff →
+        // Connected）在 sendMessage 的 echo 等待挂起期间就推进完了（本机实测：轨迹
+        // 四态全落在 echo 窗口内），所以 Reconnecting 的 first{} 必须在 sendMessage
+        // 之前挂上订阅（async 体在主协程挂起时开跑）；轨迹收集同理先行（yield 保证
+        // 挂载完成）。收集跑在 runBlocking 单线程事件循环上 → ArrayList 无需同步
+        // （7c51280 同款）。
+        val stateTrace = mutableListOf<String>()
+        val traceJob = launch {
+            chat.events.connectionState.collect { stateTrace += it.toString() }
+        }
+        yield()
+        val reconnectingDeferred = async {
+            withTimeoutOrNull(10_000) {
                 chat.events.connectionState.first { it is ConnectionState.Reconnecting }
             }
-            withTimeout(5_000) {
-                chat.events.connectionState.first { it == ConnectionState.Connected }
-            }
-            reconnecting
         }
+
+        // 触发断线； onFailure → §4.4 connected ─断→ reconnecting(n) 自动恢复。
+        // 5s 预算 CI 实测烧穿（一现 37654701199、二现 39431560296 attempt 1 均裸
+        // TimeoutCancellationException 无段位）→ 拉平 10s + 段标 + 握手数双证据
+        // （恢复握手 = 第 2 次）。
         chat.sendMessage("触发服务端断开") // 回显不来，发送侧按 SendTimeout 超时收尾即可
 
-        val reconnecting = reconnected.await() as ConnectionState.Reconnecting
+        // Connected 是链路终态而非瞬态，StateFlow 现值对晚订阅者恒可见：重连若已
+        // 整链完成，这里即时收下现值；若仍在途，等转移。
+        val recovered = withTimeoutOrNull(10_000) {
+            chat.events.connectionState.first { it == ConnectionState.Connected }
+        }
+        val reconnecting = reconnectingDeferred.await()
+        traceJob.cancel()
+
+        if (reconnecting == null) {
+            val handshakes = bypass.wsHandshakeCount()
+            val surface = when {
+                handshakes >= 2 ->
+                    "恢复握手已到达 server（握手数=$handshakes）→ 断线重连整链已推进而 Reconnecting 未被观测到（StateFlow 混洗面）"
+                handshakes >= 1 ->
+                    "首连握手已到达 server（握手数=$handshakes）但恢复握手未到 → server onMessage cancel 未派发或 onFailure 丢失面"
+                else -> "握手计数异常（握手数=$handshakes）"
+            }
+            error(
+                "[断线段] 10s 未达 Reconnecting：当前状态=${chat.events.connectionState.value}；" +
+                    "$surface；状态轨迹=$stateTrace",
+            )
+        }
+        if (recovered == null) {
+            val handshakes = bypass.wsHandshakeCount()
+            val surface = if (handshakes >= 2) {
+                "恢复握手已到达 server（握手数=$handshakes）→ upgrade 未回或 onOpen 丢失面"
+            } else {
+                "恢复握手未到达 server（握手数=$handshakes）→ 恢复 connect 协程/MockWebServer accept 饿死面"
+            }
+            error(
+                "[恢复段] 10s 未达 Connected：当前状态=${chat.events.connectionState.value}；" +
+                    "$surface；状态轨迹=$stateTrace",
+            )
+        }
+        val reconnectAttempt = (reconnecting as ConnectionState.Reconnecting).attempt
         assertEquals(1, reconnecting.attempt)
         assertEquals(ConnectionState.Connected, chat.events.connectionState.value)
     }
