@@ -2,6 +2,7 @@ package channel
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -23,7 +24,7 @@ type ChatConnectorInbox struct {
 	InstallationID         string    `gorm:"index;not null" json:"installation_id"`
 	EventID                string    `gorm:"not null" json:"event_id"`
 	EventType              string    `gorm:"not null" json:"event_type"`
-	Status                 string    `gorm:"not null" json:"status"` // committed | quarantined
+	Status                 string    `gorm:"not null" json:"status"` // committed | quarantined | dismissed
 	ConversationPlatformID string    `gorm:"not null" json:"conversation_platform_id"`
 	SenderPlatformID       string    `gorm:"not null" json:"sender_platform_id"`
 	MessagePlatformID      string    `gorm:"not null" json:"message_platform_id"`
@@ -40,7 +41,15 @@ const (
 	InboxStatusCommitted = "committed"
 	// InboxStatusQuarantined marks an unknown event held for triage.
 	InboxStatusQuarantined = "quarantined"
+	// InboxStatusDismissed marks a quarantined event dispositioned by an
+	// operator: it left the triage lane but stays as evidence (the row is
+	// never deleted).
+	InboxStatusDismissed = "dismissed"
 )
+
+// ErrInboxNotQuarantined is returned when the row exists in the requested
+// scope but is not in the quarantine lane (committed, or already dismissed).
+var ErrInboxNotQuarantined = errors.New("channel: inbox row is not quarantined")
 
 // InboxStore is the durable realization of the contract's InboundSink seam
 // (Accept). It is the single writer for the connector inbox; connectors obtain
@@ -128,4 +137,29 @@ func (s *InboxStore) ListQuarantined(ctx context.Context, tenantID, workspaceID 
 		return nil, err
 	}
 	return rows, nil
+}
+
+// Dismiss moves one quarantined row of the given scope to dismissed (the
+// dead-letter triage disposition: the event stays stored as evidence but
+// leaves the lane). The transition is one-way from quarantined; the scope
+// filter is part of the statement, so another scope's row reads as missing.
+func (s *InboxStore) Dismiss(ctx context.Context, tenantID, workspaceID string, id uint) error {
+	res := s.db.WithContext(ctx).
+		Model(&ChatConnectorInbox{}).
+		Where("id = ? AND tenant_id = ? AND workspace_id = ? AND status = ?", id, tenantID, workspaceID, InboxStatusQuarantined).
+		Updates(map[string]interface{}{"status": InboxStatusDismissed})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 1 {
+		return nil
+	}
+	var row ChatConnectorInbox
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND tenant_id = ? AND workspace_id = ?", id, tenantID, workspaceID).
+		First(&row).Error
+	if err != nil {
+		return err // gorm.ErrRecordNotFound covers unknown and cross-scope ids
+	}
+	return ErrInboxNotQuarantined
 }

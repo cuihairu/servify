@@ -339,5 +339,6 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		ConversationTimeline:                rt.ConversationTimeline,
 		OIDCProvider:                        rt.OIDCProvider,
 		HTTPMetrics:                         rt.HTTPMetrics,
+		ChatConnectors:                      rt.chatConnectors,
 	}
 }

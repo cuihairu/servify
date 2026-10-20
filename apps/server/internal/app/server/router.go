@@ -29,6 +29,7 @@ import (
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/voiceprotocol"
 
@@ -107,6 +108,9 @@ type Dependencies struct {
 	ConversationTimeline *conversationdelivery.TimelineAdapter
 	OIDCProvider         *oidcplatform.Provider
 	HTTPMetrics          *svcmetrics.HTTPMetrics
+	// ChatConnectors 聊天连接器监督器（脱敏观测 + dead-letter/reload 运维面；
+	// 未装配时该组路由返回 404）。
+	ChatConnectors *chatconnector.Supervisor
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

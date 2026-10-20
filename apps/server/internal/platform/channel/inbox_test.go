@@ -163,6 +163,89 @@ func TestInboxListQuarantinedQueryError(t *testing.T) {
 	}
 }
 
+func TestInboxDismissQuarantinedRow(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if _, err := store.Accept(context.Background(), unknownEvent("q1")); err != nil {
+		t.Fatalf("accept quarantined: %v", err)
+	}
+	if _, err := store.Accept(context.Background(), messageEvent("c1")); err != nil {
+		t.Fatalf("accept committed: %v", err)
+	}
+	row := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
+	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", row.ID); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	dismissed := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
+	if dismissed.Status != InboxStatusDismissed {
+		t.Fatalf("status = %q, want dismissed", dismissed.Status)
+	}
+	// the row stays as evidence; only the lane filter changed
+	if got := inboxCount(t, store); got != 2 {
+		t.Fatalf("inbox rows after dismiss = %d, want 2 (row retained)", got)
+	}
+	rows, err := store.ListQuarantined(context.Background(), "tenant-1", "workspace-1", 10)
+	if err != nil {
+		t.Fatalf("list quarantined: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("quarantine lane = %d rows, want 0 after dismiss", len(rows))
+	}
+
+	// the lane transition is one-way from quarantined: re-dismissing an
+	// already dismissed row or dismissing a committed row both reject
+	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", row.ID); !errors.Is(err, ErrInboxNotQuarantined) {
+		t.Fatalf("re-dismiss = %v, want ErrInboxNotQuarantined", err)
+	}
+	committed := inboxByKey(t, store, messageEvent("c1").IdempotencyKey)
+	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", committed.ID); !errors.Is(err, ErrInboxNotQuarantined) {
+		t.Fatalf("dismiss committed = %v, want ErrInboxNotQuarantined", err)
+	}
+}
+
+func TestInboxDismissScopeIsolation(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if _, err := store.Accept(context.Background(), unknownEvent("q1")); err != nil {
+		t.Fatalf("accept quarantined: %v", err)
+	}
+	row := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
+	// the scope filter is part of the statement: another scope's row reads
+	// as missing and stays untouched
+	if err := store.Dismiss(context.Background(), "tenant-2", "workspace-1", row.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("cross-scope dismiss = %v, want record not found", err)
+	}
+	if got := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey); got.Status != InboxStatusQuarantined {
+		t.Fatalf("cross-scope dismiss must not touch the row, status = %q", got.Status)
+	}
+}
+
+func TestInboxDismissUpdateError(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if _, err := store.Accept(context.Background(), unknownEvent("q1")); err != nil {
+		t.Fatalf("accept quarantined: %v", err)
+	}
+	row := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
+	if err := store.db.Callback().Update().Before("gorm:update").Register("inbox_dismiss_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", row.ID); err == nil {
+		t.Fatal("dismiss: expected update error")
+	}
+}
+
+func TestInboxDismissProbeError(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	// no rows: the update affects nothing and the store probes for the row;
+	// a failing probe must surface as an error, not as not-quarantined
+	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_dismiss_probe_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", 12345); err == nil {
+		t.Fatal("dismiss probe: expected query error")
+	}
+}
+
 func inboxCount(t *testing.T, store *InboxStore) int {
 	t.Helper()
 	var count int64

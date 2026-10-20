@@ -5,6 +5,7 @@ import (
 	"servify/apps/server/internal/middleware"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
 	auditplatform "servify/apps/server/internal/platform/audit"
+	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/usersecurity"
 
@@ -119,6 +120,21 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	auditAPI := api.Group("/")
 	auditAPI.Use(middleware.RequireResourcePermission("audit"))
 	handlers.RegisterAuditRoutes(auditAPI, handlers.NewAuditHandler(auditplatform.NewGormQueryService(deps.DB)))
+
+	// 聊天连接器运维面：脱敏观测（quarantine 泳道导出/列表 + 运行态快照）
+	// 与处置（quarantine dismiss + dead-letter 后 reload）。inbox 行本身按
+	// 契约即为无内容面，导出即脱敏产物；未装配的依赖返回 404 而非挂起。
+	chatConnectorsAPI := api.Group("/")
+	chatConnectorsAPI.Use(middleware.RequireResourcePermission("chat_connectors"))
+	var chatConnectorLane handlers.ChatConnectorQuarantineLane
+	if deps.DB != nil {
+		chatConnectorLane = channel.NewInboxStore(deps.DB)
+	}
+	var chatConnectorRuntime handlers.ChatConnectorRuntimeControl
+	if deps.ChatConnectors != nil {
+		chatConnectorRuntime = deps.ChatConnectors
+	}
+	handlers.RegisterChatConnectorRoutes(chatConnectorsAPI, handlers.NewChatConnectorHandler(chatConnectorLane, chatConnectorRuntime))
 
 	securityAPI := api.Group("/")
 	securityAPI.Use(middleware.RequireResourcePermission("security"))

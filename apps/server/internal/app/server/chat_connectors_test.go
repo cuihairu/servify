@@ -17,6 +17,7 @@ import (
 	conversationdomain "servify/apps/server/internal/modules/conversation/domain"
 	conversationinfra "servify/apps/server/internal/modules/conversation/infra"
 	"servify/apps/server/internal/platform/channel"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/channel/memex"
 
 	"github.com/glebarez/sqlite"
@@ -422,5 +423,39 @@ func TestChatConnectorEndToEndLoop(t *testing.T) {
 	}
 	if !pulled.Load() {
 		t.Fatal("platform was never pulled")
+	}
+}
+
+func TestChatConnectorOpsRoutesRegistered(t *testing.T) {
+	cfg := config.GetDefaultConfig()
+	want := []string{
+		"GET /api/chat_connectors/runners",
+		"GET /api/chat_connectors/quarantine",
+		"GET /api/chat_connectors/quarantine/export",
+		"POST /api/chat_connectors/quarantine/:id/dismiss",
+		"POST /api/chat_connectors/reload",
+	}
+	// 已装配：监督器注入后路由全量在册
+	router := BuildRouter(Dependencies{Config: cfg, ChatConnectors: chatconnector.NewSupervisor(nil, nil, nil)})
+	registered := map[string]bool{}
+	for _, ri := range router.Routes() {
+		registered[ri.Method+" "+ri.Path] = true
+	}
+	for _, path := range want {
+		if !registered[path] {
+			t.Fatalf("route %s missing", path)
+		}
+	}
+
+	// 未装配（无 DB、无监督器）：路由仍在册（请求期返回 404），装配不 panic
+	bare := BuildRouter(Dependencies{Config: cfg})
+	bareRegistered := map[string]bool{}
+	for _, ri := range bare.Routes() {
+		bareRegistered[ri.Method+" "+ri.Path] = true
+	}
+	for _, path := range want {
+		if !bareRegistered[path] {
+			t.Fatalf("route %s missing on bare runtime", path)
+		}
 	}
 }
