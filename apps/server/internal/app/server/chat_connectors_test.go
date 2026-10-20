@@ -537,9 +537,26 @@ func TestChatConnectorTelegramEndToEndLoop(t *testing.T) {
 		sessions[0].TenantID != "tenant-1" || sessions[0].WorkspaceID != "workspace-1" {
 		t.Fatalf("session drifted: %+v", sessions)
 	}
+	// The runner advances the offset cursor only after the forward settles
+	// (settleForwarded, then advance), so the cursor row legitimately lags the
+	// message row by whatever the trailing writes take — the loop above exits the
+	// moment the message is visible. On a loaded runner that gap outran a single
+	// immediate read (run 39407482038 attempt 1: message and inbox rows landed,
+	// cursor table empty at read time; the cursor INSERT died later as the
+	// deferred Stop canceled the runner while it was still in flight). Wait for
+	// the cursor the way the message is waited for; a missing cursor still fails,
+	// only with the at-least-once window the contract allows.
+	cursorDeadline := time.Now().Add(3 * time.Second)
 	var cursors []channel.ChatConnectorCursor
-	if err := db.Find(&cursors).Error; err != nil {
-		t.Fatalf("list cursors: %v", err)
+	for time.Now().Before(cursorDeadline) {
+		cursors = nil
+		if err := db.Find(&cursors).Error; err != nil {
+			t.Fatalf("list cursors: %v", err)
+		}
+		if len(cursors) == 1 && cursors[0].Cursor == "42" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if len(cursors) != 1 || cursors[0].Cursor != "42" {
 		t.Fatalf("cursor drifted: %+v (want 42 = last update_id + 1)", cursors)
