@@ -415,3 +415,114 @@ func TestConnectorCapabilitiesReadError(t *testing.T) {
 		t.Error("notify: expected capabilities read error")
 	}
 }
+
+// recordingObserver plays the assembly ingress bridge: it records every
+// committed event it is shown and can be scripted to fail.
+type recordingObserver struct {
+	mu        sync.Mutex
+	forwarded []string
+	err       error
+}
+
+func (o *recordingObserver) InboundCommitted(ctx context.Context, ev channel.ConnectorEvent) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.err != nil {
+		return o.err
+	}
+	o.forwarded = append(o.forwarded, ev.EventID)
+	return nil
+}
+
+func (o *recordingObserver) forwardedMsgs() []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.forwarded...)
+}
+
+func TestConnectorPollOnceForwardsCommittedEventsOnce(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	update := `{"ok":true,"updates":[
+		{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`
+	var pulls atomic.Int32
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		// both polls serve the same update: the second must land as a
+		// duplicate that never re-fires the observer
+		_, _ = w.Write([]byte(update))
+		_ = pulls.Add(1)
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	obs := &recordingObserver{}
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig()).WithObserver(obs)
+
+	n1, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err != nil || n1 != 1 {
+		t.Fatalf("first poll = %d (%v), want 1", n1, err)
+	}
+	n2, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err != nil || n2 != 1 {
+		t.Fatalf("redelivery poll = %d (%v), want 1", n2, err)
+	}
+	if got := obs.forwardedMsgs(); len(got) != 1 || got[0] != "m1" {
+		t.Errorf("forwarded = %v, want exactly [m1] (duplicates never re-fire)", got)
+	}
+	if got := fake.ackedMsgs(); len(got) != 2 || got[0] != "m1" || got[1] != "m1" {
+		t.Errorf("acked = %v, want m1 twice (commit and duplicate both clear)", got)
+	}
+}
+
+func TestConnectorPollOnceObserverErrorAbortsBeforeAck(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[
+			{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	obs := &recordingObserver{err: errors.New("conversation store down")}
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig()).WithObserver(obs)
+
+	n, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err == nil {
+		t.Fatal("observer failure must abort the poll")
+	}
+	if n != 0 {
+		t.Errorf("processed = %d, want 0", n)
+	}
+	if got := fake.ackedMsgs(); len(got) != 0 {
+		t.Errorf("acked = %v, want none (abort before ACK)", got)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Status != channel.InboxStatusCommitted {
+		t.Errorf("inbox rows = %+v, want the committed row kept", rows)
+	}
+}
+
+func TestConnectorWithoutObserverStillPolls(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 0 {
+		t.Fatalf("poll without observer = %d (%v), want 0 nil", n, err)
+	}
+}

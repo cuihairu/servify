@@ -231,6 +231,7 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 		}
 	}
 	wireEmailRuntime(rt, conversationService)
+	wireChatConnectors(rt, conversationService)
 	return historyAdapter, nil
 }
 

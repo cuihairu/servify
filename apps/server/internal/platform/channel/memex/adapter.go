@@ -82,6 +82,18 @@ func DeclaredCapabilities(now time.Time) channel.Capabilities {
 	}
 }
 
+// InboundObserver sees every freshly committed inbound event — never
+// quarantined rows, never duplicates — between the durable inbox acceptance
+// and the platform ACK. It is the conversation-module ingress seam: the
+// assembly bridges committed events into conversations. An error aborts the
+// poll before the platform ACK, but the row is already committed and a
+// redelivery is recognized as a duplicate (the observer is not re-fired), so
+// a failed forward stays committed-but-unforwarded — the failure must be
+// surfaced for operator triage, and the replay tooling re-drives such rows.
+type InboundObserver interface {
+	InboundCommitted(ctx context.Context, ev channel.ConnectorEvent) error
+}
+
 // Connector drives one Memex bot installation through the contract's
 // accept-before-ACK pipeline.
 type Connector struct {
@@ -90,6 +102,7 @@ type Connector struct {
 	sink       *channel.InboxStore
 	translator Translator
 	scope      channel.CapabilityScope
+	observer   InboundObserver
 }
 
 // NewConnector wires the pull/ACK client to the contract stores. Both stores
@@ -109,6 +122,13 @@ func NewConnector(client *Client, caps *channel.CapabilityStore, sink *channel.I
 			ConversationPlatformID: cfg.Conversation.PlatformID,
 		},
 	}
+}
+
+// WithObserver attaches the committed-event observer (the assembly's
+// conversation-ingress bridge) and returns the connector for chaining.
+func (c *Connector) WithObserver(o InboundObserver) *Connector {
+	c.observer = o
+	return c
 }
 
 // PollOnce drains one batch of the bot inbox. Every update is translated and
@@ -134,6 +154,13 @@ func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, 
 		decision, err := c.sink.Accept(ctx, ev)
 		if err != nil {
 			return processed, err
+		}
+		// Forward exactly once per inbox row: only the fresh-commit verdict
+		// fires the observer, so a redelivered copy never double-ingests.
+		if decision == channel.AckCommit && c.observer != nil {
+			if err := c.observer.InboundCommitted(ctx, ev); err != nil {
+				return processed, fmt.Errorf("forward %s: %w", u.MsgID, err)
+			}
 		}
 		// Every durable verdict clears the platform copy: commit and
 		// quarantine are fresh acceptances, duplicate is a redelivered copy.
