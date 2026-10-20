@@ -1027,3 +1027,58 @@ func TestChatPayloadRetentionWorkerStopContextError(t *testing.T) {
 		t.Fatalf("Stop() with cancelled ctx = %v, want context.Canceled", err)
 	}
 }
+
+// chatWorkerStubLister / chatWorkerStubRunner drive the chat connector
+// worker adapter with a real supervisor: the adapter's contract is only
+// "forward the lifecycle", so the runner parks on ctx like the quiet factory
+// in the chatconnector package.
+type chatWorkerStubLister struct {
+	rows []channel.ChatConnectorInstallation
+}
+
+func (l *chatWorkerStubLister) ListEnabled(context.Context) ([]channel.ChatConnectorInstallation, error) {
+	return l.rows, nil
+}
+
+type chatWorkerStubRunner struct{ started chan<- string }
+
+func (r *chatWorkerStubRunner) Run(ctx context.Context) error {
+	r.started <- "attached"
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestChatConnectorWorkerStartStopLifecycle covers the bootstrap.Worker
+// adapter body: Start supplies the background context the worker shape
+// lacks (the supervisor reads the enabled set with it) and Stop forwards the
+// shutdown deadline unchanged — one scripted runner proves both halves reach
+// the supervisor, not just the registry name.
+func TestChatConnectorWorkerStartStopLifecycle(t *testing.T) {
+	started := make(chan string, 1)
+	sup := chatconnector.NewSupervisor(
+		&chatWorkerStubLister{rows: []channel.ChatConnectorInstallation{
+			{Platform: "memex", InstallationID: "a", TenantID: "tenant-1", WorkspaceID: "workspace-1"},
+		}},
+		func(ctx context.Context, inst channel.ChatConnectorInstallation) (chatconnector.Runner, error) {
+			return &chatWorkerStubRunner{started: started}, nil
+		},
+		nil,
+	)
+	w := &chatConnectorWorker{supervisor: sup}
+	if w.Name() != "chat-connector-poll" {
+		t.Fatalf("Name() = %q, want chat-connector-poll", w.Name())
+	}
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("runner not attached through the adapter")
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := w.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+}

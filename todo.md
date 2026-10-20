@@ -76,7 +76,7 @@
 - [x] P3-2 收拢 services 与 modules 的最终边界（18 刀，services 层整体移除）— 9599c4e 9e1984c f1998f4 440123c 818b792 5c9061f 9b49ac3 1126b60，CI 35457474387 绿
 - [x] P3-3 清理 demo/mock/in-memory 资产默认暴露面（eventbus inmemory 生产拒启、demo-sdk 生产不暴露）— 34b66a9，CI 35462743342 绿
 - [x] P3-4 统一运行时装配方式 — af58235，CI 35461039568 绿
-- [x] 全仓覆盖率逐包收口至 100.0%（含 scripts/perfbench 与 infra/compose/weknora-mock 两处 0% 补齐、子进程覆盖率合并口径）— e4e7d77 5991d63 6de0377 516f94a c863828，CI 36316434375 绿，未覆盖语句 0
+- [x] 全仓覆盖率逐包收口至 100.0%（含 scripts/perfbench 与 infra/compose/weknora-mock 两处 0% 补齐、子进程覆盖率合并口径）— e4e7d77 5991d63 6de0377 516f94a c863828，CI 36316434375 绿，未覆盖语句 0；2026-10-20f 灰区复核收口：chat 接线切片留下的 6 条未覆盖语句（supervisor Snapshot 排序比较器 4 条 + chatConnectorWorker Start/Stop 适配 2 条）已由 TestSupervisorSnapshotSortsByScope / TestSupervisorReloadSurfacesStopFailure / TestChatConnectorWorkerStartStopLifecycle 补齐，聚合 profile 重扫 count==0 块 0 条，真·零未覆盖恢复
 - [x] 迁移 schema 守卫家族六件（表级、列级、运行时索引、tag 索引、NOT NULL、DEFAULT）+ schema-parity 真库对账工具 + 三条真漂移迁移 — 3201805 0852423 81f195b 26ba743 60ac4f0，000020/000021/000022，591 列 × 52 表 0 diff
 - [x] RAGFlow knowledge provider driver 立项落地（配置面、client、driver、租户作用域、选择链、验收脚本、集成文档）— df86736 d124dd5 043a92f，CI 35566568357 绿
 - [x] 知识库选型调研文档（LANDSCAPE：RAGFlow 首选、Dify 定位降级、双路线建议）+ 六处 Dify 优先口径修正 — 47026ca，CI 35544351300 绿

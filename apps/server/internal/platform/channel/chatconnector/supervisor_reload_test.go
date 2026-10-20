@@ -180,3 +180,84 @@ func TestSupervisorReloadSurfacesStartFailure(t *testing.T) {
 		t.Fatalf("Stop: %v", err)
 	}
 }
+
+// TestSupervisorSnapshotSortsByScope pins the ops-surface ordering contract:
+// tenant, then workspace, then platform, then installation id — five rows
+// spanning all four axes so every comparator tie-break is a live sort key,
+// not just the first discriminator.
+func TestSupervisorSnapshotSortsByScope(t *testing.T) {
+	lister := &fakeInstallationLister{rows: []channel.ChatConnectorInstallation{
+		{Platform: "telegram", InstallationID: "c", TenantID: "tenant-2", WorkspaceID: "workspace-1"},
+		{Platform: "memex", InstallationID: "z", TenantID: "tenant-1", WorkspaceID: "workspace-9"},
+		{Platform: "telegram", InstallationID: "b", TenantID: "tenant-1", WorkspaceID: "workspace-1"},
+		{Platform: "memex", InstallationID: "b", TenantID: "tenant-1", WorkspaceID: "workspace-1"},
+		{Platform: "memex", InstallationID: "a", TenantID: "tenant-1", WorkspaceID: "workspace-1"},
+	}}
+	started := make(chan string, 5)
+	sup := NewSupervisor(lister, quietFactory(started), nil)
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	collectStarted(t, started, 5)
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := sup.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+
+	want := []string{
+		"tenant-1/workspace-1/memex/a",
+		"tenant-1/workspace-1/memex/b",
+		"tenant-1/workspace-1/telegram/b",
+		"tenant-1/workspace-9/memex/z",
+		"tenant-2/workspace-1/telegram/c",
+	}
+	snapshot := sup.Snapshot()
+	if len(snapshot) != len(want) {
+		t.Fatalf("snapshot = %d rows, want %d", len(snapshot), len(want))
+	}
+	for i, st := range snapshot {
+		got := st.TenantID + "/" + st.WorkspaceID + "/" + st.Platform + "/" + st.InstallationID
+		if got != want[i] {
+			t.Fatalf("snapshot[%d] = %s, want %s", i, got, want[i])
+		}
+	}
+}
+
+// TestSupervisorReloadSurfacesStopFailure pins the error contract of
+// Reload's first half: a runner that outruns the shutdown deadline fails the
+// reload before any re-list happens (the operator sees the stop failure, not
+// a silently half-reloaded generation).
+func TestSupervisorReloadSurfacesStopFailure(t *testing.T) {
+	lister := &fakeInstallationLister{rows: []channel.ChatConnectorInstallation{sampleRow("a")}}
+	started := make(chan string, 1)
+	release := make(chan struct{})
+	factory := func(ctx context.Context, inst channel.ChatConnectorInstallation) (Runner, error) {
+		return &scriptedRunner{started: started, id: inst.InstallationID,
+			// a wedged runner ignores cancellation; the 2s backstop only keeps
+			// a broken test from hanging forever
+			run: func(ctx context.Context) error {
+				select {
+				case <-release:
+				case <-time.After(2 * time.Second):
+				}
+				return nil
+			},
+		}, nil
+	}
+	sup := NewSupervisor(lister, factory, nil)
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	collectStarted(t, started, 1)
+
+	deadline, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := sup.Reload(deadline); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Reload() error = %v, want DeadlineExceeded", err)
+	}
+	close(release)
+	if err := sup.Stop(context.Background()); err != nil {
+		t.Fatalf("drain Stop: %v", err)
+	}
+}
