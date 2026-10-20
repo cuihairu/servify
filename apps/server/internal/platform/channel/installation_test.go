@@ -145,6 +145,41 @@ func TestInstallationGet(t *testing.T) {
 	}
 }
 
+func TestInstallationListEnabled(t *testing.T) {
+	store := NewInstallationStore(newChannelTestDB(t))
+	on1 := sampleInstallation("tenant-1", "workspace-1", "on-1")
+	on2 := sampleInstallation("tenant-2", "workspace-2", "on-2")
+	off := sampleInstallation("tenant-1", "workspace-1", "off")
+	off.Enabled = false
+	for _, inst := range []ChatConnectorInstallation{on1, on2, off} {
+		if _, err := store.Save(context.Background(), inst); err != nil {
+			t.Fatalf("save %s: %v", inst.InstallationID, err)
+		}
+	}
+
+	rows, err := store.ListEnabled(context.Background())
+	if err != nil {
+		t.Fatalf("list enabled: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2 (disabled row excluded)", len(rows))
+	}
+	for _, row := range rows {
+		if !row.Enabled {
+			t.Errorf("disabled row leaked into ListEnabled: %+v", row)
+		}
+	}
+	if rows[0].InstallationID != "on-1" || rows[1].InstallationID != "on-2" {
+		t.Errorf("rows = %s %s, want on-1 on-2 (stable order)", rows[0].InstallationID, rows[1].InstallationID)
+	}
+
+	// a store with no rows returns an empty slice, not an error
+	empty, err := NewInstallationStore(newChannelTestDB(t)).ListEnabled(context.Background())
+	if err != nil || len(empty) != 0 {
+		t.Errorf("empty store list = %v (%v), want no rows", empty, err)
+	}
+}
+
 func TestInstallationStoreErrors(t *testing.T) {
 	db := newChannelTestDB(t)
 	// read path: Save and Get both fail through the capabilities-shaped query
@@ -161,6 +196,9 @@ func TestInstallationStoreErrors(t *testing.T) {
 	}
 	if _, err := store.List(context.Background(), "t", "w"); err == nil {
 		t.Error("list: expected query error")
+	}
+	if _, err := store.ListEnabled(context.Background()); err == nil {
+		t.Error("list enabled: expected query error")
 	}
 }
 

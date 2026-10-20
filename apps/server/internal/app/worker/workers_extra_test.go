@@ -28,6 +28,7 @@ import (
 	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/glebarez/sqlite"
@@ -876,6 +877,10 @@ func (fullRuntimeWorkerDeps) AutomationTimersForWorker() automationapp.TimerProc
 	return fakeTimerProcessor{}
 }
 
+func (fullRuntimeWorkerDeps) ChatConnectorsForWorker() *chatconnector.Supervisor {
+	return chatconnector.NewSupervisor(nil, nil, nil)
+}
+
 func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 	app, err := bootstrap.BuildApp(config.GetDefaultConfig())
 	if err != nil {
@@ -898,6 +903,7 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 		"waiting-queue-dispatch":  true,
 		"survey-email-send":       true,
 		"automation-timer":        true,
+		"chat-connector-poll":     true,
 		"audit-retention-cleanup": true,
 		"revoked-token-cleanup":   true,
 	}

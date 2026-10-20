@@ -155,6 +155,21 @@ func (s *InstallationStore) List(ctx context.Context, tenantID, workspaceID stri
 	return rows, nil
 }
 
+// ListEnabled returns every enabled installation across all tenants/
+// workspaces; it backs the service-startup poll loop, which must start exactly
+// the rows an operator turned on (Enabled defaults false = fail closed) and
+// read each row's scope from storage, never from its payload. The ordering is
+// stable so restarts attach runners in a deterministic order.
+func (s *InstallationStore) ListEnabled(ctx context.Context) ([]ChatConnectorInstallation, error) {
+	var rows []ChatConnectorInstallation
+	if err := s.db.WithContext(ctx).Where("enabled = ?", true).
+		Order("tenant_id ASC, workspace_id ASC, platform ASC, installation_id ASC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // Get returns one stored installation; a missing row yields (nil, nil) so a
 // future manager can treat "nothing configured" as nothing to run, not an
 // error.

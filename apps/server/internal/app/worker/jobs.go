@@ -23,6 +23,7 @@ import (
 	"servify/apps/server/internal/observability/async"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	auditplatform "servify/apps/server/internal/platform/audit"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/usersecurity"
 
 	"github.com/sirupsen/logrus"
@@ -64,6 +65,7 @@ type RuntimeWorkerDependencies interface {
 	WaitingQueueForWorker() *routingdelivery.HandlerServiceAdapter
 	SurveysForWorker() satisfapp.SurveyEmailProcessor
 	AutomationTimersForWorker() automationapp.TimerProcessor
+	ChatConnectorsForWorker() *chatconnector.Supervisor
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -82,6 +84,12 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 	if processor := deps.EmailPollAdapterForWorker(); processor != nil {
 		interval := time.Duration(cfg.Email.PollIntervalSeconds) * time.Second
 		app.RegisterWorker(NewEmailPollWorker(processor, interval, app.Logger))
+	}
+
+	// chat 渠道安装轮询：一个 supervisor 进程内管理所有已启用安装的
+	// memex 轮询循环（启动时按启用行装配，关停时统一取消）。
+	if supervisor := deps.ChatConnectorsForWorker(); supervisor != nil {
+		app.RegisterWorker(&chatConnectorWorker{supervisor: supervisor})
 	}
 
 	if scanner := deps.QualityScanForWorker(); scanner != nil {

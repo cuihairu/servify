@@ -16,6 +16,7 @@ import (
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 )
 
 // fakeStatisticsService / fakeSLAService：单轮 job 阻塞直至 ctx 取消，
@@ -125,6 +126,10 @@ func (f *fakeRuntimeWorkerDependencies) SurveysForWorker() satisfapp.SurveyEmail
 }
 
 func (f *fakeRuntimeWorkerDependencies) AutomationTimersForWorker() automationapp.TimerProcessor {
+	return nil
+}
+
+func (f *fakeRuntimeWorkerDependencies) ChatConnectorsForWorker() *chatconnector.Supervisor {
 	return nil
 }
 

@@ -40,6 +40,7 @@ import (
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
+	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/eventbus"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
 	"servify/apps/server/internal/platform/voiceprotocol"
@@ -133,6 +134,7 @@ type Runtime struct {
 	satisfactionSvc  *satisfapp.SatisfactionService
 	transferHandler  *routingdelivery.HandlerServiceAdapter
 	automationModule *automationapp.Service
+	chatConnectors   *chatconnector.Supervisor
 }
 
 type websocketRunner interface {
@@ -272,6 +274,12 @@ func (rt *Runtime) AutomationTimersForWorker() automationapp.TimerProcessor {
 		return nil
 	}
 	return rt.automationModule
+}
+
+// ChatConnectorsForWorker returns the chat connector supervisor once the chat
+// channel wiring builds it; nil keeps the chat poll worker unregistered.
+func (rt *Runtime) ChatConnectorsForWorker() *chatconnector.Supervisor {
+	return rt.chatConnectors
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {
