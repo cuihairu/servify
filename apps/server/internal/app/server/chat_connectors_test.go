@@ -47,11 +47,14 @@ func chatEvent(platform, installationID, tenantID, workspaceID, conversationID, 
 
 // stubChatIngestor mirrors the email bridge test: ResumeConversation reports
 // gorm.ErrRecordNotFound for unknown ids, CreateConversation registers them.
+// resumeErr/createErr simulate storage failures that are not not-found.
 type stubChatIngestor struct {
 	existing  map[string]bool
 	created   []conversationapp.CreateConversationCommand
 	ingested  []conversationapp.IngestTextMessageCommand
 	ingestErr error
+	resumeErr error
+	createErr error
 }
 
 func newStubChatIngestor() *stubChatIngestor {
@@ -59,6 +62,9 @@ func newStubChatIngestor() *stubChatIngestor {
 }
 
 func (s *stubChatIngestor) ResumeConversation(ctx context.Context, query conversationapp.ResumeConversationQuery) (*conversationapp.ConversationDTO, error) {
+	if s.resumeErr != nil {
+		return nil, s.resumeErr
+	}
 	if s.existing[query.ConversationID] {
 		return &conversationapp.ConversationDTO{ID: query.ConversationID}, nil
 	}
@@ -66,6 +72,9 @@ func (s *stubChatIngestor) ResumeConversation(ctx context.Context, query convers
 }
 
 func (s *stubChatIngestor) CreateConversation(ctx context.Context, cmd conversationapp.CreateConversationCommand) (*conversationapp.ConversationDTO, error) {
+	if s.createErr != nil {
+		return nil, s.createErr
+	}
 	s.created = append(s.created, cmd)
 	s.existing[cmd.ConversationID] = true
 	return &conversationapp.ConversationDTO{ID: cmd.ConversationID}, nil

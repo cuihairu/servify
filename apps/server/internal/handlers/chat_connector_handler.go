@@ -46,15 +46,24 @@ type ChatConnectorRuntimeControl interface {
 	Reload(ctx context.Context) error
 }
 
+// ChatConnectorReplayer 是 replay 泳道的读取与重放面（由
+// app/server 的 *ChatInboxReplayer 实现：从留存原始负载重建事件并驱动进
+// 正常流）。错误全部是哨兵——重放面不透出任何负载内容。
+type ChatConnectorReplayer interface {
+	ListUnforwarded(ctx context.Context, tenantID, workspaceID string, limit int) ([]channel.ChatConnectorInbox, error)
+	ReplayInboxRow(ctx context.Context, tenantID, workspaceID string, id uint) error
+}
+
 // ChatConnectorHandler 暴露 quarantine 泳道与连接器运行态的运维面。
 // 各面单独注入：未装配的依赖返回 404 而不是 panic。
 type ChatConnectorHandler struct {
 	lane    ChatConnectorQuarantineLane
 	runtime ChatConnectorRuntimeControl
+	replay  ChatConnectorReplayer
 }
 
-func NewChatConnectorHandler(lane ChatConnectorQuarantineLane, runtime ChatConnectorRuntimeControl) *ChatConnectorHandler {
-	return &ChatConnectorHandler{lane: lane, runtime: runtime}
+func NewChatConnectorHandler(lane ChatConnectorQuarantineLane, runtime ChatConnectorRuntimeControl, replay ChatConnectorReplayer) *ChatConnectorHandler {
+	return &ChatConnectorHandler{lane: lane, runtime: runtime, replay: replay}
 }
 
 // ListQuarantine 返回当前作用域的 quarantine 泳道（JSON 视图）。
@@ -148,6 +157,68 @@ func (h *ChatConnectorHandler) DismissQuarantined(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{Message: "Quarantined event dismissed"})
 }
 
+// ListUnforwarded 返回当前作用域的 replay 泳道：已提交但正常流送达未settled
+// 的行（会话摄入失败或 commit 与送达之间的崩溃），最旧在前以便按到达序重放。
+// 行本身无内容面（见文件头说明）。
+func (h *ChatConnectorHandler) ListUnforwarded(c *gin.Context) {
+	if h == nil || h.replay == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Chat connector replay unavailable", Message: "replay tooling not configured"})
+		return
+	}
+	limit := chatConnectorListLimit(c)
+	rows, err := h.replay.ListUnforwarded(c.Request.Context(), platformauth.TenantIDFromContext(c.Request.Context()), platformauth.WorkspaceIDFromContext(c.Request.Context()), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to list unforwarded events", Message: err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, PaginatedResponse{Data: rows, Total: int64(len(rows)), Page: 1, PageSize: limit})
+}
+
+// ReplayInboxRow 把一个已提交行的留存原始负载重建为事件并驱动进正常流
+// （重放进正常流，非直接写库）：正常流送达成功后该行离开 replay 泳道。
+func (h *ChatConnectorHandler) ReplayInboxRow(c *gin.Context) {
+	if h == nil || h.replay == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Chat connector replay unavailable", Message: "replay tooling not configured"})
+		return
+	}
+	id, err := strconv.ParseUint(strings.TrimSpace(c.Param("id")), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid id", Message: "id must be a positive integer"})
+		return
+	}
+	if err := h.replay.ReplayInboxRow(c.Request.Context(), platformauth.TenantIDFromContext(c.Request.Context()), platformauth.WorkspaceIDFromContext(c.Request.Context()), uint(id)); err != nil {
+		code, resp := replayErrorResponse(err)
+		c.JSON(code, resp)
+		return
+	}
+	c.JSON(http.StatusOK, SuccessResponse{Message: "Inbox event replayed"})
+}
+
+// replayErrorResponse 把重放哨兵映射成运营处置语义：泳道不可重放的是 409
+// 状态冲突（留存对象过期/丢失、安装行已删、载荷已不可解析），其余才是故障。
+// 哨兵分支先于通用 not-found 文本匹配（包装进来的「object not found」子串
+// 是留存对象的问题，不是行的 404）。
+func replayErrorResponse(err error) (int, ErrorResponse) {
+	switch {
+	case errors.Is(err, channel.ErrInboxNotCommitted):
+		return http.StatusConflict, ErrorResponse{Error: "Inbox row not committed", Message: "only committed rows can be replayed"}
+	case errors.Is(err, channel.ErrReplayPayloadUnavailable):
+		return http.StatusConflict, ErrorResponse{Error: "Retained payload unavailable", Message: "the raw payload is gone, expired, or was never retained"}
+	case errors.Is(err, channel.ErrReplaySourceGone):
+		return http.StatusConflict, ErrorResponse{Error: "Connector installation gone", Message: "the installation row behind this event no longer exists"}
+	case errors.Is(err, channel.ErrReplayMalformed):
+		return http.StatusConflict, ErrorResponse{Error: "Retained payload no longer decodes", Message: "the raw payload no longer matches its platform format"}
+	case errors.Is(err, channel.ErrReplayMismatch):
+		return http.StatusConflict, ErrorResponse{Error: "Retained payload does not match row", Message: "the raw payload does not belong to this inbox row"}
+	case errors.Is(err, channel.ErrReplayUnsupportedPlatform):
+		return http.StatusConflict, ErrorResponse{Error: "No replay translator for platform", Message: "this runtime cannot rebuild this platform's events"}
+	case isNotFoundError(err):
+		return http.StatusNotFound, ErrorResponse{Error: "Inbox row not found", Message: "no inbox row for this scope"}
+	default:
+		return http.StatusInternalServerError, ErrorResponse{Error: "Failed to replay inbox row", Message: err.Error()}
+	}
+}
+
 // ListRunners 返回每个已挂载连接器的运行态（平台/安装/作用域/状态/终止错误），
 // 全部为无内容面字段；dead-letter 因此不必只存在于日志里。
 func (h *ChatConnectorHandler) ListRunners(c *gin.Context) {
@@ -200,5 +271,7 @@ func RegisterChatConnectorRoutes(r *gin.RouterGroup, handler *ChatConnectorHandl
 		group.GET("/quarantine", handler.ListQuarantine)
 		group.GET("/quarantine/export", handler.ExportQuarantineCSV)
 		group.POST("/quarantine/:id/dismiss", handler.DismissQuarantined)
+		group.GET("/inbox/unforwarded", handler.ListUnforwarded)
+		group.POST("/inbox/:id/replay", handler.ReplayInboxRow)
 	}
 }

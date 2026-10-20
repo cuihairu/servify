@@ -16,24 +16,33 @@ import (
 // unknown event types. It is deliberately scoped to tenant and workspace so no
 // query can surface another scope's rows.
 type ChatConnectorInbox struct {
-	ID                     uint      `gorm:"primaryKey" json:"id"`
-	TenantID               string    `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"tenant_id"`
-	WorkspaceID            string    `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"workspace_id"`
-	IdempotencyKey         string    `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"idempotency_key"`
-	Platform               string    `gorm:"not null" json:"platform"`
-	InstallationID         string    `gorm:"index;not null" json:"installation_id"`
-	EventID                string    `gorm:"not null" json:"event_id"`
-	EventType              string    `gorm:"not null" json:"event_type"`
-	Status                 string    `gorm:"not null" json:"status"` // committed | quarantined | dismissed
-	ConversationPlatformID string    `gorm:"not null" json:"conversation_platform_id"`
-	SenderPlatformID       string    `gorm:"not null" json:"sender_platform_id"`
-	MessagePlatformID      string    `gorm:"not null" json:"message_platform_id"`
-	RawPayloadStore        string    `json:"raw_payload_store"`
-	RawPayloadObjectID     string    `json:"raw_payload_object_id"`
-	OccurredAt             time.Time `json:"occurred_at"`
-	ReceivedAt             time.Time `json:"received_at"`
-	CreatedAt              time.Time `json:"created_at"`
-	UpdatedAt              time.Time `json:"updated_at"`
+	ID                     uint   `gorm:"primaryKey" json:"id"`
+	TenantID               string `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"tenant_id"`
+	WorkspaceID            string `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"workspace_id"`
+	IdempotencyKey         string `gorm:"not null;uniqueIndex:uq_chat_connector_inboxes_scope_key" json:"idempotency_key"`
+	Platform               string `gorm:"not null" json:"platform"`
+	InstallationID         string `gorm:"index;not null" json:"installation_id"`
+	EventID                string `gorm:"not null" json:"event_id"`
+	EventType              string `gorm:"not null" json:"event_type"`
+	Status                 string `gorm:"not null" json:"status"` // committed | quarantined | dismissed
+	ConversationPlatformID string `gorm:"not null" json:"conversation_platform_id"`
+	SenderPlatformID       string `gorm:"not null" json:"sender_platform_id"`
+	MessagePlatformID      string `gorm:"not null" json:"message_platform_id"`
+	RawPayloadStore        string `json:"raw_payload_store"`
+	RawPayloadObjectID     string `json:"raw_payload_object_id"`
+	// RawPayloadSHA256 is the plaintext digest of the retained object: the
+	// object is sealed with AES-256-GCM, so only the digest can be verified
+	// from the row alone (swapping the object for a different one is caught).
+	RawPayloadSHA256 string    `json:"raw_payload_sha256"`
+	OccurredAt       time.Time `json:"occurred_at"`
+	ReceivedAt       time.Time `json:"received_at"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	// ForwardedAt is when the committed event reached the normal flow. NULL
+	// marks the replay lane: the row is durable but its conversation ingest
+	// never settled. Never NULL for a quarantined row — nothing was ever
+	// going to be forwarded.
+	ForwardedAt *time.Time `json:"forwarded_at"`
 }
 
 const (
@@ -50,6 +59,33 @@ const (
 // ErrInboxNotQuarantined is returned when the row exists in the requested
 // scope but is not in the quarantine lane (committed, or already dismissed).
 var ErrInboxNotQuarantined = errors.New("channel: inbox row is not quarantined")
+
+// ErrInboxNotCommitted is returned when the row exists in the requested scope
+// but never entered the normal flow (quarantined or dismissed): replay only
+// applies to committed rows.
+var ErrInboxNotCommitted = errors.New("channel: inbox row is not committed")
+
+// The replay sentinels distinguish why a committed row cannot be driven back
+// through the normal flow. They carry no payload content (contract: redacted
+// operational surfaces) and map to operator-facing states, not crashes.
+var (
+	// ErrReplayPayloadUnavailable: the row kept no retained object (retention
+	// off when it was accepted) or the object is gone/corrupt (expired sweep,
+	// early deletion, integrity failure).
+	ErrReplayPayloadUnavailable = errors.New("channel: retained raw payload unavailable for replay")
+	// ErrReplaySourceGone: the installation row the event's scope and
+	// conversation mapping came from no longer exists.
+	ErrReplaySourceGone = errors.New("channel: connector installation behind the inbox row is gone")
+	// ErrReplayMalformed: the retained bytes no longer decode as the row's
+	// platform (format drift between acceptance and replay).
+	ErrReplayMalformed = errors.New("channel: retained raw payload no longer decodes as the row's platform")
+	// ErrReplayMismatch: the retranslated event disagrees with its inbox row
+	// (idempotency key or scope) — the object does not belong to the row.
+	ErrReplayMismatch = errors.New("channel: retranslated event does not match its inbox row")
+	// ErrReplayUnsupportedPlatform: the row's platform has no replay
+	// translator (a committed row from an adapter this runtime cannot rebuild).
+	ErrReplayUnsupportedPlatform = errors.New("channel: inbox row platform has no replay translator")
+)
 
 // InboxStore is the durable realization of the contract's InboundSink seam
 // (Accept). It is the single writer for the connector inbox; connectors obtain
@@ -102,6 +138,7 @@ func (s *InboxStore) Accept(ctx context.Context, ev ConnectorEvent) (AckDecision
 	if ev.RawPayloadRef != nil {
 		row.RawPayloadStore = ev.RawPayloadRef.Store
 		row.RawPayloadObjectID = ev.RawPayloadRef.ObjectID
+		row.RawPayloadSHA256 = ev.RawPayloadRef.SHA256
 	}
 	res := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
@@ -162,4 +199,51 @@ func (s *InboxStore) Dismiss(ctx context.Context, tenantID, workspaceID string, 
 		return err // gorm.ErrRecordNotFound covers unknown and cross-scope ids
 	}
 	return ErrInboxNotQuarantined
+}
+
+// CommittedByID returns one row of the given scope that entered the normal
+// flow. Unknown ids, foreign scopes, and quarantined/dismissed rows error out;
+// the replay surface refuses to touch anything but committed rows.
+func (s *InboxStore) CommittedByID(ctx context.Context, tenantID, workspaceID string, id uint) (*ChatConnectorInbox, error) {
+	var row ChatConnectorInbox
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND tenant_id = ? AND workspace_id = ?", id, tenantID, workspaceID).
+		First(&row).Error
+	if err != nil {
+		return nil, err // gorm.ErrRecordNotFound covers unknown and cross-scope ids
+	}
+	if row.Status != InboxStatusCommitted {
+		return nil, ErrInboxNotCommitted
+	}
+	return &row, nil
+}
+
+// ListUnforwarded returns the replay lane for one tenant and workspace:
+// committed rows whose normal-flow delivery never settled, oldest first so a
+// replay drains in arrival order. The scope filter is part of every query.
+func (s *InboxStore) ListUnforwarded(ctx context.Context, tenantID, workspaceID string, limit int) ([]ChatConnectorInbox, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	var rows []ChatConnectorInbox
+	err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND workspace_id = ? AND status = ? AND forwarded_at IS NULL", tenantID, workspaceID, InboxStatusCommitted).
+		Order("id ASC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// MarkForwardedByKey stamps the delivery time onto the committed row the
+// event's idempotency key names. It is the normal-flow forwarder's bookkeeping
+// (live and replay share it); a missing row is a silent no-op because the
+// caller's event can only come from that row.
+func (s *InboxStore) MarkForwardedByKey(ctx context.Context, tenantID, workspaceID, idempotencyKey string, at time.Time) error {
+	return s.db.WithContext(ctx).
+		Model(&ChatConnectorInbox{}).
+		Where("tenant_id = ? AND workspace_id = ? AND idempotency_key = ?", tenantID, workspaceID, idempotencyKey).
+		Update("forwarded_at", at).Error
 }

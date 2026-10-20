@@ -134,7 +134,7 @@ func registerManagementRoutes(r *gin.Engine, deps Dependencies) {
 	if deps.ChatConnectors != nil {
 		chatConnectorRuntime = deps.ChatConnectors
 	}
-	handlers.RegisterChatConnectorRoutes(chatConnectorsAPI, handlers.NewChatConnectorHandler(chatConnectorLane, chatConnectorRuntime))
+	handlers.RegisterChatConnectorRoutes(chatConnectorsAPI, handlers.NewChatConnectorHandler(chatConnectorLane, chatConnectorRuntime, deps.ChatInboxReplay))
 
 	securityAPI := api.Group("/")
 	securityAPI.Use(middleware.RequireResourcePermission("security"))

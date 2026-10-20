@@ -99,20 +99,36 @@ func ChatConversationID(tenantID, workspaceID, platform, conversationPlatformID 
 //
 // An ingest failure is logged and swallowed: the inbox row is already durable
 // (without the text), so a redelivery cannot re-forward and the runner must
-// not die on the same event forever. The committed-but-unforwarded row is the
-// replay tooling's input, not a reason to take the channel down.
+// not die on the same event forever. The committed-but-unforwarded row stays
+// in the replay lane (forwarded_at NULL) and is the replay tooling's input,
+// not a reason to take the channel down. A settled forward is stamped on the
+// row via the inbox store, which is what keeps the replay lane exact.
 type chatConversationBridge struct {
 	ingestor chatConversationIngestor
+	inbox    *channel.InboxStore
 	logger   *logrus.Logger
+	now      func() time.Time
 }
 
-// InboundCommitted implements memex.InboundObserver.
+// InboundCommitted implements channel.InboundObserver.
 func (b *chatConversationBridge) InboundCommitted(ctx context.Context, ev channel.ConnectorEvent) error {
+	if err := b.forward(ctx, ev); err != nil {
+		b.logIngestFailure(err, ev)
+	}
+	return nil
+}
+
+// forward drives one committed event through the normal flow and returns the
+// failure instead of swallowing it — the replay tooling calls it directly so
+// an operator sees why a row would not settle. On success the row is stamped
+// forwarded, on failure it stays in the replay lane.
+func (b *chatConversationBridge) forward(ctx context.Context, ev channel.ConnectorEvent) error {
 	if b.ingestor == nil {
 		return nil
 	}
 	if ev.Message == nil || ev.Message.Text == "" {
-		return nil
+		// Nothing this bridge delivers; the row still leaves the replay lane.
+		return b.settleForwarded(ctx, ev)
 	}
 	ctx = platformauth.ContextWithScope(ctx, ev.TenantID, ev.WorkspaceID)
 	conversationID := ChatConversationID(ev.TenantID, ev.WorkspaceID, ev.Platform, ev.Conversation.PlatformID)
@@ -120,8 +136,7 @@ func (b *chatConversationBridge) InboundCommitted(ctx context.Context, ev channe
 		ConversationID: conversationID,
 	}); err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			b.logIngestFailure(err, ev)
-			return nil
+			return err
 		}
 		if _, err := b.ingestor.CreateConversation(ctx, conversationapp.CreateConversationCommand{
 			ConversationID: conversationID,
@@ -132,8 +147,7 @@ func (b *chatConversationBridge) InboundCommitted(ctx context.Context, ev channe
 				SessionID:  conversationID,
 			},
 		}); err != nil {
-			b.logIngestFailure(err, ev)
-			return nil
+			return err
 		}
 	}
 	if _, err := b.ingestor.IngestTextMessage(ctx, conversationapp.IngestTextMessageCommand{
@@ -148,9 +162,24 @@ func (b *chatConversationBridge) InboundCommitted(ctx context.Context, ev channe
 			"message_id":      ev.EventID,
 		},
 	}); err != nil {
-		b.logIngestFailure(err, ev)
+		return err
 	}
-	return nil
+	return b.settleForwarded(ctx, ev)
+}
+
+// settleForwarded stamps forwarded_at on the row the event's idempotency key
+// names. A stamp failure surfaces like an ingest failure: the row stays in the
+// replay lane (a later replay would re-ingest at-least-once) and the failure
+// is logged, never fatal.
+func (b *chatConversationBridge) settleForwarded(ctx context.Context, ev channel.ConnectorEvent) error {
+	if b.inbox == nil {
+		return nil
+	}
+	now := b.now
+	if now == nil {
+		now = time.Now
+	}
+	return b.inbox.MarkForwardedByKey(ctx, ev.TenantID, ev.WorkspaceID, ev.IdempotencyKey, now())
 }
 
 func (b *chatConversationBridge) logIngestFailure(err error, ev channel.ConnectorEvent) {
@@ -186,7 +215,13 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 	cursors := channel.NewCursorStore(rt.DB)
 	payloads := chatPayloadStoreFromEnv(os.Getenv, rt.Logger)
 	rt.chatPayloads = payloads
-	bridge := &chatConversationBridge{ingestor: conversationService, logger: rt.Logger}
+	bridge := &chatConversationBridge{ingestor: conversationService, inbox: inbox, logger: rt.Logger}
+	rt.chatReplay = &ChatInboxReplayer{
+		inbox:    inbox,
+		installs: installations,
+		payloads: payloads,
+		forward:  bridge.forward,
+	}
 	rt.chatConnectors = chatconnector.NewSupervisor(installations,
 		func(ctx context.Context, inst channel.ChatConnectorInstallation) (chatconnector.Runner, error) {
 			// credentials live in the environment only: the row names the
@@ -201,33 +236,18 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 			// the HTTP timeout must outlive the long poll itself, or every
 			// fully-waited pull dies client-side
 			hc := &http.Client{Timeout: longPoll + 10*time.Second}
-			conv := channel.ConversationRef{
-				PlatformID: inst.ConversationPlatformID,
-				Kind:       inst.ConversationKind,
-				IsGroup:    inst.ConversationIsGroup,
-			}
 			var poller channel.Poller
 			switch inst.Platform {
 			case platformTelegram:
 				poller = telegram.NewConnector(
 					telegram.NewClient(inst.UpdatesEndpoint, token, hc),
-					caps, inbox, cursors, telegram.Config{
-						Platform:       inst.Platform,
-						TenantID:       inst.TenantID,
-						WorkspaceID:    inst.WorkspaceID,
-						InstallationID: inst.InstallationID,
-						Conversation:   conv,
-					}).WithObserver(bridge).WithPayloadStore(payloads)
+					caps, inbox, cursors, telegramConfigFromInstallation(inst),
+				).WithObserver(bridge).WithPayloadStore(payloads)
 			case platformMemex:
 				poller = memex.NewConnector(
 					memex.NewClient(inst.UpdatesEndpoint, token, hc),
-					caps, inbox, memex.Config{
-						Platform:       inst.Platform,
-						TenantID:       inst.TenantID,
-						WorkspaceID:    inst.WorkspaceID,
-						InstallationID: inst.InstallationID,
-						Conversation:   conv,
-					}).WithObserver(bridge).WithPayloadStore(payloads)
+					caps, inbox, memexConfigFromInstallation(inst),
+				).WithObserver(bridge).WithPayloadStore(payloads)
 			default:
 				return nil, fmt.Errorf("chat connector %s: platform %q has no adapter",
 					inst.InstallationID, inst.Platform)
@@ -237,6 +257,41 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 			return runner, nil
 		},
 		rt.Logger)
+}
+
+// conversationRefFromInstallation extracts the configured conversation the
+// stored installation row pins; both live polling and replay attribute
+// conversation from the row, never from payload data.
+func conversationRefFromInstallation(inst channel.ChatConnectorInstallation) channel.ConversationRef {
+	return channel.ConversationRef{
+		PlatformID: inst.ConversationPlatformID,
+		Kind:       inst.ConversationKind,
+		IsGroup:    inst.ConversationIsGroup,
+	}
+}
+
+// telegramConfigFromInstallation is the translator scope the live poller and
+// the replay tooling share for Telegram rows.
+func telegramConfigFromInstallation(inst channel.ChatConnectorInstallation) telegram.Config {
+	return telegram.Config{
+		Platform:       inst.Platform,
+		TenantID:       inst.TenantID,
+		WorkspaceID:    inst.WorkspaceID,
+		InstallationID: inst.InstallationID,
+		Conversation:   conversationRefFromInstallation(inst),
+	}
+}
+
+// memexConfigFromInstallation is the translator scope the live poller and the
+// replay tooling share for Memex rows.
+func memexConfigFromInstallation(inst channel.ChatConnectorInstallation) memex.Config {
+	return memex.Config{
+		Platform:       inst.Platform,
+		TenantID:       inst.TenantID,
+		WorkspaceID:    inst.WorkspaceID,
+		InstallationID: inst.InstallationID,
+		Conversation:   conversationRefFromInstallation(inst),
+	}
 }
 
 func firstNonEmpty(values ...string) string {

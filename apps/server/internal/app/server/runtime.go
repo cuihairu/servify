@@ -137,6 +137,7 @@ type Runtime struct {
 	automationModule *automationapp.Service
 	chatConnectors   *chatconnector.Supervisor
 	chatPayloads     *channel.LocalPayloadStore
+	chatReplay       *ChatInboxReplayer
 }
 
 type websocketRunner interface {
@@ -291,6 +292,13 @@ func (rt *Runtime) ChatPayloadStoreForWorker() *channel.LocalPayloadStore {
 	return rt.chatPayloads
 }
 
+// ChatInboxReplayer returns the chat inbox replay tooling once the chat
+// channel wiring builds it; nil keeps the replay endpoints unregistered
+// (404), mirroring the other chat ops faces.
+func (rt *Runtime) ChatInboxReplayer() *ChatInboxReplayer {
+	return rt.chatReplay
+}
+
 func (rt *Runtime) RouterDependencies() Dependencies {
 	return Dependencies{
 		Config:                    rt.Config,
@@ -349,5 +357,6 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		OIDCProvider:                        rt.OIDCProvider,
 		HTTPMetrics:                         rt.HTTPMetrics,
 		ChatConnectors:                      rt.chatConnectors,
+		ChatInboxReplay:                     rt.chatReplay,
 	}
 }

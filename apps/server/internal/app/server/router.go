@@ -111,6 +111,9 @@ type Dependencies struct {
 	// ChatConnectors 聊天连接器监督器（脱敏观测 + dead-letter/reload 运维面；
 	// 未装配时该组路由返回 404）。
 	ChatConnectors *chatconnector.Supervisor
+	// ChatInboxReplay 聊天收件箱 replay 工具面（committed-but-unforwarded
+	// 泳道 + 单行重放进正常流；未装配时该组路由返回 404）。
+	ChatInboxReplay *ChatInboxReplayer
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

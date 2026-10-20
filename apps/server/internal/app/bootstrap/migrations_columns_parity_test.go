@@ -23,11 +23,14 @@ import (
 )
 
 var (
-	columnCreateRe  = regexp.MustCompile(`(?s)CREATE TABLE (?:IF NOT EXISTS )?"?([a-z_]+)"?\s*\(`)
-	columnAlterRe   = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_]+)"?\s+ADD (?:COLUMN )?(?:IF NOT EXISTS )?"?([a-z_]+)"?`)
-	columnDropTabRe = regexp.MustCompile(`(?i)DROP TABLE (?:IF EXISTS )?"?([a-z_]+)"?`)
-	columnDropColRe = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_]+)"?\s+DROP COLUMN (?:IF EXISTS )?"?([a-z_]+)"?`)
-	columnRenameRe  = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_]+)"?\s+RENAME COLUMN "?([a-z_]+)"? TO "?([a-z_]+)"?`)
+	columnCreateRe = regexp.MustCompile(`(?s)CREATE TABLE (?:IF NOT EXISTS )?"?([a-z_][a-z0-9_]*)"?\s*\(`)
+	// 表名与列名都允许数字（columnNameRe 同口径）：raw_payload_sha256 是全链首个
+	// 带数字列名，捕获组收窄成 [a-z_]+ 会静默丢掉整条语句（含整个表分支），守卫
+	// 对摘要类列全盲。
+	columnAlterRe   = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_][a-z0-9_]*)"?\s+ADD (?:COLUMN )?(?:IF NOT EXISTS )?"?([a-z_][a-z0-9_]*)"?`)
+	columnDropTabRe = regexp.MustCompile(`(?i)DROP TABLE (?:IF EXISTS )?"?([a-z_][a-z0-9_]*)"?`)
+	columnDropColRe = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_][a-z0-9_]*)"?\s+DROP COLUMN (?:IF EXISTS )?"?([a-z_][a-z0-9_]*)"?`)
+	columnRenameRe  = regexp.MustCompile(`(?i)ALTER TABLE (?:IF EXISTS )?"?([a-z_][a-z0-9_]*)"?\s+RENAME COLUMN "?([a-z_][a-z0-9_]*)"? TO "?([a-z_][a-z0-9_]*)"?`)
 	columnKeywordRe = regexp.MustCompile(`(?i)^(PRIMARY|CONSTRAINT|UNIQUE|FOREIGN|CHECK|INDEX|KEY)\b`)
 	columnNameRe    = regexp.MustCompile(`^"?([a-z_][a-z0-9_]*)"?`)
 )
@@ -153,5 +156,30 @@ func TestMigrationChainCoversAllModelColumns(t *testing.T) {
 				t.Errorf("模型 %T 的列 %q 不在迁移链终态表 %q 的列集合中：postgres 版本化路径全新库缺列，运行时写表必 42P01（新列必须配编号迁移，惯例参照 000020）", model, f.DBName, s.Table)
 			}
 		}
+	}
+}
+
+// TestColumnAlterRegexHandlesDigitColumnNames 钉住列名带数字的解析能力。
+// 变异验证：把三个正则的捕获组收窄回 [a-z_]+ 后本用例失败——raw_payload_sha256
+// 这类摘要列的 ADD/DROP/RENAME 会被静默丢掉，列级守卫对它们全盲（2026-10-20
+// replay 切片实证：同文件第二条 ALTER 整条未解析）。
+func TestColumnAlterRegexHandlesDigitColumnNames(t *testing.T) {
+	sqlText := `ALTER TABLE "t1" ADD COLUMN IF NOT EXISTS "raw_payload_sha256" text;
+ALTER TABLE "t1" DROP COLUMN "raw_payload_sha256";
+ALTER TABLE "t1" RENAME COLUMN "raw_payload_sha256" TO "raw_payload_hash";`
+	if m := columnAlterRe.FindStringSubmatch(sqlText); len(m) != 3 || m[1] != "t1" || m[2] != "raw_payload_sha256" {
+		t.Fatalf("columnAlterRe captures = %v, want [t1 raw_payload_sha256]", m)
+	}
+	if m := columnDropColRe.FindStringSubmatch(sqlText); len(m) != 3 || m[2] != "raw_payload_sha256" {
+		t.Fatalf("columnDropColRe captures = %v, want the digit-named column", m)
+	}
+	if m := columnRenameRe.FindStringSubmatch(sqlText); len(m) != 4 || m[2] != "raw_payload_sha256" || m[3] != "raw_payload_hash" {
+		t.Fatalf("columnRenameRe captures = %v, want [.. raw_payload_sha256 raw_payload_hash]", m)
+	}
+
+	chain := columnSetFromChain(t)
+	replayCols := chain["chat_connector_inboxes"]
+	if !replayCols["forwarded_at"] || !replayCols["raw_payload_sha256"] {
+		t.Fatalf("chain table chat_connector_inboxes must carry both replay columns, got %v", replayCols)
 	}
 }

@@ -69,6 +69,9 @@ func TestInboxAccept(t *testing.T) {
 	if quarantined.RawPayloadStore != "local" || quarantined.RawPayloadObjectID != "obj-evt-2" {
 		t.Errorf("raw ref = %q/%q, want local/obj-evt-2", quarantined.RawPayloadStore, quarantined.RawPayloadObjectID)
 	}
+	if quarantined.RawPayloadSHA256 != "deadbeef" {
+		t.Errorf("raw sha = %q, want deadbeef (row-side integrity anchor)", quarantined.RawPayloadSHA256)
+	}
 
 	stored, err = store.Accept(context.Background(), messageEvent("evt-1"))
 	if err != nil {
@@ -243,6 +246,134 @@ func TestInboxDismissProbeError(t *testing.T) {
 	}
 	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", 12345); err == nil {
 		t.Fatal("dismiss probe: expected query error")
+	}
+}
+
+func TestInboxCommittedByID(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if _, err := store.Accept(context.Background(), messageEvent("c1")); err != nil {
+		t.Fatalf("accept committed: %v", err)
+	}
+	if _, err := store.Accept(context.Background(), unknownEvent("q1")); err != nil {
+		t.Fatalf("accept quarantined: %v", err)
+	}
+	committed := inboxByKey(t, store, messageEvent("c1").IdempotencyKey)
+	quarantined := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
+
+	row, err := store.CommittedByID(context.Background(), "tenant-1", "workspace-1", committed.ID)
+	if err != nil {
+		t.Fatalf("committed by id: %v", err)
+	}
+	if row.Status != InboxStatusCommitted || row.ForwardedAt != nil {
+		t.Errorf("row = %s forwarded=%v, want committed and unsettled", row.Status, row.ForwardedAt)
+	}
+	if _, err := store.CommittedByID(context.Background(), "tenant-1", "workspace-1", quarantined.ID); !errors.Is(err, ErrInboxNotCommitted) {
+		t.Fatalf("quarantined by id = %v, want ErrInboxNotCommitted", err)
+	}
+	// the scope filter is part of the statement: another scope's row reads as
+	// missing, and so does an unknown id
+	if _, err := store.CommittedByID(context.Background(), "tenant-2", "workspace-1", committed.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("cross-scope by id = %v, want record not found", err)
+	}
+	if _, err := store.CommittedByID(context.Background(), "tenant-1", "workspace-1", 12345); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("unknown id = %v, want record not found", err)
+	}
+}
+
+func TestInboxListUnforwarded(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	for _, eventID := range []string{"c1", "c2", "c3"} {
+		if _, err := store.Accept(context.Background(), messageEvent(eventID)); err != nil {
+			t.Fatalf("accept %s: %v", eventID, err)
+		}
+	}
+	if _, err := store.Accept(context.Background(), unknownEvent("q1")); err != nil {
+		t.Fatalf("accept quarantined: %v", err)
+	}
+	otherTenant := messageEvent("other")
+	otherTenant.TenantID = "tenant-2"
+	if _, err := store.Accept(context.Background(), otherTenant); err != nil {
+		t.Fatalf("accept other tenant: %v", err)
+	}
+	// settling one committed row takes it out of the lane; the quarantined row
+	// was never in it
+	if err := store.MarkForwardedByKey(context.Background(), "tenant-1", "workspace-1",
+		messageEvent("c2").IdempotencyKey, time.Now()); err != nil {
+		t.Fatalf("mark forwarded: %v", err)
+	}
+
+	rows, err := store.ListUnforwarded(context.Background(), "tenant-1", "workspace-1", 0)
+	if err != nil {
+		t.Fatalf("list unforwarded: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("list unforwarded = %d rows, want 2", len(rows))
+	}
+	if rows[0].ID >= rows[1].ID {
+		t.Errorf("rows not in oldest-first order: %d, %d", rows[0].ID, rows[1].ID)
+	}
+	for _, row := range rows {
+		if row.EventID == "c2" || row.EventID == "q1" || row.TenantID != "tenant-1" {
+			t.Errorf("unexpected lane row %s %s %s", row.EventID, row.Status, row.TenantID)
+		}
+	}
+
+	limited, err := store.ListUnforwarded(context.Background(), "tenant-1", "workspace-1", 1)
+	if err != nil {
+		t.Fatalf("list unforwarded limited: %v", err)
+	}
+	if len(limited) != 1 || limited[0].EventID != "c1" {
+		t.Errorf("limited lane = %+v, want the oldest row c1", limited)
+	}
+	foreign, err := store.ListUnforwarded(context.Background(), "tenant-9", "workspace-9", 0)
+	if err != nil {
+		t.Fatalf("list unforwarded cross-scope: %v", err)
+	}
+	if len(foreign) != 0 {
+		t.Errorf("cross-scope lane = %d rows, want 0", len(foreign))
+	}
+}
+
+func TestInboxListUnforwardedQueryError(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_unforwarded_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	if _, err := store.ListUnforwarded(context.Background(), "tenant-1", "workspace-1", 10); err == nil {
+		t.Error("list unforwarded: expected query error")
+	}
+}
+
+func TestInboxMarkForwardedByKey(t *testing.T) {
+	store := NewInboxStore(newChannelTestDB(t))
+	if _, err := store.Accept(context.Background(), messageEvent("c1")); err != nil {
+		t.Fatalf("accept committed: %v", err)
+	}
+	key := messageEvent("c1").IdempotencyKey
+	// a foreign scope's key is a silent no-op: the row stays unsettled
+	if err := store.MarkForwardedByKey(context.Background(), "tenant-2", "workspace-1", key, time.Now()); err != nil {
+		t.Fatalf("mark cross-scope: %v", err)
+	}
+	if row := inboxByKey(t, store, key); row.ForwardedAt != nil {
+		t.Fatalf("cross-scope mark must not stamp the row, forwarded_at = %v", row.ForwardedAt)
+	}
+
+	stamp := time.Now().UTC()
+	if err := store.MarkForwardedByKey(context.Background(), "tenant-1", "workspace-1", key, stamp); err != nil {
+		t.Fatalf("mark forwarded: %v", err)
+	}
+	row := inboxByKey(t, store, key)
+	if row.ForwardedAt == nil || row.ForwardedAt.Before(stamp) {
+		t.Fatalf("forwarded_at = %v, want stamp at or after %v", row.ForwardedAt, stamp)
+	}
+
+	if err := store.db.Callback().Update().Before("gorm:update").Register("inbox_mark_error",
+		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	if err := store.MarkForwardedByKey(context.Background(), "tenant-1", "workspace-1", key, time.Now()); err == nil {
+		t.Error("mark forwarded: expected update error")
 	}
 }
 
