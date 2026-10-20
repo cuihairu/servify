@@ -468,3 +468,29 @@ func TestNewRunnerPinsContractBudget(t *testing.T) {
 		t.Error("runner must ship a sleep and a clock")
 	}
 }
+
+// StatusKind is shared vocabulary: every adapter classifies through this one
+// table, so the table itself is pinned here (per-package attribution — the
+// memex/telegram client tests exercise it through their own HTTP faces, but
+// this is where the statements live).
+func TestStatusKindCoversContractTable(t *testing.T) {
+	cases := []struct {
+		status int
+		want   ErrorKind
+	}{
+		{http.StatusUnauthorized, ErrAuth},
+		{http.StatusForbidden, ErrPermission},
+		{http.StatusTooManyRequests, ErrRateLimited},
+		{http.StatusNotFound, ErrPermanent},
+		{http.StatusInternalServerError, ErrTransient},
+		{http.StatusBadGateway, ErrTransient},
+		{http.StatusBadRequest, ErrInvalid},
+		{http.StatusTeapot, ErrInvalid},
+		{0, ErrInvalid},
+	}
+	for _, tc := range cases {
+		if got := StatusKind(tc.status); got != tc.want {
+			t.Errorf("StatusKind(%d) = %s, want %s", tc.status, got, tc.want)
+		}
+	}
+}
