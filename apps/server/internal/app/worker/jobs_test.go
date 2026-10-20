@@ -16,6 +16,7 @@ import (
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 )
 
@@ -130,6 +131,10 @@ func (f *fakeRuntimeWorkerDependencies) AutomationTimersForWorker() automationap
 }
 
 func (f *fakeRuntimeWorkerDependencies) ChatConnectorsForWorker() *chatconnector.Supervisor {
+	return nil
+}
+
+func (f *fakeRuntimeWorkerDependencies) ChatPayloadStoreForWorker() *channel.LocalPayloadStore {
 	return nil
 }
 

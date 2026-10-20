@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -28,6 +29,7 @@ import (
 	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
+	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/eventbus"
 
@@ -843,7 +845,9 @@ func TestRevokedTokenCleanupWorkerStopDuringJitter(t *testing.T) {
 // RegisterDefaultWorkers：全部依赖非 nil + 审计/令牌吊销清理开启
 // ---------------------------------------------------------------------------
 
-type fullRuntimeWorkerDeps struct{}
+type fullRuntimeWorkerDeps struct {
+	payloadStore *channel.LocalPayloadStore
+}
 
 func (fullRuntimeWorkerDeps) StatisticsServiceForWorker() *analyticsdelivery.DailyStatsRunner {
 	return analyticsdelivery.NewDailyStatsRunner(analyticsapp.NewService(analyticsinfra.NewGormRepository(nil)), nil)
@@ -881,6 +885,10 @@ func (fullRuntimeWorkerDeps) ChatConnectorsForWorker() *chatconnector.Supervisor
 	return chatconnector.NewSupervisor(nil, nil, nil)
 }
 
+func (d fullRuntimeWorkerDeps) ChatPayloadStoreForWorker() *channel.LocalPayloadStore {
+	return d.payloadStore
+}
+
 func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 	app, err := bootstrap.BuildApp(config.GetDefaultConfig())
 	if err != nil {
@@ -892,7 +900,11 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 
 	db := openSQLiteMemDB(t)
 
-	RegisterDefaultWorkers(app, cfg, db, fullRuntimeWorkerDeps{})
+	payloadStore, err := channel.NewLocalPayloadStore(t.TempDir(), bytes.Repeat([]byte{7}, 32), 0)
+	if err != nil {
+		t.Fatalf("new payload store: %v", err)
+	}
+	RegisterDefaultWorkers(app, cfg, db, fullRuntimeWorkerDeps{payloadStore: payloadStore})
 
 	want := map[string]bool{
 		"statistics-daily-stats":  true,
@@ -904,6 +916,7 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 		"survey-email-send":       true,
 		"automation-timer":        true,
 		"chat-connector-poll":     true,
+		"chat-payload-retention":  true,
 		"audit-retention-cleanup": true,
 		"revoked-token-cleanup":   true,
 	}
@@ -931,4 +944,86 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 
 func (s *stubRoutingRuntime) ListRoutingAssignments(ctx context.Context, sessionID string, limit int) ([]routingapplication.RoutingAssignmentDTO, error) {
 	return nil, nil
+}
+
+// ---------------------------------------------------------------------------
+// ChatPayloadRetentionWorker
+// ---------------------------------------------------------------------------
+
+type stubChatPayloadPurger struct {
+	calls   atomic.Int64
+	removed int
+	err     error
+}
+
+func (s *stubChatPayloadPurger) Purge(ctx context.Context, now time.Time) (int, error) {
+	s.calls.Add(1)
+	return s.removed, s.err
+}
+
+func TestChatPayloadRetentionWorkerConstructorDefaults(t *testing.T) {
+	w := NewChatPayloadRetentionWorker(&stubChatPayloadPurger{}, 0, nil).(*ChatPayloadRetentionWorker)
+	if w.interval != 6*time.Hour {
+		t.Fatalf("default interval = %v, want 6h", w.interval)
+	}
+	if w.logger == nil {
+		t.Fatal("nil logger must fall back to standard logger")
+	}
+	if w.Name() != "chat-payload-retention" {
+		t.Fatalf("Name() = %q", w.Name())
+	}
+}
+
+func TestChatPayloadRetentionWorkerNilStoreAndDoubleStart(t *testing.T) {
+	w := NewChatPayloadRetentionWorker(nil, time.Minute, nil)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() with nil store = %v", err)
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() before start = %v", err)
+	}
+
+	purger := &stubChatPayloadPurger{}
+	w2 := NewChatPayloadRetentionWorker(purger, 15*time.Millisecond, discardLogger())
+	if err := w2.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	if err := w2.Start(); err != nil {
+		t.Fatalf("second Start() must be a no-op, got %v", err)
+	}
+	waitAtLeast(t, 2*time.Second, func() bool { return purger.calls.Load() >= 1 }, "worker never ran")
+	if err := w2.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+}
+
+func TestChatPayloadRetentionWorkerRemovesAndSurvivesErrors(t *testing.T) {
+	// removals hit the debug log branch; errors must not kill the loop
+	purger := &stubChatPayloadPurger{removed: 2}
+	w := NewChatPayloadRetentionWorker(purger, 15*time.Millisecond, discardLogger())
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	waitAtLeast(t, 2*time.Second, func() bool { return purger.calls.Load() >= 1 }, "worker never ran")
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+
+	failing := &stubChatPayloadPurger{err: errors.New("sweep failed")}
+	w2 := NewChatPayloadRetentionWorker(failing, 15*time.Millisecond, discardLogger())
+	if err := w2.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	waitAtLeast(t, 2*time.Second, func() bool { return failing.calls.Load() >= 2 }, "loop must re-run after a purge error")
+	if err := w2.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+}
+
+func TestChatPayloadRetentionWorkerStopContextError(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	w := &ChatPayloadRetentionWorker{cancel: cancel, done: make(chan struct{})}
+	if err := w.Stop(preCancelledCtx()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Stop() with cancelled ctx = %v, want context.Canceled", err)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
@@ -29,6 +30,46 @@ const (
 	platformMemex    = "memex"
 	platformTelegram = "telegram"
 )
+
+// The raw-payload retention knobs (contract: encrypted on local storage, 30
+// days maximum, payload bytes out of routine DB backups — hence a filesystem
+// store, not a table). The key is 64 hex chars (AES-256); an unset key keeps
+// retention off, an invalid key disables it loudly. The directory mirrors the
+// upload storage convention of a relative default path.
+const (
+	payloadKeyEnv     = "SERVIFY_CHAT_PAYLOAD_KEY"
+	payloadDirEnv     = "SERVIFY_CHAT_PAYLOAD_DIR"
+	defaultPayloadDir = "./chat-payloads"
+)
+
+// chatPayloadStoreFromEnv builds the retention store from the environment.
+// getenv is a seam so tests can drive every branch; a nil logger just skips
+// the warning (assembly tests construct runtimes without loggers).
+func chatPayloadStoreFromEnv(getenv func(string) string, logger *logrus.Logger) *channel.LocalPayloadStore {
+	keyHex := strings.TrimSpace(getenv(payloadKeyEnv))
+	if keyHex == "" {
+		return nil
+	}
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		if logger != nil {
+			logger.Warnf("chat payload retention disabled: %s is not valid hex: %v", payloadKeyEnv, err)
+		}
+		return nil
+	}
+	dir := strings.TrimSpace(getenv(payloadDirEnv))
+	if dir == "" {
+		dir = defaultPayloadDir
+	}
+	store, err := channel.NewLocalPayloadStore(dir, key, 0)
+	if err != nil {
+		if logger != nil {
+			logger.Warnf("chat payload retention disabled: %v", err)
+		}
+		return nil
+	}
+	return store
+}
 
 // chatConversationIngestor is the minimal conversation-module write face the
 // chat connector bridge needs (satisfied by *conversationapp.Service).
@@ -132,7 +173,9 @@ func (b *chatConversationBridge) logIngestFailure(err error, ev channel.Connecto
 // The row's platform selects the adapter (Phase 2 Memex, Phase 3 Telegram);
 // the row's Enabled flag is the only gate (fail closed — no config switch);
 // a row whose token env var is unset fails only its own attachment, and the
-// runner's long poll budget comes from the row.
+// runner's long poll budget comes from the row. The raw-payload retention
+// store comes from the environment and attaches to every adapter (nil keeps
+// retention off for the whole channel).
 func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Service) {
 	if rt == nil || rt.DB == nil {
 		return
@@ -141,6 +184,8 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 	caps := channel.NewCapabilityStore(rt.DB)
 	inbox := channel.NewInboxStore(rt.DB)
 	cursors := channel.NewCursorStore(rt.DB)
+	payloads := chatPayloadStoreFromEnv(os.Getenv, rt.Logger)
+	rt.chatPayloads = payloads
 	bridge := &chatConversationBridge{ingestor: conversationService, logger: rt.Logger}
 	rt.chatConnectors = chatconnector.NewSupervisor(installations,
 		func(ctx context.Context, inst channel.ChatConnectorInstallation) (chatconnector.Runner, error) {
@@ -172,7 +217,7 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 						WorkspaceID:    inst.WorkspaceID,
 						InstallationID: inst.InstallationID,
 						Conversation:   conv,
-					}).WithObserver(bridge)
+					}).WithObserver(bridge).WithPayloadStore(payloads)
 			case platformMemex:
 				poller = memex.NewConnector(
 					memex.NewClient(inst.UpdatesEndpoint, token, hc),
@@ -182,7 +227,7 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 						WorkspaceID:    inst.WorkspaceID,
 						InstallationID: inst.InstallationID,
 						Conversation:   conv,
-					}).WithObserver(bridge)
+					}).WithObserver(bridge).WithPayloadStore(payloads)
 			default:
 				return nil, fmt.Errorf("chat connector %s: platform %q has no adapter",
 					inst.InstallationID, inst.Platform)

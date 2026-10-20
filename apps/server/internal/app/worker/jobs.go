@@ -23,6 +23,7 @@ import (
 	"servify/apps/server/internal/observability/async"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	auditplatform "servify/apps/server/internal/platform/audit"
+	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/usersecurity"
 
@@ -66,6 +67,7 @@ type RuntimeWorkerDependencies interface {
 	SurveysForWorker() satisfapp.SurveyEmailProcessor
 	AutomationTimersForWorker() automationapp.TimerProcessor
 	ChatConnectorsForWorker() *chatconnector.Supervisor
+	ChatPayloadStoreForWorker() *channel.LocalPayloadStore
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -90,6 +92,12 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 	// memex 轮询循环（启动时按启用行装配，关停时统一取消）。
 	if supervisor := deps.ChatConnectorsForWorker(); supervisor != nil {
 		app.RegisterWorker(&chatConnectorWorker{supervisor: supervisor})
+	}
+
+	// 聊天原始报文留存（契约 30 天上限）：环境给了 SERVIFY_CHAT_PAYLOAD_KEY
+	// 才有 store；nil 保持留存关闭、worker 不注册。
+	if payloads := deps.ChatPayloadStoreForWorker(); payloads != nil {
+		app.RegisterWorker(NewChatPayloadRetentionWorker(payloads, 6*time.Hour, app.Logger))
 	}
 
 	if scanner := deps.QualityScanForWorker(); scanner != nil {

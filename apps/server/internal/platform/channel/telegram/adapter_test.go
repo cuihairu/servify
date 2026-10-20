@@ -2,9 +2,14 @@ package telegram
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -736,5 +741,185 @@ func TestConnectorPollOnceObserverErrorAbortsBeforeCursorSave(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].Status != channel.InboxStatusCommitted {
 		t.Errorf("inbox rows = %+v, want the committed row kept", rows)
+	}
+}
+
+func newTestPayloadStore(t *testing.T) (*channel.LocalPayloadStore, string) {
+	t.Helper()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	root := t.TempDir()
+	store, err := channel.NewLocalPayloadStore(root, key, 0)
+	if err != nil {
+		t.Fatalf("new payload store: %v", err)
+	}
+	return store, root
+}
+
+func TestConnectorPollOnceRetainsRawPayloadOnRows(t *testing.T) {
+	inbox, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	store, _ := newTestPayloadStore(t)
+
+	rawMessage := `{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},"from":{"id":9001},"text":"hello retention","date":1697000000}}`
+	rawQuarantine := `{"update_id":42}`
+	fake := &botAPI{t: t, onPoll: func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[` + rawMessage + `,` + rawQuarantine + `]}`))
+	}}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	conn := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig()).
+		WithPayloadStore(store)
+	n, err := conn.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err != nil || n != 2 {
+		t.Fatalf("poll once = %d (%v), want 2 nil", n, err)
+	}
+	if cur := storedCursor(t, cursors); cur != "43" {
+		t.Errorf("cursor = %q, want 43 (retention must not stall the frontier)", cur)
+	}
+
+	// the committed row points at the exact bytes the platform sent
+	var row channel.ChatConnectorInbox
+	if err := db.Where("tenant_id = ? AND message_platform_id = ?", "tenant-1", "7").
+		Take(&row).Error; err != nil {
+		t.Fatalf("committed row: %v", err)
+	}
+	if row.RawPayloadStore != channel.LocalPayloadStoreName || len(row.RawPayloadObjectID) != 32 {
+		t.Errorf("row ref = %s/%q, want local-encrypted/32-hex", row.RawPayloadStore, row.RawPayloadObjectID)
+	}
+	sum := sha256.Sum256([]byte(rawMessage))
+	ref := channel.RawPayloadRef{Store: row.RawPayloadStore, ObjectID: row.RawPayloadObjectID,
+		SHA256: hex.EncodeToString(sum[:])}
+	got, err := store.Open(context.Background(), ref)
+	if err != nil || string(got) != rawMessage {
+		t.Errorf("open retained = %q (%v), want the exact platform bytes", got, err)
+	}
+	meta, err := store.Meta(context.Background(), channel.RawPayloadRef{Store: row.RawPayloadStore, ObjectID: row.RawPayloadObjectID})
+	if err != nil || meta.TenantID != "tenant-1" || meta.Platform != "telegram" ||
+		meta.InstallationID != "inst-1" || meta.EventID != "7" || meta.ContentType != channel.RawPayloadContentType {
+		t.Errorf("retained meta = %+v (%v), want the row scope", meta, err)
+	}
+
+	// the quarantined shape keeps its bytes too: that lane is what triage reads
+	var qrow channel.ChatConnectorInbox
+	if err := db.Where("event_id = ?", "update-42").Take(&qrow).Error; err != nil {
+		t.Fatalf("quarantine row: %v", err)
+	}
+	if qrow.RawPayloadStore != channel.LocalPayloadStoreName || qrow.RawPayloadObjectID == "" {
+		t.Errorf("quarantine ref = %s/%q, want retained", qrow.RawPayloadStore, qrow.RawPayloadObjectID)
+	}
+	if qrow.RawPayloadObjectID == row.RawPayloadObjectID {
+		t.Error("distinct updates must not share one object")
+	}
+}
+
+func TestConnectorPollOnceDuplicateRedeliveryDropsOrphan(t *testing.T) {
+	inbox, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	store, root := newTestPayloadStore(t)
+
+	rawUpdate := `{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},"text":"again","date":1697000000}}`
+	polls := 0
+	fake := &botAPI{t: t, onPoll: func(w http.ResponseWriter, r *http.Request) {
+		polls++
+		_, _ = w.Write([]byte(`{"ok":true,"result":[` + rawUpdate + `]}`))
+	}}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	conn := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig()).
+		WithPayloadStore(store)
+	for i := 0; i < 2; i++ {
+		if n, err := conn.PollOnce(context.Background(), 1500*time.Millisecond); err != nil || n != 1 {
+			t.Fatalf("poll %d = %d (%v), want 1 nil", i+1, n, err)
+		}
+	}
+	var row channel.ChatConnectorInbox
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if len(row.RawPayloadObjectID) != 32 {
+		t.Fatalf("row ref object = %q, want retained", row.RawPayloadObjectID)
+	}
+	// only the first delivery's pair survives: the redelivery wrote a second
+	// object, saw the duplicate verdict and removed its own copy
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read root: %v", err)
+	}
+	if len(entries) != 2 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("retained files = %v, want exactly the surviving object+meta pair", names)
+	}
+	for _, e := range entries {
+		if strings.TrimSuffix(e.Name(), ".meta.json") != row.RawPayloadObjectID {
+			t.Errorf("stray file %q: the row must point at the only retained object", e.Name())
+		}
+	}
+}
+
+func TestConnectorPollOncePayloadSaveFailureAborts(t *testing.T) {
+	inbox, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	// a root under an existing file cannot be created: every save fails
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	badStore, err := channel.NewLocalPayloadStore(filepath.Join(blocked, "payloads"), key, 0)
+	if err != nil {
+		t.Fatalf("new payload store: %v", err)
+	}
+
+	fake := &botAPI{t: t, onPoll: func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},"text":"hi","date":1697000000}}]}`))
+	}}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	conn := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig()).
+		WithPayloadStore(badStore)
+	n, err := conn.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err == nil || n != 0 {
+		t.Fatalf("poll = %d (%v), want 0 with a retention error", n, err)
+	}
+	if cur := storedCursor(t, cursors); cur != "" {
+		t.Errorf("cursor = %q, want empty (the update stays for redelivery)", cur)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil || len(rows) != 0 {
+		t.Errorf("inbox rows = %d (%v), want none", len(rows), err)
+	}
+}
+
+func TestConnectorWithoutPayloadStoreKeepsNoRef(t *testing.T) {
+	inbox, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &botAPI{t: t, onPoll: func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},"text":"hi","date":1697000000}}]}`))
+	}}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	conn := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig())
+	if _, err := conn.PollOnce(context.Background(), 1500*time.Millisecond); err != nil {
+		t.Fatalf("poll once: %v", err)
+	}
+	var row channel.ChatConnectorInbox
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if row.RawPayloadStore != "" || row.RawPayloadObjectID != "" {
+		t.Errorf("ref = %s/%q, want empty (retention off is observable)", row.RawPayloadStore, row.RawPayloadObjectID)
 	}
 }

@@ -331,3 +331,42 @@ func TestClientRetryAfterHeaderVariants(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateKeepsRawBytesAndSurfacesDecodeErrors(t *testing.T) {
+	body := `{"ok":true,"result":[` +
+		`{"update_id":7,"message":{"message_id":11,"chat":{"id":-100123,"type":"supergroup"},"from":{"id":9},"text":"hi","date":1697000000}},` +
+		`{"update_id":8}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	updates, err := NewClient(srv.URL, "tok", srv.Client()).GetUpdates(context.Background(), 0, 0)
+	if err != nil {
+		t.Fatalf("get updates: %v", err)
+	}
+	if len(updates) != 2 {
+		t.Fatalf("updates = %d, want 2", len(updates))
+	}
+	// the retention copy is the payload bytes themselves, not a re-marshal
+	wantMsg := `{"update_id":7,"message":{"message_id":11,"chat":{"id":-100123,"type":"supergroup"},"from":{"id":9},"text":"hi","date":1697000000}}`
+	if got := string(updates[0].Raw()); got != wantMsg {
+		t.Errorf("raw = %q, want the exact payload bytes %q", got, wantMsg)
+	}
+	// non-message shapes carry their bytes too: the quarantine lane is the
+	// one that most needs the raw payload for triage
+	if got := string(updates[1].Raw()); got != `{"update_id":8}` {
+		t.Errorf("unknown-shape raw = %q, want %q", got, `{"update_id":8}`)
+	}
+
+	// an element that is not an update shape fails the decode
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[7]}`))
+	}))
+	defer badSrv.Close()
+	_, err = NewClient(badSrv.URL, "tok", badSrv.Client()).GetUpdates(context.Background(), 0, 0)
+	var ae *AdapterError
+	if err == nil || !errors.As(err, &ae) || ae.Kind != ErrInvalid {
+		t.Errorf("element decode error: err = %v, want an ErrInvalid adapter error", err)
+	}
+}

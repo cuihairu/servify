@@ -49,7 +49,28 @@ type Update struct {
 	To    string `json:"to"`
 	Text  string `json:"text"`
 	TsMS  int64  `json:"ts_ms"`
+
+	// raw is the exact bytes this update was decoded from — the retention copy
+	// the contract requires encrypted-at-rest, saved by the connector before
+	// the update is normalized.
+	raw []byte
 }
+
+// UnmarshalJSON decodes the update and keeps the exact bytes it came from; the
+// alias type avoids the method re-entering itself.
+func (u *Update) UnmarshalJSON(data []byte) error {
+	type updateAlias Update
+	var alias updateAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	*u = Update(alias)
+	u.raw = append(u.raw, data...) // copy: data aliases a scratch buffer
+	return nil
+}
+
+// Raw returns the exact payload bytes this update was decoded from.
+func (u Update) Raw() []byte { return u.raw }
 
 // Client is the Memex bot HTTP face (GET /bot/updates, POST /bot/ack,
 // POST /bot/send, Bearer token auth).

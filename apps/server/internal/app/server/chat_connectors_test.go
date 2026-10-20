@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -371,6 +374,8 @@ func TestChatConnectorEndToEndLoop(t *testing.T) {
 		t.Fatalf("record capabilities: %v", err)
 	}
 	t.Setenv("SERVIFY_TEST_CHAT_E2E_TOKEN", "tok")
+	t.Setenv(payloadKeyEnv, hex.EncodeToString(bytes.Repeat([]byte{3}, 32)))
+	t.Setenv(payloadDirEnv, t.TempDir())
 
 	rt := &Runtime{Config: config.GetDefaultConfig(), DB: db}
 	wireChatConnectors(rt, conversationapp.NewService(conversationinfra.NewGormRepository(db), nil))
@@ -422,6 +427,9 @@ func TestChatConnectorEndToEndLoop(t *testing.T) {
 	if len(inboxRows) != 1 || inboxRows[0].Status != channel.InboxStatusCommitted {
 		t.Fatalf("inbox rows drifted: %+v", inboxRows)
 	}
+	if inboxRows[0].RawPayloadStore != channel.LocalPayloadStoreName || inboxRows[0].RawPayloadObjectID == "" {
+		t.Fatalf("retained ref drifted: %+v", inboxRows)
+	}
 	if !pulled.Load() {
 		t.Fatal("platform was never pulled")
 	}
@@ -444,13 +452,13 @@ func TestChatConnectorTelegramEndToEndLoop(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 
+	// the update bytes exactly as the Bot API sends them — the retention copy
+	rawUpdate := `{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup","title":"ops"},"from":{"id":9001,"username":"alice"},"text":"hello tg","date":1697000000}}`
 	var pulled atomic.Bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bottok/getUpdates", func(w http.ResponseWriter, r *http.Request) {
 		if pulled.CompareAndSwap(false, true) {
-			_, _ = io.WriteString(w, `{"ok":true,"result":[
-				{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup","title":"ops"},
-					"from":{"id":9001,"username":"alice"},"text":"hello tg","date":1697000000}}]}`)
+			_, _ = io.WriteString(w, `{"ok":true,"result":[`+rawUpdate+`]}`)
 			return
 		}
 		_, _ = io.WriteString(w, `{"ok":true,"result":null}`)
@@ -474,6 +482,9 @@ func TestChatConnectorTelegramEndToEndLoop(t *testing.T) {
 		t.Fatalf("record capabilities: %v", err)
 	}
 	t.Setenv("SERVIFY_TEST_CHAT_TG_TOKEN", "tok")
+	// retention on for this loop: the env-built store reaches the adapters
+	t.Setenv(payloadKeyEnv, hex.EncodeToString(bytes.Repeat([]byte{4}, 32)))
+	t.Setenv(payloadDirEnv, t.TempDir())
 
 	rt := &Runtime{Config: config.GetDefaultConfig(), DB: db}
 	wireChatConnectors(rt, conversationapp.NewService(conversationinfra.NewGormRepository(db), nil))
@@ -532,8 +543,78 @@ func TestChatConnectorTelegramEndToEndLoop(t *testing.T) {
 		inboxRows[0].Platform != "telegram" || inboxRows[0].ConversationPlatformID != "-100123" {
 		t.Fatalf("inbox rows drifted: %+v", inboxRows)
 	}
+	// the retained copy: row ref + exact platform bytes through the store
+	if rt.ChatPayloadStoreForWorker() == nil {
+		t.Fatal("wireChatConnectors must expose the env-built retention store")
+	}
+	if inboxRows[0].RawPayloadStore != channel.LocalPayloadStoreName || inboxRows[0].RawPayloadObjectID == "" {
+		t.Fatalf("retained ref drifted: %+v", inboxRows)
+	}
+	sum := sha256.Sum256([]byte(rawUpdate))
+	ref := channel.RawPayloadRef{Store: inboxRows[0].RawPayloadStore,
+		ObjectID: inboxRows[0].RawPayloadObjectID, SHA256: hex.EncodeToString(sum[:])}
+	got, err := rt.ChatPayloadStoreForWorker().Open(context.Background(), ref)
+	if err != nil || string(got) != rawUpdate {
+		t.Fatalf("open retained = %q (%v), want the exact platform bytes", got, err)
+	}
 	if !pulled.Load() {
 		t.Fatal("platform was never pulled")
+	}
+}
+
+// TestChatPayloadStoreFromEnv pins the retention knobs: an unset key keeps
+// retention off, a valid key builds the store (default or explicit directory),
+// and an invalid key disables retention loudly without panicking.
+func TestChatPayloadStoreFromEnv(t *testing.T) {
+	validKey := hex.EncodeToString(bytes.Repeat([]byte{9}, 32))
+
+	if got := chatPayloadStoreFromEnv(func(string) string { return "" }, nil); got != nil {
+		t.Error("unset key must keep retention off")
+	}
+	if got := chatPayloadStoreFromEnv(func(string) string { return "   " }, nil); got != nil {
+		t.Error("blank key must keep retention off")
+	}
+	if got := chatPayloadStoreFromEnv(func(k string) string {
+		if k == payloadKeyEnv {
+			return validKey
+		}
+		return ""
+	}, nil); got == nil {
+		t.Fatal("valid key must build the store with the default directory")
+	}
+	if got := chatPayloadStoreFromEnv(func(k string) string {
+		switch k {
+		case payloadKeyEnv:
+			return validKey
+		case payloadDirEnv:
+			return t.TempDir()
+		}
+		return ""
+	}, nil); got == nil {
+		t.Fatal("valid key + explicit directory must build the store")
+	}
+
+	logger, hook := test.NewNullLogger()
+	if got := chatPayloadStoreFromEnv(func(string) string { return "zz-not-hex" }, logger); got != nil {
+		t.Error("non-hex key must disable retention")
+	}
+	warned := false
+	for _, e := range hook.AllEntries() {
+		if e.Level == logrus.WarnLevel && strings.Contains(e.Message, payloadKeyEnv) {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Error("invalid key must warn")
+	}
+
+	logger2, hook2 := test.NewNullLogger()
+	shortKey := hex.EncodeToString(bytes.Repeat([]byte{1}, 16)) // AES-256 wants 32 bytes
+	if got := chatPayloadStoreFromEnv(func(string) string { return shortKey }, logger2); got != nil {
+		t.Error("wrong-length key must disable retention")
+	}
+	if len(hook2.AllEntries()) == 0 {
+		t.Error("constructor rejection must warn")
 	}
 }
 

@@ -65,7 +65,28 @@ const getUpdatesLimit = 100
 type Update struct {
 	UpdateID int64        `json:"update_id"`
 	Message  *ChatMessage `json:"message"`
+
+	// raw is the exact bytes this update was decoded from — the retention copy
+	// the contract requires encrypted-at-rest, saved by the connector before
+	// the update is normalized.
+	raw []byte
 }
+
+// UnmarshalJSON decodes the update and keeps the exact bytes it came from; the
+// alias type avoids the method re-entering itself.
+func (u *Update) UnmarshalJSON(data []byte) error {
+	type updateAlias Update
+	var alias updateAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	*u = Update(alias)
+	u.raw = append(u.raw, data...) // copy: data aliases a scratch buffer
+	return nil
+}
+
+// Raw returns the exact payload bytes this update was decoded from.
+func (u Update) Raw() []byte { return u.raw }
 
 // ChatMessage is a message payload. Telegram only promises TEXT via
 // message.text here; attachments stay server-side in the raw payload.

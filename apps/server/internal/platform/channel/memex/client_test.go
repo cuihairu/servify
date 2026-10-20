@@ -226,3 +226,38 @@ func TestClientRetryAfterHeader(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateKeepsRawBytesAndSurfacesDecodeErrors(t *testing.T) {
+	body := `{"ok":true,"updates":[{"msg_id":"m-9","from":"alice","to":"ops","text":"hi","ts_ms":1697000000123},{"msg_id":"m-10"}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	updates, err := NewClient(srv.URL, "tok", srv.Client()).Updates(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("updates: %v", err)
+	}
+	if len(updates) != 2 {
+		t.Fatalf("updates = %d, want 2", len(updates))
+	}
+	// the retention copy is the payload bytes themselves, not a re-marshal
+	want := `{"msg_id":"m-9","from":"alice","to":"ops","text":"hi","ts_ms":1697000000123}`
+	if got := string(updates[0].Raw()); got != want {
+		t.Errorf("raw = %q, want the exact payload bytes %q", got, want)
+	}
+	if got := string(updates[1].Raw()); got != `{"msg_id":"m-10"}` {
+		t.Errorf("sparse raw = %q, want %q", got, `{"msg_id":"m-10"}`)
+	}
+
+	// an element that is not an update shape fails the decode
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[7]}`))
+	}))
+	defer badSrv.Close()
+	_, err = NewClient(badSrv.URL, "tok", badSrv.Client()).Updates(context.Background(), 0)
+	var ae *AdapterError
+	if err == nil || !errors.As(err, &ae) || ae.Kind != ErrInvalid {
+		t.Errorf("element decode error: err = %v, want an ErrInvalid adapter error", err)
+	}
+}

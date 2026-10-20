@@ -40,6 +40,7 @@ import (
 	workspacedelivery "servify/apps/server/internal/modules/workspace/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	oidcplatform "servify/apps/server/internal/platform/auth/oidc"
+	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/eventbus"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -135,6 +136,7 @@ type Runtime struct {
 	transferHandler  *routingdelivery.HandlerServiceAdapter
 	automationModule *automationapp.Service
 	chatConnectors   *chatconnector.Supervisor
+	chatPayloads     *channel.LocalPayloadStore
 }
 
 type websocketRunner interface {
@@ -280,6 +282,13 @@ func (rt *Runtime) AutomationTimersForWorker() automationapp.TimerProcessor {
 // channel wiring builds it; nil keeps the chat poll worker unregistered.
 func (rt *Runtime) ChatConnectorsForWorker() *chatconnector.Supervisor {
 	return rt.chatConnectors
+}
+
+// ChatPayloadStoreForWorker returns the raw-payload retention store once the
+// chat channel wiring builds it; nil keeps the retention worker unregistered
+// (retention off is an observable configuration, not a failure).
+func (rt *Runtime) ChatPayloadStoreForWorker() *channel.LocalPayloadStore {
+	return rt.chatPayloads
 }
 
 func (rt *Runtime) RouterDependencies() Dependencies {

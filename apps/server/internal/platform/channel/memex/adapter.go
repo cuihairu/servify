@@ -94,6 +94,7 @@ type Connector struct {
 	translator Translator
 	scope      channel.CapabilityScope
 	observer   InboundObserver
+	payloads   *channel.LocalPayloadStore
 }
 
 // NewConnector wires the pull/ACK client to the contract stores. Both stores
@@ -122,11 +123,55 @@ func (c *Connector) WithObserver(o InboundObserver) *Connector {
 	return c
 }
 
-// PollOnce drains one batch of the bot inbox. Every update is translated and
-// durably accepted by the inbox (commit/quarantine/duplicate) before its
-// platform ACK clears it, so a crash between accept and ACK yields redelivery
-// that the inbox idempotency key absorbs (at-least-once). The first failure
-// aborts without ACKing, leaving unacknowledged messages for redelivery.
+// WithPayloadStore attaches the raw-payload retention store (contract:
+// encrypted on local storage, 30 days maximum). Without one the connector
+// ingests normally and keeps no payload bytes — retention off is a valid,
+// observable configuration, not a failure.
+func (c *Connector) WithPayloadStore(s *channel.LocalPayloadStore) *Connector {
+	c.payloads = s
+	return c
+}
+
+// attachRawPayload stores the exact update bytes before the inbox verdict, so
+// a row never references an object that was not written. A save failure aborts
+// the batch: the acceptance would be missing its retention copy, and
+// redelivery (no ACK sent) is the recovery path.
+func (c *Connector) attachRawPayload(ctx context.Context, u Update, ev channel.ConnectorEvent) (channel.ConnectorEvent, error) {
+	if c.payloads == nil || len(u.Raw()) == 0 {
+		return ev, nil
+	}
+	ref, err := c.payloads.Save(ctx, channel.PayloadMeta{
+		TenantID:       ev.TenantID,
+		WorkspaceID:    ev.WorkspaceID,
+		Platform:       ev.Platform,
+		InstallationID: ev.InstallationID,
+		EventID:        ev.EventID,
+		ContentType:    channel.RawPayloadContentType,
+	}, u.Raw())
+	if err != nil {
+		return ev, fmt.Errorf("retain raw payload for %s: %w", ev.EventID, err)
+	}
+	ev.RawPayloadRef = &ref
+	return ev, nil
+}
+
+// dropOrphanPayload removes this redelivery's retention copy: a duplicate
+// verdict means the surviving row already points at the copy saved by the
+// first delivery, so the object just written is an orphan. Best effort — a
+// failed delete is swept by retention long before it matters.
+func (c *Connector) dropOrphanPayload(ctx context.Context, ev channel.ConnectorEvent) {
+	if c.payloads == nil || ev.RawPayloadRef == nil {
+		return
+	}
+	_ = c.payloads.Delete(ctx, *ev.RawPayloadRef)
+}
+
+// PollOnce drains one batch of the bot inbox. Every update is translated, its
+// raw payload retained, and the event durably accepted by the inbox
+// (commit/quarantine/duplicate) before the platform ACK clears it, so a crash
+// between accept and ACK yields redelivery that the inbox idempotency key
+// absorbs (at-least-once). The first failure aborts without ACKing, leaving
+// unacknowledged messages for redelivery.
 func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, error) {
 	enabled, err := c.ingestionEnabled(ctx)
 	if err != nil {
@@ -142,9 +187,16 @@ func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, 
 	processed := 0
 	for _, u := range updates {
 		ev := c.translator.Event(time.Now(), u)
+		ev, err := c.attachRawPayload(ctx, u, ev)
+		if err != nil {
+			return processed, err
+		}
 		decision, err := c.sink.Accept(ctx, ev)
 		if err != nil {
 			return processed, err
+		}
+		if decision == channel.AckDuplicate {
+			c.dropOrphanPayload(ctx, ev)
 		}
 		// Forward exactly once per inbox row: only the fresh-commit verdict
 		// fires the observer, so a redelivered copy never double-ingests.

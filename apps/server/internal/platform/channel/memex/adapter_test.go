@@ -2,10 +2,15 @@ package memex
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -524,5 +529,172 @@ func TestConnectorWithoutObserverStillPolls(t *testing.T) {
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
 	if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 0 {
 		t.Fatalf("poll without observer = %d (%v), want 0 nil", n, err)
+	}
+}
+
+func newTestPayloadStore(t *testing.T) (*channel.LocalPayloadStore, string) {
+	t.Helper()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	root := t.TempDir()
+	store, err := channel.NewLocalPayloadStore(root, key, 0)
+	if err != nil {
+		t.Fatalf("new payload store: %v", err)
+	}
+	return store, root
+}
+
+func TestConnectorPollOnceRetainsRawPayloadOnRow(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	store, _ := newTestPayloadStore(t)
+
+	rawUpdate := `{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hello retention","ts_ms":1697000000000}`
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[` + rawUpdate + `]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig()).
+		WithPayloadStore(store)
+	n, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err != nil || n != 1 {
+		t.Fatalf("poll once = %d (%v), want 1 nil", n, err)
+	}
+	if acked := fake.ackedMsgs(); len(acked) != 1 || acked[0] != "m1" {
+		t.Errorf("acked = %v, want [m1] (retention must not stall the ACK)", acked)
+	}
+	var row channel.ChatConnectorInbox
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if row.RawPayloadStore != channel.LocalPayloadStoreName || len(row.RawPayloadObjectID) != 32 {
+		t.Fatalf("row ref = %s/%q, want local-encrypted/32-hex", row.RawPayloadStore, row.RawPayloadObjectID)
+	}
+	// the retained object is the exact bytes the platform sent
+	sum := sha256.Sum256([]byte(rawUpdate))
+	ref := channel.RawPayloadRef{Store: row.RawPayloadStore, ObjectID: row.RawPayloadObjectID,
+		SHA256: hex.EncodeToString(sum[:])}
+	got, err := store.Open(context.Background(), ref)
+	if err != nil || string(got) != rawUpdate {
+		t.Errorf("open retained = %q (%v), want the exact platform bytes", got, err)
+	}
+	meta, err := store.Meta(context.Background(), channel.RawPayloadRef{Store: row.RawPayloadStore, ObjectID: row.RawPayloadObjectID})
+	if err != nil || meta.TenantID != "tenant-1" || meta.Platform != "memex" ||
+		meta.InstallationID != "inst-1" || meta.EventID != "m1" || meta.ContentType != channel.RawPayloadContentType {
+		t.Errorf("retained meta = %+v (%v), want the row scope", meta, err)
+	}
+}
+
+func TestConnectorPollOnceDuplicateRedeliveryDropsOrphan(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	store, root := newTestPayloadStore(t)
+
+	rawUpdate := `{"msg_id":"m1","from":"alice","to":"bot:echo","text":"again","ts_ms":1697000000000}`
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[` + rawUpdate + `]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig()).
+		WithPayloadStore(store)
+	for i := 0; i < 2; i++ {
+		if n, err := connector.PollOnce(context.Background(), 1500*time.Millisecond); err != nil || n != 1 {
+			t.Fatalf("poll %d = %d (%v), want 1 nil", i+1, n, err)
+		}
+	}
+	var row channel.ChatConnectorInbox
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if len(row.RawPayloadObjectID) != 32 {
+		t.Fatalf("row ref object = %q, want retained", row.RawPayloadObjectID)
+	}
+	// only the first delivery's pair survives: the redelivery wrote a second
+	// object, saw the duplicate verdict and removed its own copy
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("read root: %v", err)
+	}
+	if len(entries) != 2 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("retained files = %v, want exactly the surviving object+meta pair", names)
+	}
+	for _, e := range entries {
+		if strings.TrimSuffix(e.Name(), ".meta.json") != row.RawPayloadObjectID {
+			t.Errorf("stray file %q: the row must point at the only retained object", e.Name())
+		}
+	}
+}
+
+func TestConnectorPollOncePayloadSaveFailureAborts(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	// a root under an existing file cannot be created: every save fails
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	badStore, err := channel.NewLocalPayloadStore(filepath.Join(blocked, "payloads"), key, 0)
+	if err != nil {
+		t.Fatalf("new payload store: %v", err)
+	}
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig()).
+		WithPayloadStore(badStore)
+	n, err := connector.PollOnce(context.Background(), 1500*time.Millisecond)
+	if err == nil || n != 0 {
+		t.Fatalf("poll = %d (%v), want 0 with a retention error", n, err)
+	}
+	if acked := fake.ackedMsgs(); len(acked) != 0 {
+		t.Errorf("acked = %v, want none (the message stays for redelivery)", acked)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil || len(rows) != 0 {
+		t.Errorf("inbox rows = %d (%v), want none", len(rows), err)
+	}
+}
+
+func TestConnectorWithoutPayloadStoreKeepsNoRef(t *testing.T) {
+	sink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	if _, err := connector.PollOnce(context.Background(), 1500*time.Millisecond); err != nil {
+		t.Fatalf("poll once: %v", err)
+	}
+	var row channel.ChatConnectorInbox
+	if err := db.Take(&row).Error; err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	if row.RawPayloadStore != "" || row.RawPayloadObjectID != "" {
+		t.Errorf("ref = %s/%q, want empty (retention off is observable)", row.RawPayloadStore, row.RawPayloadObjectID)
 	}
 }
