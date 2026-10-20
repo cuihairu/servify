@@ -2,20 +2,19 @@ package memex
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"servify/apps/server/internal/platform/channel"
 )
 
-// ErrIngestionDisabled reports a missing or not-yet-enabled grant snapshot: the
-// connector refuses to pull until an operator records an observed grant for the
-// installation (contract fail-closed default).
-var ErrIngestionDisabled = errors.New("memex ingestion disabled: no enabled capability snapshot")
-
-// ErrSendDisabled reports an outbound send blocked by a missing SendText grant.
-var ErrSendDisabled = errors.New("memex send disabled: capability not granted")
+// The fail-closed gate errors are contract-level vocabulary (shared with the
+// poll runner and every other platform adapter); they are re-exported here so
+// the memex call sites read unchanged.
+var (
+	ErrIngestionDisabled = channel.ErrIngestionDisabled
+	ErrSendDisabled      = channel.ErrSendDisabled
+)
 
 // Config is the stored installation mapping for one Memex bot installation. It
 // carries the tenant/workspace scope and the conversation being ingested — the
@@ -82,17 +81,9 @@ func DeclaredCapabilities(now time.Time) channel.Capabilities {
 	}
 }
 
-// InboundObserver sees every freshly committed inbound event — never
-// quarantined rows, never duplicates — between the durable inbox acceptance
-// and the platform ACK. It is the conversation-module ingress seam: the
-// assembly bridges committed events into conversations. An error aborts the
-// poll before the platform ACK, but the row is already committed and a
-// redelivery is recognized as a duplicate (the observer is not re-fired), so
-// a failed forward stays committed-but-unforwarded — the failure must be
-// surfaced for operator triage, and the replay tooling re-drives such rows.
-type InboundObserver interface {
-	InboundCommitted(ctx context.Context, ev channel.ConnectorEvent) error
-}
+// InboundObserver is the shared committed-event seam (channel.InboundObserver,
+// re-exported for memex call sites).
+type InboundObserver = channel.InboundObserver
 
 // Connector drives one Memex bot installation through the contract's
 // accept-before-ACK pipeline.

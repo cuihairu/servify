@@ -21,8 +21,9 @@ import (
 )
 
 // Runner is the lifecycle face one managed connector poll loop exposes —
-// satisfied by *memex.Runner. Run blocks until ctx is canceled or the loop
-// returns on its own (dead-letter, permanent error, fail-closed gate).
+// satisfied by *channel.Runner (driving any platform adapter: memex,
+// telegram). Run blocks until ctx is canceled or the loop returns on its own
+// (dead-letter, permanent error, fail-closed gate).
 type Runner interface {
 	Run(ctx context.Context) error
 }

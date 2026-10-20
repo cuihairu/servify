@@ -1,12 +1,90 @@
-package memex
+// This file carries the contract-level adapter vocabulary that every chat
+// platform shares: the error-class taxonomy, the fail-closed gate error, the
+// dead-letter sentinel and the poll-loop runner that turns those classes into
+// the contract's retry budget (docs/chat-platform-integration-contract.md).
+// Platform adapters (memex, telegram) keep only what is genuinely
+// platform-specific — payload shape, endpoints, status mapping — and share
+// this driver so one retry budget cannot drift between platforms.
+
+package channel
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"time"
 )
+
+// ErrorKind is the contract's error-class vocabulary for adapter failures.
+type ErrorKind string
+
+const (
+	ErrAuth        ErrorKind = "auth"
+	ErrPermission  ErrorKind = "permission"
+	ErrRateLimited ErrorKind = "rate_limited"
+	ErrTransient   ErrorKind = "transient"
+	ErrInvalid     ErrorKind = "invalid"
+	ErrPermanent   ErrorKind = "permanent"
+)
+
+// AdapterError carries the contract's error class for one failed API call so
+// callers can decide retry policy without parsing provider strings. RetryAfter
+// is the server-provided pause for rate-limited calls (0 when absent or
+// unparsable — the source is platform-specific: header or JSON parameter).
+type AdapterError struct {
+	Kind       ErrorKind
+	Status     int
+	Op         string
+	Detail     string
+	RetryAfter time.Duration
+}
+
+func (e *AdapterError) Error() string {
+	return fmt.Sprintf("%s: status=%d kind=%s: %s", e.Op, e.Status, e.Kind, e.Detail)
+}
+
+// ErrIngestionDisabled reports a missing or not-yet-enabled grant snapshot: the
+// connector refuses to pull until an operator records an observed grant for the
+// installation (contract fail-closed default).
+var ErrIngestionDisabled = errors.New("ingestion disabled: no enabled capability snapshot")
+
+// ErrSendDisabled reports an outbound send blocked by a missing SendText grant.
+var ErrSendDisabled = errors.New("send disabled: capability not granted")
+
+// StatusKind maps an HTTP status onto the contract's error classes
+// (401 auth, 403 permission, 429 rate limited, 404 permanent target,
+// 5xx transient, everything else invalid). Every adapter shares this table so
+// a platform cannot quietly redefine what is retryable.
+func StatusKind(status int) ErrorKind {
+	switch {
+	case status == http.StatusUnauthorized:
+		return ErrAuth
+	case status == http.StatusForbidden:
+		return ErrPermission
+	case status == http.StatusTooManyRequests:
+		return ErrRateLimited
+	case status == http.StatusNotFound:
+		return ErrPermanent
+	case status >= 500:
+		return ErrTransient
+	default:
+		return ErrInvalid
+	}
+}
+
+// InboundObserver sees every freshly committed inbound event — never
+// quarantined rows, never duplicates — between the durable inbox acceptance
+// and the platform ACK. It is the conversation-module ingress seam: the
+// assembly bridges committed events into conversations. An error aborts the
+// poll before the platform ACK, but the row is already committed and a
+// redelivery is recognized as a duplicate (the observer is not re-fired), so
+// a failed forward stays committed-but-unforwarded — the failure must be
+// surfaced for operator triage, and the replay tooling re-drives such rows.
+type InboundObserver interface {
+	InboundCommitted(ctx context.Context, ev ConnectorEvent) error
+}
 
 // DeadLetterError is what Run returns when one retryable-failure streak
 // exhausts its budget (contract: stop after 10 attempts or 24h, then
@@ -21,19 +99,27 @@ type DeadLetterError struct {
 }
 
 func (e *DeadLetterError) Error() string {
-	return fmt.Sprintf("memex ingestion dead-lettered (%s) after %d attempts: %s status=%d",
+	return fmt.Sprintf("connector ingestion dead-lettered (%s) after %d attempts: %s status=%d",
 		e.Reason, e.Attempts, e.Kind, e.Status)
 }
 
-// Runner is the poll-loop driver for one Memex installation: it repeats
-// PollOnce until the context is canceled or a failure says to stop. Retry
-// policy follows the contract's error classes — the platform's own status
-// decides pacing, never a hardcoded guess.
-type Runner struct {
-	Connector *Connector
+// Poller is the per-installation drain face every adapter exposes to the
+// shared runner: one poll drains up to one batch and returns the number of
+// processed updates. Errors must be contract-classified (*AdapterError) or be
+// one of the gate errors; anything else reads as a store failure.
+type Poller interface {
+	PollOnce(ctx context.Context, longPoll time.Duration) (int, error)
+}
 
-	// LongPoll is the per-pull server-side long-poll budget (Memex caps at
-	// 30000ms); staying under it leaves the server time to answer cleanly.
+// Runner is the poll-loop driver for one installation: it repeats PollOnce
+// until the context is canceled or a failure says to stop. Retry policy
+// follows the contract's error classes — the platform's own signals decide
+// pacing, never a hardcoded guess.
+type Runner struct {
+	Poller Poller
+
+	// LongPoll is the per-pull server-side long-poll budget (stay under the
+	// platform's cap so the server has time to answer cleanly).
 	LongPoll time.Duration
 	// IdleWait is the pause after a poll that drained an empty inbox. With a
 	// long poll this is only a small breathing gap, not the main delay.
@@ -59,10 +145,10 @@ type Runner struct {
 }
 
 // NewRunner wires a runner at the contract's retry budget (25s long poll under
-// the 30s cap, 1s base backoff, 5m cap, 10 attempts or 24h per streak).
-func NewRunner(c *Connector) *Runner {
+// a 30s server cap, 1s base backoff, 5m cap, 10 attempts or 24h per streak).
+func NewRunner(p Poller) *Runner {
 	return &Runner{
-		Connector:   c,
+		Poller:      p,
 		LongPoll:    25 * time.Second,
 		IdleWait:    time.Second,
 		MinBackoff:  time.Second,
@@ -84,7 +170,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	attempts := 0
 	var streakStart time.Time
 	for {
-		n, err := r.Connector.PollOnce(ctx, r.LongPoll)
+		n, err := r.Poller.PollOnce(ctx, r.LongPoll)
 		if err == nil {
 			backoff = r.MinBackoff
 			attempts = 0

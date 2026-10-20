@@ -16,9 +16,18 @@ import (
 	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/channel/memex"
+	"servify/apps/server/internal/platform/channel/telegram"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
+)
+
+// platformMemex and platformTelegram are the adapter keys a stored
+// installation row's Platform may select in wireChatConnectors. Anything else
+// fails that row's attachment (no silent fallback adapter).
+const (
+	platformMemex    = "memex"
+	platformTelegram = "telegram"
 )
 
 // chatConversationIngestor is the minimal conversation-module write face the
@@ -120,7 +129,8 @@ func (b *chatConversationBridge) logIngestFailure(err error, ev channel.Connecto
 
 // wireChatConnectors builds the chat connector supervisor over the stored
 // installation rows: at startup it attaches one poll runner per enabled row.
-// The row's Enabled flag is the only gate (fail closed — no config switch);
+// The row's platform selects the adapter (Phase 2 Memex, Phase 3 Telegram);
+// the row's Enabled flag is the only gate (fail closed — no config switch);
 // a row whose token env var is unset fails only its own attachment, and the
 // runner's long poll budget comes from the row.
 func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Service) {
@@ -130,6 +140,7 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 	installations := channel.NewInstallationStore(rt.DB)
 	caps := channel.NewCapabilityStore(rt.DB)
 	inbox := channel.NewInboxStore(rt.DB)
+	cursors := channel.NewCursorStore(rt.DB)
 	bridge := &chatConversationBridge{ingestor: conversationService, logger: rt.Logger}
 	rt.chatConnectors = chatconnector.NewSupervisor(installations,
 		func(ctx context.Context, inst channel.ChatConnectorInstallation) (chatconnector.Runner, error) {
@@ -144,20 +155,39 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 			longPoll := time.Duration(inst.LongPollMS) * time.Millisecond
 			// the HTTP timeout must outlive the long poll itself, or every
 			// fully-waited pull dies client-side
-			client := memex.NewClient(inst.UpdatesEndpoint, token,
-				&http.Client{Timeout: longPoll + 10*time.Second})
-			connector := memex.NewConnector(client, caps, inbox, memex.Config{
-				Platform:       inst.Platform,
-				TenantID:       inst.TenantID,
-				WorkspaceID:    inst.WorkspaceID,
-				InstallationID: inst.InstallationID,
-				Conversation: channel.ConversationRef{
-					PlatformID: inst.ConversationPlatformID,
-					Kind:       inst.ConversationKind,
-					IsGroup:    inst.ConversationIsGroup,
-				},
-			}).WithObserver(bridge)
-			runner := memex.NewRunner(connector)
+			hc := &http.Client{Timeout: longPoll + 10*time.Second}
+			conv := channel.ConversationRef{
+				PlatformID: inst.ConversationPlatformID,
+				Kind:       inst.ConversationKind,
+				IsGroup:    inst.ConversationIsGroup,
+			}
+			var poller channel.Poller
+			switch inst.Platform {
+			case platformTelegram:
+				poller = telegram.NewConnector(
+					telegram.NewClient(inst.UpdatesEndpoint, token, hc),
+					caps, inbox, cursors, telegram.Config{
+						Platform:       inst.Platform,
+						TenantID:       inst.TenantID,
+						WorkspaceID:    inst.WorkspaceID,
+						InstallationID: inst.InstallationID,
+						Conversation:   conv,
+					}).WithObserver(bridge)
+			case platformMemex:
+				poller = memex.NewConnector(
+					memex.NewClient(inst.UpdatesEndpoint, token, hc),
+					caps, inbox, memex.Config{
+						Platform:       inst.Platform,
+						TenantID:       inst.TenantID,
+						WorkspaceID:    inst.WorkspaceID,
+						InstallationID: inst.InstallationID,
+						Conversation:   conv,
+					}).WithObserver(bridge)
+			default:
+				return nil, fmt.Errorf("chat connector %s: platform %q has no adapter",
+					inst.InstallationID, inst.Platform)
+			}
+			runner := channel.NewRunner(poller)
 			runner.LongPoll = longPoll
 			return runner, nil
 		},

@@ -45,8 +45,10 @@ type ChatConnectorInstallation struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// memexLongPollCapMS is the platform's documented long poll ceiling.
-const memexLongPollCapMS = 30000
+// longPollCapMS is the shared long-poll ceiling for stored installations
+// (memex 30s server cap; telegram long polls in seconds up to 50, so a single
+// 30ms-based column serves both adapters).
+const longPollCapMS = 30000
 
 // InstallationScope keys one stored installation.
 type InstallationScope struct {
@@ -84,9 +86,9 @@ func (i ChatConnectorInstallation) Validate() error {
 	if i.TokenEnvVar == "" {
 		return errors.New("installation token env var is required")
 	}
-	if i.LongPollMS <= 0 || i.LongPollMS > memexLongPollCapMS {
+	if i.LongPollMS <= 0 || i.LongPollMS > longPollCapMS {
 		return fmt.Errorf("installation long poll %dms must be within 1..%dms",
-			i.LongPollMS, memexLongPollCapMS)
+			i.LongPollMS, longPollCapMS)
 	}
 	return nil
 }

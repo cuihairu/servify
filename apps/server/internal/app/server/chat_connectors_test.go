@@ -19,6 +19,7 @@ import (
 	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
 	"servify/apps/server/internal/platform/channel/memex"
+	"servify/apps/server/internal/platform/channel/telegram"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
@@ -423,6 +424,168 @@ func TestChatConnectorEndToEndLoop(t *testing.T) {
 	}
 	if !pulled.Load() {
 		t.Fatal("platform was never pulled")
+	}
+}
+
+// TestChatConnectorTelegramEndToEndLoop walks the Phase 3 pilot end to end:
+// Bot API long poll → offset cursor → inbox commit → conversation ingest. It
+// doubles as the adapter-selection proof: the same installation table drives
+// both platform factories off the row's platform key.
+func TestChatConnectorTelegramEndToEndLoop(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:chat_tg_e2e")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(
+		&models.User{}, &models.Session{}, &models.Message{},
+		&channel.ChatConnectorInstallation{}, &channel.ChatConnectorInbox{},
+		&channel.ChatConnectorCapability{}, &channel.ChatConnectorCursor{},
+	); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	var pulled atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/bottok/getUpdates", func(w http.ResponseWriter, r *http.Request) {
+		if pulled.CompareAndSwap(false, true) {
+			_, _ = io.WriteString(w, `{"ok":true,"result":[
+				{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup","title":"ops"},
+					"from":{"id":9001,"username":"alice"},"text":"hello tg","date":1697000000}}]}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"ok":true,"result":null}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	row := channel.ChatConnectorInstallation{
+		TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: "telegram", InstallationID: "inst-tg-1",
+		ConversationPlatformID: "-100123", ConversationKind: "supergroup", ConversationIsGroup: true,
+		UpdatesEndpoint: srv.URL, TokenEnvVar: "SERVIFY_TEST_CHAT_TG_TOKEN",
+		LongPollMS: 50, Enabled: true,
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("seed row: %v", err)
+	}
+	if err := channel.NewCapabilityStore(db).Record(context.Background(), channel.CapabilityScope{
+		TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: "telegram",
+		InstallationID: "inst-tg-1", ConversationPlatformID: "-100123",
+	}, telegram.DeclaredCapabilities(time.Now())); err != nil {
+		t.Fatalf("record capabilities: %v", err)
+	}
+	t.Setenv("SERVIFY_TEST_CHAT_TG_TOKEN", "tok")
+
+	rt := &Runtime{Config: config.GetDefaultConfig(), DB: db}
+	wireChatConnectors(rt, conversationapp.NewService(conversationinfra.NewGormRepository(db), nil))
+	sup := rt.ChatConnectorsForWorker()
+	if sup == nil {
+		t.Fatal("supervisor must be wired")
+	}
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := sup.Stop(stopCtx); err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+	}()
+
+	deadline := time.Now().Add(3 * time.Second)
+	var msgs []models.Message
+	for time.Now().Before(deadline) {
+		if err := db.Find(&msgs).Error; err != nil {
+			t.Fatalf("list messages: %v", err)
+		}
+		if len(msgs) >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("messages = %d, want 1 (telegram end-to-end forward)", len(msgs))
+	}
+	if msgs[0].Content != "hello tg" || msgs[0].TenantID != "tenant-1" {
+		t.Fatalf("message drifted: %+v", msgs[0])
+	}
+	var sessions []models.Session
+	if err := db.Find(&sessions).Error; err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].Platform != "telegram" ||
+		sessions[0].TenantID != "tenant-1" || sessions[0].WorkspaceID != "workspace-1" {
+		t.Fatalf("session drifted: %+v", sessions)
+	}
+	var cursors []channel.ChatConnectorCursor
+	if err := db.Find(&cursors).Error; err != nil {
+		t.Fatalf("list cursors: %v", err)
+	}
+	if len(cursors) != 1 || cursors[0].Cursor != "42" {
+		t.Fatalf("cursor drifted: %+v (want 42 = last update_id + 1)", cursors)
+	}
+	var inboxRows []channel.ChatConnectorInbox
+	if err := db.Find(&inboxRows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(inboxRows) != 1 || inboxRows[0].Status != channel.InboxStatusCommitted ||
+		inboxRows[0].Platform != "telegram" || inboxRows[0].ConversationPlatformID != "-100123" {
+		t.Fatalf("inbox rows drifted: %+v", inboxRows)
+	}
+	if !pulled.Load() {
+		t.Fatal("platform was never pulled")
+	}
+}
+
+// TestChatConnectorUnsupportedPlatformFailsOwnRow proves the adapter switch has
+// no silent fallback: an unknown platform key fails only that installation's
+// attachment and cannot shadow a healthy row.
+func TestChatConnectorUnsupportedPlatformFailsOwnRow(t *testing.T) {
+	logger, hook := test.NewNullLogger()
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:chat_bad_platform")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&channel.ChatConnectorInstallation{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	rows := []channel.ChatConnectorInstallation{
+		{TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: "memex", InstallationID: "inst-memex",
+			ConversationPlatformID: "group:5", ConversationKind: "group", ConversationIsGroup: true,
+			UpdatesEndpoint: "http://127.0.0.1:1/bot", TokenEnvVar: "SERVIFY_TEST_CHAT_MEMEX_TOKEN",
+			LongPollMS: 1000, Enabled: true},
+		{TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: "slack", InstallationID: "inst-slack",
+			ConversationPlatformID: "C123", ConversationKind: "channel", ConversationIsGroup: true,
+			UpdatesEndpoint: "http://127.0.0.1:1/bot", TokenEnvVar: "SERVIFY_TEST_CHAT_SLACK_TOKEN",
+			LongPollMS: 1000, Enabled: true},
+	}
+	for i := range rows {
+		if err := rows[i].Validate(); err != nil {
+			t.Fatalf("seed row invalid: %v", err)
+		}
+		if err := db.Create(&rows[i]).Error; err != nil {
+			t.Fatalf("seed row: %v", err)
+		}
+	}
+	t.Setenv("SERVIFY_TEST_CHAT_MEMEX_TOKEN", "tok")
+	t.Setenv("SERVIFY_TEST_CHAT_SLACK_TOKEN", "tok")
+
+	rt := &Runtime{Config: config.GetDefaultConfig(), Logger: logger, DB: db}
+	wireChatConnectors(rt, nil)
+	sup := rt.ChatConnectorsForWorker()
+	if sup == nil {
+		t.Fatal("supervisor must be wired")
+	}
+	if err := sup.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v (only the unsupported row may fail)", err)
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = sup.Stop(stopCtx)
+	}()
+	if entry := waitForLogEntry(t, hook, "chat connector supervisor: build runner failed"); entry == nil {
+		t.Fatal("missing build-failure log for the unsupported platform row")
 	}
 }
 

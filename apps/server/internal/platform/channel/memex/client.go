@@ -1,67 +1,45 @@
 // Package memex is the Memex bot adapter (contract Phase 2 validation
 // platform, docs/chat-platform-integration-contract.md). It owns everything
 // platform-specific — the pull/ACK HTTP surface, TEXT-only payload shape and
-// error classes — and hands normalized contract events to the inbox sink.
+// status mapping — and hands normalized contract events to the inbox sink.
+// The shared contract vocabulary (error classes, gate errors, retry budget
+// and the poll-loop runner) lives in the channel package so it cannot drift
+// between platform adapters.
 package memex
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"servify/apps/server/internal/platform/channel"
 )
 
-// ErrorKind is the contract's error-class vocabulary for adapter failures.
-type ErrorKind string
+// The contract-level adapter vocabulary (error classes, AdapterError,
+// DeadLetterError, Runner) lives in the shared channel package so the retry
+// budget cannot drift between platforms; memex keeps only its own payload
+// shape, endpoints and status mapping.
+type (
+	ErrorKind       = channel.ErrorKind
+	AdapterError    = channel.AdapterError
+	DeadLetterError = channel.DeadLetterError
+)
 
 const (
-	ErrAuth        ErrorKind = "auth"
-	ErrPermission  ErrorKind = "permission"
-	ErrRateLimited ErrorKind = "rate_limited"
-	ErrTransient   ErrorKind = "transient"
-	ErrInvalid     ErrorKind = "invalid"
-	ErrPermanent   ErrorKind = "permanent"
+	ErrAuth        = channel.ErrAuth
+	ErrPermission  = channel.ErrPermission
+	ErrRateLimited = channel.ErrRateLimited
+	ErrTransient   = channel.ErrTransient
+	ErrInvalid     = channel.ErrInvalid
+	ErrPermanent   = channel.ErrPermanent
 )
 
-// AdapterError carries the contract's error class for one failed API call so
-// callers can decide retry policy without parsing provider strings. RetryAfter
-// is the server-provided pause for rate-limited calls (parsed from the
-// Retry-After header in whole seconds; 0 when absent or unparsable).
-type AdapterError struct {
-	Kind       ErrorKind
-	Status     int
-	Op         string
-	Detail     string
-	RetryAfter time.Duration
-}
-
-func (e *AdapterError) Error() string {
-	return fmt.Sprintf("memex %s: status=%d kind=%s: %s", e.Op, e.Status, e.Kind, e.Detail)
-}
-
-// classifyStatus maps the Memex webhook status table onto contract classes
-// (401 auth, 403 permission, 429 rate limited, 404 permanent target,
-// 5xx transient, everything else invalid).
-func classifyStatus(status int) ErrorKind {
-	switch {
-	case status == http.StatusUnauthorized:
-		return ErrAuth
-	case status == http.StatusForbidden:
-		return ErrPermission
-	case status == http.StatusTooManyRequests:
-		return ErrRateLimited
-	case status == http.StatusNotFound:
-		return ErrPermanent
-	case status >= 500:
-		return ErrTransient
-	default:
-		return ErrInvalid
-	}
-}
+// Status mapping is the shared contract table (channel.StatusKind): one
+// platform cannot quietly redefine what is retryable.
 
 // Update is one decoded Memex bot update. Memex only promises TEXT
 // (msg_id/from/to/text/ts_ms); anything richer stays server-side.
@@ -147,7 +125,7 @@ func (c *Client) do(ctx context.Context, op, method, path, body string, out inte
 	}
 	if resp.StatusCode != http.StatusOK {
 		return &AdapterError{
-			Kind:       classifyStatus(resp.StatusCode),
+			Kind:       channel.StatusKind(resp.StatusCode),
 			Status:     resp.StatusCode,
 			Op:         op,
 			Detail:     errorDetail(data),

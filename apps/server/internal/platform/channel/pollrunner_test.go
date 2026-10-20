@@ -1,20 +1,13 @@
-package memex
+package channel
 
 import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
-
-	"gorm.io/gorm"
-
-	"servify/apps/server/internal/platform/channel"
 )
 
 // runnerSleeper turns every pause the runner asks for into a channel value, so
@@ -74,96 +67,67 @@ func (s *runnerSleeper) expectNone(t *testing.T) {
 	}
 }
 
-func newTestRunner(t *testing.T, sink *channel.InboxStore, caps *channel.CapabilityStore, url string, sl *runnerSleeper) *Runner {
-	t.Helper()
-	connector := NewConnector(NewClient(url, "tok", http.DefaultClient), caps, sink, adapterConfig())
-	r := NewRunner(connector)
+// scriptedPoller replays one scripted result per PollOnce call and then keeps
+// draining empty forever. Outcomes are contract results (success with a
+// processed count, AdapterError, gate error, plain store error), so the policy
+// under test is exercised directly without an HTTP platform.
+type scriptedPoller struct {
+	mu     sync.Mutex
+	script []pollOutcome
+	idx    int
+	polls  int
+}
+
+type pollOutcome struct {
+	n   int
+	err error
+}
+
+func okPoll(n int) pollOutcome     { return pollOutcome{n: n} }
+func failPoll(e error) pollOutcome { return pollOutcome{err: e} }
+
+func (s *scriptedPoller) PollOnce(context.Context, time.Duration) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.polls++
+	if s.idx < len(s.script) {
+		i := s.idx
+		s.idx++
+		return s.script[i].n, s.script[i].err
+	}
+	return 0, nil // drained
+}
+
+func (s *scriptedPoller) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.polls
+}
+
+func newTestPolicyRunner(sl *runnerSleeper, outcomes ...pollOutcome) (*Runner, *scriptedPoller) {
+	p := &scriptedPoller{script: outcomes}
+	r := NewRunner(p)
 	r.LongPoll = 0
 	r.Sleep = func(_ context.Context, d time.Duration) error { return sl.sleep(d) }
-	return r
-}
-
-// scriptedPolls serves one response per pull from a script list, then drains
-// with empty updates forever. Markers: __500__ answers a transient failure,
-// __429_<seconds>__ answers rate-limited with a Retry-After header (0 omits
-// the header), anything else is served verbatim.
-type scriptedPolls struct {
-	t      *testing.T
-	mu     sync.Mutex
-	script []string
-	polls  atomic.Int64
-}
-
-func newScriptedPolls(t *testing.T, script ...string) *scriptedPolls {
-	return &scriptedPolls{t: t, script: script}
-}
-
-func (s *scriptedPolls) handler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == "/bot/ack" {
-			_, _ = w.Write([]byte(`{"ok":true}`))
-			return
-		}
-		s.mu.Lock()
-		var body string
-		if len(s.script) > 0 {
-			body = s.script[0]
-			s.script = s.script[1:]
-		} else {
-			body = `{"ok":true,"updates":[]}`
-		}
-		s.mu.Unlock()
-		s.polls.Add(1)
-
-		if body == "__500__" {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"ok":false,"error":"boom"}`))
-			return
-		}
-		if strings.HasPrefix(body, "__429_") {
-			secs := strings.TrimSuffix(strings.TrimPrefix(body, "__429_"), "__")
-			if n, err := strconv.Atoi(secs); err == nil && n > 0 {
-				w.Header().Set("Retry-After", secs)
-			}
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"ok":false,"error":"slow down"}`))
-			return
-		}
-		_, _ = w.Write([]byte(body))
-	}
-}
-
-func updateBody(id string) string {
-	return `{"ok":true,"updates":[{"msg_id":"` + id + `","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`
+	return r, p
 }
 
 func TestRunnerHonorsRetryAfter(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__429_7__", updateBody("m1"))
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrRateLimited, Status: http.StatusTooManyRequests, RetryAfter: 7 * time.Second}),
+		okPoll(1))
 	go func() { _ = runner.Run(sl.ctx) }()
 	sl.expectExact(t, 7*time.Second) // server-provided wait: no jitter
 	sl.cancel()
 }
 
 func TestRunnerRetryAfterClampedToMaxBackoff(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__429_3600__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrRateLimited, Status: http.StatusTooManyRequests, RetryAfter: 3600 * time.Second}))
 	runner.MaxBackoff = 30 * time.Second
 	go func() { _ = runner.Run(sl.ctx) }()
 	sl.expectExact(t, 30*time.Second)
@@ -171,16 +135,10 @@ func TestRunnerRetryAfterClampedToMaxBackoff(t *testing.T) {
 }
 
 func TestRunnerRateLimitWithoutHeaderUsesBackoff(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__429_0__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrRateLimited, Status: http.StatusTooManyRequests}))
 	runner.MinBackoff = time.Second
 	go func() { _ = runner.Run(sl.ctx) }()
 	sl.expect(t, 500*time.Millisecond)
@@ -188,16 +146,11 @@ func TestRunnerRateLimitWithoutHeaderUsesBackoff(t *testing.T) {
 }
 
 func TestRunnerRetriesTransientWithBackoff(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__", "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.MinBackoff = time.Second
 	go func() { _ = runner.Run(sl.ctx) }()
 	sl.expect(t, 500*time.Millisecond) // window [0.5s, 1s]
@@ -206,16 +159,12 @@ func TestRunnerRetriesTransientWithBackoff(t *testing.T) {
 }
 
 func TestRunnerBackoffResetsAfterSuccess(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__", updateBody("m1"), "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		okPoll(1),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.MinBackoff = time.Second
 	runner.IdleWait = 3 * time.Second
 	go func() { _ = runner.Run(sl.ctx) }()
@@ -226,16 +175,12 @@ func TestRunnerBackoffResetsAfterSuccess(t *testing.T) {
 }
 
 func TestRunnerBackoffCapsAtMax(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__", "__500__", "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.MinBackoff = time.Second
 	runner.MaxBackoff = 2 * time.Second
 	go func() { _ = runner.Run(sl.ctx) }()
@@ -256,27 +201,17 @@ func TestRunnerStopsOnHardErrors(t *testing.T) {
 		{http.StatusBadRequest, ErrInvalid},
 	} {
 		t.Run(string(tc.kind), func(t *testing.T) {
-			sink, caps, _ := newAdapterStores(t)
-			enableIngestion(t, caps)
 			sl := newRunnerSleeper()
 			defer sl.cancel()
-
-			var polls atomic.Int64
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				polls.Add(1)
-				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(`{"ok":false,"error":"no"}`))
-			}))
-			defer srv.Close()
-
-			runner := newTestRunner(t, sink, caps, srv.URL, sl)
+			runner, p := newTestPolicyRunner(sl,
+				failPoll(&AdapterError{Kind: tc.kind, Status: tc.status}))
 			err := runner.Run(sl.ctx) // must return on its own, no retries
 			var apiErr *AdapterError
 			if !errors.As(err, &apiErr) || apiErr.Kind != tc.kind {
 				t.Fatalf("run = %v, want %s AdapterError", err, tc.kind)
 			}
-			if polls.Load() != 1 {
-				t.Errorf("polls = %d, want 1 (hard errors stop the loop)", polls.Load())
+			if got := p.count(); got != 1 {
+				t.Errorf("polls = %d, want 1 (hard errors stop the loop)", got)
 			}
 			sl.expectNone(t)
 		})
@@ -284,59 +219,33 @@ func TestRunnerStopsOnHardErrors(t *testing.T) {
 }
 
 func TestRunnerStopsWhenIngestionDisabled(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	var pulled atomic.Bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pulled.Store(true)
-		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
-	}))
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, p := newTestPolicyRunner(sl, failPoll(ErrIngestionDisabled))
 	if err := runner.Run(sl.ctx); !errors.Is(err, ErrIngestionDisabled) {
 		t.Errorf("run = %v, want ErrIngestionDisabled", err)
 	}
-	if pulled.Load() {
-		t.Error("disabled ingestion must not reach the platform")
+	if got := p.count(); got != 1 {
+		t.Errorf("polls = %d, want 1 (gate stops before the next pull)", got)
 	}
 	sl.expectNone(t)
 }
 
-func TestRunnerSurfacesSinkErrorWithoutRetry(t *testing.T) {
-	sink, caps, db := newAdapterStores(t)
-	enableIngestion(t, caps)
-	if err := db.Callback().Create().Before("gorm:create").Register("runner_sink_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
-		t.Fatalf("register callback: %v", err)
-	}
+func TestRunnerSurfacesStoreErrorWithoutRetry(t *testing.T) {
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, updateBody("m1"))
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl, failPoll(errors.New("boom")))
 	if err := runner.Run(sl.ctx); err == nil || errors.Is(err, context.Canceled) {
-		t.Errorf("run = %v, want sink error surfaced (store failures are not retried)", err)
+		t.Errorf("run = %v, want store error surfaced (store failures are not retried)", err)
 	}
 	sl.expectNone(t)
 }
 
 func TestRunnerCancelInsideSleepStopsLoop(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.Sleep = func(_ context.Context, d time.Duration) error {
 		_ = sl.sleep(d)
 		sl.cancel() // the first pause itself stops the loop
@@ -380,16 +289,9 @@ func TestSleepCtxHonorsDeadlineAndCancel(t *testing.T) {
 }
 
 func TestRunnerIdlePauseHonorsCancel(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t) // empty script: every poll drains empty
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl) // empty script: every poll drains empty
 	runner.IdleWait = 2 * time.Second
 	pauses := 0
 	runner.Sleep = func(_ context.Context, d time.Duration) error {
@@ -410,12 +312,6 @@ func TestRunnerIdlePauseHonorsCancel(t *testing.T) {
 }
 
 func TestRunnerReportsCancellationFromStoreError(t *testing.T) {
-	sink, caps, db := newAdapterStores(t)
-	enableIngestion(t, caps)
-	if err := db.Callback().Query().Before("gorm:query").Register("runner_cancel_probe",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
-		t.Fatalf("register callback: %v", err)
-	}
 	sl := newRunnerSleeper()
 	defer sl.cancel()
 
@@ -423,11 +319,7 @@ func TestRunnerReportsCancellationFromStoreError(t *testing.T) {
 	defer cancel()
 	cancel() // store errors racing a shutdown must read as cancellation, not db failure
 
-	polls := newScriptedPolls(t)
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, _ := newTestPolicyRunner(sl, failPoll(errors.New("boom")))
 	if err := runner.Run(ctx); !errors.Is(err, context.Canceled) {
 		t.Errorf("run = %v, want context.Canceled", err)
 	}
@@ -435,16 +327,12 @@ func TestRunnerReportsCancellationFromStoreError(t *testing.T) {
 }
 
 func TestRunnerDeadLettersAfterMaxAttempts(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__", "__500__", "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, p := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.MinBackoff = time.Millisecond
 	runner.MaxAttempts = 3
 	err := runner.Run(sl.ctx)
@@ -455,7 +343,7 @@ func TestRunnerDeadLettersAfterMaxAttempts(t *testing.T) {
 	if dl.Reason != "attempts" || dl.Attempts != 3 || dl.Kind != ErrTransient || dl.Status != http.StatusInternalServerError {
 		t.Errorf("dead letter = %+v", dl)
 	}
-	if got := polls.polls.Load(); got != 3 {
+	if got := p.count(); got != 3 {
 		t.Errorf("polls = %d, want 3 (the budgetth attempt is the last)", got)
 	}
 	sl.expect(t, 500*time.Microsecond) // jittered(1ms) ∈ [500µs, 1ms]
@@ -464,18 +352,14 @@ func TestRunnerDeadLettersAfterMaxAttempts(t *testing.T) {
 }
 
 func TestRunnerDeadLettersAfterTimeBudget(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
 
-	polls := newScriptedPolls(t, "__500__", "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
 	base := time.Unix(1697000000, 0)
 	clock := 0
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	runner, p := newTestPolicyRunner(sl,
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}),
+		failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError}))
 	runner.MinBackoff = time.Millisecond
 	runner.MaxAttempts = 100 // attempt budget off the table; the clock decides
 	runner.MaxDuration = time.Hour
@@ -494,7 +378,7 @@ func TestRunnerDeadLettersAfterTimeBudget(t *testing.T) {
 	if dl.Reason != "budget" || dl.Attempts != 2 {
 		t.Errorf("dead letter = %+v", dl)
 	}
-	if got := polls.polls.Load(); got != 2 {
+	if got := p.count(); got != 2 {
 		t.Errorf("polls = %d, want 2", got)
 	}
 	sl.expect(t, 500*time.Microsecond)
@@ -502,17 +386,11 @@ func TestRunnerDeadLettersAfterTimeBudget(t *testing.T) {
 }
 
 func TestRunnerAttemptsResetAfterSuccess(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	script := []string{"__500__", updateBody("m1"), "__500__", "__500__"}
-	polls := newScriptedPolls(t, script...)
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	transient := failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError})
+	runner, p := newTestPolicyRunner(sl,
+		transient, okPoll(1), transient, transient)
 	runner.MinBackoff = time.Millisecond
 	runner.MaxAttempts = 2
 	err := runner.Run(sl.ctx)
@@ -522,22 +400,16 @@ func TestRunnerAttemptsResetAfterSuccess(t *testing.T) {
 	}
 	// the second streak ran to its own budget (poll 2 succeeded in between):
 	// without the reset the loop would have stopped at poll 3.
-	if got := polls.polls.Load(); got != 4 {
+	if got := p.count(); got != 4 {
 		t.Errorf("polls = %d, want 4", got)
 	}
 }
 
 func TestRunnerBudgetsCanBeDisabled(t *testing.T) {
-	sink, caps, _ := newAdapterStores(t)
-	enableIngestion(t, caps)
 	sl := newRunnerSleeper()
 	defer sl.cancel()
-
-	polls := newScriptedPolls(t, "__500__", "__500__", "__500__")
-	srv := httptest.NewServer(polls.handler())
-	defer srv.Close()
-
-	runner := newTestRunner(t, sink, caps, srv.URL, sl)
+	transient := failPoll(&AdapterError{Kind: ErrTransient, Status: http.StatusInternalServerError})
+	runner, _ := newTestPolicyRunner(sl, transient, transient, transient)
 	runner.MinBackoff = time.Millisecond
 	runner.MaxAttempts = 0 // no attempt budget
 	runner.MaxDuration = 0 // no time budget
@@ -562,6 +434,16 @@ func TestDeadLetterErrorTextCarriesNoContent(t *testing.T) {
 	}
 	if (&Runner{}).now().IsZero() {
 		t.Error("zero Runner must fall back to the wall clock")
+	}
+}
+
+func TestAdapterErrorTextCarriesClassNotSecrets(t *testing.T) {
+	e := &AdapterError{Kind: ErrRateLimited, Status: 429, Op: "get_updates", Detail: "too many requests"}
+	msg := e.Error()
+	for _, want := range []string{"get_updates", "429", "rate_limited"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("adapter error text %q missing %q", msg, want)
+		}
 	}
 }
 

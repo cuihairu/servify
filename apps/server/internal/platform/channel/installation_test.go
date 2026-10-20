@@ -77,7 +77,7 @@ func TestInstallationSaveRejectsInvalidConfig(t *testing.T) {
 		{"empty endpoint", func(i *ChatConnectorInstallation) { i.UpdatesEndpoint = "" }},
 		{"empty token env var", func(i *ChatConnectorInstallation) { i.TokenEnvVar = "" }},
 		{"zero long poll", func(i *ChatConnectorInstallation) { i.LongPollMS = 0 }},
-		{"over cap long poll", func(i *ChatConnectorInstallation) { i.LongPollMS = memexLongPollCapMS + 1 }},
+		{"over cap long poll", func(i *ChatConnectorInstallation) { i.LongPollMS = longPollCapMS + 1 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inst := valid
