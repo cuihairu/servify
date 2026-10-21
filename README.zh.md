@@ -10,6 +10,7 @@
 
 **开源智能客服系统** — Web 优先，AI 首答，人工接管，工单全流程
 
+[![Status](https://img.shields.io/badge/status-in%20development-orange)](https://github.com/cuihairu/servify/releases)
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
