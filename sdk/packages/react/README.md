@@ -1,6 +1,6 @@
 # @servify/react
 
-完整文档 → [docs/web-sdk.md](../../docs/web-sdk.md)
+完整文档 → docs/web-sdk.md
 
 
 React surface for the Servify Web SDK.

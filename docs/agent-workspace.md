@@ -2,8 +2,8 @@
 
 The reception surface for agents and admins: viewing sessions, takeover, replying, transfer, close, and reviewing the event timeline.
 This document covers the HTTP API walk-through path; the admin console (admin SPA) workbench uses the same set of interfaces.
-Guest-side embedding see the [Web embedding integration guide](/embedding-guide); sessions distilled into tickets see the
-[full ticket workflow](/ticket-workflow).
+Guest-side embedding see the Web embedding integration guide; sessions distilled into tickets see the
+full ticket workflow.
 
 The interfaces in this document are based on the repo's current code (route registration:
 `apps/server/internal/app/server/router_management.go`,
@@ -151,12 +151,12 @@ request-level scope validation (`X-Tenant-ID`/`X-Workspace-ID` must not amplify 
 scope) → principal type restriction (agent/admin/service) → audit persistence. The interfaces in this
 document belong to two resource permissions: `/api/omni/*` requires `workspace`, `/api/session-transfer/*`
 requires `session_transfer`. The policy spec see
-[reception surface and permission policy](/auth-surface-policy), [audit log](/audit-log-policy),
-[tenant and workspace boundaries](/tenant-workspace-boundaries).
+reception surface and permission policy, audit log,
+tenant and workspace boundaries.
 
 ## 8. Sessions distilled into tickets
 
 Issues that cannot be resolved in the session or need cross-day follow-up, create a ticket to continue:
 `POST /api/tickets` can carry `session_id` to associate the original session, the agent reviews it in the ticket
 `GET /api/tickets/:id/conversations`. The walk-through path see the
-[full ticket workflow](/ticket-workflow).
+full ticket workflow.

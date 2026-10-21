@@ -23,7 +23,7 @@
 
 ## 执行顺序
 
-> 以下 P0/P1/P2/P3 顺序为历史执行序列，已全部执行完毕，仅作方法论留档；当前活跃 backlog 以 [todo.md](../todo.md) 为准。
+> 以下 P0/P1/P2/P3 顺序为历史执行序列，已全部执行完毕，仅作方法论留档；当前活跃 backlog 以 todo.md 为准。
 
 ### P0 先收运行时硬伤（已完成）
 
@@ -60,9 +60,8 @@
 V1.0 收敛批次（B0–B4）已全部过闸，无进行中的优先任务。恢复工作时的入口：
 
 1. 演进方向开列：薄壳模块文档面收口剩余项。（Routing 打分引擎与 Ticket 关闭前拦截规则已落地——`scripts/test-routing-scoring-acceptance.sh` 与 Makefile `routing-scoring-acceptance` 门。）
-2. 实施时按 [todo.md](../todo.md) 的批次纪律登记与过闸。
 
-如果中断恢复，以 [todo.md](../todo.md) 中最近一个 `[-]` 项为主，不要按记忆跳转。
+如果中断恢复，以 todo.md 中最近一个 `[-]` 项为主，不要按记忆跳转。
 
 ## 取舍原则
 
@@ -75,7 +74,6 @@ V1.0 收敛批次（B0–B4）已全部过闸，无进行中的优先任务。�
 
 ## 配套文档
 
-1. [todo.md](../todo.md)
 2. [acceptance-checklist.md](./acceptance-checklist.md)
 3. [implementation/README.md](./implementation/README.md)
 4. [demo-and-mock-boundaries.md](./demo-and-mock-boundaries.md)

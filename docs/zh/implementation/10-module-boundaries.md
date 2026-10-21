@@ -9,9 +9,7 @@
 
 可执行规则来源：
 
-- [scripts/module-boundaries.rules](../../scripts/module-boundaries.rules)
   - 这是当前边界检查的规则清单
-- [scripts/check-module-boundaries.sh](../../scripts/check-module-boundaries.sh)
   - 这是规则执行器
 
 维护约定：

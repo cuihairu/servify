@@ -1,6 +1,6 @@
 # @servify/core
 
-完整文档 → [docs/web-sdk.md](../../docs/web-sdk.md)
+完整文档 → docs/web-sdk.md
 
 
 Shared Web SDK runtime and contract package.

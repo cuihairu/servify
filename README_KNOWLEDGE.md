@@ -238,7 +238,7 @@ make local-knowledge-acceptance
 sync 留档 → sqlite3 数据证据（行数/chunking/维度 256）→ 语义检索正例命中与
 无关 query 过滤 → 回答逐字来自知识原文（extractive 断言）。
 
-清单行见 [acceptance-checklist.md](acceptance-checklist.md) §3「AI 与外部知识库」
+清单行见 acceptance-checklist.md §3「AI 与外部知识库」
 （本地自含知识引擎行，状态：通过）；manifest 与证据在
 `scripts/test-results/local-knowledge/`。
 

@@ -15,15 +15,7 @@ Servify stays a modular monolith at the current stage, hardening step by step ar
 
 ## Corresponding Topics in the Current Documentation Site
 
-- [V1 Product Scope](/v1-product-scope)
-- [Remote Assistance (follow-up enhancement direction)](/remote-assistance)
-- [Current Architecture Analysis](/current-architecture)
-- [Architecture Redesign Plan](/architecture-redesign-plan)
-- [Deployment Guide](/deployment)
 - [Implementation Plan](/zh/implementation/)
-- [Release Versioning Strategy](/release-versioning)
-- [Testing Pyramid](/testing-pyramid)
-- [External knowledge base integration: knowledge provider paths (selection landscape in KNOWLEDGE_BASE_LANDSCAPE)](/WEKNORA_INTEGRATION)
 
 ## Site Conventions
 

@@ -15,15 +15,7 @@ Servify 当前阶段保持为模块化单体，围绕统一 runtime、AI 编排�
 
 ## 当前文档站中的对应专题
 
-- [V1 产品收敛](/zh/v1-product-scope)
-- [远程协助（后续增强方向）](/zh/remote-assistance)
-- [当前架构分析](/zh/current-architecture)
-- [架构重设计计划](/zh/architecture-redesign-plan)
-- [部署指南](/zh/deployment)
 - [实施计划](/zh/implementation/)
-- [版本发布策略](/zh/release-versioning)
-- [测试金字塔](/zh/testing-pyramid)
-- [外部知识库集成：知识库 provider 路径（选型全景见 KNOWLEDGE_BASE_LANDSCAPE）](/zh/WEKNORA_INTEGRATION)
 
 ## 站内约定
 

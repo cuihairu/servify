@@ -2,7 +2,7 @@
 
 Both platform SDKs share the same protocol and server (WS `wss://<host>/api/v1/ws` + guest ticket `POST /api/v1/tickets`),
 with API semantics mirrored one for one. This page targets integrators; protocol details see `sdk/PROTOCOL.md` (frame contract) and
-[platform spec §4](/mobile-sdk-platform-spec) (frozen API surface); architecture and decisions see the [design doc](/mobile-sdk-design).
+platform spec §4 (frozen API surface); architecture and decisions see the design doc.
 
 ## 1. Prerequisites
 
@@ -25,7 +25,7 @@ Currently in-repo distribution (no automatic release built in before an official
 - **iOS**: XCFramework (static, `BUILD_LIBRARY_FOR_DISTRIBUTION`), produced by the CI `ios-macos` job,
   or built locally: `scripts/check-ios-sdk-size.sh` (artifact at `sdk/ios/build/ServifyKit.xcframework`).
 - CocoaPods is not provided (M3 evaluation conclusion: SPM/XCFramework single track; conditions for retriggering the evaluation see the
-  [evaluation doc](/mobile-sdk-cocoapods-evaluation)).
+  evaluation doc).
 
 Import methods:
 
@@ -157,7 +157,7 @@ Subscriptions take effect immediately: history that occurred before subscribing 
 
 `config_invalid` (thrown at construction time) / `network` / `server_unavailable` / `handshake_rejected` /
 `send_timeout` / `unsupported` / `ticket_failed` — both platforms' `ServifyError` share the same seven codes. Detailed semantics see
-[platform spec §4.5](/mobile-sdk-platform-spec).
+platform spec §4.5.
 
 ## 8. Integration self-check list
 
@@ -169,7 +169,7 @@ Subscriptions take effect immediately: history that occurred before subscribing 
 6. Size reconciliation: AAR ≤ 1.5MB / XCFramework ≤ 2MB.
 
 Common issues (handshake 400/403, repeated disconnects, no echo) reference table see
-[platform spec §5.4](/mobile-sdk-platform-spec).
+platform spec §5.4.
 
 ## 9. V1 boundaries (explicitly out of scope, to prevent integrator mis-expectations)
 

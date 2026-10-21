@@ -2,8 +2,8 @@
 
 面向坐席与管理员的接待面：查看会话、接管、回复、转派、关闭、回看事件流水。
 本文覆盖 HTTP API 跟跑链路；管理端（admin SPA）工作台走同一批接口。
-访客侧嵌入见 [Web 嵌入集成指南](/zh/embedding-guide)；会话沉淀为工单见
-[工单全流程](/zh/ticket-workflow)。
+访客侧嵌入见 Web 嵌入集成指南；会话沉淀为工单见
+工单全流程。
 
 文中接口以仓库当前代码为准（路由注册：
 `apps/server/internal/app/server/router_management.go`、
@@ -151,12 +151,12 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 scope）→ principal 类型限制（agent/admin/service）→ 审计落库。本文接口
 分属两个资源权限：`/api/omni/*` 需要 `workspace`，`/api/session-transfer/*`
 需要 `session_transfer`。策略口径见
-[接入面与权限策略](/zh/auth-surface-policy)、[审计日志](/zh/audit-log-policy)、
-[租户与工作区边界](/zh/tenant-workspace-boundaries)。
+接入面与权限策略、审计日志、
+租户与工作区边界。
 
 ## 8. 会话沉淀为工单
 
 会话里解决不了或需要跨天跟进的问题，建工单继续走：
 `POST /api/tickets` 可带 `session_id` 关联原会话，坐席在工单里回看
 `GET /api/tickets/:id/conversations`。跟跑链路见
-[工单全流程](/zh/ticket-workflow)。
+工单全流程。

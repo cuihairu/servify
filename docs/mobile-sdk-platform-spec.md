@@ -1,6 +1,6 @@
 # Mobile SDK Platform Spec: Android/iOS selection engineering and core API surface
 
-Status: technical design started (no implementation). [mobile-sdk-design.md](/mobile-sdk-design) answers "what to do, why, and in what order"; this document answers "what shape exactly" — layered architecture, engineering details for both platform selections, the V1-frozen API surface, and the executable refinement of the integration flow. Implementation code is out of scope for this document, but this is the reference baseline when M0/M1/M2 start: code review is checked line by line against this document; deviations require changing this document first.
+Status: technical design started (no implementation). mobile-sdk-design.md answers "what to do, why, and in what order"; this document answers "what shape exactly" — layered architecture, engineering details for both platform selections, the V1-frozen API surface, and the executable refinement of the integration flow. Implementation code is out of scope for this document, but this is the reference baseline when M0/M1/M2 start: code review is checked line by line against this document; deviations require changing this document first.
 
 Protocol contract see [sdk/PROTOCOL.md](../sdk/PROTOCOL.md) (frame-level source of truth); this document does not repeat frame definitions, only references them.
 

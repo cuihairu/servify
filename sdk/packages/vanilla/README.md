@@ -1,6 +1,6 @@
 # @servify/vanilla
 
-完整文档 → [docs/web-sdk.md](../../docs/web-sdk.md)
+完整文档 → docs/web-sdk.md
 
 
 Vanilla JavaScript surface for the Servify Web SDK.

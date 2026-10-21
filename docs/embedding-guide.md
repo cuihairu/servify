@@ -35,7 +35,7 @@ cd apps/server && go run ./cmd/server
 
 Open the page, a floating button appears in the bottom-right corner, click to expand the chat window: the AI first answer is knowledge-base based, after transfer to human an
 agent receives it in the admin console (`/`, the admin SPA) (agent-side receiving and transfer links see
-[Agent workspace](/agent-workspace)).
+Agent workspace).
 
 **Don't want to hand-write a page? The repo ships two example pages that can be opened directly**
 (served directly by the Servify server, snippets are identical to this section and can be followed line by line; both viewports 375/desktop have been verified):

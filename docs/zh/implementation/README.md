@@ -79,7 +79,7 @@
   工具 Port 数据源与权限校验接入为遗留项，状态见
   [13-ai-agent-loop.md](./13-ai-agent-loop.md) 头部核实注记）
 - V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是
-  [todo.md](../../todo.md) 与 [验收矩阵](../acceptance-checklist.md)；后续
+  todo.md 与 [验收矩阵](../acceptance-checklist.md)；后续
   演进见 「演进方向」
 
 当前阅读顺序：

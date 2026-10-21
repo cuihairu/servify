@@ -2,7 +2,7 @@
 
 工单是会话之后「把问题解决掉」的沉淀面：创建、指派、跟进评论、状态流转、
 关闭、统计与导出。本文覆盖坐席/管理员侧 HTTP API 跟跑链路；访客侧免登录
-建单入口见 [Web 嵌入集成指南](/zh/embedding-guide)的工单上下文一节。
+建单入口见 Web 嵌入集成指南的工单上下文一节。
 
 文中接口以仓库当前代码为准（路由注册：
 `apps/server/internal/app/server/router_management.go`、契约定义
@@ -11,7 +11,7 @@
 ## 1. 准备凭据与前置实体
 
 起服务与首个管理员的注册规则见
-[坐席工作台](/zh/agent-workspace)（全新实例首个注册用户
+坐席工作台（全新实例首个注册用户
 可直接 `role:"admin"`；坐席实体两步注册）。本文示例沿用那里的 `TOKEN` 与
 `AGENT_ID`。
 
@@ -137,5 +137,5 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 
 工单面在 `/api` 管理面统一中间件链内（JWT → scope 校验 → principal 类型
 → 审计落库），资源权限为 `tickets`。策略口径见
-[接入面与权限策略](/zh/auth-surface-policy)、[审计日志](/zh/audit-log-policy)。
-接待过程中的会话操作见 [坐席工作台](/zh/agent-workspace)。
+接入面与权限策略、审计日志。
+接待过程中的会话操作见 坐席工作台。

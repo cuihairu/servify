@@ -4,8 +4,6 @@ Status: planning document (no implementation). This document answers "what to do
 
 Related documents:
 
-- [07 SDK Multi Surface](/zh/implementation/07-sdk-multi-surface): this document is the landing plan for its M3 `app-sdk-reservation`; the four contracts already reserved in app-core (offline queue / push token registration / reconnect + session restore / mobile storage) are this document's foundation, not reinvented.
-- [v1 product scope](/v1-product-scope): the product contract for AI first answer, human handoff, ticket full flow.
 - Web SDK source: `sdk/packages/core` (protocol source of truth), `apps/demo-sdk/widget.js` (minimal integration form reference).
 
 ---

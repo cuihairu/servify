@@ -3,8 +3,6 @@
 Servify Web SDK 的接入文档：浏览器端实时聊天、工单、远程协助、语音通道的完整 API 与配置面。
 
 - 包：`@servify/core` / `@servify/react` / `@servify/vue` / `@servify/vanilla`（均 1.0.0，见 `sdk/packages/*/package.json:3`）
-- 治理口径（命名、发布策略、公共 API 边界）：见 [`sdk/SURFACE_GOVERNANCE.md`](../sdk/SURFACE_GOVERNANCE.md)
-- 移动端（Android/iOS）SDK 见 [移动端 SDK 接入](./mobile-sdk-integration)，不在本页范围
 
 ## 1. 定位与范围
 

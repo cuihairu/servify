@@ -86,13 +86,6 @@ AI handles first responses, clarification, knowledge recall, and suggestions; hu
 
 ## Recommended Reading
 
-1. [V1 Product Scope](/v1-product-scope)
-2. [Web Embedding Integration Guide](/embedding-guide)
-3. [Agent Workspace](/agent-workspace)
-4. [Ticket End-to-End Workflow](/ticket-workflow)
-5. [Deployment Guide](/deployment)
-6. [Operator Runbook](/operator-runbook)
-7. [Current Delivery Priorities](/delivery-priorities)
 8. [Implementation Plan Index](/zh/implementation/)
 
 ## Where You Can Go From Here
@@ -101,54 +94,25 @@ Grouped by usage task, consistent with the left navigation.
 
 ### Evaluation and Getting Started
 
-- [V1 Product Scope](/v1-product-scope)
-- [Current Delivery Priorities](/delivery-priorities)
-- [Local Development](/local-development)
-- [Contributing Guide](/zh/contributing)
 
 ### Embedding and Integration
 
-- [Web SDK](/web-sdk) (full tables of core / react / vue / vanilla APIs and configuration)
-- [Web Embedding Integration Guide](/embedding-guide) (website support widget, session interop, ticket context, event callbacks, full theme tables)
-- [Mobile SDK Integration](/mobile-sdk-integration)
-- [Realtime Speech Translation](/realtime-translation-design)
-- [Twilio PSTN Integration](/voice-pstn-twilio)
 
 ### Agents and Tickets
 
-- [Agent Workspace](/agent-workspace) (human handoff queue, takeover, replies, reassignment, conversation transcripts)
-- [Ticket End-to-End Workflow](/ticket-workflow) (creation, assignment, follow-up, status transitions, statistics and export)
 
 ### Deployment and Operations
 
-- [Deployment Guide](/deployment)
-- [Operator Runbook](/operator-runbook)
-- [WebRTC/TURN Deployment](/webrtc-deployment)
-- [Backup and Recovery](/backup-and-recovery)
-- [Metrics Glossary](/metrics-glossary)
 
 ### Security and Compliance
 
-- [Runtime Security Baseline](/security-baseline-operations)
-- [Configuration Scope Rules](/configuration-scopes)
-- [Token Lifecycle and Key Rotation](/token-lifecycle-and-key-rotation)
-- [Public Surface Security Checklist](/public-surface-security-checklist)
 
 ### AI and Knowledge Base
 
-- [WeKnora Integration](/WEKNORA_INTEGRATION) (for the knowledge provider selection landscape, see [KNOWLEDGE_BASE_LANDSCAPE](/KNOWLEDGE_BASE_LANDSCAPE))
-- [RAGFlow Integration](/RAGFLOW_INTEGRATION)
-- [AI Fallback Behavior](/ai-fallback-behavior)
 
 ### Development and Implementation Details
 
-- [Overall Architecture Design](/ARCHITECTURE)
-- [Current Architecture Analysis](/current-architecture)
 - [Implementation Backlog Index](/zh/implementation/)
-- [Testing Pyramid](/testing-pyramid)
-- [CI / GitHub Hosted Runner](/CI_SELF_HOSTED)
-- [Release Versioning Policy](/release-versioning)
-- [Planning and Archived History](/architecture-redesign-plan) (historical documents such as the v0.1.0 Release Notes are in the last sidebar group)
 
 ## Common Entry Points
 

@@ -58,13 +58,6 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 
 ## 推荐阅读
 
-1. [V1 产品收敛](/zh/v1-product-scope)
-2. [Web 嵌入集成指南](/zh/embedding-guide)
-3. [坐席工作台](/zh/agent-workspace)
-4. [工单全流程](/zh/ticket-workflow)
-5. [部署指南](/zh/deployment)
-6. [运维手册](/zh/operator-runbook)
-7. [当前交付优先级](/zh/delivery-priorities)
 8. [实施计划索引](/zh/implementation/)
 
 ## 你可以从这里继续
@@ -73,54 +66,25 @@ AI 负责首答、澄清、知识召回和建议，人工可以随时接管、�
 
 ### 评估与上手
 
-- [V1 产品收敛](/zh/v1-product-scope)
-- [当前交付优先级](/zh/delivery-priorities)
-- [本地开发](/zh/local-development)
-- [贡献指南](/zh/contributing)
 
 ### 嵌入与接入
 
-- [Web SDK](/zh/web-sdk)（core / react / vue / vanilla API 与配置全表）
-- [Web 嵌入集成指南](/zh/embedding-guide)（网站客服组件、会话互认、工单上下文、事件回调、主题全表）
-- [移动端 SDK 接入](/zh/mobile-sdk-integration)
-- [语音实时翻译](/zh/realtime-translation-design)
-- [Twilio PSTN 接入](/zh/voice-pstn-twilio)
 
 ### 坐席与工单
 
-- [坐席工作台](/zh/agent-workspace)（转人工队列、接管、回复、转派、会话流水）
-- [工单全流程](/zh/ticket-workflow)（创建、指派、跟进、状态流转、统计导出）
 
 ### 部署与运维
 
-- [部署指南](/zh/deployment)
-- [运维手册](/zh/operator-runbook)
-- [WebRTC/TURN 部署](/zh/webrtc-deployment)
-- [备份与恢复](/zh/backup-and-recovery)
-- [统计口径](/zh/metrics-glossary)
 
 ### 安全与合规
 
-- [运行安全基线](/zh/security-baseline-operations)
-- [配置作用域规则](/zh/configuration-scopes)
-- [Token 生命周期与密钥轮换](/zh/token-lifecycle-and-key-rotation)
-- [开放接口安全清单](/zh/public-surface-security-checklist)
 
 ### AI 与知识库
 
-- [WeKnora 集成](/zh/WEKNORA_INTEGRATION)（知识库 provider 选型全景见 [KNOWLEDGE_BASE_LANDSCAPE](/zh/KNOWLEDGE_BASE_LANDSCAPE)）
-- [RAGFlow 集成](/zh/RAGFLOW_INTEGRATION)
-- [AI 降级行为](/zh/ai-fallback-behavior)
 
 ### 研发与实施细节
 
-- [总体架构设计](/zh/ARCHITECTURE)
-- [当前架构分析](/zh/current-architecture)
 - [实施 Backlog 索引](/zh/implementation/)
-- [测试金字塔](/zh/testing-pyramid)
-- [CI / GitHub Hosted Runner](/zh/CI_SELF_HOSTED)
-- [版本发布策略](/zh/release-versioning)
-- [规划与历史存档](/zh/architecture-redesign-plan)（v0.1.0 Release Notes 等历史文档见侧边栏末组）
 
 ## 常用入口
 

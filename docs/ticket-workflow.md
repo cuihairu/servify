@@ -1,12 +1,12 @@
 # Ticket End-to-End Workflow
 
-Tickets are the persistence surface after a conversation for "actually solving the problem": creation, assignment, follow-up comments, status transitions, closing, statistics, and export. This document covers the agent/admin HTTP API walkthrough path; for the visitor-side no-login ticket-creation entry point, see the ticket context section of the [Web Embedding Integration Guide](/embedding-guide).
+Tickets are the persistence surface after a conversation for "actually solving the problem": creation, assignment, follow-up comments, status transitions, closing, statistics, and export. This document covers the agent/admin HTTP API walkthrough path; for the visitor-side no-login ticket-creation entry point, see the ticket context section of the Web Embedding Integration Guide.
 
 The interfaces below follow the current repository code (route registration: `apps/server/internal/app/server/router_management.go`, contract definitions: `apps/server/internal/modules/ticket/contract/types.go`); the examples can be run as-is.
 
 ## 1. Prepare Credentials and Prerequisite Entities
 
-See the [Agent Workspace](/agent-workspace) for the rules on starting the service and registering the first admin (on a fresh instance the first registered user can use `role:"admin"` directly; agent entities are registered in two steps). The examples below reuse the `TOKEN` and `AGENT_ID` from there.
+See the Agent Workspace for the rules on starting the service and registering the first admin (on a fresh instance the first registered user can use `role:"admin"` directly; agent entities are registered in two steps). The examples below reuse the `TOKEN` and `AGENT_ID` from there.
 
 A ticket's `customer_id` takes the id of the customer user:
 
@@ -124,4 +124,4 @@ List filter parameters: `status`/`priority`/`category`/`source` (multi-value all
 
 ## 6. Permissions and Audit
 
-The ticket surface sits inside the unified middleware chain of the `/api` management surface (JWT → scope check → principal kind → audit persistence), with `tickets` as the resource permission. For the policy convention see [Auth Surface Policy](/auth-surface-policy) and [Audit Log Policy](/audit-log-policy); for conversation operations during an engagement see the [Agent Workspace](/agent-workspace).
+The ticket surface sits inside the unified middleware chain of the `/api` management surface (JWT → scope check → principal kind → audit persistence), with `tickets` as the resource permission. For the policy convention see Auth Surface Policy and Audit Log Policy; for conversation operations during an engagement see the Agent Workspace.

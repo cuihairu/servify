@@ -4,8 +4,6 @@
 
 关联文档：
 
-- [07 SDK Multi Surface](/zh/implementation/07-sdk-multi-surface)：本文档是其 M3 `app-sdk-reservation` 的落地策划；app-core 已预留的四个契约（offline queue / push token registration / reconnect + session restore / mobile storage）是本文的地基，不再重复发明。
-- [v1 产品范围](/zh/v1-product-scope)：AI 首答、转人工、工单全流程的产品契约。
 - Web SDK 源码：`sdk/packages/core`（协议事实标准）、`apps/demo-sdk/widget.js`（最小接入形态参照）。
 
 ---

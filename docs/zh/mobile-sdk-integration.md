@@ -2,7 +2,7 @@
 
 双端 SDK 同一套协议与服务端（WS `wss://<host>/api/v1/ws` + 访客工单 `POST /api/v1/tickets`），
 API 语义逐一镜像。本页面向接入方；协议细节见 `sdk/PROTOCOL.md`（帧契约）与
-[平台规格 §4](/zh/mobile-sdk-platform-spec)（API 冻结面），架构与决策见[设计文档](/zh/mobile-sdk-design)。
+平台规格 §4（API 冻结面），架构与决策见设计文档。
 
 ## 1. 前置要求
 
@@ -25,7 +25,7 @@ API 语义逐一镜像。本页面向接入方；协议细节见 `sdk/PROTOCOL.m
 - **iOS**：XCFramework（静态，`BUILD_LIBRARY_FOR_DISTRIBUTION`），CI `ios-macos` job 产物，
   或本地构建：`scripts/check-ios-sdk-size.sh`（产物 `sdk/ios/build/ServifyKit.xcframework`）。
 - CocoaPods 不提供（M3 评估结论：SPM/XCFramework 单轨，按需重建触发条件见
-  [评估文档](/zh/mobile-sdk-cocoapods-evaluation)）。
+  评估文档）。
 
 引入方式：
 
@@ -158,7 +158,7 @@ hide 期间消息不丢）。
 
 `config_invalid`（构造期抛出）/ `network` / `server_unavailable` / `handshake_rejected` /
 `send_timeout` / `unsupported` / `ticket_failed`——双端 `ServifyError` 七码一致。详细语义见
-[平台规格 §4.5](/zh/mobile-sdk-platform-spec)。
+平台规格 §4.5。
 
 ## 8. 接入自验清单
 
@@ -170,7 +170,7 @@ hide 期间消息不丢）。
 6. 体积对账：AAR ≤ 1.5MB / XCFramework ≤ 2MB。
 
 常见问题（握手 400/403、反复断线、无回显）对照表见
-[平台规格 §5.4](/zh/mobile-sdk-platform-spec)。
+平台规格 §5.4。
 
 ## 9. V1 边界（明确不做的，防止接入误期许）
 

@@ -4,7 +4,6 @@ Integration docs for the Servify Web SDK: the complete API and configuration sur
 
 - Packages: `@servify/core` / `@servify/react` / `@servify/vue` / `@servify/vanilla` (all 1.0.0, see `sdk/packages/*/package.json:3`)
 - Governance spec (naming, release strategy, public API boundary): see [`sdk/SURFACE_GOVERNANCE.md`](../sdk/SURFACE_GOVERNANCE.md)
-- Mobile (Android/iOS) SDK: see [mobile SDK integration](./mobile-sdk-integration); out of scope for this page
 
 ## 1. Positioning and Scope
 

@@ -36,13 +36,6 @@ AI handles first answers, clarification, knowledge recall, and suggestions; huma
 
 ## Recommended Reading
 
-1. [V1 Product Scope](/v1-product-scope)
-2. [Web Embedding Integration Guide](/embedding-guide)
-3. [Agent Workspace](/agent-workspace)
-4. [Ticket Workflow](/ticket-workflow)
-5. [Deployment Guide](/deployment)
-6. [Operator Runbook](/operator-runbook)
-7. [Current Delivery Priorities](/delivery-priorities)
 8. [Implementation Plan Index](/zh/implementation/)
 
 ## Where You Can Continue From Here
@@ -51,53 +44,25 @@ Grouped by usage task, consistent with the docs site navigation (`docs/.vitepres
 
 ### Evaluation and Getting Started
 
-- [V1 Product Scope](/v1-product-scope)
-- [Current Delivery Priorities](/delivery-priorities)
-- [Local Development](/local-development)
-- [Contributing Guide](/zh/contributing)
 
 ### Embedding and Access
 
-- [Web Embedding Integration Guide](/embedding-guide)
-- [Mobile SDK Integration](/mobile-sdk-integration)
-- [Realtime Speech Translation](/realtime-translation-design)
-- [Twilio PSTN Access](/voice-pstn-twilio)
 
 ### Agents and Tickets
 
-- [Agent Workspace](/agent-workspace) (human handover queue, takeover, replies, reassignment, session history)
-- [Ticket Workflow](/ticket-workflow) (creation, assignment, follow-up, status transitions, statistics export)
 
 ### Deployment and Operations
 
-- [Deployment Guide](/deployment)
-- [Operator Runbook](/operator-runbook)
-- [WebRTC/TURN Deployment](/webrtc-deployment)
-- [Backup and Recovery](/backup-and-recovery)
-- [Metrics Conventions](/metrics-glossary)
 
 ### Security and Compliance
 
-- [Security Baseline for Operations](/security-baseline-operations)
-- [Configuration Scope Rules](/configuration-scopes)
-- [Token Lifecycle and Key Rotation](/token-lifecycle-and-key-rotation)
-- [Public API Security Checklist](/public-surface-security-checklist)
 
 ### AI and Knowledge Base
 
-- [WeKnora Integration](/WEKNORA_INTEGRATION) (for the selection landscape see [KNOWLEDGE_BASE_LANDSCAPE](/KNOWLEDGE_BASE_LANDSCAPE))
-- [RAGFlow Integration](/RAGFLOW_INTEGRATION)
-- [AI Fallback Behavior](/ai-fallback-behavior)
 
 ### Development and Implementation Details
 
-- [Overall Architecture Design](/ARCHITECTURE)
-- [Current Architecture Analysis](/current-architecture)
 - [Implementation Backlog Index](/zh/implementation/)
-- [Testing Pyramid](/testing-pyramid)
-- [CI / GitHub Hosted Runner](/CI_SELF_HOSTED)
-- [Release Versioning Strategy](/release-versioning)
-- [Planning and History Archive](/architecture-redesign-plan)
 
 ## Common Entry Points
 
