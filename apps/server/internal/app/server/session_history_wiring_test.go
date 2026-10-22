@@ -61,11 +61,11 @@ func TestAttachSessionHistoryWiresAllAISurfaces(t *testing.T) {
 		RuntimeService: orch,
 	}
 	rt := &Runtime{Config: cfg, Logger: logger}
-	rt.AIService = NewScopedAIRuntimeService(cfg, logger, nil, orch, nil)
-	rt.AIHandlerService = NewScopedAIHandlerService(cfg, logger, nil, aiAssembly.Service, orch, nil)
+	rt.AIService = NewScopedAIRuntimeService(cfg, logger, nil, orch, nil, nil)
+	rt.AIHandlerService = NewScopedAIHandlerService(cfg, logger, nil, aiAssembly.Service, orch, nil, nil)
 
 	loader := &stubHistoryLoader{}
-	attachSessionHistory(rt, aiAssembly, loader)
+	attachSessionHistory(rt, aiAssembly, loader, nil)
 
 	if v := rt.AIService.(*scopedAIRuntimeService); v.historyLoader == nil {
 		t.Fatal("scoped runtime wrapper must receive the history loader")
@@ -85,7 +85,7 @@ func TestAttachSessionHistoryWiresAllAISurfaces(t *testing.T) {
 	}
 
 	// nil loader：整体跳过，不得清空已注入的实例。
-	attachSessionHistory(rt, aiAssembly, nil)
+	attachSessionHistory(rt, aiAssembly, nil, nil)
 	if v := rt.AIService.(*scopedAIRuntimeService); v.historyLoader == nil {
 		t.Fatal("nil loader must be a no-op")
 	}
@@ -107,7 +107,7 @@ func TestSessionHistoryFlowsThroughScopedRebuild(t *testing.T) {
 		&llmmock.Provider{},
 		nil, "", logger,
 	)
-	scoped := NewScopedAIRuntimeService(cfg, logger, nil, orch, nil).(*scopedAIRuntimeService)
+	scoped := NewScopedAIRuntimeService(cfg, logger, nil, orch, nil, nil).(*scopedAIRuntimeService)
 	if scoped.historyLoader != nil {
 		t.Fatal("must start without a history loader")
 	}
@@ -137,7 +137,7 @@ func TestAttachSessionHistoryWiresCopilot(t *testing.T) {
 
 	rt := &Runtime{Config: cfg, Logger: logger}
 	rt.AICopilot = aidelivery.NewAgentCopilotService(&llmmock.Provider{ChatResponse: llm.ChatResponse{Content: "建议"}}, aidelivery.AIRuntimeParams{})
-	attachSessionHistory(rt, &AIAssembly{}, loader)
+	attachSessionHistory(rt, &AIAssembly{}, loader, nil)
 
 	resp, err := rt.AICopilot.Copilot(context.Background(), aidelivery.CopilotRequest{
 		Action:    aidelivery.CopilotSuggestReply,
@@ -154,5 +154,5 @@ func TestAttachSessionHistoryWiresCopilot(t *testing.T) {
 	}
 
 	// nil Copilot：回填整体 no-op，不 panic。
-	attachSessionHistory(&Runtime{Config: cfg, Logger: logger}, &AIAssembly{}, loader)
+	attachSessionHistory(&Runtime{Config: cfg, Logger: logger}, &AIAssembly{}, loader, nil)
 }

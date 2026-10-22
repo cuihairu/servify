@@ -95,7 +95,7 @@ import (
 type runtimeAssemblyState struct {
 	aiAssembly          *AIAssembly
 	wsHub               *realtimeplatform.WebSocketHub
-	routingService      *routingapp.Service
+	routingApp          *routingapp.Service
 	agentAdapter        *agentdelivery.HandlerServiceAdapter
 	satisfactionService *satisfapp.SatisfactionService
 }
@@ -113,8 +113,8 @@ func initializeObservability(rt *Runtime) {
 	rt.BusinessMetrics = svcmetrics.NewBusinessMetrics(svcmetrics.DefaultRegistry)
 }
 
-func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
-	aiAssembly, err := BuildAIAssembly(rt.Config, rt.Logger, AIAssemblyOptions{DB: rt.DB})
+func wireAIRuntime(rt *Runtime, routing routingdelivery.RuntimeService) (*AIAssembly, error) {
+	aiAssembly, err := BuildAIAssembly(rt.Config, rt.Logger, AIAssemblyOptions{DB: rt.DB, Routing: routing})
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +129,8 @@ func wireAIRuntime(rt *Runtime) (*AIAssembly, error) {
 		return nil, err
 	}
 	aiAssembly.Translation = gated
-	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics)
-	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics)
+	rt.AIService = NewScopedAIRuntimeService(rt.Config, rt.Logger, rt.DB, aiAssembly.RuntimeService, rt.BusinessMetrics, routing)
+	rt.AIHandlerService = NewScopedAIHandlerService(rt.Config, rt.Logger, rt.DB, aiAssembly.Service, aiAssembly.RuntimeService, rt.BusinessMetrics, routing)
 	rt.AICopilot = aiAssembly.Copilot
 	rt.TranslationHandlerService = aiAssembly.Translation
 	// 会话翻译语言偏好（Phase 1 刀一，docs/realtime-translation-design.md）：
@@ -239,7 +239,7 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 // scoped 包装器覆盖请求级重建，启动装配的编排实例覆盖 pgvector 等全局
 // 路径。conversation service 晚于 AI 装配构建，所以是事后回填而不是
 // 构造参数；全部 nil 安全，loader 为 nil 时整体跳过（单轮历史行为）。
-func attachSessionHistory(rt *Runtime, aiAssembly *AIAssembly, loader aidelivery.SessionHistoryLoader) {
+func attachSessionHistory(rt *Runtime, aiAssembly *AIAssembly, loader aidelivery.SessionHistoryLoader, routing routingdelivery.RuntimeService) {
 	if rt == nil || aiAssembly == nil || loader == nil {
 		return
 	}
@@ -542,7 +542,7 @@ func wireTransferRuntime(rt *Runtime, state *runtimeAssemblyState) {
 		AI:                rt.AIService,
 		Agents:            state.agentAdapter,
 		Notifier:          newRoutingTransferNotifier(rt.RealtimeGateway),
-		Routing:           routingdelivery.NewSessionTransferAdapter(state.routingService, rt.Bus),
+		Routing:           routingdelivery.NewSessionTransferAdapter(state.routingApp, rt.Bus),
 		Publisher:         rt.Bus,
 		Tickets:           ticketdelivery.NewRuntimeAdapter(rt.Bus),
 		Conversation:      conversationdelivery.NewRuntimeAdapter(rt.DB, rt.Bus),

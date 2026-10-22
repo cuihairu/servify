@@ -446,7 +446,7 @@ func TestAIAssemblyNilReceiverKnowledgeProvider(t *testing.T) {
 }
 
 func TestScopedAIHandlerServiceNilFallbackBranches(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), nil, nil, nil, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), logrus.New(), nil, nil, nil, nil, nil)
 
 	if _, ok := handler.GetMetrics(); ok {
 		t.Fatal("expected GetMetrics unavailable without fallback")
@@ -523,7 +523,7 @@ func TestScopedAIRuntimeServiceGetStatusUsesWorkspaceDifyOverride(t *testing.T) 
 		t.Fatalf("seed: %v", err)
 	}
 
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil)
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	status := runtimeSvc.GetStatus(ctx)
 	if provider, _ := status["knowledge_provider"].(string); provider != "dify" {

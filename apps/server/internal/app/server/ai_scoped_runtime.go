@@ -6,7 +6,9 @@ import (
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
+	aimodule "servify/apps/server/internal/modules/ai/application"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/configscope"
 
@@ -15,18 +17,21 @@ import (
 )
 
 type scopedAIRuntimeService struct {
-	cfg           *config.Config
-	logger        *logrus.Logger
-	resolver      *configscope.Resolver
-	fallback      aidelivery.RuntimeService
-	businessMeter *svcmetrics.BusinessMetrics
-	historyLoader aidelivery.SessionHistoryLoader
+	cfg            *config.Config
+	logger         *logrus.Logger
+	resolver       *configscope.Resolver
+	fallback       aidelivery.RuntimeService
+	businessMeter  *svcmetrics.BusinessMetrics
+	historyLoader  aidelivery.SessionHistoryLoader
+	agentToolPorts aidelivery.AgentToolPorts
 	// answerStore 首答持久化（B3-1b §5.3）：WS 作答（单发与流式终帧）
 	// 成功后旁路落 ai_answers 并回填 answer_id。
 	answerStore aidelivery.AnswerStore
+	db          *gorm.DB
+	routing     routingdelivery.RuntimeService
 }
 
-func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics) aidelivery.RuntimeService {
+func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, fallback aidelivery.RuntimeService, businessMeter *svcmetrics.BusinessMetrics, routing routingdelivery.RuntimeService) aidelivery.RuntimeService {
 	if logger == nil {
 		logger = logrus.StandardLogger()
 	}
@@ -41,7 +46,17 @@ func NewScopedAIRuntimeService(cfg *config.Config, logger *logrus.Logger, db *go
 		configscope.WithTenantRagFlowProvider(configscope.NewGormTenantConfigProvider(db)),
 		configscope.WithWorkspaceRagFlowProvider(configscope.NewGormWorkspaceConfigProvider(db)),
 	)
-	return &scopedAIRuntimeService{cfg: cfg, logger: logger, resolver: resolver, fallback: fallback, businessMeter: businessMeter, answerStore: aidelivery.NewGormAnswerStore(db)}
+	return &scopedAIRuntimeService{
+		cfg:            cfg,
+		logger:         logger,
+		resolver:       resolver,
+		fallback:       fallback,
+		businessMeter:  businessMeter,
+		answerStore:    aidelivery.NewGormAnswerStore(db),
+		db:             db,
+		routing:        routing,
+		agentToolPorts: newScopedAgentToolPorts(db, routing),
+	}
 }
 
 // WithSessionHistory 注入会话历史读取口（多轮上下文）。启动装配在
@@ -55,16 +70,28 @@ func (s *scopedAIRuntimeService) WithSessionHistory(loader aidelivery.SessionHis
 }
 
 func (s *scopedAIRuntimeService) ProcessQuery(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
-	service := s.buildService(ctx)
-	if service == nil {
-		return nil, nil
-	}
-	resp, err := service.ProcessQuery(ctx, query, sessionID)
+	resp, err := s.processQueryDefault(ctx, query, sessionID)
 	if err == nil {
 		// 首答持久化（B3-1b）：旁路落 ai_answers 并回填 answer_id。
 		aidelivery.RecordResponse(ctx, s.answerStore, query, sessionID, resp)
 	}
 	return resp, err
+}
+
+func (s *scopedAIRuntimeService) processQueryDefault(ctx context.Context, query string, sessionID string) (*aidelivery.AIResponse, error) {
+	service := s.buildService(ctx)
+	if service == nil {
+		return nil, nil
+	}
+	ports := scopedAgentToolPorts{db: s.db, session: sessionID, handoff: s.routing}
+	if ports.db != nil && ports.handoff != nil && aimodule.ShouldTransferToHuman(query, nil) {
+		sessionScope, err := ports.toolContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ctx = sessionScope
+	}
+	return service.ProcessQuery(ctx, query, sessionID)
 }
 
 // ProcessQueryStream 流式首答透传：请求级重建的实例具备流式能力时委托；
@@ -128,5 +155,15 @@ func (s *scopedAIRuntimeService) buildService(ctx context.Context) aidelivery.Ru
 	if s.cfg != nil {
 		aiCfg = s.cfg.AI
 	}
-	return runtimeServiceFromResolvedConfig(openAIConfig, difyConfig, ragFlowConfig, weKnoraConfig, aiCfg, s.logger, s.businessMeter, s.historyLoader)
+	return runtimeServiceFromResolvedConfig(
+		openAIConfig,
+		difyConfig,
+		ragFlowConfig,
+		weKnoraConfig,
+		aiCfg,
+		s.logger,
+		s.businessMeter,
+		s.historyLoader,
+		s.agentToolPorts,
+	)
 }

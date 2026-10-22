@@ -157,8 +157,10 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 	initializeObservability(rt)
 
 	state := &runtimeAssemblyState{}
+	state.routingApp = wireRoutingRuntime(rt)
 
-	aiAssembly, err := wireAIRuntime(rt)
+	transferAdapter := routingdelivery.NewSessionTransferAdapter(state.routingApp, rt.Bus)
+	aiAssembly, err := wireAIRuntime(rt, transferAdapter)
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +172,10 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 	if err != nil {
 		return nil, err
 	}
-	attachSessionHistory(rt, aiAssembly, historyAdapter)
+	attachSessionHistory(rt, aiAssembly, historyAdapter, transferAdapter)
 	if err := wirePushRuntime(rt, wsHub); err != nil {
 		return nil, err
 	}
-	state.routingService = wireRoutingRuntime(rt)
-
 	webrtcService, err := wireRealtimeGateways(rt, wsHub)
 	if err != nil {
 		return nil, err

@@ -8,6 +8,7 @@ import (
 
 	"servify/apps/server/internal/config"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	"servify/apps/server/internal/platform/configscope"
 	"servify/apps/server/internal/platform/embedding"
@@ -28,6 +29,8 @@ type AIAssemblyOptions struct {
 	HealthCheckTimeout              time.Duration
 	// DB 是 pgvector 自建知识库所需的主库句柄（knowledge.provider=pgvector 时必填）。
 	DB *gorm.DB
+	// Routing 是人工转接待队列契约；nil 时不注册 agent handoff 工具。
+	Routing routingdelivery.RuntimeService
 }
 
 // AIAssembly 是启动期 AI 装配的统一视图：知识源经 knowledgeSource 门面选择
@@ -73,7 +76,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 		return nil, err
 	}
 	// 基础编排服务（无外部知识源）：无知识源运行与 pgvector 降级路径共用。
-	defaultService := knowledgeSource{}.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
+	defaultService := knowledgeSource{}.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger, newScopedAgentToolPorts(opts.DB, opts.Routing))
 	assembly := &AIAssembly{
 		Service:        aidelivery.NewHandlerServiceAdapter(defaultService),
 		RuntimeService: defaultService,
@@ -110,7 +113,7 @@ func BuildAIAssembly(cfg *config.Config, logger *logrus.Logger, opts AIAssemblyO
 	if !source.present() {
 		return assembly, nil
 	}
-	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger, newScopedAgentToolPorts(opts.DB, opts.Routing))
 	// 知识同步仅在 weknora 驱动下执行（dify/pgvector 的索引由各自平台/迁移管理）。
 	if source.id == "weknora" && opts.SyncKnowledgeBase {
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -174,7 +177,7 @@ func buildPgvectorAssembly(
 		return fallback, nil
 	}
 	source := knowledgeSource{driver: driver, id: "pgvector"}
-	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger, newScopedAgentToolPorts(opts.DB, opts.Routing))
 	fallback.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
 	return fallback, nil
 }
@@ -231,7 +234,7 @@ func buildLocalAssembly(
 		return fallback, nil
 	}
 	source := knowledgeSource{driver: driver, id: localkp.ProviderID}
-	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger)
+	enhanced := source.buildOrchestrated(baseAI, llmProvider, runtimeParams, logger, newScopedAgentToolPorts(opts.DB, opts.Routing))
 	fallback.applyKnowledgeSource(source, aidelivery.NewHandlerServiceAdapter(enhanced), enhanced)
 	return fallback, nil
 }

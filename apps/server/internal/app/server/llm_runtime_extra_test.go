@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/config"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 
 	"github.com/sirupsen/logrus"
 )
@@ -35,7 +36,7 @@ func TestRuntimeServiceFromResolvedConfigUnknownProviderFallsBack(t *testing.T) 
 	service := runtimeServiceFromResolvedConfig(
 		config.OpenAIConfig{APIKey: "k"},
 		config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{},
-		config.AIConfig{Provider: "bogus"}, logger, nil, nil,
+		config.AIConfig{Provider: "bogus"}, logger, nil, nil, aidelivery.AgentToolPorts{},
 	)
 	if service == nil {
 		t.Fatal("expected fallback runtime service")

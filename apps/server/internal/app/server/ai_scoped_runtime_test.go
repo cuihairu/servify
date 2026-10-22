@@ -7,10 +7,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
+	routingapp "servify/apps/server/internal/modules/routing/application"
+	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	routinginfra "servify/apps/server/internal/modules/routing/infra"
 	platformauth "servify/apps/server/internal/platform/auth"
 	kpmock "servify/apps/server/internal/platform/knowledgeprovider/mock"
 	llm "servify/apps/server/internal/platform/llm"
@@ -55,7 +59,7 @@ func TestScopedAIRuntimeServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 		t.Fatalf("seed: %v", err)
 	}
 
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil)
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil, nil)
 	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
 	resp, err := runtimeSvc.ProcessQuery(ctx, "hello", "session-1")
 	if err != nil {
@@ -67,13 +71,101 @@ func TestScopedAIRuntimeServiceProcessQueryUsesWorkspaceOpenAIOverride(t *testin
 }
 
 func TestScopedAIRuntimeServiceDelegatesTransferAndSummaryToFallback(t *testing.T) {
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubRuntimeFallback{}, nil)
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), openScopedAITestDB(t), stubRuntimeFallback{}, nil, nil)
 	if !runtimeSvc.ShouldTransferToHuman("transfer", nil) {
 		t.Fatal("expected fallback transfer decision")
 	}
 	summary, err := runtimeSvc.GetSessionSummary(nil)
 	if err != nil || summary != "summary" {
 		t.Fatalf("summary = %q err=%v", summary, err)
+	}
+}
+
+func TestScopedAIAgentToolPortsUseSessionScope(t *testing.T) {
+	db := openScopedAITestDB(t)
+	session := models.Session{ID: "sess-tools", TenantID: "tenant-a", WorkspaceID: "workspace-1", UserID: 7, Status: "active", StartedAt: time.Now()}
+	customer := models.Customer{ID: 7, TenantID: "tenant-a", WorkspaceID: "workspace-1", UserID: 7, Company: "Acme", Priority: "high"}
+	ticket := models.Ticket{ID: 3, TenantID: "tenant-a", WorkspaceID: "workspace-1", CustomerID: 7, Title: " outage", Status: "open"}
+	if err := db.Create(&session).Error; err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	if err := db.Create(&customer).Error; err != nil {
+		t.Fatalf("seed customer: %v", err)
+	}
+	if err := db.Create(&ticket).Error; err != nil {
+		t.Fatalf("seed ticket: %v", err)
+	}
+
+	handoff := routingapp.NewService(routinginfra.NewGormRepository(db), nil)
+	ports := scopedAgentToolPorts{db: db, session: session.ID, handoff: routingdelivery.NewSessionTransferAdapter(handoff, nil)}
+	ctx := platformauth.ContextWithScope(context.Background(), "tenant-a", "workspace-1")
+	customerSummary, err := ports.GetCustomerSummary(ctx, customer.ID)
+	if err != nil {
+		t.Fatalf("customer lookup: %v", err)
+	}
+	if customerSummary["company"] != "Acme" || customerSummary["priority"] != "high" {
+		t.Fatalf("unexpected customer summary: %+v", customerSummary)
+	}
+	ticketSummary, err := ports.GetTicketSummary(ctx, ticket.ID)
+	if err != nil {
+		t.Fatalf("ticket lookup: %v", err)
+	}
+	if ticketSummary["id"] != ticket.ID || ticketSummary["customer_id"] != ticket.CustomerID {
+		t.Fatalf("unexpected ticket summary: %+v", ticketSummary)
+	}
+
+	handoffResult, err := ports.RequestHandoff(ctx, session.ID, "请帮我转人工客服")
+	if err != nil {
+		t.Fatalf("request handoff: %v", err)
+	}
+	if handoffResult["status"] != "waiting" || handoffResult["queued"] != true {
+		t.Fatalf("unexpected handoff result: %+v", handoffResult)
+	}
+	replayResult, err := ports.RequestHandoff(ctx, session.ID, "请再转一次")
+	if err != nil {
+		t.Fatalf("replay handoff: %v", err)
+	}
+	if replayResult["queued_at"] != handoffResult["queued_at"] {
+		t.Fatalf("handoff replay must be idempotent: first=%+v second=%+v", handoffResult, replayResult)
+	}
+	var waitingRecords []models.WaitingRecord
+	if err := db.Find(&waitingRecords).Error; err != nil {
+		t.Fatalf("load waiting records: %v", err)
+	}
+	if len(waitingRecords) != 1 || waitingRecords[0].TenantID != "tenant-a" || waitingRecords[0].WorkspaceID != "workspace-1" {
+		t.Fatalf("unexpected waiting records: %+v", waitingRecords)
+	}
+}
+
+func TestScopedAIAgentToolPortsRejectForeignSessionScope(t *testing.T) {
+	db := openScopedAITestDB(t)
+	if err := db.Create(&models.Session{ID: "sess-foreign", TenantID: "tenant-a", WorkspaceID: "workspace-1", UserID: 7, Status: "active", StartedAt: time.Now()}).Error; err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	if err := db.Create(&models.Customer{ID: 7, TenantID: "tenant-b", WorkspaceID: "workspace-2", UserID: 7}).Error; err != nil {
+		t.Fatalf("seed customer: %v", err)
+	}
+
+	ports := scopedAgentToolPorts{db: db, session: "sess-foreign"}
+	ctx := platformauth.ContextWithScope(context.Background(), "tenant-b", "workspace-2")
+	if _, err := ports.GetCustomerSummary(ctx, 7); err == nil || !strings.Contains(err.Error(), "tenant scope mismatch") {
+		t.Fatalf("expected tenant scope mismatch, got %v", err)
+	}
+	if _, err := ports.RequestHandoff(ctx, "sess-foreign", "user request"); err == nil || !strings.Contains(err.Error(), "tenant scope mismatch") {
+		t.Fatalf("expected handoff tenant scope mismatch, got %v", err)
+	}
+	if _, err := ports.RequestHandoff(ctx, "sess-other", "user request"); err == nil || !strings.Contains(err.Error(), "conversation mismatch") {
+		t.Fatalf("expected conversation mismatch, got %v", err)
+	}
+}
+
+func TestScopedAIRuntimeServiceMissingSessionBlocksHandoffCapableQuery(t *testing.T) {
+	db := openScopedAITestDB(t)
+	handoff := routingdelivery.NewSessionTransferAdapter(routingapp.NewService(routinginfra.NewGormRepository(db), nil), nil)
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), logrus.New(), db, stubRuntimeFallback{}, nil, handoff)
+	resp, err := runtimeSvc.ProcessQuery(context.Background(), "请帮我转人工客服", "missing-session")
+	if err == nil || !strings.Contains(err.Error(), "load agent session scope") {
+		t.Fatalf("expected missing-session scope failure, got resp=%+v err=%v", resp, err)
 	}
 }
 

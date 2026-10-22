@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"servify/apps/server/internal/config"
+	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/gin-gonic/gin"
@@ -18,12 +19,12 @@ import (
 )
 
 func TestScopedAIServicesNilLoggerFallback(t *testing.T) {
-	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil)
+	handler := NewScopedAIHandlerService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubFallbackAIHandler{}, nil, nil, nil)
 	if _, ok := handler.GetMetrics(); !ok {
 		t.Fatal("expected fallback metrics with nil logger")
 	}
 
-	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubRuntimeFallback{}, nil)
+	runtimeSvc := NewScopedAIRuntimeService(config.GetDefaultConfig(), nil, openScopedAITestDB(t), stubRuntimeFallback{}, nil, nil)
 	if got, err := runtimeSvc.GetSessionSummary(nil); err != nil || got != "summary" {
 		t.Fatalf("GetSessionSummary() = (%q, %v)", got, err)
 	}
@@ -43,7 +44,7 @@ func TestScopedAIHandlerServiceNilReceiverBranches(t *testing.T) {
 }
 
 func TestRuntimeServiceFromResolvedConfigNilLogger(t *testing.T) {
-	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, config.AIConfig{}, nil, nil, nil)
+	svc := runtimeServiceFromResolvedConfig(config.OpenAIConfig{}, config.DifyConfig{}, config.RagFlowConfig{}, config.WeKnoraConfig{}, config.AIConfig{}, nil, nil, nil, aidelivery.AgentToolPorts{})
 	if svc == nil {
 		t.Fatal("expected default runtime service with nil logger")
 	}
