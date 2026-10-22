@@ -29,6 +29,9 @@ overrides:
   react-router@<7.18.0: ^7.18.0
   send@<0.19: ^0.19.0
   source-map-js@<1.2.2: ^1.2.2
+  vite@<7.3.7: 7.3.7
+  follow-redirects@<1.16.1: 1.16.1
+  hono@<4.13.11: 4.13.11
 
 importers:
 
@@ -1038,14 +1041,14 @@ packages:
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4
+      hono: 4.13.11
 
   '@hono/node-ws@1.3.1':
     resolution: {integrity: sha512-vo/MwCnpJAVHBkGzWjCJ28wF45fYHAfbPZcH2rodZODHtch2GHA94KtMfusmVycTUtsLAsaNsHhtY6P8X3RQsA==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       '@hono/node-server': ^1.19.11
-      hono: ^4.6.0
+      hono: 4.13.11
 
   '@humanwhocodes/config-array@0.11.14':
     resolution: {integrity: sha512-3T8LkOmg45BV5FICb15QQMsyUSWrQ8AygVfC7ZG32zOalnqrilm018ZVCw0eapXux8FtA33q8PSRSstjee3jSg==}
@@ -2139,7 +2142,7 @@ packages:
     resolution: {integrity: sha512-YmKkfhOAi3wsB1PhJq5Scj3GXMn3WvtQ/JC0xoopuHoXSdmtdStOpFrYaT1kie2YgFBcIe64ROzMYRjCrYOdYw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
-      vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: 7.3.7
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -3562,8 +3565,8 @@ packages:
     resolution: {integrity: sha512-kWyh8ADvHBFz6ua5xYOPnUroZTT/bwWfrCeL0Wj1dzG4/YOmOcfJ99W8dOVyyynJN35rZ9aCOtHChqQovV7yog==}
     engines: {node: '>=6'}
 
-  follow-redirects@1.16.0:
-    resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
+  follow-redirects@1.16.1:
+    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -3816,8 +3819,8 @@ packages:
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
-  hono@4.13.7:
-    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
+  hono@4.13.11:
+    resolution: {integrity: sha512-/SMX/RQNJn7oNmFwH6DtwDqcrzZU2otm1FD6OJe2cWF6cfy/F8hq0XVBv7xW3FTJshRQwuBnXHDq2kNsdZnshg==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@2.8.9:
@@ -6841,8 +6844,8 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  vite@7.3.6:
-    resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
+  vite@7.3.7:
+    resolution: {integrity: sha512-AHEzTORMbi7/7aXp7w7KZ5+DCUdSeLsJz0grY8xHpc9DHdYb0vQu6DqJfm2tOw3gDExNgPgnJTXxM6syYFHaCA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -8344,14 +8347,14 @@ snapshots:
 
   '@formatjs/intl-utils@2.3.0': {}
 
-  '@hono/node-server@1.19.17(hono@4.13.7)':
+  '@hono/node-server@1.19.17(hono@4.13.11)':
     dependencies:
-      hono: 4.13.7
+      hono: 4.13.11
 
-  '@hono/node-ws@1.3.1(@hono/node-server@1.19.17(hono@4.13.7))(hono@4.13.7)':
+  '@hono/node-ws@1.3.1(@hono/node-server@1.19.17(hono@4.13.11))(hono@4.13.11)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.7)
-      hono: 4.13.7
+      '@hono/node-server': 1.19.17(hono@4.13.11)
+      hono: 4.13.11
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
@@ -9301,14 +9304,14 @@ snapshots:
       '@umijs/bundler-utils': 4.7.16
       '@umijs/bundler-webpack': 4.7.16(type-fest@0.20.2)(typescript@5.9.3)(webpack@5.105.4(lightningcss@1.32.0)(postcss@8.5.28))
       '@umijs/utils': 4.7.16
-      '@vitejs/plugin-react': 5.2.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0))
+      '@vitejs/plugin-react': 5.2.0(vite@7.3.7(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0))
       core-js: 3.34.0
       less: 4.1.3
       postcss-preset-env: 7.5.0(postcss@8.5.28)
       rollup-plugin-visualizer: 6.0.11(rollup@4.63.1)
       systemjs: 6.15.1
       terser: 5.49.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0)
+      vite: 7.3.7(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0)
     transitivePeerDependencies:
       - '@types/node'
       - '@types/webpack'
@@ -9761,8 +9764,8 @@ snapshots:
   '@utoo/pack@1.5.16(less-loader@11.1.0(less@4.1.3)(webpack@5.105.4(lightningcss@1.32.0)(postcss@8.5.28)))(less@4.1.3)(postcss@8.5.28)(resolve-url-loader@5.0.0)(sass-loader@13.2.0(sass@1.54.0)(webpack@5.105.4(lightningcss@1.32.0)(postcss@8.5.28)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))':
     dependencies:
       '@babel/code-frame': 7.22.5
-      '@hono/node-server': 1.19.17(hono@4.13.7)
-      '@hono/node-ws': 1.3.1(@hono/node-server@1.19.17(hono@4.13.7))(hono@4.13.7)
+      '@hono/node-server': 1.19.17(hono@4.13.11)
+      '@hono/node-ws': 1.3.1(@hono/node-server@1.19.17(hono@4.13.11))(hono@4.13.11)
       '@jridgewell/trace-mapping': 0.3.31
       '@swc/helpers': 0.5.15
       '@utoo/pack-shared': 1.5.16
@@ -9770,7 +9773,7 @@ snapshots:
       domparser-rs: 0.0.7
       find-up: 4.1.0
       get-port: 5.1.1
-      hono: 4.13.7
+      hono: 4.13.11
       less: 4.1.3
       less-loader: 11.1.0(less@4.1.3)(webpack@5.105.4(lightningcss@1.32.0)(postcss@8.5.28))
       nanoid: 3.3.19
@@ -9796,7 +9799,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@vitejs/plugin-react@5.2.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0))':
+  '@vitejs/plugin-react@5.2.0(vite@7.3.7(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0))':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
@@ -9804,7 +9807,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.3
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0)
+      vite: 7.3.7(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -10173,7 +10176,7 @@ snapshots:
 
   axios@0.34.0:
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.1
       form-data: 4.0.6
       proxy-from-env: 1.1.0
     transitivePeerDependencies:
@@ -11683,7 +11686,7 @@ snapshots:
 
   flru@1.0.2: {}
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.1: {}
 
   for-each@0.3.5:
     dependencies:
@@ -11963,7 +11966,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.13.7: {}
+  hono@4.13.11: {}
 
   hosted-git-info@2.8.9: {}
 
@@ -15340,7 +15343,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0):
+  vite@7.3.7(@types/node@25.5.0)(jiti@2.7.0)(less@4.1.3)(lightningcss@1.32.0)(sass@1.54.0)(terser@5.49.0):
     dependencies:
       esbuild: 0.28.2
       fdir: 6.5.0(picomatch@4.0.7)
