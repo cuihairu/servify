@@ -10,7 +10,7 @@
 
 **Open-source intelligent customer service system** — Web-first, AI first response, human takeover, full ticket lifecycle
 
-[![Status](https://img.shields.io/badge/status-in%20development-orange)](https://github.com/cuihairu/servify/releases)
+<p align="center">[![Status](https://img.shields.io/badge/status-in%20development-orange)](https://github.com/cuihairu/servify/releases)</p>
 [![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI)](https://github.com/cuihairu/servify/actions)
