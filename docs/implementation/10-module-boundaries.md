@@ -2,16 +2,16 @@
 
 > Status (2026-10-04 doc reconciliation): after the migration completed the `services` layer no longer
 > exists; read the three-layer responsibility descriptions in this doc as migration-period archives.
-> The current dependency direction follows [current-architecture.md](../current-architecture.md),
+> The current dependency direction follows current-architecture.md,
 > while the executable rules remain `scripts/module-boundaries.rules` (still in force).
 
 This file defines the responsibilities and dependency directions of the `handlers`, `services`, and `modules` layers during the migration phase, supporting boundary governance for M5.
 
 Executable rule sources:
 
-- [scripts/module-boundaries.rules](../../scripts/module-boundaries.rules)
+- scripts/module-boundaries.rules
   - This is the rule list for the current boundary check
-- [scripts/check-module-boundaries.sh](../../scripts/check-module-boundaries.sh)
+- scripts/check-module-boundaries.sh
   - This is the rule executor
 
 Maintenance conventions:

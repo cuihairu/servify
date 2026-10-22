@@ -16,7 +16,7 @@
 
 Telegram 在当前判据下胜出：长轮询无需先开放公网回调及其验签/加密配置；持久 offset 适合 worker 检查点；出站是普通 Bot API 调用。但**默认并非全量群消息**：普通 bot 默认启用 privacy mode，管理员必须授权访问或关闭该模式并重新添加 bot。故必须逐群核实有效权限并留存授权，完成前禁止采集。官方资料说明了 privacy 限制及通过更高 `offset` 确认更新的语义：[Bot Features](https://core.telegram.org/bots/features)、[Bot API](https://core.telegram.org/bots/api)、[FAQ](https://core.telegram.org/bots/faq)（检索日期：2026-10-19）。
 
-该推荐承接调研结论：平台间没有共同机器人 wire protocol，Servify 应定义内部事件模型并由 adapter 处理平台差异（[调研 §1](../research/chatbot-platforms-and-protocols.md#结论)，检索日期 2026-10-19）。调研还指出权限及消息生命周期各异，不能把群聊简化成 `group + user + text`，否则线程、编辑、删除、附件和来源追溯会丢失（[调研 §3–4](../research/chatbot-platforms-and-protocols.md#跨平台共性与不可抹平的差异)）。
+该推荐承接调研结论：平台间没有共同机器人 wire protocol，Servify 应定义内部事件模型并由 adapter 处理平台差异（调研 §1，检索日期 2026-10-19）。调研还指出权限及消息生命周期各异，不能把群聊简化成 `group + user + text`，否则线程、编辑、删除、附件和来源追溯会丢失（调研 §3–4）。
 
 ## 范围与分阶段计划
 
@@ -58,11 +58,11 @@ adapter 将每条入站更新规范化为 `InboundEvent`。传输与平台原始
 
 既有实现接缝与限制：
 
-- `ConversationMessage` 目前只有会话 ID、发送者、类型、内容、metadata 和创建时间（[entities.go:58](../../apps/server/internal/modules/conversation/domain/entities.go#L58)）。
-- `AppendMessage` 会按作用域插入消息，但没有外部平台键或冲突处理（[gorm_repository.go:86](../../apps/server/internal/modules/conversation/infra/gorm_repository.go#L86)）。这是消息归档入口；adapter 必须先做 inbox 幂等。
-- 会话历史读取带 tenant/workspace 作用域（[gorm_repository.go:100](../../apps/server/internal/modules/conversation/infra/gorm_repository.go#L100)）；adapter 必须传入可信作用域上下文。
-- 会话事件总线有 `conversation.message_received`，且 event ID 独立于平台消息 ID（[events.go:12](../../apps/server/internal/modules/conversation/application/events.go#L12)）；不得将 bus event ID 用作入站去重键。
-- 旧消息表主键为数字 ID，字段只有内容/类型/发送者等，没有平台 ID 或外部消息唯一约束（[models.go:255](../../apps/server/internal/models/models.go#L255)）。
+- `ConversationMessage` 目前只有会话 ID、发送者、类型、内容、metadata 和创建时间（entities.go:58）。
+- `AppendMessage` 会按作用域插入消息，但没有外部平台键或冲突处理（gorm_repository.go:86）。这是消息归档入口；adapter 必须先做 inbox 幂等。
+- 会话历史读取带 tenant/workspace 作用域（gorm_repository.go:100）；adapter 必须传入可信作用域上下文。
+- 会话事件总线有 `conversation.message_received`，且 event ID 独立于平台消息 ID（events.go:12）；不得将 bus event ID 用作入站去重键。
+- 旧消息表主键为数字 ID，字段只有内容/类型/发送者等，没有平台 ID 或外部消息唯一约束（models.go:255）。
 
 ## Connector 与出站契约
 
@@ -107,5 +107,5 @@ adapter 负责解析平台限流信号及退避。按 installation 使用 token 
 
 ## 参考
 
-- 仓内调研：[聊天平台与协议](../research/chatbot-platforms-and-protocols.md)；实现前重新核验平台文档。
+- 仓内调研：聊天平台与协议；实现前重新核验平台文档。
 - Telegram 官方资料：[Bot Features](https://core.telegram.org/bots/features)、[Bot API](https://core.telegram.org/bots/api)、[FAQ](https://core.telegram.org/bots/faq)，检索日期：2026-10-19。

@@ -3,7 +3,7 @@
 Integration docs for the Servify Web SDK: the complete API and configuration surface for browser-side real-time chat, tickets, remote assistance, and voice channels.
 
 - Packages: `@servify/core` / `@servify/react` / `@servify/vue` / `@servify/vanilla` (all 1.0.0, see `sdk/packages/*/package.json:3`)
-- Governance spec (naming, release strategy, public API boundary): see [`sdk/SURFACE_GOVERNANCE.md`](../sdk/SURFACE_GOVERNANCE.md)
+- Governance spec (naming, release strategy, public API boundary): see `sdk/SURFACE_GOVERNANCE.md`
 
 ## 1. Positioning and Scope
 

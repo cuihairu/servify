@@ -9,11 +9,11 @@
 > **Left over**: Port and PermissionChecker are passed as `nil` at tool registration (tool calls degrade with
 > "port not configured"); wiring real data ports and permission checks remains future work; the transfer-to-human keyword
 > short circuit is kept as a fallback.
-> Related: [Architecture Review 2026](../architecture-review-2026.md) · [02 AI and Knowledge](./02-ai-and-knowledge.md) · [10 Module Boundaries](./10-module-boundaries.md)
+> Related: Architecture Review 2026 · [02 AI and Knowledge](./02-ai-and-knowledge.md) · [10 Module Boundaries](./10-module-boundaries.md)
 
 ## Background and Motivation
 
-The review conclusion (see [architecture-review-2026](../architecture-review-2026.md)): the current AI orchestration is **single-turn RAG**; the `tool` system is implemented but **not wired into the main loop**, and "transfer to human" relies on keyword heuristics. This task wires up the agent loop so the intelligent customer service can **act in multiple steps** (look up customers / look up tickets / transfer to human / ask follow-ups) — this is the key step upgrading the product from a "Q&A bot" to "intelligent customer service".
+The review conclusion (see architecture-review-2026): the current AI orchestration is **single-turn RAG**; the `tool` system is implemented but **not wired into the main loop**, and "transfer to human" relies on keyword heuristics. This task wires up the agent loop so the intelligent customer service can **act in multiple steps** (look up customers / look up tickets / transfer to human / ask follow-ups) — this is the key step upgrading the product from a "Q&A bot" to "intelligent customer service".
 
 ## Goals / Non-Goals
 

@@ -5,7 +5,7 @@
 > (`POST /api/v1/ai/feedback` session binding), retrieval analytics
 > (`GET /api/v1/ai/retrieval-analytics`) — and the Knowledge source registration / document
 > versioning / index job HTTP surfaces are not part of this task package; status and evidence follow
-> [Acceptance Matrix §14](../acceptance-checklist.md). Tool-calling leftovers (Port/PermissionChecker wired as `nil` in production assembly): see [13-ai-agent-loop.md](./13-ai-agent-loop.md).
+> Acceptance Matrix §14. Tool-calling leftovers (Port/PermissionChecker wired as `nil` in production assembly): see [13-ai-agent-loop.md](./13-ai-agent-loop.md).
 
 Scope:
 

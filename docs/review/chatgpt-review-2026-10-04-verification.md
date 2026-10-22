@@ -3,7 +3,7 @@
 > Recheck baseline: `cuihairu/servify` (public GitHub repo) today's (2026-10-04) HEAD `8e2034d` (docs: add ChatGPT review docs)
 > Recheck method: evidence given by comparing item-by-item against the current code and docs (`README.md` / `ARCHITECTURE.md` / `docs/v1-product-scope.md` / `apps/server/internal/*`).
 > Conclusion statistics at the end; each item is labeled 【Accurate / Partially accurate / Outdated / Not valid / Recommendation not yet landed】.
-> **Snapshot note (2026-10-08 documentation reconciliation)**: this report is a snapshot at `8e2034d`. After that same day's V1.0 convergence B0-B4 passed the gates, the "not landed" verdicts of §5 / §10 / §18-② / §19 / §22 no longer reflect the current state (Service Timeline, the PII boundary retention gate, knowledge sources/versions/index-jobs/retrieval analytics have all landed); for the current state see [acceptance-checklist.md](../acceptance-checklist.md) §14.
+> **Snapshot note (2026-10-08 documentation reconciliation)**: this report is a snapshot at `8e2034d`. After that same day's V1.0 convergence B0-B4 passed the gates, the "not landed" verdicts of §5 / §10 / §18-② / §19 / §22 no longer reflect the current state (Service Timeline, the PII boundary retention gate, knowledge sources/versions/index-jobs/retrieval analytics have all landed); for the current state see acceptance-checklist.md §14.
 
 ---
 

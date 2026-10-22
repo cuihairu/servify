@@ -2,7 +2,7 @@
 
 > Status (2026-10-04 doc reconciliation): M1–M6 are all complete — `internal/services` has been removed
 > entirely (P3-2), business capabilities are closed out under `internal/modules/*` (capped at 27 top-level
-> modules), so this doc is now a migration-history archive. The current active status source is [todo.md](../../todo.md).
+> modules), so this doc is now a migration-history archive. The current active status source is todo.md.
 
 Scope:
 

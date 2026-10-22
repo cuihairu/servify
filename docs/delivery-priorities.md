@@ -23,7 +23,7 @@ Trade-offs for follow-up evolution are executed by "evolution direction" — wit
 
 ## Execution Order
 
-> The P0/P1/P2/P3 order below is the historical execution sequence, fully executed, and is kept only as methodology archive; the current active backlog is in [todo.md](../todo.md).
+> The P0/P1/P2/P3 order below is the historical execution sequence, fully executed, and is kept only as methodology archive; the current active backlog is in todo.md.
 
 ### P0 First Close Out Runtime Hard Defects (Complete)
 
@@ -60,9 +60,9 @@ For example:
 The V1.0 convergence batch (B0–B4) has all passed the gate; there are no in-progress priority tasks. Entry points when resuming work:
 
 1. Evolution direction backlog: remaining thin-shell module documentation surface closure items. (The Routing scoring engine and pre-close ticket interception rules have landed — `scripts/test-routing-scoring-acceptance.sh` and the Makefile `routing-scoring-acceptance` gate.)
-2. When implementing, register and gate batches per [todo.md](../todo.md)'s batch discipline.
+2. When implementing, register and gate batches per todo.md's batch discipline.
 
-If resuming after an interruption, use the most recent `[-]` item in [todo.md](../todo.md) as the anchor, and do not jump around from memory.
+If resuming after an interruption, use the most recent `[-]` item in todo.md as the anchor, and do not jump around from memory.
 
 ## Trade-off Principles
 
@@ -75,7 +75,7 @@ When the following kinds of conflict appear, decide uniformly by these principle
 
 ## Companion Documents
 
-1. [todo.md](../todo.md)
+1. todo.md
 2. [acceptance-checklist.md](./acceptance-checklist.md)
 3. [implementation/README.md](/zh/implementation/README.md)
 4. [demo-and-mock-boundaries.md](./demo-and-mock-boundaries.md)

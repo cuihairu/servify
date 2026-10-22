@@ -16,7 +16,11 @@ const config = defineConfig({
     'Servify product docs for intelligent customer service, remote assistance, deployment, and operations',
   base: docsBase,
   head: [['meta', { name: 'theme-color', content: '#0f172a' }]],
-  ignoreDeadLinks: true,
+  // 仅放行文档里的 localhost 示例地址；站内死链仍然 build 即断。
+  ignoreDeadLinks: [/^https?:\/\/localhost/],
+
+  // 无对应中文版且未入任何导航的存档评审页：不入站，避免官方语言切换器产生死链。
+  srcExclude: ['review/luna-review-2026-10-18.md', 'review/sdk-kb-audit-2026-10-19.md'],
 
   locales: {
     root: {

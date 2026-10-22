@@ -10,11 +10,11 @@ Purpose:
 
 File descriptions:
 
-- [Overall Architecture Design](../ARCHITECTURE.md)
+- Overall Architecture Design
   - Macro boundaries, runtime layering, and future extension directions
-- [Current Architecture Analysis](../current-architecture.md)
+- Current Architecture Analysis
   - Current real architecture snapshot, module migration status, and transition risks
-- [Architecture Redesign Plan](../architecture-redesign-plan.md)
+- Architecture Redesign Plan
   - Architecture redesign plan (a services→modules migration-era artifact, archived only)
 - [01-platform-and-runtime.md](./01-platform-and-runtime.md)
   - Platform tasks such as entry, bootstrap, router, auth, event bus, and realtime
@@ -79,18 +79,18 @@ Current progress (updated 2026-10-04, `v1.0.0` released):
   wiring the tool Port data sources and permission checks is left over; see the
   verification note at the top of [13-ai-agent-loop.md](./13-ai-agent-loop.md))
 - The V1.0 convergence batches (B0–B4) have all passed the gate; the only active status sources are
-  [todo.md](../../todo.md) and the [acceptance matrix](../acceptance-checklist.md); for future
+  todo.md and the acceptance matrix; for future
   evolution see "Evolution Directions"
 
 Current reading order:
 
-1. Read [Current Architecture Analysis](../current-architecture.md) first to confirm the repository's real state.
-2. Then read the [V1.0 Convergence Plan](../v1-convergence-plan.md) to confirm the current product/architecture baseline.
+1. Read Current Architecture Analysis first to confirm the repository's real state.
+2. Then read the V1.0 Convergence Plan to confirm the current product/architecture baseline.
 3. The historical implementation mainline (architecture redesign plan, 10-series migration archives) serves only as migration history reference.
 
 Companion topics:
 
-- [Release Versioning Strategy](../release-versioning.md)
-- [Testing Pyramid](../testing-pyramid.md)
-- [Mermaid Compatibility](../MERMAID_COMPATIBILITY.md)
-- [Repository Hygiene and Generated Asset Boundaries](../repo-hygiene.md)
+- Release Versioning Strategy
+- Testing Pyramid
+- Mermaid Compatibility
+- Repository Hygiene and Generated Asset Boundaries

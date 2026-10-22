@@ -58,11 +58,11 @@ Every adapter emits one `InboundEvent`; platform-specific transport and payload 
 
 Existing seams and limits:
 
-- `ConversationMessage` currently carries only conversation ID, sender, kind, content, metadata and created time ([entities.go:58](../apps/server/internal/modules/conversation/domain/entities.go#L58)).
-- `AppendMessage` scopes and inserts the message, but has no external-platform key or conflict handling ([gorm_repository.go:86](../apps/server/internal/modules/conversation/infra/gorm_repository.go#L86)). This is the archive insertion seam; connector inbox dedup must precede it.
-- Existing session history reads are tenant/workspace scoped ([gorm_repository.go:100](../apps/server/internal/modules/conversation/infra/gorm_repository.go#L100)); adapters must pass trusted scope context.
-- The conversation event bus exposes `conversation.message_received` and creates event IDs separately from platform IDs ([events.go:12](../apps/server/internal/modules/conversation/application/events.go#L12)); do not use bus event ID as inbound dedup key.
-- Legacy storage has a `models.Message` row keyed by numeric ID and content/type/sender, with no platform ID field or external-message uniqueness ([models.go:255](../apps/server/internal/models/models.go#L255)).
+- `ConversationMessage` currently carries only conversation ID, sender, kind, content, metadata and created time (entities.go:58).
+- `AppendMessage` scopes and inserts the message, but has no external-platform key or conflict handling (gorm_repository.go:86). This is the archive insertion seam; connector inbox dedup must precede it.
+- Existing session history reads are tenant/workspace scoped (gorm_repository.go:100); adapters must pass trusted scope context.
+- The conversation event bus exposes `conversation.message_received` and creates event IDs separately from platform IDs (events.go:12); do not use bus event ID as inbound dedup key.
+- Legacy storage has a `models.Message` row keyed by numeric ID and content/type/sender, with no platform ID field or external-message uniqueness (models.go:255).
 
 ## Connector and outbound contract
 

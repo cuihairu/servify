@@ -9,11 +9,11 @@
 > **遗留**：工具注册时 Port 与 PermissionChecker 传 `nil`（工具调用会以
 > “port 未配置”降级），真实数据端口与权限校验接入仍是后续项；转人工关键词
 > 短路仍保留为兜底。
-> 关联：[架构评估 2026](../architecture-review-2026.md) · [02 AI 与知识](./02-ai-and-knowledge.md) · [10 模块边界](./10-module-boundaries.md)
+> 关联：架构评估 2026 · [02 AI 与知识](./02-ai-and-knowledge.md) · [10 模块边界](./10-module-boundaries.md)
 
 ## 背景与动机
 
-评估结论（见 [architecture-review-2026](../architecture-review-2026.md)）：当前 AI 编排是**单轮 RAG**，`tool` 系统已实现但**未接入主循环**，"转人工"靠关键词启发式。本任务把 agent loop 接通，让智能客服能**多步行动**（查客户 / 查工单 / 转人工 / 追问）——这是产品从"问答机器人"升级到"智能客服"的关键一步。
+评估结论（见 architecture-review-2026）：当前 AI 编排是**单轮 RAG**，`tool` 系统已实现但**未接入主循环**，"转人工"靠关键词启发式。本任务把 agent loop 接通，让智能客服能**多步行动**（查客户 / 查工单 / 转人工 / 追问）——这是产品从"问答机器人"升级到"智能客服"的关键一步。
 
 ## 目标 / 非目标
 

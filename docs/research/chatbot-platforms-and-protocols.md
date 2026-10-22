@@ -105,5 +105,5 @@ Servify 已在 `README.zh.md` 预留 channel adapters 映射到 `conversation`/`
 - 钉钉：[获取自定义机器人 Webhook 地址](https://open.dingtalk.com/document/orgapp/custom-robot-access)、[开放平台](https://open.dingtalk.com/)
 - Microsoft Teams：[群聊与频道会话](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/channel-and-group-conversations)、[Activity handlers](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/bot-basics)、[Resource-specific Consent 消息接收](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/channel-messages-for-bots-and-agents)
 - Matrix：[Application Service API v1.9](https://spec.matrix.org/v1.9/application-service-api/)、[Client-Server API 事件模型](https://spec.matrix.org/latest/client-server-api/)
-- 本地 Memex：[机器人平台设计](../../../memex/docs/design/机器人平台.md)、[群内知识沉淀闭环](../../../memex/docs/design/knowledge-deposition-loop.md)
-- 本仓库：[群聊知识沉淀审计](../review/sdk-kb-audit-2026-10-19.md)、[SDK 与渠道预留](../../README.zh.md#sdk-与渠道预留)
+- 本地 Memex：机器人平台设计、群内知识沉淀闭环
+- 本仓库：群聊知识沉淀审计、SDK 与渠道预留

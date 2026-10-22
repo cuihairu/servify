@@ -10,11 +10,11 @@
 
 文件说明：
 
-- [总体架构设计](../ARCHITECTURE.md)
+- 总体架构设计
   - 宏观边界、运行时分层、未来扩展方向
-- [当前架构分析](../current-architecture.md)
+- 当前架构分析
   - 当前真实架构快照、模块迁移状态与过渡风险
-- [架构重设计计划](../architecture-redesign-plan.md)
+- 架构重设计计划
   - 架构重设计计划（services→modules 迁移期产物，仅存档）
 - [01-platform-and-runtime.md](./01-platform-and-runtime.md)
   - 入口、bootstrap、router、auth、event bus、realtime 等平台任务
@@ -73,17 +73,17 @@
 - `10` services→modules 迁移已完成（`internal/services` 已整体移除，27 个一级模块封顶），配套 inventory / scorecard / boundaries 为迁移期档案
 - `11` 和 `12` 主体已落地（租户/审计/安全基线接入管理面；tracing/metrics/告警通过 observability baseline 门禁）
 - `13` AI agent loop 主循环已接通（tool-calling 循环 + 流式 + 三工具注册；工具 Port 数据源与权限校验接入为遗留项，状态见 [13-ai-agent-loop.md](./13-ai-agent-loop.md) 头部核实注记）
-- V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是 todo.md 与 [验收矩阵](../acceptance-checklist.md)；后续演进见 「演进方向」
+- V1.0 收敛批次（B0–B4）已全部过闸，当前唯一活跃状态源是 todo.md 与 验收矩阵；后续演进见 「演进方向」
 
 当前阅读顺序：
 
-1. 先读 [当前架构分析](../current-architecture.md)，确认仓库真实状态。
-2. 再读 [V1.0 收敛改造计划书](../v1-convergence-plan.md)，确认当前产品/架构口径。
+1. 先读 当前架构分析，确认仓库真实状态。
+2. 再读 V1.0 收敛改造计划书，确认当前产品/架构口径。
 3. 历史实施主线（架构重设计计划、10-series 迁移档案）仅作迁移史参考。
 
 配套专题：
 
-- [版本发布策略](../release-versioning.md)
-- [测试金字塔](../testing-pyramid.md)
-- [Mermaid 兼容性](../MERMAID_COMPATIBILITY.md)
-- [仓库卫生与生成物边界](../repo-hygiene.md)
+- 版本发布策略
+- 测试金字塔
+- Mermaid 兼容性
+- 仓库卫生与生成物边界
