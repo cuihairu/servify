@@ -37,11 +37,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -79,7 +79,7 @@ jobs:
       # default: standard 防上游默认漂移。
       - name: Lint
         timeout-minutes: 10
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: v2.14.0
           args: --max-issues-per-linter 0 --max-same-issues 0
@@ -97,7 +97,7 @@ jobs:
       # 直接报错，CI 如实红而不是静默跳过）。
       - name: Upload coverage to Codecov
         timeout-minutes: 5
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7.1.1
         with:
           files: scripts/test-results/coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -117,7 +117,7 @@ jobs:
       - name: Upload test artifacts
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: go-test-results
           path: scripts/test-results
@@ -143,11 +143,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -177,11 +177,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -215,11 +215,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -299,11 +299,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -312,7 +312,7 @@ jobs:
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -352,7 +352,7 @@ jobs:
       - name: Upload docs artifact
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: docs-site
           path: docs/.vitepress/dist
@@ -368,7 +368,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Validate shell syntax
         timeout-minutes: 2
@@ -432,11 +432,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -445,7 +445,7 @@ jobs:
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -471,11 +471,11 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
         timeout-minutes: 3
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
           cache-dependency-path: |
@@ -484,7 +484,7 @@ jobs:
 
       - name: Setup Java
         timeout-minutes: 3
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6.1.0
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -521,7 +521,7 @@ jobs:
       # M4 验收③（产物流程就绪）：AAR 作为接入方可取产物随 CI 归档（可重建，30 天足够）。
       - name: Upload AAR artifact
         timeout-minutes: 3
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: servify-sdk-aar
           path: sdk/android/servify-sdk/build/outputs/aar/servify-sdk-release.aar
@@ -540,7 +540,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Swift 6.4.0
         timeout-minutes: 12
@@ -584,7 +584,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Build and test ServifyKit (Darwin face incl. URLSession transport)
         timeout-minutes: 15
@@ -599,7 +599,7 @@ jobs:
       # cd 进 sdk/ios 后把产物留在 sdk/ios/build/（不清理），此处归档。
       - name: Upload XCFramework artifact
         timeout-minutes: 3
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: servify-kit-xcframework
           path: sdk/ios/build/ServifyKit.xcframework.zip
@@ -616,17 +616,17 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node
         timeout-minutes: 3
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
 
       - name: Setup pnpm
         timeout-minutes: 3
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6.1.0
         with:
           version: 10
 
@@ -637,7 +637,7 @@ jobs:
 
       - name: Setup pnpm cache
         timeout-minutes: 3
-        uses: actions/cache@v5
+        uses: actions/cache@v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('apps/admin/pnpm-lock.yaml') }}
@@ -663,7 +663,7 @@ jobs:
       - name: Upload admin build artifact
         timeout-minutes: 3
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: admin-dist
           path: apps/admin/dist
@@ -686,7 +686,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 3
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Compose version
         timeout-minutes: 1
@@ -724,7 +724,7 @@ jobs:
 
       - name: Setup Go (schema parity)
         timeout-minutes: 2
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: apps/server/go.mod
 
