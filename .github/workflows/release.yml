@@ -21,7 +21,7 @@ env:
 jobs:
   prepare-release:
     name: Prepare Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash

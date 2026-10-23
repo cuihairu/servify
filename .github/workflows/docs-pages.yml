@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     name: Build Docs Site
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash

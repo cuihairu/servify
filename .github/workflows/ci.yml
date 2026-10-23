@@ -27,7 +27,7 @@ env:
 jobs:
   go-checks:
     name: Go Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # 测试口径带 -tags integration（37 个集成测试文件）后单次跑量增大，
     # 步骤与作业超时相应放宽，避免冷缓存下误报超时。
     timeout-minutes: 30
@@ -133,7 +133,7 @@ jobs:
 
   golden-real:
     name: AI Golden Set (real LLM)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     # 手动触发才跑；secret 未配置时静默跳过，不阻塞任何常态门禁
     if: github.event_name == 'workflow_dispatch'
@@ -169,7 +169,7 @@ jobs:
 
   module-checks:
     name: Module Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     defaults:
       run:
@@ -207,7 +207,7 @@ jobs:
 
   sdk-checks:
     name: SDK Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     defaults:
       run:
@@ -291,7 +291,7 @@ jobs:
 
   docs-checks:
     name: Docs Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     defaults:
       run:
@@ -360,7 +360,7 @@ jobs:
 
   script-checks:
     name: Script Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 30
     defaults:
       run:
@@ -424,7 +424,7 @@ jobs:
 
   smoke-checks:
     name: Smoke Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -463,7 +463,7 @@ jobs:
 
   android-probe:
     name: Android SDK
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 35
     defaults:
       run:
@@ -532,7 +532,7 @@ jobs:
     name: iOS SDK (Swift)
     # 锁 ubuntu-24.04：swift.org 的 26.04 平台 tarball 首版带了旧编译的 Testing.swiftmodule
     # （6.4.0-RELEASE 实测），24.04 是成熟平台面；runner 与 setup 均用 24.04 口径。
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     defaults:
       run:
@@ -576,7 +576,7 @@ jobs:
     # 刀 4：Darwin 专属面（URLSessionWebSocketTransport / create 工厂）只能在 macOS
     # 编译验证；XCFramework ≤2MB 门禁（D9 / M2 验收②）也依赖 xcodebuild。
     # 锁 macos-15：runner 标签随 macos-latest 漂移会换 Xcode 大版本（与 ubuntu 锁 24.04 同因）。
-    runs-on: macos-15
+    runs-on: ${{ vars.CI_RUNNER || 'macos-15' }}
     timeout-minutes: 25
     defaults:
       run:
@@ -608,7 +608,7 @@ jobs:
 
   admin-checks:
     name: Admin Checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     defaults:
       run:
@@ -671,7 +671,7 @@ jobs:
 
   integration:
     name: Integration
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     needs:
       - go-checks
       - sdk-checks
