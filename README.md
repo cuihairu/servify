@@ -11,12 +11,7 @@
 **Open-source intelligent customer service system** — Web-first, AI first response, human takeover, full ticket lifecycle
 
 <p align="center">
-<a href="https://github.com/cuihairu/servify/releases"><img alt="Status" src="https://img.shields.io/badge/status-in%20development-orange"></a>
-<a href="https://go.dev/"><img alt="Go Version" src="https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white"></a>
-<a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
-<a href="https://github.com/cuihairu/servify/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI"></a>
-<a href="https://codecov.io/gh/cuihairu/servify"><img alt="codecov" src="https://codecov.io/gh/cuihairu/servify/graph/badge.svg"></a>
-<a href="https://servify.cuihairu.site/"><img alt="Website" src="https://img.shields.io/badge/website-servify.cuihairu.site-6366f1?logo=cloudflare"></a>
+<a href="https://github.com/cuihairu/servify/releases"><img alt="Status" src="https://img.shields.io/badge/status-in%20development-orange"></a> <a href="https://go.dev/"><img alt="Go Version" src="https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go&logoColor=white"></a> <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a> <a href="https://github.com/cuihairu/servify/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/cuihairu/servify/ci.yml?branch=main&label=CI"></a> <a href="https://codecov.io/gh/cuihairu/servify"><img alt="codecov" src="https://codecov.io/gh/cuihairu/servify/graph/badge.svg"></a> <a href="https://servify.cuihairu.site/"><img alt="Website" src="https://img.shields.io/badge/website-servify.cuihairu.site-6366f1?logo=cloudflare"></a>
 </p>
 
 </div>
@@ -561,7 +556,5 @@ module documentation cleanup.
 
 Made with ❤️ by [cuihairu](https://github.com/cuihairu)
 
-<a href="LICENSE"><img alt="Apache License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a>
-<a href="https://github.com/cuihairu/servify"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-cuihairu%2Fservify-181717?logo=github"></a>
-
+<a href="LICENSE"><img alt="Apache License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg"></a> <a href="https://github.com/cuihairu/servify"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-cuihairu%2Fservify-181717?logo=github"></a>
 </div>
