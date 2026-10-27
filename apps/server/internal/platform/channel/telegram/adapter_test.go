@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -678,6 +679,232 @@ func TestConnectorNotifyPropagatesSendFailure(t *testing.T) {
 	var apiErr *AdapterError
 	if res.PlatformMessageID != "" || !errors.As(err, &apiErr) || apiErr.Kind != ErrPermission {
 		t.Errorf("notify = %+v, %v; want empty result and permission AdapterError", res, err)
+	}
+}
+
+// sendTransportResponse is one scripted sendMessage reply for an injected
+// http.RoundTripper; err short-circuits before any response is parsed.
+type sendTransportResponse struct {
+	status int
+	body   string
+	err    error
+}
+
+// scriptedSendTransport implements http.RoundTripper without a network socket:
+// it snapshots every request and returns the queued responses in order.
+type scriptedSendTransport struct {
+	mu        sync.Mutex
+	responses []sendTransportResponse
+	calls     int
+	requests  []string
+}
+
+func (s *scriptedSendTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
+	i := s.calls
+	s.calls++
+	if i >= len(s.responses) {
+		return nil, errors.New("unexpected send transport call")
+	}
+	s.requests = append(s.requests, req.URL.RawQuery)
+	resp := s.responses[i]
+	if resp.err != nil {
+		return nil, resp.err
+	}
+	return &http.Response{
+		StatusCode: resp.status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(resp.body)),
+		Request:    req,
+	}, nil
+}
+
+func (s *scriptedSendTransport) observed() (calls int, requests []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls, append([]string(nil), s.requests...)
+}
+
+func TestConnectorSendMapsPlatformRefusal(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{{
+		status: http.StatusOK,
+		body:   `{"ok":false,"error_code":403,"description":"bot was kicked"}`,
+	}}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultRejected || res.PlatformMessageID != "" {
+		t.Errorf("refusal result = %+v, want rejected without platform id", res)
+	}
+	if !errors.As(err, &apiErr) || apiErr.Kind != ErrPermission {
+		t.Errorf("refusal err = %v, want permission AdapterError", err)
+	}
+	if calls, _ := st.observed(); calls != 1 {
+		t.Errorf("send calls = %d, want 1 (permission is never retried)", calls)
+	}
+}
+
+func TestConnectorSendTransportUncertaintyIsUnknown(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{{err: io.ErrUnexpectedEOF}}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	res, err := connector.Send(context.Background(), sendRequest("-100123", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultUnknown || res.PlatformMessageID != "" || !res.AcceptedAt.IsZero() {
+		t.Errorf("transport uncertainty result = %+v, want unknown without delivery evidence", res)
+	}
+	if !errors.As(err, &apiErr) || apiErr.Kind != ErrTransient || apiErr.Status != 0 {
+		t.Errorf("transport uncertainty err = %v, want transient status 0", err)
+	}
+	if calls, _ := st.observed(); calls != 1 {
+		t.Errorf("send calls = %d, want 1 (ambiguous delivery is never blindly retried)", calls)
+	}
+}
+
+func TestConnectorSendRetriesEnvelopeRetryAfter(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{
+		{status: http.StatusOK, body: `{"ok":false,"error_code":429,"parameters":{"retry_after":2}}`},
+		{status: http.StatusOK, body: `{"ok":true,"result":{"message_id":91}}`},
+	}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	connector.retryMaxAttempts = 2
+	connector.retryMaxBackoff = 30 * time.Second
+	var waits []time.Duration
+	connector.sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
+	if err != nil {
+		t.Fatalf("notify after retry: %v", err)
+	}
+	if res.Status != channel.SendResultAccepted || res.PlatformMessageID != "91" || res.AcceptedAt.IsZero() {
+		t.Errorf("retried result = %+v, want accepted 91", res)
+	}
+	if calls, _ := st.observed(); calls != 2 {
+		t.Errorf("send calls = %d, want 2", calls)
+	}
+	if len(waits) != 1 || waits[0] != 2*time.Second {
+		t.Errorf("retry waits = %v, want exactly [2s] (server Retry-After wins)", waits)
+	}
+}
+
+func TestConnectorSendRetriesWithoutRetryAfterWithBackoff(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{
+		{status: http.StatusOK, body: `{"ok":false,"error_code":429}`},
+		{status: http.StatusOK, body: `{"ok":true,"result":{"message_id":92}}`},
+	}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	connector.retryMaxAttempts = 2
+	connector.retryMinBackoff = 2 * time.Second
+	connector.retryMaxBackoff = 4 * time.Second
+	var waits []time.Duration
+	connector.sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
+	if err != nil || res.Status != channel.SendResultAccepted || res.PlatformMessageID != "92" {
+		t.Fatalf("backoff retry = %+v (%v), want accepted 92", res, err)
+	}
+	if len(waits) != 1 || waits[0] < time.Second || waits[0] > 2*time.Second {
+		t.Errorf("backoff wait = %v, want full-jitter inside [1s,2s]", waits)
+	}
+}
+
+func TestConnectorSendRetryBudgetStops(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	rateLimited := sendTransportResponse{status: http.StatusOK, body: `{"ok":false,"error_code":429}`}
+	st := &scriptedSendTransport{responses: []sendTransportResponse{rateLimited, rateLimited, rateLimited}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	connector.retryMaxAttempts = 3
+	connector.retryMinBackoff = time.Millisecond
+	connector.retryMaxBackoff = 2 * time.Millisecond
+	var waits []time.Duration
+	connector.sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultRejected || !errors.As(err, &apiErr) || apiErr.Kind != ErrRateLimited {
+		t.Errorf("budget result = %+v, %v; want rejected rate_limited", res, err)
+	}
+	if !strings.Contains(err.Error(), "after 3 attempts") || !strings.Contains(err.Error(), "notify-1") {
+		t.Errorf("budget err = %v, want attempt count and caller idempotency key", err)
+	}
+	if calls, _ := st.observed(); calls != 3 {
+		t.Errorf("send calls = %d, want 3 (budget is attempts, no extra call)", calls)
+	}
+	if len(waits) != 2 {
+		t.Errorf("backoff waits = %v, want 2 pauses before the final refusal", waits)
+	}
+}
+
+func TestConnectorSendDeadlineBoundsAttempt(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{{
+		status: http.StatusOK,
+		body:   `{"ok":true,"result":{"message_id":93}}`,
+	}}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	req := sendRequest("-100123", "hello")
+	req.Deadline = time.Now().Add(-time.Second)
+	res, err := connector.Send(context.Background(), req)
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultUnknown || !errors.As(err, &apiErr) || apiErr.Kind != ErrTransient {
+		t.Errorf("deadline result = %+v, %v; want unknown transient", res, err)
+	}
+}
+
+func TestConnectorSendSleepCancellationIsUnknown(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	st := &scriptedSendTransport{responses: []sendTransportResponse{{
+		status: http.StatusOK,
+		body:   `{"ok":false,"error_code":429}`,
+	}}}
+	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
+	connector.sleep = func(ctx context.Context, d time.Duration) error { return context.Canceled }
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
+	if res.Status != channel.SendResultUnknown || !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled backoff result = %+v, %v; want unknown context cancellation", res, err)
+	}
+}
+
+func TestSleepContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sleepContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled sleep = %v, want context.Canceled", err)
+	}
+	if err := sleepContext(context.Background(), 0); err != nil {
+		t.Errorf("non-positive sleep = %v, want nil", err)
+	}
+	if err := sleepContext(context.Background(), time.Nanosecond); err != nil {
+		t.Errorf("timer sleep = %v, want nil", err)
+	}
+}
+
+func TestJitteredBackoffFloor(t *testing.T) {
+	if got := jitteredBackoff(time.Nanosecond); got != time.Nanosecond {
+		t.Errorf("nanosecond backoff = %v, want unchanged", got)
+	}
+	if got := jitteredBackoff(time.Second); got < 500*time.Millisecond || got > time.Second {
+		t.Errorf("jittered backoff = %v, want inside [500ms,1s]", got)
 	}
 }
 
