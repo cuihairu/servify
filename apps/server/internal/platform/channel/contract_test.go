@@ -100,3 +100,107 @@ func TestInboundIdempotencyKey(t *testing.T) {
 		t.Error("composition must be unambiguous for split-identical inputs")
 	}
 }
+
+func TestContractSendResultStatusValues(t *testing.T) {
+	cases := map[SendResultStatus]string{
+		SendResultAccepted: "accepted",
+		SendResultUnknown:  "unknown",
+		SendResultRejected: "rejected",
+	}
+	for status, want := range cases {
+		if string(status) != want {
+			t.Errorf("SendResultStatus %q does not match contract vocabulary %q", string(status), want)
+		}
+	}
+}
+
+func TestSendRequestValidate(t *testing.T) {
+	base := SendRequest{
+		ConversationID: "-100123",
+		IdempotencyKey: "out-1",
+		Content:        SendContent{Text: "hello"},
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid send request rejected: %v", err)
+	}
+	reply := base
+	reply.ReplyToMessageID = "11"
+	if err := reply.Validate(); err != nil {
+		t.Errorf("send request with reply chain rejected: %v", err)
+	}
+	withParts := base
+	withParts.Content = SendContent{ContentParts: []ContentPart{{Kind: "text", Text: "hi"}}}
+	if err := withParts.Validate(); err != nil {
+		t.Errorf("send request with content parts rejected: %v", err)
+	}
+	cases := []struct {
+		name string
+		mut  func(*SendRequest)
+	}{
+		{"missing conversation", func(r *SendRequest) { r.ConversationID = "" }},
+		{"missing idempotency key", func(r *SendRequest) { r.IdempotencyKey = "" }},
+		{"empty content", func(r *SendRequest) { r.Content = SendContent{} }},
+	}
+	for _, tc := range cases {
+		r := base
+		tc.mut(&r)
+		if err := r.Validate(); err == nil {
+			t.Errorf("%s: empty envelope must be rejected", tc.name)
+		}
+	}
+}
+
+func TestNotifyRequestValidate(t *testing.T) {
+	base := NotifyRequest{
+		Target:         "-100123",
+		Reason:         "phase-0 announcement",
+		IdempotencyKey: "out-2",
+		Content:        SendContent{Text: "announcement"},
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid notify request rejected: %v", err)
+	}
+	cases := []struct {
+		name string
+		mut  func(*NotifyRequest)
+	}{
+		{"missing target", func(r *NotifyRequest) { r.Target = "" }},
+		{"missing idempotency key", func(r *NotifyRequest) { r.IdempotencyKey = "" }},
+		{"empty content", func(r *NotifyRequest) { r.Content = SendContent{} }},
+	}
+	for _, tc := range cases {
+		r := base
+		tc.mut(&r)
+		if err := r.Validate(); err == nil {
+			t.Errorf("%s: empty envelope must be rejected", tc.name)
+		}
+	}
+}
+
+func TestSendResultValidate(t *testing.T) {
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	accepted := SendResult{PlatformMessageID: "77", AcceptedAt: now, Status: SendResultAccepted}
+	if err := accepted.Validate(); err != nil {
+		t.Fatalf("accepted result rejected: %v", err)
+	}
+	unknown := SendResult{Status: SendResultUnknown}
+	if err := unknown.Validate(); err != nil {
+		t.Fatalf("unknown result rejected: %v", err)
+	}
+	rejected := SendResult{Status: SendResultRejected}
+	if err := rejected.Validate(); err != nil {
+		t.Fatalf("rejected result rejected: %v", err)
+	}
+	if err := (SendResult{PlatformMessageID: "77", Status: SendResultAccepted}).Validate(); err == nil {
+		t.Error("accepted result without accepted_at must be rejected")
+	}
+	if err := (SendResult{Status: SendResultAccepted, AcceptedAt: now}).Validate(); err == nil {
+		t.Error("accepted result without platform message id must be rejected")
+	}
+	if err := (SendResult{PlatformMessageID: "77", Status: SendResultUnknown}).Validate(); err == nil {
+		t.Error("non-accepted result carrying a message id must be rejected")
+	}
+	if err := (SendResult{Status: SendResultStatus("queued")}).Validate(); err == nil {
+		t.Error("unknown status must be rejected")
+	}
+}

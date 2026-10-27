@@ -149,12 +149,30 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, timeoutSec int) (
 	return out.Result, nil
 }
 
-// SendText delivers one TEXT message as the bot and returns the platform
-// message id (the retry idempotency anchor).
-func (c *Client) SendText(ctx context.Context, chatID int64, text string) (int64, error) {
+// SendParams carries one sendMessage call. ReplyToMessageID threads the reply
+// chain (Bot API's reply_to_message_id); MessageThreadID targets a forum topic
+// (message_thread_id). Zero values mean the field is absent.
+type SendParams struct {
+	ChatID           int64
+	Text             string
+	ReplyToMessageID int64 // 0: no reply chain
+	MessageThreadID  int64 // 0: no topic thread
+}
+
+// SendMessage delivers one TEXT message as the bot and returns the platform
+// message id (the retry idempotency anchor). The reply/thread ids ride the
+// standard Bot API query parameters, so a reply chain never needs a second
+// platform call.
+func (c *Client) SendMessage(ctx context.Context, p SendParams) (int64, error) {
 	q := url.Values{}
-	q.Set("chat_id", strconv.FormatInt(chatID, 10))
-	q.Set("text", text)
+	q.Set("chat_id", strconv.FormatInt(p.ChatID, 10))
+	q.Set("text", p.Text)
+	if p.ReplyToMessageID != 0 {
+		q.Set("reply_to_message_id", strconv.FormatInt(p.ReplyToMessageID, 10))
+	}
+	if p.MessageThreadID != 0 {
+		q.Set("message_thread_id", strconv.FormatInt(p.MessageThreadID, 10))
+	}
 	var out struct {
 		OK     bool `json:"ok"`
 		Result struct {
@@ -165,6 +183,11 @@ func (c *Client) SendText(ctx context.Context, chatID int64, text string) (int64
 		return 0, err
 	}
 	return out.Result.MessageID, nil
+}
+
+// SendText delivers one plain TEXT message without a reply or thread.
+func (c *Client) SendText(ctx context.Context, chatID int64, text string) (int64, error) {
+	return c.SendMessage(ctx, SendParams{ChatID: chatID, Text: text})
 }
 
 // do performs one Bot API call. Every parameter goes in the query string (the

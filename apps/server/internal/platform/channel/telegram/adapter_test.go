@@ -83,6 +83,8 @@ type botAPI struct {
 	offsets  []string
 	timeouts []string
 	sends    []string
+	replies  []string
+	threads  []string
 	onPoll   func(w http.ResponseWriter, r *http.Request)
 	onSend   func(w http.ResponseWriter, r *http.Request)
 }
@@ -102,6 +104,8 @@ func (f *botAPI) handler() http.HandlerFunc {
 		case r.Method == http.MethodPost && r.URL.Path == "/bottok/sendMessage":
 			f.mu.Lock()
 			f.sends = append(f.sends, r.URL.Query().Get("chat_id")+"|"+r.URL.Query().Get("text"))
+			f.replies = append(f.replies, r.URL.Query().Get("reply_to_message_id"))
+			f.threads = append(f.threads, r.URL.Query().Get("message_thread_id"))
 			f.mu.Unlock()
 			if f.onSend != nil {
 				f.onSend(w, r)
@@ -120,6 +124,12 @@ func (f *botAPI) observed() (offsets, timeouts, sends []string) {
 	defer f.mu.Unlock()
 	return append([]string(nil), f.offsets...), append([]string(nil), f.timeouts...),
 		append([]string(nil), f.sends...)
+}
+
+func (f *botAPI) observedSendChain() (replies, threads []string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.replies...), append([]string(nil), f.threads...)
 }
 
 func storedCursor(t *testing.T, cursors *channel.CursorStore) string {
@@ -564,7 +574,7 @@ func TestConnectorCapabilitiesReadError(t *testing.T) {
 	if _, err := connector.PollOnce(context.Background(), 0); err == nil {
 		t.Error("poll once: expected capabilities read error")
 	}
-	if _, err := connector.Notify(context.Background(), "-100123", "hello"); err == nil {
+	if _, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello")); err == nil {
 		t.Error("notify: expected capabilities read error")
 	}
 }
@@ -615,7 +625,7 @@ func TestConnectorNotifyGatesAndSends(t *testing.T) {
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
 
 	// no snapshot at all: fail closed without reaching the platform.
-	if _, err := connector.Notify(context.Background(), "-100123", "hello"); !errors.Is(err, ErrSendDisabled) {
+	if _, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello")); !errors.Is(err, ErrSendDisabled) {
 		t.Errorf("notify without snapshot = %v, want ErrSendDisabled", err)
 	}
 	if _, _, sends := fake.observed(); len(sends) != 0 {
@@ -624,19 +634,25 @@ func TestConnectorNotifyGatesAndSends(t *testing.T) {
 
 	enableIngestion(t, caps)
 	// DeclaredCapabilities grants SendText: the send goes out.
-	msgID, err := connector.Notify(context.Background(), "-100123", "hello")
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
 	if err != nil {
 		t.Fatalf("notify: %v", err)
 	}
-	if msgID != "77" {
-		t.Errorf("notify msg id = %q, want 77", msgID)
+	if res.PlatformMessageID != "77" || res.Status != channel.SendResultAccepted || res.AcceptedAt.IsZero() {
+		t.Errorf("notify result = %+v, want accepted 77 with observed accepted_at", res)
+	}
+	if err := res.Validate(); err != nil {
+		t.Errorf("notify result invalid: %v", err)
 	}
 	// Target is the chat id: surrounding whitespace tolerated.
-	if _, err = connector.Notify(context.Background(), " -100123 ", "hello"); err != nil {
+	if _, err = connector.Notify(context.Background(), notifyRequest(" -100123 ", "hello")); err != nil {
 		t.Fatalf("notify trimmed target: %v", err)
 	}
 	if _, _, sends := fake.observed(); len(sends) != 2 || sends[0] != "-100123|hello" {
 		t.Errorf("sends = %v", sends)
+	}
+	if replies, _ := fake.observedSendChain(); len(replies) != 2 || replies[0] != "" {
+		t.Errorf("notify must not carry a reply chain: %v", replies)
 	}
 
 	// capability flipped off afterwards: gate closes again.
@@ -644,7 +660,7 @@ func TestConnectorNotifyGatesAndSends(t *testing.T) {
 		Update("send_text", false).Error; err != nil {
 		t.Fatalf("flip send capability off: %v", err)
 	}
-	if _, err = connector.Notify(context.Background(), "-100123", "hello"); !errors.Is(err, ErrSendDisabled) {
+	if _, err = connector.Notify(context.Background(), notifyRequest("-100123", "hello")); !errors.Is(err, ErrSendDisabled) {
 		t.Errorf("notify with revoked send capability = %v, want ErrSendDisabled", err)
 	}
 }
@@ -658,10 +674,10 @@ func TestConnectorNotifyPropagatesSendFailure(t *testing.T) {
 	defer srv.Close()
 
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
-	msgID, err := connector.Notify(context.Background(), "-100123", "hello")
+	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
 	var apiErr *AdapterError
-	if msgID != "" || !errors.As(err, &apiErr) || apiErr.Kind != ErrPermission {
-		t.Errorf("notify = %q, %v; want empty id and permission AdapterError", msgID, err)
+	if res.PlatformMessageID != "" || !errors.As(err, &apiErr) || apiErr.Kind != ErrPermission {
+		t.Errorf("notify = %+v, %v; want empty result and permission AdapterError", res, err)
 	}
 }
 
@@ -675,13 +691,144 @@ func TestConnectorNotifyRejectsNonChatTargets(t *testing.T) {
 
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
 	for _, target := range []string{"", "group:5", "not-a-chat", "0", "  "} {
-		if _, err := connector.Notify(context.Background(), target, "hello"); err == nil ||
-			!strings.Contains(err.Error(), "not an integer") {
-			t.Errorf("notify target %q: err = %v, want integer-chat-id rejection", target, err)
+		_, err := connector.Notify(context.Background(), notifyRequest(target, "hello"))
+		invalidEnvelope := strings.TrimSpace(target) == ""
+		want := "notify request requires target"
+		if !invalidEnvelope {
+			want = "not an integer"
+		}
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("notify target %q: err = %v, want rejection containing %q", target, err, want)
 		}
 	}
 	if _, _, sends := fake.observed(); len(sends) != 0 {
 		t.Errorf("rejected targets must not reach the platform: %v", sends)
+	}
+}
+
+func notifyRequest(target, text string) channel.NotifyRequest {
+	return channel.NotifyRequest{
+		Target:         target,
+		Reason:         "test announcement",
+		IdempotencyKey: "notify-1",
+		Content:        channel.SendContent{Text: text},
+	}
+}
+
+func sendRequest(conversationID, text string) channel.SendRequest {
+	return channel.SendRequest{
+		ConversationID: conversationID,
+		IdempotencyKey: "send-1",
+		Content:        channel.SendContent{Text: text},
+	}
+}
+
+func TestConnectorSendReplyChain(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
+	req := sendRequest("-100123", "replying")
+	req.ReplyToMessageID = "42"
+	req.ThreadID = "7"
+	res, err := connector.Send(context.Background(), req)
+	if err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if res.PlatformMessageID != "77" || res.Status != channel.SendResultAccepted || res.AcceptedAt.IsZero() {
+		t.Errorf("send result = %+v, want accepted 77 with observed accepted_at", res)
+	}
+	if err := res.Validate(); err != nil {
+		t.Errorf("send result invalid: %v", err)
+	}
+	replies, threads := fake.observedSendChain()
+	if len(replies) != 1 || replies[0] != "42" {
+		t.Errorf("reply chain = %v, want [42] (reply_to_message_id rides sendMessage)", replies)
+	}
+	if len(threads) != 1 || threads[0] != "7" {
+		t.Errorf("thread chain = %v, want [7]", threads)
+	}
+	if _, _, sends := fake.observed(); len(sends) != 1 || sends[0] != "-100123|replying" {
+		t.Errorf("sends = %v, want the single reply to the conversation", sends)
+	}
+}
+
+func TestConnectorSendRejectsInvalidBeforePlatform(t *testing.T) {
+	sink, caps, cursors, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
+	invalid := []struct {
+		name string
+		req  channel.SendRequest
+		want string
+	}{
+		{"missing conversation", channel.SendRequest{IdempotencyKey: "k", Content: channel.SendContent{Text: "x"}}, "conversation"},
+		{"missing idempotency key", channel.SendRequest{ConversationID: "-100123", Content: channel.SendContent{Text: "x"}}, "idempotency"},
+		{"empty content", channel.SendRequest{ConversationID: "-100123", IdempotencyKey: "k"}, "content"},
+		{"non-integer conversation", channel.SendRequest{ConversationID: "group:5", IdempotencyKey: "k", Content: channel.SendContent{Text: "x"}}, "not an integer"},
+		{"non-positive reply id", func() channel.SendRequest {
+			r := sendRequest("-100123", "x")
+			r.ReplyToMessageID = "0"
+			return r
+		}(), "reply_to_message_id"},
+		{"non-positive thread id", func() channel.SendRequest {
+			r := sendRequest("-100123", "x")
+			r.ThreadID = "-1"
+			return r
+		}(), "message_thread_id"},
+	}
+	for _, tc := range invalid {
+		if _, err := connector.Send(context.Background(), tc.req); err == nil ||
+			!strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want rejection containing %q", tc.name, err, tc.want)
+		}
+	}
+	if _, _, sends := fake.observed(); len(sends) != 0 {
+		t.Errorf("invalid sends must not reach the platform: %v", sends)
+	}
+}
+
+func TestConnectorSendGatesAndRejectsRichContent(t *testing.T) {
+	sink, caps, cursors, db := newAdapterStores(t)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig())
+
+	// No observed snapshot: the outbound gate is fail-closed.
+	if _, err := connector.Send(context.Background(), sendRequest("-100123", "x")); !errors.Is(err, ErrSendDisabled) {
+		t.Errorf("send without snapshot = %v, want ErrSendDisabled", err)
+	}
+
+	enableIngestion(t, caps)
+	// A rich body on the TEXT surface is refused rather than silently dropped.
+	rich := sendRequest("-100123", "")
+	rich.Content = channel.SendContent{ContentParts: []channel.ContentPart{{Kind: "file", Text: "not-real"}}}
+	if _, err := connector.Send(context.Background(), rich); !errors.Is(err, ErrRichSendUnsupported) {
+		t.Errorf("rich send = %v, want ErrRichSendUnsupported", err)
+	}
+
+	// Capability revoked afterwards: the gate closes again.
+	if err := db.Model(&channel.ChatConnectorCapability{}).Where("1=1").
+		Update("send_text", false).Error; err != nil {
+		t.Fatalf("flip send capability off: %v", err)
+	}
+	if _, err := connector.Send(context.Background(), sendRequest("-100123", "x")); !errors.Is(err, ErrSendDisabled) {
+		t.Errorf("send with revoked capability = %v, want ErrSendDisabled", err)
+	}
+	if _, _, sends := fake.observed(); len(sends) != 0 {
+		t.Errorf("gated/refused sends must not reach the platform: %v", sends)
 	}
 }
 

@@ -200,6 +200,57 @@ func TestClientEnvelopeErrorOnSend(t *testing.T) {
 	}
 }
 
+// The reply chain rides the standard sendMessage query parameters, so a reply
+// to a platform message is one platform call and the client keeps the platform
+// message id for the caller's retry anchor.
+func TestClientSendMessageReplyChainParams(t *testing.T) {
+	var sawReply, sawThread, sawText, sawChat string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		sawChat = q.Get("chat_id")
+		sawText = q.Get("text")
+		sawReply = q.Get("reply_to_message_id")
+		sawThread = q.Get("message_thread_id")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":88}}`))
+	}))
+	defer srv.Close()
+
+	id, err := NewClient(srv.URL, "tok", srv.Client()).SendMessage(context.Background(), SendParams{
+		ChatID:           -100123,
+		Text:             "replying",
+		ReplyToMessageID: 42,
+		MessageThreadID:  7,
+	})
+	if err != nil {
+		t.Fatalf("send message: %v", err)
+	}
+	if id != 88 {
+		t.Errorf("message id = %d, want 88", id)
+	}
+	if sawChat != "-100123" || sawText != "replying" || sawReply != "42" || sawThread != "7" {
+		t.Errorf("params = chat %q text %q reply %q thread %q, want the reply chain echoed", sawChat, sawText, sawReply, sawThread)
+	}
+}
+
+// A plain SendText omits the optional reply/thread parameters entirely.
+func TestClientSendTextOmitsChainParams(t *testing.T) {
+	var sawReply, sawThread string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		sawReply = q.Get("reply_to_message_id")
+		sawThread = q.Get("message_thread_id")
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1}}`))
+	}))
+	defer srv.Close()
+
+	if _, err := NewClient(srv.URL, "tok", srv.Client()).SendText(context.Background(), 5, "hi"); err != nil {
+		t.Fatalf("send text: %v", err)
+	}
+	if sawReply != "" || sawThread != "" {
+		t.Errorf("plain send carried chain params reply=%q thread=%q, want absent", sawReply, sawThread)
+	}
+}
+
 // The rarer true non-200 responses take the shared HTTP status table, with the
 // Retry-After header as the pause source.
 func TestClientHTTPStatusErrors(t *testing.T) {

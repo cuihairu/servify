@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,12 @@ import (
 // unknownSender marks a quarantined update whose author we cannot identify from
 // the shape — the row is evidence for triage, not a forwardable message.
 const unknownSender = "unknown"
+
+// ErrRichSendUnsupported reports an outbound body that carries content parts on
+// the TEXT-only Bot API surface. The adapter cannot render a part silently:
+// the caller must send a TEXT body (contract: no adapter may drop a structured
+// part it cannot deliver).
+var ErrRichSendUnsupported = errors.New("telegram: rich outbound content is not supported by the TEXT surface")
 
 // Config is the stored installation mapping for one Telegram bot installation.
 // It carries the tenant/workspace scope and the configured conversation (the
@@ -286,26 +293,100 @@ func (c *Connector) advance(ctx context.Context, updateID int64) error {
 	return c.cursors.Save(ctx, c.cursorScope, strconv.FormatInt(updateID+1, 10))
 }
 
-// Notify sends one TEXT message as the bot, gated on the recorded SendText
-// capability — the outbound sibling of the ingestion gate. The target is the
-// Telegram chat id (integers only: private, group, supergroup and channel ids).
-func (c *Connector) Notify(ctx context.Context, target, text string) (string, error) {
+// Send delivers one TEXT message to the request's conversation, optionally in
+// a topic thread and replying to a platform message. The reply chain rides the
+// Bot API's sendMessage reply_to_message_id, so a reply is a single platform
+// call; the idempotency key is the caller's stable retry anchor. ContentParts
+// is accepted for interface conformance but this TEXT surface renders only
+// Text — a richer body without a SendRich grant is rejected by the capability
+// gate before it ever reaches the platform.
+func (c *Connector) Send(ctx context.Context, req channel.SendRequest) (channel.SendResult, error) {
+	if err := req.Validate(); err != nil {
+		return channel.SendResult{}, err
+	}
+	chatID, err := parseChatID(req.ConversationID)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	replyTo, err := parsePositiveID("reply_to_message_id", req.ReplyToMessageID)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	threadID, err := parsePositiveID("message_thread_id", req.ThreadID)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	return c.deliver(ctx, chatID, req.Content, replyTo, threadID)
+}
+
+// Notify sends one TEXT operator/system announcement as the bot, gated on the
+// recorded SendText capability — the outbound sibling of the ingestion gate.
+// Target is the explicit recipient scope (the storage-scoped Telegram chat id,
+// integers only: private, group, supergroup and channel ids) and Reason is the
+// audit trail entry for why the announcement ran. The adapter never broadens
+// the audience implicitly.
+func (c *Connector) Notify(ctx context.Context, req channel.NotifyRequest) (channel.SendResult, error) {
+	if err := req.Validate(); err != nil {
+		return channel.SendResult{}, err
+	}
+	chatID, err := parseChatID(req.Target)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	return c.deliver(ctx, chatID, req.Content, 0, 0)
+}
+
+// deliver runs the capability-gated send and wraps a Bot API message id into
+// the contract's accepted result. An ambiguous platform outcome surfaces as an
+// AdapterError to the caller; the connector never fabricates an unknown verdict
+// because the Bot API either returns a message id or an explicit error.
+func (c *Connector) deliver(ctx context.Context, chatID int64, content channel.SendContent, replyTo, threadID int64) (channel.SendResult, error) {
 	snapshot, err := c.caps.Latest(ctx, c.scope)
 	if err != nil {
-		return "", err
+		return channel.SendResult{}, err
 	}
 	if snapshot == nil || !snapshot.SendText {
-		return "", ErrSendDisabled
+		return channel.SendResult{}, ErrSendDisabled
 	}
+	if len(content.ContentParts) != 0 {
+		return channel.SendResult{}, ErrRichSendUnsupported
+	}
+	id, err := c.client.SendMessage(ctx, SendParams{
+		ChatID:           chatID,
+		Text:             content.Text,
+		ReplyToMessageID: replyTo,
+		MessageThreadID:  threadID,
+	})
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	return channel.SendResult{
+		PlatformMessageID: strconv.FormatInt(id, 10),
+		AcceptedAt:        time.Now(),
+		Status:            channel.SendResultAccepted,
+	}, nil
+}
+
+func parseChatID(target string) (int64, error) {
 	chatID, err := strconv.ParseInt(strings.TrimSpace(target), 10, 64)
 	if err != nil || chatID == 0 {
-		return "", fmt.Errorf("telegram chat id %q is not an integer", target)
+		return 0, fmt.Errorf("telegram chat id %q is not an integer", target)
 	}
-	id, err := c.client.SendText(ctx, chatID, text)
-	if err != nil {
-		return "", err
+	return chatID, nil
+}
+
+// parsePositiveID parses the optional reply/thread chain ids: empty means the
+// field is absent, a non-empty value must be a positive integer (the Bot API
+// rejects zero and negative ids for these parameters).
+func parsePositiveID(field, value string) (int64, error) {
+	if value == "" {
+		return 0, nil
 	}
-	return strconv.FormatInt(id, 10), nil
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("telegram %s %q is not a positive integer", field, value)
+	}
+	return id, nil
 }
 
 func (c *Connector) ingestionEnabled(ctx context.Context) (bool, error) {
