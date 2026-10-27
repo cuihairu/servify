@@ -184,7 +184,7 @@ func TestInstallationStoreErrors(t *testing.T) {
 	db := newChannelTestDB(t)
 	// read path: Save and Get both fail through the capabilities-shaped query
 	if err := db.Callback().Query().Before("gorm:query").Register("inst_query_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register query callback: %v", err)
 	}
 	store := NewInstallationStore(db)
@@ -206,7 +206,7 @@ func TestInstallationSaveCreateAndUpdateErrors(t *testing.T) {
 	// create path
 	db := newChannelTestDB(t)
 	if err := db.Callback().Create().Before("gorm:create").Register("inst_create_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register create callback: %v", err)
 	}
 	if _, err := NewInstallationStore(db).Save(context.Background(),
@@ -221,7 +221,7 @@ func TestInstallationSaveCreateAndUpdateErrors(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := db2.Callback().Update().Before("gorm:update").Register("inst_update_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register update callback: %v", err)
 	}
 	if _, err := store.Save(context.Background(), sampleInstallation("t", "w", "i")); err == nil {

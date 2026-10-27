@@ -108,7 +108,7 @@ func TestCapabilityRecordReadError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCapabilityStore(db)
 	if err := db.Callback().Query().Before("gorm:query").Register("cap_read_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Record(context.Background(), capScope(), observedCaps()); err == nil {
@@ -120,7 +120,7 @@ func TestCapabilityRecordCreateError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCapabilityStore(db)
 	if err := db.Callback().Create().Before("gorm:create").Register("cap_create_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Record(context.Background(), capScope(), observedCaps()); err == nil {
@@ -136,7 +136,7 @@ func TestCapabilityRecordUpdateError(t *testing.T) {
 		t.Fatalf("record first: %v", err)
 	}
 	if err := db.Callback().Update().Before("gorm:update").Register("cap_update_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Record(ctx, capScope(), observedCaps()); err == nil {
@@ -168,7 +168,7 @@ func TestCapabilityLatestQueryError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCapabilityStore(db)
 	if err := db.Callback().Query().Before("gorm:query").Register("cap_query_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if _, err := store.Latest(context.Background(), capScope()); err == nil {

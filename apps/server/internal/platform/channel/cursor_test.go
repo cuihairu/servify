@@ -84,7 +84,7 @@ func TestCursorSaveFirstReadError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCursorStore(db)
 	if err := db.Callback().Query().Before("gorm:query").Register("cursor_read_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Save(context.Background(), cursorScope(), "offset-1"); err == nil {
@@ -100,7 +100,7 @@ func TestCursorSaveUpdateError(t *testing.T) {
 		t.Fatalf("save first: %v", err)
 	}
 	if err := db.Callback().Update().Before("gorm:update").Register("cursor_update_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Save(ctx, cursorScope(), "offset-2"); err == nil {
@@ -112,7 +112,7 @@ func TestCursorSaveCreateError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCursorStore(db)
 	if err := db.Callback().Create().Before("gorm:create").Register("cursor_create_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Save(context.Background(), cursorScope(), "offset-1"); err == nil {
@@ -128,7 +128,7 @@ func TestCursorClearDeleteError(t *testing.T) {
 		t.Fatalf("save first: %v", err)
 	}
 	if err := db.Callback().Delete().Before("gorm:delete").Register("cursor_delete_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Save(ctx, cursorScope(), ""); err == nil {
@@ -140,7 +140,7 @@ func TestCursorLoadQueryError(t *testing.T) {
 	db := newChannelTestDB(t)
 	store := NewCursorStore(db)
 	if err := db.Callback().Query().Before("gorm:query").Register("cursor_load_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if _, err := store.Cursor(context.Background(), cursorScope()); err == nil {

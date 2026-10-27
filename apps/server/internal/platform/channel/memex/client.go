@@ -139,7 +139,7 @@ func (c *Client) do(ctx context.Context, op, method, path, body string, out inte
 	if err != nil {
 		return &AdapterError{Kind: ErrTransient, Op: op, Detail: err.Error()}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return &AdapterError{Kind: ErrInvalid, Status: resp.StatusCode, Op: op, Detail: err.Error()}

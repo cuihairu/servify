@@ -441,7 +441,7 @@ func TestConnectorPollOnceKeepsOffsetOnSinkFailure(t *testing.T) {
 	sink, caps, cursors, db := newAdapterStores(t)
 	enableIngestion(t, caps)
 	if err := db.Callback().Create().Before("gorm:create").Register("tg_sink_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 
@@ -474,7 +474,7 @@ func TestConnectorPollOnceStopsOnCursorSaveFailure(t *testing.T) {
 		t.Fatalf("seed cursor: %v", err)
 	}
 	if err := db.Callback().Update().Before("gorm:update").Register("tg_cursor_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("cursor store down")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("cursor store down")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 
@@ -541,7 +541,7 @@ func TestConnectorPollOnceCursorReadError(t *testing.T) {
 	if err := db.Callback().Query().Before("gorm:query").Register("tg_cursor_read_error",
 		func(tx *gorm.DB) {
 			if tx.Statement.Table == "chat_connector_cursor" {
-				tx.AddError(errors.New("cursor store down"))
+				_ = tx.AddError(errors.New("cursor store down"))
 			}
 		}); err != nil {
 		t.Fatalf("register callback: %v", err)
@@ -562,7 +562,7 @@ func TestConnectorCapabilitiesReadError(t *testing.T) {
 	sink, caps, cursors, db := newAdapterStores(t)
 	enableIngestion(t, caps)
 	if err := db.Callback().Query().Before("gorm:query").Register("tg_caps_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	fake := &botAPI{t: t}

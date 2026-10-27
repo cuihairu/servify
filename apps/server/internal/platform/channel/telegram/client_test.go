@@ -368,7 +368,7 @@ func TestClientRetryAfterHeaderVariants(t *testing.T) {
 				w.Header().Set("Retry-After", tc.header)
 			}
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"ok":false,"error_code":429,"description":"t=%s"}`, tc.name)))
+			_, _ = fmt.Fprintf(w, `{"ok":false,"error_code":429,"description":"t=%s"}`, tc.name)
 		}))
 		_, err := NewClient(srv.URL, "tok", srv.Client()).GetUpdates(context.Background(), 0, 0)
 		srv.Close()

@@ -299,7 +299,7 @@ func TestConnectorPollOnceKeepsUnackedOnSinkFailure(t *testing.T) {
 	sink, caps, db := newAdapterStores(t)
 	enableIngestion(t, caps)
 	if err := db.Callback().Create().Before("gorm:create").Register("memex_sink_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 
@@ -404,7 +404,7 @@ func TestConnectorCapabilitiesReadError(t *testing.T) {
 	sink, caps, db := newAdapterStores(t)
 	enableIngestion(t, caps)
 	if err := db.Callback().Query().Before("gorm:query").Register("memex_caps_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	fake := &memexFake{t: t}

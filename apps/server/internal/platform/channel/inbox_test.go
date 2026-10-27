@@ -97,7 +97,7 @@ func TestInboxAccept(t *testing.T) {
 func TestInboxAcceptCreateError(t *testing.T) {
 	store := NewInboxStore(newChannelTestDB(t))
 	if err := store.db.Callback().Create().Before("gorm:create").Register("inbox_accept_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if _, err := store.Accept(context.Background(), messageEvent("evt-1")); err == nil {
@@ -158,7 +158,7 @@ func TestInboxListQuarantined(t *testing.T) {
 func TestInboxListQuarantinedQueryError(t *testing.T) {
 	store := NewInboxStore(newChannelTestDB(t))
 	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_query_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if _, err := store.ListQuarantined(context.Background(), "tenant-1", "workspace-1", 10); err == nil {
@@ -228,7 +228,7 @@ func TestInboxDismissUpdateError(t *testing.T) {
 	}
 	row := inboxByKey(t, store, unknownEvent("q1").IdempotencyKey)
 	if err := store.db.Callback().Update().Before("gorm:update").Register("inbox_dismiss_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", row.ID); err == nil {
@@ -241,7 +241,7 @@ func TestInboxDismissProbeError(t *testing.T) {
 	// no rows: the update affects nothing and the store probes for the row;
 	// a failing probe must surface as an error, not as not-quarantined
 	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_dismiss_probe_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.Dismiss(context.Background(), "tenant-1", "workspace-1", 12345); err == nil {
@@ -337,7 +337,7 @@ func TestInboxListUnforwarded(t *testing.T) {
 func TestInboxListUnforwardedQueryError(t *testing.T) {
 	store := NewInboxStore(newChannelTestDB(t))
 	if err := store.db.Callback().Query().After("gorm:query").Register("inbox_unforwarded_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if _, err := store.ListUnforwarded(context.Background(), "tenant-1", "workspace-1", 10); err == nil {
@@ -369,7 +369,7 @@ func TestInboxMarkForwardedByKey(t *testing.T) {
 	}
 
 	if err := store.db.Callback().Update().Before("gorm:update").Register("inbox_mark_error",
-		func(tx *gorm.DB) { tx.AddError(errors.New("boom")) }); err != nil {
+		func(tx *gorm.DB) { _ = tx.AddError(errors.New("boom")) }); err != nil {
 		t.Fatalf("register callback: %v", err)
 	}
 	if err := store.MarkForwardedByKey(context.Background(), "tenant-1", "workspace-1", key, time.Now()); err == nil {

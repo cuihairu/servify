@@ -61,7 +61,7 @@ func TestSupervisorSnapshotTracksLifecycle(t *testing.T) {
 		t.Fatalf("states = %d, want 2", len(states))
 	}
 	for key, st := range states {
-		if st.Status != RunnerStatusRunning && !(key == "memex/doomed" && st.Status == RunnerStatusExited) {
+		if st.Status != RunnerStatusRunning && (key != "memex/doomed" || st.Status != RunnerStatusExited) {
 			t.Fatalf("%s status = %q, want running (doomed may have exited already)", key, st.Status)
 		}
 		if st.TenantID != "tenant-1" || st.WorkspaceID != "workspace-1" || st.Platform != "memex" {
