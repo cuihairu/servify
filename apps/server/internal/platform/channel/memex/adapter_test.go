@@ -994,3 +994,115 @@ func TestConnectorWithoutPayloadStoreKeepsNoRef(t *testing.T) {
 		t.Errorf("ref = %s/%q, want empty (retention off is observable)", row.RawPayloadStore, row.RawPayloadObjectID)
 	}
 }
+
+func TestConnectorCapabilitiesObservesOwnInstallation(t *testing.T) {
+	_, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, channel.NewInboxStore(nil), adapterConfig())
+	got, err := connector.Capabilities(context.Background(), "inst-1")
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	if !got.IngestionEnabled() || !got.SendText {
+		t.Errorf("snapshot = %+v, want recorded ingest+send grant", got)
+	}
+	if _, err := connector.Capabilities(context.Background(), "inst-2"); err == nil {
+		t.Error("capabilities for another installation: want error (one connector observes one installation)")
+	}
+}
+
+func TestConnectorCapabilitiesFailClosedWithoutSnapshot(t *testing.T) {
+	_, caps, _ := newAdapterStores(t)
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, channel.NewInboxStore(nil), adapterConfig())
+	got, err := connector.Capabilities(context.Background(), "inst-1")
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	if got.IngestionEnabled() {
+		t.Errorf("uncorded snapshot must surface fail-closed, got %+v", got)
+	}
+}
+
+func TestConnectorCapabilitiesStoreErrorSurfaces(t *testing.T) {
+	_, caps, db := newAdapterStores(t)
+	// Close the DB so the capability store read fails: the interface must
+	// surface the store error, never fabricate a grant.
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("sql db: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+	fake := &memexFake{t: t}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, channel.NewInboxStore(nil), adapterConfig())
+	if _, err := connector.Capabilities(context.Background(), "inst-1"); err == nil {
+		t.Error("closed store: want error from Capabilities")
+	}
+}
+
+func TestConnectorReceiveDrainsThroughSuppliedSink(t *testing.T) {
+	boundSink, caps, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	// A distinct sink the caller hands to Receive, so we can prove the drain
+	// uses the interface argument rather than the connector's bound store.
+	callerSink, _, callerDB := newAdapterStores(t)
+
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("timeout_ms"); got != strconv.Itoa(channel.DefaultLongPollMS) {
+			t.Errorf("timeout_ms = %q, want %d (contract default)", got, channel.DefaultLongPollMS)
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[{"msg_id":"m1","from":"alice","to":"bot:echo","text":"hi","ts_ms":1697000000000}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, boundSink, adapterConfig())
+	if err := connector.Receive(context.Background(), callerSink); err != nil {
+		t.Fatalf("receive: %v", err)
+	}
+	var bound []channel.ChatConnectorInbox
+	if err := db.Find(&bound).Error; err != nil || len(bound) != 0 {
+		t.Errorf("bound sink rows = %d (%v), want none (drain must use the supplied sink)", len(bound), err)
+	}
+	var caller []channel.ChatConnectorInbox
+	if err := callerDB.Find(&caller).Error; err != nil || len(caller) != 1 {
+		t.Errorf("caller sink rows = %d (%v), want 1", len(caller), err)
+	}
+	if acked := fake.ackedMsgs(); len(acked) != 1 || acked[0] != "m1" {
+		t.Errorf("acked = %v, want [m1]", acked)
+	}
+}
+
+func TestConnectorReceiveGatesOnCapabilities(t *testing.T) {
+	boundSink, caps, _ := newAdapterStores(t)
+	fake := &memexFake{t: t}
+	fake.onPull = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"updates":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, boundSink, adapterConfig())
+	if err := connector.Receive(context.Background(), channel.NewInboxStore(nil)); !errors.Is(err, ErrIngestionDisabled) {
+		t.Errorf("receive without snapshot = %v, want ErrIngestionDisabled", err)
+	}
+}

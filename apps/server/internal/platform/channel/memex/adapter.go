@@ -119,6 +119,11 @@ type Connector struct {
 	retry channel.SendRetryPolicy
 }
 
+// Compile-time assertion: the connector satisfies the contract's full
+// Connector surface (Capabilities / Receive / Send / Notify), so a caller can
+// hold the platform-independent interface without reaching into Memex.
+var _ channel.Connector = (*Connector)(nil)
+
 // NewConnector wires the pull/ACK client to the contract stores. Both stores
 // enforce tenant/workspace scoping internally, so ingestion cannot cross
 // scopes regardless of what the payload claims.
@@ -196,6 +201,48 @@ func (c *Connector) dropOrphanPayload(ctx context.Context, ev channel.ConnectorE
 // absorbs (at-least-once). The first failure aborts without ACKing, leaving
 // unacknowledged messages for redelivery.
 func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, error) {
+	return c.drain(ctx, c.sink, longPoll)
+}
+
+// Capabilities observes the latest recorded platform grant for the
+// installation this connector is bound to. It is the contract's live-grant
+// face: the connector returns whatever the capability store holds for its own
+// scope, so an unrecorded or revoked grant surfaces as the fail-closed zero
+// snapshot (IngestionEnabled false) rather than an operator's assertion. An
+// installationID that is not this connector's own is a caller error — one
+// connector observes exactly one installation.
+func (c *Connector) Capabilities(ctx context.Context, installationID string) (channel.Capabilities, error) {
+	if installationID != c.scope.InstallationID {
+		return channel.Capabilities{}, fmt.Errorf("memex: capability listener bound to installation %q cannot observe %q",
+			c.scope.InstallationID, installationID)
+	}
+	snapshot, err := c.caps.Latest(ctx, c.scope)
+	if err != nil {
+		return channel.Capabilities{}, err
+	}
+	if snapshot == nil {
+		return channel.Capabilities{}, nil
+	}
+	return *snapshot, nil
+}
+
+// Receive drains one long-poll batch through the caller-supplied sink at the
+// contract's default long-poll budget. It is the Connector interface's
+// single-drain face over the same accept-before-ACK pipeline as PollOnce, so a
+// caller holding the platform-independent surface gets the identical durable
+// behavior without reconfiguring the connector's stores.
+func (c *Connector) Receive(ctx context.Context, sink channel.InboundSink) error {
+	_, err := c.drain(ctx, sink, time.Duration(channel.DefaultLongPollMS)*time.Millisecond)
+	return err
+}
+
+// drain is the shared accept-before-ACK pipeline. Every update is translated,
+// its raw payload retained, and the event durably accepted by the sink
+// (commit/quarantine/duplicate) before the platform ACK clears it, so a crash
+// between accept and ACK yields redelivery that the inbox idempotency key
+// absorbs (at-least-once). The first failure aborts without ACKing, leaving
+// unacknowledged messages for redelivery.
+func (c *Connector) drain(ctx context.Context, sink channel.InboundSink, longPoll time.Duration) (int, error) {
 	enabled, err := c.ingestionEnabled(ctx)
 	if err != nil {
 		return 0, err
@@ -214,7 +261,7 @@ func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, 
 		if err != nil {
 			return processed, err
 		}
-		decision, err := c.sink.Accept(ctx, ev)
+		decision, err := sink.Accept(ctx, ev)
 		if err != nil {
 			return processed, err
 		}

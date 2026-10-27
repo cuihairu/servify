@@ -1274,3 +1274,125 @@ func TestConnectorWithoutPayloadStoreKeepsNoRef(t *testing.T) {
 		t.Errorf("ref = %s/%q, want empty (retention off is observable)", row.RawPayloadStore, row.RawPayloadObjectID)
 	}
 }
+
+func TestConnectorCapabilitiesObservesOwnInstallation(t *testing.T) {
+	_, caps, _, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	inbox := channel.NewInboxStore(nil)
+	cursors := channel.NewCursorStore(nil)
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig())
+	got, err := connector.Capabilities(context.Background(), "inst-1")
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	if !got.IngestionEnabled() || !got.SendText {
+		t.Errorf("snapshot = %+v, want recorded ingest+send grant", got)
+	}
+	if _, err := connector.Capabilities(context.Background(), "inst-2"); err == nil {
+		t.Error("capabilities for another installation: want error (one connector observes one installation)")
+	}
+}
+
+func TestConnectorCapabilitiesFailClosedWithoutSnapshot(t *testing.T) {
+	_, caps, _, _ := newAdapterStores(t)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	inbox := channel.NewInboxStore(nil)
+	cursors := channel.NewCursorStore(nil)
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, inbox, cursors, adapterConfig())
+	got, err := connector.Capabilities(context.Background(), "inst-1")
+	if err != nil {
+		t.Fatalf("capabilities: %v", err)
+	}
+	if got.IngestionEnabled() {
+		t.Errorf("unrecorded snapshot must surface fail-closed, got %+v", got)
+	}
+}
+
+func TestConnectorCapabilitiesStoreErrorSurfaces(t *testing.T) {
+	_, caps, _, db := newAdapterStores(t)
+	// Close the DB so the capability store read fails: the interface must
+	// surface the store error, never fabricate a grant.
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("sql db: %v", err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+	fake := &botAPI{t: t}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, channel.NewInboxStore(nil),
+		channel.NewCursorStore(nil), adapterConfig())
+	if _, err := connector.Capabilities(context.Background(), "inst-1"); err == nil {
+		t.Error("closed store: want error from Capabilities")
+	}
+}
+
+func TestConnectorReceiveDrainsThroughSuppliedSink(t *testing.T) {
+	boundSink, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+	// A distinct sink the caller hands to Receive, so we can prove the drain
+	// uses the interface argument rather than the connector's bound store.
+	callerSink, _, callerCursors, callerDB := newAdapterStores(t)
+
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("timeout"); got != "25" {
+			t.Errorf("timeout = %q, want 25s (contract default)", got)
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},"text":"hi","date":1697000000}}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, boundSink, cursors, adapterConfig())
+	if err := connector.Receive(context.Background(), callerSink); err != nil {
+		t.Fatalf("receive: %v", err)
+	}
+	var bound []channel.ChatConnectorInbox
+	if err := db.Find(&bound).Error; err != nil || len(bound) != 0 {
+		t.Errorf("bound sink rows = %d (%v), want none (drain must use the supplied sink)", len(bound), err)
+	}
+	var caller []channel.ChatConnectorInbox
+	if err := callerDB.Find(&caller).Error; err != nil || len(caller) != 1 {
+		t.Errorf("caller sink rows = %d (%v), want 1", len(caller), err)
+	}
+	// The cursor is connector-owned state (not the sink argument): Receive advances
+	// the bound connector's frontier, so the caller-supplied cursor store stays empty.
+	if cur := storedCursor(t, callerCursors); cur != "" {
+		t.Errorf("caller cursor = %q, want empty (cursor is connector-owned)", cur)
+	}
+	if cur := storedCursor(t, cursors); cur != "42" {
+		t.Errorf("bound cursor = %q, want 42", cur)
+	}
+}
+
+func TestConnectorReceiveGatesOnCapabilities(t *testing.T) {
+	boundSink, caps, cursors, _ := newAdapterStores(t)
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, boundSink, cursors, adapterConfig())
+	if err := connector.Receive(context.Background(), channel.NewInboxStore(nil)); !errors.Is(err, ErrIngestionDisabled) {
+		t.Errorf("receive without snapshot = %v, want ErrIngestionDisabled", err)
+	}
+}
