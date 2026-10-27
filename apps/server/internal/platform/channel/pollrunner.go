@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"time"
 )
@@ -244,15 +243,8 @@ func (r *Runner) now() time.Time {
 
 // jittered returns a full-jitter wait inside [d/2, d]. Halving the window
 // keeps retry storms from synchronizing across runners sharing a rate limit,
-// while still bounding the worst-case pause to the window itself. Windows
-// under 2ns cannot halve, so they pass through unchanged.
-func (r *Runner) jittered(d time.Duration) time.Duration {
-	half := int64(d / 2)
-	if half <= 0 {
-		return d
-	}
-	return time.Duration(half + rand.Int63n(half+1))
-}
+// while still bounding the worst-case pause to the window itself.
+func (r *Runner) jittered(d time.Duration) time.Duration { return jitter(d) }
 
 // sleepCtx pauses for d and reports context cancellation; a non-positive d
 // short-circuits (a zero wait must never busy-spin a failing loop).

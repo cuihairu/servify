@@ -2,7 +2,9 @@ package memex
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"servify/apps/server/internal/platform/channel"
@@ -14,6 +16,20 @@ import (
 var (
 	ErrIngestionDisabled = channel.ErrIngestionDisabled
 	ErrSendDisabled      = channel.ErrSendDisabled
+)
+
+// ErrRichSendUnsupported reports an outbound body that carries content parts on
+// the TEXT-only surface. The adapter cannot render a part silently: the caller
+// must send a TEXT body (contract: no adapter may drop a structured part it
+// cannot deliver).
+var ErrRichSendUnsupported = errors.New("memex: rich outbound content is not supported by the TEXT surface")
+
+// ErrReplyUnsupported and ErrThreadUnsupported report a reply-chain or topic
+// parameter the /bot/send endpoint has no parameter for. The adapter refuses
+// rather than silently delivering a top-level message a caller asked to thread.
+var (
+	ErrReplyUnsupported  = errors.New("memex: reply chain is not supported by the TEXT surface")
+	ErrThreadUnsupported = errors.New("memex: thread send is not supported by the TEXT surface")
 )
 
 // Config is the stored installation mapping for one Memex bot installation. It
@@ -95,6 +111,12 @@ type Connector struct {
 	scope      channel.CapabilityScope
 	observer   InboundObserver
 	payloads   *channel.LocalPayloadStore
+
+	// retry is the contract's outbound attempt policy, shared with every other
+	// platform adapter so one budget cannot drift. Memex's /bot/send has no
+	// idempotency parameter, so the caller's key is the retry anchor and never
+	// leaves the connector.
+	retry channel.SendRetryPolicy
 }
 
 // NewConnector wires the pull/ACK client to the contract stores. Both stores
@@ -113,6 +135,7 @@ func NewConnector(client *Client, caps *channel.CapabilityStore, sink *channel.I
 			InstallationID:         cfg.InstallationID,
 			ConversationPlatformID: cfg.Conversation.PlatformID,
 		},
+		retry: channel.DefaultSendRetryPolicy(),
 	}
 }
 
@@ -215,17 +238,71 @@ func (c *Connector) PollOnce(ctx context.Context, longPoll time.Duration) (int, 
 	return processed, nil
 }
 
-// Notify sends one TEXT message as the bot, gated on the recorded SendText
-// capability — the outbound sibling of the ingestion gate.
-func (c *Connector) Notify(ctx context.Context, target, text string) (string, error) {
+// Send delivers one TEXT message to the request's conversation. Memex's
+// /bot/send has no thread or reply parameter, so a request carrying either is
+// refused before it ever reaches the platform rather than silently delivered
+// as a top-level message; the idempotency key is the caller's stable retry
+// anchor. ContentParts is accepted for interface conformance but this TEXT
+// surface renders only Text — a richer body is rejected by the capability
+// gate before it reaches the platform.
+func (c *Connector) Send(ctx context.Context, req channel.SendRequest) (channel.SendResult, error) {
+	if err := req.Validate(); err != nil {
+		return channel.SendResult{}, err
+	}
+	if req.ThreadID != "" {
+		return channel.SendResult{}, ErrThreadUnsupported
+	}
+	if req.ReplyToMessageID != "" {
+		return channel.SendResult{}, ErrReplyUnsupported
+	}
+	return c.deliver(ctx, strings.TrimSpace(req.ConversationID), req.Content, req.IdempotencyKey, req.Deadline)
+}
+
+// Notify sends one TEXT operator/system announcement as the bot, gated on the
+// recorded SendText capability — the outbound sibling of the ingestion gate.
+// Target is the explicit recipient scope (a "group:<id>" conversation or an
+// account name) and Reason is the audit trail entry for why the announcement
+// ran. The adapter never broadens the audience implicitly.
+func (c *Connector) Notify(ctx context.Context, req channel.NotifyRequest) (channel.SendResult, error) {
+	if err := req.Validate(); err != nil {
+		return channel.SendResult{}, err
+	}
+	return c.deliver(ctx, strings.TrimSpace(req.Target), req.Content, req.IdempotencyKey, req.Deadline)
+}
+
+// deliver runs the capability-gated send with the caller's retry anchor and
+// deadline under the contract's shared outbound budget: permanent and invalid
+// refusals are rejected, server-class 429/5xx refusals are retried, and a
+// transport failure (the request may have been delivered) is unknown without
+// a resend — the caller keeps the same idempotency key for any
+// operator-approved reconciliation.
+func (c *Connector) deliver(ctx context.Context, target string, content channel.SendContent, idempotencyKey string, deadline time.Time) (channel.SendResult, error) {
 	snapshot, err := c.caps.Latest(ctx, c.scope)
 	if err != nil {
-		return "", err
+		return channel.SendResult{}, err
 	}
 	if snapshot == nil || !snapshot.SendText {
-		return "", ErrSendDisabled
+		return channel.SendResult{}, ErrSendDisabled
 	}
-	return c.client.Send(ctx, target, text)
+	if len(content.ContentParts) != 0 {
+		return channel.SendResult{}, ErrRichSendUnsupported
+	}
+	if !deadline.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
+	msgID, err := channel.RetrySend(ctx, c.retry, idempotencyKey, func(ctx context.Context) (string, error) {
+		return c.client.Send(ctx, target, content.Text)
+	})
+	if err != nil {
+		return channel.OutboundSendResult(err), err
+	}
+	return channel.SendResult{
+		PlatformMessageID: msgID,
+		AcceptedAt:        time.Now(),
+		Status:            channel.SendResultAccepted,
+	}, nil
 }
 
 func (c *Connector) ingestionEnabled(ctx context.Context) (bool, error) {

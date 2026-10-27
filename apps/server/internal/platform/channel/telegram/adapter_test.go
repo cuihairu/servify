@@ -776,10 +776,10 @@ func TestConnectorSendRetriesEnvelopeRetryAfter(t *testing.T) {
 		{status: http.StatusOK, body: `{"ok":true,"result":{"message_id":91}}`},
 	}}
 	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
-	connector.retryMaxAttempts = 2
-	connector.retryMaxBackoff = 30 * time.Second
+	connector.retry.MaxAttempts = 2
+	connector.retry.MaxBackoff = 30 * time.Second
 	var waits []time.Duration
-	connector.sleep = func(ctx context.Context, d time.Duration) error {
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
 		waits = append(waits, d)
 		return nil
 	}
@@ -806,11 +806,11 @@ func TestConnectorSendRetriesWithoutRetryAfterWithBackoff(t *testing.T) {
 		{status: http.StatusOK, body: `{"ok":true,"result":{"message_id":92}}`},
 	}}
 	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
-	connector.retryMaxAttempts = 2
-	connector.retryMinBackoff = 2 * time.Second
-	connector.retryMaxBackoff = 4 * time.Second
+	connector.retry.MaxAttempts = 2
+	connector.retry.MinBackoff = 2 * time.Second
+	connector.retry.MaxBackoff = 4 * time.Second
 	var waits []time.Duration
-	connector.sleep = func(ctx context.Context, d time.Duration) error {
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
 		waits = append(waits, d)
 		return nil
 	}
@@ -829,11 +829,11 @@ func TestConnectorSendRetryBudgetStops(t *testing.T) {
 	rateLimited := sendTransportResponse{status: http.StatusOK, body: `{"ok":false,"error_code":429}`}
 	st := &scriptedSendTransport{responses: []sendTransportResponse{rateLimited, rateLimited, rateLimited}}
 	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
-	connector.retryMaxAttempts = 3
-	connector.retryMinBackoff = time.Millisecond
-	connector.retryMaxBackoff = 2 * time.Millisecond
+	connector.retry.MaxAttempts = 3
+	connector.retry.MinBackoff = time.Millisecond
+	connector.retry.MaxBackoff = 2 * time.Millisecond
 	var waits []time.Duration
-	connector.sleep = func(ctx context.Context, d time.Duration) error {
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
 		waits = append(waits, d)
 		return nil
 	}
@@ -878,33 +878,10 @@ func TestConnectorSendSleepCancellationIsUnknown(t *testing.T) {
 		body:   `{"ok":false,"error_code":429}`,
 	}}}
 	connector := NewConnector(NewClient("", "tok", &http.Client{Transport: st}), caps, sink, cursors, adapterConfig())
-	connector.sleep = func(ctx context.Context, d time.Duration) error { return context.Canceled }
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error { return context.Canceled }
 	res, err := connector.Notify(context.Background(), notifyRequest("-100123", "hello"))
 	if res.Status != channel.SendResultUnknown || !errors.Is(err, context.Canceled) {
 		t.Errorf("cancelled backoff result = %+v, %v; want unknown context cancellation", res, err)
-	}
-}
-
-func TestSleepContextHonorsCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := sleepContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
-		t.Errorf("cancelled sleep = %v, want context.Canceled", err)
-	}
-	if err := sleepContext(context.Background(), 0); err != nil {
-		t.Errorf("non-positive sleep = %v, want nil", err)
-	}
-	if err := sleepContext(context.Background(), time.Nanosecond); err != nil {
-		t.Errorf("timer sleep = %v, want nil", err)
-	}
-}
-
-func TestJitteredBackoffFloor(t *testing.T) {
-	if got := jitteredBackoff(time.Nanosecond); got != time.Nanosecond {
-		t.Errorf("nanosecond backoff = %v, want unchanged", got)
-	}
-	if got := jitteredBackoff(time.Second); got < 500*time.Millisecond || got > time.Second {
-		t.Errorf("jittered backoff = %v, want inside [500ms,1s]", got)
 	}
 }
 

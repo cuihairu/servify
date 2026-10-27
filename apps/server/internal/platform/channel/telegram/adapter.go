@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -142,15 +141,12 @@ type Connector struct {
 	observer    channel.InboundObserver
 	payloads    *channel.LocalPayloadStore
 
-	// sendRetry is the outbound attempt policy. Telegram's sendMessage has no
-	// idempotency parameter, so the caller's key is the contract's retry anchor
-	// and never leaves the connector; the policy below only decides when a
-	// server-class refusal is safe to resend.
-	sleep            func(ctx context.Context, d time.Duration) error
-	retryMinBackoff  time.Duration
-	retryMaxBackoff  time.Duration
-	retryMaxAttempts int
-	retryMaxDuration time.Duration
+	// retry is the contract's outbound attempt policy, shared with every other
+	// platform adapter so one budget cannot drift. Telegram's sendMessage has no
+	// idempotency parameter, so the caller's key is the retry anchor and never
+	// leaves the connector; the policy only decides when a server-class refusal
+	// is safe to resend.
+	retry channel.SendRetryPolicy
 }
 
 // NewConnector wires the pull/send client to the contract stores. Both stores
@@ -176,11 +172,7 @@ func NewConnector(client *Client, caps *channel.CapabilityStore, sink *channel.I
 			Platform:       cfg.Platform,
 			InstallationID: cfg.InstallationID,
 		},
-		sleep:            sleepContext,
-		retryMinBackoff:  time.Second,
-		retryMaxBackoff:  5 * time.Minute,
-		retryMaxAttempts: 10,
-		retryMaxDuration: 24 * time.Hour,
+		retry: channel.DefaultSendRetryPolicy(),
 	}
 }
 
@@ -375,94 +367,26 @@ func (c *Connector) deliver(ctx context.Context, chatID int64, content channel.S
 		ctx, cancel = context.WithDeadline(ctx, deadline)
 		defer cancel()
 	}
-	id, err := c.sendWithRetry(ctx, SendParams{
-		ChatID:           chatID,
-		Text:             content.Text,
-		ReplyToMessageID: replyTo,
-		MessageThreadID:  threadID,
-	}, idempotencyKey)
+	msgID, err := channel.RetrySend(ctx, c.retry, idempotencyKey, func(ctx context.Context) (string, error) {
+		id, err := c.client.SendMessage(ctx, SendParams{
+			ChatID:           chatID,
+			Text:             content.Text,
+			ReplyToMessageID: replyTo,
+			MessageThreadID:  threadID,
+		})
+		if err != nil {
+			return "", err
+		}
+		return strconv.FormatInt(id, 10), nil
+	})
 	if err != nil {
-		return outboundResult(err), err
+		return channel.OutboundSendResult(err), err
 	}
 	return channel.SendResult{
-		PlatformMessageID: strconv.FormatInt(id, 10),
+		PlatformMessageID: msgID,
 		AcceptedAt:        time.Now(),
 		Status:            channel.SendResultAccepted,
 	}, nil
-}
-
-// sendWithRetry performs one sendMessage with the contract's outbound budget.
-// It retries only a server-class refusal (RateLimited or a 5xx response)
-// because that response proves the platform saw and refused the call. A
-// transport-level failure carries no such proof: returning it as unknown keeps
-// the caller from blindly resending a message that may already be delivered.
-func (c *Connector) sendWithRetry(ctx context.Context, params SendParams, idempotencyKey string) (int64, error) {
-	backoff := c.retryMinBackoff
-	start := time.Now()
-	for attempt := 0; ; attempt++ {
-		id, err := c.client.SendMessage(ctx, params)
-		if err == nil {
-			return id, nil
-		}
-		var apiErr *AdapterError
-		if !errors.As(err, &apiErr) || apiErr.Kind != ErrRateLimited && apiErr.Kind != ErrTransient || apiErr.Status == 0 {
-			return 0, fmt.Errorf("telegram send %s: %w", idempotencyKey, err)
-		}
-		if attempt+1 >= c.retryMaxAttempts || time.Since(start) >= c.retryMaxDuration {
-			return 0, fmt.Errorf("telegram send %s after %d attempts: %w", idempotencyKey, attempt+1, err)
-		}
-		var wait time.Duration
-		if apiErr.Kind == ErrRateLimited && apiErr.RetryAfter > 0 {
-			wait = min(apiErr.RetryAfter, c.retryMaxBackoff)
-		} else {
-			wait = jitteredBackoff(backoff)
-			backoff = min(backoff*2, c.retryMaxBackoff)
-		}
-		if err := c.sleep(ctx, wait); err != nil {
-			return 0, fmt.Errorf("telegram send %s: %w", idempotencyKey, err)
-		}
-	}
-}
-
-// outboundResult maps the outcome of one sendWithRetry call onto the contract's
-// delivery status. A transport uncertainty is unknown; every platform refusal
-// is rejected. Storage and validation failures never reach this helper.
-func outboundResult(err error) channel.SendResult {
-	var apiErr *AdapterError
-	if errors.As(err, &apiErr) {
-		if apiErr.Kind == ErrTransient && apiErr.Status == 0 {
-			return channel.SendResult{Status: channel.SendResultUnknown}
-		}
-		return channel.SendResult{Status: channel.SendResultRejected}
-	}
-	// A non-adapter failure has no server verdict; keep it unknown rather than
-	// fabricating a rejection the platform never made.
-	return channel.SendResult{Status: channel.SendResultUnknown}
-}
-
-// jitteredBackoff returns a full-jitter wait inside [d/2, d], matching the
-// shared poll-loop runner so outbound retries cannot synchronize across
-// runners sharing one Bot API rate limit.
-func jitteredBackoff(d time.Duration) time.Duration {
-	half := int64(d / 2)
-	if half <= 0 {
-		return d
-	}
-	return time.Duration(half + rand.Int63n(half+1))
-}
-
-func sleepContext(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func parseChatID(target string) (int64, error) {

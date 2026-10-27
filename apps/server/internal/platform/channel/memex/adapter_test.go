@@ -72,6 +72,74 @@ func enableIngestion(t *testing.T, caps *channel.CapabilityStore) {
 	}
 }
 
+func notifyRequest(target, text string) channel.NotifyRequest {
+	return channel.NotifyRequest{Target: target, IdempotencyKey: "notify-1", Content: channel.SendContent{Text: text}}
+}
+
+func sendRequest(conversationID, text string) channel.SendRequest {
+	return channel.SendRequest{ConversationID: conversationID, IdempotencyKey: "send-1", Content: channel.SendContent{Text: text}}
+}
+
+// sendStub is one scripted /bot/send response; the queue is served in order
+// and the last stub repeats for any extra call.
+type sendStub struct {
+	status int
+	header http.Header
+	body   string
+}
+
+// scriptedSendServer serves /bot/send from a script and records every request
+// body so retry counts and payloads stay observable without a network socket.
+type scriptedSendServer struct {
+	t     *testing.T
+	mu    sync.Mutex
+	stubs []sendStub
+	last  sendStub
+	calls []string
+}
+
+func (s *scriptedSendServer) handler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/bot/send" {
+			s.t.Errorf("unexpected call %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var body struct {
+			Target string `json:"target"`
+			Text   string `json:"text"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		s.mu.Lock()
+		s.calls = append(s.calls, body.Target+"|"+body.Text)
+		var st sendStub
+		if len(s.stubs) > 0 {
+			st = s.stubs[0]
+			s.stubs = s.stubs[1:]
+			s.last = st
+		} else {
+			st = s.last
+		}
+		s.mu.Unlock()
+		if st.status == 0 {
+			st.status = http.StatusOK
+		}
+		for k, vs := range st.header {
+			for _, v := range vs {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(st.status)
+		_, _ = w.Write([]byte(st.body))
+	}
+}
+
+func (s *scriptedSendServer) observed() (calls int, bodies []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.calls), append([]string(nil), s.calls...)
+}
+
 // memexFake is a scripted Memex webhook server: onPull answers the updates
 // endpoint, ACKs are recorded so redelivery semantics stay observable.
 type memexFake struct {
@@ -360,34 +428,41 @@ func TestConnectorPollOnceStopsOnAckFailure(t *testing.T) {
 	}
 }
 
-func TestConnectorNotifyGatesOnSendCapability(t *testing.T) {
+func TestConnectorNotifyGatesAndSends(t *testing.T) {
 	sink, caps, db := newAdapterStores(t)
 
-	called := false
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		_, _ = w.Write([]byte(`{"ok":true,"msg_id":"out-1"}`))
-	}))
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{body: `{"ok":true,"msg_id":"out-1"}`}}}
+	srv := httptest.NewServer(server.handler())
 	defer srv.Close()
 
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
 
 	// no snapshot at all: fail closed without reaching the platform.
-	if _, err := connector.Notify(context.Background(), "group:5", "hello"); !errors.Is(err, ErrSendDisabled) {
+	if _, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello")); !errors.Is(err, ErrSendDisabled) {
 		t.Errorf("notify without snapshot = %v, want ErrSendDisabled", err)
 	}
-	if called {
-		t.Error("send gate must not reach the platform")
+	if calls, _ := server.observed(); calls != 0 {
+		t.Errorf("send gate must not reach the platform: %d calls", calls)
 	}
 
 	enableIngestion(t, caps)
 	// DeclaredCapabilities grants SendText: the send goes out.
-	msgID, err := connector.Notify(context.Background(), "group:5", "hello")
+	res, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello"))
 	if err != nil {
 		t.Fatalf("notify: %v", err)
 	}
-	if msgID != "out-1" {
-		t.Errorf("notify msg id = %q, want out-1", msgID)
+	if res.PlatformMessageID != "out-1" || res.Status != channel.SendResultAccepted || res.AcceptedAt.IsZero() {
+		t.Errorf("notify result = %+v, want accepted out-1 with observed accepted_at", res)
+	}
+	if err := res.Validate(); err != nil {
+		t.Errorf("notify result invalid: %v", err)
+	}
+	// Target is the free-form recipient scope: surrounding whitespace tolerated.
+	if _, err = connector.Notify(context.Background(), notifyRequest(" group:5 ", "hello")); err != nil {
+		t.Fatalf("notify trimmed target: %v", err)
+	}
+	if calls, bodies := server.observed(); calls != 2 || bodies[0] != "group:5|hello" || bodies[1] != "group:5|hello" {
+		t.Errorf("sends = %v (want group:5|hello twice)", bodies)
 	}
 
 	// capability flipped off afterwards: gate closes again.
@@ -395,8 +470,229 @@ func TestConnectorNotifyGatesOnSendCapability(t *testing.T) {
 		Update("send_text", false).Error; err != nil {
 		t.Fatalf("flip send capability off: %v", err)
 	}
-	if _, err := connector.Notify(context.Background(), "group:5", "hello"); !errors.Is(err, ErrSendDisabled) {
+	if _, err = connector.Notify(context.Background(), notifyRequest("group:5", "hello")); !errors.Is(err, ErrSendDisabled) {
 		t.Errorf("notify with revoked send capability = %v, want ErrSendDisabled", err)
+	}
+}
+
+func TestConnectorSendRejectsThreadReplyRichBeforePlatform(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{body: `{"ok":true,"msg_id":"x"}`}}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+
+	req := sendRequest("group:5", "hello")
+	req.ThreadID = "42"
+	if _, err := connector.Send(context.Background(), req); !errors.Is(err, ErrThreadUnsupported) {
+		t.Errorf("thread send err = %v, want ErrThreadUnsupported", err)
+	}
+	req = sendRequest("group:5", "hello")
+	req.ReplyToMessageID = "77"
+	if _, err := connector.Send(context.Background(), req); !errors.Is(err, ErrReplyUnsupported) {
+		t.Errorf("reply send err = %v, want ErrReplyUnsupported", err)
+	}
+	req = sendRequest("group:5", "hello")
+	req.Content = channel.SendContent{ContentParts: []channel.ContentPart{{Kind: "file", Text: "not-real"}}}
+	if _, err := connector.Send(context.Background(), req); !errors.Is(err, ErrRichSendUnsupported) {
+		t.Errorf("rich send err = %v, want ErrRichSendUnsupported", err)
+	}
+	if calls, _ := server.observed(); calls != 0 {
+		t.Errorf("unsupported outbound must not reach the platform: %d calls", calls)
+	}
+}
+
+func TestConnectorSendMapsPlatformRefusal(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{status: http.StatusForbidden, body: `{"ok":false,"error":"bot removed"}`}}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	res, err := connector.Send(context.Background(), sendRequest("group:5", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultRejected || res.PlatformMessageID != "" {
+		t.Errorf("refusal result = %+v, want rejected without platform id", res)
+	}
+	if !errors.As(err, &apiErr) || apiErr.Kind != ErrPermission {
+		t.Errorf("refusal err = %v, want permission AdapterError", err)
+	}
+	if calls, _ := server.observed(); calls != 1 {
+		t.Errorf("send calls = %d, want 1 (permission is never retried)", calls)
+	}
+}
+
+func TestConnectorSendTransportUncertaintyIsUnknown(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	// A closed server makes the dial fail: the request may have been delivered,
+	// so the verdict is unknown and the send is never blindly retried.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+
+	connector := NewConnector(NewClient(url, "tok", http.DefaultClient), caps, sink, adapterConfig())
+	res, err := connector.Send(context.Background(), sendRequest("group:5", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultUnknown || res.PlatformMessageID != "" || !res.AcceptedAt.IsZero() {
+		t.Errorf("transport uncertainty result = %+v, want unknown without delivery evidence", res)
+	}
+	if !errors.As(err, &apiErr) || apiErr.Kind != ErrTransient || apiErr.Status != 0 {
+		t.Errorf("transport uncertainty err = %v, want transient status 0", err)
+	}
+}
+
+func TestConnectorNotifyRetriesRetryAfterHeader(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	h := http.Header{}
+	h.Set("Retry-After", "2")
+	server := &scriptedSendServer{t: t, stubs: []sendStub{
+		{status: http.StatusTooManyRequests, header: h, body: `{"ok":false,"error":"rate limited"}`},
+		{body: `{"ok":true,"msg_id":"r1"}`},
+	}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	connector.retry.MaxAttempts = 2
+	connector.retry.MaxBackoff = 30 * time.Second
+	var waits []time.Duration
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello"))
+	if err != nil {
+		t.Fatalf("notify after retry: %v", err)
+	}
+	if res.Status != channel.SendResultAccepted || res.PlatformMessageID != "r1" || res.AcceptedAt.IsZero() {
+		t.Errorf("retried result = %+v, want accepted r1", res)
+	}
+	if calls, _ := server.observed(); calls != 2 {
+		t.Errorf("send calls = %d, want 2", calls)
+	}
+	if len(waits) != 1 || waits[0] != 2*time.Second {
+		t.Errorf("retry waits = %v, want exactly [2s] (server Retry-After wins)", waits)
+	}
+}
+
+func TestConnectorSendRetriesWithoutRetryAfterWithBackoff(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{
+		{status: http.StatusTooManyRequests, body: `{"ok":false,"error":"rate limited"}`},
+		{body: `{"ok":true,"msg_id":"r2"}`},
+	}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	connector.retry.MaxAttempts = 2
+	connector.retry.MinBackoff = 2 * time.Second
+	connector.retry.MaxBackoff = 4 * time.Second
+	var waits []time.Duration
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Send(context.Background(), sendRequest("group:5", "hello"))
+	if err != nil || res.Status != channel.SendResultAccepted || res.PlatformMessageID != "r2" {
+		t.Fatalf("backoff retry = %+v (%v), want accepted r2", res, err)
+	}
+	if len(waits) != 1 || waits[0] < time.Second || waits[0] > 2*time.Second {
+		t.Errorf("backoff wait = %v, want full-jitter inside [1s,2s]", waits)
+	}
+}
+
+func TestConnectorSendRetryBudgetStops(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	rateLimited := sendStub{status: http.StatusTooManyRequests, body: `{"ok":false,"error":"rate limited"}`}
+	server := &scriptedSendServer{t: t, stubs: []sendStub{rateLimited, rateLimited, rateLimited}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	connector.retry.MaxAttempts = 3
+	connector.retry.MinBackoff = time.Millisecond
+	connector.retry.MaxBackoff = 2 * time.Millisecond
+	var waits []time.Duration
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	res, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello"))
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultRejected || !errors.As(err, &apiErr) || apiErr.Kind != ErrRateLimited {
+		t.Errorf("budget result = %+v, %v; want rejected rate_limited", res, err)
+	}
+	if !strings.Contains(err.Error(), "after 3 attempts") || !strings.Contains(err.Error(), "notify-1") {
+		t.Errorf("budget err = %v, want attempt count and caller idempotency key", err)
+	}
+	if calls, _ := server.observed(); calls != 3 {
+		t.Errorf("send calls = %d, want 3 (budget is attempts, no extra call)", calls)
+	}
+	if len(waits) != 2 {
+		t.Errorf("backoff waits = %v, want 2 pauses before the final refusal", waits)
+	}
+}
+
+func TestConnectorSendDeadlineBoundsAttempt(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{body: `{"ok":true,"msg_id":"x"}`}}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	req := sendRequest("group:5", "hello")
+	req.Deadline = time.Now().Add(-time.Second)
+	res, err := connector.Send(context.Background(), req)
+	var apiErr *AdapterError
+	if res.Status != channel.SendResultUnknown || !errors.As(err, &apiErr) || apiErr.Kind != ErrTransient {
+		t.Errorf("deadline result = %+v, %v; want unknown transient", res, err)
+	}
+}
+
+func TestConnectorSendSleepCancellationIsUnknown(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{status: http.StatusTooManyRequests, body: `{"ok":false,"error":"rate limited"}`}}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	connector.retry.Sleep = func(ctx context.Context, d time.Duration) error { return context.Canceled }
+	res, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello"))
+	if res.Status != channel.SendResultUnknown || !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled backoff result = %+v, %v; want unknown context cancellation", res, err)
+	}
+}
+
+func TestConnectorSendRejectsInvalidBeforePlatform(t *testing.T) {
+	sink, caps, _ := newAdapterStores(t)
+	enableIngestion(t, caps)
+	server := &scriptedSendServer{t: t, stubs: []sendStub{{body: `{"ok":true,"msg_id":"x"}`}}}
+	srv := httptest.NewServer(server.handler())
+	defer srv.Close()
+
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, adapterConfig())
+	// Missing conversation or idempotency key is a caller bug: never sent.
+	if _, err := connector.Send(context.Background(), channel.SendRequest{IdempotencyKey: "k", Content: channel.SendContent{Text: "hi"}}); err == nil {
+		t.Error("send without conversation: expected validation error")
+	}
+	if _, err := connector.Send(context.Background(), channel.SendRequest{ConversationID: "group:5", Content: channel.SendContent{Text: "hi"}}); err == nil {
+		t.Error("send without idempotency key: expected validation error")
+	}
+	if _, err := connector.Notify(context.Background(), channel.NotifyRequest{IdempotencyKey: "k", Content: channel.SendContent{Text: "hi"}}); err == nil {
+		t.Error("notify without target: expected validation error")
+	}
+	if calls, _ := server.observed(); calls != 0 {
+		t.Errorf("invalid envelope must not reach the platform: %d calls", calls)
 	}
 }
 
@@ -416,7 +712,7 @@ func TestConnectorCapabilitiesReadError(t *testing.T) {
 	if _, err := connector.PollOnce(context.Background(), 0); err == nil {
 		t.Error("poll once: expected capabilities read error")
 	}
-	if _, err := connector.Notify(context.Background(), "group:5", "hello"); err == nil {
+	if _, err := connector.Notify(context.Background(), notifyRequest("group:5", "hello")); err == nil {
 		t.Error("notify: expected capabilities read error")
 	}
 }
