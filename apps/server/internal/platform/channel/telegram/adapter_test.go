@@ -178,10 +178,10 @@ func TestTranslatorBuildsContractEvent(t *testing.T) {
 	if err := ev.Validate(); err != nil {
 		t.Fatalf("translated event invalid: %v", err)
 	}
-	if ev.EventType != channel.EventTypeMessageCreated || ev.EventID != "7" {
+	if ev.EventType != channel.EventTypeMessageCreated || ev.EventID != "-100123:7" {
 		t.Errorf("event type/id = %s/%s", ev.EventType, ev.EventID)
 	}
-	if ev.IdempotencyKey != channel.InboundIdempotencyKey("inst-1", "7") {
+	if ev.IdempotencyKey != channel.InboundIdempotencyKey("inst-1", "-100123:7") {
 		t.Errorf("idempotency key = %q", ev.IdempotencyKey)
 	}
 	if ev.Conversation.PlatformID != "-100123" || ev.Conversation.Kind != "supergroup" || !ev.Conversation.IsGroup {
@@ -211,6 +211,30 @@ func TestTranslatorPrivateChatIsNotGroup(t *testing.T) {
 	}
 	if ev.Sender.PlatformID != unknownSender {
 		t.Errorf("sender without from = %q, want %q", ev.Sender.PlatformID, unknownSender)
+	}
+}
+
+func TestTranslatorScopesTelegramMessageIDToChat(t *testing.T) {
+	base := adapterConfig()
+	ev := Translator{Config: base}.Event(time.Unix(1, 0), Update{
+		UpdateID: 41,
+		Message:  &ChatMessage{MessageID: 7, Chat: &Chat{ID: -100123, Type: "supergroup"}, Text: "first"},
+	})
+	other := Translator{Config: base}.Event(time.Unix(1, 0), Update{
+		UpdateID: 42,
+		Message:  &ChatMessage{MessageID: 7, Chat: &Chat{ID: -100456, Type: "supergroup"}, Text: "second"},
+	})
+	if err := ev.Validate(); err != nil {
+		t.Fatalf("first event invalid: %v", err)
+	}
+	if err := other.Validate(); err != nil {
+		t.Fatalf("second event invalid: %v", err)
+	}
+	if ev.IdempotencyKey == other.IdempotencyKey {
+		t.Fatalf("cross-chat message_id collision: first = %+v, second = %+v", ev, other)
+	}
+	if ev.Message.PlatformID != "7" || other.Message.PlatformID != "7" {
+		t.Fatalf("platform message ids = %q/%q, want both 7", ev.Message.PlatformID, other.Message.PlatformID)
 	}
 }
 
@@ -345,8 +369,8 @@ func TestConnectorPollOnceQuarantinesUnknownShapes(t *testing.T) {
 	if committed != 1 || quarantined != 1 {
 		t.Errorf("committed/quarantined = %d/%d, want 1/1", committed, quarantined)
 	}
-	if got := obs.forwardedEvents(); len(got) != 1 || got[0] != "7" {
-		t.Errorf("forwarded = %v, want exactly [7] (quarantined rows never reach conversations)", got)
+	if got := obs.forwardedEvents(); len(got) != 1 || got[0] != "-100123:7" {
+		t.Errorf("forwarded = %v, want exactly [-100123:7] (quarantined rows never reach conversations)", got)
 	}
 	if cur := storedCursor(t, cursors); cur != "43" {
 		t.Errorf("cursor = %q, want 43 (quarantine is a durable verdict)", cur)
@@ -360,8 +384,9 @@ func TestConnectorPollOnceRedeliveryDeduplicates(t *testing.T) {
 	payload := `{"ok":true,"result":[
 		{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},
 			"from":{"id":9001},"text":"hi","date":1697000000}}]}`
-	// The same update redelivered despite the advanced cursor (e.g. the bot
-	// was restarted with a stale offset): the inbox absorbs it as duplicate.
+	// The same update redelivered after a crash between inbox commit and
+	// cursor save: the cursor is empty again, so the poll uses offset 0 and
+	// Telegram re-delivers the same update. The inbox absorbs it as duplicate.
 	fake := &botAPI{t: t}
 	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(payload))
@@ -374,6 +399,12 @@ func TestConnectorPollOnceRedeliveryDeduplicates(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 1 {
 			t.Fatalf("poll %d = %d (%v), want 1", i, n, err)
+		}
+		if err := cursors.Save(context.Background(), channel.CursorScope{
+			TenantID: "tenant-1", WorkspaceID: "workspace-1",
+			Platform: "telegram", InstallationID: "inst-1",
+		}, ""); err != nil {
+			t.Fatalf("reset cursor %d: %v", i, err)
 		}
 	}
 	var count int64
@@ -392,6 +423,9 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 	sink, caps, cursors, db := newAdapterStores(t)
 	enableIngestion(t, caps)
 
+	// The fixture re-delivers the same update on every offset=0 poll to model
+	// a crash between inbox commit and cursor save: the poll restarts from the
+	// same frontier and Telegram re-sends the un-ACKed update.
 	const fixture = `{"ok":true,"result":[
 		{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},
 			"from":{"id":9001,"username":"alice"},"text":"hello contract","date":1697000000}}]}`
@@ -412,10 +446,20 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig()).
 		WithObserver(obs)
 
-	for round := 0; round < 2; round++ {
-		if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 1 {
-			t.Fatalf("poll %d = %d (%v), want fixture accepted once each time", round, n, err)
-		}
+	// First poll commits the inbox row and advances the cursor. Then simulate
+	// a crash between accept and ACK: clear the stored frontier so the next
+	// poll starts at offset 0 and Telegram redelivers the same un-ACKed update.
+	if _, err := connector.PollOnce(context.Background(), 0); err != nil {
+		t.Fatalf("initial poll: %v", err)
+	}
+	if err := cursors.Save(context.Background(), channel.CursorScope{
+		TenantID: "tenant-1", WorkspaceID: "workspace-1",
+		Platform: "telegram", InstallationID: "inst-1",
+	}, ""); err != nil {
+		t.Fatalf("reset cursor: %v", err)
+	}
+	if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 1 {
+		t.Fatalf("crash redelivery poll = %d (%v)", n, err)
 	}
 	if cur := storedCursor(t, cursors); cur != "42" {
 		t.Fatalf("cursor = %q, want 42 after durable ACK", cur)
@@ -428,13 +472,13 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 		t.Fatalf("inbox rows = %d, want 1 after redelivery", len(inboxRows))
 	}
 	row := inboxRows[0]
-	wantKey := channel.InboundIdempotencyKey("inst-1", "7")
+	wantKey := channel.InboundIdempotencyKey("inst-1", "-100123:7")
 	if row.IdempotencyKey != wantKey || row.EventType != string(channel.EventTypeMessageCreated) ||
 		row.Status != channel.InboxStatusCommitted || row.ConversationPlatformID != "-100123" ||
 		row.SenderPlatformID != "9001" || row.MessagePlatformID != "7" {
 		t.Fatalf("inbox row drifted: %+v", row)
 	}
-	if forwarded := obs.forwardedEvents(); len(forwarded) != 1 || forwarded[0] != "7" {
+	if forwarded := obs.forwardedEvents(); len(forwarded) != 1 || forwarded[0] != "-100123:7" {
 		t.Fatalf("forwarded events = %v, want duplicate fixture forwarded once", forwarded)
 	}
 
@@ -452,8 +496,8 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 	}
 	offsets, _, sends := fake.observed()
 	wantSends := []string{"-100123|contract reply", "-100123|contract notice"}
-	if len(offsets) != 2 || offsets[0] != "0" || offsets[1] != "42" {
-		t.Fatalf("offsets = %v, want [0 42]", offsets)
+	if len(offsets) != 2 || offsets[0] != "0" || offsets[1] != "0" {
+		t.Fatalf("offsets = %v, want [0 0] (crash reset then redelivery)", offsets)
 	}
 	if len(sends) != len(wantSends) || sends[0] != wantSends[0] || sends[1] != wantSends[1] {
 		t.Fatalf("sends = %v, want %v", sends, wantSends)
@@ -462,6 +506,41 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 	if len(replies) != 2 || replies[0] != "7" || replies[1] != "" ||
 		len(threads) != 2 || threads[0] != "" || threads[1] != "" {
 		t.Fatalf("reply chain = %v / %v, want send reply 7 and notify unthreaded", replies, threads)
+	}
+}
+
+func TestConnectorPollOnceKeepsSameMessageIDAcrossChats(t *testing.T) {
+	sink, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[
+			{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},
+				"from":{"id":9001},"text":"first chat","date":1697000000}},
+			{"update_id":42,"message":{"message_id":7,"chat":{"id":-100456,"type":"supergroup"},
+				"from":{"id":9002},"text":"second chat","date":1697000001}}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	obs := &recordingObserver{}
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig()).WithObserver(obs)
+	if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 2 {
+		t.Fatalf("poll = %d (%v), want 2", n, err)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("inbox rows = %d, want 2 (same Telegram message_id in different chats)", len(rows))
+	}
+	if got := obs.forwardedEvents(); len(got) != 2 {
+		t.Fatalf("forwarded = %v, want both chat-scoped messages", got)
+	}
+	if cur := storedCursor(t, cursors); cur != "43" {
+		t.Fatalf("cursor = %q, want 43", cur)
 	}
 }
 
@@ -569,7 +648,7 @@ func TestConnectorPollOnceStopsOnCursorSaveFailure(t *testing.T) {
 	obs := &recordingObserver{}
 	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig()).WithObserver(obs)
 	n, err := connector.PollOnce(context.Background(), 0)
-	if err == nil || !strings.Contains(err.Error(), "cursor after 7") {
+	if err == nil || !strings.Contains(err.Error(), "cursor after -100123:7") {
 		t.Errorf("poll err = %v, want cursor failure naming the event", err)
 	}
 	if n != 0 {
@@ -1228,7 +1307,7 @@ func TestConnectorPollOnceRetainsRawPayloadOnRows(t *testing.T) {
 	}
 	meta, err := store.Meta(context.Background(), channel.RawPayloadRef{Store: row.RawPayloadStore, ObjectID: row.RawPayloadObjectID})
 	if err != nil || meta.TenantID != "tenant-1" || meta.Platform != "telegram" ||
-		meta.InstallationID != "inst-1" || meta.EventID != "7" || meta.ContentType != channel.RawPayloadContentType {
+		meta.InstallationID != "inst-1" || meta.EventID != "-100123:7" || meta.ContentType != channel.RawPayloadContentType {
 		t.Errorf("retained meta = %+v (%v), want the row scope", meta, err)
 	}
 

@@ -72,8 +72,12 @@ func (t Translator) Event(receivedAt time.Time, u Update) channel.ConnectorEvent
 	if msg.From != nil {
 		sender = strconv.FormatInt(msg.From.ID, 10)
 	}
-	ev.EventID = msgID
-	ev.IdempotencyKey = channel.InboundIdempotencyKey(t.Config.InstallationID, msgID)
+	// Telegram message_id is unique only within a chat; compose the event
+	// identity from both so two chats' same-numbered messages never share one
+	// dedup key (contract: idempotency key = installation + platform event id).
+	eventID := chatID + ":" + msgID
+	ev.EventID = eventID
+	ev.IdempotencyKey = channel.InboundIdempotencyKey(t.Config.InstallationID, eventID)
 	ev.EventType = channel.EventTypeMessageCreated
 	ev.OccurredAt = time.Unix(msg.Date, 0)
 	ev.Conversation = channel.ConversationRef{
