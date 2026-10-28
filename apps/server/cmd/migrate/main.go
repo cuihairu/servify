@@ -152,6 +152,14 @@ func main() {
 			log.Printf("Scope backfill touched %d rows", touched)
 		}
 
+		// 聊天平台接入：Telegram EventID 旧格式回填（postgres 走 versioned
+		// SQL 迁移 000031，AutoMigrate 分支在此补齐同语义）。
+		if touched, err := appbootstrap.BackfillTelegramEventIDs(db); err != nil {
+			log.Fatalf("Failed to backfill telegram event ids: %v", err)
+		} else {
+			log.Printf("Telegram event id backfill touched %d rows", touched)
+		}
+
 		log.Println("Creating additional indexes...")
 		if err := appbootstrap.CreateIndexes(db); err != nil {
 			log.Fatalf("Failed to create indexes: %v", err)

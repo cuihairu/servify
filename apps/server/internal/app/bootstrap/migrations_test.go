@@ -20,25 +20,36 @@ func TestMigrationsEmbeddedNonEmpty(t *testing.T) {
 }
 
 func TestMigrationsFileNaming(t *testing.T) {
-	nameRe := regexp.MustCompile(`^(\d{6})_[^.]+\.up\.sql$`)
+	nameRe := regexp.MustCompile(`^(\d{6})_[^.]+\.(up|down)\.sql$`)
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		t.Fatalf("read embedded migrations: %v", err)
 	}
 	last := 0
+	seen := map[int]map[string]bool{}
 	for _, e := range entries {
 		m := nameRe.FindStringSubmatch(e.Name())
 		if m == nil {
-			t.Fatalf("migration file %q does not match NNNNNN_name.up.sql", e.Name())
+			t.Fatalf("migration file %q does not match NNNNNN_name.(up|down).sql", e.Name())
 		}
 		version, err := strconv.Atoi(m[1])
 		if err != nil {
 			t.Fatalf("parse version in %q: %v", e.Name(), err)
 		}
-		if version <= last {
-			t.Fatalf("migration versions must strictly increase; %q follows version %d", e.Name(), last)
+		direction := m[2]
+		if version < last {
+			t.Fatalf("migration versions must be non-decreasing; %q follows version %d", e.Name(), last)
 		}
-		last = version
+		if seen[version] == nil {
+			seen[version] = map[string]bool{}
+		}
+		if seen[version][direction] {
+			t.Fatalf("migration version %d has duplicate %s file", version, direction)
+		}
+		seen[version][direction] = true
+		if version > last {
+			last = version
+		}
 	}
 }
 

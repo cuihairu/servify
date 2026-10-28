@@ -18,8 +18,8 @@ import (
 
 // migrationsFS embeds the versioned SQL migrations applied to PostgreSQL
 // databases. Files follow the golang-migrate naming convention
-// NNNNNN_name.up.sql; down migrations are intentionally not shipped — the
-// baseline is not reversible, rollbacks restore from backup.
+// NNNNNN_name.up.sql. Reversible data migrations may ship a paired .down.sql;
+// schema/baseline changes remain up-only — rollbacks restore from backup.
 //
 //go:embed migrations/*.sql
 var migrationsFS embed.FS

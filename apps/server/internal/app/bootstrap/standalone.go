@@ -136,6 +136,13 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 			} else if touched := sumScopeBackfillCounts(counts); touched > 0 {
 				logger.Infof("Scope backfill touched %d rows across core business tables", touched)
 			}
+			// 聊天平台接入：sqlite/AutoMigrate 路径的 Telegram EventID 旧格式
+			// 回填（postgres 走 versioned SQL 迁移 000031_...）。
+			if touched, err := BackfillTelegramEventIDs(db); err != nil {
+				return fmt.Errorf("failed to backfill telegram event ids: %w", err)
+			} else if touched > 0 {
+				logger.Infof("Telegram event id backfill touched %d inbox rows", touched)
+			}
 		}
 	}
 
