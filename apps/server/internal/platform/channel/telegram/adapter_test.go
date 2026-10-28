@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -384,6 +385,83 @@ func TestConnectorPollOnceRedeliveryDeduplicates(t *testing.T) {
 	}
 	if got := obs.forwardedEvents(); len(got) != 1 {
 		t.Errorf("forwarded = %v, want exactly once across redelivery", got)
+	}
+}
+
+func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
+	sink, caps, cursors, db := newAdapterStores(t)
+	enableIngestion(t, caps)
+
+	const fixture = `{"ok":true,"result":[
+		{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},
+			"from":{"id":9001,"username":"alice"},"text":"hello contract","date":1697000000}}]}`
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(fixture))
+	}
+	fake.onSend = func(w http.ResponseWriter, r *http.Request) {
+		fake.mu.Lock()
+		messageID := 501 + len(fake.sends)
+		fake.mu.Unlock()
+		_, _ = fmt.Fprintf(w, `{"ok":true,"result":{"message_id":%d}}`, messageID)
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	obs := &recordingObserver{}
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig()).
+		WithObserver(obs)
+
+	for round := 0; round < 2; round++ {
+		if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 1 {
+			t.Fatalf("poll %d = %d (%v), want fixture accepted once each time", round, n, err)
+		}
+	}
+	if cur := storedCursor(t, cursors); cur != "42" {
+		t.Fatalf("cursor = %q, want 42 after durable ACK", cur)
+	}
+	var inboxRows []channel.ChatConnectorInbox
+	if err := db.Find(&inboxRows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(inboxRows) != 1 {
+		t.Fatalf("inbox rows = %d, want 1 after redelivery", len(inboxRows))
+	}
+	row := inboxRows[0]
+	wantKey := channel.InboundIdempotencyKey("inst-1", "7")
+	if row.IdempotencyKey != wantKey || row.EventType != string(channel.EventTypeMessageCreated) ||
+		row.Status != channel.InboxStatusCommitted || row.ConversationPlatformID != "-100123" ||
+		row.SenderPlatformID != "9001" || row.MessagePlatformID != "7" {
+		t.Fatalf("inbox row drifted: %+v", row)
+	}
+	if forwarded := obs.forwardedEvents(); len(forwarded) != 1 || forwarded[0] != "7" {
+		t.Fatalf("forwarded events = %v, want duplicate fixture forwarded once", forwarded)
+	}
+
+	send, err := connector.Send(context.Background(), func() channel.SendRequest {
+		req := sendRequest("-100123", "contract reply")
+		req.ReplyToMessageID = "7"
+		return req
+	}())
+	if err != nil || send.Status != channel.SendResultAccepted || send.PlatformMessageID != "502" {
+		t.Fatalf("send = %+v, %v; want accepted 502", send, err)
+	}
+	notify, err := connector.Notify(context.Background(), notifyRequest("-100123", "contract notice"))
+	if err != nil || notify.Status != channel.SendResultAccepted || notify.PlatformMessageID != "503" {
+		t.Fatalf("notify = %+v, %v; want accepted 503", notify, err)
+	}
+	offsets, _, sends := fake.observed()
+	wantSends := []string{"-100123|contract reply", "-100123|contract notice"}
+	if len(offsets) != 2 || offsets[0] != "0" || offsets[1] != "42" {
+		t.Fatalf("offsets = %v, want [0 42]", offsets)
+	}
+	if len(sends) != len(wantSends) || sends[0] != wantSends[0] || sends[1] != wantSends[1] {
+		t.Fatalf("sends = %v, want %v", sends, wantSends)
+	}
+	replies, threads := fake.observedSendChain()
+	if len(replies) != 2 || replies[0] != "7" || replies[1] != "" ||
+		len(threads) != 2 || threads[0] != "" || threads[1] != "" {
+		t.Fatalf("reply chain = %v / %v, want send reply 7 and notify unthreaded", replies, threads)
 	}
 }
 
