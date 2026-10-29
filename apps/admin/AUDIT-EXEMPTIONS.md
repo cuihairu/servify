@@ -10,18 +10,29 @@ override to a still-vulnerable version). `pnpm audit` keeps reporting all of
 them so that a future re-run stays honest. Every entry below has a registry
 fact that makes it impossible to close with a dependency upgrade.
 
-## Snapshot (2026-10-19)
+## Snapshot (2026-10-29)
 
 ```
 npx -y pnpm@10.22.0 --dir apps/admin audit
 2 vulnerabilities found
-Severity: 1 low | 1 high
+Severity: 2 low
 ```
 
 `pnpm audit --prod` reports the same two because `@umijs/max` is declared
 under `dependencies` (UMI is a build-time tool, but the app keeps it in the
-prod section). Both remaining chains are lint / test / bundler toolchain —
-none of them is shipped in the served bundle (evidence below).
+prod section). Both remaining chains are bundler toolchain — none of them is
+shipped in the served bundle (evidence below).
+
+`braces` (GHSA-vfj7-8cjw-p6xm, high, formerly entry 1) left this ledger on
+2026-10-23: the advisory was **withdrawn** upstream as not practically
+exploitable, so `pnpm audit` stopped reporting it. The installed `3.0.3` and
+the registry ceiling are unchanged — no override or upgrade was involved.
+
+On 2026-10-29 the Dependabot security batch for this directory closed four
+of its six findings via `pnpm.overrides` re-resolution (`@hono/node-server`
+→ 2.1.5, `qs` → 6.17.1, `fast-uri` → 3.1.9, `body-parser` → 1.20.9; the
+sixth, `@vitest/mocker` 5.0.5, lives in `sdk`). `deepmerge` is the one
+advisory of the batch with no published fix and joins this ledger below.
 
 `react-router` closed two of the original five findings on 2026-10-15 via
 `pnpm.overrides` (`react-router@<7.18.0` → `^7.18.0`, resolved 7.18.4,
@@ -40,38 +51,7 @@ API js-yaml 4 keeps (`safeLoad`, dropped in 4, was never used). `js-yaml@3`
 had exactly one consumer in the tree before the override, and the lockfile
 diff only removes those four packages. Audit went from 3 to 2 findings.
 
-## 1. `braces` — GHSA-vfj7-8cjw-p6xm (high)
-
-| Field | Value |
-|---|---|
-| Vulnerable versions | `<=3.0.3` |
-| Patched versions | `<0.0.0` — no fixed release published |
-| Registry latest | `3.0.3` (`npm view braces dist-tags` → `latest: 3.0.3`; published versions end at `3.0.3`) |
-| Path | `@umijs/max > @umijs/lint > @typescript-eslint/eslint-plugin > @typescript-eslint/type-utils > @typescript-eslint/typescript-estree > globby > fast-glob > micromatch > braces` |
-
-Reachability: `@umijs/lint` is only loaded by `max lint`. In a fresh `max
-build` output (`dist/`, 91 files) `globby` and `micromatch` appear in 0 files,
-so the glob-expansion chain is not shipped.
-
-Why not an override: there is no patched version to pin to. Pinning
-`braces@3.0.3` would pin the identical vulnerable release and change nothing.
-
-Why not a dependency replacement (the method that closed `sprintf-js`):
-`braces` sits one level under `micromatch`, and every glob engine that could
-be pivoted onto instead carries the same `micromatch`. Installed
-`globby@11.1.0` and `globby@13.2.2` both depend on `fast-glob`; current
-registry lines do the same — `globby@14.0.2` and `globby@15.0.0` depend on
-`fast-glob ^3.3`, and `globby@16.2.4` depends on `fast-glob ^3.3.3` **plus** a
-direct `micromatch ^4.0.8` (`npm view globby@<v> dependencies`, 2026-10-19).
-`fast-glob@3.3.3` itself depends on `micromatch ^4.0.8`. There is no
-brace-free glob line to move the chain onto, so the leaf cannot be eliminated
-from inside this tree.
-
-Unblock condition: upstream publishes a `braces` release with a non-zero
-patched version. Then add a `pnpm.overrides` entry, `pnpm install`, run
-`typecheck` + `build`, wait for CI `Admin Checks`, and delete this entry.
-
-## 2. `elliptic` — GHSA-848j-6mx2-7j84 (low)
+## 1. `elliptic` — GHSA-848j-6mx2-7j84 (low)
 
 | Field | Value |
 |---|---|
@@ -105,13 +85,48 @@ webpack's node-polyfill layer.
 Unblock condition: upstream publishes a fixed `elliptic`. Same procedure as
 above.
 
+## 2. `deepmerge` — GHSA-gcqx-w48m-w2h4 (low)
+
+| Field | Value |
+|---|---|
+| Title | mergeObject() allows prototype poisoning of returned objects |
+| Vulnerable versions | `>=4.2.0 <=4.3.1` |
+| Patched versions | `<0.0.0` — no fixed release published |
+| Registry latest | `4.3.1` (`npm view deepmerge@4.3.2` → E404; published versions end at `4.3.1`) |
+| Path | `@umijs/max > umi > @umijs/bundler-webpack > @svgr/plugin-svgo > deepmerge` (audit-reported; `fork-ts-checker-webpack-plugin@8.0.0` declares the same `^4.2.2` and resolves the same `4.3.1`) |
+
+Reachability: both consumers are webpack build steps. `@svgr/plugin-svgo`
+optimizes imported `.svg` assets at compile time; `fork-ts-checker-webpack-plugin`
+is the parallel TypeScript type-checker. In a fresh `max build` output
+(`dist/`, 91 files) `deepmerge` appears in 0 files — the plugin is never
+bundled into the served app.
+
+Why not an override: no patched version exists to pin to. The last
+non-vulnerable 4.x is `4.1.2`, but both consumers declare `deepmerge: ^4.2.2`
+(`npm view @svgr/plugin-svgo@6.5.1 dependencies.deepmerge`,
+`npm view fork-ts-checker-webpack-plugin@8.0.0 dependencies.deepmerge`), so a
+pin would force a version below both consumers' declared ranges — a
+compatibility gamble this ledger does not take for a low-severity,
+build-time-only finding.
+
+Why not a dependency replacement: `deepmerge` is the merge utility both
+plugins call directly (`deepmerge`/`mergeAll`), a leaf with no drop-in
+sibling in either chain; the only other instance in the tree is
+`deepmerge@1.5.2` (via `webpack-5-chain`), an unrelated major with a different
+surface that the `^4.2.2` consumers cannot adopt.
+
+Unblock condition: upstream publishes a `deepmerge` release above `4.3.1`.
+Then add a `pnpm.overrides` entry, `pnpm install`, run `typecheck` + `build`,
+wait for CI `Admin Checks`, and delete this entry.
+
 ## Why an `@umijs/max` upgrade does not close any of these
 
 `@umijs/max` 4.7.25 is the current `latest` tag against the installed 4.7.16,
 but upgrading cannot resolve either remaining entry: each chain is structural
-to UMI (`@umijs/lint` eslint tooling, `@umijs/bundler-webpack` node polyfills)
-and each leaf package has no fixed release to resolve to. The blocking fact is
-the leaf, not the top of the chain.
+to UMI (`@umijs/bundler-webpack` node polyfills for `elliptic`;
+`@umijs/bundler-webpack` svgr / TS-checker tooling for `deepmerge`) and each
+leaf package has no fixed release to resolve to. The blocking fact is the
+leaf, not the top of the chain.
 
 ## Procedure when an upstream fix lands
 
