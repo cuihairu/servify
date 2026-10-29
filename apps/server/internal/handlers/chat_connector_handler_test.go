@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	platformauth "servify/apps/server/internal/platform/auth"
 	"servify/apps/server/internal/platform/channel"
@@ -127,7 +128,7 @@ func chatConnectorRouter(lane ChatConnectorQuarantineLane, runtime ChatConnector
 	if len(replay) > 0 {
 		replayer = replay[0]
 	}
-	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(lane, runtime, replayer, nil, nil))
+	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(lane, runtime, replayer, nil, nil, nil))
 	return r
 }
 
@@ -137,7 +138,16 @@ func chatConnectorConfigRouter(installs ChatConnectorInstallationStore, grants C
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(chatConnectorScopeMiddleware())
-	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(nil, nil, nil, installs, grants))
+	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(nil, nil, nil, installs, grants, nil))
+	return r
+}
+
+// chatConnectorNotifyRouter 只注入出站公告面。
+func chatConnectorNotifyRouter(notifier ChatConnectorNotifier) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(chatConnectorScopeMiddleware())
+	RegisterChatConnectorRoutes(&r.RouterGroup, NewChatConnectorHandler(nil, nil, nil, nil, nil, notifier))
 	return r
 }
 
@@ -272,7 +282,7 @@ func TestChatConnectorHandlerListQuarantineClampsLimit(t *testing.T) {
 
 func TestRegisterChatConnectorRoutesNilArguments(t *testing.T) {
 	// 两个 nil 守卫：注册入口必须容忍半装配参数，而不是 panic
-	RegisterChatConnectorRoutes(nil, NewChatConnectorHandler(&stubChatConnectorLane{}, nil, nil, nil, nil))
+	RegisterChatConnectorRoutes(nil, NewChatConnectorHandler(&stubChatConnectorLane{}, nil, nil, nil, nil, nil))
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterChatConnectorRoutes(&r.RouterGroup, nil)
@@ -708,5 +718,121 @@ func TestChatConnectorHandlerRecordCapabilitiesStoreError(t *testing.T) {
 			`"receive_mode":"polling","message_scope":"mention_only","verified_at":"2026-10-20T10:00:00Z"}`)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("store error code=%d, want 500", w.Code)
+	}
+}
+
+// stubChatConnectorNotifier 记录操作者公告调用并回放固定结果，驱动 /notify 的
+// 错误与交付判定映射（作用域投影 + 请求体透传）。
+type stubChatConnectorNotifier struct {
+	result                                    channel.SendResult
+	err                                       error
+	calls                                     int
+	tenant, workspace, platform, installation string
+	req                                       channel.NotifyRequest
+}
+
+func (s *stubChatConnectorNotifier) Notify(_ context.Context, tenantID, workspaceID, platform, installationID string, req channel.NotifyRequest) (channel.SendResult, error) {
+	s.calls++
+	s.tenant, s.workspace, s.platform, s.installation = tenantID, workspaceID, platform, installationID
+	s.req = req
+	return s.result, s.err
+}
+
+func TestChatConnectorHandlerNotify(t *testing.T) {
+	validBody := `{"platform":"telegram","installation_id":"inst-1","reason":"maintenance","idempotency_key":"op-1","text":"system going down"}`
+	cases := []struct {
+		name       string
+		notifier   *stubChatConnectorNotifier
+		wantStatus int
+		wantErr    string
+	}{
+		{"accepted", &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultAccepted, PlatformMessageID: "123", AcceptedAt: time.Now()}}, http.StatusOK, ""},
+		{"unknown", &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultUnknown}, err: errors.New("transport failed")}, http.StatusBadGateway, "Delivery uncertain"},
+		{"rejected", &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultRejected}, err: errors.New("chat not found")}, http.StatusConflict, "Platform refused"},
+		{"send disabled", &stubChatConnectorNotifier{err: channel.ErrSendDisabled}, http.StatusConflict, "Notify disabled"},
+		{"installation not found", &stubChatConnectorNotifier{err: channel.ErrNotifierInstallationNotFound}, http.StatusNotFound, "Connector installation not found"},
+		{"store failure", &stubChatConnectorNotifier{err: errors.New("db down")}, http.StatusInternalServerError, "Failed to notify"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := chatConnectorNotifyRouter(tc.notifier)
+			w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/notify", validBody)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if tc.wantErr != "" && !strings.Contains(w.Body.String(), tc.wantErr) {
+				t.Fatalf("body %q missing %q", w.Body.String(), tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestChatConnectorHandlerNotifyAcceptedBody(t *testing.T) {
+	acceptedAt := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	stub := &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultAccepted, PlatformMessageID: "123", AcceptedAt: acceptedAt}}
+	r := chatConnectorNotifyRouter(stub)
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/notify",
+		`{"platform":"telegram","installation_id":"inst-1","reason":"maintenance","idempotency_key":"op-1","text":"hello"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d (body %s)", w.Code, w.Body.String())
+	}
+	for _, want := range []string{`"status":"accepted"`, `"platform_message_id":"123"`, `"accepted_at":"2026-10-30T12:00:00Z"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Fatalf("accepted body missing %q: %s", want, w.Body.String())
+		}
+	}
+}
+
+func TestChatConnectorHandlerNotifyValidation(t *testing.T) {
+	cases := []struct{ name, body, wantErr string }{
+		{"bad json", `{`, "Invalid request"},
+		{"missing platform", `{"installation_id":"i","reason":"r","idempotency_key":"k","text":"t"}`, "platform is required"},
+		{"missing installation", `{"platform":"telegram","reason":"r","idempotency_key":"k","text":"t"}`, "installation_id is required"},
+		{"missing reason", `{"platform":"telegram","installation_id":"i","idempotency_key":"k","text":"t"}`, "reason is required"},
+		{"missing key", `{"platform":"telegram","installation_id":"i","reason":"r","text":"t"}`, "idempotency_key is required"},
+		{"missing text", `{"platform":"telegram","installation_id":"i","reason":"r","idempotency_key":"k"}`, "text is required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := chatConnectorNotifyRouter(&stubChatConnectorNotifier{})
+			w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/notify", tc.body)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (body %s)", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.wantErr) {
+				t.Fatalf("body %q missing %q", w.Body.String(), tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestChatConnectorHandlerNotifyUnconfigured(t *testing.T) {
+	r := chatConnectorNotifyRouter(nil)
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/notify",
+		`{"platform":"telegram","installation_id":"i","reason":"r","idempotency_key":"k","text":"t"}`)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("unconfigured status = %d, want 404", w.Code)
+	}
+}
+
+func TestChatConnectorHandlerNotifyScopeAndBody(t *testing.T) {
+	stub := &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultAccepted, PlatformMessageID: "1", AcceptedAt: time.Now()}}
+	r := chatConnectorNotifyRouter(stub)
+	body := `{"platform":"telegram","installation_id":"inst-9","reason":"ops drill","idempotency_key":"op-9","text":"hello"}`
+	w := doChatConnectorJSONRequest(r, http.MethodPost, "/chat_connectors/notify", body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d (body %s)", w.Code, w.Body.String())
+	}
+	if stub.tenant != "tenant-1" || stub.workspace != "workspace-1" {
+		t.Fatalf("scope from context = %s/%s, want tenant-1/workspace-1", stub.tenant, stub.workspace)
+	}
+	if stub.platform != "telegram" || stub.installation != "inst-9" {
+		t.Fatalf("identity = %s/%s, want telegram/inst-9", stub.platform, stub.installation)
+	}
+	if stub.req.Reason != "ops drill" || stub.req.IdempotencyKey != "op-9" || stub.req.Content.Text != "hello" {
+		t.Fatalf("notify request drifted: %+v", stub.req)
+	}
+	if stub.req.Target != "" {
+		t.Fatalf("target must be pinned by the dispatcher, not the handler: %q", stub.req.Target)
 	}
 }

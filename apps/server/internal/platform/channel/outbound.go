@@ -88,6 +88,12 @@ func RetrySend(ctx context.Context, policy SendRetryPolicy, anchor string, attem
 	}
 }
 
+// ErrNotifierInstallationNotFound reports that the request scope has no
+// installation row: the notify recipient is pinned to a stored installation's
+// conversation (contract: the audience is never broadened from the request),
+// so a missing row leaves nothing to pin and nothing to send.
+var ErrNotifierInstallationNotFound = errors.New("chat connector installation not found")
+
 // OutboundSendResult maps one outbound attempt outcome onto the contract's
 // delivery status. A transport uncertainty is unknown; every platform refusal
 // is rejected. Storage and validation failures never reach this helper.

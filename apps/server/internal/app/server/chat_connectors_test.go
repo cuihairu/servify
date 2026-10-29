@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -267,12 +268,18 @@ func TestWireChatConnectorsBuildsSupervisor(t *testing.T) {
 	if rt.ChatConnectorsForWorker() == nil {
 		t.Fatal("wireChatConnectors must build the supervisor")
 	}
+	if rt.chatNotifier == nil {
+		t.Fatal("wireChatConnectors must build the notify dispatcher")
+	}
 
 	// a store-less runtime wires nothing
 	rt2 := &Runtime{Config: config.GetDefaultConfig()}
 	wireChatConnectors(rt2, nil)
 	if rt2.ChatConnectorsForWorker() != nil {
 		t.Fatal("nil DB must wire nothing")
+	}
+	if rt2.chatNotifier != nil {
+		t.Fatal("nil DB must wire no notifier")
 	}
 }
 
@@ -706,6 +713,7 @@ func TestChatConnectorOpsRoutesRegistered(t *testing.T) {
 		"POST /api/chat_connectors/reload",
 		"POST /api/chat_connectors/installations",
 		"POST /api/chat_connectors/capabilities",
+		"POST /api/chat_connectors/notify",
 	}
 	// 已装配：监督器注入后路由全量在册
 	router := BuildRouter(Dependencies{Config: cfg, ChatConnectors: chatconnector.NewSupervisor(nil, nil, nil)})
@@ -729,5 +737,137 @@ func TestChatConnectorOpsRoutesRegistered(t *testing.T) {
 		if !bareRegistered[path] {
 			t.Fatalf("route %s missing on bare runtime", path)
 		}
+	}
+}
+
+// newChatNotifierRuntime 装配一个带单条 memex/指定平台安装行的 runtime（供
+// notify dispatcher 测试）。caps=true 时按行的会话映射记录 SendText 授权；
+// endpoint 是假平台基址；tokenEnv 是行引用的环境变量名。
+func newChatNotifierRuntime(t *testing.T, endpoint, platform, tokenEnv string, caps bool) *Runtime {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:chat_notifier")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&channel.ChatConnectorInstallation{}, &channel.ChatConnectorCapability{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	row := channel.ChatConnectorInstallation{
+		TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: platform, InstallationID: "inst-1",
+		ConversationPlatformID: "group:5", ConversationKind: "group", ConversationIsGroup: true,
+		UpdatesEndpoint: endpoint, TokenEnvVar: tokenEnv, LongPollMS: 50, Enabled: true,
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("seed row: %v", err)
+	}
+	if caps {
+		if err := channel.NewCapabilityStore(db).Record(context.Background(), channel.CapabilityScope{
+			TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: platform,
+			InstallationID: "inst-1", ConversationPlatformID: "group:5",
+		}, memex.DeclaredCapabilities(time.Now())); err != nil {
+			t.Fatalf("record capabilities: %v", err)
+		}
+	}
+	rt := &Runtime{Config: config.GetDefaultConfig(), DB: db}
+	wireChatConnectors(rt, nil)
+	if rt.chatNotifier == nil {
+		t.Fatal("wireChatConnectors must build the notifier")
+	}
+	return rt
+}
+
+func TestChatConnectorNotifierDispatchesAndPinsTarget(t *testing.T) {
+	var received atomic.Value // last /bot/send request body
+	mux := http.NewServeMux()
+	mux.HandleFunc("/bot/send", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		received.Store(string(b))
+		_, _ = io.WriteString(w, `{"ok":true,"msg_id":"mid-1"}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	tokenEnv := "SERVIFY_TEST_NOTIFY_TOKEN"
+	rt := newChatNotifierRuntime(t, srv.URL, "memex", tokenEnv, true)
+	t.Setenv(tokenEnv, "tok")
+
+	// 请求体绝不携带收件人：dispatcher 用行映射的 group:5 覆盖任何传入 target
+	res, err := rt.chatNotifier.Notify(context.Background(), "tenant-1", "workspace-1", "memex", "inst-1", channel.NotifyRequest{
+		Target:         "group:999",
+		Reason:         "maintenance",
+		IdempotencyKey: "op-1",
+		Content:        channel.SendContent{Text: "system going down"},
+	})
+	if err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if res.Status != channel.SendResultAccepted || res.PlatformMessageID != "mid-1" || res.AcceptedAt.IsZero() {
+		t.Fatalf("result = %+v, want accepted/mid-1 with accepted_at", res)
+	}
+	body, _ := received.Load().(string)
+	var sent struct {
+		Target string `json:"target"`
+		Text   string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(body), &sent); err != nil {
+		t.Fatalf("decode send body %q: %v", body, err)
+	}
+	if sent.Target != "group:5" {
+		t.Fatalf("target = %q, want row-pinned group:5 (body %q)", sent.Target, body)
+	}
+	if sent.Text != "system going down" {
+		t.Fatalf("text = %q, want passthrough", sent.Text)
+	}
+}
+
+func TestChatConnectorNotifierErrors(t *testing.T) {
+	cases := []struct {
+		name      string
+		platform  string
+		caps      bool
+		setToken  bool
+		notifyID  string
+		wantCheck func(t *testing.T, err error)
+	}{
+		{"installation missing", "memex", true, true, "inst-missing", func(t *testing.T, err error) {
+			if !errors.Is(err, channel.ErrNotifierInstallationNotFound) {
+				t.Fatalf("err = %v, want ErrNotifierInstallationNotFound", err)
+			}
+		}},
+		{"token env unset", "memex", true, false, "inst-1", func(t *testing.T, err error) {
+			if !strings.Contains(err.Error(), "token env var") {
+				t.Fatalf("err = %v, want token env failure", err)
+			}
+		}},
+		{"no adapter for platform", "slack", true, true, "inst-1", func(t *testing.T, err error) {
+			if !strings.Contains(err.Error(), `platform "slack" has no adapter`) {
+				t.Fatalf("err = %v, want no-adapter failure", err)
+			}
+		}},
+		{"send text not granted", "memex", false, true, "inst-1", func(t *testing.T, err error) {
+			if !errors.Is(err, channel.ErrSendDisabled) {
+				t.Fatalf("err = %v, want ErrSendDisabled", err)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenEnv := "SERVIFY_TEST_NOTIFY_ERR_TOKEN"
+			rt := newChatNotifierRuntime(t, "http://127.0.0.1:1", tc.platform, tokenEnv, tc.caps)
+			if tc.setToken {
+				t.Setenv(tokenEnv, "tok")
+			} else {
+				t.Setenv(tokenEnv, "")
+			}
+			_, err := rt.chatNotifier.Notify(context.Background(), "tenant-1", "workspace-1", tc.platform, tc.notifyID, channel.NotifyRequest{
+				Reason:         "maintenance",
+				IdempotencyKey: "op-1",
+				Content:        channel.SendContent{Text: "system going down"},
+			})
+			if err == nil {
+				t.Fatal("Notify must fail")
+			}
+			tc.wantCheck(t, err)
+		})
 	}
 }

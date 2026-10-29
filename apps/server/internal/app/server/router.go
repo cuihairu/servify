@@ -2,6 +2,7 @@ package server
 
 import (
 	"servify/apps/server/internal/config"
+	"servify/apps/server/internal/handlers"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	aidelivery "servify/apps/server/internal/modules/ai/delivery"
 	analyticsdelivery "servify/apps/server/internal/modules/analytics/delivery"
@@ -114,6 +115,9 @@ type Dependencies struct {
 	// ChatInboxReplay 聊天收件箱 replay 工具面（committed-but-unforwarded
 	// 泳道 + 单行重放进正常流；未装配时该组路由返回 404）。
 	ChatInboxReplay *ChatInboxReplayer
+	// ChatConnectorNotifier 操作者公告出站缝（契约 79 行 Notify 语义的 HTTP
+	// 载体；未装配时 /notify 路由返回 404，镜像其余聊天运维面）。
+	ChatConnectorNotifier handlers.ChatConnectorNotifier
 }
 
 // BuildRouter assembles the HTTP routes and middleware around already-wired services.

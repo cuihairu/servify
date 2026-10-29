@@ -67,6 +67,14 @@ type ChatConnectorCapabilityStore interface {
 	Record(ctx context.Context, scope channel.CapabilityScope, caps channel.Capabilities) error
 }
 
+// ChatConnectorNotifier 是操作者公告的出站缝（由 app/server 的
+// *chatConnectorNotifier 实现）。实现方按作用域解析安装行、把收件人钉在行
+// 映射的会话上（契约：收件人绝不从请求隐式扩面）并驱动适配器的类型化
+// Notify。返回的 SendResult 携带契约交付判定（accepted/unknown/rejected）。
+type ChatConnectorNotifier interface {
+	Notify(ctx context.Context, tenantID, workspaceID, platform, installationID string, req channel.NotifyRequest) (channel.SendResult, error)
+}
+
 // ChatConnectorHandler 暴露连接器运维面：脱敏观测、quarantine/replay 处置、
 // 运行态重启，以及让安装映射与能力快照脱离裸 SQL 的配置写入面。
 // 各面单独注入：未装配的依赖返回 404 而不是 panic。
@@ -76,6 +84,7 @@ type ChatConnectorHandler struct {
 	replay        ChatConnectorReplayer
 	installations ChatConnectorInstallationStore
 	grants        ChatConnectorCapabilityStore
+	notifier      ChatConnectorNotifier
 }
 
 func NewChatConnectorHandler(
@@ -84,10 +93,12 @@ func NewChatConnectorHandler(
 	replay ChatConnectorReplayer,
 	installations ChatConnectorInstallationStore,
 	grants ChatConnectorCapabilityStore,
+	notifier ChatConnectorNotifier,
 ) *ChatConnectorHandler {
 	return &ChatConnectorHandler{
 		lane: lane, runtime: runtime, replay: replay,
 		installations: installations, grants: grants,
+		notifier: notifier,
 	}
 }
 
@@ -452,6 +463,93 @@ func parseChatConnectorCapabilities(req chatConnectorCapabilitiesRequest, tenant
 	}, nil
 }
 
+// chatConnectorNotifyRequest 是操作者公告请求体。target 刻意不在其中：收件人
+// 恒由已存安装行钉住（契约：绝不从请求隐式扩面）；reason 是审计面要求的公告
+// 动因；idempotency_key 是调用方稳定重试锚点，缺失即拒绝（自动生成会让操作者
+// 的重试失去锚点）。两个适配器均为 TEXT 面，正文只接受 text。
+type chatConnectorNotifyRequest struct {
+	Platform       string `json:"platform"`
+	InstallationID string `json:"installation_id"`
+	Reason         string `json:"reason"`
+	IdempotencyKey string `json:"idempotency_key"`
+	Text           string `json:"text"`
+}
+
+// NotifyConnector 发送一条操作者/系统公告到安装行映射的会话（契约 79 行
+// Notify 语义的操作载体）。出站能力门在适配器侧 fail-closed（无 SendText 授权
+// 即不出网）；交付判定如实透出：accepted 携带平台消息 id，unknown（传输未证
+// 实，请求可能已达平台）绝不盲目重发，rejected 是平台明确拒绝。该路由在 /api
+// 的全局审计中间件之下，reason 随请求体入审计。
+func (h *ChatConnectorHandler) NotifyConnector(c *gin.Context) {
+	if h == nil || h.notifier == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Chat connector outbound unavailable", Message: "notify dispatcher not configured"})
+		return
+	}
+	var req chatConnectorNotifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid request", Message: err.Error()})
+		return
+	}
+	platform := strings.TrimSpace(req.Platform)
+	installationID := strings.TrimSpace(req.InstallationID)
+	key := strings.TrimSpace(req.IdempotencyKey)
+	switch {
+	case platform == "":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid notify request", Message: "platform is required"})
+		return
+	case installationID == "":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid notify request", Message: "installation_id is required"})
+		return
+	case strings.TrimSpace(req.Reason) == "":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid notify request", Message: "reason is required"})
+		return
+	case key == "":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid notify request", Message: "idempotency_key is required"})
+		return
+	case req.Text == "":
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Invalid notify request", Message: "text is required"})
+		return
+	}
+	result, err := h.notifier.Notify(c.Request.Context(),
+		platformauth.TenantIDFromContext(c.Request.Context()),
+		platformauth.WorkspaceIDFromContext(c.Request.Context()),
+		platform, installationID,
+		channel.NotifyRequest{
+			Reason:         strings.TrimSpace(req.Reason),
+			IdempotencyKey: key,
+			Content:        channel.SendContent{Text: req.Text},
+		})
+	if err != nil {
+		code, resp := notifyErrorResponse(err, result)
+		c.JSON(code, resp)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":              result.Status,
+		"platform_message_id": result.PlatformMessageID,
+		"accepted_at":         result.AcceptedAt,
+	})
+}
+
+// notifyErrorResponse 把出站失败映射成操作者处置语义：安装行缺失是 404，
+// SendText 未授权（fail-closed 门，未出网）是 409，平台明确拒绝是 409 状态
+// 冲突，传输不确定（unknown，请求可能已达平台）是 502——重发必须换锚点语义
+// 而不是原样重试，其余按故障 500。
+func notifyErrorResponse(err error, result channel.SendResult) (int, ErrorResponse) {
+	switch {
+	case errors.Is(err, channel.ErrNotifierInstallationNotFound):
+		return http.StatusNotFound, ErrorResponse{Error: "Connector installation not found", Message: "no installation row for this scope"}
+	case errors.Is(err, channel.ErrSendDisabled):
+		return http.StatusConflict, ErrorResponse{Error: "Notify disabled", Message: "no SendText capability recorded for this installation"}
+	case result.Status == channel.SendResultUnknown:
+		return http.StatusBadGateway, ErrorResponse{Error: "Delivery uncertain", Message: "the platform may have received the announcement; do not retry blindly with the same outcome"}
+	case result.Status == channel.SendResultRejected:
+		return http.StatusConflict, ErrorResponse{Error: "Platform refused the announcement", Message: err.Error()}
+	default:
+		return http.StatusInternalServerError, ErrorResponse{Error: "Failed to notify", Message: err.Error()}
+	}
+}
+
 // chatConnectorListLimit 取 limit 参数并夹在上限内。
 func chatConnectorListLimit(c *gin.Context) int {
 	limit := intQuery(c, "limit", 50)
@@ -479,5 +577,6 @@ func RegisterChatConnectorRoutes(r *gin.RouterGroup, handler *ChatConnectorHandl
 		group.POST("/quarantine/:id/dismiss", handler.DismissQuarantined)
 		group.GET("/inbox/unforwarded", handler.ListUnforwarded)
 		group.POST("/inbox/:id/replay", handler.ReplayInboxRow)
+		group.POST("/notify", handler.NotifyConnector)
 	}
 }

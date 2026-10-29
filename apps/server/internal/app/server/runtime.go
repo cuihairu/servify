@@ -138,6 +138,7 @@ type Runtime struct {
 	chatConnectors   *chatconnector.Supervisor
 	chatPayloads     *channel.LocalPayloadStore
 	chatReplay       *ChatInboxReplayer
+	chatNotifier     *chatConnectorNotifier
 }
 
 type websocketRunner interface {
@@ -358,5 +359,6 @@ func (rt *Runtime) RouterDependencies() Dependencies {
 		HTTPMetrics:                         rt.HTTPMetrics,
 		ChatConnectors:                      rt.chatConnectors,
 		ChatInboxReplay:                     rt.chatReplay,
+		ChatConnectorNotifier:               rt.chatNotifier,
 	}
 }

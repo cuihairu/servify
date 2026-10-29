@@ -236,27 +236,106 @@ func wireChatConnectors(rt *Runtime, conversationService *conversationapp.Servic
 			// the HTTP timeout must outlive the long poll itself, or every
 			// fully-waited pull dies client-side
 			hc := &http.Client{Timeout: longPoll + 10*time.Second}
-			var poller channel.Poller
-			switch inst.Platform {
-			case platformTelegram:
-				poller = telegram.NewConnector(
-					telegram.NewClient(inst.UpdatesEndpoint, token, hc),
-					caps, inbox, cursors, telegramConfigFromInstallation(inst),
-				).WithObserver(bridge).WithPayloadStore(payloads)
-			case platformMemex:
-				poller = memex.NewConnector(
-					memex.NewClient(inst.UpdatesEndpoint, token, hc),
-					caps, inbox, memexConfigFromInstallation(inst),
-				).WithObserver(bridge).WithPayloadStore(payloads)
-			default:
-				return nil, fmt.Errorf("chat connector %s: platform %q has no adapter",
-					inst.InstallationID, inst.Platform)
+			conn, err := buildChatConnector(inst, token, hc, caps, inbox, cursors, bridge, payloads)
+			if err != nil {
+				return nil, err
 			}
-			runner := channel.NewRunner(poller)
+			runner := channel.NewRunner(conn)
 			runner.LongPoll = longPoll
 			return runner, nil
 		},
 		rt.Logger)
+	rt.chatNotifier = &chatConnectorNotifier{
+		installations: installations,
+		caps:          caps,
+		inbox:         inbox,
+		cursors:       cursors,
+		payloads:      payloads,
+	}
+}
+
+// chatConnectorView is the combined face the poll runner and the notify
+// dispatcher share: one connector is built per call, and the poll loop (PollOnce)
+// and the outbound announce (Notify) drive the same concrete adapter.
+type chatConnectorView interface {
+	channel.Connector
+	channel.Poller
+}
+
+// buildChatConnector builds the adapter for one installation row. The platform
+// selects the adapter; anything else is a row-data failure (no silent fallback).
+// observer and payloads are optional (nil keeps inbound observer / retention
+// off) — the notify dispatcher drives outbound only and passes nil observer.
+func buildChatConnector(inst channel.ChatConnectorInstallation, token string, hc *http.Client, caps *channel.CapabilityStore, inbox *channel.InboxStore, cursors *channel.CursorStore, observer channel.InboundObserver, payloads *channel.LocalPayloadStore) (chatConnectorView, error) {
+	switch inst.Platform {
+	case platformTelegram:
+		return telegram.NewConnector(
+			telegram.NewClient(inst.UpdatesEndpoint, token, hc),
+			caps, inbox, cursors, telegramConfigFromInstallation(inst),
+		).WithObserver(observer).WithPayloadStore(payloads), nil
+	case platformMemex:
+		return memex.NewConnector(
+			memex.NewClient(inst.UpdatesEndpoint, token, hc),
+			caps, inbox, memexConfigFromInstallation(inst),
+		).WithObserver(observer).WithPayloadStore(payloads), nil
+	default:
+		return nil, fmt.Errorf("chat connector %s: platform %q has no adapter",
+			inst.InstallationID, inst.Platform)
+	}
+}
+
+// chatConnectorNotifier is the operator-announcement dispatcher: it resolves the
+// installation row for the request scope, pins the recipient to the row's
+// conversation (contract: the adapter never broadens the audience implicitly)
+// and drives the adapter's typed Notify. It builds a fresh connector per call —
+// outbound is stateless, so no registry has to stay in sync with reloads — and
+// the SendText capability gate is read live from the shared store.
+type chatConnectorNotifier struct {
+	installations *channel.InstallationStore
+	caps          *channel.CapabilityStore
+	inbox         *channel.InboxStore
+	cursors       *channel.CursorStore
+	payloads      *channel.LocalPayloadStore
+}
+
+// Notify implements handlers.ChatConnectorNotifier. The request scope is the
+// handler's, so a row from another tenant/workspace is never reachable (the
+// store's Get filters by scope). Target is overwritten from the row — the body
+// never carries a recipient.
+func (n *chatConnectorNotifier) Notify(ctx context.Context, tenantID, workspaceID, platform, installationID string, req channel.NotifyRequest) (channel.SendResult, error) {
+	if n == nil || n.installations == nil {
+		return channel.SendResult{}, errors.New("chat connector notifier: installation store not configured")
+	}
+	inst, err := n.installations.Get(ctx, channel.InstallationScope{
+		TenantID:       tenantID,
+		WorkspaceID:    workspaceID,
+		Platform:       platform,
+		InstallationID: installationID,
+	})
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	if inst == nil {
+		return channel.SendResult{}, channel.ErrNotifierInstallationNotFound
+	}
+	token := os.Getenv(inst.TokenEnvVar)
+	if token == "" {
+		return channel.SendResult{}, fmt.Errorf("chat connector %s: token env var %s is unset",
+			inst.InstallationID, inst.TokenEnvVar)
+	}
+	longPoll := time.Duration(inst.LongPollMS) * time.Millisecond
+	// the HTTP timeout must outlive the long poll budget, mirroring the runner
+	// so a notifier never races a slow platform with a client-side timeout
+	hc := &http.Client{Timeout: longPoll + 10*time.Second}
+	conn, err := buildChatConnector(*inst, token, hc, n.caps, n.inbox, n.cursors, nil, n.payloads)
+	if err != nil {
+		return channel.SendResult{}, err
+	}
+	req.Target = inst.ConversationPlatformID
+	if err := req.Validate(); err != nil {
+		return channel.SendResult{}, fmt.Errorf("chat connector %s: %w", inst.InstallationID, err)
+	}
+	return conn.Notify(ctx, req)
 }
 
 // conversationRefFromInstallation extracts the configured conversation the
