@@ -745,9 +745,22 @@ jobs:
         # 联接条件写错不会被捕获；TestTelegramEventIDBackfillPostgresExecutes
         # 在临时 schema 上执行 up.sql 并断言重写/删除/排除/幂等）。
         run: |
+          # 该步骤依赖本 job 的 postgres service 容器与 TEST_POSTGRES_DSN。
+          # 若未来被挪到无 postgres 的 job，go test 会因 DSN 未设而 Skip
+          # （不报错），门禁会静默退化为空跑——用 -json 断言 Skip 计数为 0。
           TEST_POSTGRES_DSN="postgres://postgres:password@localhost:5432/postgres?sslmode=disable" \
             go -C apps/server test ./internal/app/bootstrap/ \
-            -run 'TestTelegramEventIDBackfillPostgresExecutes' -count=1 -v
+            -run 'TestTelegramEventIDBackfillPostgresExecutes' -count=1 -json > /tmp/teidbf.json
+          skipped=$(grep -c '"Action":"skip"' /tmp/teidbf.json || true)
+          if [ "$skipped" -ne 0 ]; then
+            echo "TestTelegramEventIDBackfillPostgresExecutes skipped $skipped time(s); TEST_POSTGRES_DSN 未注入，门禁退化为空跑"
+            exit 1
+          fi
+          failed=$(grep -c '"Action":"fail"' /tmp/teidbf.json || true)
+          if [ "$failed" -ne 0 ]; then
+            echo "TestTelegramEventIDBackfillPostgresExecutes failed"
+            exit 1
+          fi
 
       - name: Backup & restore drill (pg_dump/pg_restore)
         timeout-minutes: 5

@@ -31,51 +31,64 @@ import (
 // one that entered the normal flow, and its retained object is swept by
 // retention. updated_at is not refreshed (backfill convention, matching
 // 000017_scope_backfill).
+//
+// The whole rewrite runs in a single transaction: a mid-flight failure (e.g.
+// disk full) rolls the partial state back, matching the postgres path where
+// the migration executes each statement atomically. Reruns stay idempotent
+// because allDigits only matches unprocessed rows and deleted rows do not
+// resurrect.
 func BackfillTelegramEventIDs(db *gorm.DB) (int64, error) {
 	if db == nil {
 		return 0, nil
 	}
-	var rows []channel.ChatConnectorInbox
-	if err := db.Where("platform = ? AND event_type = ?", "telegram", string(channel.EventTypeMessageCreated)).
-		Find(&rows).Error; err != nil {
-		return 0, fmt.Errorf("backfill telegram event ids: %w", err)
-	}
-
-	// Occupied target keys, scoped by tenant+workspace+idempotency key to match
-	// the unique index (uq_chat_connector_inboxes_scope_key). A legacy row whose
-	// target is occupied is the stale duplicate of the same update (it landed
-	// once before and once after the format change); the surviving scoped row
-	// is the one that entered the normal flow. Only non-legacy rows count as
-	// occupiers — a legacy row's target always contains ':' so it can never be
-	// another legacy row's target.
-	type scopeKey struct{ tenant, workspace, key string }
-	occupied := make(map[scopeKey]bool, len(rows))
-	for _, r := range rows {
-		if !allDigits(r.EventID) {
-			occupied[scopeKey{r.TenantID, r.WorkspaceID, r.IdempotencyKey}] = true
-		}
-	}
-
 	var touched int64
-	for _, row := range rows {
-		if !allDigits(row.EventID) {
-			continue
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var rows []channel.ChatConnectorInbox
+		if err := tx.Where("platform = ? AND event_type = ?", "telegram", string(channel.EventTypeMessageCreated)).
+			Find(&rows).Error; err != nil {
+			return fmt.Errorf("backfill telegram event ids: %w", err)
 		}
-		newEventID := row.ConversationPlatformID + ":" + row.EventID
-		newKey := channel.InboundIdempotencyKey(row.InstallationID, newEventID)
-		if occupied[scopeKey{row.TenantID, row.WorkspaceID, newKey}] {
-			if err := db.Where("id = ?", row.ID).Delete(&channel.ChatConnectorInbox{}).Error; err != nil {
-				return touched, fmt.Errorf("backfill telegram event ids: %w", err)
+
+		// Occupied target keys, scoped by tenant+workspace+idempotency key to
+		// match the unique index (uq_chat_connector_inboxes_scope_key). A legacy
+		// row whose target is occupied is the stale duplicate of the same update
+		// (it landed once before and once after the format change); the
+		// surviving scoped row is the one that entered the normal flow. Only
+		// non-legacy rows count as occupiers — a legacy row's target always
+		// contains ':' so it can never be another legacy row's target.
+		type scopeKey struct{ tenant, workspace, key string }
+		occupied := make(map[scopeKey]bool, len(rows))
+		for _, r := range rows {
+			if !allDigits(r.EventID) {
+				occupied[scopeKey{r.TenantID, r.WorkspaceID, r.IdempotencyKey}] = true
 			}
-			touched++
-			continue
 		}
-		res := db.Model(&channel.ChatConnectorInbox{}).Where("id = ?", row.ID).
-			UpdateColumns(map[string]interface{}{"event_id": newEventID, "idempotency_key": newKey})
-		if res.Error != nil {
-			return touched, fmt.Errorf("backfill telegram event ids: %w", res.Error)
+
+		for _, row := range rows {
+			if !allDigits(row.EventID) {
+				continue
+			}
+			newEventID := row.ConversationPlatformID + ":" + row.EventID
+			newKey := channel.InboundIdempotencyKey(row.InstallationID, newEventID)
+			if occupied[scopeKey{row.TenantID, row.WorkspaceID, newKey}] {
+				res := tx.Where("id = ?", row.ID).Delete(&channel.ChatConnectorInbox{})
+				if res.Error != nil {
+					return fmt.Errorf("backfill telegram event ids: %w", res.Error)
+				}
+				touched += res.RowsAffected
+				continue
+			}
+			res := tx.Model(&channel.ChatConnectorInbox{}).Where("id = ?", row.ID).
+				UpdateColumns(map[string]interface{}{"event_id": newEventID, "idempotency_key": newKey})
+			if res.Error != nil {
+				return fmt.Errorf("backfill telegram event ids: %w", res.Error)
+			}
+			touched += res.RowsAffected
 		}
-		touched += res.RowsAffected
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
 	return touched, nil
 }
