@@ -17,7 +17,8 @@ Servify 的恢复口径按部署形态分两轨：
   拒绝 postgres 方言**——把 sqlite JSONL 备份误灌生产库比没有备份
   更危险，工具在建立连接前就拦截。
 
-**迁移回滚的唯一口径是"恢复备份"**：版本化迁移不提供 down 文件
+**迁移回滚的唯一口径是"恢复备份"**：可逆数据迁移可配 `.down.sql`，
+但 schema/基线变更保持仅 up，版本化迁移其余情况不提供 down 文件
 （`apps/server/internal/app/bootstrap/migrate_runner.go` 的 embed
 注释即该教义），失败迁移不走反向 SQL，而是把数据库恢复到迁移前
 的备份点。该口径的 postgres 可执行证据在 CI Integration job 的

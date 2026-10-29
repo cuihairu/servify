@@ -3,8 +3,8 @@
 //
 // 定位（docs/backup-and-recovery.md 双轨口径）：本包面向本地开发与
 // sqlite 单机部署形态；生产 PostgreSQL 的一致性备份走 pg_dump/pg_restore
-// SOP，迁移回滚不提供 down migration——恢复备份是唯一回滚口径
-// （见 bootstrap/migrate_runner.go 的 embed 注释）。
+// SOP，迁移回滚以恢复备份为唯一口径——可逆数据迁移可配 .down.sql，
+// schema/基线变更保持仅 up（见 bootstrap/migrate_runner.go 的 embed 注释）。
 package recovery
 
 import (

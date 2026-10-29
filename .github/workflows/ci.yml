@@ -738,6 +738,17 @@ jobs:
           go -C apps/server run ./cmd/schema-parity \
             -dsn "postgres://postgres:password@localhost:5432/postgres?sslmode=disable"
 
+      - name: Telegram event id backfill on real postgres
+        timeout-minutes: 3
+        # 000031 迁移 SQL 的联接/删除语义在真实 postgres 上执行验证（子串
+        # 对账 TestTelegramEventIDBackfillSQLCoversSameLogic 只做存在性检查，
+        # 联接条件写错不会被捕获；TestTelegramEventIDBackfillPostgresExecutes
+        # 在临时 schema 上执行 up.sql 并断言重写/删除/排除/幂等）。
+        run: |
+          TEST_POSTGRES_DSN="postgres://postgres:password@localhost:5432/postgres?sslmode=disable" \
+            go -C apps/server test ./internal/app/bootstrap/ \
+            -run 'TestTelegramEventIDBackfillPostgresExecutes' -count=1 -v
+
       - name: Backup & restore drill (pg_dump/pg_restore)
         timeout-minutes: 5
         run: |
