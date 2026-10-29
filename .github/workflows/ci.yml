@@ -768,7 +768,7 @@ jobs:
           COMPOSE="docker compose -f infra/compose/docker-compose.yml"
           pg() { $COMPOSE exec -T postgres psql -U postgres -d servify -tAc "$1"; }
 
-          # P2-3 postgres 演练:迁移回滚 = 恢复备份(migrations 无 down)。
+          # P2-3 postgres 演练:迁移回滚 = 恢复备份(可逆数据迁移可配 .down.sql;schema/基线仍 up-only)。
           # 1) 播种关键表并全量备份(-Fc;schema_migrations 随系统目录进备份)
           pg "INSERT INTO users (username, email, password, role, status, created_at, updated_at) VALUES ('drill-user-1', 'drill1@example.com', 'drill-only', 'customer', 'active', NOW(), NOW()), ('drill-user-2', 'drill2@example.com', 'drill-only', 'customer', 'active', NOW(), NOW())"
           $COMPOSE exec -T postgres pg_dump -U postgres -Fc servify > /tmp/servify-drill.dump
