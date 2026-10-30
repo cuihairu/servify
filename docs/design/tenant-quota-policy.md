@@ -9,6 +9,10 @@
 > enforcement was landed per §4 (2026-10-15, default `enabled: false`);
 > the tenant/workspace override limit chain was landed per §4.4 (2026-10-16,
 > decided on behalf in the same round).
+>
+> **2026-10-30 已代决复核（docs/review/2026-10-30-decisions.md 第 4、7 项）**:
+> 保留当前**软配额保护**口径——`limit + unit(requests|tokens) + window(hour|day|month)`、
+> Redis 固定窗口、租户/工作区只覆盖 limit、默认关闭、计量故障放行;它作为**服务保护/软阈值,不是计费账本**,交付说明统一用「软配额保护」措辞,不作硬费用保证。无新需求时不重新设计、暂不统一开启生产配额;只有客户合同或明确支出风险要求硬封顶时,才单独设计(调用前原子预留/调用后结算/失败退款/崩溃恢复)并立项,立项触发时产品先给出计量对象/允许超额/故障时能否中断/并发规模/预算归属。
 
 ## 1. Current State (measured 2026-10-15)
 

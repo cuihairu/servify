@@ -9,6 +9,14 @@
 > ("new-customer delivery default knowledge base criteria (decided 2026-09-21)")
 > into a single decision record. **The conclusion is consistent with the current
 > code, zero code changes**; the only remaining gap is in §5.
+>
+> **2026-10-30 已代决复核（docs/review/2026-10-30-decisions.md 第 5 项）**:
+> 维持既有代决——代码默认 `Knowledge.Provider: ""` 保持空、三外部 provider 默认
+> `Enabled: false`,交付有条件时以 pgvector 起步;选择优先级维持
+> `pgvector 直配 → local → ragflow → dify → weknora`;新增增强投入集中 RAGFlow,
+> 维护 WeKnora,Dify 冻结新增能力,MaxKB 仅观察。**代码默认空 ≠ 开箱即用知识库**——
+> 每个交付必须明确所选 provider 及其前提,不得把代码默认解释为已启用。不改代码默认、
+> 不调整兼容顺序、不新增 MaxKB 接入、不扩展 Dify 新能力(冻结能力不停止修复兼容问题)。
 
 ## 1. Current State (measured 2026-10-15)
 

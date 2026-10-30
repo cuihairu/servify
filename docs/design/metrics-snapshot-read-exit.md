@@ -4,6 +4,14 @@
 > (decided during the 2026-10-15 inspection; the user may overturn it; overturning =
 > restoring the `Snapshot()` method). Corresponds to the todo item "MetricsAggregator
 > Snapshot read-path exit (pending product/ops decision)".
+>
+> **2026-10-30 已代决复核（docs/review/2026-10-30-decisions.md 第 6 项）**:
+> 维持 Prometheus `/metrics` 为 MetricsAggregator 唯一对外读取出口(`SnapshotSeries` →
+> `MetricsPrometheusCollector`),旧有损 `Snapshot()` 保持退役。导出路径验证:handlers 包
+> 8 条 metrics 用例全绿(含 `TestMetricsPrometheusCollector_ExportsAggregatedSeries` 与
+> `_EmptyAggregator`,2026-10-30 实跑)。运维验收时从 `/metrics` 抽查指标名/标签/数值
+> 是否满足看板需求——该抽查登记为运维验收项,出现具体缺失项且确有消费者需求时再提新读取能力;
+> 不恢复旧 Snapshot、不再造同内容 JSON 读取 API、不以指标快照实现收费。
 
 ## 1. Current State (measured 2026-10-15)
 
