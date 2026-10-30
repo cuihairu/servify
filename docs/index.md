@@ -28,6 +28,8 @@ features:
     details: Manage agents, knowledge bases, permissions, security policies, and product runtime configuration in one unified admin console.
 ---
 
+![Servify architecture diagram](/images/architecture-en.svg)
+
 <script setup lang="ts">
 // 首次访问按浏览器语言选择文档语言（vitepress 无此能力，GitHub Pages 不支持 _redirects）
 // 优先级：localStorage 手动选择 > navigator.language > 保持当前 locale

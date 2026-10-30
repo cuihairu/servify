@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1080" viewBox="0 0 1280 1080" role="img" aria-labelledby="title desc" xml:lang="en">
+<title id="title">Servify · Modular Monolith Layered Architecture</title>
+<desc id="desc">AI customer service system as a modular monolith. Top-down: access channels, delivery layer (HTTP/WebSocket/adapters), application layer (use-case orchestration), domain layer (entities), infrastructure layer (PostgreSQL/Redis/event bus/observability/knowledge and LLM ports). The AI orchestrator sits to the right of the application layer, invoking knowledge and LLM. 27 top-level modules, core 7 are conversation/customer/agent/routing/ticket/ai/knowledge. Dependency direction handlers → modules/*/delivery → application → domain|infra.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
+<style>text{font-family:Arial,'Noto Sans CJK SC','Microsoft YaHei',sans-serif;fill:#172b4d}.title{font-size:30px;font-weight:700}.sub{font-size:17px;fill:#435570}.band{font-size:16px;font-weight:700}.layer{font-size:18px;font-weight:700}.layerbody{font-size:13px;fill:#435570}.chip{font-size:15px;font-weight:700}.chipbody{font-size:12px;fill:#435570}.small{font-size:13px;fill:#52647b}.label{font-size:13px;fill:#435570;paint-order:stroke;stroke:#f8fafc;stroke-width:5px;stroke-linejoin:round}.edge{fill:none;stroke-linejoin:round}.control{stroke-dasharray:7 5}.core{stroke-width:2.5}</style>
+<rect width="1280" height="1080" rx="20" fill="#f8fafc"/>
+<text x="40" y="46" class="title" text-anchor="start">Servify · Modular Monolith Layered Architecture</text>
+<text x="40" y="78" class="sub" text-anchor="start">AI customer service · 27 top-level modules · core 7 modules · domain-first module boundaries · grounded in code and docs</text>
+
+<g id="channels">
+<rect x="40" y="104" width="1200" height="92" rx="14" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+<text x="60" y="128" class="band" text-anchor="start">Access Channels · SDKs &amp; Protocols</text>
+<g id="ch-user"><rect x="60" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="185" y="163" class="chip" text-anchor="middle">User · Web SDK (TS)</text></g>
+<g id="ch-admin"><rect x="334" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="459" y="163" class="chip" text-anchor="middle">Admin · Back-office Console</text></g>
+<g id="ch-adapters"><rect x="608" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="733" y="163" class="chip" text-anchor="middle">Channel Adapters · SIP/Telegram/WeCom/WhatsApp</text></g>
+<g id="ch-sdk"><rect x="882" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="1007" y="163" class="chip" text-anchor="middle">SDK Family · backend API / future mobile</text></g>
+</g>
+
+<g id="delivery">
+<rect x="40" y="222" width="1010" height="120" rx="14" fill="#eef2ff" stroke="#a5b4fc" stroke-width="1.5"/>
+<text x="60" y="248" class="layer" text-anchor="start">Delivery Layer</text>
+<text x="60" y="270" class="layerbody" text-anchor="start">No business rules · no GORM · validation/auth/DTO mapping/use-case invocation only</text>
+<g id="d-http"><rect x="60" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="152" y="300" class="chip" text-anchor="middle">HTTP API</text><text x="152" y="318" class="chipbody" text-anchor="middle">REST endpoints</text></g>
+<g id="d-ws"><rect x="261" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="353" y="300" class="chip" text-anchor="middle">WebSocket</text><text x="353" y="318" class="chipbody" text-anchor="middle">realtime sessions</text></g>
+<g id="d-admin"><rect x="462" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="554" y="300" class="chip" text-anchor="middle">Admin/Public/Webhook</text><text x="554" y="318" class="chipbody" text-anchor="middle">endpoint classes</text></g>
+<g id="d-proto"><rect x="663" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="755" y="300" class="chip" text-anchor="middle">Protocol Adapters</text><text x="755" y="318" class="chipbody" text-anchor="middle">channel ports</text></g>
+<g id="d-sdk"><rect x="864" y="280" width="166" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="947" y="300" class="chip" text-anchor="middle">SDK Transports</text><text x="947" y="318" class="chipbody" text-anchor="middle">toward SDKs</text></g>
+</g>
+
+<g id="application">
+<rect x="40" y="372" width="1010" height="150" rx="14" fill="#edf5ff" stroke="#93b9e3" stroke-width="1.5"/>
+<text x="60" y="398" class="layer" text-anchor="start">Application Layer</text>
+<text x="60" y="420" class="layerbody" text-anchor="start">Use-case orchestration · transaction boundaries · authz · event publication · repository/port calls</text>
+<g id="a-conv"><rect x="60" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="125" y="454" class="chip" text-anchor="middle">conversation</text><text x="125" y="474" class="chipbody" text-anchor="middle">core · session hub</text></g>
+<g id="a-routing"><rect x="202" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="267" y="454" class="chip" text-anchor="middle">routing</text><text x="267" y="474" class="chipbody" text-anchor="middle">core · routing/transfer</text></g>
+<g id="a-ticket"><rect x="344" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="409" y="454" class="chip" text-anchor="middle">ticket</text><text x="409" y="474" class="chipbody" text-anchor="middle">core · ticketing</text></g>
+<g id="a-ai"><rect x="486" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="551" y="454" class="chip" text-anchor="middle">ai</text><text x="551" y="474" class="chipbody" text-anchor="middle">core · AI response</text></g>
+<g id="a-know"><rect x="628" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="693" y="454" class="chip" text-anchor="middle">knowledge</text><text x="693" y="474" class="chipbody" text-anchor="middle">core · knowledge base</text></g>
+<g id="a-cust"><rect x="770" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="835" y="454" class="chip" text-anchor="middle">customer</text><text x="835" y="474" class="chipbody" text-anchor="middle">core · customer</text></g>
+<g id="a-agent"><rect x="912" y="432" width="118" height="50" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2.5"/><text x="971" y="454" class="chip" text-anchor="middle">agent</text><text x="971" y="474" class="chipbody" text-anchor="middle">core · agent</text></g>
+<g id="a-other"><rect x="60" y="492" width="1010" height="18" rx="6" fill="#fff" stroke="#93b9e3"/><text x="565" y="505" class="chipbody" text-anchor="middle" style="fill:#52647b">Other full-layered modules: analytics · assist · automation · quality · translation · voice · webhook ｜ 13 thin-shell modules (api_key/auth/email/sla/shift/macro/…) as sub-capabilities</text></g>
+</g>
+
+<g id="domain">
+<rect x="40" y="552" width="1010" height="120" rx="14" fill="#eef8f5" stroke="#86c9b3" stroke-width="1.5"/>
+<text x="60" y="578" class="layer" text-anchor="start">Domain Layer</text>
+<text x="60" y="600" class="layerbody" text-anchor="start">Entities &amp; domain logic · high cohesion within modules · event-driven internal coordination</text>
+<g id="dom-conv"><rect x="60" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="135" y="630" class="chip" text-anchor="middle">Conversation</text><text x="135" y="648" class="chipbody" text-anchor="middle">session</text></g>
+<g id="dom-agent"><rect x="222" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="297" y="630" class="chip" text-anchor="middle">Agent</text><text x="297" y="648" class="chipbody" text-anchor="middle">agent</text></g>
+<g id="dom-ticket"><rect x="384" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="459" y="630" class="chip" text-anchor="middle">Ticket</text><text x="459" y="648" class="chipbody" text-anchor="middle">ticket</text></g>
+<g id="dom-know"><rect x="546" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="621" y="630" class="chip" text-anchor="middle">Knowledge</text><text x="621" y="648" class="chipbody" text-anchor="middle">knowledge</text></g>
+<g id="dom-sla"><rect x="708" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="783" y="630" class="chip" text-anchor="middle">SLA</text><text x="783" y="648" class="chipbody" text-anchor="middle">service level</text></g>
+<g id="dom-voice"><rect x="870" y="610" width="160" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="950" y="630" class="chip" text-anchor="middle">Voice Call</text><text x="950" y="648" class="chipbody" text-anchor="middle">voice call</text></g>
+</g>
+
+<g id="infra">
+<rect x="40" y="702" width="1010" height="150" rx="14" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="60" y="728" class="layer" text-anchor="start" style="fill:#334155">Infrastructure Layer</text>
+<text x="60" y="750" class="layerbody" text-anchor="start">Ports &amp; adapters · replaceable external vendors · separated read/write models</text>
+<g id="i-pg"><rect x="60" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="152" y="780" class="chip" text-anchor="middle">PostgreSQL</text><text x="152" y="798" class="chipbody" text-anchor="middle">authoritative store</text></g>
+<g id="i-redis"><rect x="261" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="353" y="780" class="chip" text-anchor="middle">Redis</text><text x="353" y="798" class="chipbody" text-anchor="middle">cache / realtime state</text></g>
+<g id="i-bus"><rect x="462" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="554" y="780" class="chip" text-anchor="middle">Event Bus</text><text x="554" y="798" class="chipbody" text-anchor="middle">domain events</text></g>
+<g id="i-obs"><rect x="663" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="755" y="780" class="chip" text-anchor="middle">Observability</text><text x="755" y="798" class="chipbody" text-anchor="middle">tracing/metrics/logs</text></g>
+<g id="i-know"><rect x="864" y="760" width="166" height="46" rx="10" fill="#fff" stroke="#fdba74"/><text x="947" y="780" class="chip" text-anchor="middle">Knowledge Port</text><text x="947" y="798" class="chipbody" text-anchor="middle">WeKnora/Dify/RAGFlow</text></g>
+<g id="i-llm"><rect x="864" y="806" width="166" height="34" rx="8" fill="#fff" stroke="#fdba74"/><text x="947" y="827" class="chip" text-anchor="middle">LLM Port</text></g>
+</g>
+
+<g id="ai-orch">
+<rect x="1070" y="372" width="170" height="300" rx="14" fill="#fdf4ff" stroke="#f0abfc" stroke-width="1.5"/>
+<text x="1155" y="398" class="band" text-anchor="middle" style="fill:#86198f">AI Orchestrator</text>
+<text x="1070" y="422" class="chipbody" text-anchor="start" style="fill:#86198f">AI Orchestrator</text>
+<text x="1070" y="444" class="chipbody" text-anchor="start">First response · clarify · suggest</text>
+<text x="1070" y="466" class="chipbody" text-anchor="start">Knowledge Q&amp;A · human-AI</text>
+<text x="1070" y="488" class="chipbody" text-anchor="start">collaboration · replaceable</text>
+<text x="1070" y="506" class="chipbody" text-anchor="start">(vendor behind ports)</text>
+<path id="ai-know" d="M1070 430 H1052" class="edge" style="stroke:#c026d3;stroke-width:2" marker-end="url(#arrow)"/>
+<text x="1050" y="420" class="label" text-anchor="end" style="fill:#c026d3">orchestrate</text>
+</g>
+<path id="ai-llm" d="M1155 672 V700 H1030 V786" class="edge control" style="stroke:#c026d3;stroke-width:2" marker-end="url(#arrow)"/>
+<text transform="translate(1172 690) rotate(-90)" class="small" style="fill:#c026d3">knowledge retrieval / LLM calls</text>
+
+<path id="l1" d="M200 196 V222" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l2" d="M200 342 V372" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l3" d="M200 522 V552" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l4" d="M200 672 V702" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<text x="212" y="210" class="label" text-anchor="start">validate/auth</text>
+<text x="212" y="357" class="label" text-anchor="start">use-case</text>
+<text x="212" y="537" class="label" text-anchor="start">domain ops</text>
+<text x="212" y="687" class="label" text-anchor="start">repo/port</text>
+
+<text x="40" y="900" class="small" text-anchor="start">Dashed: call/coordination · Solid: data flow · Bold blue: core 7 modules (conversation/customer/agent/routing/ticket/ai/knowledge)</text>
+<text x="40" y="922" class="small" text-anchor="start">27 top-level modules (frozen after V1.0 convergence): 14 fully layered (domain/application/infra/delivery) + 13 thin-shell (no domain)</text>
+<text x="40" y="944" class="small" text-anchor="start">Dependency direction: handlers → modules/*/delivery → modules/*/application → modules/*/domain|infra (guarded by scripts/check-module-boundaries.sh)</text>
+<text x="40" y="966" class="small" text-anchor="start">Modular monolith · ports &amp; adapters · domain-event coordination · no microservice decomposition at this stage</text>
+</svg>

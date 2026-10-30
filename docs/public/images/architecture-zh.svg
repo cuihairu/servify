@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1080" viewBox="0 0 1280 1080" role="img" aria-labelledby="title desc" xml:lang="zh-CN">
+<title id="title">Servify · 模块化单体分层架构</title>
+<desc id="desc">智能客服系统，模块化单体。自上而下为接入渠道、交付层（HTTP/WebSocket/适配器）、应用层（用例编排）、领域层（实体）、基础设施层（PostgreSQL/Redis/事件总线/可观测/知识库与 LLM 端口）。AI 编排器位于应用层右侧，调用知识库与 LLM。27 个一级模块，核心 7 模块为 conversation/customer/agent/routing/ticket/ai/knowledge。依赖方向 handlers → modules/*/delivery → application → domain|infra。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
+<style>text{font-family:Arial,'Noto Sans CJK SC','Microsoft YaHei',sans-serif;fill:#172b4d}.title{font-size:30px;font-weight:700}.sub{font-size:17px;fill:#435570}.band{font-size:16px;font-weight:700}.layer{font-size:18px;font-weight:700}.layerbody{font-size:13px;fill:#435570}.chip{font-size:15px;font-weight:700}.chipbody{font-size:12px;fill:#435570}.small{font-size:13px;fill:#52647b}.label{font-size:13px;fill:#435570;paint-order:stroke;stroke:#f8fafc;stroke-width:5px;stroke-linejoin:round}.edge{fill:none;stroke-linejoin:round}.control{stroke-dasharray:7 5}.core{stroke-width:2.5}</style>
+<rect width="1280" height="1080" rx="20" fill="#f8fafc"/>
+<text x="40" y="46" class="title" text-anchor="start">Servify · 模块化单体分层架构</text>
+<text x="40" y="78" class="sub" text-anchor="start">智能客服系统 · 27 个一级模块 · 核心 7 模块 · 领域优先模块边界 · 以代码与文档事实为准</text>
+
+<!-- 接入渠道 -->
+<g id="channels">
+<rect x="40" y="104" width="1200" height="92" rx="14" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+<text x="60" y="128" class="band" text-anchor="start">接入渠道 · SDK 与协议</text>
+<g id="ch-user"><rect x="60" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="185" y="163" class="chip" text-anchor="middle">用户 · Web SDK（TS）</text></g>
+<g id="ch-admin"><rect x="334" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="459" y="163" class="chip" text-anchor="middle">管理员 · 后台控制台</text></g>
+<g id="ch-adapters"><rect x="608" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="733" y="163" class="chip" text-anchor="middle">渠道适配器 · SIP/Telegram/WeCom/WhatsApp</text></g>
+<g id="ch-sdk"><rect x="882" y="138" width="250" height="42" rx="10" fill="#fff" stroke="#fdba74"/><text x="1007" y="163" class="chip" text-anchor="middle">SDK 族 · 后端 API / 未来移动端</text></g>
+</g>
+
+<!-- 交付层 -->
+<g id="delivery">
+<rect x="40" y="222" width="1010" height="120" rx="14" fill="#eef2ff" stroke="#a5b4fc" stroke-width="1.5"/>
+<text x="60" y="248" class="layer" text-anchor="start">交付层 · Delivery</text>
+<text x="60" y="270" class="layerbody" text-anchor="start">无业务规则 · 无 GORM · 仅校验/鉴权/DTO 映射/调用用例</text>
+<g id="d-http"><rect x="60" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="152" y="300" class="chip" text-anchor="middle">HTTP API</text><text x="152" y="318" class="chipbody" text-anchor="middle">REST 端点</text></g>
+<g id="d-ws"><rect x="261" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="353" y="300" class="chip" text-anchor="middle">WebSocket</text><text x="353" y="318" class="chipbody" text-anchor="middle">实时会话</text></g>
+<g id="d-admin"><rect x="462" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="554" y="300" class="chip" text-anchor="middle">Admin/Public/Webhook</text><text x="554" y="318" class="chipbody" text-anchor="middle">端点分类</text></g>
+<g id="d-proto"><rect x="663" y="280" width="185" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="755" y="300" class="chip" text-anchor="middle">协议适配器</text><text x="755" y="318" class="chipbody" text-anchor="middle">渠道端口</text></g>
+<g id="d-sdk"><rect x="864" y="280" width="166" height="46" rx="10" fill="#fff" stroke="#a5b4fc"/><text x="947" y="300" class="chip" text-anchor="middle">SDK 传输契约</text><text x="947" y="318" class="chipbody" text-anchor="middle">面向 SDK</text></g>
+</g>
+
+<!-- 应用层 -->
+<g id="application">
+<rect x="40" y="372" width="1010" height="150" rx="14" fill="#edf5ff" stroke="#93b9e3" stroke-width="1.5"/>
+<text x="60" y="398" class="layer" text-anchor="start">应用层 · Application</text>
+<text x="60" y="420" class="layerbody" text-anchor="start">用例编排 · 事务边界 · 鉴权 · 事件发布 · 仓储与外部端口调用</text>
+<g id="a-conv" class="core"><rect x="60" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="125" y="454" class="chip" text-anchor="middle">conversation</text><text x="125" y="474" class="chipbody" text-anchor="middle">核心 · 会话中心</text></g>
+<g id="a-routing"><rect x="202" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="267" y="454" class="chip" text-anchor="middle">routing</text><text x="267" y="474" class="chipbody" text-anchor="middle">核心 · 路由/转接</text></g>
+<g id="a-ticket"><rect x="344" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="409" y="454" class="chip" text-anchor="middle">ticket</text><text x="409" y="474" class="chipbody" text-anchor="middle">核心 · 工单</text></g>
+<g id="a-ai"><rect x="486" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="551" y="454" class="chip" text-anchor="middle">ai</text><text x="551" y="474" class="chipbody" text-anchor="middle">核心 · AI 应答</text></g>
+<g id="a-know"><rect x="628" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="693" y="454" class="chip" text-anchor="middle">knowledge</text><text x="693" y="474" class="chipbody" text-anchor="middle">核心 · 知识库</text></g>
+<g id="a-cust"><rect x="770" y="432" width="130" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="835" y="454" class="chip" text-anchor="middle">customer</text><text x="835" y="474" class="chipbody" text-anchor="middle">核心 · 客户</text></g>
+<g id="a-agent"><rect x="912" y="432" width="118" height="50" rx="10" fill="#fff" stroke="#2563eb"/><text x="971" y="454" class="chip" text-anchor="middle">agent</text><text x="971" y="474" class="chipbody" text-anchor="middle">核心 · 坐席</text></g>
+<g id="a-other"><rect x="60" y="492" width="1010" height="18" rx="6" fill="#fff" stroke="#93b9e3"/><text x="565" y="505" class="chipbody" text-anchor="middle" style="fill:#52647b">其余全分层模块：analytics · assist · automation · quality · translation · voice · webhook ｜ 13 个薄壳模块（api_key/auth/email/sla/shift/macro/…）归属子能力</text></g>
+</g>
+
+<!-- 领域层 -->
+<g id="domain">
+<rect x="40" y="552" width="1010" height="120" rx="14" fill="#eef8f5" stroke="#86c9b3" stroke-width="1.5"/>
+<text x="60" y="578" class="layer" text-anchor="start">领域层 · Domain</text>
+<text x="60" y="600" class="layerbody" text-anchor="start">实体与领域逻辑 · 模块内高内聚 · 事件驱动内部协调</text>
+<g id="dom-conv"><rect x="60" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="135" y="630" class="chip" text-anchor="middle">Conversation</text><text x="135" y="648" class="chipbody" text-anchor="middle">会话</text></g>
+<g id="dom-agent"><rect x="222" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="297" y="630" class="chip" text-anchor="middle">Agent</text><text x="297" y="648" class="chipbody" text-anchor="middle">坐席</text></g>
+<g id="dom-ticket"><rect x="384" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="459" y="630" class="chip" text-anchor="middle">Ticket</text><text x="459" y="648" class="chipbody" text-anchor="middle">工单</text></g>
+<g id="dom-know"><rect x="546" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="621" y="630" class="chip" text-anchor="middle">Knowledge</text><text x="621" y="648" class="chipbody" text-anchor="middle">知识</text></g>
+<g id="dom-sla"><rect x="708" y="610" width="150" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="783" y="630" class="chip" text-anchor="middle">SLA</text><text x="783" y="648" class="chipbody" text-anchor="middle">服务等级</text></g>
+<g id="dom-voice"><rect x="870" y="610" width="160" height="46" rx="10" fill="#fff" stroke="#86c9b3"/><text x="950" y="630" class="chip" text-anchor="middle">Voice Call</text><text x="950" y="648" class="chipbody" text-anchor="middle">语音通话</text></g>
+</g>
+
+<!-- 基础设施层 -->
+<g id="infra">
+<rect x="40" y="702" width="1010" height="150" rx="14" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="60" y="728" class="layer" text-anchor="start" style="fill:#334155">基础设施层 · Infrastructure</text>
+<text x="60" y="750" class="layerbody" text-anchor="start">端口与适配器 · 外部供应商可替换 · 读写模型分离</text>
+<g id="i-pg"><rect x="60" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="152" y="780" class="chip" text-anchor="middle">PostgreSQL</text><text x="152" y="798" class="chipbody" text-anchor="middle">权威存储</text></g>
+<g id="i-redis"><rect x="261" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="353" y="780" class="chip" text-anchor="middle">Redis</text><text x="353" y="798" class="chipbody" text-anchor="middle">缓存/实时状态</text></g>
+<g id="i-bus"><rect x="462" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="554" y="780" class="chip" text-anchor="middle">事件总线</text><text x="554" y="798" class="chipbody" text-anchor="middle">内部领域事件</text></g>
+<g id="i-obs"><rect x="663" y="760" width="185" height="46" rx="10" fill="#fff" stroke="#94a3b8"/><text x="755" y="780" class="chip" text-anchor="middle">可观测</text><text x="755" y="798" class="chipbody" text-anchor="middle">追踪/指标/日志</text></g>
+<g id="i-know"><rect x="864" y="760" width="166" height="46" rx="10" fill="#fff" stroke="#fdba74"/><text x="947" y="780" class="chip" text-anchor="middle">知识库端口</text><text x="947" y="798" class="chipbody" text-anchor="middle">WeKnora/Dify/RAGFlow</text></g>
+<g id="i-llm"><rect x="864" y="806" width="166" height="34" rx="8" fill="#fff" stroke="#fdba74"/><text x="947" y="827" class="chip" text-anchor="middle">LLM 端口</text></g>
+</g>
+
+<!-- AI 编排器 -->
+<g id="ai-orch">
+<rect x="1070" y="372" width="170" height="300" rx="14" fill="#fdf4ff" stroke="#f0abfc" stroke-width="1.5"/>
+<text x="1155" y="398" class="band" text-anchor="middle" style="fill:#86198f">AI 编排器</text>
+<text x="1070" y="422" class="chipbody" text-anchor="start" style="fill:#86198f">AI Orchestrator</text>
+<text x="1070" y="444" class="chipbody" text-anchor="start">首次应答 · 澄清 · 建议</text>
+<text x="1070" y="466" class="chipbody" text-anchor="start">知识问答 · 人机协同</text>
+<text x="1070" y="488" class="chipbody" text-anchor="start">可替换（模型/知识</text>
+<text x="1070" y="506" class="chipbody" text-anchor="start">供应商经端口）</text>
+<path id="ai-know" d="M1070 430 H1052" class="edge" style="stroke:#c026d3;stroke-width:2" marker-end="url(#arrow)"/>
+<text x="1050" y="420" class="label" text-anchor="end" style="fill:#c026d3">编排</text>
+</g>
+<path id="ai-llm" d="M1155 672 V700 H1030 V786" class="edge control" style="stroke:#c026d3;stroke-width:2" marker-end="url(#arrow)"/>
+<text transform="translate(1172 690) rotate(-90)" class="small" style="fill:#c026d3">知识检索 / LLM 调用</text>
+
+<!-- 层间数据流 -->
+<path id="l1" d="M200 196 V222" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l2" d="M200 342 V372" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l3" d="M200 522 V552" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<path id="l4" d="M200 672 V702" class="edge" style="stroke:#475569;stroke-width:2" marker-end="url(#arrow)"/>
+<text x="212" y="210" class="label" text-anchor="start">请求校验/鉴权</text>
+<text x="212" y="357" class="label" text-anchor="start">用例编排</text>
+<text x="212" y="537" class="label" text-anchor="start">领域操作</text>
+<text x="212" y="687" class="label" text-anchor="start">仓储/外部端口</text>
+
+<!-- 图例与说明 -->
+<text x="40" y="900" class="small" text-anchor="start">虚线：调用/协调 · 实线：数据流 · 加粗蓝框：核心 7 模块（conversation/customer/agent/routing/ticket/ai/knowledge）</text>
+<text x="40" y="922" class="small" text-anchor="start">27 个一级模块（V1.0 收敛后不再新增）：14 个全分层（domain/application/infra/delivery）+ 13 个薄壳模块（无 domain）</text>
+<text x="40" y="944" class="small" text-anchor="start">依赖方向：handlers → modules/*/delivery → modules/*/application → modules/*/domain|infra（scripts/check-module-boundaries.sh 守护）</text>
+<text x="40" y="966" class="small" text-anchor="start">模块化单体 · 端口与适配器 · 领域事件内部协调 · 当前阶段不拆微服务</text>
+</svg>

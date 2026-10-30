@@ -28,6 +28,8 @@ features:
     details: 在统一后台管理坐席、知识库、权限、安全策略和产品运行配置。
 ---
 
+![Servify 架构图](/images/architecture-zh.svg)
+
 ## 产品概览
 
 Servify 第一版先针对企业官网、品牌独立站、SaaS 官网和文档站提供 Web 智能客服能力。
