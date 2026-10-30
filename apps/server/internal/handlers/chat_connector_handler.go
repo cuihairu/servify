@@ -539,6 +539,8 @@ func notifyErrorResponse(err error, result channel.SendResult) (int, ErrorRespon
 	switch {
 	case errors.Is(err, channel.ErrNotifierInstallationNotFound):
 		return http.StatusNotFound, ErrorResponse{Error: "Connector installation not found", Message: "no installation row for this scope"}
+	case errors.Is(err, channel.ErrNotifierDisabled):
+		return http.StatusConflict, ErrorResponse{Error: "Connector disabled", Message: "installation is turned off; no announcements until it is enabled"}
 	case errors.Is(err, channel.ErrSendDisabled):
 		return http.StatusConflict, ErrorResponse{Error: "Notify disabled", Message: "no SendText capability recorded for this installation"}
 	case result.Status == channel.SendResultUnknown:

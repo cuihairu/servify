@@ -318,6 +318,13 @@ func (n *chatConnectorNotifier) Notify(ctx context.Context, tenantID, workspaceI
 	if inst == nil {
 		return channel.SendResult{}, channel.ErrNotifierInstallationNotFound
 	}
+	// The poll runner attaches only enabled rows (fail closed), so the notify
+	// dispatcher must honor the same gate: an operator who turned a connector
+	// off expects no announcements from it, and a disabled row's capability
+	// snapshot is not an approved send path.
+	if !inst.Enabled {
+		return channel.SendResult{}, channel.ErrNotifierDisabled
+	}
 	token := os.Getenv(inst.TokenEnvVar)
 	if token == "" {
 		return channel.SendResult{}, fmt.Errorf("chat connector %s: token env var %s is unset",

@@ -77,6 +77,18 @@ func enableIngestion(t *testing.T, caps *channel.CapabilityStore) {
 	}
 }
 
+// enableConversationGrant records an approved grant for one specific
+// conversation (per-group authorization: each chat needs its own observed
+// snapshot before its messages may be forwarded).
+func enableConversationGrant(t *testing.T, caps *channel.CapabilityStore, conversationID string) {
+	t.Helper()
+	scope := capabilityScope()
+	scope.ConversationPlatformID = conversationID
+	if err := caps.Record(context.Background(), scope, DeclaredCapabilities(time.Now())); err != nil {
+		t.Fatalf("record capability for %s: %v", conversationID, err)
+	}
+}
+
 // botAPI is a scripted Bot API server: onPoll answers getUpdates (the
 // observed offset frontier is recorded), onSend answers sendMessage.
 type botAPI struct {
@@ -512,6 +524,10 @@ func TestConnectorOfflineFixtureInboundACKAndOutbound(t *testing.T) {
 func TestConnectorPollOnceKeepsSameMessageIDAcrossChats(t *testing.T) {
 	sink, caps, cursors, db := newAdapterStores(t)
 	enableIngestion(t, caps)
+	// Both chats carry the same platform message_id but are separate
+	// conversations: each must be individually authorized (per-group grant)
+	// before its message is forwardable.
+	enableConversationGrant(t, caps, "-100456")
 
 	fake := &botAPI{t: t}
 	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
@@ -541,6 +557,66 @@ func TestConnectorPollOnceKeepsSameMessageIDAcrossChats(t *testing.T) {
 	}
 	if cur := storedCursor(t, cursors); cur != "43" {
 		t.Fatalf("cursor = %q, want 43", cur)
+	}
+}
+
+// TestConnectorPollOnceQuarantinesUnauthorizedChat enforces the contract's
+// per-group authorization gate: a TEXT message from a chat with no recorded
+// grant (the installed bot is not an authorized member of that group) must
+// never reach the conversation module. It is stored as quarantine evidence and
+// the offset still advances, so an unauthorized group cannot pin the poll loop
+// into an endless redelivery.
+func TestConnectorPollOnceQuarantinesUnauthorizedChat(t *testing.T) {
+	sink, caps, cursors, db := newAdapterStores(t)
+	// Only the configured conversation (-100123) is authorized; the message
+	// arrives from a different chat (-100456) the operator never granted.
+	enableIngestion(t, caps)
+
+	fake := &botAPI{t: t}
+	fake.onPoll = func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"ok":true,"result":[
+			{"update_id":41,"message":{"message_id":7,"chat":{"id":-100123,"type":"supergroup"},
+				"from":{"id":9001},"text":"authorized","date":1697000000}},
+			{"update_id":42,"message":{"message_id":8,"chat":{"id":-100456,"type":"supergroup"},
+				"from":{"id":9002},"text":"unauthorized","date":1697000001}}]}`))
+	}
+	srv := httptest.NewServer(fake.handler())
+	defer srv.Close()
+
+	obs := &recordingObserver{}
+	connector := NewConnector(NewClient(srv.URL, "tok", srv.Client()), caps, sink, cursors, adapterConfig()).WithObserver(obs)
+	if n, err := connector.PollOnce(context.Background(), 0); err != nil || n != 2 {
+		t.Fatalf("poll = %d (%v), want 2 (both updates processed, one quarantined)", n, err)
+	}
+	var rows []channel.ChatConnectorInbox
+	if err := db.Find(&rows).Error; err != nil {
+		t.Fatalf("list inbox: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("inbox rows = %d, want 2", len(rows))
+	}
+	byConv := map[string]channel.ChatConnectorInbox{}
+	for _, row := range rows {
+		byConv[row.ConversationPlatformID] = row
+	}
+	authorized, ok := byConv["-100123"]
+	if !ok || authorized.Status != channel.InboxStatusCommitted {
+		t.Fatalf("authorized chat row = %+v, want committed", byConv["-100123"])
+	}
+	unauthorized, ok := byConv["-100456"]
+	if !ok || unauthorized.Status != channel.InboxStatusQuarantined {
+		t.Fatalf("unauthorized chat row = %+v, want quarantined", byConv["-100456"])
+	}
+	if unauthorized.EventType != string(channel.EventTypeUnknown) {
+		t.Errorf("unauthorized event type = %q, want unknown (quarantine lane)", unauthorized.EventType)
+	}
+	// Only the authorized conversation was forwarded; the unauthorized chat is
+	// durable evidence, never a conversation message.
+	if got := obs.forwardedEvents(); len(got) != 1 || got[0] != "-100123:7" {
+		t.Fatalf("forwarded = %v, want only the authorized chat's message", got)
+	}
+	if cur := storedCursor(t, cursors); cur != "43" {
+		t.Fatalf("cursor = %q, want 43 (unauthorized update still ACKed)", cur)
 	}
 }
 

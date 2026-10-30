@@ -751,6 +751,7 @@ func TestChatConnectorHandlerNotify(t *testing.T) {
 		{"rejected", &stubChatConnectorNotifier{result: channel.SendResult{Status: channel.SendResultRejected}, err: errors.New("chat not found")}, http.StatusConflict, "Platform refused"},
 		{"send disabled", &stubChatConnectorNotifier{err: channel.ErrSendDisabled}, http.StatusConflict, "Notify disabled"},
 		{"installation not found", &stubChatConnectorNotifier{err: channel.ErrNotifierInstallationNotFound}, http.StatusNotFound, "Connector installation not found"},
+		{"installation disabled", &stubChatConnectorNotifier{err: channel.ErrNotifierDisabled}, http.StatusConflict, "Connector disabled"},
 		{"store failure", &stubChatConnectorNotifier{err: errors.New("db down")}, http.StatusInternalServerError, "Failed to notify"},
 	}
 	for _, tc := range cases {

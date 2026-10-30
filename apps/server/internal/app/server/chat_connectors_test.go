@@ -742,8 +742,9 @@ func TestChatConnectorOpsRoutesRegistered(t *testing.T) {
 
 // newChatNotifierRuntime 装配一个带单条 memex/指定平台安装行的 runtime（供
 // notify dispatcher 测试）。caps=true 时按行的会话映射记录 SendText 授权；
-// endpoint 是假平台基址；tokenEnv 是行引用的环境变量名。
-func newChatNotifierRuntime(t *testing.T, endpoint, platform, tokenEnv string, caps bool) *Runtime {
+// enabled=false 时落一个关停安装行（默认安全态）；endpoint 是假平台基址；
+// tokenEnv 是行引用的环境变量名。
+func newChatNotifierRuntime(t *testing.T, endpoint, platform, tokenEnv string, caps, enabled bool) *Runtime {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(uniqueMemDSN("file:chat_notifier")), &gorm.Config{})
 	if err != nil {
@@ -755,7 +756,7 @@ func newChatNotifierRuntime(t *testing.T, endpoint, platform, tokenEnv string, c
 	row := channel.ChatConnectorInstallation{
 		TenantID: "tenant-1", WorkspaceID: "workspace-1", Platform: platform, InstallationID: "inst-1",
 		ConversationPlatformID: "group:5", ConversationKind: "group", ConversationIsGroup: true,
-		UpdatesEndpoint: endpoint, TokenEnvVar: tokenEnv, LongPollMS: 50, Enabled: true,
+		UpdatesEndpoint: endpoint, TokenEnvVar: tokenEnv, LongPollMS: 50, Enabled: enabled,
 	}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatalf("seed row: %v", err)
@@ -788,7 +789,7 @@ func TestChatConnectorNotifierDispatchesAndPinsTarget(t *testing.T) {
 	defer srv.Close()
 
 	tokenEnv := "SERVIFY_TEST_NOTIFY_TOKEN"
-	rt := newChatNotifierRuntime(t, srv.URL, "memex", tokenEnv, true)
+	rt := newChatNotifierRuntime(t, srv.URL, "memex", tokenEnv, true, true)
 	t.Setenv(tokenEnv, "tok")
 
 	// 请求体绝不携带收件人：dispatcher 用行映射的 group:5 覆盖任何传入 target
@@ -826,25 +827,31 @@ func TestChatConnectorNotifierErrors(t *testing.T) {
 		platform  string
 		caps      bool
 		setToken  bool
+		enabled   bool
 		notifyID  string
 		wantCheck func(t *testing.T, err error)
 	}{
-		{"installation missing", "memex", true, true, "inst-missing", func(t *testing.T, err error) {
+		{"installation missing", "memex", true, true, true, "inst-missing", func(t *testing.T, err error) {
 			if !errors.Is(err, channel.ErrNotifierInstallationNotFound) {
 				t.Fatalf("err = %v, want ErrNotifierInstallationNotFound", err)
 			}
 		}},
-		{"token env unset", "memex", true, false, "inst-1", func(t *testing.T, err error) {
+		{"installation disabled", "memex", true, true, false, "inst-1", func(t *testing.T, err error) {
+			if !errors.Is(err, channel.ErrNotifierDisabled) {
+				t.Fatalf("err = %v, want ErrNotifierDisabled", err)
+			}
+		}},
+		{"token env unset", "memex", true, false, true, "inst-1", func(t *testing.T, err error) {
 			if !strings.Contains(err.Error(), "token env var") {
 				t.Fatalf("err = %v, want token env failure", err)
 			}
 		}},
-		{"no adapter for platform", "slack", true, true, "inst-1", func(t *testing.T, err error) {
+		{"no adapter for platform", "slack", true, true, true, "inst-1", func(t *testing.T, err error) {
 			if !strings.Contains(err.Error(), `platform "slack" has no adapter`) {
 				t.Fatalf("err = %v, want no-adapter failure", err)
 			}
 		}},
-		{"send text not granted", "memex", false, true, "inst-1", func(t *testing.T, err error) {
+		{"send text not granted", "memex", false, true, true, "inst-1", func(t *testing.T, err error) {
 			if !errors.Is(err, channel.ErrSendDisabled) {
 				t.Fatalf("err = %v, want ErrSendDisabled", err)
 			}
@@ -853,7 +860,7 @@ func TestChatConnectorNotifierErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tokenEnv := "SERVIFY_TEST_NOTIFY_ERR_TOKEN"
-			rt := newChatNotifierRuntime(t, "http://127.0.0.1:1", tc.platform, tokenEnv, tc.caps)
+			rt := newChatNotifierRuntime(t, "http://127.0.0.1:1", tc.platform, tokenEnv, tc.caps, tc.enabled)
 			if tc.setToken {
 				t.Setenv(tokenEnv, "tok")
 			} else {

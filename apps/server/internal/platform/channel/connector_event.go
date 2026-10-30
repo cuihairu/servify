@@ -152,3 +152,18 @@ func (ev ConnectorEvent) Validate() error {
 func (ev ConnectorEvent) QuarantineRequired() bool {
 	return ev.EventType == EventTypeUnknown
 }
+
+// AsQuarantined rewrites a structurally valid event into the quarantine lane
+// without losing its identity or source evidence: the event type becomes
+// unknown (so the inbox sink stores it as quarantined), the message payload is
+// dropped (unknown events carry no message), and everything else — scope,
+// timestamps, conversation/sender references and the raw payload ref — is
+// preserved so triage can still tell what the platform sent and from where.
+// Callers use it for the per-conversation authorization gate: an event from a
+// chat with no approved grant must never reach normal processing, but it also
+// must not be silently dropped.
+func (ev ConnectorEvent) AsQuarantined() ConnectorEvent {
+	ev.EventType = EventTypeUnknown
+	ev.Message = nil
+	return ev
+}

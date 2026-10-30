@@ -109,3 +109,36 @@ func TestConnectorEventQuarantineRequired(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectorEventAsQuarantined(t *testing.T) {
+	ev := validBaseEvent()
+	ev.RawPayloadRef = &RawPayloadRef{Store: "local", ObjectID: "obj-1", SHA256: "abc"}
+	q := ev.AsQuarantined()
+	if err := q.Validate(); err != nil {
+		t.Fatalf("quarantined event must stay structurally valid: %v", err)
+	}
+	if !q.QuarantineRequired() {
+		t.Error("AsQuarantined must set the quarantine lane")
+	}
+	if q.EventType != EventTypeUnknown {
+		t.Errorf("event type = %s, want unknown", q.EventType)
+	}
+	if q.Message != nil {
+		t.Error("quarantined event must drop the message payload")
+	}
+	// Identity, scope, source references and raw payload evidence survive.
+	if q.EventID != ev.EventID || q.IdempotencyKey != ev.IdempotencyKey ||
+		q.InstallationID != ev.InstallationID || q.TenantID != ev.TenantID ||
+		q.WorkspaceID != ev.WorkspaceID {
+		t.Errorf("quarantined identity drifted: %+v", q)
+	}
+	if q.Conversation != ev.Conversation || q.Sender != ev.Sender {
+		t.Errorf("quarantined source refs drifted: conversation=%+v sender=%+v", q.Conversation, q.Sender)
+	}
+	if q.RawPayloadRef == nil || q.RawPayloadRef.ObjectID != "obj-1" {
+		t.Errorf("quarantined raw payload ref = %+v, want obj-1 retained", q.RawPayloadRef)
+	}
+	if !q.OccurredAt.Equal(ev.OccurredAt) || !q.ReceivedAt.Equal(ev.ReceivedAt) {
+		t.Errorf("quarantined timestamps drifted: occurred=%v received=%v", q.OccurredAt, q.ReceivedAt)
+	}
+}

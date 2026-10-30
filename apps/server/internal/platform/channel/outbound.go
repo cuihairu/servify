@@ -94,6 +94,13 @@ func RetrySend(ctx context.Context, policy SendRetryPolicy, anchor string, attem
 // so a missing row leaves nothing to pin and nothing to send.
 var ErrNotifierInstallationNotFound = errors.New("chat connector installation not found")
 
+// ErrNotifierDisabled reports that the request scope's installation row is
+// turned off (Enabled false). Poll runners only attach enabled rows, so a
+// disabled installation must not be a send path either: an operator who turns
+// a connector off expects no announcements until it is turned back on
+// (fail closed), and a disabled row never carries a live capability gate.
+var ErrNotifierDisabled = errors.New("chat connector installation is disabled")
+
 // OutboundSendResult maps one outbound attempt outcome onto the contract's
 // delivery status. A transport uncertainty is unknown; every platform refusal
 // is rejected. Storage and validation failures never reach this helper.

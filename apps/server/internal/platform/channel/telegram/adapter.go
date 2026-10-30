@@ -283,6 +283,15 @@ func (c *Connector) Receive(ctx context.Context, sink channel.InboundSink) error
 // crash between accept and cursor save yields redelivery that the inbox
 // idempotency key absorbs (at-least-once). The first failure aborts without
 // advancing, leaving the update for redelivery.
+//
+// The per-conversation authorization gate (contract: validate the allowlisted
+// group before normalization) runs after translation and before acceptance: a
+// message from a chat with no recorded grant that IngestionEnabled() approves
+// is rewritten to the quarantine lane (unknown) instead of being committed.
+// The event stays durable evidence with its raw payload, is never forwarded to
+// the conversation module, and still advances the offset so the unauthorized
+// chat cannot pin the poll loop; only the configured installation snapshot
+// (fail closed for the whole connector) gates the pull itself.
 func (c *Connector) drain(ctx context.Context, sink channel.InboundSink, longPoll time.Duration) (int, error) {
 	enabled, err := c.ingestionEnabled(ctx)
 	if err != nil {
@@ -302,6 +311,10 @@ func (c *Connector) drain(ctx context.Context, sink channel.InboundSink, longPol
 	processed := 0
 	for _, u := range updates {
 		ev := c.translator.Event(time.Now(), u)
+		ev, err = c.authorizeConversation(ctx, ev)
+		if err != nil {
+			return processed, err
+		}
 		ev, err := c.attachRawPayload(ctx, u, ev)
 		if err != nil {
 			return processed, err
@@ -327,6 +340,35 @@ func (c *Connector) drain(ctx context.Context, sink channel.InboundSink, longPol
 		processed++
 	}
 	return processed, nil
+}
+
+// authorizeConversation applies the contract's per-conversation authorization
+// gate to one translated event. The grant is keyed by the event's own
+// conversation platform id (Telegram updates carry the chat they came from),
+// so a chat without an observed snapshot — or whose snapshot IngestionEnabled
+// rejects — is not eligible for normal processing: it is quarantined with the
+// raw payload kept for triage and the source references preserved. The
+// tenant/workspace scope is never taken from the payload; the scope already
+// stamped by the translator (from the stored installation) is reused for the
+// grant lookup, so an update cannot authorize itself into another scope.
+func (c *Connector) authorizeConversation(ctx context.Context, ev channel.ConnectorEvent) (channel.ConnectorEvent, error) {
+	if ev.QuarantineRequired() {
+		return ev, nil
+	}
+	snapshot, err := c.caps.Latest(ctx, channel.CapabilityScope{
+		TenantID:               ev.TenantID,
+		WorkspaceID:            ev.WorkspaceID,
+		Platform:               ev.Platform,
+		InstallationID:         ev.InstallationID,
+		ConversationPlatformID: ev.Conversation.PlatformID,
+	})
+	if err != nil {
+		return ev, err
+	}
+	if snapshot != nil && snapshot.IngestionEnabled() {
+		return ev, nil
+	}
+	return ev.AsQuarantined(), nil
 }
 
 // offset reads the acknowledged frontier. An empty cursor (first run, or a
