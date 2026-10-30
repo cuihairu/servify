@@ -54,6 +54,9 @@ func TestInboxAccept(t *testing.T) {
 		t.Errorf("source refs = %q/%q/%q, want grp-1/user-1/msg-1",
 			row.ConversationPlatformID, row.SenderPlatformID, row.MessagePlatformID)
 	}
+	if row.MessageText != "hi" {
+		t.Errorf("message text snapshot = %q, want hi", row.MessageText)
+	}
 
 	stored, err = store.Accept(context.Background(), unknownEvent("evt-2"))
 	if err != nil {
@@ -71,6 +74,9 @@ func TestInboxAccept(t *testing.T) {
 	}
 	if quarantined.RawPayloadSHA256 != "deadbeef" {
 		t.Errorf("raw sha = %q, want deadbeef (row-side integrity anchor)", quarantined.RawPayloadSHA256)
+	}
+	if quarantined.MessageText != "" {
+		t.Errorf("unknown shape message text = %q, want empty (no normalized body)", quarantined.MessageText)
 	}
 
 	stored, err = store.Accept(context.Background(), messageEvent("evt-1"))
@@ -402,6 +408,24 @@ func messageEvent(eventID string) ConnectorEvent {
 	ev.EventID = eventID
 	ev.IdempotencyKey = InboundIdempotencyKey("inst-1", eventID)
 	return ev
+}
+
+func TestBoundedTextSnapshot(t *testing.T) {
+	if got := boundedTextSnapshot(nil); got != "" {
+		t.Errorf("nil message snapshot = %q, want empty", got)
+	}
+	if got := boundedTextSnapshot(&MessageContent{Text: "short"}); got != "short" {
+		t.Errorf("short snapshot = %q, want short", got)
+	}
+	exact := strings.Repeat("界", maxMessageTextSnapshotRunes)
+	if got := boundedTextSnapshot(&MessageContent{Text: exact}); got != exact {
+		t.Errorf("exact-limit snapshot changed length = %d", len([]rune(got)))
+	}
+	over := exact + "overflow"
+	got := boundedTextSnapshot(&MessageContent{Text: over})
+	if len([]rune(got)) != maxMessageTextSnapshotRunes || got != exact {
+		t.Errorf("over-limit snapshot = %d runes, want %d rune cap", len([]rune(got)), maxMessageTextSnapshotRunes)
+	}
 }
 
 // unknownEvent builds a valid quarantined unknown event with a retained raw

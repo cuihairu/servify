@@ -123,10 +123,10 @@ func TestConnectorEventAsQuarantined(t *testing.T) {
 	if q.EventType != EventTypeUnknown {
 		t.Errorf("event type = %s, want unknown", q.EventType)
 	}
-	if q.Message != nil {
-		t.Error("quarantined event must drop the message payload")
+	if q.Message == nil || q.Message.PlatformID != "msg-1" || q.Message.Text != "hi" {
+		t.Errorf("quarantined event must keep the bounded content snapshot, got %+v", q.Message)
 	}
-	// Identity, scope, source references and raw payload evidence survive.
+	// Identity, scope, source references, content snapshot and raw payload evidence survive.
 	if q.EventID != ev.EventID || q.IdempotencyKey != ev.IdempotencyKey ||
 		q.InstallationID != ev.InstallationID || q.TenantID != ev.TenantID ||
 		q.WorkspaceID != ev.WorkspaceID {

@@ -28,6 +28,12 @@ type ChatConnectorInbox struct {
 	ConversationPlatformID string `gorm:"not null" json:"conversation_platform_id"`
 	SenderPlatformID       string `gorm:"not null" json:"sender_platform_id"`
 	MessagePlatformID      string `gorm:"not null" json:"message_platform_id"`
+	// MessageText is a bounded normalized content snapshot of the message that
+	// produced the event, kept for triage review (contract: source references
+	// include a bounded content snapshot). It is retained for both committed and
+	// quarantined rows, so an unauthorized conversation still has review
+	// evidence even when raw-payload retention is disabled.
+	MessageText string `json:"message_text"`
 	RawPayloadStore        string `json:"raw_payload_store"`
 	RawPayloadObjectID     string `json:"raw_payload_object_id"`
 	// RawPayloadSHA256 is the plaintext digest of the retained object: the
@@ -55,6 +61,27 @@ const (
 	// never deleted).
 	InboxStatusDismissed = "dismissed"
 )
+
+// maxMessageTextSnapshotRunes bounds the normalized content snapshot retained
+// on an inbox row. The contract requires a bounded content snapshot for review;
+// the full platform bytes (if retained) remain the raw-payload object, so this
+// column is never the archive.
+const maxMessageTextSnapshotRunes = 4096
+
+// boundedTextSnapshot returns a rune-bounded copy of the message's normalized
+// text so a quarantined row keeps review evidence even when raw-payload
+// retention is disabled. A nil message (unknown shape with no body) yields an
+// empty snapshot.
+func boundedTextSnapshot(msg *MessageContent) string {
+	if msg == nil {
+		return ""
+	}
+	runes := []rune(msg.Text)
+	if len(runes) <= maxMessageTextSnapshotRunes {
+		return msg.Text
+	}
+	return string(runes[:maxMessageTextSnapshotRunes])
+}
 
 // ErrInboxNotQuarantined is returned when the row exists in the requested
 // scope but is not in the quarantine lane (committed, or already dismissed).
@@ -117,8 +144,10 @@ func (s *InboxStore) Accept(ctx context.Context, ev ConnectorEvent) (AckDecision
 		decision = AckQuarantine
 	}
 	messagePlatform := ""
+	messageText := ""
 	if ev.Message != nil {
 		messagePlatform = ev.Message.PlatformID
+		messageText = boundedTextSnapshot(ev.Message)
 	}
 	row := ChatConnectorInbox{
 		TenantID:               ev.TenantID,
@@ -132,6 +161,7 @@ func (s *InboxStore) Accept(ctx context.Context, ev ConnectorEvent) (AckDecision
 		ConversationPlatformID: ev.Conversation.PlatformID,
 		SenderPlatformID:       ev.Sender.PlatformID,
 		MessagePlatformID:      messagePlatform,
+		MessageText:            messageText,
 		OccurredAt:             ev.OccurredAt,
 		ReceivedAt:             ev.ReceivedAt,
 	}

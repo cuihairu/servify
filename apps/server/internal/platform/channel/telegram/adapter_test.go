@@ -610,6 +610,9 @@ func TestConnectorPollOnceQuarantinesUnauthorizedChat(t *testing.T) {
 	if unauthorized.EventType != string(channel.EventTypeUnknown) {
 		t.Errorf("unauthorized event type = %q, want unknown (quarantine lane)", unauthorized.EventType)
 	}
+	if unauthorized.MessageText != "unauthorized" {
+		t.Errorf("unauthorized chat content snapshot = %q, want unauthorized (bounded review evidence)", unauthorized.MessageText)
+	}
 	// Only the authorized conversation was forwarded; the unauthorized chat is
 	// durable evidence, never a conversation message.
 	if got := obs.forwardedEvents(); len(got) != 1 || got[0] != "-100123:7" {
