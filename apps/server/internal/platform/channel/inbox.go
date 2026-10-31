@@ -33,9 +33,9 @@ type ChatConnectorInbox struct {
 	// include a bounded content snapshot). It is retained for both committed and
 	// quarantined rows, so an unauthorized conversation still has review
 	// evidence even when raw-payload retention is disabled.
-	MessageText string `json:"message_text"`
-	RawPayloadStore        string `json:"raw_payload_store"`
-	RawPayloadObjectID     string `json:"raw_payload_object_id"`
+	MessageText        string `json:"message_text"`
+	RawPayloadStore    string `json:"raw_payload_store"`
+	RawPayloadObjectID string `json:"raw_payload_object_id"`
 	// RawPayloadSHA256 is the plaintext digest of the retained object: the
 	// object is sealed with AES-256-GCM, so only the digest can be verified
 	// from the row alone (swapping the object for a different one is caught).
