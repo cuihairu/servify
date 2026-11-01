@@ -1,7 +1,7 @@
 [English](README.md) | [中文](README.zh.md)
 
 <p align="center">
-  <img src="./docs/.vitepress/public/icon.png" width="64" height="64" alt="Servify Logo"> <a href="https://cuihairu.github.io/servify//"><img src="https://img.shields.io/badge/docs-blue" alt="docs"></a>
+  <img src="./docs/.vitepress/public/icon.png" width="64" height="64" alt="Servify Logo"> <a href="https://cuihairu.github.io/servify/"><img src="https://img.shields.io/badge/docs-blue" alt="docs"></a>
 </p>
 
 <div align="center">
