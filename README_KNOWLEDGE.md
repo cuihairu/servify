@@ -1,6 +1,6 @@
 # Servify 知识库使用指南
 
-本指南介绍如何使用 Servify 的自建知识库功能。知识库功能基于 pgvector 实现，支持将文档内容转换为向量并进行语义搜索。
+本指南介绍如何使用 Servify 的自建知识库功能。知识库经统一 KnowledgeProvider 契约接入多驱动选型（ragflow / dify / weknora / pgvector / local / memory / mock）：外部知识库走 ragflow→dify→weknora 选择链（ragflow 为链首），pgvector / local 为进程内直配、需显式声明 `knowledge.provider=pgvector|local` 启用。文档内容可转换为向量并进行语义搜索。
 
 ## 快速开始
 
@@ -16,7 +16,7 @@
 
 ```yaml
 embedding:
-  provider: openai  # 可选: openai, tei, xinference
+  provider: openai  # 可选: openai, tei, xinference, local
   openai:
     api_key: ${OPENAI_API_KEY}
     base_url: https://api.openai.com/v1
@@ -42,7 +42,7 @@ make migrate
 
 ## Embedding Provider 选择
 
-Servify 支持三种 Embedding Provider，可根据需求选择：
+Servify 支持四种 Embedding Provider（openai / tei / xinference / local），可根据需求选择：
 
 ### OpenAI
 
@@ -298,7 +298,7 @@ curl http://localhost:9997/v1/embeddings \
   - `internal/modules/ai/infra/answer_repository.go`: ai_answers / answer_feedbacks 仓储
   - `internal/modules/ai/delivery/`: 记录路径（REST/WS 旁路观测）与反馈/分析端点
 - **EmbeddingProvider**: 将文本转换为向量
-  - `internal/platform/embedding/`: 接口与 openai / tei / xinference 实现
+  - `internal/platform/embedding/`: 接口与 openai / tei / xinference / local 实现
 - **KnowledgeProvider**: 向量存储和检索
   - `internal/platform/knowledgeprovider/pgvector`: pgvector 实现
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This guide explains how Servify connects an external knowledge base into the AI orchestration chain. The current code selection chain uses `RagFlow` as the primary provider, `Dify` as the secondary compatibility path, and `WeKnora` for protocol regression and fallback validation; when no external source is enabled, the system falls back to running without a knowledge source (`knowledge.provider` defaults to empty, and the selection chain returning "no source" means it starts in the no-knowledge-source form). **pgvector / local are not automatic fallback paths**: both require explicit `provider: "pgvector"` / `provider: "local"` declarations in the config file to be enabled (`apps/server/internal/config/config.go:1288-1289`). The selection chain implementation is in `apps/server/internal/app/server/knowledge_source.go`; see Knowledge Base Landscape for the full selection overview.
+This guide explains how Servify connects an external knowledge base into the AI orchestration chain. The current code selection chain uses `RagFlow` as the primary provider, `Dify` as the secondary compatibility path, and `WeKnora` for protocol regression and fallback validation; when no external source is enabled, the system falls back to running without a knowledge source (`knowledge.provider` defaults to empty, and the selection chain returning "no source" means it starts in the no-knowledge-source form). **pgvector / local are not automatic fallback paths**: both require explicit `provider: "pgvector"` / `provider: "local"` declarations in the config file to be enabled (`apps/server/internal/config/config.go:1316`). The selection chain implementation is in `apps/server/internal/app/server/knowledge_source.go`; see Knowledge Base Landscape for the full selection overview.
 
 > **Positioning clarification (2026-09)**: Dify is strictly speaking an LLM application orchestration platform; its dataset knowledge base is only an ancillary capability and is not suitable as the long-term flagship direction for knowledge bases. The mainstream knowledge base selection and adaptation plan (RAGFlow chain head, pgvector direct config as the default path, Dify positioning demoted) is in Knowledge Base Landscape.
 The document name is kept as `WEKNORA_INTEGRATION` mainly for compatibility with historical links; the content semantics center on the general knowledge provider.
@@ -82,9 +82,10 @@ cp .env.weknora.example .env
 
 # 编辑环境变量，至少需要配置：
 # - OPENAI_API_KEY: OpenAI API 密钥
-# - RagFlow（链首）走 config.yml 的 ragflow 段（enabled/base_url/api_key/dataset_id）；
+# - RagFlow（链首）与 Dify（次选）的密钥不来自 .env.weknora.example，而是经 config.yml 的
+#   ragflow 段与 dify 段配置（enabled/base_url/api_key/dataset_id）；.env.weknora.example
+#   不含 DIFY_* / RAGFLOW_* 占位符
 #   或 knowledge.provider=pgvector 直配（零外部依赖）
-# - DIFY_API_KEY / DIFY_DATASET_ID: Dify 兼容路径（次选）
 # - WEKNORA_API_KEY: 仅在需要兼容或 fallback 验收时配置
 nano .env
 ```

@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。当前代码选择链以 `RagFlow` 为首选 provider，`Dify` 为次选兼容路径，`WeKnora` 用于协议回归与 fallback 验证；未启用外部源时回落无知识源运行（`knowledge.provider` 默认为空，选择链返回「无源」即按无知识源形态启动）。**pgvector / local 不是自动回落路径**：二者需在配置文件显式声明 `provider: "pgvector"` / `provider: "local"` 才会启用（`apps/server/internal/config/config.go:1288-1289`）。选择链实现见 `apps/server/internal/app/server/knowledge_source.go`，选型全景见 知识库选型全景。
+本指南说明 Servify 如何把外部知识库接入到 AI 编排链路中。当前代码选择链以 `RagFlow` 为首选 provider，`Dify` 为次选兼容路径，`WeKnora` 用于协议回归与 fallback 验证；未启用外部源时回落无知识源运行（`knowledge.provider` 默认为空，选择链返回「无源」即按无知识源形态启动）。**pgvector / local 不是自动回落路径**：二者需在配置文件显式声明 `provider: "pgvector"` / `provider: "local"` 才会启用（`apps/server/internal/config/config.go:1316`）。选择链实现见 `apps/server/internal/app/server/knowledge_source.go`，选型全景见 知识库选型全景。
 
 > **定位澄清（2026-09）**：Dify 严格说是 LLM 应用编排平台，dataset 知识库只是其附属能力，不宜作为知识库长期主推方向。主流知识库选型与适配规划（RAGFlow 链首、pgvector 直配默认路径、Dify 定位降级）见 知识库选型全景。
 文档名保留 `WEKNORA_INTEGRATION` 主要是为了兼容历史链接；内容语义以通用 knowledge provider 为主。
@@ -82,9 +82,10 @@ cp .env.weknora.example .env
 
 # 编辑环境变量，至少需要配置：
 # - OPENAI_API_KEY: OpenAI API 密钥
-# - RagFlow（链首）走 config.yml 的 ragflow 段（enabled/base_url/api_key/dataset_id）；
+# - RagFlow（链首）与 Dify（次选）的密钥不来自 .env.weknora.example，而是经 config.yml 的
+#   ragflow 段与 dify 段配置（enabled/base_url/api_key/dataset_id）；.env.weknora.example
+#   不含 DIFY_* / RAGFLOW_* 占位符
 #   或 knowledge.provider=pgvector 直配（零外部依赖）
-# - DIFY_API_KEY / DIFY_DATASET_ID: Dify 兼容路径（次选）
 # - WEKNORA_API_KEY: 仅在需要兼容或 fallback 验收时配置
 nano .env
 ```

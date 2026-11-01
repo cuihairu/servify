@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | `ragflowkp` | RAGFlow（InfiniFlow 开源知识库，锚定 v0.27.x） | **正统知识库**，主推方向之一：文档解析最深、REST API 完整；租户作用域全量对齐 dify/weknora，见 `scripts/test-ragflow-acceptance.sh` |
 | `weknorakp` | WeKnora（腾讯开源知识库） | **正统知识库**，主推方向之一，见 `WEKNORA_INTEGRATION.md` |
-| `pgvector` | 进程内 pgvector（DB + embedding 直配） | 轻量自托管默认路径，无外部依赖 |
+| `pgvector` | 进程内 pgvector（DB + embedding 直配） | 推荐的轻量自托管零依赖路径（需显式声明 `provider: "pgvector"`，并非配置默认值），无外部依赖 |
 | `difykp` | Dify dataset API | **定位不严谨**：Dify 是编排平台，dataset 是附属功能。作为兼容路径保留，不宜作为知识库主推 |
 | `local` | 进程内本地知识引擎（本地嵌入器 + 余弦） | 零外部依赖离线链路，经 `knowledge.provider=local` 显式声明启用（非测试桩，有独立 `local-knowledge` 验收） |
 | `memory` | 进程内内存实现 | 完整实现契约、但未接入生产装配，仅 provider 切换测试与验收脚本引用 |
@@ -91,7 +91,7 @@
 ### 3.8 向量数据库层（不属于知识库，但相关）
 
 - pgvector（已适配，进程内直配）、Milvus、Qdrant、Weaviate、Chroma 是「知识库引擎」之下的存储/检索层
-- servify 的 `pgvector` driver 走的是「自建检索层」路线（DB + embedding 直配），适合零外部依赖的默认路径；专职知识库产品则把解析/分块/rerank 一并托管
+- servify 的 `pgvector` driver 走的是「自建检索层」路线（DB + embedding 直配），适合零外部依赖的路径（需显式 `provider: "pgvector"`）；专职知识库产品则把解析/分块/rerank 一并托管
 
 ## 4. 适配评估矩阵
 
@@ -111,7 +111,7 @@
 1. **RAGFlow driver 已立项落地**：REST API 最完整、文档解析最深、自托管契合——知识库主推方向之一（与 WeKnora 形成双路径：深度解析场景走 RAGFlow，轻量中文生态走 WeKnora）；后续投入转向真实环境联调与版本跟进（v0.27.x 锚定）
 2. **MaxKB 备选观察**：客户已有 MaxKB 存量时按需接入，不做默认主推
 3. **Dify 定位降级**：文档与产品口径从「知识库插件」修正为「编排平台集成（dataset 兼容保留）」；`selectKnowledgeSource` 门面中 dify 分支保留兼容，不新增能力投入
-4. **pgvector 保持默认轻量路径**：零外部依赖场景的默认选择不变。新客户交付口径已拍板（2026-09-21）：**pgvector 起步（零外部配置，交付首周跑通全链路），客户有知识库运营诉求时按解析深度选 WeKnora（轻量中文）或 RAGFlow（重解析）增强**，口径详见 deployment.md「新客户交付默认知识库口径」
+4. **pgvector 保持推荐的轻量零依赖路径**：零外部依赖场景的推荐选择不变，需显式声明 `knowledge.provider=pgvector` 启用（代码默认 `knowledge.provider` 为空，pgvector 并非配置默认值）。新客户交付口径已拍板（2026-09-21）：**pgvector 起步（零外部配置，交付首周跑通全链路），客户有知识库运营诉求时按解析深度选 WeKnora（轻量中文）或 RAGFlow（重解析）增强**，口径详见 deployment.md「新客户交付默认知识库口径」
 
 ## 6. 落地路径（新 driver 模式）
 

@@ -21,7 +21,7 @@ Seven existing driver implementations (under `apps/server/internal/platform/know
 | --- | --- | --- |
 | `ragflowkp` | RAGFlow (InfiniFlow's open-source knowledge base, anchored at v0.27.x) | **A legitimate knowledge base**, one of the primary directions: the deepest document parsing, a complete REST API; tenant scoping fully aligned with dify/weknora, see `scripts/test-ragflow-acceptance.sh` |
 | `weknorakp` | WeKnora (Tencent's open-source knowledge base) | **A legitimate knowledge base**, one of the primary directions, see `WEKNORA_INTEGRATION.md` |
-| `pgvector` | In-process pgvector (DB + embedding direct setup) | The lightweight self-hosted default path, no external dependencies |
+| `pgvector` | In-process pgvector (DB + embedding direct setup) | The recommended lightweight self-hosted zero-dependency path (requires explicit `provider: "pgvector"`; not a config default), no external dependencies |
 | `difykp` | Dify dataset API | **Imprecise positioning**: Dify is an orchestration platform and the dataset is an attached feature. Kept as a compatibility path; not fit to be the primary knowledge base recommendation |
 | `local` | In-process local knowledge engine (local embedder + cosine) | A zero-dependency offline path, enabled by explicit declaration via `knowledge.provider=local` (not a test stub; has its own `local-knowledge` acceptance) |
 | `memory` | In-process in-memory implementation | Fully implements the contract but is not wired into production assembly; referenced only by provider-switch tests and acceptance scripts |
@@ -91,7 +91,7 @@ Synthesized from community comparisons and official documentation (sources liste
 ### 3.8 The Vector Database Layer (Not a Knowledge Base, but Related)
 
 - pgvector (already adapted, in-process direct setup), Milvus, Qdrant, Weaviate, and Chroma are the storage/retrieval layer beneath "knowledge base engines"
-- servify's `pgvector` driver takes the "build your own retrieval layer" route (DB + embedding direct setup), suited to the zero-dependency default path; dedicated knowledge base products take over parsing / chunking / rerank as a bundle
+- servify's `pgvector` driver takes the "build your own retrieval layer" route (DB + embedding direct setup), suited to the zero-dependency path (requires explicit `provider: "pgvector"`); dedicated knowledge base products take over parsing / chunking / rerank as a bundle
 
 ## 4. Adaptation Assessment Matrix
 
@@ -111,7 +111,7 @@ Synthesized from community comparisons and official documentation (sources liste
 1. **The RAGFlow driver has been initiated and landed**: the most complete REST API, the deepest document parsing, and a self-hosting fit — one of the primary knowledge base directions (forming a dual path with WeKnora: RAGFlow for deep parsing scenarios, WeKnora for the lightweight Chinese ecosystem); follow-up investment shifts to real-environment integration and version tracking (anchored at v0.27.x)
 2. **MaxKB as a watched alternative**: integrate on demand when a customer already runs MaxKB; not a default recommendation
 3. **Dify demoted in positioning**: the documentation and product convention is corrected from "knowledge base plugin" to "orchestration platform integration (dataset compatibility retained)"; the dify branch in the `selectKnowledgeSource` facade stays for compatibility, with no new capability investment
-4. **pgvector stays the default lightweight path**: the default choice for zero-dependency scenarios is unchanged. The new-customer delivery convention has been signed off (2026-09-21): **start with pgvector (zero external configuration, the full chain runs in the first delivery week); when the customer has knowledge base operational needs, enhance with WeKnora (lightweight, Chinese) or RAGFlow (heavy parsing) by parsing depth** — see deployment.md's "default knowledge base convention for new-customer delivery" for the full convention
+4. **pgvector stays the recommended lightweight zero-dependency path**: it remains the recommended choice for zero-dependency scenarios, enabled by an explicit `knowledge.provider=pgvector` declaration (the code default `knowledge.provider` is empty, so pgvector is not a config default). The new-customer delivery convention has been signed off (2026-09-21): **start with pgvector (zero external configuration, the full chain runs in the first delivery week); when the customer has knowledge base operational needs, enhance with WeKnora (lightweight, Chinese) or RAGFlow (heavy parsing) by parsing depth** — see deployment.md's "default knowledge base convention for new-customer delivery" for the full convention
 
 ## 6. Implementation Path (the New-Driver Pattern)
 
