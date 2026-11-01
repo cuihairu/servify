@@ -498,9 +498,10 @@ sdk/
         errors/
     transport-http/
     transport-websocket/
-    web-vanilla/
-    web-react/
-    web-vue/
+    vanilla/
+    react/
+    vue/
+    react-native/
     api-client/
     app-core/
 ```
@@ -511,9 +512,10 @@ Current phase:
 
 - `core`
 - `websocket/http transport` as needed by web sdk
-- `web vanilla`
-- `web react`
-- `web vue`
+- `vanilla`
+- `react`
+- `vue`
+- `react-native`
 - Android / iOS native SDKs (`sdk/android`, `sdk/ios`, milestone M1–M3
   accepted; SwiftPM / XCFramework distribution, protocol contracts aligned
   with the web SDK)
@@ -522,6 +524,8 @@ Also implemented:
 
 - `api-client` (request pipeline + contracts)
 - `app-core` (runtime + contracts)
+
+Note: the SDK package directories carry no `web-` prefix (`vanilla`, `react`, `vue`); a `react-native` package also exists.
 
 ### 8.6 SDK Contracts
 
@@ -739,9 +743,10 @@ sdk/
     core/
     transport-http/
     transport-websocket/
-    web-vanilla/
-    web-react/
-    web-vue/
+    vanilla/
+    react/
+    vue/
+    react-native/
     api-client/
     app-core/
 ```

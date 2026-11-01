@@ -1,6 +1,6 @@
 # 移动端 SDK 平台规格：Android/iOS 选型工程化与核心 API 表面
 
-状态：开工技术方案（不含实现）。mobile-sdk-design.md 回答"做什么、为什么、按什么顺序"；本文回答"具体长什么形状"——分层架构、两平台选型的工程化细节、V1 冻结的 API 表面、接入流程的可执行细化。实现代码不在本文范围，但本文是 M0/M1/M2 开工时的对照基线：代码评审按本文逐条验收，偏离需先改本文。
+状态：已实现（`sdk/` 包已存在，移动端 SDK 可构建）。mobile-sdk-design.md 回答"做什么、为什么、按什么顺序"；本文回答"具体长什么形状"——分层架构、两平台选型的工程化细节、V1 冻结的 API 表面、接入流程的可执行细化。实现代码不在本文范围，但本文是 M0/M1/M2 开工时的对照基线：代码评审按本文逐条验收，偏离需先改本文。
 
 协议契约见 sdk/PROTOCOL.md（帧级事实源）；本文不重复帧定义，只引用。
 
@@ -35,7 +35,7 @@
 |---|---|---|
 | 语言/UI | Kotlin + Jetpack Compose（D3 已定） | 状态驱动渲染与会话页同构 |
 | Kotlin/工具链 | Kotlin 2.x + JDK 17 构建、compileSdk 35 | Compose 2.x 要求；compileSdk 取当前 stable 供 SDK 编译，运行时行为仍由 minSdk 24 兜底（SDK 编译目标高不抬高接入方运行要求） |
-| 交付形态 | 单 AAR、内部多包（`connect`/`model`/`ui`），`api` 面只有门面 | 多 AAR 会把内部分层泄漏成接入方的依赖管理负担；单 AAR + internal 分层让重构自由保留 |
+| 交付形态 | 单 AAR、内部多包（`connect`/`model`/`ui`/`core`/`protocol`），`api` 面只有门面 | 多 AAR 会把内部分层泄漏成接入方的依赖管理负担；单 AAR + internal 分层让重构自由保留 |
 | 并发模型 | 门面持有应用级 `SupervisorJob` + 内部 `CoroutineScope`；状态暴露 `StateFlow`、事件流 `SharedFlow`；公开挂起函数 | Supervisor 隔离单点失败不拖垮作用域；StateFlow 给 UI 收敛重放语义；接入方不接触任何协程作用域创建 |
 | 持久化 | 快照（sessionId/lastMessageId/savedAt）走 DataStore Preferences；访客 token 走 EncryptedSharedPreferences | 快照无敏感字段用轻量存储即可；token 必须进系统加密存储（D6 安全基线） |
 | 网络 | OkHttp 4.x（`api` 依赖，随宿主去重，D9 白名单） | WSS + 协议层保活 `pingInterval` 一处配置（PROTOCOL.md §2 移动端口径） |

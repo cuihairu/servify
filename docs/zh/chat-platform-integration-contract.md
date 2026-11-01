@@ -76,6 +76,8 @@ type Connector interface {
 type InboundSink interface { Accept(ctx context.Context, event InboundEvent) (AckDecision, error) }
 ```
 
+**管理端 HTTP 面（已落地）**：上述进程内 `Connector` 接口正是管理端 HTTP 端点写入的运行时契约：`POST /api/chat_connectors/installations`、`POST /api/chat_connectors/capabilities`、`POST /api/chat_connectors/notify`（路由在 `apps/server/internal/app/server/router_management.go`；handler 在 `apps/server/internal/handlers/chat_connector_handler.go`）。
+
 `Send` 指定会话，可选线程/回复；`Notify` 是带明确目标范围和审计理由的系统/运营通知。两者都接受调用方幂等键、deadline 和结构化内容；返回平台消息 ID、接受时间及 `accepted`、`unknown`、`rejected` 状态。若 adapter 无法安全去重，`unknown` 不得盲目重试。adapter 不得隐式扩大接收人范围。
 
 `Capabilities` 来自平台实际授权，逐 installation/群记录：`receive_mode`、`message_scope`（`mention_only`、`all_authorized_groups`、`unknown`）、`history_read`、`event_types[]`、`threads`、`replies`、`attachments`、`edits`、`deletes`、`reactions`、`send_text`、`send_rich`、`rate_limit`、`verified_at`。权限未知时关闭采集。

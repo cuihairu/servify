@@ -76,6 +76,8 @@ type Connector interface {
 type InboundSink interface { Accept(ctx context.Context, event InboundEvent) (AckDecision, error) }
 ```
 
+**Admin HTTP face (landed):** the in-process `Connector` interface above is the runtime contract the admin HTTP endpoints write to: `POST /api/chat_connectors/installations`, `POST /api/chat_connectors/capabilities`, `POST /api/chat_connectors/notify` (routes in `apps/server/internal/app/server/router_management.go`; handlers in `apps/server/internal/handlers/chat_connector_handler.go`).
+
 `Send` addresses a conversation and optionally a thread/reply; `Notify` is an operator/system announcement with explicit recipient scope and audit reason. Both accept a caller idempotency key, deadline, and structured content; both return platform message ID, accepted timestamp and delivery status (`accepted`, `unknown`, `rejected`). `unknown` must not be retried blindly unless the adapter can safely deduplicate. No adapter may broaden a target audience implicitly.
 
 `Capabilities` is observed from granted platform permissions and contains: `receive_mode`, `message_scope` (`mention_only`, `all_authorized_groups`, `unknown`), `history_read`, `event_types[]`, `threads`, `replies`, `attachments`, `edits`, `deletes`, `reactions`, `send_text`, `send_rich`, `rate_limit` and `verified_at`. Capture it per installation and group; any unknown permission means ingestion is disabled.

@@ -81,12 +81,12 @@
 | --- | --- |
 | `api_key` | `application` / `delivery` / `infra` |
 | `app_integration` | `application` / `delivery` / `infra` |
-| `auth` | `application` / `delivery`（真实逻辑在 `platform/auth` + `handlers/auth_*`） |
+| `auth` | `application` / `infra` / `delivery`（真实逻辑在 `platform/auth` + `handlers/auth_*`） |
 | `custom_field` | `application` / `delivery` / `infra` |
-| `email` | `application` / `delivery` / `infra` |
+| `email` | `delivery` / `infra` |
 | `gamification` | `application` / `delivery` / `infra` / `contract` |
 | `macro` | `application` / `delivery` / `infra` |
-| `push` | `application` / `delivery` / `infra` |
+| `push` | `delivery` / `infra` / `contract` / `orchestration` |
 | `satisfaction` | `application` / `delivery` / `infra` |
 | `shift` | `application` / `delivery` / `infra` |
 | `sla` | `application` / `delivery` / `infra` |

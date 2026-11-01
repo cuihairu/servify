@@ -1,6 +1,6 @@
 # Mobile SDK Platform Spec: Android/iOS selection engineering and core API surface
 
-Status: technical design started (no implementation). mobile-sdk-design.md answers "what to do, why, and in what order"; this document answers "what shape exactly" — layered architecture, engineering details for both platform selections, the V1-frozen API surface, and the executable refinement of the integration flow. Implementation code is out of scope for this document, but this is the reference baseline when M0/M1/M2 start: code review is checked line by line against this document; deviations require changing this document first.
+Status: implemented (SDK packages exist in `sdk/`; the mobile SDK builds). mobile-sdk-design.md answers "what to do, why, and in what order"; this document answers "what shape exactly" — layered architecture, engineering details for both platform selections, the V1-frozen API surface, and the executable refinement of the integration flow. Implementation code is out of scope for this document, but this is the reference baseline when M0/M1/M2 start: code review is checked line by line against this document; deviations require changing this document first.
 
 Protocol contract see sdk/PROTOCOL.md (frame-level source of truth); this document does not repeat frame definitions, only references them.
 
@@ -35,7 +35,7 @@ Protocol contract see sdk/PROTOCOL.md (frame-level source of truth); this docume
 |---|---|---|
 | Language/UI | Kotlin + Jetpack Compose (D3 signed off) | State-driven rendering is isomorphic with the conversation page |
 | Kotlin/toolchain | Kotlin 2.x + JDK 17 build, compileSdk 35 | Required by Compose 2.x; compileSdk takes the current stable for SDK compilation, runtime behavior is still backstopped by minSdk 24 (a higher SDK compile target does not raise the integrator's runtime requirement) |
-| Delivery form | Single AAR, internal multi-package (`connect`/`model`/`ui`), `api` surface only the facade | Multiple AARs would leak internal layering as the integrator's dependency management burden; single AAR + internal layering preserves refactoring freedom |
+| Delivery form | Single AAR, internal multi-package (`connect`/`model`/`ui`/`core`/`protocol`), `api` surface only the facade | Multiple AARs would leak internal layering as the integrator's dependency management burden; single AAR + internal layering preserves refactoring freedom |
 | Concurrency model | Facade holds an application-level `SupervisorJob` + internal `CoroutineScope`; state exposed as `StateFlow`, event flow as `SharedFlow`; public suspend functions | Supervisor isolates single-point failure without taking down the scope; StateFlow gives the UI convergent replay semantics; integrators do not touch any coroutine scope creation |
 | Persistence | Snapshot (sessionId/lastMessageId/savedAt) via DataStore Preferences; guest token via EncryptedSharedPreferences | Snapshot has no sensitive fields so lightweight storage suffices; the token must go into system encrypted storage (D6 security baseline) |
 | Network | OkHttp 4.x (`api` dependency, deduplicated by host, D9 allowlist) | WSS + protocol-layer keepalive `pingInterval` configured in one place (PROTOCOL.md §2 mobile spec) |
