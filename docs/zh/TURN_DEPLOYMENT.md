@@ -6,7 +6,7 @@
 ## 结论先行
 
 1. **方案：coturn 独立部署（独立容器/进程），不做 pion/turn 内嵌。** 决定性维度是网络位置独立（TURN 需要公网 UDP，不该绑在 app 容器上）与生命周期解耦（app 滚动发版不能掐断进行中的媒体中继）。
-2. **凭据口径：时间限 HMAC 凭据（coturn `use-auth-secret` 模式）**，服务端按 `static-auth-secret` 动态生成、经信令下发；**静态长期凭据不进生产**（[部署指南第 5 节](./webrtc-deployment.md)的 `--lt-cred-mech --user` 示例是最小可用形态，仅适用纯 STUN/开发，TURN 启用时按本文第 4 节升级）。
+2. **凭据口径：时间限 HMAC 凭据（coturn `use-auth-secret` 模式）**，服务端按 `static-auth-secret` 动态生成、经信令下发；**静态长期凭据不进生产**（[部署指南第 5 节](./webrtc-deployment.md) 的 coturn 示例现已用 `--use-auth-secret` + `--static-auth-secret` 形态；静态 `--user` 凭据仅适用纯 STUN/开发，TURN 启用时按本文第 4 节升级）。
 3. **托管云 TURN（Twilio NTS / Cloudflare Calls TURN 等）一票否决**：中国大陆私有化交付下不可达/不稳，与知识库选型的 SaaS-only 一票否决同口径（见 [KNOWLEDGE_BASE_LANDSCAPE](./KNOWLEDGE_BASE_LANDSCAPE.md)）。
 4. 落地量级：配置面 + 凭据包 + 下发口 + compose 模板约 2–3 天（见第 5 节），客户机房真实联调另计。
 
@@ -14,13 +14,13 @@
 
 | # | 事实 | 位置 |
 | --- | --- | --- |
-| 1 | 服务端是 PeerConnection 一端（浏览器 ↔ 服务端 ICE 直连），每个连接的 `ICEServers` 只填单 STUN | `apps/server/internal/platform/realtime/webrtc_service.go` `CreatePeerConnection` |
+| 1 | 服务端是 PeerConnection 一端（浏览器 ↔ 服务端 ICE 直连），每个连接的 `ICEServers` 只填单 STUN *（已取代——见第 5 节第 3 项：服务端装配现已填 STUN 列表 + TURN 条目）* | `apps/server/internal/platform/realtime/webrtc_service.go` `CreatePeerConnection` |
 | 2 | WebRTC 配置面单键，默认 Google STUN，大陆机房不可达（超时拖慢建连） | `config.yml` `webrtc.stun_server`；兜底值在 `apps/server/internal/config/config.go` |
-| 3 | `webrtc.stun_server` 无环境变量覆盖（env 覆盖白名单不含 webrtc 键） | `apps/server/internal/app/bootstrap/config.go` `applyConfigEnvOverrides` |
-| 4 | 客户端一端的 ICE 配置默认空数组、靠宿主集成方自备；REST 下发口 `startCall` 是显式 `unsupported()` 桩 | `sdk/packages/core/src/sdk.ts`（`remoteAssist.iceServers` 回退链）、`sdk/packages/core/src/api.ts` |
+| 3 | `webrtc.stun_server` 无环境变量覆盖（env 覆盖白名单不含 webrtc 键） *（已取代——见第 5 节第 1 项：`applyConfigEnvOverrides` 现已白名单 `WEBRTC_STUN_SERVERS` / `WEBRTC_TURN_URL` / `WEBRTC_TURN_REALM` / `WEBRTC_TURN_STATIC_AUTH_SECRET`）* | `apps/server/internal/app/bootstrap/config.go` `applyConfigEnvOverrides` |
+| 4 | 客户端一端的 ICE 配置默认空数组、靠宿主集成方自备；REST 下发口 `startCall` 是显式 `unsupported()` 桩 *（已取代——见第 5 节第 4 项：`getIceServers()` → `GET /api/v1/rtc/ice-servers` 已替换 `startCall` 桩）* | `sdk/packages/core/src/sdk.ts`（`remoteAssist.iceServers` 回退链）、`sdk/packages/core/src/api.ts` |
 | 5 | pion/turn v5 已在依赖图（`pion/webrtc` 间接依赖），内嵌方案无新增模块成本 | `apps/server/go.mod` |
 | 6 | 交付形态以单机 Docker Compose 私有化为主 | `docs/deployment.md` |
-| 7 | TURN 中继无配置面：`ICEServer.Username/Credential` 未暴露 | `apps/server/internal/platform/realtime/webrtc_service.go` |
+| 7 | TURN 中继无配置面：`ICEServer.Username/Credential` 未暴露 *（已取代——见第 5 节第 3 项：TURN 条目现已设 `Username`/`Credential`）* | `apps/server/internal/platform/realtime/webrtc_service.go` |
 
 **拓扑口径**（与[部署指南第 1 节](./webrtc-deployment.md)一致）：ICE 直连发生在浏览器 ↔ Servify 服务器之间，两端**都**需要 ICE 配置——服务端从 config 装配（事实 1），客户端浏览器一端目前靠宿主自备（事实 4）。因此 TURN 落地必须同时补"服务端装配"与"客户端下发口"两处，缺一则对称 NAT 仍有一侧打不通。
 
@@ -74,7 +74,7 @@ credential = base64(HMAC-SHA1(static_auth_secret, username))
 
 1. ✅（2026-09-22）**配置面**：`webrtc` 块扩展为 `stun_servers`（列表，多 STUN 冗余）+ `turn.url / turn.realm / turn.static_auth_secret / turn.ttl`。
    > 口径说明：[部署指南第 4 节](./webrtc-deployment.md)曾建议"配置加 `ice_servers` 列表（含 username/credential）"的最小演进路径——该路径会诱导**静态凭据写进配置文件**，本文档将其升级为上述 `turn.*` 口径：secret 只存服务端，凭据运行时生成。落地时同步更新部署指南第 2/4 节。
-   门禁惯例：零容忍 `Validate` + 装配层兜底双层 gate；新增配置键必改 secure-config 白名单/模板 lint 测试（参照 `internal/config/config_template_lint_test.go`、`TestValidate_SecureConfigIsValid` 等）并同步 `config.yml` + `config.production.secure.example.yml` + `config.staging.example.yml` 三模板；`applyConfigEnvOverrides` 白名单补 webrtc 键（事实 3）。
+   门禁惯例：零容忍 `Validate` + 装配层兜底双层 gate；新增配置键必改 secure-config 白名单/模板 lint 测试（参照 `TestValidate_SecureConfigIsValid`（`apps/server/internal/config/config_coverage_test.go`）等）并同步 `config.yml` + `config.production.secure.example.yml` + `config.staging.example.yml` 三模板；`applyConfigEnvOverrides` 白名单补 webrtc 键（事实 3）。
 2. ✅（2026-09-22）**平台包**：`internal/platform/` 新增 ICE 凭据包（或并入 `realtime`）：凭据生成（HMAC）+ ICE 配置装配，provider `none | coturn`，接口带 mock seam（覆盖率门禁 100%，异步副作用测试按既有惯例轮询）。
 3. ✅（2026-09-22）**服务端装配**：`CreatePeerConnection` 填入完整 `ICEServers`（STUN 列表 + TURN 条目带短时凭据），voice/realtime 一处收口。
 4. ✅（2026-09-22）**客户端下发口**：最小路径走 WS 信令建联时下发 ICE 配置（沿用 `webrtc-state-change` 类消息模式）；REST 面（`/api/v1/rtc/ice-servers`，workspace 鉴权）作为后续项，同时消掉 SDK `startCall` 的 `unsupported` 桩。SDK `remoteAssist.iceServers` 保留为宿主覆盖口，服务端下发为默认。
