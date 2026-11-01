@@ -112,7 +112,7 @@ fly postgres create
 fly postgres attach <db-name>
 
 # 注入密钥
-fly secrets set JWT_SECRET=$(openssl rand -hex 32)
+fly secrets set SERVIFY_JWT_SECRET=$(openssl rand -hex 32)
 fly secrets set OPENAI_API_KEY=sk-xxx
 
 # 部署
@@ -240,7 +240,7 @@ redis:
   port: 6379
 
 jwt:
-  secret: "${JWT_SECRET}"      # 通过环境变量注入，禁止使用默认值
+  secret: "${SERVIFY_JWT_SECRET}"      # 通过环境变量注入，禁止使用默认值
 
 ai:
   openai:
@@ -310,7 +310,7 @@ log:
 
 | 密钥 | 生成方式 | 轮换影响 |
 |------|----------|----------|
-| `JWT_SECRET` | `openssl rand -hex 32` | 轮换后所有已登录用户需重新登录 |
+| `SERVIFY_JWT_SECRET` | `openssl rand -hex 32` | 轮换后所有已登录用户需重新登录 |
 | `OPENAI_API_KEY` | OpenAI 平台获取 | 轮换后 AI 功能短暂不可用直到新 key 生效 |
 | `DB_PASSWORD` | 强随机密码 | 需同步更新数据库和配置 |
 
@@ -319,7 +319,7 @@ log:
 **推荐：环境变量**
 
 ```bash
-export JWT_SECRET=$(openssl rand -hex 32)
+export SERVIFY_JWT_SECRET=$(openssl rand -hex 32)
 export OPENAI_API_KEY=sk-proj-xxx
 export DB_PASSWORD=your-strong-password
 ```
@@ -334,7 +334,7 @@ echo "your-jwt-secret" > ./secrets/jwt_secret
 **Fly.io**
 
 ```bash
-fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
+fly secrets set SERVIFY_JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 ```
 
 ### 5.3 密钥轮换
@@ -924,7 +924,7 @@ security:
 
 ### 每月
 
-- [ ] 密钥轮换评估（特别是 JWT_SECRET 和 API Key）
+- [ ] 密钥轮换评估（特别是 SERVIFY_JWT_SECRET 和 API Key）
 - [ ] 安全基线检查：`make security-check CONFIG=config.production.yml`
 - [ ] 可观测性基线检查：`make observability-check CONFIG=config.production.yml`
 - [ ] 容量规划评估（CPU、内存、数据库连接数趋势）

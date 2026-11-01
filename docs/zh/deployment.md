@@ -104,12 +104,9 @@ docker compose -f infra/compose/docker-compose.yml up postgres redis -d
 ### 3.3 配置
 
 ```bash
-# 使用默认配置（SQLite 开发模式）
-cp config.yml config.local.yml
+# 使用默认配置（SQLite 开发模式）—— 直接编辑 config.yml
 
-# 或使用 PostgreSQL
-cp config.yml config.local.yml
-# 编辑数据库连接和 AI 配置
+# 或使用 PostgreSQL —— 编辑 config.yml 中的数据库连接和 AI 配置
 # 必填项：
 #   jwt.secret — JWT 签名密钥
 #   ai.openai.api_key — OpenAI API Key
@@ -277,7 +274,7 @@ fly postgres create
 fly postgres attach <db-name>
 
 # 设置密钥
-fly secrets set JWT_SECRET=$(openssl rand -hex 32)
+fly secrets set SERVIFY_JWT_SECRET=$(openssl rand -hex 32)
 fly secrets set OPENAI_API_KEY=sk-xxx
 
 # 部署
@@ -517,7 +514,7 @@ monitoring:
 
 | 密钥 | 说明 | 示例 |
 |------|------|------|
-| `JWT_SECRET` | JWT 签名密钥 | `openssl rand -hex 32` |
+| `SERVIFY_JWT_SECRET` | JWT 签名密钥 | `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | OpenAI API Key | `sk-proj-xxx` |
 | `DB_PASSWORD` | PostgreSQL 密码 | 强密码 |
 
@@ -575,7 +572,7 @@ make release-check CONFIG=config.yml
 # docker-compose.yml 中引用
 services:
   servify:
-    entrypoint: ["/bin/sh", "-c", "export JWT_SECRET=$(cat /run/secrets/jwt_secret) && /app/servify"]
+    entrypoint: ["/bin/sh", "-c", "export SERVIFY_JWT_SECRET=$(cat /run/secrets/jwt_secret) && /app/servify"]
     secrets:
       - jwt_secret
 
@@ -588,7 +585,7 @@ secrets:
 
 ```bash
 # Fly.io
-fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
+fly secrets set SERVIFY_JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 
 # Railway — 在 Dashboard 中添加环境变量
 ```

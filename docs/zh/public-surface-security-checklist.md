@@ -59,7 +59,7 @@
 
 - 仅返回品牌和 locale 信息
 - 不携带 tenant 内部配置、provider 参数或 feature flag 明细
-- 保留独立限流
+- 无独立限流配置：该端点由通用 `/public/` 前缀限流覆盖
 
 ### `/public/kb/*`
 
@@ -83,7 +83,7 @@
 ### `/api/v1/auth/*` 匿名入口
 
 - `/login`、`/register`、`/refresh` 必须有独立路径级限流
-- `/2fa/verify`（匿名 OTP 挑战步）与 `/oidc/start|callback|status` 同属本面：2FA 校验口重点防 OTP 暴力枚举（沿用 auth 前缀限流 25rpm），OIDC callback 重点防开放重定向与 state 伪造
+- `/2fa/verify`（匿名 OTP 挑战步）与 `/oidc/start|callback|status` 同属本面：2FA 校验口重点防 OTP 暴力枚举（auth 前缀限流为 dev 25rpm / staging 30rpm / 生产 20rpm），OIDC callback 重点防开放重定向与 state 伪造
 - 不在错误响应里泄漏账号存在性、内部状态或策略细节
 - 对暴力尝试、refresh 滥用、批量注册建立告警
 - 全局 `security.max_body_bytes` 对超限请求直接 413（生产模板 16MB）

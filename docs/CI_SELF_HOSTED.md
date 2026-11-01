@@ -4,7 +4,7 @@ The repository now runs on GitHub Hosted Runner and no longer depends on reposit
 
 ## Current Runtime Environment
 
-- Runner: `ubuntu-latest`
+- Runner: `ubuntu-latest` by default; per-job pins exist — the iOS Swift job pins `ubuntu-24.04` and the iOS macOS job pins `macos-15`
 - Workflow: `.github/workflows/ci.yml`
 - Triggers:
   - push to `main`
@@ -18,7 +18,11 @@ The repository now runs on GitHub Hosted Runner and no longer depends on reposit
 - `gofmt` format verification
 - `go mod tidy` drift check
 - `go vet`
+- Lint (`golangci-lint`, baseline zero, repo-root scope)
 - Unit tests and coverage gate
+- Race detector (`go test -race`)
+- AI golden set (mock, `make test-golden`)
+- Codecov coverage upload
 - Standard binary build
 - WeKnora compatibility tag build
 

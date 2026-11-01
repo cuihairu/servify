@@ -59,7 +59,7 @@ Scope:
 
 - Return only branding and locale information
 - Do not include internal tenant configuration, provider parameters, or feature flag details
-- Keep the dedicated rate limit
+- No dedicated rate limit is configured for this prefix: the endpoint is covered by the general `/public/` prefix rate limit
 
 ### `/public/kb/*`
 
@@ -83,7 +83,7 @@ Scope:
 ### Anonymous `/api/v1/auth/*` entry points
 
 - `/login`, `/register`, `/refresh` must have dedicated path-level rate limits
-- `/2fa/verify` (the anonymous OTP challenge step) and `/oidc/start|callback|status` belong to this surface as well: the 2FA verification endpoint focuses on preventing OTP brute-force enumeration (keeping the auth-prefix rate limit of 25rpm), while the OIDC callback focuses on preventing open redirects and state forgery
+- `/2fa/verify` (the anonymous OTP challenge step) and `/oidc/start|callback|status` belong to this surface as well: the 2FA verification endpoint focuses on preventing OTP brute-force enumeration (the auth-prefix rate limit is 25rpm in dev, 30rpm in staging, and 20rpm in production), while the OIDC callback focuses on preventing open redirects and state forgery
 - Do not leak account existence, internal state, or policy details in error responses
 - Set up alerts for brute-force attempts, refresh abuse, and bulk registration
 - The global `security.max_body_bytes` returns a direct 413 for oversized requests (16MB in the production template)

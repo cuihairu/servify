@@ -4,7 +4,7 @@
 
 ## 当前运行环境
 
-- Runner: `ubuntu-latest`
+- Runner: `ubuntu-latest`（默认；存在按 job 钉版——iOS Swift job 钉 `ubuntu-24.04`，iOS macOS job 钉 `macos-15`）
 - Workflow: `.github/workflows/ci.yml`
 - 触发条件：
   - push 到 `main`
@@ -18,7 +18,11 @@
 - `gofmt` 格式校验
 - `go mod tidy` 漂移检查
 - `go vet`
+- Lint（`golangci-lint`，基线零，仓库根口径）
 - 单元测试与覆盖率门槛检查
+- 竞态检测（`go test -race`）
+- AI golden set（mock，`make test-golden`）
+- Codecov 覆盖率上传
 - 标准二进制构建
 - WeKnora compatibility tag 构建
 

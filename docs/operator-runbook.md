@@ -112,7 +112,7 @@ fly postgres create
 fly postgres attach <db-name>
 
 # 注入密钥
-fly secrets set JWT_SECRET=$(openssl rand -hex 32)
+fly secrets set SERVIFY_JWT_SECRET=$(openssl rand -hex 32)
 fly secrets set OPENAI_API_KEY=sk-xxx
 
 # 部署
@@ -240,7 +240,7 @@ redis:
   port: 6379
 
 jwt:
-  secret: "${JWT_SECRET}"      # 通过环境变量注入，禁止使用默认值
+  secret: "${SERVIFY_JWT_SECRET}"      # 通过环境变量注入，禁止使用默认值
 
 ai:
   openai:
@@ -310,7 +310,7 @@ log:
 
 | Secret | Generation Method | Rotation Impact |
 |------|----------|----------|
-| `JWT_SECRET` | `openssl rand -hex 32` | After rotation, all logged-in users must log in again |
+| `SERVIFY_JWT_SECRET` | `openssl rand -hex 32` | After rotation, all logged-in users must log in again |
 | `OPENAI_API_KEY` | Obtain from the OpenAI platform | After rotation, AI features are briefly unavailable until the new key takes effect |
 | `DB_PASSWORD` | Strong random password | The database and configuration must be updated together |
 
@@ -319,7 +319,7 @@ log:
 **Recommended: environment variables**
 
 ```bash
-export JWT_SECRET=$(openssl rand -hex 32)
+export SERVIFY_JWT_SECRET=$(openssl rand -hex 32)
 export OPENAI_API_KEY=sk-proj-xxx
 export DB_PASSWORD=your-strong-password
 ```
@@ -334,7 +334,7 @@ echo "your-jwt-secret" > ./secrets/jwt_secret
 **Fly.io**
 
 ```bash
-fly secrets set JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
+fly secrets set SERVIFY_JWT_SECRET=xxx OPENAI_API_KEY=sk-xxx
 ```
 
 ### 5.3 Secret Rotation
@@ -921,7 +921,7 @@ security:
 
 ### Monthly
 
-- [ ] Secret rotation assessment (especially JWT_SECRET and API Keys)
+- [ ] Secret rotation assessment (especially SERVIFY_JWT_SECRET and API Keys)
 - [ ] Security baseline check: `make security-check CONFIG=config.production.yml`
 - [ ] Observability baseline check: `make observability-check CONFIG=config.production.yml`
 - [ ] Capacity planning assessment (CPU, memory, database connection count trends)
