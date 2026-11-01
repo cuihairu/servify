@@ -5,7 +5,7 @@
 | 指标 | 定义 | 数据来源 | 计算口径 |
 |------|------|---------|---------|
 | 活跃会话数 | 状态为 active 的会话 | `sessions.status = 'active'` | 实时计数 |
-| 等待客服数 | 状态为 waiting_human 的会话 | `sessions.status = 'waiting_human'` | 实时计数 |
+| 等待客服数 | 状态为 waiting_human 的会话（未透出在 dashboard stats 响应中——`DashboardStats` 无 waiting 字段） | `sessions.status = 'waiting_human'` | 实时计数 |
 | 已结束会话数 | 状态为 ended 的会话 | `sessions.status = 'ended'`（落库值；domain 层 closed 经 conversation/infra 映射为 ended） | 数据口径；当前 DashboardStats 契约未透出该指标 |
 | 平均响应时间 | 客服首次回复的平均耗时 | `agents.avg_response_time` | 取 agent 表平均值 |
 
@@ -25,8 +25,8 @@
 |------|------|---------|---------|
 | 平均评分 | 所有评分的加权平均 | `customer_satisfactions.rating` | `AVG(rating)` |
 | 评价总数 | 满意度记录条数 | `customer_satisfactions` | `COUNT(*)` |
-| 好评率 | 评分 >= 4 的占比 | `rating >= 4` 的计数 / 总数 | `positive_rate` |
-| 差评率 | 评分 <= 2 的占比 | `rating <= 2` 的计数 / 总数 | `negative_rate` |
+| 好评率 | 评分 >= 4 的占比（未透出——已移除） | `rating >= 4` 的计数 / 总数 | — |
+| 差评率 | 评分 <= 2 的占比（未透出——已移除） | `rating <= 2` 的计数 / 总数 | — |
 | 评分分布 | 1~5 星各档计数 | `GROUP BY rating` | 分布直方图 |
 | 满意度趋势 | 按日聚合的平均评分和评价数 | `GROUP BY DATE(created_at)` | 时间序列 |
 
@@ -54,12 +54,12 @@
 
 ## 6. 时间范围与筛选
 
-statistics 族接口（`/api/statistics/*`，除 dashboard 外）要求以下查询参数：
+statistics 族接口（`/api/statistics/*`，除 dashboard 外）使用以下查询参数。`start_date`/`end_date` 在 time-range 与 agent-performance 接口为必填；ticket-category 与 ticket-priority 接口视为可选，缺省时默认最近 30 天；customer-source 接口不接收日期参数。
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `start_date` | YYYY-MM-DD | 起始日期（必填） |
-| `end_date` | YYYY-MM-DD | 结束日期（必填） |
+| `start_date` | YYYY-MM-DD | 起始日期（time-range 与 agent-performance 必填；ticket-category 与 ticket-priority 可选，默认最近 30 天窗口） |
+| `end_date` | YYYY-MM-DD | 结束日期（要求与 `start_date` 相同） |
 | `tenant_id` | string | 租户筛选（从 auth context 自动注入） |
 | `workspace_id` | string | 工作区筛选（从 auth context 自动注入） |
 
@@ -67,8 +67,8 @@ statistics 族接口（`/api/statistics/*`，除 dashboard 外）要求以下查
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `date_from` | ISO 8601 | 起始时间 |
-| `date_to` | ISO 8601 | 结束时间 |
+| `date_from` | YYYY-MM-DD | 起始日期 |
+| `date_to` | YYYY-MM-DD | 结束日期 |
 
 ## 7. 前后端字段映射
 
@@ -90,5 +90,6 @@ ai_usage_today / knowledge_provider_usage_today / weknora_usage_today
 前端 stats.average_rating      ← 后端 AverageRating
 前端 stats.total_ratings       ← 后端 TotalRatings
 前端 stats.rating_distribution ← 后端 RatingDistribution (map[rating]count)
+前端 stats.category_stats      ← 后端 CategoryStats (map[category]SatisfactionStat)
 前端 stats.trend_data          ← 后端 TrendData ([]SatisfactionTrend)
 ```

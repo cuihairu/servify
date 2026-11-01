@@ -28,6 +28,8 @@
 | 平均解决时间 | `avg_resolution_time` | `AVG(EXTRACT(epoch FROM (resolved_at - created_at))) FROM tickets WHERE resolved_at IS NOT NULL`（秒） | `tickets` 表 |
 | 客户满意度 | `customer_satisfaction` | `COALESCE(AVG(rating), 0) FROM customer_satisfactions`（1~5 分） | `customer_satisfactions` 表 |
 | AI 使用次数(今日) | `ai_usage_today` | `daily_stats.ai_usage_count WHERE date=今日` | `daily_stats` 表 |
+| 知识库 provider 使用次数(今日) | `knowledge_provider_usage_today` | `daily_stats.we_knora_usage_count WHERE date=今日`（合并；无独立列） | `daily_stats` 表 |
+| WeKnora 使用次数(今日) | `weknora_usage_today` | `daily_stats.we_knora_usage_count WHERE date=今日` | `daily_stats` 表 |
 
 ## 2. 时间范围统计
 

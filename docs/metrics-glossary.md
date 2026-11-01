@@ -28,6 +28,8 @@ This document defines the calculation conventions for all statistical metrics in
 | Average resolution time | `avg_resolution_time` | `AVG(EXTRACT(epoch FROM (resolved_at - created_at))) FROM tickets WHERE resolved_at IS NOT NULL` (seconds) | `tickets` table |
 | Customer satisfaction | `customer_satisfaction` | `COALESCE(AVG(rating), 0) FROM customer_satisfactions` (1–5 scale) | `customer_satisfactions` table |
 | AI usage (today) | `ai_usage_today` | `daily_stats.ai_usage_count WHERE date=今日` | `daily_stats` table |
+| Knowledge provider usage (today) | `knowledge_provider_usage_today` | `daily_stats.we_knora_usage_count WHERE date=今日` (merged; no separate column) | `daily_stats` table |
+| WeKnora usage (today) | `weknora_usage_today` | `daily_stats.we_knora_usage_count WHERE date=今日` | `daily_stats` table |
 
 ## 2. Time-Range Statistics
 

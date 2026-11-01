@@ -5,7 +5,7 @@
 | Metric | Definition | Data Source | Calculation |
 |------|------|---------|---------|
 | Active sessions | Sessions whose status is active | `sessions.status = 'active'` | Real-time count |
-| Waiting-for-agent sessions | Sessions whose status is waiting_human | `sessions.status = 'waiting_human'` | Real-time count |
+| Waiting-for-agent sessions | Sessions whose status is waiting_human (not exposed in the dashboard stats payload — `DashboardStats` has no waiting field) | `sessions.status = 'waiting_human'` | Real-time count |
 | Ended sessions | Sessions whose status is ended | `sessions.status = 'ended'` (stored value; the domain-level closed is mapped to ended by conversation/infra) | Data spec; the current DashboardStats contract does not expose this metric |
 | Average response time | Average time to the agent's first reply | `agents.avg_response_time` | Average over the agent table |
 
@@ -25,8 +25,8 @@
 |------|------|---------|---------|
 | Average rating | Weighted average of all ratings | `customer_satisfactions.rating` | `AVG(rating)` |
 | Total ratings | Number of satisfaction records | `customer_satisfactions` | `COUNT(*)` |
-| Positive rate | Share of ratings >= 4 | Count of `rating >= 4` / total | `positive_rate` |
-| Negative rate | Share of ratings <= 2 | Count of `rating <= 2` / total | `negative_rate` |
+| Positive rate | Share of ratings >= 4 (not emitted — removed) | Count of `rating >= 4` / total | — |
+| Negative rate | Share of ratings <= 2 (not emitted — removed) | Count of `rating <= 2` / total | — |
 | Rating distribution | Count per 1~5 star bucket | `GROUP BY rating` | Distribution histogram |
 | Satisfaction trend | Average rating and rating count aggregated by day | `GROUP BY DATE(created_at)` | Time series |
 
@@ -54,12 +54,12 @@
 
 ## 6. Time Ranges and Filters
 
-The statistics API family (`/api/statistics/*`, except dashboard) requires the following query parameters:
+The statistics API family (`/api/statistics/*`, except dashboard) uses the following query parameters. `start_date`/`end_date` are required by the time-range and agent-performance endpoints; the ticket-category and ticket-priority endpoints treat them as optional and default to the last 30 days when omitted; the customer-source endpoint takes no date parameters.
 
 | Parameter | Type | Description |
 |------|------|------|
-| `start_date` | YYYY-MM-DD | Start date (required) |
-| `end_date` | YYYY-MM-DD | End date (required) |
+| `start_date` | YYYY-MM-DD | Start date (required by time-range & agent-performance; optional with a default 30-day window for ticket-category & ticket-priority) |
+| `end_date` | YYYY-MM-DD | End date (same requirement as `start_date`) |
 | `tenant_id` | string | Tenant filter (injected automatically from the auth context) |
 | `workspace_id` | string | Workspace filter (injected automatically from the auth context) |
 
@@ -67,8 +67,8 @@ The satisfaction API (`/api/satisfactions/stats`) uses:
 
 | Parameter | Type | Description |
 |------|------|------|
-| `date_from` | ISO 8601 | Start time |
-| `date_to` | ISO 8601 | End time |
+| `date_from` | YYYY-MM-DD | Start date |
+| `date_to` | YYYY-MM-DD | End date |
 
 ## 7. Frontend/Backend Field Mapping
 
@@ -90,5 +90,6 @@ ai_usage_today / knowledge_provider_usage_today / weknora_usage_today
 前端 stats.average_rating      ← 后端 AverageRating
 前端 stats.total_ratings       ← 后端 TotalRatings
 前端 stats.rating_distribution ← 后端 RatingDistribution (map[rating]count)
+前端 stats.category_stats      ← 后端 CategoryStats (map[category]SatisfactionStat)
 前端 stats.trend_data          ← 后端 TrendData ([]SatisfactionTrend)
 ```
