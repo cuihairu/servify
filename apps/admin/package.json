@@ -16,7 +16,7 @@
     "@ant-design/icons": "^6.3.4",
     "@ant-design/pro-components": "^2.8.10",
     "@ant-design/pro-layout": "^7.22.7",
-    "@umijs/max": "^4.7.16",
+    "@umijs/max": "^4.7.30",
     "antd": "^5.29.3",
     "dayjs": "^1.11.23"
   },
@@ -40,7 +40,7 @@
       "decode-uri-component@<0.5": "^0.5.0",
       "esbuild@<0.25": "^0.25.0",
       "fast-uri@>=3 <3.1.9": "^3.1.9",
-      "glob@>=10.2 <10.5": "10.5.0",
+      "glob@>=10.2 <10.5": "14.0.3",
       "immer@<9": "^9.0.6",
       "moment@<2.31": "^2.31.0",
       "node-fetch@<2": "^2.6.7",
@@ -54,7 +54,7 @@
       "send@<0.19": "^0.19.0",
       "source-map-js@<1.2.2": "^1.2.2",
       "vite@<7.3.7": "7.3.7",
-      "follow-redirects@<1.16.1": "1.16.1",
+      "follow-redirects@<1.16.1": "1.16.2",
       "hono@<4.13.11": "4.13.11"
     }
   }

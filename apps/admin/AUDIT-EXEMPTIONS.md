@@ -1,6 +1,6 @@
 # Admin dependency audit exemptions
 
-Scope: `apps/admin` only (`@servify/admin`, UMI 4 / `@umijs/max` 4.7.16). The
+Scope: `apps/admin` only (`@servify/admin`, UMI 4 / `@umijs/max` 4.7.30). The
 server-side `apps/server` module has no `pnpm audit` surface and is out of
 scope here.
 
@@ -10,18 +10,18 @@ override to a still-vulnerable version). `pnpm audit` keeps reporting all of
 them so that a future re-run stays honest. Every entry below has a registry
 fact that makes it impossible to close with a dependency upgrade.
 
-## Snapshot (2026-10-29)
+## Snapshot (2026-11-03)
 
 ```
-npx -y pnpm@10.22.0 --dir apps/admin audit
-2 vulnerabilities found
-Severity: 2 low
+corepack pnpm@10.22.0 --dir apps/admin audit --prod
+3 vulnerabilities found
+Severity: 1 moderate, 2 low
 ```
 
-`pnpm audit --prod` reports the same two because `@umijs/max` is declared
+`pnpm audit --prod` reports the same three because `@umijs/max` is declared
 under `dependencies` (UMI is a build-time tool, but the app keeps it in the
-prod section). Both remaining chains are bundler toolchain — none of them is
-shipped in the served bundle (evidence below).
+prod section). All remaining chains are bundler/lint toolchain — none of them
+is shipped in the served bundle (evidence below).
 
 `braces` (GHSA-vfj7-8cjw-p6xm, high, formerly entry 1) left this ledger on
 2026-10-23: the advisory was **withdrawn** upstream as not practically
@@ -121,12 +121,43 @@ wait for CI `Admin Checks`, and delete this entry.
 
 ## Why an `@umijs/max` upgrade does not close any of these
 
-`@umijs/max` 4.7.25 is the current `latest` tag against the installed 4.7.16,
-but upgrading cannot resolve either remaining entry: each chain is structural
-to UMI (`@umijs/bundler-webpack` node polyfills for `elliptic`;
-`@umijs/bundler-webpack` svgr / TS-checker tooling for `deepmerge`) and each
-leaf package has no fixed release to resolve to. The blocking fact is the
-leaf, not the top of the chain.
+`@umijs/max` was upgraded from 4.7.16 to the current 4.7.30. That update plus
+the existing `glob@>=10.2 <10.5` override now resolves the mako build chain to
+`rimraf@5.0.1 → glob@14.0.3 → minimatch@11.0.4`, closing the vulnerable glob
+10 chain. The remaining three chains are structural to UMI: webpack node
+polyfills for `elliptic`; webpack svgr / TS-checker tooling for `deepmerge`;
+and the pinned lint plugin chain for `minimatch`. The blocking facts are the
+leaves and the consumer API, not the top of the chain.
+
+## 3. `minimatch` — GHSA-g3hv-75wg-m249 (moderate)
+
+| Field | Value |
+|---|---|
+| Title | minimatch has potential denial of service via globparts amplification |
+| Vulnerable versions | `<11.0.1` |
+| Patched versions | `>=11.0.1` |
+| Registry latest | `11.0.4` |
+| Path | `@umijs/max > @umijs/lint > eslint-plugin-react > minimatch` |
+
+Reachability: this is lint tooling only. `eslint-plugin-react@7.33.2` uses
+`minimatch` only in `jsx-pascal-case` to compare rule names, and `max build`
+does not ship `minimatch` or the plugin in the served bundle.
+
+Why not an override: `@umijs/lint@4.7.30` pins `eslint-plugin-react@7.33.2`;
+that plugin declares `minimatch: ^3.1.2` and calls the required module
+directly (`minimatch(name, entry, { noglobstar: true })`). `minimatch@11`
+changed the CommonJS export to an object whose callable is
+`exports.minimatch`, so forcing the direct consumer to 11 makes the call
+`TypeError: minimatch is not a function`. The compatible patched upgrade
+must come from `eslint-plugin-react` (or `@umijs/lint`).
+
+Why not a dependency replacement: the vulnerable leaf is imported directly by
+the lint rule. Replacing it with a shim would mask the API mismatch rather
+than use an upstream-supported compatibility release.
+
+Unblock condition: `@umijs/lint` releases a version using an
+`eslint-plugin-react` release compatible with `minimatch@11`. Then update
+that chain, run `typecheck` + `lint` + `build`, and delete this entry.
 
 ## Procedure when an upstream fix lands
 
