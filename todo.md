@@ -98,7 +98,7 @@
 - [x] modules 非 infra 层 GORM 写归属下沉 infra（satisfaction 50 / sla 32 / auth 19 操作，reopen TranslateError 哨兵）— 覆盖率回 100.0%，全量绿
 - [x] models 侧过渡别名最终删除（models.go 9 别名块 + 5 domain 导入 + 3 文件删除）— 3481171（26 文件）+ 379e8c9 守卫 + cc43cb0/7d02e9b 灰区 14 条，CI 38547016404 绿
 - [x] 文档-源码一致性审计（2026-11-01 复扫，38 条：超前 3 / 滞后 13 / 不符 22，P0 0、P1 6）— 8073a14…e82f1f6，docs build 绿
-- [x] 依赖安全批次收口（admin @umijs/max 4.7.16→4.7.30、follow-redirects 1.16.2、glob 10.5.0→14.0.3 使 mako 链 minimatch→11.0.4；docs mermaid 11.16.1→11.17.2 / vitepress 1.6.0→1.6.4；minimatch 经 eslint-plugin-react 链无兼容补丁记豁免）— apps/admin/AUDIT-EXEMPTIONS.md:132-162，admin typecheck+lint+build 绿（0 退出）、docs npm ci+build 绿、admin audit 5→3（1 moderate+2 low）、docs audit 0
+- [x] 依赖安全批次收口（admin @umijs/max 4.7.16→4.7.30、follow-redirects 1.16.2、glob 10.5.0→14.0.3 使 mako 链 minimatch→11.0.4；docs mermaid 11.16.1→11.17.2 / vitepress 1.6.0→1.6.4；minimatch 经 eslint-plugin-react 链无兼容补丁记豁免）— 32fa296 a82fd59（apps/admin/package.json:19,43；apps/admin/AUDIT-EXEMPTIONS.md:132；docs/package.json:14,15），admin typecheck+lint+build 0 退出、docs npm ci+build 0 退出、admin audit 5→3（1 moderate+2 low）、docs audit 0
 
 ## 审核发现
 
