@@ -136,4 +136,14 @@
 
 ## 漏洞扫描遗留（2026-11-03 全舰队扫描，源 scratch/vuln-scan-*.md）
 
-- [ ] VULN-SERVIFY-001 [非安全·过时依赖] go get -u ./... 因 proxy EOF 部分失败（仅安全项保留）：补跑非安全升级；验收：go list -m -u all 无网络错误 + go build ./... && go test ./... 绿（另：根与 apps/server 的 govulncheck 已于 2026-11-03 晚实测 No vulnerabilities found，EOF 需重跑一项已闭合）
+- [x] VULN-SERVIFY-001 [非安全·过时依赖] go get -u ./... 因 proxy EOF 部分失败（仅安全项保留）：补跑非安全升级；验收：go list -m -u all 无网络错误 + go build ./... && go test ./... 绿（另：根与 apps/server 的 govulncheck 已于 2026-11-03 晚实测 No vulnerabilities found，EOF 需重跑一项已闭合）— 2026-11-04 证据：go list -m -u all exit 0（无网络错误）；go build ./... exit 0；go test -timeout 60m ./... exit 0（含 scripts 2260.387s / perfbench 6.252s / weknora-mock 0.096s，其余包 ok 或 no test files）；make test（run-tests.sh 集成 tag）exit 0、覆盖率 100.0%；go.mod:5 + apps/server/go.mod:5 toolchain go1.27.3，gorm.io/gorm v1.25.7→v1.31.2（apps/server/go.mod:43）等全量升级；schema.ParseIndexes() map→[]*Index API 变更已适配（migrations_tag_indexes_parity_test.go:53），bootstrap 包 go test -tags integration 32.943s ok。
+
+## 审核发现（e3a0fabd..HEAD，2026-11-03 只审不改）
+
+覆盖范围：6 提交（aed3ba0 todo 验证 1f59ae44..HEAD / 32fa296 fix(deps) 升级 admin+docs 依赖并收口 glob 审计链 / a82fd59 chore(docs) 移除过时 pnpm lockfile / 62ea1e6 todo 记录依赖安全批次证据 / 63dab1d todo 复核 blocked 项 / 09c45c6 docs 记录漏洞扫描遗留），仅改 apps/admin/{package.json,pnpm-lock.yaml,AUDIT-EXEMPTIONS.md}、docs/{package.json,package-lock.json,pnpm-lock.yaml(删)}、todo.md 七文件；`git diff -- '*.go' '*.sql' '*.sh' 'Dockerfile*' 'Makefile'` 为空（pnpm-lock.yaml 命中 *.yaml 除外），服务端/配置面零改动。
+
+- [ ] 审核发现：override `glob@>=10.2 <10.5: 14.0.3` 强制跨 4 个主版本把 glob@14.0.3 注入 rimraf@5.0.1（其声明 `glob: ^10.2.5`，锁文件 rimraf@5.0.1→glob:14.0.3），构成 semver 范围违规（apps/admin/package.json:43）。实测当前可用：glob@14 导出 glob/globSync/sync 均为可调用函数，rimraf@5.0.1 async+sync glob 路径均正常删除、无 runtime 错误；但为潜在脆性——未来 glob 主版本或 rimraf 变更可能在 admin build/lint 静默破坏，建议以升级 rimraf 至声明含 glob@14 的版本替代该强制 override，或把此约束固化为豁免/注释。
+- [ ] 审核发现：测试缺口 — rimraf@5.0.1 ↔ glob@14.0.3 override 兼容性无自动化回归测试（唯一证据为一次 admin typecheck+lint+build 0 退出，todo.md:103），而 admin build 路径多半不触发 rimraf 的 glob:true 分支（rimraf 默认 glob:false，仅 -g/--glob 或 glob 选项触发），该 override 破坏面未被构建覆盖（apps/admin/pnpm-lock.yaml:14408）；建议补一个 rimraf+glob14 冒烟用例或把此约束写入验收。
+- [ ] 审核发现：apps/admin/package.json 末行 `}` 丢失结尾换行（\ No newline at end of file，文件 61 行无末尾 \n），纯卫生、无功能影响（apps/admin/package.json:61）；系 32fa296 编辑引入，建议补回换行以免后续 diff 噪声。
+- [ ] 审核发现：apps/admin/AUDIT-EXEMPTIONS.md 新增「## 3. minimatch」（:132）置于「## Why an @umijs/max upgrade does not close any of these」（:122）之后、Procedure（:162）之前，而条目 1/2（elliptic :54 / deepmerge :88）在该 Why 节之前，节序不一致（内容本身无误，无安全/正确性影响，纯文档结构小瑕疵）（apps/admin/AUDIT-EXEMPTIONS.md:132）。
+- [ ] 审核发现：本轮 diff 无新增漏洞依赖——旧锁文件 e3a0fab 已含 minimatch@3.1.5（eslint-plugin-react 链）/elliptic@6.6.1/deepmerge@1.5.2+4.3.1，本次仅消除 glob@10.5.0 链、修补 follow-redirects 1.16.1→1.16.2（锁内无 <1.16.1 残留）、升 @umijs/max 4.7.16→4.7.30 与 docs mermaid/vitepress，安全面净改善（5→3）；pnpm audit 因 proxy EOF 无法在本环境独立复跑，5→3（1 moderate+2 low）与 docs audit 0 依 todo.md:103 台账记载，锁文件状态与所述 3 项残留（elliptic/deepmerge/minimatch@3.1.5）一致，且「无 glob@10.x 残留」已由 grep 证实。

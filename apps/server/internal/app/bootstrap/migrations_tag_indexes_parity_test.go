@@ -50,7 +50,8 @@ func TestMigrationChainCoversAllModelTagIndexes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse model %T: %v", model, err)
 		}
-		for name := range s.ParseIndexes() {
+		for _, idx := range s.ParseIndexes() {
+			name := idx.Name
 			tagIndexTotal++
 			if !chainIndexes[name] {
 				t.Errorf("模型 %T 的 tag 索引 %q 不在迁移链任何 CREATE INDEX 中：postgres 版本化路径全新库缺索引（新 tag 索引必须配编号迁移，惯例参照 000021）", model, name)
