@@ -119,16 +119,6 @@ Unblock condition: upstream publishes a `deepmerge` release above `4.3.1`.
 Then add a `pnpm.overrides` entry, `pnpm install`, run `typecheck` + `build`,
 wait for CI `Admin Checks`, and delete this entry.
 
-## Why an `@umijs/max` upgrade does not close any of these
-
-`@umijs/max` was upgraded from 4.7.16 to the current 4.7.30. That update plus
-the existing `glob@>=10.2 <10.5` override now resolves the mako build chain to
-`rimraf@5.0.1 → glob@14.0.3 → minimatch@11.0.4`, closing the vulnerable glob
-10 chain. The remaining three chains are structural to UMI: webpack node
-polyfills for `elliptic`; webpack svgr / TS-checker tooling for `deepmerge`;
-and the pinned lint plugin chain for `minimatch`. The blocking facts are the
-leaves and the consumer API, not the top of the chain.
-
 ## 3. `minimatch` — GHSA-g3hv-75wg-m249 (moderate)
 
 | Field | Value |
@@ -158,6 +148,19 @@ than use an upstream-supported compatibility release.
 Unblock condition: `@umijs/lint` releases a version using an
 `eslint-plugin-react` release compatible with `minimatch@11`. Then update
 that chain, run `typecheck` + `lint` + `build`, and delete this entry.
+
+## Why an `@umijs/max` upgrade does not close any of these
+
+`@umijs/max` was upgraded from 4.7.16 to the current 4.7.30. That update plus
+the `rimraf@5.0.1 → 6.1.4` override now resolves the mako build chain to
+`rimraf@6.1.4 → glob@14.0.3 → minimatch@11.0.4`, closing the vulnerable glob
+10 chain. rimraf@6.1.4 declares `glob: ^14.0.3`, so the previous
+`glob@>=10.2 <10.5: 14.0.3` override (which injected glob@14 into rimraf@5.0.1
+declaring `^10.2.5`, a semver violation) was removed. The remaining three chains
+are structural to UMI: webpack node polyfills for `elliptic`; webpack svgr /
+TS-checker tooling for `deepmerge`; and the pinned lint plugin chain for
+`minimatch`. The blocking facts are the
+leaves and the consumer API, not the top of the chain.
 
 ## Procedure when an upstream fix lands
 
