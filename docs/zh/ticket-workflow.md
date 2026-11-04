@@ -21,7 +21,13 @@
 # 注册客户用户（已有客户账号可跳过，用其 user.id）
 curl -sS -X POST http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"username":"cust1","email":"cust1@example.com","password":"Cust!12345","name":"客户一","role":"customer"}'
+  -d '{
+          "username": "cust1",
+          "email": "cust1@example.com",
+          "password": "Cust!12345",
+          "name": "客户一",
+          "role": "customer"
+        }'
 # 记下响应里的 user.id，下文写作 CUSTOMER_ID
 ```
 

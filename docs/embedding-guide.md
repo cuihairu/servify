@@ -158,7 +158,14 @@ addresses per endpoint configuration, a background worker delivers asynchronousl
 # 注册端点（管理面，权限面 webhooks）
 curl -X POST https://servify.example.com/api/webhooks \
   -H 'X-API-Key: <SERVICE_API_KEY>' -H 'Content-Type: application/json' \
-  -d '{"url": "https://app.example.com/hooks/servify", "events": ["ticket.created","ticket.assigned","ticket.closed"]}'
+  -d '{
+          "url": "https://app.example.com/hooks/servify",
+          "events": [
+            "ticket.created",
+            "ticket.assigned",
+            "ticket.closed"
+          ]
+        }'
 ```
 
 - Subscribable events are governed by the whitelist returned by `GET /api/webhooks/events`; currently 12 kinds:

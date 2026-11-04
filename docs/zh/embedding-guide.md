@@ -160,7 +160,14 @@ Servify 内置出站 webhook：内部事件总线上的白名单事件按端点�
 # 注册端点（管理面，权限面 webhooks）
 curl -X POST https://servify.example.com/api/webhooks \
   -H 'X-API-Key: <SERVICE_API_KEY>' -H 'Content-Type: application/json' \
-  -d '{"url": "https://app.example.com/hooks/servify", "events": ["ticket.created","ticket.assigned","ticket.closed"]}'
+  -d '{
+          "url": "https://app.example.com/hooks/servify",
+          "events": [
+            "ticket.created",
+            "ticket.assigned",
+            "ticket.closed"
+          ]
+        }'
 ```
 
 - 可订阅事件以 `GET /api/webhooks/events` 返回的白名单为准；当前收录 12 类：

@@ -27,7 +27,13 @@ cd apps/server && go run ./cmd/server
 # 1) 全新实例：注册管理员，响应含 token 与 user.id
 curl -sS -X POST http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","email":"admin@example.com","password":"Admin!12345","name":"Admin","role":"admin"}'
+  -d '{
+          "username": "admin",
+          "email": "admin@example.com",
+          "password": "Admin!12345",
+          "name": "Admin",
+          "role": "admin"
+        }'
 ```
 
 **坐席账号**两步：注册 `role:"agent"` 的用户，再为该用户建坐席实体
@@ -37,7 +43,13 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
 # 2) 坐席用户
 curl -sS -X POST http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"username":"agent1","email":"agent1@example.com","password":"Agent!12345","name":"坐席一","role":"agent"}'
+  -d '{
+          "username": "agent1",
+          "email": "agent1@example.com",
+          "password": "Agent!12345",
+          "name": "坐席一",
+          "role": "agent"
+        }'
 # 记下响应里的 user.id（下一步的 user_id）
 
 # 3) 坐席实体（管理员 token）
