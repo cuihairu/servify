@@ -19,6 +19,7 @@ import (
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	"servify/apps/server/internal/modules/ticket/outbox"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/observability/async"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
@@ -68,6 +69,7 @@ type RuntimeWorkerDependencies interface {
 	AutomationTimersForWorker() automationapp.TimerProcessor
 	ChatConnectorsForWorker() *chatconnector.Supervisor
 	ChatPayloadStoreForWorker() *channel.LocalPayloadStore
+	TicketOutboxForWorker() outbox.WorkerContract
 }
 
 // RegisterDefaultWorkers registers the default background workers for the server runtime.
@@ -81,6 +83,10 @@ func RegisterDefaultWorkers(app *bootstrap.App, cfg *config.Config, db *gorm.DB,
 
 	if processor := deps.WebhookDeliveryForWorker(); processor != nil {
 		app.RegisterWorker(NewWebhookDeliveryWorker(processor, 30*time.Second, app.Logger))
+	}
+
+	if processor := deps.TicketOutboxForWorker(); processor != nil {
+		app.RegisterWorker(NewTicketOutboxWorker(processor, 5*time.Second, app.Logger))
 	}
 
 	if processor := deps.EmailPollAdapterForWorker(); processor != nil {

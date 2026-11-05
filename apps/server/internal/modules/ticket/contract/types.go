@@ -3,25 +3,27 @@ package contract
 import "time"
 
 type CreateTicketRequest struct {
-	Title        string                 `json:"title" binding:"required"`
-	Description  string                 `json:"description"`
-	CustomerID   uint                   `json:"customer_id" binding:"required"`
-	Category     string                 `json:"category"`
-	Priority     string                 `json:"priority"`
-	Source       string                 `json:"source"`
-	Tags         string                 `json:"tags"`
-	SessionID    string                 `json:"session_id"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
+	Title          string                 `json:"title" binding:"required"`
+	Description    string                 `json:"description"`
+	CustomerID     uint                   `json:"customer_id" binding:"required"`
+	IdempotencyKey string                 `json:"idempotency_key"`
+	Category       string                 `json:"category"`
+	Priority       string                 `json:"priority"`
+	Source         string                 `json:"source"`
+	Tags           string                 `json:"tags"`
+	SessionID      string                 `json:"session_id"`
+	CustomFields   map[string]interface{} `json:"custom_fields"`
 }
 
 // CreateVisitorTicketRequest 是访客工单创建的最小面（M3 移动 SDK 配套 §10 #4）：
 // 免认证通道按 session 归属租户 scope，分类/优先级/来源由服务端固定默认值
 // （general/normal/chat），自定义字段与标签不开放给访客。
 type CreateVisitorTicketRequest struct {
-	SessionID   string `json:"session_id" binding:"required"`
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description"`
-	AISummary   string `json:"ai_summary"`
+	SessionID      string `json:"session_id" binding:"required"`
+	Title          string `json:"title" binding:"required"`
+	Description    string `json:"description"`
+	AISummary      string `json:"ai_summary"`
+	IdempotencyKey string `json:"idempotency_key"`
 }
 
 type UpdateTicketRequest struct {

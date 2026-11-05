@@ -11,6 +11,7 @@ import (
 	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/models"
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
+	ticketoutbox "servify/apps/server/internal/modules/ticket/outbox"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 	"servify/apps/server/internal/platform/eventbus"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -80,6 +81,9 @@ func TestBuildRuntimeAssemblesFullGraph(t *testing.T) {
 	}
 	if rt.SLAServiceForWorker() == nil {
 		t.Fatal("expected SLA service for worker")
+	}
+	if rt.TicketOutboxForWorker() == nil {
+		t.Fatal("expected ticket outbox service for worker")
 	}
 
 	deps := rt.RouterDependencies()
@@ -169,6 +173,19 @@ func TestRuntimeStopWithoutMessageRouter(t *testing.T) {
 	rt := &Runtime{}
 	if err := rt.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop() with nil router = %v", err)
+	}
+}
+
+func TestRuntimeTicketOutboxForWorkerUnwired(t *testing.T) {
+	// outbox repo/bus 未接线时保持 worker 未注册（nil 分支）。
+	rt := &Runtime{}
+	if rt.TicketOutboxForWorker() != nil {
+		t.Fatal("expected nil ticket outbox worker when outbox not wired")
+	}
+	// 只接 repo、缺 bus：同样返回 nil。
+	rt2 := &Runtime{ticketOutbox: ticketoutbox.NewGormRepository(newRuntimeTestDB(t))}
+	if rt2.TicketOutboxForWorker() != nil {
+		t.Fatal("expected nil when bus missing")
 	}
 }
 

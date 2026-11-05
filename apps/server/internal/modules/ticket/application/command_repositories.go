@@ -8,6 +8,13 @@ import (
 
 type CommandRepository interface {
 	CreateTicket(ctx context.Context, ticket *domain.Ticket) error
+	// CreateTicketAtomically writes ticket + initial status record + outbox
+	// event in one DB transaction. It is idempotent on ticket.IdempotencyKey:
+	// a retry with the same key returns the already-created ticket without
+	// writing a duplicate row or duplicate outbox event. buildOutbox is called
+	// inside the transaction after the ticket row has its ID, so the outbox
+	// payload can embed the assigned ID; it may return nil to skip the outbox.
+	CreateTicketAtomically(ctx context.Context, ticket *domain.Ticket, initialStatus *domain.StatusChange, buildOutbox func(*domain.Ticket) *domain.OutboxEvent) (created bool, err error)
 	UpdateTicket(ctx context.Context, ticket *domain.Ticket) error
 	UpdateTicketWithStatus(ctx context.Context, ticket *domain.Ticket, fromStatus string, userID uint, reason string) error
 	AssignTicket(ctx context.Context, ticket *domain.Ticket, previousAgentID *uint, fromStatus string, userID uint, reason string) error

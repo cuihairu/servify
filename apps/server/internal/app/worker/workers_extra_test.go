@@ -28,6 +28,7 @@ import (
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	satisfinfra "servify/apps/server/internal/modules/satisfaction/infra"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	"servify/apps/server/internal/modules/ticket/outbox"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
@@ -889,6 +890,10 @@ func (d fullRuntimeWorkerDeps) ChatPayloadStoreForWorker() *channel.LocalPayload
 	return d.payloadStore
 }
 
+func (fullRuntimeWorkerDeps) TicketOutboxForWorker() outbox.WorkerContract {
+	return &outbox.Processor{Repo: &outbox.GormRepository{}, Dispatcher: &outbox.BusDispatcher{}}
+}
+
 func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 	app, err := bootstrap.BuildApp(config.GetDefaultConfig())
 	if err != nil {
@@ -910,6 +915,7 @@ func TestRegisterDefaultWorkersRegistersAllWorkers(t *testing.T) {
 		"statistics-daily-stats":  true,
 		"sla-monitor":             true,
 		"webhook-delivery":        true,
+		"ticket-outbox":           true,
 		"email-poll":              true,
 		"quality-review-scan":     true,
 		"waiting-queue-dispatch":  true,
@@ -1080,5 +1086,99 @@ func TestChatConnectorWorkerStartStopLifecycle(t *testing.T) {
 	defer cancel()
 	if err := w.Stop(stopCtx); err != nil {
 		t.Fatalf("Stop() = %v", err)
+	}
+}
+
+// ticketOutboxStub 是 outbox.WorkerContract 桩：单轮阻塞直至 ctx 取消。
+type ticketOutboxStub struct {
+	started chan struct{}
+}
+
+func (t *ticketOutboxStub) ProcessDueEvents(ctx context.Context, now time.Time) int {
+	if t.started != nil {
+		select {
+		case t.started <- struct{}{}:
+		default:
+		}
+	}
+	<-ctx.Done()
+	return 0
+}
+
+// ticketOutboxCountStub 返回固定 processed 数，触发 worker 的日志分支。
+type ticketOutboxCountStub struct {
+	calls  atomic.Int64
+	result int
+}
+
+func (t *ticketOutboxCountStub) ProcessDueEvents(ctx context.Context, now time.Time) int {
+	t.calls.Add(1)
+	return t.result
+}
+
+func TestTicketOutboxWorkerLifecycle(t *testing.T) {
+	started := make(chan struct{}, 1)
+	w := NewTicketOutboxWorker(&ticketOutboxStub{started: started}, 10*time.Millisecond, discardLogger()).(*TicketOutboxWorker)
+	if w.Name() != "ticket-outbox" {
+		t.Fatalf("unexpected worker name: %s", w.Name())
+	}
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected first outbox cycle to start")
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	// 重复 Stop 幂等。
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("second Stop() error = %v", err)
+	}
+}
+
+func TestTicketOutboxWorkerConstructorDefaults(t *testing.T) {
+	w := NewTicketOutboxWorker(&ticketOutboxCountStub{}, 0, nil).(*TicketOutboxWorker)
+	if w.interval != 5*time.Second {
+		t.Fatalf("default interval = %v, want 5s", w.interval)
+	}
+	if w.logger == nil {
+		t.Fatal("nil logger must fall back to standard logger")
+	}
+	if w.Name() != "ticket-outbox" {
+		t.Fatalf("Name() = %q", w.Name())
+	}
+}
+
+func TestTicketOutboxWorkerNilServiceAndDoubleStart(t *testing.T) {
+	w := NewTicketOutboxWorker(nil, time.Minute, nil)
+	if err := w.Start(); err != nil {
+		t.Fatalf("Start() with nil service = %v", err)
+	}
+	if err := w.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() before start = %v", err)
+	}
+
+	proc := &ticketOutboxCountStub{result: 1}
+	w2 := NewTicketOutboxWorker(proc, 15*time.Millisecond, discardLogger())
+	if err := w2.Start(); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	if err := w2.Start(); err != nil {
+		t.Fatalf("second Start() must be a no-op, got %v", err)
+	}
+	waitAtLeast(t, 2*time.Second, func() bool { return proc.calls.Load() >= 1 }, "worker never ran")
+	if err := w2.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() = %v", err)
+	}
+}
+
+func TestTicketOutboxWorkerStopContextError(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	w := &TicketOutboxWorker{cancel: cancel, done: make(chan struct{})}
+	if err := w.Stop(preCancelledCtx()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Stop() with cancelled ctx = %v, want context.Canceled", err)
 	}
 }

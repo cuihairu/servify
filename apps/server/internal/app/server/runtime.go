@@ -33,6 +33,7 @@ import (
 	sladelivery "servify/apps/server/internal/modules/sla/delivery"
 	suggestiondelivery "servify/apps/server/internal/modules/suggestion/delivery"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
+	ticketoutbox "servify/apps/server/internal/modules/ticket/outbox"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	voicedelivery "servify/apps/server/internal/modules/voice/delivery"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
@@ -139,6 +140,8 @@ type Runtime struct {
 	chatPayloads     *channel.LocalPayloadStore
 	chatReplay       *ChatInboxReplayer
 	chatNotifier     *chatConnectorNotifier
+	ticketOutbox     *ticketoutbox.GormRepository
+	ticketOutboxBus  *ticketoutbox.BusDispatcher
 }
 
 type websocketRunner interface {
@@ -238,6 +241,16 @@ func (rt *Runtime) SLAServiceForWorker() slapp.SLAMonitor {
 // WebhookDeliveryForWorker returns the webhook delivery processor for worker use.
 func (rt *Runtime) WebhookDeliveryForWorker() webhookapp.Processor {
 	return rt.webhookService
+}
+
+// TicketOutboxForWorker returns the ticket reliable-event outbox processor
+// for worker use. nil (when the outbox repo was not wired) keeps the worker
+// unregistered.
+func (rt *Runtime) TicketOutboxForWorker() ticketoutbox.WorkerContract {
+	if rt.ticketOutbox == nil || rt.ticketOutboxBus == nil {
+		return nil
+	}
+	return &ticketoutbox.Processor{Repo: rt.ticketOutbox, Dispatcher: rt.ticketOutboxBus}
 }
 
 // EmailPollAdapterForWorker returns the email poll adapter when the email channel

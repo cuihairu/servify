@@ -106,8 +106,8 @@ func TestOrchCovApplyCreateTicketSideEffects(t *testing.T) {
 	created, err := o.ApplyCreateTicketSideEffects(ctx, &models.Ticket{ID: 5, CustomerID: 2})
 	require.NoError(t, err)
 	assert.Equal(t, uint(5), created.ID)
-	require.Len(t, bus.events, 1)
-	assert.Equal(t, "ticket.created", bus.events[0].Name())
+	// ticket.created 可靠事件由 outbox 统一投递，side-effect 不再直接发布。
+	assert.Len(t, bus.events, 0)
 	assert.Len(t, sla.checkCalls, 1)
 }
 

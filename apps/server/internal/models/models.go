@@ -122,26 +122,27 @@ type Agent struct {
 
 // 工单模型
 type Ticket struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	TenantID    string         `gorm:"index:idx_tickets_scope" json:"tenant_id"`
-	WorkspaceID string         `gorm:"index:idx_tickets_scope" json:"workspace_id"`
-	Title       string         `gorm:"not null" json:"title"`
-	Description string         `gorm:"type:text" json:"description"`
-	AISummary   string         `gorm:"type:text" json:"ai_summary"` // 访客工单创建时的 AI 会话摘要（M3 §10 #4）
-	CustomerID  uint           `gorm:"index" json:"customer_id"`
-	AgentID     *uint          `gorm:"index" json:"agent_id"`
-	SessionID   *string        `gorm:"index" json:"session_id"`
-	Category    string         `json:"category"`                         // technical, billing, general, complaint
-	Priority    string         `gorm:"default:'normal'" json:"priority"` // low, normal, high, urgent
-	Status      string         `gorm:"default:'open'" json:"status"`     // open, assigned, in_progress, resolved, closed
-	Source      string         `json:"source"`                           // web, email, phone, chat
-	Tags        string         `json:"tags"`                             // 标签，逗号分隔
-	DueDate     *time.Time     `json:"due_date"`
-	ResolvedAt  *time.Time     `json:"resolved_at"`
-	ClosedAt    *time.Time     `json:"closed_at"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	TenantID       string         `gorm:"index:idx_tickets_scope;uniqueIndex:uq_tickets_scope_idempotency_key,priority:1" json:"tenant_id"`
+	WorkspaceID    string         `gorm:"index:idx_tickets_scope;uniqueIndex:uq_tickets_scope_idempotency_key,priority:2" json:"workspace_id"`
+	IdempotencyKey *string        `gorm:"uniqueIndex:uq_tickets_scope_idempotency_key,priority:3" json:"idempotency_key,omitempty"`
+	Title          string         `gorm:"not null" json:"title"`
+	Description    string         `gorm:"type:text" json:"description"`
+	AISummary      string         `gorm:"type:text" json:"ai_summary"` // 访客工单创建时的 AI 会话摘要（M3 §10 #4）
+	CustomerID     uint           `gorm:"index" json:"customer_id"`
+	AgentID        *uint          `gorm:"index" json:"agent_id"`
+	SessionID      *string        `gorm:"index" json:"session_id"`
+	Category       string         `json:"category"`                         // technical, billing, general, complaint
+	Priority       string         `gorm:"default:'normal'" json:"priority"` // low, normal, high, urgent
+	Status         string         `gorm:"default:'open'" json:"status"`     // open, assigned, in_progress, resolved, closed
+	Source         string         `json:"source"`                           // web, email, phone, chat
+	Tags           string         `json:"tags"`                             // 标签，逗号分隔
+	DueDate        *time.Time     `json:"due_date"`
+	ResolvedAt     *time.Time     `json:"resolved_at"`
+	ClosedAt       *time.Time     `json:"closed_at"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// 关联关系
 	Customer          User                     `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
@@ -224,6 +225,28 @@ type TicketStatus struct {
 
 	Ticket Ticket `gorm:"foreignKey:TicketID" json:"ticket,omitempty"`
 	User   User   `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// TicketOutbox 是工单可靠事件的持久化 outbox：业务写（工单行、初始状态
+// 记录、事件行）与事件投递在同一 DB 事务提交，worker 异步领取并投递到
+// 事件总线。event_id 全局唯一，重复投递（进程崩溃重试）由 worker 按
+// event_id 去重：同一事件只发布一次，消费者侧天然幂等。
+//
+// 状态机：pending --worker--> delivered / failed(带 next_attempt_at 回到
+// pending 语义) / dead。attempts 记录重试次数。
+type TicketOutbox struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	EventID       string     `gorm:"uniqueIndex:uq_ticket_outbox_event_id;size:128;not null" json:"event_id"`
+	EventName     string     `gorm:"not null" json:"event_name"`
+	AggregateID   string     `gorm:"size:128" json:"aggregate_id"`
+	Payload       string     `gorm:"type:text" json:"payload"`                                                               // 事件 JSON（TicketEvent 序列化）
+	Status        string     `gorm:"default:'pending';index:idx_ticket_outbox_status_next_attempt,priority:1" json:"status"` // pending|delivered|failed|dead
+	Attempts      int        `gorm:"default:0" json:"attempts"`
+	LastError     string     `gorm:"type:text" json:"last_error"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	DeliveredAt   *time.Time `json:"delivered_at"`
+	NextAttemptAt *time.Time `gorm:"index:idx_ticket_outbox_status_next_attempt,priority:2" json:"next_attempt_at"`
 }
 
 // 会话模型（更新）

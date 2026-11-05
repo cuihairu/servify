@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -60,30 +61,51 @@ func (s *CommandService) CreateTicket(ctx context.Context, cmd CreateTicketComma
 	}
 
 	ticket := &domain.Ticket{
-		Title:       strings.TrimSpace(cmd.Title),
-		Description: strings.TrimSpace(cmd.Description),
-		CustomerID:  cmd.CustomerID,
-		Category:    category,
-		Priority:    priority,
-		Status:      "open",
-		Source:      source,
-		Tags:        strings.TrimSpace(cmd.Tags),
-		SessionID:   cmd.SessionID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Title:          strings.TrimSpace(cmd.Title),
+		Description:    strings.TrimSpace(cmd.Description),
+		CustomerID:     cmd.CustomerID,
+		IdempotencyKey: idempotencyPtr(cmd.IdempotencyKey),
+		Category:       category,
+		Priority:       priority,
+		Status:         "open",
+		Source:         source,
+		Tags:           strings.TrimSpace(cmd.Tags),
+		SessionID:      cmd.SessionID,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
-
-	if err := s.repo.CreateTicket(ctx, ticket); err != nil {
+	initialStatus := &domain.StatusChange{
+		UserID:     0,
+		FromStatus: "",
+		ToStatus:   "open",
+		Reason:     "create_ticket",
+		CreatedAt:  now,
+	}
+	_, err = s.repo.CreateTicketAtomically(ctx, ticket, initialStatus, func(created *domain.Ticket) *domain.OutboxEvent {
+		event := NewTicketEvent(ctx, TicketCreatedEventName, MapTicket(*created))
+		// TicketEvent 仅含可序列化标量字段，json.Marshal 不会失败，错误
+		// 分支为不可达死代码（与 platform/realtime/webrtc_service.go 同口径）。
+		payload, _ := json.Marshal(event)
+		return &domain.OutboxEvent{
+			EventID:     event.ID(),
+			EventName:   event.Name(),
+			AggregateID: event.AggregateID(),
+			Payload:     string(payload),
+		}
+	})
+	if err != nil {
 		return nil, err
 	}
 	dto := MapTicket(*ticket)
-	if err := s.recordStatusChange(ctx, ticket.ID, 0, "", "open", "create_ticket"); err != nil {
-		return nil, err
-	}
-	if err := s.publishTicketEvent(ctx, TicketCreatedEventName, dto); err != nil {
-		return nil, err
-	}
 	return &dto, nil
+}
+
+func idempotencyPtr(v string) *string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 func (s *CommandService) UpdateTicket(ctx context.Context, ticketID uint, cmd UpdateTicketCommand) (*TicketDTO, error) {

@@ -15,6 +15,7 @@ import (
 	routingdelivery "servify/apps/server/internal/modules/routing/delivery"
 	satisfapp "servify/apps/server/internal/modules/satisfaction/application"
 	slapp "servify/apps/server/internal/modules/sla/application"
+	"servify/apps/server/internal/modules/ticket/outbox"
 	webhookapp "servify/apps/server/internal/modules/webhook/application"
 	"servify/apps/server/internal/platform/channel"
 	"servify/apps/server/internal/platform/channel/chatconnector"
@@ -135,6 +136,10 @@ func (f *fakeRuntimeWorkerDependencies) ChatConnectorsForWorker() *chatconnector
 }
 
 func (f *fakeRuntimeWorkerDependencies) ChatPayloadStoreForWorker() *channel.LocalPayloadStore {
+	return nil
+}
+
+func (f *fakeRuntimeWorkerDependencies) TicketOutboxForWorker() outbox.WorkerContract {
 	return nil
 }
 

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -47,6 +48,7 @@ func newTicketDeliveryDB(t *testing.T) *gorm.DB {
 		&models.TicketStatus{},
 		&models.TicketComment{},
 		&models.Session{},
+		&models.TicketOutbox{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -152,9 +154,12 @@ func TestHandlerAssemblyCreateTicketFullFlow(t *testing.T) {
 		t.Fatalf("unexpected status history: %+v", history)
 	}
 
-	names := bus.published()
-	if len(names) != 1 || names[0] != "ticket.created" {
-		t.Fatalf("expected ticket.created event, got %v", names)
+	var outboxRows []models.TicketOutbox
+	if err := db.Where("aggregate_id = ?", fmt.Sprintf("ticket:%d", got.ID)).Find(&outboxRows).Error; err != nil {
+		t.Fatalf("load outbox: %v", err)
+	}
+	if len(outboxRows) != 1 || outboxRows[0].EventName != "ticket.created" || outboxRows[0].Status != "pending" {
+		t.Fatalf("expected one pending ticket.created outbox event, got %+v", outboxRows)
 	}
 }
 

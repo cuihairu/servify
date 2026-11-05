@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"servify/apps/server/internal/models"
@@ -27,16 +28,20 @@ func TestHandlerAssemblyCreateVisitorTicketFullFlow(t *testing.T) {
 	}
 
 	got, err := adapter.CreateVisitorTicket(ctx, &ticketcontract.CreateVisitorTicketRequest{
-		SessionID:   "m-visitor1",
-		Title:       "打不开页面",
-		Description: "点击按钮无响应",
-		AISummary:   "访客反馈页面按钮无响应，已建议清除缓存",
+		SessionID:      "m-visitor1",
+		Title:          "打不开页面",
+		Description:    "点击按钮无响应",
+		AISummary:      "访客反馈页面按钮无响应，已建议清除缓存",
+		IdempotencyKey: "visitor-key-1",
 	})
 	if err != nil {
 		t.Fatalf("CreateVisitorTicket() error = %v", err)
 	}
 	if got.ID == 0 || got.Status != "open" || got.Title != "打不开页面" {
 		t.Fatalf("unexpected ticket: %+v", got)
+	}
+	if got.IdempotencyKey == nil || *got.IdempotencyKey != "visitor-key-1" {
+		t.Fatalf("unexpected idempotency key: %+v", got.IdempotencyKey)
 	}
 	// 访客无 customer 主体；scope 从 session 继承；ai_summary 落列。
 	if got.CustomerID != 0 || got.TenantID != "tenant-9" || got.WorkspaceID != "ws-9" {
@@ -69,9 +74,12 @@ func TestHandlerAssemblyCreateVisitorTicketFullFlow(t *testing.T) {
 	if len(history) != 1 || history[0].ToStatus != "open" || history[0].Reason != "访客工单创建" {
 		t.Fatalf("unexpected status history: %+v", history)
 	}
-	names := bus.published()
-	if len(names) != 1 || names[0] != "ticket.created" {
-		t.Fatalf("expected ticket.created event, got %v", names)
+	var outboxRows []models.TicketOutbox
+	if err := db.Where("aggregate_id = ?", fmt.Sprintf("ticket:%d", got.ID)).Find(&outboxRows).Error; err != nil {
+		t.Fatalf("load outbox: %v", err)
+	}
+	if len(outboxRows) != 1 || outboxRows[0].EventName != "ticket.created" || outboxRows[0].Status != "pending" {
+		t.Fatalf("expected one pending ticket.created outbox event, got %+v", outboxRows)
 	}
 }
 

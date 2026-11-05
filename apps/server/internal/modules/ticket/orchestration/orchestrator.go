@@ -191,7 +191,9 @@ func (o *TicketOrchestrator) ApplyCreateTicketSideEffects(ctx context.Context, t
 		return nil, err
 	}
 
-	o.publishTicketModuleEvent(ctx, ticketapp.TicketCreatedEventName, createdTicket)
+	// ticket.created 可靠事件由 outbox 统一投递（create 事务内已落 outbox 行），
+	// 这里不再直接发布——避免与 outbox worker 重复投递（事件按 event_id 去重
+	// 的语义在 outbox 侧，双路径会产生两个不同 event_id 的同名事件）。
 	o.evaluateTicketSLA(ctx, createdTicket, false, false)
 	return createdTicket, nil
 }

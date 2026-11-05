@@ -61,6 +61,7 @@ import (
 	ticketapp "servify/apps/server/internal/modules/ticket/application"
 	ticketdelivery "servify/apps/server/internal/modules/ticket/delivery"
 	ticketinfra "servify/apps/server/internal/modules/ticket/infra"
+	ticketoutbox "servify/apps/server/internal/modules/ticket/outbox"
 	translationapp "servify/apps/server/internal/modules/translation/application"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	translationinfra "servify/apps/server/internal/modules/translation/infra"
@@ -506,6 +507,10 @@ func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {
 		SLA:          slaService,
 		Satisfaction: satisfactionService,
 	}).AttachBusinessMetrics(rt.BusinessMetrics)
+	// 工单可靠事件 outbox（工单行、初始状态记录与事件行同事务提交）：
+	// repo 与 dispatcher 供 worker 领取投递；repo 同时注入 create 路径。
+	rt.ticketOutbox = ticketoutbox.NewGormRepository(rt.DB)
+	rt.ticketOutboxBus = ticketoutbox.NewBusDispatcher(rt.Bus)
 	rt.TicketHandlerService = ticketHandler
 	rt.TicketReaderService = ticketdelivery.NewReaderServiceAdapter(rt.DB)
 	// 访客工单（M3 §10 #4）：与管理面 ticket 装配同源复用（同一 adapter 实现

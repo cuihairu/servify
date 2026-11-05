@@ -3,14 +3,15 @@ package application
 import "time"
 
 type CreateTicketCommand struct {
-	Title       string
-	Description string
-	CustomerID  uint
-	Category    string
-	Priority    string
-	Source      string
-	Tags        string
-	SessionID   *string
+	Title          string
+	Description    string
+	CustomerID     uint
+	IdempotencyKey string
+	Category       string
+	Priority       string
+	Source         string
+	Tags           string
+	SessionID      *string
 }
 
 type UpdateTicketCommand struct {

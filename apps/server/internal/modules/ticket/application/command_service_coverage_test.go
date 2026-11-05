@@ -32,6 +32,16 @@ func (s *flakyCommandRepo) CreateTicket(ctx context.Context, ticket *domain.Tick
 	return s.stubCommandRepo.CreateTicket(ctx, ticket)
 }
 
+func (s *flakyCommandRepo) CreateTicketAtomically(ctx context.Context, ticket *domain.Ticket, initialStatus *domain.StatusChange, buildOutbox func(*domain.Ticket) *domain.OutboxEvent) (bool, error) {
+	if s.createErr != nil {
+		return false, s.createErr
+	}
+	if s.recordErr != nil {
+		return false, s.recordErr
+	}
+	return s.stubCommandRepo.CreateTicketAtomically(ctx, ticket, initialStatus, buildOutbox)
+}
+
 func (s *flakyCommandRepo) UpdateTicket(ctx context.Context, ticket *domain.Ticket) error {
 	if s.updateErr != nil {
 		return s.updateErr
@@ -128,10 +138,25 @@ func TestCoverageCreateTicketErrorBranches(t *testing.T) {
 		t.Fatal("expected record status change error")
 	}
 
+	// 事件不再在 CreateTicket 内直接发布（outbox 统一投递），bus down 不再出错。
 	repo = &flakyCommandRepo{stubCommandRepo: stubCommandRepo{customerExists: true}}
 	svc := NewCommandServiceWithBus(repo, &stubEventBus{err: errors.New("bus down")})
-	if _, err := svc.CreateTicket(ctx, CreateTicketCommand{Title: "t", CustomerID: 1}); err == nil {
-		t.Fatal("expected publish error")
+	if _, err := svc.CreateTicket(ctx, CreateTicketCommand{Title: "t", CustomerID: 1}); err != nil {
+		t.Fatalf("expected success (outbox owns delivery), got %v", err)
+	}
+
+	// 非空幂等键透传到工单领域模型（空串已由 idempotencyPtr 归一为 nil）。
+	repo = &flakyCommandRepo{stubCommandRepo: stubCommandRepo{customerExists: true}}
+	created, err := NewCommandService(repo).CreateTicket(ctx, CreateTicketCommand{
+		Title:          "t",
+		CustomerID:     1,
+		IdempotencyKey: "  key-1  ",
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket() error = %v", err)
+	}
+	if repo.tickets[created.ID].IdempotencyKey == nil || *repo.tickets[created.ID].IdempotencyKey != "key-1" {
+		t.Fatal("expected trimmed idempotency key on ticket")
 	}
 }
 

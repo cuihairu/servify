@@ -52,6 +52,7 @@ func ticketCovMigrate(t *testing.T, db *gorm.DB) {
 		&models.TicketComment{},
 		&models.TicketFile{},
 		&models.TicketStatus{},
+		&models.TicketOutbox{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -1131,4 +1132,194 @@ func TestTicketCovTransactionErrorBranches(t *testing.T) {
 			t.Fatalf("expected gorm.ErrRecordNotFound, got %v", err)
 		}
 	})
+}
+
+func TestTicketCovCreateTicketModelAtomically(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+
+	ticket := &models.Ticket{Title: "atomic", CustomerID: 1, Status: "open"}
+	status := &models.TicketStatus{UserID: 1, FromStatus: "", ToStatus: "open", Reason: "created"}
+	key := "atomic-key-1"
+	ticket.IdempotencyKey = &key
+	created, err := repo.CreateTicketModelAtomically(ctx, ticket, nil, status, func(created *models.Ticket) *models.TicketOutbox {
+		return &models.TicketOutbox{EventID: "evt-atomic-1", EventName: "ticket.created", AggregateID: fmt.Sprintf("ticket:%d", created.ID), Payload: "{}"}
+	})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.NotZero(t, ticket.ID)
+	require.NotZero(t, status.TicketID)
+
+	// 同键重试：返回已有工单，不新建、不重复状态/outbox。
+	second := &models.Ticket{Title: "atomic2", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	created2, err := repo.CreateTicketModelAtomically(ctx, second, nil, &models.TicketStatus{UserID: 1, ToStatus: "open"}, func(*models.Ticket) *models.TicketOutbox {
+		return &models.TicketOutbox{EventID: "evt-atomic-2", EventName: "ticket.created", AggregateID: "x", Payload: "{}"}
+	})
+	require.NoError(t, err)
+	require.False(t, created2)
+	require.Equal(t, ticket.ID, second.ID)
+
+	var cnt int64
+	require.NoError(t, db.Model(&models.TicketStatus{}).Where("ticket_id = ?", ticket.ID).Count(&cnt).Error)
+	require.Equal(t, int64(1), cnt)
+	require.NoError(t, db.Model(&models.TicketOutbox{}).Where("aggregate_id = ?", fmt.Sprintf("ticket:%d", ticket.ID)).Count(&cnt).Error)
+	require.Equal(t, int64(1), cnt)
+}
+
+func TestTicketCovCreateTicketModelAtomicallyScopeKey(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := ticketCovScopeCtx("t1", "w1")
+	key := "scope-key"
+	ticket := &models.Ticket{Title: "a", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	_, err := repo.CreateTicketModelAtomically(ctx, ticket, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.NoError(t, err)
+
+	// 不同 scope 同 key 允许（scope 隔离）。
+	ctx2 := ticketCovScopeCtx("t2", "w2")
+	ticket2 := &models.Ticket{Title: "b", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	_, err = repo.CreateTicketModelAtomically(ctx2, ticket2, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.NoError(t, err)
+	require.NotEqual(t, ticket.ID, ticket2.ID)
+}
+
+func TestTicketCovCreateTicketAtomicallyDomain(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := ticketCovScopeCtx("t1", "w1")
+	key := "dom-key"
+	ticket := &domain.Ticket{Title: "d", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	created, err := repo.CreateTicketAtomically(ctx, ticket, &domain.StatusChange{UserID: 0, ToStatus: "open"}, func(*domain.Ticket) *domain.OutboxEvent {
+		return &domain.OutboxEvent{EventID: "evt-d", EventName: "ticket.created", AggregateID: "ticket:x", Payload: "{}"}
+	})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.NotZero(t, ticket.ID)
+
+	// 同键重试命中已有。
+	ticket2 := &domain.Ticket{Title: "d2", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	created2, err := repo.CreateTicketAtomically(ctx, ticket2, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.NoError(t, err)
+	require.False(t, created2)
+	require.Equal(t, ticket.ID, ticket2.ID)
+
+	// 新键 + buildOutbox 返回 nil：outbox 闭包走 event==nil 分支（不写
+	// outbox 行），覆盖 domain 包装器的 nil 守卫。
+	ticket3 := &domain.Ticket{Title: "d3", CustomerID: 1, Status: "open", IdempotencyKey: covStrPtr("dom-nil-outbox")}
+	created3, err := repo.CreateTicketAtomically(ctx, ticket3, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.NoError(t, err)
+	require.True(t, created3)
+	require.NotZero(t, ticket3.ID)
+}
+
+// covStrPtr 是无 build tag 的本地 helper（integration 测试文件里的
+// strPtrInfra 在非 integration 基准编译下不可见）。
+func covStrPtr(s string) *string { return &s }
+
+func TestTicketCovCreateTicketModelAtomicallyErrors(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	key := "err-key"
+
+	// findTicketByScopeAndKey 非 ErrRecordNotFound（表不存在 → 错误）。
+	require.NoError(t, db.Migrator().DropTable("tickets"))
+	ticket := &models.Ticket{Title: "e", CustomerID: 1, Status: "open", IdempotencyKey: &key}
+	_, err := repo.CreateTicketModelAtomically(ctx, ticket, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.Error(t, err)
+	require.NoError(t, db.Migrator().DropTable("ticket_outboxes"))
+	// 恢复 tickets 表（重建）。
+	require.NoError(t, db.AutoMigrate(&models.Ticket{}))
+}
+
+func TestTicketCovCreateTicketAtomicallyErrorBranches(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+
+	// 无幂等键，ticket create 失败（表不存在）。
+	require.NoError(t, db.Migrator().DropTable("tickets"))
+	_, err := repo.CreateTicketAtomically(ctx, &domain.Ticket{Title: "e", CustomerID: 1}, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.Error(t, err)
+	require.NoError(t, db.AutoMigrate(&models.Ticket{}))
+}
+
+func TestTicketCovCreateTicketModelAtomicallyMidTxErrors(t *testing.T) {
+	// 各阶段注入故障：ticket 落库失败 / 状态落库失败 / outbox 落库失败。
+	t.Run("ticket create fails", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		require.NoError(t, db.Migrator().DropTable("tickets"))
+		_, err := repo.CreateTicketModelAtomically(context.Background(), &models.Ticket{Title: "e", CustomerID: 1}, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+		require.Error(t, err)
+	})
+
+	t.Run("status create fails", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		require.NoError(t, db.Migrator().DropTable("ticket_statuses"))
+		_, err := repo.CreateTicketModelAtomically(context.Background(), &models.Ticket{Title: "e", CustomerID: 1}, nil, &models.TicketStatus{ToStatus: "open"}, func(*models.Ticket) *models.TicketOutbox { return nil })
+		require.Error(t, err)
+	})
+
+	t.Run("outbox create fails", func(t *testing.T) {
+		db := newTicketCovTestDB(t)
+		repo := NewGormRepository(db)
+		require.NoError(t, db.Migrator().DropTable("ticket_outboxes"))
+		_, err := repo.CreateTicketModelAtomically(context.Background(), &models.Ticket{Title: "e", CustomerID: 1}, nil, nil, func(*models.Ticket) *models.TicketOutbox { return &models.TicketOutbox{EventID: "x"} })
+		require.Error(t, err)
+	})
+}
+
+func TestTicketCovCreateTicketModelAtomicallyCustomFieldError(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	require.NoError(t, db.Migrator().DropTable("ticket_custom_field_values"))
+	_, err := repo.CreateTicketModelAtomically(context.Background(), &models.Ticket{Title: "e", CustomerID: 1},
+		[]models.TicketCustomFieldValue{{CustomFieldID: 7, Value: "v"}}, nil,
+		func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.Error(t, err)
+}
+
+func TestTicketCovCreateTicketAtomicallyTxErrors(t *testing.T) {
+	// domain 路径：ticket 落库失败（表不存在）。
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	require.NoError(t, db.Migrator().DropTable("tickets"))
+	_, err := repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1}, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.Error(t, err)
+	require.NoError(t, db.AutoMigrate(&models.Ticket{}))
+
+	// domain 路径：outbox 落库失败。
+	require.NoError(t, db.Migrator().DropTable("ticket_outboxes"))
+	_, err = repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1}, nil, func(*domain.Ticket) *domain.OutboxEvent { return &domain.OutboxEvent{EventID: "x"} })
+	require.Error(t, err)
+}
+
+func TestTicketCovCreateTicketAtomicallyStatusAndOutboxErrors(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+
+	// 状态落库失败（表不存在）。
+	require.NoError(t, db.Migrator().DropTable("ticket_statuses"))
+	_, err := repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1},
+		&domain.StatusChange{ToStatus: "open"}, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.Error(t, err)
+	require.NoError(t, db.AutoMigrate(&models.TicketStatus{}))
+
+	// outbox 落库失败（表不存在）。
+	require.NoError(t, db.Migrator().DropTable("ticket_outboxes"))
+	_, err = repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1},
+		&domain.StatusChange{ToStatus: "open"}, func(*domain.Ticket) *domain.OutboxEvent { return &domain.OutboxEvent{EventID: "x"} })
+	require.Error(t, err)
+}
+
+func TestTicketCovCreateTicketAtomicallyPropagatesModelError(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	// 模型路径失败（tickets 表不存在）→ domain 包装器传播错误。
+	require.NoError(t, db.Migrator().DropTable("tickets"))
+	_, err := repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1}, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
+	require.Error(t, err)
 }

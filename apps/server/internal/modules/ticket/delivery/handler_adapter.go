@@ -2,6 +2,8 @@ package delivery
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -10,6 +12,7 @@ import (
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
 	ticketinfra "servify/apps/server/internal/modules/ticket/infra"
 	ticketorchestration "servify/apps/server/internal/modules/ticket/orchestration"
+	ticketoutbox "servify/apps/server/internal/modules/ticket/outbox"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
 )
 
@@ -19,6 +22,7 @@ type HandlerServiceAdapter struct {
 	query        ticketStatsQueryService
 	cmd          *ticketapp.CommandService
 	orchestrator *ticketorchestration.TicketOrchestrator
+	outboxRepo   *ticketoutbox.GormRepository
 	db           *gorm.DB
 	metrics      *svcmetrics.BusinessMetrics
 }
@@ -78,18 +82,55 @@ func (a *HandlerServiceAdapter) CreateTicket(ctx context.Context, req *ticketcon
 	if err != nil {
 		return nil, err
 	}
+	if key := strings.TrimSpace(req.IdempotencyKey); key != "" {
+		prepared.Ticket.IdempotencyKey = &key
+	}
 	initialStatus := &models.TicketStatus{
 		UserID:     0,
 		FromStatus: "",
 		ToStatus:   "open",
 		Reason:     "工单创建",
 	}
-	if err := a.repo.CreateTicketModelWithCustomFieldsAndStatus(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus); err != nil {
+	created, err := a.repo.CreateTicketModelAtomically(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus, func(ticket *models.Ticket) *models.TicketOutbox {
+		return a.buildCreateOutbox(ctx, ticket)
+	})
+	if err != nil {
 		return nil, err
 	}
-	// tenant 体系尚未落到工单模型，先按单租户口径记 default。
-	a.metrics.RecordTicketCreated("default", prepared.Ticket.Priority)
+	if created {
+		// tenant 体系尚未落到工单模型，先按单租户口径记 default。
+		a.metrics.RecordTicketCreated("default", prepared.Ticket.Priority)
+	}
 	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
+}
+
+func (a *HandlerServiceAdapter) buildCreateOutbox(ctx context.Context, ticket *models.Ticket) *models.TicketOutbox {
+	dto := ticketapp.TicketDTO{
+		ID:         ticket.ID,
+		Title:      ticket.Title,
+		CustomerID: ticket.CustomerID,
+		AgentID:    ticket.AgentID,
+		SessionID:  ticket.SessionID,
+		Category:   ticket.Category,
+		Priority:   ticket.Priority,
+		Status:     ticket.Status,
+		Source:     ticket.Source,
+		Tags:       ticket.Tags,
+		CreatedAt:  ticket.CreatedAt,
+		UpdatedAt:  ticket.UpdatedAt,
+		ResolvedAt: ticket.ResolvedAt,
+		ClosedAt:   ticket.ClosedAt,
+	}
+	event := ticketapp.NewTicketEvent(ctx, ticketapp.TicketCreatedEventName, dto)
+	// TicketEvent 仅含可序列化标量字段，json.Marshal 不会失败，错误分支
+	// 为不可达死代码（与 platform/realtime/webrtc_service.go 同口径）。
+	payload, _ := json.Marshal(event)
+	return &models.TicketOutbox{
+		EventID:     event.ID(),
+		EventName:   event.Name(),
+		AggregateID: event.AggregateID(),
+		Payload:     string(payload),
+	}
 }
 
 func (a *HandlerServiceAdapter) GetTicketByID(ctx context.Context, ticketID uint) (*models.Ticket, error) {
@@ -104,20 +145,28 @@ func (a *HandlerServiceAdapter) CreateVisitorTicket(ctx context.Context, req *ti
 	if err != nil {
 		return nil, err
 	}
+	if key := strings.TrimSpace(req.IdempotencyKey); key != "" {
+		prepared.Ticket.IdempotencyKey = &key
+	}
 	initialStatus := &models.TicketStatus{
 		UserID:     0,
 		FromStatus: "",
 		ToStatus:   "open",
 		Reason:     "访客工单创建",
 	}
-	if err := a.repo.CreateTicketModelWithCustomFieldsAndStatus(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus); err != nil {
+	created, err := a.repo.CreateTicketModelAtomically(ctx, prepared.Ticket, prepared.CustomFieldValues, initialStatus, func(ticket *models.Ticket) *models.TicketOutbox {
+		return a.buildCreateOutbox(ctx, ticket)
+	})
+	if err != nil {
 		return nil, err
 	}
-	tenantID := prepared.Ticket.TenantID
-	if tenantID == "" {
-		tenantID = "default"
+	if created {
+		tenantID := prepared.Ticket.TenantID
+		if tenantID == "" {
+			tenantID = "default"
+		}
+		a.metrics.RecordTicketCreated(tenantID, prepared.Ticket.Priority)
 	}
-	a.metrics.RecordTicketCreated(tenantID, prepared.Ticket.Priority)
 	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
 }
 

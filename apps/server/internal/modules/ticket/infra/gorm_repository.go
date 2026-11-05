@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -234,6 +235,63 @@ func (r *GormRepository) CreateTicket(ctx context.Context, ticket *domain.Ticket
 	return nil
 }
 
+// CreateTicketAtomically writes the ticket row, the initial status record and
+// the reliable-event outbox row in one DB transaction. It is idempotent on the
+// scoped idempotency key: a retry with the same key returns the already-created
+// ticket (created=false) without writing a duplicate row or duplicate event.
+// A non-empty key and a duplicate insert conflict are both treated as the
+// same-key replay path.
+func (r *GormRepository) CreateTicketAtomically(ctx context.Context, ticket *domain.Ticket, initialStatus *domain.StatusChange, buildOutbox func(*domain.Ticket) *domain.OutboxEvent) (created bool, err error) {
+	model := mapTicketModel(*ticket)
+	applyTicketScopeFields(ctx, &model)
+
+	modelStatus := (*models.TicketStatus)(nil)
+	if initialStatus != nil {
+		modelStatus = &models.TicketStatus{
+			UserID:     initialStatus.UserID,
+			FromStatus: initialStatus.FromStatus,
+			ToStatus:   initialStatus.ToStatus,
+			Reason:     initialStatus.Reason,
+			CreatedAt:  initialStatus.CreatedAt,
+		}
+	}
+	created, err = r.CreateTicketModelAtomically(ctx, &model, nil, modelStatus, func(createdModel *models.Ticket) *models.TicketOutbox {
+		event := buildOutbox(ticket)
+		if event == nil {
+			return nil
+		}
+		return &models.TicketOutbox{
+			EventID:     event.EventID,
+			EventName:   event.EventName,
+			AggregateID: event.AggregateID,
+			Payload:     event.Payload,
+		}
+	})
+	if err != nil {
+		return false, err
+	}
+	*ticket = mapTicket(model)
+	if initialStatus != nil && modelStatus != nil {
+		initialStatus.ID = modelStatus.ID
+	}
+	return created, nil
+}
+
+func (r *GormRepository) findTicketByScopeAndKey(db *gorm.DB, ctx context.Context, key string) (*models.Ticket, error) {
+	var model models.Ticket
+	q := db.Model(&models.Ticket{}).Where("idempotency_key = ?", key)
+	if tenantID := platformauth.TenantIDFromContext(ctx); tenantID != "" {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+	if workspaceID := platformauth.WorkspaceIDFromContext(ctx); workspaceID != "" {
+		q = q.Where("workspace_id = ?", workspaceID)
+	}
+	if err := q.First(&model).Error; err != nil {
+		return nil, err
+	}
+	return &model, nil
+}
+
 func (r *GormRepository) CreateTicketModelWithCustomFieldsAndStatus(
 	ctx context.Context,
 	ticket *models.Ticket,
@@ -263,6 +321,61 @@ func (r *GormRepository) CreateTicketModelWithCustomFieldsAndStatus(
 
 func (r *GormRepository) CreateTicketModelWithCustomFields(ctx context.Context, ticket *models.Ticket, values []models.TicketCustomFieldValue) error {
 	return r.CreateTicketModelWithCustomFieldsAndStatus(ctx, ticket, values, nil)
+}
+
+// CreateTicketModelAtomically writes ticket + custom fields + initial status +
+// outbox event in one DB transaction, idempotent on the scoped idempotency key
+// (a retry with the same key returns the already-created ticket, created=false,
+// and writes no duplicate rows). buildOutbox runs inside the transaction after
+// the ticket row has its ID; nil return skips the outbox.
+func (r *GormRepository) CreateTicketModelAtomically(
+	ctx context.Context,
+	ticket *models.Ticket,
+	values []models.TicketCustomFieldValue,
+	initialStatus *models.TicketStatus,
+	buildOutbox func(*models.Ticket) *models.TicketOutbox,
+) (created bool, err error) {
+	applyTicketScopeFields(ctx, ticket)
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if ticket.IdempotencyKey != nil && strings.TrimSpace(*ticket.IdempotencyKey) != "" {
+			existing, findErr := r.findTicketByScopeAndKey(tx, ctx, *ticket.IdempotencyKey)
+			if findErr == nil {
+				*ticket = *existing
+				return nil
+			}
+			if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+				return findErr
+			}
+		}
+		if err := tx.Create(ticket).Error; err != nil {
+			return err
+		}
+		if len(values) > 0 {
+			for i := range values {
+				values[i].TicketID = ticket.ID
+			}
+			if err := tx.Create(&values).Error; err != nil {
+				return err
+			}
+		}
+		if initialStatus != nil {
+			initialStatus.TicketID = ticket.ID
+			if err := tx.Create(initialStatus).Error; err != nil {
+				return err
+			}
+		}
+		if outboxRow := buildOutbox(ticket); outboxRow != nil {
+			outboxRow.Status = "pending"
+			outboxRow.CreatedAt = time.Now()
+			outboxRow.UpdatedAt = time.Now()
+			if err := tx.Create(outboxRow).Error; err != nil {
+				return err
+			}
+		}
+		created = true
+		return nil
+	})
+	return created, err
 }
 
 func (r *GormRepository) UpdateTicket(ctx context.Context, ticket *domain.Ticket) error {
@@ -765,43 +878,45 @@ func applyListTicketFilters(db *gorm.DB, query application.ListTicketsQuery) *go
 
 func mapTicket(model models.Ticket) domain.Ticket {
 	return domain.Ticket{
-		ID:          model.ID,
-		Title:       model.Title,
-		Description: model.Description,
-		CustomerID:  model.CustomerID,
-		AgentID:     model.AgentID,
-		SessionID:   model.SessionID,
-		Category:    model.Category,
-		Priority:    model.Priority,
-		Status:      model.Status,
-		Source:      model.Source,
-		Tags:        model.Tags,
-		DueDate:     model.DueDate,
-		ResolvedAt:  model.ResolvedAt,
-		ClosedAt:    model.ClosedAt,
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
+		ID:             model.ID,
+		Title:          model.Title,
+		Description:    model.Description,
+		CustomerID:     model.CustomerID,
+		AgentID:        model.AgentID,
+		IdempotencyKey: model.IdempotencyKey,
+		SessionID:      model.SessionID,
+		Category:       model.Category,
+		Priority:       model.Priority,
+		Status:         model.Status,
+		Source:         model.Source,
+		Tags:           model.Tags,
+		DueDate:        model.DueDate,
+		ResolvedAt:     model.ResolvedAt,
+		ClosedAt:       model.ClosedAt,
+		CreatedAt:      model.CreatedAt,
+		UpdatedAt:      model.UpdatedAt,
 	}
 }
 
 func mapTicketModel(ticket domain.Ticket) models.Ticket {
 	return models.Ticket{
-		ID:          ticket.ID,
-		Title:       ticket.Title,
-		Description: ticket.Description,
-		CustomerID:  ticket.CustomerID,
-		AgentID:     ticket.AgentID,
-		SessionID:   ticket.SessionID,
-		Category:    ticket.Category,
-		Priority:    ticket.Priority,
-		Status:      ticket.Status,
-		Source:      ticket.Source,
-		Tags:        ticket.Tags,
-		DueDate:     ticket.DueDate,
-		ResolvedAt:  ticket.ResolvedAt,
-		ClosedAt:    ticket.ClosedAt,
-		CreatedAt:   ticket.CreatedAt,
-		UpdatedAt:   ticket.UpdatedAt,
+		ID:             ticket.ID,
+		Title:          ticket.Title,
+		Description:    ticket.Description,
+		CustomerID:     ticket.CustomerID,
+		AgentID:        ticket.AgentID,
+		IdempotencyKey: ticket.IdempotencyKey,
+		SessionID:      ticket.SessionID,
+		Category:       ticket.Category,
+		Priority:       ticket.Priority,
+		Status:         ticket.Status,
+		Source:         ticket.Source,
+		Tags:           ticket.Tags,
+		DueDate:        ticket.DueDate,
+		ResolvedAt:     ticket.ResolvedAt,
+		ClosedAt:       ticket.ClosedAt,
+		CreatedAt:      ticket.CreatedAt,
+		UpdatedAt:      ticket.UpdatedAt,
 	}
 }
 

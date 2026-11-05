@@ -55,6 +55,31 @@ func (s *stubCommandRepo) CreateTicket(ctx context.Context, ticket *domain.Ticke
 	return nil
 }
 
+func (s *stubCommandRepo) CreateTicketAtomically(ctx context.Context, ticket *domain.Ticket, initialStatus *domain.StatusChange, buildOutbox func(*domain.Ticket) *domain.OutboxEvent) (bool, error) {
+	if s.err != nil {
+		return false, s.err
+	}
+	if ticket.IdempotencyKey != nil && *ticket.IdempotencyKey != "" {
+		for _, existing := range s.tickets {
+			if existing.IdempotencyKey != nil && *existing.IdempotencyKey == *ticket.IdempotencyKey {
+				*ticket = *existing
+				return false, nil
+			}
+		}
+	}
+	if err := s.CreateTicket(ctx, ticket); err != nil {
+		return false, err
+	}
+	if initialStatus != nil {
+		change := *initialStatus
+		if err := s.RecordStatusChange(ctx, ticket.ID, &change); err != nil {
+			return false, err
+		}
+	}
+	_ = buildOutbox(ticket)
+	return true, nil
+}
+
 func (s *stubCommandRepo) UpdateTicket(ctx context.Context, ticket *domain.Ticket) error {
 	if s.err != nil {
 		return s.err
@@ -212,8 +237,9 @@ func TestCommandServiceCreateTicket(t *testing.T) {
 	if len(repo.statusChanges[got.ID]) != 1 || repo.statusChanges[got.ID][0].ToStatus != "open" {
 		t.Fatalf("expected initial open status history, got %+v", repo.statusChanges[got.ID])
 	}
-	if len(bus.events) != 1 || bus.events[0].Name() != TicketCreatedEventName {
-		t.Fatalf("expected created event, got %+v", bus.events)
+	// ticket.created 可靠事件由 outbox 统一投递，CreateTicket 不再直接发布。
+	if len(bus.events) != 0 {
+		t.Fatalf("expected no direct bus event (outbox owns delivery), got %+v", bus.events)
 	}
 }
 

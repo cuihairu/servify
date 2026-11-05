@@ -113,6 +113,7 @@ func newTestDBForTickets(t *testing.T) *gorm.DB {
 		&models.TicketStatus{},
 		&models.TicketComment{},
 		&models.TicketFile{},
+		&models.TicketOutbox{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
