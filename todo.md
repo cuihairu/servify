@@ -175,7 +175,7 @@
 
 ### P0
 
-- [ ] AI 无依据回答策略：零命中、知识服务故障和低置信时按可配置策略澄清/拒答或请求人工；原因：`apps/server/internal/modules/ai/delivery/enhanced_service.go:323-358,510-521` 零命中仍直答且置信为常数；验收：非流式和流式分别覆盖零命中、超时、命中和明确请求人工，访客看到一致策略，答案及原因可审计。
+- [x] AI 无依据回答策略：零命中、知识服务故障和低置信时按可配置策略澄清/拒答或请求人工；原因：`apps/server/internal/modules/ai/delivery/enhanced_service.go:323-358,510-521` 零命中仍直答且置信为常数；验收：非流式和流式分别覆盖零命中、超时、命中和明确请求人工，访客看到一致策略，答案及原因可审计。 — f8ef920，`make test` 全绿覆盖率 100.0%；新增 `ai.no_evidence` 配置（zero_hit_action/low_confidence_action/confidence_threshold，动作 direct/clarify/refuse/handoff，默认 direct 历史兼容），`KnowledgeUnavailableError` 区分检索故障与零命中，ai_answers.reason（000033）落审计原因，WS `reason` 透出；`no_evidence_policy_test.go` 覆盖非流式零命中 clarify/refuse/handoff、低置信 refuse、命中直答、明确转人工、知识故障策略与直答兜底、流式零命中 clarify/refuse、流式低置信 handoff、流式知识故障 refuse、未知动作归一 direct；`ai_no_evidence_config_test.go` 覆盖动作白名单与阈值边界；`answer_recording_test.go` 验证 reason 落库；`ai_response_payload_unit_test.go` 验证 reason 透出与 direct 省略。
 - [ ] 工单创建原子化和幂等：把工单、初始状态记录和可靠事件写入同一事务或 outbox，并支持请求幂等键；原因：`apps/server/internal/modules/ticket/application/command_service.go:76-85` 分步提交后可能返回错误；验收：逐步注入故障及同键重试不产生孤儿记录或重复单，恢复后事件恰投递可去重。
 - [ ] 转接并发与目标校验：检查目标坐席作用域及可接状态，以事务/版本控制更新分配并处理系统消息失败；原因：`apps/server/internal/modules/conversation/application/service.go:230-261` 本方法读改写且忽略消息错误；验收：通过真实 API 并发转接和无效/跨作用域目标测试，最终分配、负载、时间线一致，失败有明确结果。
 - [ ] WeKnora 重建语义：实现远端可支持的重建并确认完成，或明确返回不支持且 UI 不显示成功；原因：`apps/server/internal/platform/knowledgeprovider/weknora/provider.go:103-107` 空操作返回 nil；验收：真实或协议契约测试验证请求、失败和状态，未支持路径不产生成功记录。
