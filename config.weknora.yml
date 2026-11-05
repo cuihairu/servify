@@ -36,6 +36,10 @@ ai:
   handoff:
     enabled: true
     confidence_threshold: 0.65
+  no_evidence:
+    zero_hit_action: direct
+    low_confidence_action: direct
+    confidence_threshold: 0
 
 dify:
   enabled: true

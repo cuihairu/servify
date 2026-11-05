@@ -34,6 +34,7 @@ type AnswerRecord struct {
 	Answer     string
 	Confidence float64
 	Strategy   string
+	Reason     string
 	Sources    []aidomain.SourceSnapshot
 }
 
@@ -60,6 +61,7 @@ func (s *gormAnswerStore) RecordAnswer(ctx context.Context, record AnswerRecord)
 		Answer:      record.Answer,
 		Confidence:  record.Confidence,
 		Strategy:    record.Strategy,
+		Reason:      record.Reason,
 		SourcesJSON: sourcesJSON,
 	}
 	if err := s.repo.Create(ctx, answer); err != nil {
@@ -81,6 +83,7 @@ func RecordResponse(ctx context.Context, store AnswerStore, query, sessionID str
 		Answer:     resp.Content,
 		Confidence: resp.Confidence,
 		Strategy:   resp.Strategy,
+		Reason:     resp.Reason,
 		Sources:    sourceSnapshots(resp.Sources),
 	}
 	id, err := store.RecordAnswer(ctx, record)

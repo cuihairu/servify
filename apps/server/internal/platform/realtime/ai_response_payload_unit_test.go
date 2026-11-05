@@ -53,3 +53,18 @@ func TestAIResponsePayloadAnswerID(t *testing.T) {
 		t.Fatalf("expected answer_id passthrough, got %v", payload["answer_id"])
 	}
 }
+
+// TestAIResponsePayloadNoEvidenceReason 无依据策略的审计原因（reason）非空
+// 时透出；direct 策略省略（向后兼容）。
+func TestAIResponsePayloadNoEvidenceReason(t *testing.T) {
+	resp := &aidelivery.AIResponse{Content: "clarify", Confidence: 0.6, Source: "system", NextAction: "clarify", Reason: "zero_hit"}
+	payload := aiResponsePayload(resp)
+	if payload["reason"] != "zero_hit" || payload["next_action"] != "clarify" {
+		t.Fatalf("expected reason passthrough, got %v", payload)
+	}
+
+	plain := aiResponsePayload(&aidelivery.AIResponse{Content: "hi", Confidence: 0.6, Source: "ai"})
+	if _, ok := plain["reason"]; ok {
+		t.Fatalf("reason must be omitted for direct, got %v", plain)
+	}
+}

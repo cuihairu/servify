@@ -2,8 +2,11 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	aimodule "servify/apps/server/internal/modules/ai/application"
 )
 
 // AIStreamEvent 流式首答事件：ContentDelta 为增量文本；终末事件恒为
@@ -43,6 +46,27 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryStream(ctx context.Context, 
 
 	stream, err := s.activeOrchestrator().HandleStream(ctx, s.buildAIRequest(ctx, query, sessionID))
 	if err != nil {
+		// 知识服务故障与零命中分开：有配置的非直答策略时返回可审计固定
+		// 响应，避免调用方把故障流回退成模型直答。
+		var knowledgeErr *aimodule.KnowledgeUnavailableError
+		if errors.As(err, &knowledgeErr) {
+			action := normalizeNoEvidenceAction(s.runtimeParams.NoEvidence.ZeroHitAction)
+			if action != NoEvidenceDirect {
+				if s.knowledgeProviderEnabled {
+					s.circuitBreaker.OnFailure()
+				}
+				final := &AIResponse{
+					Confidence: 0.6,
+					Source:     "system",
+				}
+				s.applyNoEvidenceAction(final, action, "knowledge_unavailable")
+				s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), time.Since(start).Seconds())
+				out := make(chan AIStreamEvent, 1)
+				out <- AIStreamEvent{Done: true, Final: final}
+				close(out)
+				return out, nil
+			}
+		}
 		return nil, err
 	}
 	if stream == nil {

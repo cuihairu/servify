@@ -20,6 +20,9 @@ type AIAnswer struct {
 	// Strategy 答案产生方式：weknora/dify/llm/fallback/transfer（与
 	// ai/delivery AIResponse.Strategy 同口径）。
 	Strategy string `gorm:"index" json:"strategy"`
+	// Reason 无依据回答策略原因码（audit）：zero_hit / low_confidence /
+	// knowledge_unavailable；策略为 direct 时为空串。
+	Reason string `gorm:"index" json:"reason"`
 	// SourcesJSON 引用来源快照（[]SourceSnapshot 序列化），空串=零命中。
 	SourcesJSON string    `gorm:"type:text" json:"-"`
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`

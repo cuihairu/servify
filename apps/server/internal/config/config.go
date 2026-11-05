@@ -182,6 +182,8 @@ type AIConfig struct {
 	OpenAI    OpenAIConfig    `yaml:"openai" json:"openai,omitempty"`
 	Anthropic AnthropicConfig `yaml:"anthropic" json:"anthropic,omitempty"`
 	Handoff   HandoffConfig   `yaml:"handoff" json:"handoff,omitempty"`
+	// NoEvidence 无知识依据（零命中/低置信）时的访客面策略。
+	NoEvidence NoEvidenceConfig `yaml:"no_evidence" json:"no_evidence,omitempty"`
 	// 语音链路（Phase 2 实时翻译，docs/realtime-translation-design.md §2/§3.1）：
 	// provider 空 = 未启用（合法形态，装配层跳过接线）。放 ai.* 是因为
 	// 翻译语音是 LLM 同源的 AI 出站面（§4.2），与 voice.*（通话录音/转写
@@ -195,6 +197,17 @@ type AIConfig struct {
 // 恰落在零命中 confidence=0.6 与有命中 confidence≥0.7 之间。
 type HandoffConfig struct {
 	Enabled             bool    `yaml:"enabled" json:"enabled"`
+	ConfidenceThreshold float64 `yaml:"confidence_threshold" json:"confidence_threshold"`
+}
+
+type NoEvidenceConfig struct {
+	// ZeroHitAction 检索零命中时的策略：direct（直答，历史默认）| clarify
+	// （澄清追问）| refuse（无依据拒答）| handoff（请求人工）。空值 = direct。
+	ZeroHitAction string `yaml:"zero_hit_action" json:"zero_hit_action,omitempty"`
+	// LowConfidenceAction 检索有命中但置信低于阈值时的策略（取值同
+	// ZeroHitAction）。空值 = direct（直答并可按 handoff 门附建议，历史行为）。
+	LowConfidenceAction string `yaml:"low_confidence_action" json:"low_confidence_action,omitempty"`
+	// ConfidenceThreshold 低置信判定阈值，(0,1]；零值 = 不启用低置信门。
 	ConfidenceThreshold float64 `yaml:"confidence_threshold" json:"confidence_threshold"`
 }
 
@@ -835,6 +848,25 @@ func InsecureDefaults(cfg *Config) []string {
 		warnings = append(warnings, fmt.Sprintf("ai.handoff.confidence_threshold must be in (0,1] when handoff is enabled (got %v)", cfg.AI.Handoff.ConfidenceThreshold))
 	}
 
+	// no_evidence 策略校验：仅允许 direct/clarify/refuse/handoff；低置信门
+	// 开启时阈值必须 (0,1]。空值在 GetDefaultConfig 已归一为 direct，这里
+	// 只拦显式非法值。
+	noEvidence := cfg.AI.NoEvidence
+	for _, field := range []struct {
+		name  string
+		value string
+	}{{"ai.no_evidence.zero_hit_action", noEvidence.ZeroHitAction},
+		{"ai.no_evidence.low_confidence_action", noEvidence.LowConfidenceAction}} {
+		switch strings.ToLower(strings.TrimSpace(field.value)) {
+		case "", "direct", "clarify", "refuse", "handoff":
+		default:
+			warnings = append(warnings, fmt.Sprintf("%s must be 'direct', 'clarify', 'refuse' or 'handoff' (got %q)", field.name, field.value))
+		}
+	}
+	if noEvidence.ConfidenceThreshold < 0 || noEvidence.ConfidenceThreshold > 1 {
+		warnings = append(warnings, fmt.Sprintf("ai.no_evidence.confidence_threshold must be in [0,1] (got %v)", noEvidence.ConfidenceThreshold))
+	}
+
 	if strings.EqualFold(strings.TrimSpace(cfg.Upload.Provider), "s3") {
 		if strings.TrimSpace(cfg.Upload.S3.Bucket) == "" {
 			warnings = append(warnings, "upload.provider is s3 but upload.s3.bucket is empty")
@@ -1106,6 +1138,13 @@ func GetDefaultConfig() *Config {
 			Handoff: HandoffConfig{
 				Enabled:             true,
 				ConfidenceThreshold: 0.65,
+			},
+			NoEvidence: NoEvidenceConfig{
+				// 历史兼容：零命中仍直答（direct），低置信不额外拦截
+				// （direct + handoff 门），运维显式配置才收紧。
+				ZeroHitAction:       "direct",
+				LowConfidenceAction: "direct",
+				ConfidenceThreshold: 0,
 			},
 		},
 		Dify: DifyConfig{

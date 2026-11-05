@@ -43,5 +43,10 @@ func resolveLLMRuntime(cfg *config.Config, resolver *configscope.Resolver) (llm.
 		TimeoutMs:                  timeoutMs,
 		HandoffEnabled:             cfg.AI.Handoff.Enabled,
 		HandoffConfidenceThreshold: cfg.AI.Handoff.ConfidenceThreshold,
+		NoEvidence: aidelivery.NoEvidencePolicy{
+			ZeroHitAction:       aidelivery.NoEvidenceAction(cfg.AI.NoEvidence.ZeroHitAction),
+			LowConfidenceAction: aidelivery.NoEvidenceAction(cfg.AI.NoEvidence.LowConfidenceAction),
+			ConfidenceThreshold: cfg.AI.NoEvidence.ConfidenceThreshold,
+		},
 	}, nil
 }

@@ -27,6 +27,9 @@ type AIResponse struct {
 	NextAction string `json:"next_action,omitempty"`
 	// HandoffReason NextAction=handoff 时的原因码，当前固定 "low_confidence"。
 	HandoffReason string `json:"handoff_reason,omitempty"`
+	// Reason 无依据回答策略的原因码（audit）："zero_hit" / "low_confidence" /
+	// "knowledge_unavailable"。策略为 direct 时省略。
+	Reason string `json:"reason,omitempty"`
 	// AnswerID 首答持久化 ID（B3-1b §5.3 反馈闭环）：记录路径装配后回填，
 	// 客户端凭它调 POST /api/v1/ai/feedback；未装配记录路径时省略。
 	AnswerID uint `json:"answer_id,omitempty"`

@@ -192,6 +192,11 @@ func runtimeServiceFromResolvedConfig(openAIConfig config.OpenAIConfig, difyConf
 		TimeoutMs:                  timeoutMs,
 		HandoffEnabled:             aiCfg.Handoff.Enabled,
 		HandoffConfidenceThreshold: aiCfg.Handoff.ConfidenceThreshold,
+		NoEvidence: aidelivery.NoEvidencePolicy{
+			ZeroHitAction:       aidelivery.NoEvidenceAction(aiCfg.NoEvidence.ZeroHitAction),
+			LowConfidenceAction: aidelivery.NoEvidenceAction(aiCfg.NoEvidence.LowConfidenceAction),
+			ConfidenceThreshold: aiCfg.NoEvidence.ConfidenceThreshold,
+		},
 	}, logger, agentToolPorts)
 	return orchestrated.WithSessionHistory(historyLoader).AttachBusinessMetrics(businessMeter)
 }

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -33,6 +34,33 @@ type AIRuntimeParams struct {
 	// "零命中 confidence=0.6" 与 "有命中 confidence≥0.7" 之间——开箱即
 	// "知识库答不上来才建议转人工"。
 	HandoffConfidenceThreshold float64
+	// NoEvidence 无知识依据策略：零命中/低置信时按配置澄清、拒答、请求人工
+	// 或直答。零值 = 历史行为（零命中直答、低置信直答并按 handoff 门附建议）。
+	NoEvidence NoEvidencePolicy
+}
+
+// NoEvidenceAction 无依据回答的访客面动作。
+type NoEvidenceAction string
+
+const (
+	// NoEvidenceDirect 直接作答（历史默认）。
+	NoEvidenceDirect NoEvidenceAction = "direct"
+	// NoEvidenceClarify 澄清追问，不编造答案。
+	NoEvidenceClarify NoEvidenceAction = "clarify"
+	// NoEvidenceRefuse 无依据拒答。
+	NoEvidenceRefuse NoEvidenceAction = "refuse"
+	// NoEvidenceHandoff 请求人工接管。
+	NoEvidenceHandoff NoEvidenceAction = "handoff"
+)
+
+// NoEvidencePolicy 配置化的无依据回答策略。
+type NoEvidencePolicy struct {
+	// ZeroHitAction 检索零命中时动作（空值 = direct）。
+	ZeroHitAction NoEvidenceAction
+	// LowConfidenceAction 检索有命中但置信低于阈值时动作（空值 = direct）。
+	LowConfidenceAction NoEvidenceAction
+	// ConfidenceThreshold 低置信判定阈值；<=0 关闭低置信门（历史行为）。
+	ConfidenceThreshold float64
 }
 
 // SessionHistoryLoader 是多轮上下文的最小依赖口：编排服务只关心"按会话
@@ -241,6 +269,29 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		err = fmt.Errorf("ai orchestrator returned empty result (session_id=%s)", sessionID)
 	}
 	if err != nil {
+		// 知识服务故障（检索失败/超时）与零命中分开处理：有配置的非直答
+		// 策略时按无依据策略响应（reason=knowledge_unavailable），避免把
+		// 故障降级成"模型继续编造"；否则维持历史 fallback 兜底。
+		var knowledgeErr *aimodule.KnowledgeUnavailableError
+		if errors.As(err, &knowledgeErr) {
+			action := normalizeNoEvidenceAction(s.runtimeParams.NoEvidence.ZeroHitAction)
+			if action != NoEvidenceDirect {
+				if s.knowledgeProviderEnabled {
+					s.circuitBreaker.OnFailure()
+				}
+				enhanced := &EnhancedAIResponse{
+					AIResponse: &AIResponse{
+						Confidence: 0.6,
+						Source:     "system",
+					},
+					Strategy: string(action),
+					Duration: time.Since(start),
+				}
+				s.applyNoEvidenceAction(enhanced.AIResponse, action, "knowledge_unavailable")
+				s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), time.Since(start).Seconds())
+				return enhanced, nil
+			}
+		}
 		if s.knowledgeProviderEnabled {
 			s.circuitBreaker.OnFailure()
 		}
@@ -334,6 +385,7 @@ func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResp
 		Strategy: "llm",
 		Duration: result.Latency,
 	}
+	zeroHit := len(result.Sources) == 0
 	if len(result.Sources) > 0 {
 		enhanced.Strategy = s.activeKnowledgeProviderID()
 		enhanced.Sources = toWeKnoraSources(result.Sources)
@@ -351,11 +403,26 @@ func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResp
 		// FallbackUsageCount——那是编排失败兜底专用的指标。
 		recordedStrategy = "primary"
 	}
+	// 无依据策略：零命中或低置信时按配置澄清/拒答/请求人工，避免"不确定仍
+	// 编造答案"。direct 保持历史直答（并按下方置信门附建议）。
+	policy := s.runtimeParams.NoEvidence
+	action := s.noEvidenceAction(zeroHit, aiResp.Confidence, policy)
+	if action != "" && action != NoEvidenceDirect {
+		reason := "low_confidence"
+		if zeroHit {
+			reason = "zero_hit"
+		}
+		s.applyNoEvidenceAction(aiResp, action, reason)
+		recordedStrategy = string(action)
+		enhanced.Strategy = string(action)
+	}
 	// 置信门：低于阈值只产出"建议转人工"的元数据（next_action/handoff_reason），
 	// 不改写答案内容、不执行转接——真正转接仍由用户显式发起或关键词触发。
-	if s.runtimeParams.HandoffEnabled && aiResp.Confidence < s.runtimeParams.HandoffConfidenceThreshold {
-		aiResp.NextAction = "handoff"
-		aiResp.HandoffReason = "low_confidence"
+	if action == "" || action == NoEvidenceDirect {
+		if s.runtimeParams.HandoffEnabled && aiResp.Confidence < s.runtimeParams.HandoffConfidenceThreshold {
+			aiResp.NextAction = "handoff"
+			aiResp.HandoffReason = "low_confidence"
+		}
 	}
 	s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", recordedStrategy, result.Latency.Seconds())
 	if result.TokenUsage != nil {
@@ -364,6 +431,47 @@ func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResp
 		s.promMetrics.RecordAILLMTokens(s.aiProviderLabel(), "output", result.TokenUsage.OutputTokens)
 	}
 	return enhanced
+}
+
+// noEvidenceAction 计算无依据策略动作：零命中用 ZeroHitAction；有命中但置信
+// 低于阈值（门开启）用 LowConfidenceAction；否则 direct。未配置动作归一为
+// direct（历史行为）。
+func (s *OrchestratedEnhancedAIService) noEvidenceAction(zeroHit bool, confidence float64, policy NoEvidencePolicy) NoEvidenceAction {
+	if zeroHit {
+		return normalizeNoEvidenceAction(policy.ZeroHitAction)
+	}
+	if policy.ConfidenceThreshold > 0 && confidence < policy.ConfidenceThreshold {
+		return normalizeNoEvidenceAction(policy.LowConfidenceAction)
+	}
+	return NoEvidenceDirect
+}
+
+// applyNoEvidenceAction 改写访客面响应：固定文案（不编造），透出
+// next_action（仅 clarify/handoff 有动作语义）与可审计 reason
+// （zero_hit/low_confidence/knowledge_unavailable）。
+func (s *OrchestratedEnhancedAIService) applyNoEvidenceAction(aiResp *AIResponse, action NoEvidenceAction, reason string) {
+	aiResp.Reason = reason
+	switch action {
+	case NoEvidenceClarify:
+		aiResp.Content = "抱歉，我暂时无法从知识库中找到与您问题直接相关的信息。请补充更多细节或换种方式描述，我会继续为您查找。"
+		aiResp.NextAction = "clarify"
+	case NoEvidenceRefuse:
+		aiResp.Content = "抱歉，当前没有足够依据回答您的问题。为避免误导，我不会猜测答案，请通过人工客服获取准确帮助。"
+	case NoEvidenceHandoff:
+		aiResp.Content = "我来为您转接人工客服，请稍等..."
+		aiResp.NextAction = "handoff"
+		aiResp.HandoffReason = reason
+	}
+}
+
+// normalizeNoEvidenceAction 空值/未知值归一为 direct（历史行为）。
+func normalizeNoEvidenceAction(action NoEvidenceAction) NoEvidenceAction {
+	switch action {
+	case NoEvidenceClarify, NoEvidenceRefuse, NoEvidenceHandoff:
+		return action
+	default:
+		return NoEvidenceDirect
+	}
 }
 
 func (s *OrchestratedEnhancedAIService) ShouldTransferToHuman(query string, sessionHistory []models.Message) bool {

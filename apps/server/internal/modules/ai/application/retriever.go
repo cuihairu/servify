@@ -2,10 +2,32 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"servify/apps/server/internal/platform/knowledgeprovider"
 )
+
+// KnowledgeUnavailableError 标记知识服务故障（检索失败/超时），供编排层
+// 按无依据策略区分"零命中"与"服务不可用"：前者是检索正常返回空，后者是
+// 检索本身失败。Unwrap 保留底层原因供日志。
+type KnowledgeUnavailableError struct {
+	Err error
+}
+
+func (e *KnowledgeUnavailableError) Error() string {
+	if e == nil || e.Err == nil {
+		return "knowledge service unavailable"
+	}
+	return fmt.Sprintf("knowledge service unavailable: %v", e.Err)
+}
+
+func (e *KnowledgeUnavailableError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // Retriever isolates knowledge retrieval policy from the orchestrator.
 type Retriever struct {
@@ -41,5 +63,9 @@ func (r *Retriever) Retrieve(ctx context.Context, req AIRequest) ([]knowledgepro
 		Strategy:        req.RetrievalPolicy.Strategy,
 		ConsistencyMode: knowledgeprovider.ConsistencyEventual,
 	}
-	return r.provider.Search(ctx, searchReq)
+	hits, err := r.provider.Search(ctx, searchReq)
+	if err != nil {
+		return nil, &KnowledgeUnavailableError{Err: err}
+	}
+	return hits, nil
 }

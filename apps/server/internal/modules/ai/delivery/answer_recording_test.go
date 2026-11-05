@@ -50,6 +50,9 @@ func TestRecordResponsePersistsAndStampsAnswerID(t *testing.T) {
 	if row.Strategy != "weknora" || row.Confidence != 0.9 {
 		t.Fatalf("row = %+v", row)
 	}
+	if row.Reason != "" {
+		t.Fatalf("hit answer must not record reason, got %q", row.Reason)
+	}
 	// 来源快照不落 content 全文。
 	if row.SourcesJSON == "" || strings.Contains(row.SourcesJSON, "不应落库的全文") {
 		t.Fatalf("sources snapshot leaked content: %q", row.SourcesJSON)
@@ -64,6 +67,28 @@ func TestRecordResponseNilStoreIsSilent(t *testing.T) {
 	RecordResponse(context.Background(), nil, "q", "s", resp)
 	if resp.AnswerID != 0 {
 		t.Fatalf("nil store must not stamp id, got %d", resp.AnswerID)
+	}
+}
+
+func TestRecordResponsePersistsNoEvidenceReason(t *testing.T) {
+	db := newAnswerRecordingDB(t)
+	store := NewGormAnswerStore(db)
+	resp := &AIResponse{
+		Content:    "抱歉，当前没有足够依据回答您的问题。",
+		Confidence: 0.6,
+		Strategy:   "refuse",
+		Reason:     "zero_hit",
+	}
+	RecordResponse(context.Background(), store, "无依据问题", "conv-no-evidence", resp)
+	if resp.AnswerID == 0 {
+		t.Fatal("expected answer_id stamped on response")
+	}
+	var row aidomain.AIAnswer
+	if err := db.First(&row, resp.AnswerID).Error; err != nil {
+		t.Fatalf("load recorded answer: %v", err)
+	}
+	if row.Strategy != "refuse" || row.Reason != "zero_hit" {
+		t.Fatalf("row = %+v", row)
 	}
 }
 

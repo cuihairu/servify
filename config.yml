@@ -104,6 +104,14 @@ ai:
   handoff:
     enabled: true
     confidence_threshold: 0.65
+  # no_evidence: 无知识依据（零命中/低置信）时的访客面策略。动作取值：
+  #   direct（直接作答，历史默认）| clarify（澄清追问，不编造）|
+  #   refuse（无依据拒答）| handoff（请求人工）。confidence_threshold 为
+  #   低置信判定阈值，(0,1]；0 = 不启用低置信门（历史行为）。
+  no_evidence:
+    zero_hit_action: direct
+    low_confidence_action: direct
+    confidence_threshold: 0
 
 dify:
   enabled: ${DIFY_ENABLED}
