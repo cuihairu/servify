@@ -168,3 +168,43 @@
 - [x] 审核发现：docs/ 新增 pnpm-lock.yaml 后同目录并存 package-lock.json（npm）与 pnpm-lock.yaml（pnpm）两个 lockfile，且 package.json 同时声明 npm 式 overrides（docs/package.json:20-23）与 pnpm.overrides（docs/package.json:26-29）两套覆盖；若实际构建/CI 走 npm（package-lock.json 仍在库）则新 pnpm 锁不被消费，反之亦然，双锁与双覆盖易漂移，建议二选一收敛（docs/package-lock.json，docs/pnpm-lock.yaml:1）。 — 2026-11-05 属实已修复：保留 npm 单锁（docs/package-lock.json，CI 唯一消费路径 .github/workflows/ci.yml:323/340），删除 docs/pnpm-lock.yaml 并移除 docs/package.json 的 `pnpm` 覆盖块（docs/package.json 现仅剩 npm 式 `overrides`）；npm 侧已生效 vite 6.4.4/esbuild 0.25.12/katex 0.18.10（docs/package-lock.json）。
 - [x] 审核发现：go.work.sum 本次新增约 52 行 go.mod 校验和（含 cloud.google.com/go v0.123.0、golang.org/x/exp v0.0.0-20261014143641、honnef.co/go/tools v0.8.2 等图节点）超出提交所述 otelhttp 回滚语义范围，属 go1.27.3 toolchain 对全 workspace 模块图重新对账 / `go work sync` 的旁路产物；已实测 `go mod tidy -diff` 与 `go list -m all` 均 exit 0 且未改动任何文件，无功能影响，仅提示可在后续 `go work sync` 时收敛（go.work.sum:7）。 — 2026-11-05 属实已修复：实测确认 764201e 新增 52 行中仅 20 行为真旁路（go-openapi 系列、otelgrpc v0.72.0、x/exp 20261014、honnef.co/go/tools v0.8.2 等），其余 32 行为 go 工具稳态所必需（`go list -m all`/`go work sync`/`go mod tidy` 共同固定点为 358 行）。已将 go.work.sum 收敛至 358 行固定点（删 20 行），并验证跨 `go list -m all`/`go work sync`/`go mod tidy -diff`（根+apps/server）均稳定不再改动；CI tidy 守卫（.github/workflows/ci.yml:64-66）exit 0。
 - [x] 审核发现：本轮 diff 未见问题（95d6789d..HEAD） — 审核通过，无需改动；证据：git log 95d6789d..HEAD 仅 1 提交（54e3fa8），改动仅 docs 锁收敛（删 docs/pnpm-lock.yaml、移除 docs/package.json pnpm 覆盖块）、go.work.sum 收敛至 358 行固定点、CI Go vet 超时 2→10 分钟及 todo 台账，无 Go/SQL/YAML 语义面；实测 `go -C apps/server mod tidy`+`go work sync`+`go list -m all` 均稳定、`go vet` exit 0、`npm -C docs ci` 冷装 exit 0 且锁无漂移、`npm -C docs run build` exit 0、`make test` exit 0 覆盖率 100.0%。 — 2026-11-05 审核通过
+
+## 深度评审 2026-11-05（codex luna）
+
+详细证据与竞品链接见 `docs/评审/深度评审-2026-11-05.md`；以下任务与原有条目并存，真实 provider 资源阻塞不以模拟验收替代。
+
+### P0
+
+- [ ] AI 无依据回答策略：零命中、知识服务故障和低置信时按可配置策略澄清/拒答或请求人工；原因：`apps/server/internal/modules/ai/delivery/enhanced_service.go:323-358,510-521` 零命中仍直答且置信为常数；验收：非流式和流式分别覆盖零命中、超时、命中和明确请求人工，访客看到一致策略，答案及原因可审计。
+- [ ] 工单创建原子化和幂等：把工单、初始状态记录和可靠事件写入同一事务或 outbox，并支持请求幂等键；原因：`apps/server/internal/modules/ticket/application/command_service.go:76-85` 分步提交后可能返回错误；验收：逐步注入故障及同键重试不产生孤儿记录或重复单，恢复后事件恰投递可去重。
+- [ ] 转接并发与目标校验：检查目标坐席作用域及可接状态，以事务/版本控制更新分配并处理系统消息失败；原因：`apps/server/internal/modules/conversation/application/service.go:230-261` 本方法读改写且忽略消息错误；验收：通过真实 API 并发转接和无效/跨作用域目标测试，最终分配、负载、时间线一致，失败有明确结果。
+- [ ] WeKnora 重建语义：实现远端可支持的重建并确认完成，或明确返回不支持且 UI 不显示成功；原因：`apps/server/internal/platform/knowledgeprovider/weknora/provider.go:103-107` 空操作返回 nil；验收：真实或协议契约测试验证请求、失败和状态，未支持路径不产生成功记录。
+- [ ] WeKnora 文档更新容错：设计先新建后切换、补偿或可恢复状态，避免先删旧后上传失败造成内容不可用；原因：`apps/server/internal/platform/knowledgeprovider/weknora/provider.go:69-85`；验收：删除、上传、映射更新各点注入失败，重试后远端与本地映射收敛且旧/新版本可追踪。
+- [ ] WeKnora 删除作用域：贯通知识库 namespace 到删除操作；原因：`apps/server/internal/platform/knowledgeprovider/weknora/provider.go:29-35,65,90-100` 搜索上传与删除的映射不同；验收：两个知识库中分别创建删除，确认只删除指定库中的文档，错误映射被拒绝。
+- [ ] WeKnora 真实服务验收：准备专用可写删资源、版本和凭据，执行 `WEKNORA_ACCEPTANCE_MODE=real`；原因：历史 Docker 验收使用 mock（`docs/acceptance-weknora-docker.md:3-5,22-27`）；验收：脱敏记录真实版本、命中 provider、上传、更新、删除、检索、故障降级及结果，资源缺失保持阻塞。
+- [ ] RAGFlow 真实服务验收：准备专用资源并运行 real 模式；原因：`docs/review/kb-real-acceptance-resources-2026-10-30.md:5-17` 尚无真实资源；验收：记录版本、作用域、CRUD、检索与降级的脱敏结果，失败不标通过。
+- [ ] Dify 真实服务验收：准备专用资源并运行 real 模式；原因：同一资源清单中真实端点和凭据待提供；验收：记录版本、作用域、CRUD、检索与降级的脱敏结果，失败不标通过。
+
+### P1
+
+- [ ] 构建客服知识评测集：覆盖有答案、无答案、过期文档、冲突、多语言和越权问题；原因：现有置信度是检索分数/常数（`apps/server/internal/modules/ai/delivery/enhanced_service.go:510-521`），非正确率；验收：发布脱敏标注集、复现命令和召回、引用正确率、拒答误判及延迟基线。
+- [ ] 调整转人工启发式：用意图边界和可配置规则替代无条件子串及历史长度规则；原因：`apps/server/internal/modules/ai/application/handoff_policy.go:9-33` 易误判；验收：人工请求、普通 agent 单词、长会话及投诉样本均有预期，报告误报漏报。
+- [ ] 评估本地检索候选截断：明确数据规模上限，必要时采用全文/向量索引；原因：`apps/server/internal/platform/knowledgeprovider/local/provider.go:111-120` 先按新旧截断；验收：含旧相关文档的数据集测 recall@k 与 p95，记录规模限制及查询方案。
+- [ ] 明确 hybrid 检索语义：实现关键词与向量融合，或把 local 的 hybrid 配置标为不支持；原因：`apps/server/internal/platform/knowledgeprovider/local/provider.go:292-298` 实际仅 cosine；验收：配置与 API 准确描述策略，词面精确命中和语义命中测试可区分。
+- [ ] 校验 pgvector 维度及索引：对选用模型、实际查询表及迁移做对账；原因：`apps/server/internal/app/bootstrap/migrations/000025_knowledge_bases_chunks.up.sql:41` 固定 1536 维，而另一迁移有 IVFFlat；验收：不匹配在建索引前明确报错，真实 PostgreSQL 的 EXPLAIN 与代表性数据基准归档。
+- [ ] 定义工单重开政策：决定 resolved/closed 遇客户追问时重开还是关联新单；原因：`apps/server/internal/modules/ticket/application/status_policy.go:16-35` 终态不可回 open，Crisp Ticket Center 支持客户持续跟踪；验收：状态图、权限、通知、关联历史及 API/UI 自动化测试一致。
+- [ ] 修正会话指标租户归因：从可信作用域记录租户并约束标签基数；原因：`apps/server/internal/modules/conversation/application/service.go:68-69` 固定 default；验收：两作用域创建会话的指标和审计正确，缺失作用域按明确策略处理。
+- [ ] 验证事件丢失恢复：检查业务写入与 Redis Streams 事件的事务边界及消费者重放；原因：`apps/server/internal/modules/conversation/application/service.go:65-70` 写后发布，`apps/server/internal/platform/eventbus/redis_bus.go:107-120` 写流后通知；验收：进程在各阶段崩溃后重启，时间线无永久漏项、重复事件可去重。
+- [ ] Web 真实浏览器验收：在部署环境验证嵌入、鉴权、断线重连、人工接管、转派、工单与来源展示；原因：首版承诺 `README.zh.md:17-25`；验收：两坐席和访客的可重放记录含版本、网络故障及结果。
+- [ ] 流式取消与持久化验收：覆盖模型中断、客户端断线、重复提交和转人工；原因：流式与非流式共享最终响应路径（`apps/server/internal/modules/ai/delivery/enhanced_service.go:298-314`），完整恢复语义尚未由本评审验证；验收：访客看到的内容、落库状态及重试行为一致且无错误详情泄露。
+- [ ] 核对并修正文档声明：统一 README 四层断言、知识 provider 优先级、WeKnora 初始化命令和无依据精度数字；原因：`README.zh.md:124-130`、`docs/zh/current-architecture.md:9-17`、`WEKNORA_IMPLEMENTATION_COMPLETE.md:73-95` 存在不一致或无可复现实验；验收：每项声明指向当前代码/配置或标记历史，文档链接与命令通过检查。
+- [ ] 检查 WeKnora 示例配置的生产安全：明确 Dify/WeKnora 开关与密钥、CORS、JWT 的实际校验；原因：`config.weknora.yml:40-56,106-108,147-153`；验收：示例有明确非生产标识，生产模式对不安全配置拒绝或给出可验证的安全约束。
+
+### P2
+
+- [ ] 验证多渠道需求及交付边界：对邮件和 Telegram 等选一条真实客户需求试点；原因：Chatwoot 社区版支持多个渠道（评审竞品表），仓库 Telegram 真 token 联调仍阻塞（`todo.md:8`）；验收：记录渠道协议、授权、出入站、重放、失败处理和真实服务证据。
+- [ ] 设计客户工单跟踪入口：先访谈客户再决定是否建设；原因：Crisp Plus 提供 Ticket Center（评审竞品表），Servify 首版只明确后台跟进（`docs/zh/v1-product-scope.md:108-115`）；验收：记录决策及权限、状态、通知原型，若实施则客户只能查看自己的工单并完成端到端测试。
+- [ ] 验证远程协助差异化：选择真实排障场景，评估同意、权限、结束和恢复；原因：`README.zh.md:60-68` 明确尚非完整 co-browsing；验收：客户试用记录、威胁模型及可复现工作流，未实现能力不作为交付承诺。
+- [ ] 对候选开源解析、队列及 LLM SDK 做选型实验：比较许可证、维护、可靠性和自部署依赖；原因：`apps/server/go.mod:7-44` 现有组件不直接提供完整文档管线或专用队列；验收：每类至少两种方案或保留现状的对照、最小实验和明确采纳决定。
+
+- [x] 审核发现：本轮 diff 未见问题（54e3fa8e..HEAD） — 2026-11-05 复核属实：git log 54e3fa8e..HEAD 仅 2 提交（e0c8e27 todo 验证 95d6789d..HEAD、8959c31 dependabot 升级 npm_and_yarn 组 1 目录），git diff 54e3fa8e..HEAD -- '*.go' '*.sql' '*.yml' '*.yaml' '*.sh' 'Dockerfile*' 'Makefile' 为空；改动仅 docs/package-lock.json（vite 6.4.4→6.4.5）、sdk/package.json+7 子包 package.json+sdk/package-lock.json（vite 8.3.3→8.3.5）与 todo.md 台账，无 Go/SQL/YAML 语义面。实测：`npm -C sdk ci --no-audit --no-fund`（冷装）exit 0、`npm -C sdk run typecheck` exit 0、`npm -C sdk run test` 全绿、`npm -C docs ci --no-audit --no-fund`（冷装）exit 0、`npm -C docs run build` exit 0（93.96s，0 404）；锁内 vite 均一致（sdk node_modules/vite=8.3.5，docs=6.4.5），无版本漂移或 frozen-lockfile 冲突；dependabot 提交信息称「1 目录 /docs」但实际同批改了 SDK 依赖，属提交信息卫生（vite 同族补丁升级），非语义/契约/安全缺陷。
