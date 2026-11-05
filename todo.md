@@ -4,7 +4,7 @@
 
 ## 未完成
 
-- [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）—— BLOCKED：env 无 dify/weknora/ragflow 凭据，缺真实远端端点 + 凭证（外部提供）。2026-11-04 复核（env 仍无凭据，仅模板）；本轮跳过；复核 2026-11-05 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）
+- [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）—— BLOCKED：env 无 dify/weknora/ragflow 凭据，缺真实远端端点 + 凭证（外部提供）。2026-11-04 复核（env 仍无凭据，仅模板）；本轮跳过；复核 2026-11-05 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）；复核 2026-11-06 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）
 - [ ] 聊天平台 Phase 0：Telegram 真实 bot token 联调（隐私模式 / 逐群授权核实与运营授权记录）—— BLOCKED：env 无 telegram/bot_token，token 外部提供；仓内实现已收口。2026-11-04 复核（env 仍无 token）；本轮跳过；复核 2026-11-05 仍缺 外部 telegram bot token（env 无 telegram/bot_token）
 
 ## 已定口径
@@ -223,3 +223,12 @@
 - [ ] 审核发现：知识服务故障触发熔断后，后续跳过检索的请求被当成零命中且成功响应会重置熔断器，导致故障原因审计错误并过早恢复访问（apps/server/internal/modules/ai/delivery/enhanced_service.go:280）。
 - [ ] 审核发现：流式知识服务故障分支未设置响应 strategy，导致访客终帧及答案记录缺少实际执行的策略（apps/server/internal/modules/ai/delivery/streaming.go:58）。
 - [ ] 审核发现：无依据策略在模型及工具循环完成后才执行，零命中或低置信时模型仍可能先调用人工转接等有副作用的工具，即使配置要求拒答或澄清（apps/server/internal/modules/ai/delivery/enhanced_service.go:409）。
+- [ ] 审核发现：访客请求的认证上下文没有租户作用域，幂等查询因此只按键查找，可返回其他租户的工单并泄露其内容（apps/server/internal/modules/ticket/infra/gorm_repository.go:282）。
+- [ ] 审核发现：幂等键只按租户和工作区区分而未绑定访客会话或请求内容，同一作用域的不同访客使用相同键时会收到彼此的工单（apps/server/internal/modules/ticket/infra/gorm_repository.go:341）。
+- [ ] 审核发现：并发同键请求均可能通过预查询，后到的插入仅返回唯一约束错误而不读取已创建工单，无法实现并发幂等重试（apps/server/internal/modules/ticket/infra/gorm_repository.go:350）。
+- [ ] 审核发现：领域工单创建的 outbox 回调使用尚未同步数据库生成 ID 的原 ticket，导致创建事件的工单 ID 和聚合 ID 为零（apps/server/internal/modules/ticket/infra/gorm_repository.go:259）。
+- [ ] 审核发现：outbox 领取仅执行查询而未原子标记或加锁，多实例 worker 可同时投递同一行并互相覆盖投递状态（apps/server/internal/modules/ticket/outbox/gorm_repository.go:34）。
+- [ ] 审核发现：发布成功后标记 delivered 前崩溃或更新失败会再次发布同一事件，而 event_id 唯一索引只约束 outbox 行，不能防止总线和消费者重复处理（apps/server/internal/modules/ticket/outbox/worker.go:32）。
+- [ ] 审核发现：同键重试命中既有工单后仍执行自动分配及 SLA 副作用，重复请求可能重复派单或重复执行 SLA 处理（apps/server/internal/modules/ticket/delivery/handler_adapter.go:104）。
+- [ ] 审核发现：创建事件改为仅由后台 worker 投递后，未注册默认 worker 的 CLI run 入口会让工单创建事件永久停留在 outbox（apps/server/internal/app/worker/jobs.go:88）。
+- [ ] 审核发现：自动派单仍在创建后立即异步执行，而创建事件延迟到 worker 投递，消费者可能先收到 ticket.assigned 再收到 ticket.created（apps/server/internal/modules/ticket/orchestration/orchestrator.go:191）。
