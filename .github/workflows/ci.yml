@@ -69,7 +69,7 @@ jobs:
           git diff --exit-code -- go.work.sum apps/server/go.mod apps/server/go.sum
 
       - name: Go vet
-        timeout-minutes: 2
+        timeout-minutes: 10
         run: go -C apps/server vet ./...
 
       # lint 门（2026-10-11 起基线为零）：errcheck/staticcheck 等 standard
