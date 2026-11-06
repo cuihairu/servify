@@ -451,6 +451,8 @@ definitions:
         type: integer
       description:
         type: string
+      idempotency_key:
+        type: string
       priority:
         type: string
       session_id:
@@ -470,6 +472,8 @@ definitions:
       ai_summary:
         type: string
       description:
+        type: string
+      idempotency_key:
         type: string
       session_id:
         type: string
@@ -1639,6 +1643,8 @@ definitions:
         type: string
       id:
         type: integer
+      idempotency_key:
+        type: string
       priority:
         description: low, normal, high, urgent
         type: string

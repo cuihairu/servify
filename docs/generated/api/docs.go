@@ -7103,6 +7103,9 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "idempotency_key": {
+                    "type": "string"
+                },
                 "priority": {
                     "type": "string"
                 },
@@ -7131,6 +7134,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "idempotency_key": {
                     "type": "string"
                 },
                 "session_id": {
@@ -8852,6 +8858,9 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
                 },
                 "priority": {
                     "description": "low, normal, high, urgent",

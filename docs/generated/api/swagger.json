@@ -7092,6 +7092,9 @@
                 "description": {
                     "type": "string"
                 },
+                "idempotency_key": {
+                    "type": "string"
+                },
                 "priority": {
                     "type": "string"
                 },
@@ -7120,6 +7123,9 @@
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "idempotency_key": {
                     "type": "string"
                 },
                 "session_id": {
@@ -8841,6 +8847,9 @@
                 },
                 "id": {
                     "type": "integer"
+                },
+                "idempotency_key": {
+                    "type": "string"
                 },
                 "priority": {
                     "description": "low, normal, high, urgent",
