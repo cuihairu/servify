@@ -216,19 +216,22 @@
 - [x] 审核发现：本轮把约 19 个包的 `resolved` 源从 registry.npmmirror.com 换为 registry.npmjs.org（@rolldown/binding-* 1.2.8→1.2.16、@oxc-project/types、nanoid、postcss），sdk/package-lock.json 仍混存 32 条 npmjs 与 186 条 npmmirror（e0c8e27a 为 13/205，混源系既有状态）；integrity 完整且 npm ci 通过，属 registry 混源/镜像依赖卫生问题，对只镜像 npmmirror 的环境冷装会改走 npmjs 源（sdk/package-lock.json:372）。 — 复核属实（2026-11-05）：grep -oE + sort | uniq -c 实测 e0c8e27a 锁内 npmjs 13/npmmirror 205 → 当前 32/186，差值 19 与升级包数吻合；冷装 exit 0 且 integrity 均完整，混源系既有镜像/官方源并存状态非本轮引入，仅记录在案。
 
 核实证据：git log e0c8e27a..a167d09 仅 2 提交（8959c31 dependabot 升级、a167d09 todo 验证 54e3fa8e..HEAD）；git diff --name-only e0c8e27a..a167d09 仅 docs/package-lock.json、sdk/package.json、sdk/packages/*/package.json、sdk/package-lock.json、todo.md，无 Go/SQL/YAML/代码变更（`git diff --name-only e0c8e27a..a167d09 | grep -Ev 'package(-lock)?\.json|todo\.md'` 为空）。实测：`npm -C sdk ci --dry-run --no-audit --no-fund` exit 0、`npm -C docs ci --dry-run --no-audit --no-fund` exit 0（均无 frozen-lockfile 冲突）、`npm -C sdk audit` 9 条 moderate 均位于 eslint/@typescript-eslint/minimatch 链（本轮未触碰，属既有，与 vite 升级无关）、`npm -C docs audit` 0 漏洞；锁内 vite 解析 sdk=8.3.5、docs=6.4.5。以上 3 项均为卫生/归因类，非安全或构建阻断缺陷（功能面可安装可构建，前轮已实测 sdk typecheck/test 全绿、docs build exit 0）。 — 2026-11-05
-- [ ] 审核发现：流式零命中或低置信时，模型增量在策略改写终帧前已发送给访客，仍会展示应被拒绝的猜测内容（apps/server/internal/modules/ai/delivery/streaming.go:84）。
-- [ ] 审核发现：零命中和低置信策略直到模型成功返回后才执行，模型调用失败或超时时会进入旧兜底而绕过配置的澄清或拒答策略（apps/server/internal/modules/ai/delivery/enhanced_service.go:408）。
-- [ ] 审核发现：无依据 handoff 策略只设置建议字段却声称正在转接，现有会话处理不会据此执行转接或排队（apps/server/internal/modules/ai/delivery/enhanced_service.go:460）。
-- [ ] 审核发现：配置校验接受大小写及首尾空格变体，但运行时仅匹配原始小写值，合法配置如 REFUSE 会静默退化为直答（apps/server/internal/config/config.go:860）。
-- [ ] 审核发现：知识服务故障触发熔断后，后续跳过检索的请求被当成零命中且成功响应会重置熔断器，导致故障原因审计错误并过早恢复访问（apps/server/internal/modules/ai/delivery/enhanced_service.go:280）。
-- [ ] 审核发现：流式知识服务故障分支未设置响应 strategy，导致访客终帧及答案记录缺少实际执行的策略（apps/server/internal/modules/ai/delivery/streaming.go:58）。
-- [ ] 审核发现：无依据策略在模型及工具循环完成后才执行，零命中或低置信时模型仍可能先调用人工转接等有副作用的工具，即使配置要求拒答或澄清（apps/server/internal/modules/ai/delivery/enhanced_service.go:409）。
-- [ ] 审核发现：访客请求的认证上下文没有租户作用域，幂等查询因此只按键查找，可返回其他租户的工单并泄露其内容（apps/server/internal/modules/ticket/infra/gorm_repository.go:282）。
-- [ ] 审核发现：幂等键只按租户和工作区区分而未绑定访客会话或请求内容，同一作用域的不同访客使用相同键时会收到彼此的工单（apps/server/internal/modules/ticket/infra/gorm_repository.go:341）。
-- [ ] 审核发现：并发同键请求均可能通过预查询，后到的插入仅返回唯一约束错误而不读取已创建工单，无法实现并发幂等重试（apps/server/internal/modules/ticket/infra/gorm_repository.go:350）。
-- [ ] 审核发现：领域工单创建的 outbox 回调使用尚未同步数据库生成 ID 的原 ticket，导致创建事件的工单 ID 和聚合 ID 为零（apps/server/internal/modules/ticket/infra/gorm_repository.go:259）。
-- [ ] 审核发现：outbox 领取仅执行查询而未原子标记或加锁，多实例 worker 可同时投递同一行并互相覆盖投递状态（apps/server/internal/modules/ticket/outbox/gorm_repository.go:34）。
-- [ ] 审核发现：发布成功后标记 delivered 前崩溃或更新失败会再次发布同一事件，而 event_id 唯一索引只约束 outbox 行，不能防止总线和消费者重复处理（apps/server/internal/modules/ticket/outbox/worker.go:32）。
-- [ ] 审核发现：同键重试命中既有工单后仍执行自动分配及 SLA 副作用，重复请求可能重复派单或重复执行 SLA 处理（apps/server/internal/modules/ticket/delivery/handler_adapter.go:104）。
-- [ ] 审核发现：创建事件改为仅由后台 worker 投递后，未注册默认 worker 的 CLI run 入口会让工单创建事件永久停留在 outbox（apps/server/internal/app/worker/jobs.go:88）。
-- [ ] 审核发现：自动派单仍在创建后立即异步执行，而创建事件延迟到 worker 投递，消费者可能先收到 ticket.assigned 再收到 ticket.created（apps/server/internal/modules/ticket/orchestration/orchestrator.go:191）。
+- [x] 审核发现：流式零命中或低置信时，模型增量在策略改写终帧前已发送给访客，仍会展示应被拒绝的猜测内容（apps/server/internal/modules/ai/delivery/streaming.go:84）。 — 03803b4，TestNoEvidenceStreamingNoLeakBeforePolicyRewrite 覆盖（refuse 流仅 1 终帧、模型 0 调用）
+- [x] 审核发现：零命中和低置信策略直到模型成功返回后才执行，模型调用失败或超时时会进入旧兜底而绕过配置的澄清或拒答策略（apps/server/internal/modules/ai/delivery/enhanced_service.go:408）。 — 03803b4，策略改到模型/工具调用前预检（noEvidenceShortCircuit），失败不再进旧兜底
+- [x] 审核发现：无依据 handoff 策略只设置建议字段却声称正在转接，现有会话处理不会据此执行转接或排队（apps/server/internal/modules/ai/delivery/enhanced_service.go:460）。 — 03803b4，applyNoEvidenceAction 执行 HandoffPort.RequestHandoff（TestNoEvidenceHandoffExecutesPort 覆盖，恰 1 次调用）
+- [x] 审核发现：配置校验接受大小写及首尾空格变体，但运行时仅匹配原始小写值，合法配置如 REFUSE 会静默退化为直答（apps/server/internal/config/config.go:860）。 — 03803b4，normalizeNoEvidenceAction 大小写/首尾空格不敏感（TestNoEvidenceNormalizeCaseInsensitive 覆盖 "  REFUSE  "→refuse）
+- [ ] 审核发现：知识服务故障触发熔断后，后续跳过检索的请求被当成零命中且成功响应会重置熔断器，导致故障原因审计错误并过早恢复访问（apps/server/internal/modules/ai/delivery/enhanced_service.go:280）。 — 部分闭合（03803b4）：非直答 no_evidence 策略经 NoEvidenceShort 提前返回不再触发 OnSuccess；但 **direct 策略**下熔断 open→activeKnowledgeProvider 返回 nil→检索跳过→零命中→模型成功→finalizeEnhanced 仍调 circuitBreaker.OnSuccess()（enhanced_service.go:393-395）会重置熔断器、过早恢复。待补：OnSuccess 仅在检索实际执行时触发。
+- [x] 审核发现：流式知识服务故障分支未设置响应 strategy，导致访客终帧及答案记录缺少实际执行的策略（apps/server/internal/modules/ai/delivery/streaming.go:58）。 — 03803b4，streaming.go 故障分支补 final.Strategy = string(action)
+- [x] 审核发现：无依据策略在模型及工具循环完成后才执行，零命中或低置信时模型仍可能先调用人工转接等有副作用的工具，即使配置要求拒答或澄清（apps/server/internal/modules/ai/delivery/enhanced_service.go:409）。 — 03803b4，noEvidenceShortCircuit 在 prepare 拿到检索结果后、模型/工具调用前执行（模型 0 调用断言）
+- [x] 审核发现：访客请求的认证上下文没有租户作用域，幂等查询因此只按键查找，可返回其他租户的工单并泄露其内容（apps/server/internal/modules/ticket/infra/gorm_repository.go:282）。 — 3d0b625，findTicketByScopeAndKey 改用 ticket 行自身 TenantID/WorkspaceID/SessionID，不再依赖 ctx 认证 scope
+- [x] 审核发现：幂等键只按租户和工作区区分而未绑定访客会话或请求内容，同一作用域的不同访客使用相同键时会收到彼此的工单（apps/server/internal/modules/ticket/infra/gorm_repository.go:341）。 — 3d0b625，作用域加 session_id（查询 + 唯一索引 uq_tickets_scope_idempotency_key 四列）
+- [x] 审核发现：并发同键请求均可能通过预查询，后到的插入仅返回唯一约束错误而不读取已创建工单，无法实现并发幂等重试（apps/server/internal/modules/ticket/infra/gorm_repository.go:350）。 — 3d0b625，ErrDuplicatedKey 时重查已建行收敛（TestTicketCovCreateTicketModelAtomicallyConcurrentReplay 覆盖）
+- [x] 审核发现：领域工单创建的 outbox 回调使用尚未同步数据库生成 ID 的原 ticket，导致创建事件的工单 ID 和聚合 ID 为零（apps/server/internal/modules/ticket/infra/gorm_repository.go:259）。 — 3d0b625，回调先 mapTicket(createdModel)（事务内已回填 DB 主键）再 buildOutbox
+- [x] 审核发现：outbox 领取仅执行查询而未原子标记或加锁，多实例 worker 可同时投递同一行并互相覆盖投递状态（apps/server/internal/modules/ticket/outbox/gorm_repository.go:34）。 — 3d0b625，ClaimDue 条件 UPDATE 抢占（status=processing+claimed_at，受影响=1 才归本实例）；TestOutboxClaimDueAtomicClaimAndStaleReclaim 覆盖
+- [x] 审核发现：发布成功后标记 delivered 前崩溃或更新失败会再次发布同一事件，而 event_id 唯一索引只约束 outbox 行，不能防止总线和消费者重复处理（apps/server/internal/modules/ticket/outbox/worker.go:32）。 — 3d0b625，conversation_events.event_id 唯一索引 + Append 幂等去重（replay 不产生重复流水行）；MarkDelivered/MarkFailed 仅对 processing 生效
+- [x] 审核发现：同键重试命中既有工单后仍执行自动分配及 SLA 副作用，重复请求可能重复派单或重复执行 SLA 处理（apps/server/internal/modules/ticket/delivery/handler_adapter.go:104）。 — 3d0b625，created=false 直接返回已建工单，不重复 ApplyCreateTicketSideEffects
+- [x] 审核发现：创建事件改为仅由后台 worker 投递后，未注册默认 worker 的 CLI run 入口会让工单创建事件永久停留在 outbox（apps/server/internal/app/worker/jobs.go:88）。 — 3d0b625，run.go RegisterWorkers 注册 RegisterTicketOutboxWorker；TestRegisterTicketOutboxWorkerNilGuards 覆盖 nil 守卫
+- [x] 审核发现：自动派单仍在创建后立即异步执行，而创建事件延迟到 worker 投递，消费者可能先收到 ticket.assigned 再收到 ticket.created（apps/server/internal/modules/ticket/orchestration/orchestrator.go:191）。 — 3d0b625，autoAssignAgent 改为 ticket.created 订阅内执行（created 先发布、assigned 随后）；assembly_test 经 outbox 同构路径投递
+- [x] 审核发现：本轮新增的「自动派单…先收到 ticket.created」发现引用 orchestrator.go:191，但自动派单 goroutine 实际在 orchestrator.go:185（go o.autoAssignAgent(ticket.ID)），191 是 loadTicket 错误返回而非派单语句，引用错位影响该发现的定位与整改（todo.md:234）。 — 3d0b625，`go o.autoAssignAgent` 已从 ApplyCreateTicketSideEffects 移除改订阅，原 185/191 引用均随之失效
+
+- [ ] 审核发现：本轮 diff 未见问题（b1d73f24..HEAD）。
