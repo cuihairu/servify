@@ -569,3 +569,25 @@ func (w *RetentionCleanupWorker) Stop(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// WorkerRegistry is the minimal registration seam for RegisterTicketOutboxWorker
+// so callers (the real bootstrap.App and test stubs) can be injected.
+type WorkerRegistry interface {
+	RegisterWorker(worker bootstrap.Worker)
+}
+
+// RegisterTicketOutboxWorker registers only the reliable ticket.created outbox
+// dispatcher. CLI run keeps its lightweight local profile but must not leave
+// transactional outbox rows pending forever.
+func RegisterTicketOutboxWorker(registry WorkerRegistry, logger *logrus.Logger, deps TicketOutboxDependencies) {
+	if registry == nil || deps == nil {
+		return
+	}
+	if processor := deps.TicketOutboxForWorker(); processor != nil {
+		registry.RegisterWorker(NewTicketOutboxWorker(processor, 5*time.Second, logger))
+	}
+}
+
+type TicketOutboxDependencies interface {
+	TicketOutboxForWorker() outbox.WorkerContract
+}

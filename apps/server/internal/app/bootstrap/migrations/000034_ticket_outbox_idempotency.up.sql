@@ -13,8 +13,14 @@
 -- 不经过本文件。
 ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "idempotency_key" text;
 
-CREATE UNIQUE INDEX IF NOT EXISTS "uq_tickets_scope_idempotency_key" ON "tickets" ("tenant_id","workspace_id","idempotency_key");
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_tickets_scope_idempotency_key" ON "tickets" ("tenant_id","workspace_id","idempotency_key","session_id");
 
-CREATE TABLE IF NOT EXISTS "ticket_outboxes" ("id" bigserial,"event_id" varchar(128) NOT NULL,"event_name" text NOT NULL,"aggregate_id" varchar(128),"payload" text,"status" text DEFAULT 'pending',"attempts" bigint DEFAULT 0,"last_error" text,"created_at" timestamptz,"updated_at" timestamptz,"delivered_at" timestamptz,"next_attempt_at" timestamptz,PRIMARY KEY ("id"));
+CREATE TABLE IF NOT EXISTS "ticket_outboxes" ("id" bigserial,"event_id" varchar(128) NOT NULL,"event_name" text NOT NULL,"aggregate_id" varchar(128),"payload" text,"status" text DEFAULT 'pending',"attempts" bigint DEFAULT 0,"last_error" text,"created_at" timestamptz,"updated_at" timestamptz,"delivered_at" timestamptz,"next_attempt_at" timestamptz,"claimed_at" timestamptz,PRIMARY KEY ("id"));
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_ticket_outbox_event_id" ON "ticket_outboxes" ("event_id");
 CREATE INDEX IF NOT EXISTS "idx_ticket_outbox_status_next_attempt" ON "ticket_outboxes" ("status","next_attempt_at");
+
+-- ③ conversation_events.event_id：Timeline 投影按事件唯一标识去重（outbox
+--    崩溃后重发同一事件时不再产生重复流水行）。既有行留空不冲突（Postgres
+--    唯一索引允许多 NULL），订阅者恒填非空。
+ALTER TABLE "conversation_events" ADD COLUMN IF NOT EXISTS "event_id" varchar(128);
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_conv_events_event_id" ON "conversation_events" ("event_id");

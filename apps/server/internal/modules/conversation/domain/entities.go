@@ -71,6 +71,7 @@ type ConversationMessage struct {
 // 不进入业务写路径。ActorType 取值：system | customer | agent | ai | routing。
 type ConversationEvent struct {
 	ID             uint
+	EventID        string
 	ConversationID string
 	EventType      string
 	ActorType      string

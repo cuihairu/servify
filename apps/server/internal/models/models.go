@@ -131,7 +131,7 @@ type Ticket struct {
 	AISummary      string         `gorm:"type:text" json:"ai_summary"` // 访客工单创建时的 AI 会话摘要（M3 §10 #4）
 	CustomerID     uint           `gorm:"index" json:"customer_id"`
 	AgentID        *uint          `gorm:"index" json:"agent_id"`
-	SessionID      *string        `gorm:"index" json:"session_id"`
+	SessionID      *string        `gorm:"index;uniqueIndex:uq_tickets_scope_idempotency_key,priority:4" json:"session_id"`
 	Category       string         `json:"category"`                         // technical, billing, general, complaint
 	Priority       string         `gorm:"default:'normal'" json:"priority"` // low, normal, high, urgent
 	Status         string         `gorm:"default:'open'" json:"status"`     // open, assigned, in_progress, resolved, closed
@@ -247,6 +247,7 @@ type TicketOutbox struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 	DeliveredAt   *time.Time `json:"delivered_at"`
 	NextAttemptAt *time.Time `gorm:"index:idx_ticket_outbox_status_next_attempt,priority:2" json:"next_attempt_at"`
+	ClaimedAt     *time.Time `json:"claimed_at"`
 }
 
 // 会话模型（更新）
@@ -609,6 +610,7 @@ type PushToken struct {
 // ActorType 取值：system | customer | agent | ai | routing。
 type ConversationEvent struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
+	EventID        *string   `gorm:"uniqueIndex:uq_conv_events_event_id;size:128" json:"event_id"`
 	TenantID       string    `gorm:"index:idx_conv_events_scope" json:"tenant_id"`
 	WorkspaceID    string    `gorm:"index:idx_conv_events_scope" json:"workspace_id"`
 	ConversationID string    `gorm:"index:idx_conv_events_conversation;size:64;not null" json:"conversation_id"`

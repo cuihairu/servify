@@ -263,3 +263,101 @@ func TestOutboxProcessDispatchErrorMarkFailedIgnored(t *testing.T) {
 		t.Fatalf("expected 0, got %d", got)
 	}
 }
+
+// TestOutboxClaimDueAtomicClaimAndStaleReclaim covers the ClaimDue atomic
+// claim: a pending row becomes processing (not double-claimed on the same
+// batch), a processing row younger than the stale threshold is skipped, and a
+// stale processing row (claimed_at older than claimStaleAfter) is reclaimed.
+func TestOutboxClaimDueAtomicClaimAndStaleReclaim(t *testing.T) {
+	db := newOutboxTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	now := time.Now()
+
+	row := &models.TicketOutbox{
+		EventID: "evt-claim", EventName: "ticket.created", AggregateID: "ticket:1",
+		Payload: `{"event_id":"evt-claim","event_name":"ticket.created","ticket_id":1,"customer_id":1,"status":"open"}`,
+	}
+	require.NoError(t, repo.Append(ctx, row))
+
+	// 第一次领取：pending → processing，归本实例。
+	claimed, err := repo.ClaimDue(ctx, now, 10)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	require.Equal(t, StatusProcessing, claimed[0].Status)
+	require.NotNil(t, claimed[0].ClaimedAt)
+
+	// 同批再次领取：processing 未过期，不再返回。
+	again, err := repo.ClaimDue(ctx, now.Add(time.Second), 10)
+	require.NoError(t, err)
+	require.Len(t, again, 0)
+
+	// 未过期 processing（模拟并发实例已抢占）不返回。
+	staleFuture := now.Add(-claimStaleAfter / 2)
+	require.NoError(t, db.Model(&models.TicketOutbox{}).Where("id = ?", row.ID).
+		Updates(map[string]interface{}{"claimed_at": staleFuture}).Error)
+	young, err := repo.ClaimDue(ctx, now.Add(time.Second), 10)
+	require.NoError(t, err)
+	require.Len(t, young, 0)
+
+	// 超过阈值：重新领取（崩溃残留回收）。
+	stale := now.Add(-claimStaleAfter - time.Minute)
+	require.NoError(t, db.Model(&models.TicketOutbox{}).Where("id = ?", row.ID).
+		Updates(map[string]interface{}{"claimed_at": stale}).Error)
+	reclaimed, err := repo.ClaimDue(ctx, now.Add(time.Second), 10)
+	require.NoError(t, err)
+	require.Len(t, reclaimed, 1)
+	require.Equal(t, row.ID, reclaimed[0].ID)
+
+	// MarkDelivered 只对 processing 生效：delivered 后不再被领取。
+	require.NoError(t, repo.MarkDelivered(ctx, row.ID, now))
+	var stored models.TicketOutbox
+	require.NoError(t, db.First(&stored, row.ID).Error)
+	require.Equal(t, StatusDelivered, stored.Status)
+	post, err := repo.ClaimDue(ctx, now.Add(2*time.Minute), 10)
+	require.NoError(t, err)
+	require.Len(t, post, 0)
+}
+
+// TestOutboxMarkFailedOnlyProcessing covers MarkFailed being gated on the
+// processing status so a raced double-claim cannot mark a re-claimed row.
+func TestOutboxMarkFailedOnlyProcessing(t *testing.T) {
+	db := newOutboxTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+	row := &models.TicketOutbox{
+		EventID: "evt-fail", EventName: "ticket.created", AggregateID: "ticket:2",
+		Payload: `{"event_id":"evt-fail","event_name":"ticket.created","ticket_id":2,"customer_id":2,"status":"open"}`,
+	}
+	require.NoError(t, repo.Append(ctx, row))
+	claimed, err := repo.ClaimDue(ctx, time.Now(), 10)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	next := time.Now().Add(time.Minute)
+	require.NoError(t, repo.MarkFailed(ctx, row.ID, 1, "boom", &next, false))
+	var stored models.TicketOutbox
+	require.NoError(t, db.First(&stored, row.ID).Error)
+	require.Equal(t, StatusFailed, stored.Status)
+	require.Equal(t, 1, stored.Attempts)
+
+	// 非 processing（delivered）时 MarkFailed 不改状态：已投递行不受影响。
+	// gating 下只有 processing 能 MarkDelivered，须先领取再投递构造 delivered。
+	row2 := &models.TicketOutbox{
+		EventID: "evt-fail-2", EventName: "ticket.created", AggregateID: "ticket:3",
+		Payload: `{"event_id":"evt-fail-2","event_name":"ticket.created","ticket_id":3,"customer_id":3,"status":"open"}`,
+	}
+	require.NoError(t, repo.Append(ctx, row2))
+	// row1 已 failed 且 next_attempt_at 在未来，ClaimDue 只应领取 row2。
+	claimed2, err := repo.ClaimDue(ctx, time.Now(), 10)
+	require.NoError(t, err)
+	require.Len(t, claimed2, 1)
+	require.Equal(t, row2.ID, claimed2[0].ID)
+	require.NoError(t, repo.MarkDelivered(ctx, row2.ID, time.Now()))
+	require.NoError(t, repo.MarkFailed(ctx, row2.ID, 1, "late", &next, false))
+	// 复用独立目标变量：stored 已载入 row1（主键 1），GORM 会把既有主键与
+	// 实参合并成 id=2 AND id=1，查询恒空。
+	var stored2 models.TicketOutbox
+	require.NoError(t, db.First(&stored2, row2.ID).Error)
+	require.Equal(t, StatusDelivered, stored2.Status)
+	require.Equal(t, 0, stored2.Attempts)
+}

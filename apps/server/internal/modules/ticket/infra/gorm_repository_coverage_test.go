@@ -1323,3 +1323,27 @@ func TestTicketCovCreateTicketAtomicallyPropagatesModelError(t *testing.T) {
 	_, err := repo.CreateTicketAtomically(context.Background(), &domain.Ticket{Title: "e", CustomerID: 1}, nil, func(*domain.Ticket) *domain.OutboxEvent { return nil })
 	require.Error(t, err)
 }
+
+// TestTicketCovCreateTicketModelAtomicallyConcurrentReplay covers the
+// pre-check/duplicate-key path: both concurrent requests pass the initial
+// lookup, the loser's insert hits the scoped unique index, and the loser
+// resolves to the winner's row instead of surfacing a constraint error.
+func TestTicketCovCreateTicketModelAtomicallyConcurrentReplay(t *testing.T) {
+	db := newTicketCovTestDB(t)
+	repo := NewGormRepository(db)
+	ctx := context.Background()
+
+	ticket := &models.Ticket{Title: "winner", CustomerID: 1, Status: "open", IdempotencyKey: covStrPtr("concurrent-key")}
+	created, err := repo.CreateTicketModelAtomically(ctx, ticket, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.NoError(t, err)
+	require.True(t, created)
+
+	loser := &models.Ticket{Title: "loser", CustomerID: 1, Status: "open", IdempotencyKey: covStrPtr("concurrent-key")}
+	// First lookup misses, then tx.Create returns ErrDuplicatedKey from the
+	// unique index; CreateTicketModelAtomically must resolve via re-query.
+	loserCreated, loserErr := repo.CreateTicketModelAtomically(ctx, loser, nil, nil, func(*models.Ticket) *models.TicketOutbox { return nil })
+	require.NoError(t, loserErr)
+	require.False(t, loserCreated)
+	require.Equal(t, ticket.ID, loser.ID)
+	require.Equal(t, "winner", loser.Title)
+}

@@ -66,7 +66,7 @@ func NewTicketOrchestrator(
 	assignTicket func(context.Context, uint, uint, uint) error,
 	addComment func(context.Context, uint, uint, string, string) (*models.TicketComment, error),
 ) *TicketOrchestrator {
-	return &TicketOrchestrator{
+	o := &TicketOrchestrator{
 		db:                       db,
 		logger:                   logger,
 		slaService:               slaService,
@@ -80,6 +80,25 @@ func NewTicketOrchestrator(
 		assignTicket:             assignTicket,
 		addComment:               addComment,
 	}
+	o.subscribeCreatedForAutoAssign()
+	return o
+}
+
+// subscribeCreatedForAutoAssign 在 ticket.created 事件经 outbox 投递后触发
+// 自动派单：创建事件由 worker 异步投递，若创建时立即派单，assigned 可能先
+// 于 created 到达消费者。订阅保证 created 先发布、assigned 随其后。
+func (o *TicketOrchestrator) subscribeCreatedForAutoAssign() {
+	if o == nil || o.bus == nil {
+		return
+	}
+	o.bus.Subscribe(ticketapp.TicketCreatedEventName, eventbus.HandlerFunc(func(ctx context.Context, event eventbus.Event) error {
+		created, ok := event.(ticketapp.TicketEvent)
+		if !ok || created.TicketID == 0 {
+			return nil
+		}
+		o.autoAssignAgent(created.TicketID)
+		return nil
+	}))
 }
 
 func (o *TicketOrchestrator) PrepareCreateTicket(ctx context.Context, req *ticketcontract.CreateTicketRequest) (*TicketCreatePreparation, error) {
@@ -182,8 +201,6 @@ func (o *TicketOrchestrator) ApplyCreateTicketSideEffects(ctx context.Context, t
 	if ticket == nil {
 		return nil, fmt.Errorf("ticket required")
 	}
-	go o.autoAssignAgent(ticket.ID)
-
 	o.logger.Infof("Created ticket %d for customer %d", ticket.ID, ticket.CustomerID)
 
 	createdTicket, err := o.loadTicket(ctx, ticket.ID)

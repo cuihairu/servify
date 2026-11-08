@@ -1182,3 +1182,41 @@ func TestTicketOutboxWorkerStopContextError(t *testing.T) {
 		t.Fatalf("Stop() with cancelled ctx = %v, want context.Canceled", err)
 	}
 }
+
+// TestRegisterTicketOutboxWorkerNilGuards covers RegisterTicketOutboxWorker
+// nil-app / nil-deps / nil-processor guards so the CLI run entry can safely
+// skip registration without registering a dead worker.
+type depsStub struct{ proc outbox.WorkerContract }
+
+func (d depsStub) TicketOutboxForWorker() outbox.WorkerContract { return d.proc }
+
+type workerRegistryStub struct {
+	bootstrap.App
+	workers []bootstrap.Worker
+}
+
+func (w *workerRegistryStub) RegisterWorker(worker bootstrap.Worker) {
+	w.workers = append(w.workers, worker)
+}
+
+func TestRegisterTicketOutboxWorkerNilGuards(t *testing.T) {
+	app := &workerRegistryStub{}
+	// nil registry / nil deps：不 panic。
+	RegisterTicketOutboxWorker(nil, nil, depsStub{proc: &ticketOutboxCountStub{}})
+	RegisterTicketOutboxWorker(app, nil, nil)
+	if len(app.workers) != 0 {
+		t.Fatalf("nil guards must not register workers, got %d", len(app.workers))
+	}
+
+	// nil processor：不注册。
+	RegisterTicketOutboxWorker(app, nil, depsStub{proc: nil})
+	if len(app.workers) != 0 {
+		t.Fatalf("nil processor must not register, got %d", len(app.workers))
+	}
+
+	// 有效 processor：注册 ticket-outbox worker。
+	RegisterTicketOutboxWorker(app, nil, depsStub{proc: &ticketOutboxCountStub{}})
+	if len(app.workers) != 1 || app.workers[0].Name() != "ticket-outbox" {
+		t.Fatalf("expected one ticket-outbox worker, got %+v", app.workers)
+	}
+}

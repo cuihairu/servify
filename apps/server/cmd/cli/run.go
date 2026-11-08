@@ -2,11 +2,15 @@ package cli
 
 import (
 	appbootstrap "servify/apps/server/internal/app/bootstrap"
+	appserver "servify/apps/server/internal/app/server"
+	appworker "servify/apps/server/internal/app/worker"
+	"servify/apps/server/internal/config"
 	"servify/apps/server/internal/observability/async"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"gorm.io/gorm"
 )
 
 var runCmd = &cobra.Command{
@@ -32,6 +36,11 @@ func run(cmd *cobra.Command, args []string) {
 		logrus.Fatalf("Failed to load config: %v", err)
 	}
 	if err := appbootstrap.RunStandalone(cfg, appbootstrap.StandaloneOptions{
+		RegisterWorkers: func(app *appbootstrap.App, cfg *config.Config, db *gorm.DB, rt *appserver.Runtime) {
+			// CLI 保持轻量本地运行定位，但仍需投递事务性 ticket.created
+			// outbox 行（否则创建事件永久停留）。
+			appworker.RegisterTicketOutboxWorker(app, app.Logger, rt)
+		},
 		EventBusDecorator: func(bus eventbus.Bus, logger *logrus.Logger) eventbus.Bus {
 			return async.WireDefaultObservableBus(bus, logger)
 		},

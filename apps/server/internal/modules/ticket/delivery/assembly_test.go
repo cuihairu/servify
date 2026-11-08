@@ -13,6 +13,7 @@ import (
 
 	"servify/apps/server/internal/models"
 	ticketcontract "servify/apps/server/internal/modules/ticket/contract"
+	ticketoutbox "servify/apps/server/internal/modules/ticket/outbox"
 	"servify/apps/server/internal/platform/eventbus"
 
 	"github.com/glebarez/sqlite"
@@ -62,16 +63,32 @@ func newTicketDeliveryLogger() *logrus.Logger {
 }
 
 type recordingBus struct {
-	mu     sync.Mutex
-	events []string
+	mu       sync.Mutex
+	events   []string
+	handlers map[string][]eventbus.Handler
 }
 
-func (b *recordingBus) Subscribe(eventName string, handler eventbus.Handler) {}
+func (b *recordingBus) Subscribe(eventName string, handler eventbus.Handler) {
+	if b.handlers == nil {
+		b.handlers = make(map[string][]eventbus.Handler)
+	}
+	b.handlers[eventName] = append(b.handlers[eventName], handler)
+}
 
 func (b *recordingBus) Publish(ctx context.Context, event eventbus.Event) error {
+	// 快照 handlers 后在锁外执行：订阅者（auto-assign）会在处理 ticket.created
+	// 时同步 publish ticket.assigned 回到同一总线，持锁调用会死锁。
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	handlers := append([]eventbus.Handler(nil), b.handlers[event.Name()]...)
+	b.mu.Unlock()
+	for _, handler := range handlers {
+		if err := handler.Handle(ctx, event); err != nil {
+			return err
+		}
+	}
+	b.mu.Lock()
 	b.events = append(b.events, event.Name())
+	b.mu.Unlock()
 	return nil
 }
 
@@ -177,6 +194,10 @@ func TestHandlerAssemblyCreateTicketAutoAssignsAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTicket() error = %v", err)
 	}
+
+	// 创建事件经 outbox 投递后才触发自动派单订阅（与生产 worker 一致）：
+	// 取出 pending 行并以 BusDispatcher 同构方式发布 ticket.created。
+	dispatchTicketCreated(t, db, bus, got.ID)
 
 	var stored models.Ticket
 	deadline := time.Now().Add(5 * time.Second)
@@ -297,5 +318,23 @@ func TestHandlerAssemblyUpdateTicketCustomFieldLoadError(t *testing.T) {
 		CustomFields: map[string]interface{}{"severity": "low"},
 	}, 5); err == nil || !strings.Contains(err.Error(), "custom_fields") {
 		t.Fatalf("expected custom field listing error, got %v", err)
+	}
+}
+
+// dispatchTicketCreated 以生产 outbox worker 的同构路径发布 ticket.created：
+// 读取 pending 行、反序列化为 TicketEvent 并 publish 到测试总线（触发
+// orchestrator 的 auto-assign 订阅）。返回是否投递成功。
+func dispatchTicketCreated(t *testing.T, db *gorm.DB, bus *recordingBus, ticketID uint) {
+	t.Helper()
+	var row models.TicketOutbox
+	if err := db.Where("aggregate_id = ?", fmt.Sprintf("ticket:%d", ticketID)).First(&row).Error; err != nil {
+		t.Fatalf("load outbox row: %v", err)
+	}
+	event, err := ticketoutbox.UnmarshalEvent(row)
+	if err != nil {
+		t.Fatalf("unmarshal outbox event: %v", err)
+	}
+	if err := bus.Publish(context.Background(), event); err != nil {
+		t.Fatalf("publish ticket.created: %v", err)
 	}
 }

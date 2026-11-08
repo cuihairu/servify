@@ -78,6 +78,7 @@ func (s *EventBusSubscriber) Register(bus eventbus.Bus) {
 				occurredAt = time.Now()
 			}
 			record := domain.ConversationEvent{
+				EventID:        event.ID(),
 				ConversationID: conversationID,
 				EventType:      eventName,
 				ActorType:      projection.actorType,

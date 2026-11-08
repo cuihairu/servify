@@ -100,8 +100,11 @@ func (a *HandlerServiceAdapter) CreateTicket(ctx context.Context, req *ticketcon
 	if created {
 		// tenant 体系尚未落到工单模型，先按单租户口径记 default。
 		a.metrics.RecordTicketCreated("default", prepared.Ticket.Priority)
+		return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
 	}
-	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
+	// 同键重试命中既有工单：不重复执行自动分配 / SLA 副作用（避免重复派单
+	// 或重复执行 SLA 处理）。created=false 直接返回已建工单。
+	return prepared.Ticket, nil
 }
 
 func (a *HandlerServiceAdapter) buildCreateOutbox(ctx context.Context, ticket *models.Ticket) *models.TicketOutbox {
@@ -166,8 +169,9 @@ func (a *HandlerServiceAdapter) CreateVisitorTicket(ctx context.Context, req *ti
 			tenantID = "default"
 		}
 		a.metrics.RecordTicketCreated(tenantID, prepared.Ticket.Priority)
+		return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
 	}
-	return a.orchestrator.ApplyCreateTicketSideEffects(ctx, prepared.Ticket)
+	return prepared.Ticket, nil
 }
 
 func (a *HandlerServiceAdapter) UpdateTicket(ctx context.Context, ticketID uint, req *ticketcontract.UpdateTicketRequest, userID uint) (*models.Ticket, error) {

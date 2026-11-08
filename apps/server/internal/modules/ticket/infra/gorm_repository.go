@@ -256,7 +256,11 @@ func (r *GormRepository) CreateTicketAtomically(ctx context.Context, ticket *dom
 		}
 	}
 	created, err = r.CreateTicketModelAtomically(ctx, &model, nil, modelStatus, func(createdModel *models.Ticket) *models.TicketOutbox {
-		event := buildOutbox(ticket)
+		// createdModel 已在事务内回填数据库生成的主键；先映射回领域模型
+		// 再构造事件，否则回调拿到的 ticket.ID 仍是零，创建事件会携带
+		// 工单 ID/聚合 ID 为零（审核发现 2026-11-06）。
+		createdDomain := mapTicket(*createdModel)
+		event := buildOutbox(&createdDomain)
 		if event == nil {
 			return nil
 		}
@@ -277,14 +281,23 @@ func (r *GormRepository) CreateTicketAtomically(ctx context.Context, ticket *dom
 	return created, nil
 }
 
-func (r *GormRepository) findTicketByScopeAndKey(db *gorm.DB, ctx context.Context, key string) (*models.Ticket, error) {
+func (r *GormRepository) findTicketByScopeAndKey(db *gorm.DB, ctx context.Context, ticket *models.Ticket) (*models.Ticket, error) {
 	var model models.Ticket
+	key := *ticket.IdempotencyKey
 	q := db.Model(&models.Ticket{}).Where("idempotency_key = ?", key)
-	if tenantID := platformauth.TenantIDFromContext(ctx); tenantID != "" {
-		q = q.Where("tenant_id = ?", tenantID)
+	// scope 取 ticket 行自身继承值（visitor 已从 session 继承；管理面从
+	// ctx scope 注入），不再依赖 ctx 的认证 scope——访客免认证请求的 ctx
+	// 无租户，仅按键查找会跨租户命中并泄露内容。
+	if ticket.TenantID != "" {
+		q = q.Where("tenant_id = ?", ticket.TenantID)
 	}
-	if workspaceID := platformauth.WorkspaceIDFromContext(ctx); workspaceID != "" {
-		q = q.Where("workspace_id = ?", workspaceID)
+	if ticket.WorkspaceID != "" {
+		q = q.Where("workspace_id = ?", ticket.WorkspaceID)
+	}
+	if ticket.SessionID != nil && *ticket.SessionID != "" {
+		q = q.Where("session_id = ?", *ticket.SessionID)
+	} else {
+		q = q.Where("session_id IS NULL")
 	}
 	if err := q.First(&model).Error; err != nil {
 		return nil, err
@@ -338,7 +351,7 @@ func (r *GormRepository) CreateTicketModelAtomically(
 	applyTicketScopeFields(ctx, ticket)
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if ticket.IdempotencyKey != nil && strings.TrimSpace(*ticket.IdempotencyKey) != "" {
-			existing, findErr := r.findTicketByScopeAndKey(tx, ctx, *ticket.IdempotencyKey)
+			existing, findErr := r.findTicketByScopeAndKey(tx, ctx, ticket)
 			if findErr == nil {
 				*ticket = *existing
 				return nil
@@ -348,6 +361,15 @@ func (r *GormRepository) CreateTicketModelAtomically(
 			}
 		}
 		if err := tx.Create(ticket).Error; err != nil {
+			// 并发同键请求：预查询都可能通过，后到插入仅命中唯一约束。
+			// 重查已创建行，把并发重试收敛为幂等命中（created=false）。
+			if errors.Is(err, gorm.ErrDuplicatedKey) && ticket.IdempotencyKey != nil && strings.TrimSpace(*ticket.IdempotencyKey) != "" {
+				existing, findErr := r.findTicketByScopeAndKey(tx, ctx, ticket)
+				if findErr == nil {
+					*ticket = *existing
+					return nil
+				}
+			}
 			return err
 		}
 		if len(values) > 0 {

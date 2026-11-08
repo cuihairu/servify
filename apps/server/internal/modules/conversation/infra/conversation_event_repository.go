@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 
@@ -26,7 +27,15 @@ func NewConversationEventRepository(db *gorm.DB) *ConversationEventRepository {
 func (r *ConversationEventRepository) Append(ctx context.Context, event domain.ConversationEvent) error {
 	model := toConversationEventModel(event)
 	applyConversationEventScopeFields(ctx, &model)
-	return r.db.WithContext(ctx).Create(&model).Error
+	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+		// 同 event_id 重复投递（outbox 崩溃重发）幂等忽略：Timeline 不产生
+		// 重复行，消费者去重由事件唯一标识承担。
+		if errors.Is(err, gorm.ErrDuplicatedKey) && model.EventID != nil && *model.EventID != "" {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // ListByConversation 按会话返回事件流水（新→旧）。
@@ -53,8 +62,14 @@ func (r *ConversationEventRepository) ListByConversation(ctx context.Context, co
 }
 
 func toConversationEventModel(event domain.ConversationEvent) models.ConversationEvent {
+	var eventID *string
+	if event.EventID != "" {
+		v := event.EventID
+		eventID = &v
+	}
 	return models.ConversationEvent{
 		ID:             event.ID,
+		EventID:        eventID,
 		ConversationID: event.ConversationID,
 		EventType:      event.EventType,
 		ActorType:      event.ActorType,
@@ -66,8 +81,13 @@ func toConversationEventModel(event domain.ConversationEvent) models.Conversatio
 }
 
 func fromConversationEventModel(record models.ConversationEvent) domain.ConversationEvent {
+	eventID := ""
+	if record.EventID != nil {
+		eventID = *record.EventID
+	}
 	return domain.ConversationEvent{
 		ID:             record.ID,
+		EventID:        eventID,
 		ConversationID: record.ConversationID,
 		EventType:      record.EventType,
 		ActorType:      record.ActorType,
