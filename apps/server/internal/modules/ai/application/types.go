@@ -65,4 +65,11 @@ type AIResponse struct {
 	FinishReason string                           `json:"finish_reason,omitempty"`
 	Latency      time.Duration                    `json:"latency"`
 	Truncated    bool                             `json:"truncated,omitempty"`
+	// NoEvidenceShort marks a pre-model no-evidence short circuit: the
+	// configured clarify/refuse/handoff policy was decided before any model
+	// or tool call, so the delivery layer applies the fixed response without
+	// treating the request as a model success.
+	NoEvidenceShort  bool
+	NoEvidenceAction string
+	NoEvidenceReason string
 }

@@ -84,6 +84,7 @@ type OrchestratedEnhancedAIService struct {
 	promMetrics              *svcmetrics.BusinessMetrics
 	logger                   *logrus.Logger
 	toolExecutor             *aimodule.ToolExecutor
+	handoffPort              aimodule.HandoffPort
 	runtimeParams            AIRuntimeParams
 	historyLoader            SessionHistoryLoader
 }
@@ -107,6 +108,9 @@ func (s *OrchestratedEnhancedAIService) WithRuntimeParams(params AIRuntimeParams
 		return s
 	}
 	s.runtimeParams = params
+	if s.orchestrator != nil {
+		s.orchestrator.SetNoEvidencePolicy(orchestratorNoEvidencePolicy{policy: params.NoEvidence})
+	}
 	return s
 }
 
@@ -228,6 +232,13 @@ func NewOrchestratedEnhancedAIService(
 	}
 	toolExecutor := aimodule.NewToolExecutor(registry, nil)
 	orchestrator.SetToolExecutor(toolExecutor)
+	var handoffPort aimodule.HandoffPort
+	for _, ports := range toolPorts {
+		if ports.Handoff != nil {
+			handoffPort = ports.Handoff
+			break
+		}
+	}
 	return &OrchestratedEnhancedAIService{
 		base:                     base,
 		orchestrator:             orchestrator,
@@ -240,6 +251,7 @@ func NewOrchestratedEnhancedAIService(
 		metrics:                  &AIMetrics{ActiveKnowledgeProvider: strings.TrimSpace(knowledgeProviderID)},
 		logger:                   logger,
 		toolExecutor:             toolExecutor,
+		handoffPort:              handoffPort,
 	}
 }
 
@@ -287,7 +299,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 					Strategy: string(action),
 					Duration: time.Since(start),
 				}
-				s.applyNoEvidenceAction(enhanced.AIResponse, action, "knowledge_unavailable")
+				s.applyNoEvidenceAction(ctx, sessionID, enhanced.AIResponse, action, "knowledge_unavailable")
 				s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), time.Since(start).Seconds())
 				return enhanced, nil
 			}
@@ -314,7 +326,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "failure", "primary", time.Since(start).Seconds())
 		return nil, err
 	}
-	return s.finalizeEnhanced(result), nil
+	return s.finalizeEnhanced(ctx, sessionID, result), nil
 }
 
 // buildAIRequest 组装首答编排请求：模型参数来自 ai.provider 对应配置族
@@ -363,7 +375,21 @@ func (s *OrchestratedEnhancedAIService) transferShortCircuit(start time.Time) *E
 
 // finalizeEnhanced 把编排成功结果映射为 enhanced 响应并记录指标：引用来源
 // →置信度/产生方式，置信门→转人工建议。非流式与流式首答共用。
-func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResponse) *EnhancedAIResponse {
+func (s *OrchestratedEnhancedAIService) finalizeEnhanced(ctx context.Context, sessionID string, result *aimodule.AIResponse) *EnhancedAIResponse {
+	if result != nil && result.NoEvidenceShort {
+		action := NoEvidenceAction(result.NoEvidenceAction)
+		enhanced := &EnhancedAIResponse{
+			AIResponse: &AIResponse{
+				Confidence: 0.6,
+				Source:     "system",
+			},
+			Strategy: string(action),
+			Duration: result.Latency,
+		}
+		s.applyNoEvidenceAction(ctx, sessionID, enhanced.AIResponse, action, result.NoEvidenceReason)
+		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), result.Latency.Seconds())
+		return enhanced
+	}
 	if s.knowledgeProviderEnabled {
 		s.circuitBreaker.OnSuccess()
 	}
@@ -412,7 +438,7 @@ func (s *OrchestratedEnhancedAIService) finalizeEnhanced(result *aimodule.AIResp
 		if zeroHit {
 			reason = "zero_hit"
 		}
-		s.applyNoEvidenceAction(aiResp, action, reason)
+		s.applyNoEvidenceAction(ctx, sessionID, aiResp, action, reason)
 		recordedStrategy = string(action)
 		enhanced.Strategy = string(action)
 	}
@@ -449,7 +475,7 @@ func (s *OrchestratedEnhancedAIService) noEvidenceAction(zeroHit bool, confidenc
 // applyNoEvidenceAction 改写访客面响应：固定文案（不编造），透出
 // next_action（仅 clarify/handoff 有动作语义）与可审计 reason
 // （zero_hit/low_confidence/knowledge_unavailable）。
-func (s *OrchestratedEnhancedAIService) applyNoEvidenceAction(aiResp *AIResponse, action NoEvidenceAction, reason string) {
+func (s *OrchestratedEnhancedAIService) applyNoEvidenceAction(ctx context.Context, sessionID string, aiResp *AIResponse, action NoEvidenceAction, reason string) {
 	aiResp.Reason = reason
 	switch action {
 	case NoEvidenceClarify:
@@ -461,16 +487,51 @@ func (s *OrchestratedEnhancedAIService) applyNoEvidenceAction(aiResp *AIResponse
 		aiResp.Content = "我来为您转接人工客服，请稍等..."
 		aiResp.NextAction = "handoff"
 		aiResp.HandoffReason = reason
+		if s.handoffPort != nil {
+			if _, err := s.handoffPort.RequestHandoff(ctx, sessionID, reason); err != nil {
+				s.logger.Warnf("No-evidence handoff failed (session_id=%s, reason=%s): %v", sessionID, reason, err)
+			}
+		}
 	}
 }
 
 // normalizeNoEvidenceAction 空值/未知值归一为 direct（历史行为）。
 func normalizeNoEvidenceAction(action NoEvidenceAction) NoEvidenceAction {
-	switch action {
+	switch NoEvidenceAction(strings.ToLower(strings.TrimSpace(string(action)))) {
 	case NoEvidenceClarify, NoEvidenceRefuse, NoEvidenceHandoff:
-		return action
+		return NoEvidenceAction(strings.ToLower(strings.TrimSpace(string(action))))
 	default:
 		return NoEvidenceDirect
+	}
+}
+
+// orchestratorNoEvidencePolicy adapts the configured NoEvidencePolicy to the
+// application-layer pre-model short circuit. It evaluates retrieval hits
+// before any model/tool call so clarify/refuse/handoff never let the model
+// guess or run side-effect tools first.
+type orchestratorNoEvidencePolicy struct {
+	policy NoEvidencePolicy
+}
+
+func (p orchestratorNoEvidencePolicy) EvaluateNoEvidence(ctx context.Context, req aimodule.AIRequest, hits []knowledgeprovider.KnowledgeHit) aimodule.NoEvidenceDecision {
+	zeroHit := len(hits) == 0
+	action := normalizeNoEvidenceAction(p.policy.ZeroHitAction)
+	reason := "zero_hit"
+	if !zeroHit {
+		conf := confidenceFromSources(hits)
+		if p.policy.ConfidenceThreshold <= 0 || conf >= p.policy.ConfidenceThreshold {
+			return aimodule.NoEvidenceDecision{}
+		}
+		action = normalizeNoEvidenceAction(p.policy.LowConfidenceAction)
+		reason = "low_confidence"
+	}
+	if action == NoEvidenceDirect {
+		return aimodule.NoEvidenceDecision{}
+	}
+	return aimodule.NoEvidenceDecision{
+		Apply:  true,
+		Action: string(action),
+		Reason: reason,
 	}
 }
 
@@ -590,6 +651,7 @@ func (s *OrchestratedEnhancedAIService) activeOrchestrator() *aimodule.QueryOrch
 			if s.toolExecutor != nil {
 				s.orchestrator.SetToolExecutor(s.toolExecutor)
 			}
+			s.orchestrator.SetNoEvidencePolicy(orchestratorNoEvidencePolicy{policy: s.runtimeParams.NoEvidence})
 		}
 		return s.orchestrator
 	}
@@ -597,6 +659,7 @@ func (s *OrchestratedEnhancedAIService) activeOrchestrator() *aimodule.QueryOrch
 	if s.toolExecutor != nil {
 		o.SetToolExecutor(s.toolExecutor)
 	}
+	o.SetNoEvidencePolicy(orchestratorNoEvidencePolicy{policy: s.runtimeParams.NoEvidence})
 	return o
 }
 

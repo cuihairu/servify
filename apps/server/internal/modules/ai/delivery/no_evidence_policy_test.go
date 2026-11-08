@@ -258,3 +258,71 @@ func TestNoEvidenceNormalizeUnknownAction(t *testing.T) {
 		t.Fatalf("unknown action must normalize to direct, got %+v", resp.AIResponse)
 	}
 }
+
+type stubHandoffPort struct {
+	calls int
+}
+
+func (s *stubHandoffPort) RequestHandoff(ctx context.Context, conversationID, reason string) (map[string]interface{}, error) {
+	s.calls++
+	return map[string]interface{}{"queued": true}, nil
+}
+
+func TestNoEvidenceNormalizeCaseInsensitive(t *testing.T) {
+	svc, provider := noEvidenceService(t, NoEvidencePolicy{ZeroHitAction: NoEvidenceAction("  REFUSE  ")}, &mockkp.Provider{})
+	resp, err := svc.ProcessQueryEnhanced(context.Background(), "unknown question", "sess-case")
+	if err != nil {
+		t.Fatalf("ProcessQueryEnhanced: %v", err)
+	}
+	if resp.Reason != "zero_hit" || resp.Content == "ungrounded answer" {
+		t.Fatalf("uppercase/space REFUSE must normalize to refuse, got %+v", resp.AIResponse)
+	}
+	if len(provider.Requests) != 0 {
+		t.Fatalf("model must not be called for refuse precheck, got %d requests", len(provider.Requests))
+	}
+}
+
+func TestNoEvidenceStreamingNoLeakBeforePolicyRewrite(t *testing.T) {
+	base := NewAIService("", "")
+	base.InitializeKnowledgeBase()
+	provider := &llmmock.Provider{StreamChunks: []llm.ChatChunk{{ContentDelta: "guess"}, {Done: true}}}
+	svc := NewOrchestratedEnhancedAIService(base, provider, &mockkp.Provider{}, "", nil).
+		WithRuntimeParams(AIRuntimeParams{NoEvidence: policy(NoEvidenceRefuse, NoEvidenceDirect, 0)})
+	stream, err := svc.ProcessQueryStream(context.Background(), "unknown question", "sess-leak")
+	if err != nil {
+		t.Fatalf("ProcessQueryStream: %v", err)
+	}
+	events := drainAll(t, stream)
+	if len(events) != 1 || !events[0].Done {
+		t.Fatalf("refuse stream must emit exactly one terminal event, got %+v", events)
+	}
+	final := events[0].Final
+	if final.Content == "guess" || final.Reason != "zero_hit" {
+		t.Fatalf("no model delta may leak before refuse final, got %+v", final)
+	}
+	if len(provider.Requests) != 0 {
+		t.Fatalf("model must not be called on refuse precheck, got %d requests", len(provider.Requests))
+	}
+}
+
+func TestNoEvidenceHandoffExecutesPort(t *testing.T) {
+	base := NewAIService("", "")
+	base.InitializeKnowledgeBase()
+	handoff := &stubHandoffPort{}
+	provider := &llmmock.Provider{ChatResponse: llm.ChatResponse{Content: "ungrounded answer"}}
+	svc := NewOrchestratedEnhancedAIService(base, provider, &mockkp.Provider{}, "", nil, AgentToolPorts{Handoff: handoff}).
+		WithRuntimeParams(AIRuntimeParams{NoEvidence: policy(NoEvidenceHandoff, NoEvidenceDirect, 0)})
+	resp, err := svc.ProcessQueryEnhanced(context.Background(), "unknown question", "sess-handoff")
+	if err != nil {
+		t.Fatalf("ProcessQueryEnhanced: %v", err)
+	}
+	if resp.NextAction != "handoff" || resp.HandoffReason != "zero_hit" {
+		t.Fatalf("handoff metadata = %+v", resp.AIResponse)
+	}
+	if handoff.calls != 1 {
+		t.Fatalf("handoff port must be invoked exactly once, got %d", handoff.calls)
+	}
+	if len(provider.Requests) != 0 {
+		t.Fatalf("model must not be called when handoff policy short-circuits, got %d requests", len(provider.Requests))
+	}
+}

@@ -25,6 +25,7 @@ type QueryOrchestrator struct {
 	metrics       *Metrics
 	tracer        trace.Tracer
 	policyHooks   []PolicyHook
+	noEvidence    NoEvidencePolicy
 	auditRecorder PromptAuditRecorder
 	toolExecutor  *ToolExecutor
 }
@@ -58,6 +59,9 @@ func (o *QueryOrchestrator) Handle(ctx context.Context, req AIRequest) (*AIRespo
 	messages, hits, err := o.prepare(ctx, req, span)
 	if err != nil {
 		return nil, err
+	}
+	if short, ok := o.noEvidenceShortCircuit(ctx, req, hits); ok {
+		return short, nil
 	}
 
 	var (
@@ -232,6 +236,10 @@ func (o *QueryOrchestrator) HandleStream(ctx context.Context, req AIRequest) (<-
 	go func() {
 		defer span.End()
 		defer close(events)
+		if short, ok := o.noEvidenceShortCircuit(ctx, req, hits); ok {
+			events <- StreamEvent{Done: true, Response: short}
+			return
+		}
 		o.streamInteraction(ctx, span, req, messages, hits, start, events)
 	}()
 	return events, nil
@@ -327,6 +335,35 @@ func (o *QueryOrchestrator) Metrics() MetricsSnapshot {
 
 func (o *QueryOrchestrator) SetPolicyHooks(hooks ...PolicyHook) {
 	o.policyHooks = append([]PolicyHook(nil), hooks...)
+}
+
+// SetNoEvidencePolicy 注入检索后的无依据策略预检（nil 安全，可链式）。
+func (o *QueryOrchestrator) SetNoEvidencePolicy(policy NoEvidencePolicy) {
+	if o == nil {
+		return
+	}
+	o.noEvidence = policy
+}
+
+// noEvidenceShortCircuit 在 prepare 拿到检索结果后、模型/工具调用前评估
+// 无依据策略；命中时把固定响应标记在 AIResponse 上返回 true，调用方不再
+// 调用模型与工具（避免先编造或触发人工转接等副作用工具）。
+func (o *QueryOrchestrator) noEvidenceShortCircuit(ctx context.Context, req AIRequest, hits []knowledgeprovider.KnowledgeHit) (*AIResponse, bool) {
+	if o.noEvidence == nil {
+		return nil, false
+	}
+	decision := o.noEvidence.EvaluateNoEvidence(ctx, req, hits)
+	if !decision.Apply {
+		return nil, false
+	}
+	return &AIResponse{
+		Content:          "",
+		Sources:          hits,
+		Latency:          0,
+		NoEvidenceShort:  true,
+		NoEvidenceAction: decision.Action,
+		NoEvidenceReason: decision.Reason,
+	}, true
 }
 
 func (o *QueryOrchestrator) SetAuditRecorder(recorder PromptAuditRecorder) {

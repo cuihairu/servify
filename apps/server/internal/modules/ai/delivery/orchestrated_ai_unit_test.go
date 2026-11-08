@@ -222,3 +222,26 @@ func TestOrchestratedAI_SetFallbackEnabled(t *testing.T) {
 		t.Fatal("expected fallback disabled")
 	}
 }
+
+// TestOrchestratedAI_WithRuntimeParamsSetsNoEvidenceOnOrchestrator covers the
+// WithRuntimeParams injection path when the orchestrator is already built: the
+// pre-model no-evidence policy must be installed so a configured refuse
+// short-circuits before any model/tool call.
+func TestOrchestratedAI_WithRuntimeParamsSetsNoEvidenceOnOrchestrator(t *testing.T) {
+	svc, llmProvider, _ := newOrchestratedForUnit(t)
+	// 先触发 orchestrator 构建，再注入参数（注入须回写已建编排器）。
+	_ = svc.activeOrchestrator()
+	svc.WithRuntimeParams(AIRuntimeParams{
+		NoEvidence: NoEvidencePolicy{ZeroHitAction: NoEvidenceRefuse},
+	})
+	resp, err := svc.ProcessQueryEnhanced(context.Background(), "no evidence?", "sess-ne-inject")
+	if err != nil {
+		t.Fatalf("ProcessQueryEnhanced: %v", err)
+	}
+	if resp.Reason != "zero_hit" || resp.Content == "ungrounded answer" {
+		t.Fatalf("expected refuse short-circuit after WithRuntimeParams, got %+v", resp.AIResponse)
+	}
+	if got := len(llmProvider.RecordedRequests()); got != 0 {
+		t.Fatalf("model must not be called on refuse precheck, got %d requests", got)
+	}
+}

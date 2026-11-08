@@ -59,7 +59,8 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryStream(ctx context.Context, 
 					Confidence: 0.6,
 					Source:     "system",
 				}
-				s.applyNoEvidenceAction(final, action, "knowledge_unavailable")
+				s.applyNoEvidenceAction(ctx, sessionID, final, action, "knowledge_unavailable")
+				final.Strategy = string(action)
 				s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), time.Since(start).Seconds())
 				out := make(chan AIStreamEvent, 1)
 				out <- AIStreamEvent{Done: true, Final: final}
@@ -81,7 +82,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryStream(ctx context.Context, 
 		for evt := range stream {
 			if evt.Done {
 				if evt.Response != nil {
-					enhanced := s.finalizeEnhanced(evt.Response)
+					enhanced := s.finalizeEnhanced(ctx, sessionID, evt.Response)
 					// 与 ProcessQuery 同规：把 enhanced 附加输出（引用来源、
 					// 产生方式）带回 AIResponse，WS ai-response 终帧据此透出。
 					final := enhanced.AIResponse
