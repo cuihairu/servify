@@ -7,6 +7,12 @@
 // 嵌入侧建议配 embedding.provider=local（零依赖确定性嵌入器）；检索分值
 // 经幂次校准（cos^(1/3)）后回传，使强词法命中可越过编排层默认 0.7 的
 // 相关门、弱命中仍被滤除（校准只单调保序，不改变排序）。
+//
+// 检索只实现向量余弦通道（strategy 空/semantic → cosine）：本驱动没有
+// 词面索引，语义改写零词面重叠不会命中（TestLocalDriverCosineOnly 钉住
+// 该边界）。strategy=hybrid 显式报错，不再静默降级为 cosine——词面精确
+// 召回（产品名/错误码/订单号）由 pgvector driver 的 hybrid（pg_trgm + RRF）
+// 提供。
 package local
 
 import (
@@ -44,7 +50,7 @@ type Config struct {
 type SearchConfig struct {
 	TopK      int
 	Threshold float64
-	Strategy  string // semantic/hybrid → cosine；其余显式报错
+	Strategy  string // "" / semantic → cosine（纯向量）；hybrid 不支持，显式报错（词面通道在 pgvector driver）；其余报错
 }
 
 // IndexingConfig 是索引配置。
@@ -95,9 +101,6 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 	if strategy == "" {
 		strategy = p.config.Search.Strategy
 	}
-	if normalizeSearchStrategy(strategy) != "cosine" {
-		return nil, fmt.Errorf("unsupported search strategy: %s", strategy)
-	}
 
 	topK := req.TopK
 	if topK <= 0 {
@@ -106,6 +109,15 @@ func (p *Provider) Search(ctx context.Context, req knowledgeprovider.SearchReque
 	threshold := req.Threshold
 	if threshold == 0 {
 		threshold = p.config.Search.Threshold
+	}
+
+	switch normalized := normalizeSearchStrategy(strategy); normalized {
+	case "cosine":
+		// 纯向量通道（本驱动唯一实现）。
+	case "hybrid":
+		return nil, fmt.Errorf("hybrid search is not supported by the local driver: only vector cosine is available (use the pgvector provider for hybrid)")
+	default:
+		return nil, fmt.Errorf("unsupported search strategy: %s", strategy)
 	}
 
 	query := p.db.WithContext(ctx).Model(&knowledgedomain.KnowledgeDoc{}).
@@ -291,7 +303,7 @@ func calibratedScore(cosine float64) float64 {
 
 func normalizeSearchStrategy(strategy string) string {
 	switch strings.TrimSpace(strings.ToLower(strategy)) {
-	case "", "semantic", "hybrid", "cosine":
+	case "", "semantic":
 		return "cosine"
 	default:
 		return strings.TrimSpace(strings.ToLower(strategy))

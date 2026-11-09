@@ -104,6 +104,8 @@ embedding:
 
 关键词路径在 PostgreSQL 使用 `pg_trgm` 的字符三元组相似度，并为标题与正文表达式建立 GIN 索引。PostgreSQL 默认配置没有中文分词器，因此这里**没有使用 tsvector/ts_rank，也不声称提供中文分词**；`pg_trgm` 对中文连续字符按字符片段匹配，适合产品名、错误码、订单号等精确词与短语召回。SQLite 测试环境使用 `LIKE` 作为回退，不代表生产实现。
 
+**本节策略面仅适用于 `knowledge.provider=pgvector`**。`local` 驱动只实现向量余弦通道（`strategy` 空/`semantic` 均按 cosine 处理）：没有词面索引，语义改写零词面重叠不会命中；配置或请求级 `strategy=hybrid` 会显式报错（不再静默降级为 cosine）。需要词面精确召回（产品名、错误码、订单号）请使用 pgvector 驱动的 hybrid。
+
 ### 分块配置 (Indexing)
 
 - `chunk_size`: 单个文本块的最大字符数

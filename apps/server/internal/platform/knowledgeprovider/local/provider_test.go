@@ -316,15 +316,105 @@ func normalizedCosine() float64 {
 	return cosineSimilarity(a, b)
 }
 
-// TestStrategyNormalize 策略别名归一化。
+// TestStrategyNormalize 策略别名归一化：空值/semantic 归一为 cosine；
+// hybrid 不再静默降级，原样透传由 Search 显式报错。
 func TestStrategyNormalize(t *testing.T) {
-	for _, in := range []string{"", "semantic", "hybrid", "COSINE", " cosine "} {
+	for _, in := range []string{"", "semantic", "COSINE", " cosine "} {
 		if got := normalizeSearchStrategy(in); got != "cosine" {
 			t.Fatalf("normalize(%q) = %q, want cosine", in, got)
 		}
 	}
+	if got := normalizeSearchStrategy("hybrid"); got != "hybrid" {
+		t.Fatalf("normalize(hybrid) = %q, want passthrough (local has no hybrid channel)", got)
+	}
 	if got := normalizeSearchStrategy("euclidean"); got != "euclidean" {
 		t.Fatalf("normalize(euclidean) = %q", got)
+	}
+}
+
+// TestSearchRejectsHybridStrategy local 驱动无词面通道：配置或请求级
+// strategy=hybrid 都显式报错，不得静默降级为 cosine（历史行为）。
+func TestSearchRejectsHybridStrategy(t *testing.T) {
+	db := openDB(t)
+	p, err := newTestProvider(t, db, Config{
+		Search: SearchConfig{TopK: 3, Threshold: 0.7, Strategy: "hybrid"},
+	})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	if _, err := p.Search(context.Background(), knowledgeprovider.SearchRequest{
+		Query:    "七天无理由退货",
+		TenantID: "tenant-a",
+	}); err == nil || !strings.Contains(err.Error(), "not supported by the local driver") {
+		t.Fatalf("config-level hybrid must error explicitly, got %v", err)
+	}
+
+	p2, err := newTestProvider(t, db, Config{
+		Search: SearchConfig{TopK: 3, Threshold: 0.7},
+	})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	if _, err := p2.Search(context.Background(), knowledgeprovider.SearchRequest{
+		Query:    "七天无理由退货",
+		TenantID: "tenant-a",
+		Strategy: "HYBRID",
+	}); err == nil || !strings.Contains(err.Error(), "not supported by the local driver") {
+		t.Fatalf("request-level hybrid (case-insensitive) must error explicitly, got %v", err)
+	}
+}
+
+// TestLocalDriverCosineOnly 词面精确命中与语义改写可区分：同词面命中
+// 越阈值；零词面重叠的语义改写不被检索（本地驱动无语义泛化通道，
+// 泛化由编排层 LLM 承担）。
+func TestLocalDriverCosineOnly(t *testing.T) {
+	p, err := newTestProvider(t, openDB(t), Config{
+		Search: SearchConfig{TopK: 3, Threshold: 0.7},
+	})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	ctx := context.Background()
+	if _, err := p.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{
+		ID:       "refund-doc",
+		TenantID: "tenant-a",
+		Title:    "Refund Policy",
+		Content:  "Our refund policy allows refunds within 45 days of payment. Submit a ticket in the admin console.",
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := p.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{
+		ID:       "office-doc",
+		TenantID: "tenant-a",
+		Title:    "Office Hours",
+		Content:  "The office is closed on weekends and public holidays.",
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// 词面精确命中：查询与文档共享 refund/policy/45/days/ticket 词面。
+	hits, err := p.Search(ctx, knowledgeprovider.SearchRequest{
+		Query:    "refund policy 45 days ticket",
+		TenantID: "tenant-a",
+	})
+	if err != nil {
+		t.Fatalf("lexical search: %v", err)
+	}
+	if len(hits) == 0 || hits[0].Metadata["external_id"] != "refund-doc" {
+		t.Fatalf("lexical exact hit must surface refund-doc first, got %+v", hits)
+	}
+
+	// 语义改写零词面重叠：how/do/I/get/my/money/back 与文档词面零共享，
+	// 必须零命中——证明驱动内没有隐藏的语义/hybrid 通道。
+	hits, err = p.Search(ctx, knowledgeprovider.SearchRequest{
+		Query:    "how do I get my money back",
+		TenantID: "tenant-a",
+	})
+	if err != nil {
+		t.Fatalf("semantic search: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("paraphrase without lexical overlap must stay empty (cosine-only boundary), got %+v", hits)
 	}
 }
 
