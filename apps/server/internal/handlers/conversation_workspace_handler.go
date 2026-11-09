@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	conversationapp "servify/apps/server/internal/modules/conversation/application"
 	conversationdelivery "servify/apps/server/internal/modules/conversation/delivery"
 	translationdelivery "servify/apps/server/internal/modules/translation/delivery"
 	realtimeplatform "servify/apps/server/internal/platform/realtime"
@@ -376,9 +377,19 @@ func (h *ConversationWorkspaceHandler) Transfer(c *gin.Context) {
 
 	dto, err := h.service.Transfer(c.Request.Context(), sessionID, req.ToAgentID)
 	if err != nil {
+		// 转接失败面（并发转接 gate）：目标不存在 404、跨作用域 403、不可接
+		// /并发冲突 409，其余保持 500——失败必须有明确结果而非笼统错误。
 		status := http.StatusInternalServerError
-		if errors.Is(err, conversationdelivery.ErrConversationNotFound) {
+		switch {
+		case errors.Is(err, conversationdelivery.ErrConversationNotFound):
 			status = http.StatusNotFound
+		case errors.Is(err, conversationapp.ErrTransferTargetNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, conversationapp.ErrTransferTargetOutOfScope):
+			status = http.StatusForbidden
+		case errors.Is(err, conversationapp.ErrTransferTargetUnavailable),
+			errors.Is(err, conversationapp.ErrConcurrentTransfer):
+			status = http.StatusConflict
 		}
 		c.JSON(status, ErrorResponse{
 			Error:   "Failed to transfer conversation",

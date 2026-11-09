@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"servify/apps/server/internal/models"
+
 	agentapp "servify/apps/server/internal/modules/agent/application"
 	agentdelivery "servify/apps/server/internal/modules/agent/delivery"
 	agentinfra "servify/apps/server/internal/modules/agent/infra"
@@ -185,6 +187,36 @@ func wireRealtimeRuntime(rt *Runtime) (*realtimeplatform.WebSocketHub, *realtime
 	return wsHub, voiceHub
 }
 
+// agentTransferTargetValidator 转接目标校验（并发转接 gate 的组合根适配器）：
+// 直查 agents 表（不套请求作用域）以区分「目标不存在 404」与「跨租户/工作区
+// 403」；可接判定与 routing 手动转接口径一致（非 offline 且未满载）。
+type agentTransferTargetValidator struct {
+	db *gorm.DB
+}
+
+func (v agentTransferTargetValidator) ValidateTransferTarget(ctx context.Context, agentID uint, tenantID, workspaceID string) error {
+	var agent models.Agent
+	err := v.db.WithContext(ctx).Where("user_id = ?", agentID).First(&agent).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return conversationapp.ErrTransferTargetNotFound
+		}
+		return err
+	}
+	if (tenantID != "" && agent.TenantID != tenantID) || (workspaceID != "" && agent.WorkspaceID != workspaceID) {
+		return conversationapp.ErrTransferTargetOutOfScope
+	}
+	switch strings.ToLower(strings.TrimSpace(agent.Status)) {
+	case "online", "busy":
+	default:
+		return conversationapp.ErrTransferTargetUnavailable
+	}
+	if agent.MaxConcurrent > 0 && agent.CurrentLoad >= agent.MaxConcurrent {
+		return conversationapp.ErrTransferTargetUnavailable
+	}
+	return nil
+}
+
 func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, voiceHub *realtimeplatform.VoiceHub) (*conversationdelivery.WebSocketMessageAdapter, error) {
 	conversationRepo := conversationinfra.NewGormRepository(rt.DB)
 	// 会话关闭前拦截（v1-convergence-plan §7.1）：注入 ticket 查询面（同一
@@ -192,7 +224,8 @@ func wireConversationRuntime(rt *Runtime, wsHub *realtimeplatform.WebSocketHub, 
 	// （sessions 表 ID，访客建单 PrepareCreateVisitorTicket 强校验存在性）。
 	conversationService := conversationapp.NewService(conversationRepo, rt.Bus).
 		AttachBusinessMetrics(rt.BusinessMetrics).
-		AttachOpenTicketChecker(ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB)))
+		AttachOpenTicketChecker(ticketapp.NewQueryService(ticketinfra.NewGormRepository(rt.DB))).
+		AttachTransferTargetValidator(agentTransferTargetValidator{db: rt.DB})
 	rt.ConversationHandler = conversationdelivery.NewHandlerService(conversationService)
 	// 跨页缓存刀：conversation app service 结构化满足译文持久化窄契约
 	// （同 aiAssembly.Translation 满足 TranslateInvoker 的零适配口径），

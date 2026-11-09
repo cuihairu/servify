@@ -53,6 +53,51 @@ func (s *stubConversationRepo) UpdateConversation(ctx context.Context, conversat
 	return nil
 }
 
+func (s *stubConversationRepo) TransferAgentAtomic(ctx context.Context, conversationID string, expectedAgentID *uint, newAgentID uint, newStatus domain.ConversationStatus) (bool, error) {
+	if s.err != nil {
+		return false, s.err
+	}
+	item, ok := s.conversations[conversationID]
+	if !ok {
+		return false, fmt.Errorf("not found")
+	}
+	if !applyConversationAgentCAS(item, expectedAgentID, newAgentID, newStatus) {
+		return false, nil
+	}
+	return true, nil
+}
+
+// applyConversationAgentCAS 内存版转接 CAS（与 infra.TransferAgentAtomic 同
+// 语义）：当前坐席等于预期值才改写参与者与状态，供 application 包内测试复用。
+func applyConversationAgentCAS(conv *domain.Conversation, expectedAgentID *uint, newAgentID uint, newStatus domain.ConversationStatus) bool {
+	current := conversationAgentUserID(conv)
+	if (expectedAgentID == nil) != (current == nil) {
+		return false
+	}
+	if expectedAgentID != nil && *expectedAgentID != *current {
+		return false
+	}
+	agentID := newAgentID
+	found := false
+	for i, p := range conv.Participants {
+		if p.Role == domain.ParticipantRoleAgent {
+			conv.Participants[i].UserID = &agentID
+			conv.Participants[i].ID = fmt.Sprintf("agent:%d", newAgentID)
+			found = true
+			break
+		}
+	}
+	if !found {
+		conv.Participants = append(conv.Participants, domain.Participant{
+			ID:     fmt.Sprintf("agent:%d", newAgentID),
+			UserID: &agentID,
+			Role:   domain.ParticipantRoleAgent,
+		})
+	}
+	conv.Status = newStatus
+	return true
+}
+
 func (s *stubConversationRepo) AppendMessage(ctx context.Context, message *domain.ConversationMessage) error {
 	if s.err != nil {
 		return s.err

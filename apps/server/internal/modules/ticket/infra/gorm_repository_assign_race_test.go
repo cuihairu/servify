@@ -8,10 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/ticket/domain"
-
-	"gorm.io/gorm"
 )
 
 // 生产侧派单竞态回归：并发显式派单与自动派单在事务外预读工单 agent_id，
@@ -20,56 +17,7 @@ import (
 // 两个流预读同 stale 值、随后各自开事务——与生产竞态等价（行锁串行化后
 // 后一事务读到前一事务提交的库内值）。
 
-func raceSeedAgent(t *testing.T, db *gorm.DB, userID uint, load int) models.Agent {
-	t.Helper()
-	agent := models.Agent{
-		UserID:        userID,
-		Status:        "online",
-		MaxConcurrent: 10,
-		CurrentLoad:   load,
-	}
-	if err := db.Create(&agent).Error; err != nil {
-		t.Fatalf("seed agent %d: %v", userID, err)
-	}
-	return agent
-}
-
-func raceSeedTicket(t *testing.T, db *gorm.DB, agentID *uint) models.Ticket {
-	t.Helper()
-	ticket := models.Ticket{
-		Title:      "race ticket",
-		CustomerID: 1,
-		AgentID:    agentID,
-		Status:     "assigned",
-		Priority:   "normal",
-		Category:   "support",
-		Source:     "web",
-	}
-	if err := db.Create(&ticket).Error; err != nil {
-		t.Fatalf("seed ticket: %v", err)
-	}
-	return ticket
-}
-
-func raceLoad(t *testing.T, db *gorm.DB, userID uint) int {
-	t.Helper()
-	var agent models.Agent
-	if err := db.Where("user_id = ?", userID).First(&agent).Error; err != nil {
-		t.Fatalf("load agent %d: %v", userID, err)
-	}
-	return agent.CurrentLoad
-}
-
-func raceTicketAgent(t *testing.T, db *gorm.DB, ticketID uint) *uint {
-	t.Helper()
-	var ticket models.Ticket
-	if err := db.Select("id", "agent_id").First(&ticket, ticketID).Error; err != nil {
-		t.Fatalf("load ticket %d: %v", ticketID, err)
-	}
-	return ticket.AgentID
-}
-
-func raceUintPtr(v uint) *uint { return &v }
+// race 夹具已移至无标签文件 gorm_repository_unit_helpers_test.go。
 
 // 两个派单流都预读到 agent_id=nil（显式派单 + 自动派单竞态的最小形态）：
 // 修复后第二流按库内值（第一流的坐席）减 1，第一流坐席不留幽灵负载。

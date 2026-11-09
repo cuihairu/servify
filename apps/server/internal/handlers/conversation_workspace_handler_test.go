@@ -47,7 +47,13 @@ func newConversationWorkspaceTestDB(t *testing.T) *gorm.DB {
 
 func seedConversation(t *testing.T, db *gorm.DB) *conversationapp.Service {
 	t.Helper()
-	repo := conversationinfra.NewGormRepository(db)
+	return seedConversationOn(t, db, conversationinfra.NewGormRepository(db))
+}
+
+// seedConversationOn 用给定仓储装配 service（并发转接测试注入 barrier 装饰器
+// 复用同一 seed 流程）。
+func seedConversationOn(t *testing.T, db *gorm.DB, repo conversationapp.ConversationRepository) *conversationapp.Service {
+	t.Helper()
 	service := conversationapp.NewService(repo, nil)
 	customerID := uint(1)
 	if err := db.Create(&models.User{ID: customerID, Username: "customer", Email: "customer@example.com", Password: "x"}).Error; err != nil {

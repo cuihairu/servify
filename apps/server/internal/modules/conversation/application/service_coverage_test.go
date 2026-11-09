@@ -28,6 +28,9 @@ type scriptedRepo struct {
 
 	saveTranslationsErr error
 
+	transferAtomicErr  error
+	transferAtomicMiss bool
+
 	listAfterLimit  int
 	listAfterCursor string
 
@@ -74,6 +77,23 @@ func (s *scriptedRepo) UpdateConversation(ctx context.Context, conversation *dom
 	cp := *conversation
 	s.conversations[conversation.ID] = &cp
 	return nil
+}
+
+func (s *scriptedRepo) TransferAgentAtomic(ctx context.Context, conversationID string, expectedAgentID *uint, newAgentID uint, newStatus domain.ConversationStatus) (bool, error) {
+	if s.transferAtomicErr != nil {
+		return false, s.transferAtomicErr
+	}
+	if s.transferAtomicMiss {
+		return false, nil
+	}
+	if s.conversations == nil {
+		s.conversations = map[string]*domain.Conversation{}
+	}
+	item, ok := s.conversations[conversationID]
+	if !ok {
+		return false, gorm.ErrRecordNotFound
+	}
+	return applyConversationAgentCAS(item, expectedAgentID, newAgentID, newStatus), nil
 }
 
 func (s *scriptedRepo) AppendMessage(ctx context.Context, message *domain.ConversationMessage) error {
@@ -343,10 +363,10 @@ func TestServiceTransferBranches(t *testing.T) {
 		conversations: map[string]*domain.Conversation{
 			"conv-1": {ID: "conv-1"},
 		},
-		updateErr: errors.New("update boom"),
+		transferAtomicErr: errors.New("atomic boom"),
 	}, nil)
-	if _, err := svc.Transfer(context.Background(), "conv-1", 2); err == nil || err.Error() != "update boom" {
-		t.Fatalf("expected update error, got %v", err)
+	if _, err := svc.Transfer(context.Background(), "conv-1", 2); err == nil || err.Error() != "atomic boom" {
+		t.Fatalf("expected atomic transfer error, got %v", err)
 	}
 
 	repo := &scriptedRepo{conversations: map[string]*domain.Conversation{
@@ -368,7 +388,9 @@ func TestServiceTransferBranches(t *testing.T) {
 	}
 }
 
-func TestServiceTransferIgnoresSystemMessageFailure(t *testing.T) {
+// TestServiceTransferSystemMessageFailureSurfaces 转接系统消息写失败必须上抛
+// （并发转接 gate：失败有明确结果，不再静默吞掉导致时间线缺转派记录）。
+func TestServiceTransferSystemMessageFailureSurfaces(t *testing.T) {
 	repo := &scriptedRepo{
 		conversations: map[string]*domain.Conversation{
 			"conv-1": {ID: "conv-1"},
@@ -377,12 +399,9 @@ func TestServiceTransferIgnoresSystemMessageFailure(t *testing.T) {
 	}
 	svc := NewService(repo, nil)
 
-	got, err := svc.Transfer(context.Background(), "conv-1", 5)
-	if err != nil {
-		t.Fatalf("expected no error despite system message failure, got %v", err)
-	}
-	if got.Status != string(domain.ConversationStatusTransferred) {
-		t.Fatalf("unexpected status %q", got.Status)
+	_, err := svc.Transfer(context.Background(), "conv-1", 5)
+	if err == nil || !strings.Contains(err.Error(), "append boom") {
+		t.Fatalf("expected system message failure surfaced, got %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -77,6 +78,51 @@ func (s *scriptedConversationRepo) UpdateConversation(ctx context.Context, conve
 	cp := *conversation
 	s.conversations[conversation.ID] = &cp
 	return nil
+}
+
+func (s *scriptedConversationRepo) TransferAgentAtomic(ctx context.Context, conversationID string, expectedAgentID *uint, newAgentID uint, newStatus conversationdomain.ConversationStatus) (bool, error) {
+	if s.updateErr != nil {
+		return false, s.updateErr
+	}
+	if s.conversations == nil {
+		s.conversations = map[string]*conversationdomain.Conversation{}
+	}
+	item, ok := s.conversations[conversationID]
+	if !ok {
+		return false, gorm.ErrRecordNotFound
+	}
+	var current *uint
+	for _, p := range item.Participants {
+		if p.Role == conversationdomain.ParticipantRoleAgent && p.UserID != nil {
+			current = p.UserID
+			break
+		}
+	}
+	if (expectedAgentID == nil) != (current == nil) {
+		return false, nil
+	}
+	if expectedAgentID != nil && *expectedAgentID != *current {
+		return false, nil
+	}
+	agentID := newAgentID
+	replaced := false
+	for i, p := range item.Participants {
+		if p.Role == conversationdomain.ParticipantRoleAgent {
+			item.Participants[i].UserID = &agentID
+			item.Participants[i].ID = fmt.Sprintf("agent:%d", newAgentID)
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		item.Participants = append(item.Participants, conversationdomain.Participant{
+			ID:     fmt.Sprintf("agent:%d", newAgentID),
+			UserID: &agentID,
+			Role:   conversationdomain.ParticipantRoleAgent,
+		})
+	}
+	item.Status = newStatus
+	return true, nil
 }
 
 func (s *scriptedConversationRepo) AppendMessage(ctx context.Context, message *conversationdomain.ConversationMessage) error {

@@ -118,6 +118,45 @@ func TestHandlerAssemblyCreateVisitorTicketEmptyScopeFallsBackToDefaultMetric(t 
 	}
 }
 
+// 同键重试：第二次命中既有工单（created=false），不重复执行自动派单/SLA
+// 副作用，直接回既有工单。
+func TestHandlerAssemblyCreateVisitorTicketIdempotentRetry(t *testing.T) {
+	db := newTicketDeliveryDB(t)
+	bus := &recordingBus{}
+	adapter := newTicketDeliveryAdapter(t, db, bus)
+	ctx := context.Background()
+
+	if err := db.Create(&models.Session{
+		ID: "m-retry", TenantID: "tenant-7", WorkspaceID: "ws-7", Status: "active", Platform: "chat",
+	}).Error; err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	req := &ticketcontract.CreateVisitorTicketRequest{
+		SessionID:      "m-retry",
+		Title:          "重复提交",
+		IdempotencyKey: "visitor-retry-key",
+	}
+	first, err := adapter.CreateVisitorTicket(ctx, req)
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	second, err := adapter.CreateVisitorTicket(ctx, req)
+	if err != nil {
+		t.Fatalf("retry must converge: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("retry id = %d, want %d (idempotent hit)", second.ID, first.ID)
+	}
+
+	var count int64
+	if err := db.Model(&models.Ticket{}).Where("idempotency_key = ?", "visitor-retry-key").Count(&count).Error; err != nil {
+		t.Fatalf("count tickets: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("tickets with the key = %d, want 1", count)
+	}
+}
+
 func TestHandlerAssemblyCreateVisitorTicketPersistFailure(t *testing.T) {
 	// tickets 表不存在 → session 解析成功但建行失败，错误透传。
 	db := newTicketDeliveryDB(t)

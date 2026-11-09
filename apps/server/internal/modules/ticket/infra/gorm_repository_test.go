@@ -6,43 +6,17 @@ package infra
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
 	"servify/apps/server/internal/models"
 	"servify/apps/server/internal/modules/ticket/application"
 
-	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
-func newTicketInfraTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	dsn := uniqueMemDSN("file:ticket_infra_" + strings.ReplaceAll(t.Name(), "/", "_") + "")
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		t.Fatalf("db handle: %v", err)
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.Agent{},
-		&models.Ticket{},
-		&models.CustomField{},
-		&models.TicketCustomFieldValue{},
-		&models.TicketStatus{},
-	); err != nil {
-		t.Fatalf("automigrate: %v", err)
-	}
-	return db
-}
+// newTicketInfraTestDB 已移至无标签文件 gorm_repository_unit_helpers_test.go
+// （与负载同步单测套件共享同一夹具）。
 
 func TestGormRepositoryListTicketCustomFields(t *testing.T) {
 	db := newTicketInfraTestDB(t)

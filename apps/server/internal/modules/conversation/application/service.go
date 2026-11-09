@@ -9,14 +9,16 @@ import (
 	"servify/apps/server/internal/modules/conversation/domain"
 	routingapp "servify/apps/server/internal/modules/routing/application"
 	svcmetrics "servify/apps/server/internal/observability/metrics"
+	platformauth "servify/apps/server/internal/platform/auth"
 )
 
 type Service struct {
-	repo        ConversationRepository
-	publisher   EventPublisher
-	now         func() time.Time
-	metrics     *svcmetrics.BusinessMetrics
-	openTickets OpenTicketChecker
+	repo              ConversationRepository
+	publisher         EventPublisher
+	now               func() time.Time
+	metrics           *svcmetrics.BusinessMetrics
+	openTickets       OpenTicketChecker
+	transferValidator TransferTargetValidator
 }
 
 func NewService(repo ConversationRepository, publisher EventPublisher) *Service {
@@ -45,6 +47,16 @@ func (s *Service) AttachOpenTicketChecker(checker OpenTicketChecker) *Service {
 		return s
 	}
 	s.openTickets = checker
+	return s
+}
+
+// AttachTransferTargetValidator 注入转接目标校验（nil 安全，可链式）。
+// 未注入时 Transfer 跳过目标校验（保持历史行为）。
+func (s *Service) AttachTransferTargetValidator(validator TransferTargetValidator) *Service {
+	if s == nil {
+		return s
+	}
+	s.transferValidator = validator
 	return s
 }
 
@@ -231,34 +243,39 @@ func (s *Service) Transfer(ctx context.Context, conversationID string, toAgentID
 	if strings.TrimSpace(conversationID) == "" {
 		return nil, fmt.Errorf("conversation_id required")
 	}
+	// 目标校验（V1.0 转接并发与目标校验 gate）：目标坐席必须存在、属同一
+	// 作用域、且可接。校验失败返回哨兵错误，交付层映射明确结果而非 500。
+	if s.transferValidator != nil {
+		if err := s.transferValidator.ValidateTransferTarget(ctx, toAgentID,
+			platformauth.TenantIDFromContext(ctx), platformauth.WorkspaceIDFromContext(ctx)); err != nil {
+			return nil, err
+		}
+	}
 	conv, err := s.repo.GetConversation(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	// Update agent participant to new agent
-	found := false
-	for i, p := range conv.Participants {
-		if p.Role == domain.ParticipantRoleAgent {
-			conv.Participants[i].UserID = &toAgentID
-			conv.Participants[i].ID = fmt.Sprintf("agent:%d", toAgentID)
-			found = true
-			break
-		}
-	}
-	if !found {
-		conv.Participants = append(conv.Participants, domain.Participant{
-			ID:     fmt.Sprintf("agent:%d", toAgentID),
-			UserID: &toAgentID,
-			Role:   domain.ParticipantRoleAgent,
-		})
-	}
-	conv.Status = domain.ConversationStatusTransferred
-	if err := s.repo.UpdateConversation(ctx, conv); err != nil {
+	// 并发转接以原子 CAS 更新分配：仅当会话当前坐席仍等于读到的值才把
+	// agent_id/status 一并更新。并发冲突返回 ErrConcurrentTransfer（明确结果），
+	// 避免 last-write-wins 造成败者系统消息与实际分配不一致。
+	expectedAgentID := conversationAgentUserID(conv)
+	transferred, err := s.repo.TransferAgentAtomic(ctx, conversationID, expectedAgentID, toAgentID,
+		domain.ConversationStatusTransferred)
+	if err != nil {
 		return nil, err
 	}
-	// Emit system event for transfer
-	_, _ = s.ingestMessage(ctx, conversationID, "", domain.ParticipantRoleSystem, domain.MessageKindSystem,
-		fmt.Sprintf("会话已转派给客服 #%d", toAgentID), nil)
+	if !transferred {
+		return nil, ErrConcurrentTransfer
+	}
+	// CAS 命中后落库结果确定（agent_id=toAgentID + transferred），把同一变更
+	// 应用到读出的快照上组装返回 DTO，不再多一次读。
+	applyTransferToSnapshot(conv, toAgentID)
+	// Emit system event for transfer（错误不再静默丢弃：失败上抛，调用方
+	// 得到明确结果，避免访客面漏记转派系统消息）。
+	if _, err := s.ingestMessage(ctx, conversationID, "", domain.ParticipantRoleSystem, domain.MessageKindSystem,
+		fmt.Sprintf("会话已转派给客服 #%d", toAgentID), nil); err != nil {
+		return nil, fmt.Errorf("record transfer system message: %w", err)
+	}
 	// 统一分配事件发布路径（V1.0 B2 gate）：改派发 routing.transfer_completed，
 	// 与 routing.Service.AssignAgent 的发布口径一致。
 	s.publishRouting(ctx, routingapp.RoutingTransferCompletedEventName, conversationID, map[string]interface{}{
@@ -268,6 +285,43 @@ func (s *Service) Transfer(ctx context.Context, conversationID string, toAgentID
 	})
 	dto := MapConversation(*conv)
 	return &dto, nil
+}
+
+// applyTransferToSnapshot 把确定的转接结果（目标坐席 + transferred 状态）应用
+// 到读出的会话快照：替换或追加 agent 参与人，状态置 transferred。仅在 CAS
+// 命中后调用，与仓储原子更新写下的字段一一对应。
+func applyTransferToSnapshot(conv *domain.Conversation, toAgentID uint) {
+	agentID := toAgentID
+	found := false
+	for i, p := range conv.Participants {
+		if p.Role == domain.ParticipantRoleAgent {
+			conv.Participants[i].UserID = &agentID
+			conv.Participants[i].ID = fmt.Sprintf("agent:%d", toAgentID)
+			found = true
+			break
+		}
+	}
+	if !found {
+		conv.Participants = append(conv.Participants, domain.Participant{
+			ID:     fmt.Sprintf("agent:%d", toAgentID),
+			UserID: &agentID,
+			Role:   domain.ParticipantRoleAgent,
+		})
+	}
+	conv.Status = domain.ConversationStatusTransferred
+}
+
+// conversationAgentUserID 返回会话当前 agent 参与人的 UserID；无 agent 参与
+// 人返回 nil（用于原子 CAS 的预期前置状态）。调用方保证 conv 非空
+// （GetConversation 错误路径先行返回）。
+func conversationAgentUserID(conv *domain.Conversation) *uint {
+	for _, p := range conv.Participants {
+		if p.Role == domain.ParticipantRoleAgent && p.UserID != nil {
+			userID := *p.UserID
+			return &userID
+		}
+	}
+	return nil
 }
 
 func (s *Service) Close(ctx context.Context, conversationID string) (*ConversationDTO, error) {

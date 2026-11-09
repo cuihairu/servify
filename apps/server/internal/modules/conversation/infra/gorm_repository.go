@@ -83,6 +83,29 @@ func (r *GormRepository) UpdateConversation(ctx context.Context, conversation *d
 	return applyConversationScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx).Where("id = ?", conversation.ID).Updates(updates).Error
 }
 
+// TransferAgentAtomic 转接的原子分配更新：UPDATE 带 CAS 谓词（agent_id 仍
+// 等于预期值，nil 预期要求 IS NULL），命中才改 agent_id/status/updated_at。
+// 以 RowsAffected 判定命中——并发转接败者拿到 false 而非静默 last-write-wins。
+// 沿用请求作用域过滤（applyConversationScope），跨租户会话不可被转接。
+func (r *GormRepository) TransferAgentAtomic(ctx context.Context, conversationID string, expectedAgentID *uint, newAgentID uint, newStatus domain.ConversationStatus) (bool, error) {
+	q := applyConversationScope(r.db.WithContext(ctx).Model(&models.Session{}), ctx).
+		Where("id = ?", conversationID)
+	if expectedAgentID == nil {
+		q = q.Where("agent_id IS NULL")
+	} else {
+		q = q.Where("agent_id = ?", *expectedAgentID)
+	}
+	result := q.Updates(map[string]interface{}{
+		"agent_id":   newAgentID,
+		"status":     mapConversationStatusToSessionStatus(newStatus),
+		"updated_at": time.Now(),
+	})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
 func (r *GormRepository) AppendMessage(ctx context.Context, message *domain.ConversationMessage) error {
 	if message == nil {
 		return fmt.Errorf("message required")

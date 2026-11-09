@@ -38,6 +38,10 @@ type ConversationRepository interface {
 	// （历史标注的持久化面，保留键契约见 message_translations.go）：
 	// 跨会话/已删除消息静默跳过，DB 错误上抛。
 	SaveMessageTranslations(ctx context.Context, entries []MessageTranslationEntry) error
+	// TransferAgentAtomic 转接的原子分配更新（并发转接 gate）：仅当会话当前
+	// 坐席仍等于 expectedAgentID（nil 表示无坐席）时，才把 agent_id 与状态
+	// 一并更新；返回是否命中（false = 前置状态已被并发请求改变，CAS 未命中）。
+	TransferAgentAtomic(ctx context.Context, conversationID string, expectedAgentID *uint, newAgentID uint, newStatus domain.ConversationStatus) (bool, error)
 }
 
 // OpenSessionListQuery 开放 API 会话列表查询参数。
