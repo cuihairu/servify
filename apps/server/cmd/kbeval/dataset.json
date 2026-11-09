@@ -1,0 +1,215 @@
+{
+  "description": "customer-service knowledge evaluation set (sanitized, synthetic content): answer / no_answer / stale / conflict / multilingual / privilege categories against the local retrieval driver",
+  "driver": "local",
+  "embedder": "local",
+  "topk": 5,
+  "threshold": 0.7,
+  "docs": [
+    {
+      "external_id": "refund-current",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "退款政策",
+      "content": "当前退款政策：订单支付后 45 天内可以申请退款，需在管理后台提交工单，客服审核后 3 个工作日原路退回。",
+      "lang": "zh"
+    },
+    {
+      "external_id": "refund-old",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "退款政策（旧版）",
+      "content": "旧版退款政策（已过期）：订单支付后 30 天内可以申请退款，退款审核需要 5 个工作日。",
+      "lang": "zh",
+      "superseded": true
+    },
+    {
+      "external_id": "webhook-retry",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "Webhook 重试策略",
+      "content": "Webhook 投递失败会自动重试：最多重试 5 次，间隔按指数退避从 10 秒开始，5 次全部失败后事件进入死信队列，可在管理后台手动重投。",
+      "lang": "zh"
+    },
+    {
+      "external_id": "password-reset",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "Password Reset Guide",
+      "content": "To reset your admin password, open the login page and click Forgot Password. We will send a reset link by email. The link expires after 30 minutes. Contact support if the email does not arrive.",
+      "lang": "en"
+    },
+    {
+      "external_id": "api-429",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "HTTP 429 Rate Limit",
+      "content": "HTTP status 429 means too many requests. The API rate limit is 100 requests per minute per token. Slow down and retry with exponential backoff, and check the Retry-After response header.",
+      "lang": "en"
+    },
+    {
+      "external_id": "sla-p1-source-a",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "SLA Priority Matrix Source A",
+      "content": "P1 incident first response time is 15 minutes according to the customer success handbook. Escalation happens after 30 minutes without response.",
+      "lang": "en"
+    },
+    {
+      "external_id": "sla-p1-source-b",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "SLA Priority Matrix Source B",
+      "content": "P1 incident first response time is 30 minutes according to the operations runbook. The two sources disagree and need review by the support lead.",
+      "lang": "en"
+    },
+    {
+      "external_id": "maintenance-old",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "维护窗口安排（旧版）",
+      "content": "旧版维护窗口（已过期）：系统维护时间为每周三 02:00 到 04:00。",
+      "lang": "zh",
+      "superseded": true
+    },
+    {
+      "external_id": "maintenance-current",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "title": "维护窗口安排",
+      "content": "当前维护窗口：系统维护时间为每月第二个周二 01:00 到 03:00，维护期间管理后台只读。",
+      "lang": "zh"
+    },
+    {
+      "external_id": "tenant-b-pricing",
+      "tenant_id": "tenant-b",
+      "knowledge_id": "kb-support",
+      "title": "内部结算价目表",
+      "content": "内部结算价目表：标准版每坐席每月 88 元，企业版每坐席每月 168 元，此价格不对租户外公开。",
+      "lang": "zh"
+    }
+  ],
+  "cases": [
+    {
+      "id": "answer-zh-refund",
+      "category": "answer",
+      "lang": "zh",
+      "query": "当前退款政策 45 天内申请退款 提交工单 原路退回",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "refund-current"
+      ],
+      "expect_top1": "refund-current",
+      "expect_zero_hit": false
+    },
+    {
+      "id": "answer-zh-webhook",
+      "category": "answer",
+      "lang": "zh",
+      "query": "webhook 重试几次 死信队列",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "webhook-retry"
+      ],
+      "expect_top1": "webhook-retry",
+      "expect_zero_hit": false
+    },
+    {
+      "id": "answer-en-password",
+      "category": "answer",
+      "lang": "en",
+      "query": "reset admin password forgot password login page email link expires",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "password-reset"
+      ],
+      "expect_top1": "password-reset",
+      "expect_zero_hit": false
+    },
+    {
+      "id": "answer-en-429",
+      "category": "answer",
+      "lang": "en",
+      "query": "http 429 too many requests rate limit",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "api-429"
+      ],
+      "expect_top1": "api-429",
+      "expect_zero_hit": false
+    },
+    {
+      "id": "no-answer-fax",
+      "category": "no_answer",
+      "lang": "en",
+      "query": "how to configure the office fax machine",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [],
+      "expect_zero_hit": true
+    },
+    {
+      "id": "no-answer-invoice",
+      "category": "no_answer",
+      "lang": "zh",
+      "query": "发票抬头怎么修改纸质发票邮寄地址",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [],
+      "expect_zero_hit": true
+    },
+    {
+      "id": "stale-maintenance",
+      "category": "stale",
+      "lang": "zh",
+      "query": "当前维护窗口 系统维护时间 管理后台只读",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "maintenance-current",
+        "maintenance-old"
+      ],
+      "expect_top1": "maintenance-current",
+      "expect_zero_hit": false
+    },
+    {
+      "id": "conflict-sla",
+      "category": "conflict",
+      "lang": "en",
+      "query": "P1 incident first response time",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "sla-p1-source-a",
+        "sla-p1-source-b"
+      ],
+      "expect_zero_hit": false
+    },
+    {
+      "id": "privilege-pricing",
+      "category": "privilege",
+      "lang": "zh",
+      "query": "内部结算价目表 每坐席多少钱",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [],
+      "expect_zero_hit": true
+    },
+    {
+      "id": "multilingual-cross-reset",
+      "category": "multilingual",
+      "lang": "zh",
+      "query": "如何重置管理员密码",
+      "tenant_id": "tenant-a",
+      "knowledge_id": "kb-support",
+      "expect_doc_ids": [
+        "password-reset"
+      ],
+      "expect_zero_hit": false,
+      "cross_lingual": true
+    }
+  ]
+}
