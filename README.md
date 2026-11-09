@@ -123,7 +123,7 @@ The repository already has the real-time foundation for this capability chain, i
 
 ## Architecture Principles
 
-- **Modular business domains**: every module carries `domain`, `application`, `infra`, and `delivery`
+- **Modular business domains**: core modules carry `domain`, `application`, `infra`, and `delivery`; thin-shell modules host sub-capabilities via legacy handlers (see `docs/zh/current-architecture.md`: 14 of 27 modules have all four layers, 13 have no `domain` layer)
 - **Platform capability abstraction**: authentication, event bus, AI/Knowledge providers, realtime/SIP are independent
 - **Multi-platform SDK reservation**: Web ships first, API/App contracts are reserved, no fake implementations
 - **Voice capability isolation**: integrated through the `voice` module and a SIP adapter, decoupled from the chat chain

@@ -123,7 +123,7 @@ Servify 当前更适合这样理解：
 
 ## 架构原则
 
-- **业务模块化**：每个模块具备 `domain`、`application`、`infra`、`delivery`
+- **业务模块化**：核心模块具备 `domain`、`application`、`infra`、`delivery` 四层；薄壳模块以 legacy handler/service 承载子能力（详见 `docs/zh/current-architecture.md`：27 个模块中 14 个四层完整、13 个无 `domain` 层）
 - **平台能力抽象**：认证、事件总线、AI/Knowledge provider、realtime/SIP 独立
 - **多端 SDK 预留**：Web 先落地，API/App 预留 contract，不做伪实现
 - **语音能力隔离**：通过 `voice` 模块和 SIP adapter 接入，不耦合聊天链路

@@ -1,3 +1,12 @@
+# ⚠️ 示例配置（非生产）：本文件是外部知识库 provider 的模板样例，仅供本地/
+# 开发/验收用，勿直接用于生产。生产必须满足（启动时 SecurityWarnings /
+# `servify check-security-baseline --strict` 逐项校验，违规即失败）：
+#   - jwt.secret 非默认值（InsecureJWTSecrets 黑名单之外的强随机串）
+#   - database.password 非默认/非空（sqlite 驱动豁免空密码语义）
+#   - event_bus.provider=redis（inmemory 事件不持久，production/staging 拒启）
+#   - dify/weknora/ragflow enabled 时填真实 api_key（+ dataset_id）
+#   - security.cors.allowed_origins 枚举来源，禁用 "*"（bootstrap/security.go）
+#   - security.rate_limiting.enabled=true 且覆盖 /public/ /api/v1/ws 等公开面
 # 更新后的配置文件 - 外部知识库 provider 示例（Dify 优先，WeKnora 兼容）
 
 server:
@@ -44,8 +53,8 @@ ai:
 dify:
   enabled: true
   base_url: "https://api.dify.example/v1"
-  api_key: ""
-  dataset_id: ""
+  api_key: ""  # 启用时必填真实密钥（check-security-baseline --strict 校验，空则基线失败）
+  dataset_id: ""  # 启用时必填
   timeout: 30s
   search:
     top_k: 5
