@@ -87,7 +87,10 @@ Status surface: five states — `open` / `assigned` / `in_progress` / `resolved`
 - `open` → `assigned` / `resolved` / `closed`
 - `assigned` → `open` (can be sent back) / `in_progress` / `resolved` / `closed`
 - `in_progress` → `open` (can be sent back) / `resolved` / `closed`
-- `resolved` / `closed` → `closed` (same-state submission is idempotently allowed)
+- `resolved` → `open` (reopen policy: when a customer follows up on a resolved ticket, the agent reopens the same ticket instead of creating a new one — `resolved_at` is cleared, the status history records `reopen_ticket`, and a `ticket.reopened` event is projected into the linked conversation timeline as「重开工单」) / `closed`
+- `closed` → terminal: reopening is rejected with `closed is terminal; create a new ticket linked to the same session for customer follow-up`; a follow-up on a closed ticket must be a new ticket referencing the same `session_id`. Same-status submissions (`closed` → `closed`) stay idempotently allowed.
+
+Reopen permission: reopening is a management-surface action (`PUT /api/tickets/{id}` with `status:"open"`, agent/admin behind the `tickets` resource permission); visitors cannot change status from the embed surface — their follow-up on a resolved ticket goes through the agent, and on a closed ticket through a new `POST /api/v1/tickets`.
 
 `PUT` changing `status` follows the transitions; use the close endpoint to close a ticket (it records the close reason):
 

@@ -65,6 +65,11 @@ func (s *EventBusSubscriber) Register(bus eventbus.Bus) {
 			actorType:      "system",
 			summary:        "关闭工单",
 		},
+		ticketapp.TicketReopenedEventName: {
+			conversationID: conversationIDFromTicketEvent,
+			actorType:      "system",
+			summary:        "重开工单",
+		},
 	}
 	for name, projection := range registrations {
 		eventName := name

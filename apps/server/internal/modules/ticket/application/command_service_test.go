@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -553,5 +554,87 @@ func TestCommandServiceAssignTicketPublishesEvent(t *testing.T) {
 	}
 	if len(bus.events) != 1 || bus.events[0].Name() != TicketAssignedEventName {
 		t.Fatalf("expected assigned event, got %+v", bus.events)
+	}
+}
+
+// TestCommandServiceReopenResolvedTicket 重开政策（todo 195）：客户追问已
+// 解决工单时坐席重开同一工单——resolved → open 清空解决时间戳、状态流水
+// 记 reopen_ticket（区别于普通 update_ticket）、发布 ticket.reopened 供
+// timeline 投影「重开工单」归入来源会话。
+func TestCommandServiceReopenResolvedTicket(t *testing.T) {
+	bus := &stubEventBus{}
+	resolvedAt := time.Now().Add(-time.Hour)
+	repo := &stubCommandRepo{
+		customerExists: true,
+		tickets: map[uint]*domain.Ticket{
+			1: {
+				ID:         1,
+				Title:      "Billing",
+				CustomerID: 9,
+				Status:     "resolved",
+				ResolvedAt: &resolvedAt,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+		},
+	}
+	svc := NewCommandServiceWithBus(repo, bus)
+	status := "open"
+	got, err := svc.UpdateTicket(context.Background(), 1, UpdateTicketCommand{Status: &status, ActorID: 42})
+	if err != nil {
+		t.Fatalf("expected reopen to succeed, got %v", err)
+	}
+	if got.Status != "open" {
+		t.Fatalf("expected reopened status open, got %+v", got)
+	}
+	if got.ResolvedAt != nil {
+		t.Fatalf("expected resolved_at cleared on reopen, got %+v", got.ResolvedAt)
+	}
+	changes := repo.statusChanges[1]
+	if len(changes) == 0 {
+		t.Fatalf("expected reopen status history, got none")
+	}
+	last := changes[len(changes)-1]
+	if last.Reason != "reopen_ticket" || last.FromStatus != "resolved" || last.ToStatus != "open" || last.UserID != 42 {
+		t.Fatalf("expected reopen_ticket history entry, got %+v", last)
+	}
+	reopened := false
+	for _, ev := range bus.events {
+		if ev.Name() == TicketReopenedEventName {
+			reopened = true
+		}
+	}
+	if !reopened {
+		t.Fatalf("expected ticket.reopened published, got %+v", bus.events)
+	}
+}
+
+// TestCommandServiceReopenClosedRejected 重开政策的终态半边：closed → open
+// 被状态机拒绝且错误信息指引新建工单，不产生任何写入或事件。
+func TestCommandServiceReopenClosedRejected(t *testing.T) {
+	bus := &stubEventBus{}
+	closedAt := time.Now().Add(-2 * time.Hour)
+	repo := &stubCommandRepo{
+		customerExists: true,
+		tickets: map[uint]*domain.Ticket{
+			1: {
+				ID:         1,
+				Title:      "Billing",
+				CustomerID: 9,
+				Status:     "closed",
+				ClosedAt:   &closedAt,
+				CreatedAt:  time.Now(),
+				UpdatedAt:  time.Now(),
+			},
+		},
+	}
+	svc := NewCommandServiceWithBus(repo, bus)
+	status := "open"
+	_, err := svc.UpdateTicket(context.Background(), 1, UpdateTicketCommand{Status: &status, ActorID: 42})
+	if err == nil || !strings.Contains(err.Error(), "closed is terminal") {
+		t.Fatalf("expected closed-terminal rejection, got %v", err)
+	}
+	if len(bus.events) != 0 || len(repo.statusChanges[1]) != 0 {
+		t.Fatalf("expected no writes or events on rejected reopen, events=%+v changes=%+v", bus.events, repo.statusChanges[1])
 	}
 }

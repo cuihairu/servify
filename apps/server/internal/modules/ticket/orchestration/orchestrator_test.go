@@ -375,6 +375,52 @@ func TestPrepareUpdateTicketBuildsMutationContextAndStatusChange(t *testing.T) {
 	}
 }
 
+// TestPrepareUpdateTicketReopenClearsResolvedAt 重开政策（todo 195）的编排
+// 面：resolved → open 时 updates 携带 resolved_at=nil（GORM 置 NULL 清空
+// 解决时间戳），状态流水 from=resolved to=open。
+func TestPrepareUpdateTicketReopenClearsResolvedAt(t *testing.T) {
+	oldTicket := &models.Ticket{
+		ID:         4,
+		Title:      "Old",
+		CustomerID: 7,
+		Status:     "resolved",
+	}
+	newStatus := "open"
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) { return oldTicket, nil },
+		nil,
+		nil,
+	)
+
+	prepared, err := o.PrepareUpdateTicket(context.Background(), oldTicket.ID, &ticketcontract.UpdateTicketRequest{
+		Status: &newStatus,
+	}, 42)
+	if err != nil {
+		t.Fatalf("expected reopen to be allowed, got %v", err)
+	}
+	if prepared == nil || !prepared.StatusChanged {
+		t.Fatalf("expected status change to be detected, got %+v", prepared)
+	}
+	if prepared.Updates["status"] != "open" {
+		t.Fatalf("unexpected updates map: %+v", prepared.Updates)
+	}
+	if v, ok := prepared.Updates["resolved_at"]; !ok || v != nil {
+		t.Fatalf("expected resolved_at cleared (nil) on reopen, got ok=%v v=%v", ok, v)
+	}
+	if prepared.StatusChange == nil || prepared.StatusChange.FromStatus != "resolved" || prepared.StatusChange.ToStatus != "open" {
+		t.Fatalf("unexpected status change: %+v", prepared.StatusChange)
+	}
+}
+
 func TestPrepareUpdateTicketRejectsInvalidStatusTransition(t *testing.T) {
 	oldTicket := &models.Ticket{
 		ID:         4,

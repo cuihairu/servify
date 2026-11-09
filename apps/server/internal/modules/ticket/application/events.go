@@ -13,6 +13,10 @@ const (
 	TicketCreatedEventName  = "ticket.created"
 	TicketAssignedEventName = "ticket.assigned"
 	TicketClosedEventName   = "ticket.closed"
+	// TicketReopenedEventName 是 resolved → open 重开（todo 195 重开政策：
+	// 客户追问已解决工单时坐席重开同一工单）；timeline 投影据此把重开
+	// 归入来源会话。
+	TicketReopenedEventName = "ticket.reopened"
 )
 
 type TicketEvent struct {

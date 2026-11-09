@@ -277,6 +277,10 @@ func (o *TicketOrchestrator) PrepareUpdateTicket(ctx context.Context, ticketID u
 			updates["resolved_at"] = &changeTime
 		case "closed":
 			updates["closed_at"] = &changeTime
+		case "open":
+			// 重开（todo 195）：resolved → open 清空解决时间戳；closed →
+			// open 已被状态机终态拒绝。
+			updates["resolved_at"] = nil
 		}
 		statusChange = &models.TicketStatus{
 			UserID:     userID,

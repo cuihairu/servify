@@ -573,7 +573,8 @@ func TestCoverageStatusPolicyValidate(t *testing.T) {
 		{"", "assigned"}, {"open", "resolved"}, {"open", "closed"},
 		{"assigned", "open"}, {"assigned", "in_progress"}, {"assigned", "resolved"}, {"assigned", "closed"},
 		{"in_progress", "open"}, {"in_progress", "resolved"}, {"in_progress", "closed"},
-		{"resolved", "closed"}, {"closed", "closed"},
+		// 重开政策（todo 195）：resolved → open 允许重开同一工单。
+		{"resolved", "open"}, {"resolved", "closed"}, {"closed", "closed"},
 	}
 	for _, pair := range valid {
 		if err := policy.Validate(pair[0], pair[1]); err != nil {
@@ -581,9 +582,6 @@ func TestCoverageStatusPolicyValidate(t *testing.T) {
 		}
 	}
 	if err := policy.Validate("assigned", "bogus"); err == nil {
-		t.Fatal("expected invalid transition error")
-	}
-	if err := policy.Validate("resolved", "open"); err == nil {
 		t.Fatal("expected invalid transition error")
 	}
 	if err := policy.Validate("closed", "open"); err == nil {

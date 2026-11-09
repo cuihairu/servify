@@ -119,6 +119,10 @@ func (s *CommandService) UpdateTicket(ctx context.Context, ticketID uint, cmd Up
 	previousStatus := ticket.Status
 	previousAgentID := ticket.AgentID
 	statusChanged := false
+	// reopened 是重开政策（todo 195）的审计口径：resolved → open 时状态
+	// 流水记 reopen_ticket（区别于普通 update_ticket）并发布 ticket.reopened
+	// （timeline 投影「重开工单」归入来源会话）。
+	reopened := false
 
 	if cmd.Title != nil {
 		ticket.Title = strings.TrimSpace(*cmd.Title)
@@ -149,7 +153,12 @@ func (s *CommandService) UpdateTicket(ctx context.Context, ticketID uint, cmd Up
 				ticket.ResolvedAt = &now
 			case "closed":
 				ticket.ClosedAt = &now
+			case "open":
+				// 重开（assigned/in_progress 退回或 resolved 重开）：
+				// 解决时间戳清空；closed → open 已被策略终态拒绝，不可达。
+				ticket.ResolvedAt = nil
 			}
+			reopened = previousStatus == "resolved" && status == "open"
 		}
 	}
 	if cmd.Tags != nil {
@@ -164,7 +173,11 @@ func (s *CommandService) UpdateTicket(ctx context.Context, ticketID uint, cmd Up
 	}
 	ticket.UpdatedAt = time.Now()
 	if statusChanged {
-		if err := s.repo.UpdateTicketWithStatus(ctx, ticket, previousStatus, cmd.ActorID, "update_ticket"); err != nil {
+		reason := "update_ticket"
+		if reopened {
+			reason = "reopen_ticket"
+		}
+		if err := s.repo.UpdateTicketWithStatus(ctx, ticket, previousStatus, cmd.ActorID, reason); err != nil {
 			return nil, err
 		}
 	} else {
@@ -175,6 +188,11 @@ func (s *CommandService) UpdateTicket(ctx context.Context, ticketID uint, cmd Up
 	dto := MapTicket(*ticket)
 	if agentChanged(previousAgentID, dto.AgentID) {
 		if err := s.publishTicketEvent(ctx, TicketAssignedEventName, dto); err != nil {
+			return nil, err
+		}
+	}
+	if reopened {
+		if err := s.publishTicketEvent(ctx, TicketReopenedEventName, dto); err != nil {
 			return nil, err
 		}
 	}
