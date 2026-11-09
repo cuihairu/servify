@@ -21,7 +21,7 @@ func (p *capturingKP) UpsertDocument(_ context.Context, _ knowledgeprovider.Know
 	return "", knowledgeprovider.ErrOperationNotSupported
 }
 
-func (p *capturingKP) DeleteDocument(_ context.Context, _ string) error {
+func (p *capturingKP) DeleteDocument(_ context.Context, _ knowledgeprovider.KnowledgeDocument) error {
 	return knowledgeprovider.ErrOperationNotSupported
 }
 
@@ -64,7 +64,7 @@ func TestRetrieverDoesNotLeakConversationIDIntoKnowledgeNamespace(t *testing.T) 
 	if _, err := kp.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{}); err == nil {
 		t.Fatal("UpsertDocument should be unsupported")
 	}
-	if err := kp.DeleteDocument(context.Background(), "doc-1"); err == nil {
+	if err := kp.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil {
 		t.Fatal("DeleteDocument should be unsupported")
 	}
 	if err := kp.HealthCheck(context.Background()); err != nil {

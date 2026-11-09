@@ -91,17 +91,22 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	return info.ID, nil
 }
 
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
+// DeleteDocument 与 Search/UpsertDocument 共用 namespace 映射：文档挂在哪个
+// 知识库（doc.TenantID/doc.KnowledgeID 解析，回落 provider 默认库）就从哪个
+// 库删除，杜绝跨库误删；ExternalID 为空或知识库不可解析即拒绝。
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
 	if p.client == nil {
 		return fmt.Errorf("weknora client is not configured")
 	}
+	id := strings.TrimSpace(doc.ExternalID)
 	if id == "" {
 		return fmt.Errorf("external document id is required")
 	}
-	if p.knowledgeID == "" {
+	namespace := knowledgeprovider.ResolveNamespace("", p.knowledgeID, doc.TenantID, doc.KnowledgeID)
+	if namespace.KnowledgeID == "" {
 		return fmt.Errorf("knowledge base id is not configured")
 	}
-	return p.client.DeleteDocument(ctx, p.knowledgeID, id)
+	return p.client.DeleteDocument(ctx, namespace.KnowledgeID, id)
 }
 
 func (p *Provider) HealthCheck(ctx context.Context) error {

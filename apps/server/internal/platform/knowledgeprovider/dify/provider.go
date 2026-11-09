@@ -123,17 +123,23 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	return created.ID, nil
 }
 
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
+// DeleteDocument 与 UpsertDocument 同一 dataset 映射：文档挂在哪个知识库
+// （doc.KnowledgeID）就从哪个库删，默认 dataset 配置不掺和跨库目标。
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
 	if p.client == nil {
 		return fmt.Errorf("dify client is not configured")
 	}
-	if p.datasetID == "" {
+	datasetID := doc.KnowledgeID
+	if datasetID == "" {
+		datasetID = p.datasetID
+	}
+	if datasetID == "" {
 		return fmt.Errorf("dify dataset id is not configured")
 	}
-	if id = docID(id); id == "" {
-		return fmt.Errorf("dify document id is not configured")
+	if id := docID(doc.ExternalID); id != "" {
+		return p.client.DeleteDocument(ctx, datasetID, id)
 	}
-	return p.client.DeleteDocument(ctx, p.datasetID, id)
+	return fmt.Errorf("dify document id is not configured")
 }
 
 func (p *Provider) HealthCheck(ctx context.Context) error {

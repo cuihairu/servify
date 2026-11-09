@@ -104,10 +104,10 @@ func TestProviderDeleteRebuildHealth(t *testing.T) {
 	if _, err := provider.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{ID: "doc-x", Title: "X"}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if err := provider.DeleteDocument(ctx, "doc-x"); err != nil {
+	if err := provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "doc-x"}); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if err := provider.DeleteDocument(ctx, "missing"); err != nil {
+	if err := provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "missing"}); err != nil {
 		t.Fatalf("delete missing: %v", err)
 	}
 	hits, err := provider.Search(ctx, knowledgeprovider.SearchRequest{})

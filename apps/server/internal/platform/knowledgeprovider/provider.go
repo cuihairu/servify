@@ -11,7 +11,10 @@ var ErrOperationNotSupported = errors.New("knowledge provider operation is not s
 type KnowledgeProvider interface {
 	Search(ctx context.Context, req SearchRequest) ([]KnowledgeHit, error)
 	UpsertDocument(ctx context.Context, doc KnowledgeDocument) (string, error)
-	DeleteDocument(ctx context.Context, id string) error
+	// DeleteDocument 删除外部文档：scope 由 doc.TenantID/doc.KnowledgeID 经各
+	// provider 与 Search/UpsertDocument 相同的 namespace 映射解析（回落各自
+	// 默认库），保证删除目标与写入目标一致；doc.ExternalID 为外部文档标识。
+	DeleteDocument(ctx context.Context, doc KnowledgeDocument) error
 	HealthCheck(ctx context.Context) error
 }
 

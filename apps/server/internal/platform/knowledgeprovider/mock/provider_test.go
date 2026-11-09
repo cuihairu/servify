@@ -118,7 +118,7 @@ func TestProviderDeleteDocument(t *testing.T) {
 	p := &Provider{Documents: map[string]knowledgeprovider.KnowledgeDocument{
 		"doc-1": {ID: "doc-1"},
 	}}
-	if err := p.DeleteDocument(context.Background(), "doc-1"); err != nil {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err != nil {
 		t.Fatalf("DeleteDocument() error = %v", err)
 	}
 	if _, ok := p.Documents["doc-1"]; ok {
@@ -126,13 +126,13 @@ func TestProviderDeleteDocument(t *testing.T) {
 	}
 
 	// Documents 为 nil 时删除也安全
-	if err := (&Provider{}).DeleteDocument(context.Background(), "x"); err != nil {
+	if err := (&Provider{}).DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "x"}); err != nil {
 		t.Fatalf("DeleteDocument() on nil map error = %v", err)
 	}
 
 	wantErr := errors.New("delete forbidden")
 	p2 := &Provider{DeleteError: wantErr}
-	if err := p2.DeleteDocument(context.Background(), "doc-1"); !errors.Is(err, wantErr) {
+	if err := p2.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); !errors.Is(err, wantErr) {
 		t.Fatalf("DeleteDocument() error = %v, want %v", err, wantErr)
 	}
 }

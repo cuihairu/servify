@@ -149,7 +149,7 @@ func TestUpsertReplaceAndDelete(t *testing.T) {
 	if err := p.db.Model(&knowledgeDocModel{}).Where("external_id = ?", "doc-r").Count(&count).Error; err != nil || count > 4 {
 		t.Fatalf("chunk count = %d (err %v), want <= 4", count, err)
 	}
-	if err := p.DeleteDocument(context.Background(), "doc-r"); err != nil {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-r"}); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	none, err := p.Search(context.Background(), knowledgeprovider.SearchRequest{
@@ -339,7 +339,7 @@ func TestConfigDefaults(t *testing.T) {
 // TestDeleteUnknownId 删除不存在的文档不报错（与 pgvector 同契约）。
 func TestDeleteUnknownId(t *testing.T) {
 	p, _ := newTestProvider(t, openDB(t), Config{})
-	if err := p.DeleteDocument(context.Background(), "no-such-doc"); err != nil {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "no-such-doc"}); err != nil {
 		t.Fatalf("delete unknown = %v, want nil", err)
 	}
 }

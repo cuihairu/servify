@@ -84,7 +84,7 @@ func TestProviderNilClient(t *testing.T) {
 	if _, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{}); err == nil || err.Error() != "ragflow client is not configured" {
 		t.Fatalf("UpsertDocument() nil client error = %v", err)
 	}
-	if err := provider.DeleteDocument(context.Background(), "doc"); err == nil || err.Error() != "ragflow client is not configured" {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc"}); err == nil || err.Error() != "ragflow client is not configured" {
 		t.Fatalf("DeleteDocument() nil client error = %v", err)
 	}
 	if err := provider.HealthCheck(context.Background()); err == nil || err.Error() != "ragflow client is not configured" {
@@ -101,7 +101,7 @@ func TestProviderMissingDatasetID(t *testing.T) {
 	if _, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{Title: "t", Content: "c"}); err == nil || err.Error() != "ragflow dataset id is not configured" {
 		t.Fatalf("UpsertDocument() missing dataset error = %v", err)
 	}
-	if err := provider.DeleteDocument(context.Background(), "doc-1"); err == nil || err.Error() != "ragflow dataset id is not configured" {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil || err.Error() != "ragflow dataset id is not configured" {
 		t.Fatalf("DeleteDocument() missing dataset error = %v", err)
 	}
 	if err := provider.HealthCheck(context.Background()); err == nil || err.Error() != "ragflow dataset id is not configured" {
@@ -249,10 +249,10 @@ func TestProviderDeleteDocumentValidationAndErrors(t *testing.T) {
 	client := &capturingClient{}
 	provider := NewProvider(client, "ds-1", SearchConfig{})
 
-	if err := provider.DeleteDocument(context.Background(), "   "); err == nil || err.Error() != "ragflow document id is not configured" {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "   "}); err == nil || err.Error() != "ragflow document id is not configured" {
 		t.Fatalf("DeleteDocument() blank id error = %v", err)
 	}
-	if err := provider.DeleteDocument(context.Background(), "  doc-9  "); err != nil {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "  doc-9  "}); err != nil {
 		t.Fatalf("DeleteDocument() error = %v", err)
 	}
 	if client.gotDeleteDatasetID != "ds-1" || !reflect.DeepEqual(client.gotDeleteIDs, []string{"doc-9"}) {
@@ -260,7 +260,7 @@ func TestProviderDeleteDocumentValidationAndErrors(t *testing.T) {
 	}
 
 	failing := NewProvider(&mockClient{deleteErr: errors.New("delete boom")}, "ds-1", SearchConfig{})
-	if err := failing.DeleteDocument(context.Background(), "doc-1"); err == nil || err.Error() != "delete boom" {
+	if err := failing.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil || err.Error() != "delete boom" {
 		t.Fatalf("DeleteDocument() propagated error = %v", err)
 	}
 }

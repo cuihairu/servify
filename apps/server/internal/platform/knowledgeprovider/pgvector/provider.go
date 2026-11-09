@@ -367,8 +367,8 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 }
 
 // DeleteDocument 删除文档及其所有 chunks
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
-	id = strings.TrimSpace(id)
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
+	id := strings.TrimSpace(doc.ExternalID)
 	query := p.db.WithContext(ctx).Table("knowledge_docs").
 		Where("external_id = ? AND provider_id = ?", id, "pgvector")
 	result := query.Delete(&knowledgedomain.KnowledgeDoc{})

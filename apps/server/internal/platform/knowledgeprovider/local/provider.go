@@ -227,9 +227,9 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	return firstDocID, nil
 }
 
-// DeleteDocument 删除文档及其全部分块（空 id 为无操作，与 pgvector 同契约）。
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
-	return p.deleteByDocument(ctx, strings.TrimSpace(id))
+// DeleteDocument 删除文档及其全部分块（空 external id 为无操作，与 pgvector 同契约）。
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
+	return p.deleteByDocument(ctx, strings.TrimSpace(doc.ExternalID))
 }
 
 // deleteByDocument 按 external_id+provider 删除既有分块；externalID 为空

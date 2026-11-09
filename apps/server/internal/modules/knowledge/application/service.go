@@ -134,7 +134,9 @@ func (s *Service) DeleteDocument(ctx context.Context, id string) error {
 		if externalID == "" {
 			return fmt.Errorf("knowledge provider deletion is not supported: missing external document id")
 		}
-		if err := s.provider.DeleteDocument(ctx, externalID); err != nil {
+		if err := s.provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{
+			ExternalID: externalID,
+		}); err != nil {
 			if errors.Is(err, knowledgeprovider.ErrOperationNotSupported) {
 				return fmt.Errorf("knowledge provider deletion is not supported: %w", err)
 			}

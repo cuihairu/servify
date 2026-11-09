@@ -321,7 +321,7 @@ type unsupportedDeleteProvider struct {
 	mockkp.Provider
 }
 
-func (p *unsupportedDeleteProvider) DeleteDocument(ctx context.Context, id string) error {
+func (p *unsupportedDeleteProvider) DeleteDocument(ctx context.Context, _ knowledgeprovider.KnowledgeDocument) error {
 	return knowledgeprovider.ErrOperationNotSupported
 }
 
@@ -330,9 +330,9 @@ type trackingDeleteProvider struct {
 	deletedID string
 }
 
-func (p *trackingDeleteProvider) DeleteDocument(ctx context.Context, id string) error {
-	p.deletedID = id
-	return p.Provider.DeleteDocument(ctx, id)
+func (p *trackingDeleteProvider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
+	p.deletedID = doc.ExternalID
+	return p.Provider.DeleteDocument(ctx, doc)
 }
 
 // namedStubProvider 自报 provider 名（NamedProvider，模拟 dify/weknora 驱动）。

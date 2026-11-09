@@ -424,7 +424,7 @@ func TestProvider_DeleteDocument(t *testing.T) {
 	provider := NewProvider(db, &mockEmbeddingProvider{}, Config{})
 
 	// 删除文档
-	err := provider.DeleteDocument(ctx, fmt.Sprintf("%d", doc.ID))
+	err := provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: fmt.Sprintf("%d", doc.ID)})
 	if err != nil {
 		t.Errorf("DeleteDocument() error = %v", err)
 	}
@@ -460,7 +460,7 @@ func TestProvider_DeleteDocumentDeletesAllChunksByExternalID(t *testing.T) {
 		t.Fatalf("expected chunked rows before delete, got %d", before)
 	}
 
-	if err := provider.DeleteDocument(ctx, "doc-1"); err != nil {
+	if err := provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err != nil {
 		t.Fatalf("DeleteDocument() error = %v", err)
 	}
 
@@ -829,7 +829,7 @@ func TestProvider_DeleteDocumentBranches(t *testing.T) {
 		t.Fatalf("drop: %v", err)
 	}
 	provider := NewProvider(db, &mockEmbeddingProvider{dimension: 3}, Config{})
-	if err := provider.DeleteDocument(ctx, "whatever"); err == nil {
+	if err := provider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "whatever"}); err == nil {
 		t.Fatal("expected delete error on missing table")
 	}
 }
@@ -951,7 +951,7 @@ func TestProvider_DeleteDocumentSecondQueryFailure(t *testing.T) {
 		tx.Error = errors.New("second delete failed")
 	})
 	p := NewProvider(db, &mockEmbeddingProvider{dimension: 3}, Config{})
-	if err := p.DeleteDocument(context.Background(), "missing-id"); err == nil {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "missing-id"}); err == nil {
 		t.Fatal("expected second delete failure")
 	}
 }

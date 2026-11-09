@@ -78,11 +78,11 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	return doc.ExternalID, nil
 }
 
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	delete(p.documents, id)
+	delete(p.documents, doc.ExternalID)
 	return nil
 }
 

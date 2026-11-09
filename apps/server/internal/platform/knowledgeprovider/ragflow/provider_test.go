@@ -93,7 +93,7 @@ func TestProviderUpsertDocumentReturnsExternalID(t *testing.T) {
 
 func TestProviderDeleteDocument(t *testing.T) {
 	provider := NewProvider(&mockClient{}, "ds-1", SearchConfig{})
-	if err := provider.DeleteDocument(context.Background(), "doc-1"); err != nil {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err != nil {
 		t.Fatalf("DeleteDocument() error = %v", err)
 	}
 }

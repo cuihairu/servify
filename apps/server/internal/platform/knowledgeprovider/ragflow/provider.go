@@ -123,17 +123,24 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	}
 	return created.ID, nil
 }
-func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
+
+// DeleteDocument 与 UpsertDocument 同一 dataset 映射：文档挂在哪个知识库
+// （doc.KnowledgeID）就从哪个库删，默认 dataset 配置不掺和跨库目标。
+func (p *Provider) DeleteDocument(ctx context.Context, doc knowledgeprovider.KnowledgeDocument) error {
 	if p.client == nil {
 		return fmt.Errorf("ragflow client is not configured")
 	}
-	if p.datasetID == "" {
+	datasetID := doc.KnowledgeID
+	if datasetID == "" {
+		datasetID = p.datasetID
+	}
+	if datasetID == "" {
 		return fmt.Errorf("ragflow dataset id is not configured")
 	}
-	if id = strings.TrimSpace(id); id == "" {
-		return fmt.Errorf("ragflow document id is not configured")
+	if id := strings.TrimSpace(doc.ExternalID); id != "" {
+		return p.client.DeleteDocuments(ctx, datasetID, []string{id})
 	}
-	return p.client.DeleteDocuments(ctx, p.datasetID, []string{id})
+	return fmt.Errorf("ragflow document id is not configured")
 }
 
 func (p *Provider) HealthCheck(ctx context.Context) error {

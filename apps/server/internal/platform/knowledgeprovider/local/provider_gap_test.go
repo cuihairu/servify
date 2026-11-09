@@ -100,7 +100,7 @@ func TestUpsertNoID(t *testing.T) {
 		t.Fatalf("rows = %d, want 2 (no cross-delete)", count)
 	}
 	// 删除空 id → 无操作。
-	if err := p.DeleteDocument(context.Background(), "  "); err != nil {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "  "}); err != nil {
 		t.Fatalf("delete blank id = %v, want nil", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestUpsertDeleteErrors(t *testing.T) {
 	}); err == nil || !strings.Contains(err.Error(), "failed to delete existing document") {
 		t.Fatalf("upsert on closed db = %v, want delete error", err)
 	}
-	if err := p.DeleteDocument(context.Background(), "doc-e"); err == nil || !strings.Contains(err.Error(), "failed to delete existing document") {
+	if err := p.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-e"}); err == nil || !strings.Contains(err.Error(), "failed to delete existing document") {
 		t.Fatalf("delete on closed db = %v, want delete error", err)
 	}
 }

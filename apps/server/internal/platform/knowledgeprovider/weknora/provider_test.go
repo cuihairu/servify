@@ -92,8 +92,48 @@ func TestProviderUpsertDocumentReturnsExternalID(t *testing.T) {
 
 func TestProviderDeleteDocument(t *testing.T) {
 	provider := NewProvider(&mockClient{}, "kb-1")
-	if err := provider.DeleteDocument(context.Background(), "doc-1"); err != nil {
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+// TestProviderDeleteDocumentScopedToDocumentNamespace 删除作用域贯通：文档
+// 挂在哪个知识库（doc.KnowledgeID）就从哪个库删，默认库配置不掺和跨库目标；
+// 无 doc.KnowledgeID 时回落 provider 默认库。
+func TestProviderDeleteDocumentScopedToDocumentNamespace(t *testing.T) {
+	client := &recordingClient{}
+	provider := NewProvider(client, "kb-default")
+
+	// 挂在 kb-a 的文档：删除目标是 kb-a，不是默认库。
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		TenantID:    "tenant-a",
+		KnowledgeID: "kb-a",
+		ExternalID:  "doc-a",
+	}); err != nil {
+		t.Fatalf("delete kb-a document: %v", err)
+	}
+	if len(client.calls) != 1 || client.calls[0] != "delete:kb-a/doc-a" {
+		t.Fatalf("calls = %v, want delete scoped to the document namespace", client.calls)
+	}
+
+	// 挂在 kb-b 的文档：只删 kb-b，kb-a/默认库不受影响。
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		TenantID:    "tenant-a",
+		KnowledgeID: "kb-b",
+		ExternalID:  "doc-b",
+	}); err != nil {
+		t.Fatalf("delete kb-b document: %v", err)
+	}
+	if len(client.calls) != 2 || client.calls[1] != "delete:kb-b/doc-b" {
+		t.Fatalf("calls = %v, want second delete scoped to kb-b", client.calls)
+	}
+
+	// 无 doc namespace：回落 provider 默认库（与 UpsertDocument 同映射规则）。
+	if err := provider.DeleteDocument(context.Background(), knowledgeprovider.KnowledgeDocument{ExternalID: " doc-c "}); err != nil {
+		t.Fatalf("delete with default namespace: %v", err)
+	}
+	if len(client.calls) != 3 || client.calls[2] != "delete:kb-default/doc-c" {
+		t.Fatalf("calls = %v, want fallback to provider default kb with trimmed id", client.calls)
 	}
 }
 
@@ -101,22 +141,22 @@ func TestProviderDeleteDocumentErrorBranches(t *testing.T) {
 	ctx := context.Background()
 
 	nilProvider := NewProvider(nil, "kb-1")
-	if err := nilProvider.DeleteDocument(ctx, "doc-1"); err == nil {
+	if err := nilProvider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil {
 		t.Fatal("nil client delete should fail")
 	}
 
 	noDoc := NewProvider(&mockClient{}, "kb-1")
-	if err := noDoc.DeleteDocument(ctx, ""); err == nil {
+	if err := noDoc.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: " "}); err == nil {
 		t.Fatal("missing document id delete should fail")
 	}
 
 	noKB := NewProvider(&mockClient{}, "")
-	if err := noKB.DeleteDocument(ctx, "doc-1"); err == nil {
-		t.Fatal("missing knowledge id delete should fail")
+	if err := noKB.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil {
+		t.Fatal("unresolvable knowledge base delete should fail")
 	}
 
 	errProvider := NewProvider(&mockClient{deleteErr: errors.New("boom")}, "kb-1")
-	if err := errProvider.DeleteDocument(ctx, "doc-1"); err == nil || !strings.Contains(err.Error(), "boom") {
+	if err := errProvider.DeleteDocument(ctx, knowledgeprovider.KnowledgeDocument{ExternalID: "doc-1"}); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("delete error should propagate, got %v", err)
 	}
 }
