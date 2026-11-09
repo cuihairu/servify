@@ -57,9 +57,20 @@ Redis provider（`eventbus/redis_bus.go`）的投递模型：
 - **语义是广播，不是竞争消费**：N 个实例 → 每条事件被每个实例的
   订阅方各处理一次（N 倍副作用）。代码中无 `consumerGroup` 常量，也未
   调用 XREADGROUP。
-- 消费不保证送达：通知丢失（实例正好在重连 pub/sub）时该实例跳过
-  这条事件，没有 pending/ACK/重放机制。stream 里的记录仍可用于
-  排障，但不会被自动重新分发。
+- 消费不保证实时送达：通知丢失（实例正好在重连 pub/sub）时该实例跳过
+  这条事件。2026-11-09 起有启动期 catch-up 兜底（todo 197）：每实例在全部
+  订阅注册完成后执行 `ReplayStreamBacklog`——按 per-stream 检查点
+  （`servify:events:replay:<stream_key>`，存 Redis）增量重放各已注册事件
+  流的未派发积压，at-least-once（派发与检查点写之间的崩溃下轮重放），
+  下游按 event_id 幂等去重（timeline Append 吞 ErrDuplicatedKey）。运行中
+  丢通知的事件滞留到该实例下次重启才补派——无 pending/ACK，运行期不会
+  立即重派。
+- 业务写入与发布仍非事务（写库后、发布前崩溃事件根本没进流）：时间线的
+  `conversation.created` 由启动期对账回填补齐（`bootstrap.ReconcileConversationTimeline`，
+  以 sessions 表为事实源、(conversation_id, event_type) NOT EXISTS 幂等
+  谓词，确定性 event_id）；其余事件类型（如 message.received 的
+  `s.publish` fire-and-forget）仍无恢复面——ticket 链路走 outbox（同事务
+  落事件行 + worker 领取投递）不受此窗口影响。
 - InMemory provider：纯进程内，进程重启即丢（dev/demo 语义）。
 
 推论：**把订阅方写到 bus 上的副作用（如 webhook 入队）必须按
@@ -114,6 +125,10 @@ HTTP 层补充：**rate limiter 是进程内 token bucket**
 - 广播语义测试锚点：`platform/eventbus/redis_bus_multi_instance_test.go`
   —— 两个 `RedisBus` 实例共享同一 Redis，一条事件两边订阅方都收到
   （锁定本文档第 3 节的声明，防止未来静默改成竞争消费或丢失广播）。
+- 启动期 catch-up 重放证据（2026-11-09）：`platform/eventbus/redis_bus_replay_test.go`
+  —— 积压按流序派发、检查点增量重放、nil 接收者与 Redis 不可达；时间线
+  对账证据：`app/bootstrap/timeline_reconcile_test.go` —— 回填行内容、二跑
+  幂等、旧格式 NULL event_id 行视为已覆盖、无表静默 no-op。
 - Agent 多实例证据：`agent/infra/redis_registry_multi_instance_test.go`
   —— 两个 `RedisRegistry` 实例共享同一 Redis 与 DB，互见 presence、transfer
   load 与实例崩溃后的 TTL 过期（原锚 `services/agent_service_redis_integration_test.go`

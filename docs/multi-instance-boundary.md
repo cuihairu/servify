@@ -59,9 +59,20 @@ The delivery model of the Redis provider (`eventbus/redis_bus.go`):
 - **The semantics are broadcast, not competing consumption**: N instances → each event is handled once
   by each instance's subscribers (N-fold side effects). There is no `consumerGroup` constant in the code,
   and XREADGROUP is never called.
-- Consumption is not guaranteed delivered: when a notification is lost (the instance happens to be
-  reconnecting pub/sub), that instance skips this event; there is no pending/ACK/replay mechanism.
-  The records in the stream remain usable for troubleshooting, but are not automatically redistributed.
+- Consumption is not guaranteed delivered in real time: when a notification is lost (the instance happens to be
+  reconnecting pub/sub), that instance skips this event. Since 2026-11-09 there is a startup catch-up safety
+  net (todo 197): after all subscriptions are registered, every instance runs `ReplayStreamBacklog` — an
+  incremental replay of undispatched backlog per registered event stream, from a per-stream checkpoint
+  (`servify:events:replay:<stream_key>`, stored in Redis). Delivery is at-least-once (a crash between dispatch
+  and the checkpoint write replays that window on the next boot); downstream consumers dedupe by event id
+  (the timeline projection swallows ErrDuplicatedKey). An event whose notification was lost mid-run stays
+  undelivered until that instance's next restart — no pending/ACK, no in-run re-dispatch.
+- The business write and the publish are still not transactional (crash after the DB write but before publish
+  leaves the event out of the stream entirely): the timeline's `conversation.created` row is backfilled by a
+  startup reconciliation (`bootstrap.ReconcileConversationTimeline` — sessions as source of truth, an idempotent
+  `(conversation_id, event_type)` NOT EXISTS predicate, deterministic event_id). Other event types (e.g.
+  `message.received`'s fire-and-forget `s.publish`) still have no recovery face — the ticket chain goes through
+  an outbox (event row committed in the same transaction + worker-claimed delivery) and is unaffected by this window.
 - InMemory provider: purely process-local and lost on process restart (dev/demo semantics).
 
 Inference: **side effects written onto the bus by subscribers (e.g. webhook enqueueing) must be
@@ -117,6 +128,10 @@ Once any item lands, update the corresponding face in this document and in deplo
 - Broadcast semantics test anchor: `platform/eventbus/redis_bus_multi_instance_test.go` — two `RedisBus`
   instances sharing one Redis; one event is received by both instances' subscribers (locks the claim in
   section 3 of this document, preventing a silent future change to competing consumption or a lost broadcast).
+- Startup catch-up replay evidence (2026-11-09): `platform/eventbus/redis_bus_replay_test.go` — backlog
+  dispatch in stream order, checkpoint incremental replay, nil receiver / unreachable Redis; timeline
+  reconcile evidence: `app/bootstrap/timeline_reconcile_test.go` — backfill contents, idempotent second run,
+  legacy NULL-event_id rows counted as covered, empty-schema no-op.
 - Agent multi-instance evidence: `agent/infra/redis_registry_multi_instance_test.go` — two `RedisRegistry`
   instances sharing one Redis and DB, mutually observing presence, transfer load, and TTL expiry after
   instance crash (the original anchor `services/agent_service_redis_integration_test.go` was deleted with

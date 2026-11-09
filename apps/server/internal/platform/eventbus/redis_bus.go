@@ -19,6 +19,8 @@ const (
 	eventPubSubChannel = "servify:events:pubsub"
 	// Default stream max length
 	streamMaxLen = 10000
+	// Per-stream checkpoint of the last replayed entry id: servify:events:replay:{stream_key}
+	replayCheckpointPattern = "servify:events:replay:%s"
 )
 
 // RedisBus implements a persistent event bus using Redis Streams.
@@ -208,6 +210,69 @@ func (b *RedisBus) waitUntilReady(ctx context.Context) bool {
 	case <-ctx.Done():
 		return false
 	}
+}
+
+// ReplayStreamBacklog replays stream entries that were persisted but never
+// dispatched. The stream XAdd and the pub/sub notification are not atomic:
+// a crash (or a lost notification) in between leaves the entry in the stream
+// with nobody dispatching it. Called once at startup, after all Subscribe
+// registrations, it walks every stream that has local handlers from the last
+// replay checkpoint (stored in Redis, so normal restarts replay only the
+// undelivered tail) and dispatches each entry. Delivery is at-least-once:
+// downstream consumers dedupe by event id (e.g. the timeline projection
+// swallows gorm.ErrDuplicatedKey), and a crash between dispatch and the
+// checkpoint write just replays that window again on the next boot. Returns
+// the number of entries replayed.
+func (b *RedisBus) ReplayStreamBacklog(ctx context.Context) (int, error) {
+	if b == nil || b.client == nil {
+		return 0, nil
+	}
+
+	b.mu.RLock()
+	names := make([]string, 0, len(b.handlers))
+	for name := range b.handlers {
+		names = append(names, name)
+	}
+	handlers := make(map[string][]Handler, len(b.handlers))
+	for name, hs := range b.handlers {
+		handlers[name] = hs
+	}
+	b.mu.RUnlock()
+
+	replayed := 0
+	for _, name := range names {
+		streamKey := fmt.Sprintf(eventStreamPattern, name)
+		checkpoint, err := b.client.Get(ctx, fmt.Sprintf(replayCheckpointPattern, streamKey)).Result()
+		if err != nil && err != redis.Nil {
+			return replayed, fmt.Errorf("read replay checkpoint %s: %w", streamKey, err)
+		}
+
+		start := checkpoint
+		if start == "" {
+			start = "-"
+		}
+		entries, err := b.client.XRange(ctx, streamKey, start, "+").Result()
+		if err != nil && err != redis.Nil {
+			return replayed, fmt.Errorf("read backlog %s: %w", streamKey, err)
+		}
+		for i, message := range entries {
+			// XRANGE is start-inclusive: skip the checkpointed entry itself.
+			if i == 0 && checkpoint != "" && message.ID == checkpoint {
+				continue
+			}
+			b.dispatchMessage(ctx, name, message, handlers[name])
+			replayed++
+		}
+		if len(entries) > 0 {
+			// Advance the checkpoint to the last read entry — entries published
+			// after XRange but before this Set stay below it and are replayed
+			// on the next startup (start-inclusive skip keeps them visible).
+			if err := b.client.Set(ctx, fmt.Sprintf(replayCheckpointPattern, streamKey), entries[len(entries)-1].ID, 0).Err(); err != nil {
+				return replayed, fmt.Errorf("store replay checkpoint %s: %w", streamKey, err)
+			}
+		}
+	}
+	return replayed, nil
 }
 
 // dispatchFromStream reads events from a stream and calls local handlers.

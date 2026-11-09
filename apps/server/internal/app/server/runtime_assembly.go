@@ -92,7 +92,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+
 	"gorm.io/gorm"
+	"servify/apps/server/internal/platform/eventbus"
 )
 
 type runtimeAssemblyState struct {
@@ -449,6 +451,26 @@ func newAgentRegistry(db *gorm.DB, redisClient *redis.Client, logger *logrus.Log
 	}
 	logger.Warn("using in-memory agent registry - not suitable for multi-instance deployment")
 	return agentinfra.NewInMemoryRegistry()
+}
+
+// replayEventBusBacklog 启动期 catch-up（todo 197）：全部订阅注册完成后重放
+// Redis 流内已落库未派发的积压（XAdd 成功、pub/sub 通知丢失的崩溃窗口）。
+// 仅对 *eventbus.RedisBus 生效（测试 stub/nil bus 跳过）；失败仅告警不阻断
+// 启动——重放是恢复面，缺它只退回旧行为（流内条目滞留到下次重启），不值得
+// 让进程起不来。
+func replayEventBusBacklog(bus eventbus.Bus, logger *logrus.Logger) {
+	redisBus, ok := bus.(*eventbus.RedisBus)
+	if !ok || redisBus == nil {
+		return
+	}
+	replayed, err := redisBus.ReplayStreamBacklog(context.Background())
+	if err != nil {
+		logger.Warnf("event backlog replay failed: %v", err)
+		return
+	}
+	if replayed > 0 {
+		logger.Infof("event backlog replayed %d stream entries", replayed)
+	}
 }
 
 func wireOperationalServices(rt *Runtime, state *runtimeAssemblyState) {

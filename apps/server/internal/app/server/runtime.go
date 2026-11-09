@@ -191,6 +191,10 @@ func BuildRuntime(cfg *config.Config, logger *logrus.Logger, db *gorm.DB, redisC
 	wireOperationalServices(rt, state)
 	wireTransferRuntime(rt, state)
 
+	// 启动期 catch-up（todo 197）：全部事件订阅注册完成后，重放 Redis 流内
+	// 已落库未派发的积压（崩溃窗口：XAdd 成功、pub/sub 通知丢失）。
+	replayEventBusBacklog(rt.Bus, rt.Logger)
+
 	// OIDC SSO: fail fast on a configured-but-broken provider so a server
 	// never comes up advertising SSO it cannot serve.
 	if cfg.OIDC.Enabled {

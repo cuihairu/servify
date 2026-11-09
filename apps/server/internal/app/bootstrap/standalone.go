@@ -144,6 +144,15 @@ func RunStandalone(cfg *config.Config, opts StandaloneOptions) error {
 				logger.Infof("Telegram event id backfill touched %d inbox rows", touched)
 			}
 		}
+
+		// 会话时间线对账回填（todo 197）：业务写入后、事件发布前崩溃会永久
+		// 缺 conversation.created 投影行；迁移完成后按 sessions 表对账补齐，
+		// 幂等可重复执行。两条 schema 路径（versioned/automigrate）都要走。
+		if touched, err := ReconcileConversationTimeline(db); err != nil {
+			return fmt.Errorf("failed to reconcile conversation timeline: %w", err)
+		} else if touched > 0 {
+			logger.Infof("Conversation timeline reconcile backfilled %d rows", touched)
+		}
 	}
 
 	runtime, err := app.BuildServerRuntime()
