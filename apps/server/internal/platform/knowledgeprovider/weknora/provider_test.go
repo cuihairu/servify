@@ -160,13 +160,13 @@ func TestProviderUpsertErrorBranches(t *testing.T) {
 	}
 }
 
-func TestProviderRebuildIndex(t *testing.T) {
-	ctx := context.Background()
-	if err := NewProvider(nil, "kb-1").RebuildIndex(ctx, knowledgeprovider.RebuildRequest{}); err == nil {
-		t.Fatal("nil client rebuild should fail")
-	}
-	if err := NewProvider(&mockClient{}, "kb-1").RebuildIndex(ctx, knowledgeprovider.RebuildRequest{}); err != nil {
-		t.Fatalf("rebuild should be a no-op, got %v", err)
+// TestProviderNotRebuildable WeKnora 远端无重建端点（WeKnoraInterface 无对应
+// 方法），Provider 不得实现 RebuildableProvider 伪造成功记录——重建能力的
+// 缺失由类型断言显式表达（与 ragflow/dify/local/pgvector 同口径）。
+func TestProviderNotRebuildable(t *testing.T) {
+	var prov knowledgeprovider.KnowledgeProvider = NewProvider(&mockClient{}, "kb-1")
+	if _, ok := prov.(knowledgeprovider.RebuildableProvider); ok {
+		t.Fatal("weknora remote has no rebuild endpoint; provider must not fake rebuild success")
 	}
 }
 

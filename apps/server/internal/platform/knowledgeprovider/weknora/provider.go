@@ -100,13 +100,6 @@ func (p *Provider) DeleteDocument(ctx context.Context, id string) error {
 	return p.client.DeleteDocument(ctx, p.knowledgeID, id)
 }
 
-func (p *Provider) RebuildIndex(ctx context.Context, req knowledgeprovider.RebuildRequest) error {
-	if p.client == nil {
-		return fmt.Errorf("weknora client is not configured")
-	}
-	return nil
-}
-
 func (p *Provider) HealthCheck(ctx context.Context) error {
 	if p.client == nil {
 		return fmt.Errorf("weknora client is not configured")
