@@ -207,16 +207,22 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 		return "", err
 	}
 
+	kbID, err := resolveDefaultKnowledgeBase(ctx, p.db, doc.TenantID, doc.KnowledgeID)
+	if err != nil {
+		return "", err
+	}
+
 	var firstDocID string
 	for i, chunk := range chunks {
 		docModel := &knowledgedomain.KnowledgeDoc{
-			TenantID:    doc.TenantID,
-			WorkspaceID: doc.KnowledgeID,
-			ProviderID:  ProviderID,
-			ExternalID:  externalID,
-			Title:       doc.Title,
-			Content:     chunk,
-			Category:    "knowledge",
+			TenantID:        doc.TenantID,
+			WorkspaceID:     doc.KnowledgeID,
+			KnowledgeBaseID: kbID,
+			ProviderID:      ProviderID,
+			ExternalID:      externalID,
+			Title:           doc.Title,
+			Content:         chunk,
+			Category:        "knowledge",
 		}
 		if category, ok := doc.Metadata["category"].(string); ok {
 			docModel.Category = category
@@ -242,6 +248,25 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 		return externalID, nil
 	}
 	return firstDocID, nil
+}
+
+// resolveDefaultKnowledgeBase 解析（或首次创建）当前作用域的 Default 知识库。
+// 无归属文档统一挂默认库，与 legacy CRUD 路径（modules/knowledge infra
+// GormDocumentRepository.Create 的 FirstOrCreate）及迁移 000025 存量回填同一
+// 约定；全新 PostgreSQL 上 knowledge_bases 无 id=0 行，knowledge_base_id=0
+// 直接 Create 会撞 fk_knowledge_docs_knowledge_base（SQLSTATE 23503）。
+func resolveDefaultKnowledgeBase(ctx context.Context, db *gorm.DB, tenantID, workspaceID string) (uint, error) {
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	if workspaceID == "" {
+		workspaceID = "default"
+	}
+	base := &knowledgedomain.KnowledgeBase{TenantID: tenantID, WorkspaceID: workspaceID, Name: "Default"}
+	if err := db.WithContext(ctx).Where("tenant_id = ? AND workspace_id = ? AND name = ?", tenantID, workspaceID, "Default").FirstOrCreate(base).Error; err != nil {
+		return 0, fmt.Errorf("failed to resolve default knowledge base: %w", err)
+	}
+	return base.ID, nil
 }
 
 // DeleteDocument 删除文档及其全部分块（空 external id 为无操作，与 pgvector 同契约）。

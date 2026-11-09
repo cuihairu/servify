@@ -44,6 +44,9 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryStream(ctx context.Context, 
 		return out, nil
 	}
 
+	// 检索是否实际执行，在编排前定死（同 ProcessQueryEnhanced）：半开态
+	// 试探耗尽时检索被跳过，流式成功的终帧不得触发 OnSuccess 误关熔断器。
+	retrievalActive := s.activeKnowledgeProvider() != nil
 	stream, err := s.activeOrchestrator().HandleStream(ctx, s.buildAIRequest(ctx, query, sessionID))
 	if err != nil {
 		// 知识服务故障与零命中分开：有配置的非直答策略时返回可审计固定
@@ -82,7 +85,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryStream(ctx context.Context, 
 		for evt := range stream {
 			if evt.Done {
 				if evt.Response != nil {
-					enhanced := s.finalizeEnhanced(ctx, sessionID, evt.Response)
+					enhanced := s.finalizeEnhanced(ctx, sessionID, evt.Response, retrievalActive)
 					// 与 ProcessQuery 同规：把 enhanced 附加输出（引用来源、
 					// 产生方式）带回 AIResponse，WS ai-response 终帧据此透出。
 					final := enhanced.AIResponse

@@ -274,6 +274,10 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		return s.transferShortCircuit(start), nil
 	}
 
+	// 检索是否实际执行，在编排前定死：熔断器半开态试探耗尽时
+	// activeKnowledgeProvider 返回 nil、检索被跳过，该请求的成功不
+	// 代表知识服务恢复，finalizeEnhanced 据此决定是否触发 OnSuccess。
+	retrievalActive := s.activeKnowledgeProvider() != nil
 	result, err := s.activeOrchestrator().Handle(ctx, s.buildAIRequest(ctx, query, sessionID))
 	if err == nil && result == nil {
 		// Handle 契约外仍可能 (nil, nil)（如 llmProvider 未接线）：
@@ -326,7 +330,7 @@ func (s *OrchestratedEnhancedAIService) ProcessQueryEnhanced(ctx context.Context
 		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "failure", "primary", time.Since(start).Seconds())
 		return nil, err
 	}
-	return s.finalizeEnhanced(ctx, sessionID, result), nil
+	return s.finalizeEnhanced(ctx, sessionID, result, retrievalActive), nil
 }
 
 // buildAIRequest 组装首答编排请求：模型参数来自 ai.provider 对应配置族
@@ -375,7 +379,11 @@ func (s *OrchestratedEnhancedAIService) transferShortCircuit(start time.Time) *E
 
 // finalizeEnhanced 把编排成功结果映射为 enhanced 响应并记录指标：引用来源
 // →置信度/产生方式，置信门→转人工建议。非流式与流式首答共用。
-func (s *OrchestratedEnhancedAIService) finalizeEnhanced(ctx context.Context, sessionID string, result *aimodule.AIResponse) *EnhancedAIResponse {
+// retrievalActive 表示本次请求是否实际执行了知识检索：熔断器半开态试探
+// 请求耗尽后，Allow=false 会让 activeKnowledgeProvider 返回 nil、检索被
+// 跳过，此时模型成功不代表知识服务恢复——不得触发 OnSuccess 把半开态
+// 误转关闭（过早恢复访问）。OnSuccess 仅在检索实际执行时触发。
+func (s *OrchestratedEnhancedAIService) finalizeEnhanced(ctx context.Context, sessionID string, result *aimodule.AIResponse, retrievalActive bool) *EnhancedAIResponse {
 	if result != nil && result.NoEvidenceShort {
 		action := NoEvidenceAction(result.NoEvidenceAction)
 		enhanced := &EnhancedAIResponse{
@@ -390,7 +398,7 @@ func (s *OrchestratedEnhancedAIService) finalizeEnhanced(ctx context.Context, se
 		s.promMetrics.RecordAIRequest(s.aiProviderLabel(), "", "success", string(action), result.Latency.Seconds())
 		return enhanced
 	}
-	if s.knowledgeProviderEnabled {
+	if s.knowledgeProviderEnabled && retrievalActive {
 		s.circuitBreaker.OnSuccess()
 	}
 	s.metrics.SuccessCount++
