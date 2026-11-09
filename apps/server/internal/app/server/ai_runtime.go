@@ -156,6 +156,16 @@ func buildPgvectorAssembly(
 		logger.Warnf("knowledge.provider=pgvector set but embedding.provider is not configured; continuing without it")
 		return fallback, nil
 	}
+	// 维度对账门（todo 194）：embedding 模型维度必须与 vector(1536) 列一致，
+	// 不一致在建索引/入库前显式报错，不得到首次写入才炸出 pg 维度错误。
+	if emb.Dimension() != pgvectorkp.EmbeddingDim {
+		err := fmt.Errorf("pgvector embedding dimension mismatch: embedding provider produces %d-dim vectors but knowledge_docs.embedding is vector(%d); align the embedding model or the column before indexing", emb.Dimension(), pgvectorkp.EmbeddingDim)
+		if opts.requireKnowledgeProviderHealthy() {
+			return nil, err
+		}
+		logger.Warnf("%v; continuing without it", err)
+		return fallback, nil
+	}
 	driver := pgvectorkp.NewProvider(opts.DB, emb, pgvectorkp.Config{
 		Search: pgvectorkp.SearchConfig{
 			TopK:      cfg.Knowledge.Pgvector.Search.TopK,

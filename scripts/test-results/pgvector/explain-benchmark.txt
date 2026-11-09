@@ -1,0 +1,54 @@
+=== todo 194 pgvector EXPLAIN/benchmark (representative data) ===
+date: 2026-11-09T10:32:28Z
+rows: 20000
+ivfflat index: idx_knowledge_docs_embedding lists=100
+
+--- query shape: tenant filter + cosine order + limit 10 (provider.searchVector) ---
+
+=== generic plan, default planner (plan_cache_mode=force_generic_plan) ===
+SET
+PREPARE
+Limit
+  ->  Index Scan using idx_knowledge_docs_embedding on knowledge_docs
+        Order By: (embedding <=> $2)
+        Filter: (tenant_id = $1)
+DEALLOCATE
+
+=== generic plan, forced index (enable_seqscan=off) ===
+SET
+SET
+PREPARE
+Limit (actual time=46.717..47.070 rows=10 loops=1)
+  Buffers: shared hit=1427 read=8805
+  ->  Index Scan using idx_knowledge_docs_embedding on knowledge_docs (actual time=46.714..47.062 rows=10 loops=1)
+        Order By: (embedding <=> $2)
+        Filter: (tenant_id = $1)
+        Buffers: shared hit=1427 read=8805
+Planning:
+  Buffers: shared hit=272
+Planning Time: 4.282 ms
+Execution Time: 47.504 ms
+DEALLOCATE
+
+=== generic plan, default planner, EXPLAIN ANALYZE ===
+SET
+SET
+PREPARE
+Limit (actual time=50.524..50.957 rows=10 loops=1)
+  Buffers: shared hit=1459 read=8773
+  ->  Index Scan using idx_knowledge_docs_embedding on knowledge_docs (actual time=50.520..50.949 rows=10 loops=1)
+        Order By: (embedding <=> $2)
+        Filter: (tenant_id = $1)
+        Buffers: shared hit=1459 read=8773
+Planning:
+  Buffers: shared hit=272
+Planning Time: 4.694 ms
+Execution Time: 51.268 ms
+DEALLOCATE
+
+=== top-1 correctness ===
+Bench 17850 topic 0 similarity=0.9844
+
+=== latency 12 probes per mode (psql round-trip incl parse) ===
+mode=index p50=773ms p95=875ms samples: 776 689 851 727 878 874 760 659 875 773 787 588
+mode=seq p50=417ms p95=676ms samples: 991 306 520 676 417 427 429 373 346 368 338 458

@@ -49,14 +49,17 @@ append_summary() {
 }
 
 # psql_exec "SQL" —— 数据证据经 psql 单值查询（-tAc）。
-# SQL 外再包一层双引号：ssh 把参数拼接后交给远端 shell，不引则空格截断
-# （-tAc 只收到 "UPDATE"，其余成了 psql 的额外参数，调用还悄悄成功）。
+# ssh 模式下 SQL 外再包一层双引号：ssh 把参数拼接后交给远端 shell，不引则
+# 空格截断（-tAc 只收到 "UPDATE"，其余成了 psql 的额外参数，调用还悄悄
+# 成功）。local 模式 docker exec 不经 shell 再解析，包引号会把字面引号
+# 交给 psql 导致语句必败且被 || true 吞掉（2026-11-09 实证：admin 提权
+# 与残留清理静默失败）。
 psql_exec() {
-  local sql="\"$1\""
+  local sql="$1"
   if [ "$PSQL_MODE" = "local" ]; then
     docker exec "$PGVECTOR_CONTAINER" psql -U "$PGVECTOR_USER" -d "$PGVECTOR_DB" -tAc "$sql"
   else
-    ssh "$PGVECTOR_SSH_HOST" docker exec "$PGVECTOR_CONTAINER" psql -U "$PGVECTOR_USER" -d "$PGVECTOR_DB" -tAc "$sql"
+    ssh "$PGVECTOR_SSH_HOST" docker exec "$PGVECTOR_CONTAINER" psql -U "$PGVECTOR_USER" -d "$PGVECTOR_DB" -tAc "\"$sql\""
   fi
 }
 

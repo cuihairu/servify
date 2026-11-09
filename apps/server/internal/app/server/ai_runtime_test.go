@@ -178,6 +178,29 @@ func TestBuildPgvectorAssemblyBranches(t *testing.T) {
 	}
 }
 
+// TestBuildPgvectorAssemblyDimensionMismatch 维度对账门（todo 194）：
+// embedding 模型维度与 knowledge_docs.embedding vector(1536) 列不一致时，
+// 必须在建索引/入库前显式报错（require）或明确降级（默认），不得静默
+// 装配后在首次写入才炸出 pg 维度错误。
+func TestBuildPgvectorAssemblyDimensionMismatch(t *testing.T) {
+	logger := logrus.New()
+	baseAI := aidelivery.NewAIService("test-key", "http://127.0.0.1:1")
+	cfg := config.GetDefaultConfig()
+	cfg.Knowledge.Provider = "pgvector"
+	// local 嵌入器维度 64 ≠ 列维度 1536：装配线可判定的静态不一致。
+	cfg.Embedding.Provider = "local"
+	cfg.Embedding.Local.Dimension = 64
+
+	if _, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: &gorm.DB{}, RequireKnowledgeProviderHealthy: true}, &AIAssembly{}); err == nil || !strings.Contains(err.Error(), "dimension mismatch") {
+		t.Fatalf("dimension mismatch with require must fail explicitly, got %v", err)
+	}
+	fallback := &AIAssembly{}
+	asm, err := buildPgvectorAssembly(baseAI, openai.NewProvider("k", "u"), aidelivery.AIRuntimeParams{}, cfg, logger, AIAssemblyOptions{DB: &gorm.DB{}}, fallback)
+	if err != nil || asm != fallback || asm.KnowledgeDriver != nil {
+		t.Fatalf("dimension mismatch without require must degrade: asm=%v err=%v", asm, err)
+	}
+}
+
 // TestBuildPgvectorAssemblySuccess 覆盖健康检查通过后的成功装配路径：
 // sqlite 内存库插桩 pg_extension 表供 driver.HealthCheck 的扩展探针查询，
 // embedding provider 指向本地 httptest mock（openai 兼容探针任意路径 2xx）。

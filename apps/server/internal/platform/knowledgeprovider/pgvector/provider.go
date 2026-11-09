@@ -21,6 +21,13 @@ type Config struct {
 	Indexing IndexingConfig
 }
 
+// EmbeddingDim 是 knowledge_docs.embedding / knowledge_chunks.embedding
+// 列的固定维度（迁移 000001_init / 000025_knowledge_bases_chunks 的
+// vector(1536)，与 domain KnowledgeDoc GORM tag 同源）。装配线用它对账
+// embedding provider 的 Dimension()：不一致在建索引/入库前显式报错，
+// 不得到首次写入才炸出 pg 维度错误。
+const EmbeddingDim = 1536
+
 // SearchConfig 是搜索配置
 type SearchConfig struct {
 	TopK      int
