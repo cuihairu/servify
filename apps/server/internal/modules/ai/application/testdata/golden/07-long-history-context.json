@@ -1,6 +1,6 @@
 {
   "name": "long-history-context",
-  "description": "长会话历史：上下文注入 system prompt，且历史超阈值触发转人工兜底",
+  "description": "长会话历史：上下文注入 system prompt，且用户轮数达到阈值触发转人工兜底（兜底只数用户消息，assistant 回复不计）",
   "request": {
     "task_type": "qa",
     "query": "还有别的优惠吗",
@@ -13,7 +13,21 @@
       { "role": "user", "content": "运费谁承担" },
       { "role": "assistant", "content": "质量问题由商家承担。" },
       { "role": "user", "content": "多久能到账" },
-      { "role": "assistant", "content": "退款 3-5 个工作日到账。" }
+      { "role": "assistant", "content": "退款 3-5 个工作日到账。" },
+      { "role": "user", "content": "优惠券怎么领" },
+      { "role": "assistant", "content": "在下单页领券中心领取。" },
+      { "role": "user", "content": "能开发票吗" },
+      { "role": "assistant", "content": "支持电子发票，下单后 24 小时内开出。" },
+      { "role": "user", "content": "发票抬头能改吗" },
+      { "role": "assistant", "content": "开出后 30 天内可以在订单详情里重开。" },
+      { "role": "user", "content": "密码忘了怎么办" },
+      { "role": "assistant", "content": "登录页点击忘记密码，通过邮箱重置。" },
+      { "role": "user", "content": "数据能导出吗" },
+      { "role": "assistant", "content": "管理后台支持订单与客户数据导出。" },
+      { "role": "user", "content": "API 有频率限制吗" },
+      { "role": "assistant", "content": "默认每分钟 100 次请求，可在套餐里提升。" },
+      { "role": "user", "content": "webhook 失败会重试吗" },
+      { "role": "assistant", "content": "自动重试 5 次，之后进入死信队列可手动重投。" }
     ]
   },
   "knowledge_hits": [],
