@@ -3,8 +3,11 @@ package local
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -476,6 +479,130 @@ func (f *failingEmbedding) Embed(_ context.Context, texts []string) ([][]float32
 func (f *failingEmbedding) Dimension() int { return 8 }
 
 func (f *failingEmbedding) HealthCheck(_ context.Context) error { return f.healthErr }
+
+// TestCandidateScanCeilingRecallAndP95 截断面规模上限评估（todo 192）：
+// 候选超过 candidateScanLimit 时窗口取最近写入（id DESC），窗口外最旧
+// 分块不可检索——唯一相关文档被挤出窗口时 recall@5 由 1 跌 0；同内容
+// 重新写入（最新 id）恢复命中。扫描延迟记录 p50/p95 基线（进程内余弦，
+// 不作硬阈值断言，CI 时序不承载性能契约）。超限形态的查询方案 = 迁移
+// pgvector driver（向量索引 + pg_trgm 词面通道）。
+func TestCandidateScanCeilingRecallAndP95(t *testing.T) {
+	db := openDB(t)
+	emb := localllm.NewProvider(localllm.Config{})
+	p, err := newTestProvider(t, db, Config{Search: SearchConfig{TopK: 5, Threshold: 0.7}})
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	ctx := context.Background()
+
+	// 目标文档最先写入（最旧，id 最小）：其后 candidateScanLimit 条噪声
+	// 分块把目标挤出 id DESC 截断窗口。
+	target := knowledgeprovider.KnowledgeDocument{
+		ID:          "target-old",
+		TenantID:    "tenant-a",
+		KnowledgeID: "kb",
+		Title:       "Refund Policy",
+		Content:     "UniqueRefundToken refund within 45 days of payment",
+	}
+	if _, err := p.UpsertDocument(ctx, target); err != nil {
+		t.Fatalf("upsert target: %v", err)
+	}
+
+	// 噪声向量与查询向量正交构造（不走文本嵌入）：5000 条随机文本的数字
+	// 词元会以 ~1% 概率哈希碰撞进查询词元桶、越过阈值污染截断断言；本测
+	// 试的对象是 id DESC 扫描窗口的截断语义，不是嵌入器，噪声必须保证
+	// 余弦恒 0。
+	queryVector := emb.EmbedOne("UniqueRefundToken refund 45 days")
+	support := map[int]bool{}
+	for i, v := range queryVector {
+		if v != 0 {
+			support[i] = true
+		}
+	}
+	freeDims := make([]int, 0, len(queryVector))
+	for i := range queryVector {
+		if !support[i] {
+			freeDims = append(freeDims, i)
+		}
+	}
+	if len(freeDims) == 0 {
+		t.Fatal("query support spans the whole embedding space")
+	}
+	rows := make([]knowledgeDocModel, candidateScanLimit)
+	for i := range rows {
+		vec := make([]float32, len(queryVector))
+		vec[freeDims[i%len(freeDims)]] = 1
+		rows[i] = knowledgeDocModel{
+			TenantID:    "tenant-a",
+			WorkspaceID: "kb",
+			ProviderID:  ProviderID,
+			ExternalID:  fmt.Sprintf("noise-%d", i),
+			Title:       fmt.Sprintf("Noise %d", i),
+			Content:     fmt.Sprintf("noise document %d", i),
+			Category:    "knowledge",
+			ChunkIndex:  0,
+			DocChunkID:  fmt.Sprintf("noise-%d-chunk-0", i),
+			Embedding:   knowledgedomain.NewEmbedding(vec),
+		}
+	}
+	if err := db.CreateInBatches(rows, 200).Error; err != nil {
+		t.Fatalf("seed noise: %v", err)
+	}
+
+	var total int64
+	if err := db.Model(&knowledgeDocModel{}).Count(&total).Error; err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if total != int64(candidateScanLimit)+1 {
+		t.Fatalf("corpus = %d, want %d", total, candidateScanLimit+1)
+	}
+
+	query := knowledgeprovider.SearchRequest{Query: "UniqueRefundToken refund 45 days", TenantID: "tenant-a", TopK: 5}
+	hits, err := p.Search(ctx, query)
+	if err != nil {
+		t.Fatalf("search beyond ceiling: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("target beyond the id-DESC scan window must be unreachable, got %+v", hits)
+	}
+	t.Logf("recall@5 = 0/1: oldest relevant chunk (%d chunks total) falls outside the id-DESC scan window", total)
+
+	// 窗口内对照：同内容重新写入（最新 id）即可命中。
+	if _, err := p.UpsertDocument(ctx, knowledgeprovider.KnowledgeDocument{
+		ID:          "target-new",
+		TenantID:    "tenant-a",
+		KnowledgeID: "kb",
+		Title:       "Refund Policy",
+		Content:     "UniqueRefundToken refund within 45 days of payment",
+	}); err != nil {
+		t.Fatalf("upsert target-new: %v", err)
+	}
+	hits, err = p.Search(ctx, query)
+	if err != nil {
+		t.Fatalf("search within window: %v", err)
+	}
+	if len(hits) == 0 || hits[0].Metadata["external_id"] != "target-new" {
+		t.Fatalf("same content inside the window must hit, got %+v", hits)
+	}
+	t.Log("recall@5 = 1/1 once the chunk is inside the scan window (newest write)")
+
+	// 进程内扫描延迟基线（5000 候选 × 256 维余弦）：记录 p50/p95。
+	latencies := make([]float64, 0, 20)
+	for i := 0; i < 20; i++ {
+		start := time.Now()
+		if _, err := p.Search(ctx, query); err != nil {
+			t.Fatalf("latency probe: %v", err)
+		}
+		latencies = append(latencies, float64(time.Since(start).Microseconds()))
+	}
+	sort.Float64s(latencies)
+	p50 := latencies[len(latencies)*50/100]
+	p95 := latencies[len(latencies)*95/100]
+	t.Logf("scan latency at %d candidates: p50=%.0fµs p95=%.0fµs (in-process cosine)", candidateScanLimit, p50, p95)
+	if p95 <= 0 {
+		t.Fatal("latency baseline must be positive")
+	}
+}
 
 // 编译期确认实现端口（与 quality/infra 同款防御）。
 var _ knowledgeprovider.KnowledgeProvider = (*Provider)(nil)

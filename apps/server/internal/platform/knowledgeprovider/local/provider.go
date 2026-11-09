@@ -38,6 +38,11 @@ func (p *Provider) ProviderName() string { return ProviderID }
 
 // candidateScanLimit 是单次检索的最大候选分块数（进程内余弦是 O(n·d)，
 // 上限防全表扫描；命中面按租户/知识库过滤后仍超限时取最近写入的分块）。
+// 截断语义即规模上限：语料超限后最旧分块移出检索窗口、recall 跌 0
+// （TestCandidateScanCeilingRecallAndP95 以 limit+1 语料实证 recall@k 跌
+// 0/复写恢复 1，并记录进程内 p50/p95 扫描延迟）。超限形态的查询方案 =
+// 迁移 pgvector driver（向量索引 + pg_trgm 词面通道），本驱动定位零依赖
+// 小语料形态。
 const candidateScanLimit = 5000
 
 // Config 是本地知识引擎配置（结构与 pgvector driver 同形，便于配置迁移）。
