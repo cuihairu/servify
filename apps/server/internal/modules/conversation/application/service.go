@@ -77,8 +77,14 @@ func (s *Service) CreateConversation(ctx context.Context, cmd CreateConversation
 	if err := s.repo.CreateConversation(ctx, conversation); err != nil {
 		return nil, err
 	}
-	// tenant 体系尚未落到会话模型，先按单租户口径记 default。
-	s.metrics.RecordConversationCreated("default", cmd.Channel.Channel)
+	// 租户归因（todo 196）：从可信作用域（auth ctx 盖章，与事件盖章/仓储
+	// 落列同源）读租户；缺失作用域按明确策略回落 default（单租户兜底口径），
+	// 不再无条件记 default。渠道标签限幅见 boundedChannelLabel。
+	tenantID := platformauth.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	s.metrics.RecordConversationCreated(tenantID, boundedChannelLabel(cmd.Channel.Channel))
 	s.publish(ctx, ConversationCreatedEventName, conversation.ID, MapConversation(*conversation))
 	dto := MapConversation(*conversation)
 	return &dto, nil
@@ -446,4 +452,19 @@ func cloneMetadata(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+// boundedChannelLabel 把渠道指标标签限幅在已知渠道集（web/wechat/whatsapp/
+// voice/telegram/email，大小写归一；空值落 web，与仓储 Platform 缺省口径
+// 一致），未知自由字符串收敛进 other——客户端撑不爆 Prometheus 标签基数。
+// 仅约束指标标签；会话落库的渠道原值不受影响。
+func boundedChannelLabel(channel string) string {
+	switch normalized := strings.ToLower(strings.TrimSpace(channel)); normalized {
+	case "", "web":
+		return "web"
+	case "wechat", "whatsapp", "voice", "telegram", "email":
+		return normalized
+	default:
+		return "other"
+	}
 }
