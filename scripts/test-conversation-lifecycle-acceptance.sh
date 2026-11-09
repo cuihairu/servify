@@ -551,25 +551,35 @@ append_summary "session_close_ok=true"
 echo "✅ 关会话完成"
 
 # ---- 10. Service Timeline 投影断言（B1 落库链路） ----
+# ticket.created 自 c4b3615 起经事务性 outbox 由后台 worker 投递（5s 轮询），
+# 投影非同步可见；固定 sleep 1 会在 worker 首个轮询前读空，确定性误报缺事件
+# （2026-11-09 本地与 CI 双双复现）。改有限等待：500ms×30=15s 上限内轮询到
+# 三事件齐才收口，超时仍缺才判失败。
 echo "🕰️ 校验 Service Timeline..."
-sleep 1
-request_json "GET" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/timeline?limit=100" "" "$ADMIN_TOKEN"
-save_response "timeline" "$RESPONSE_BODY"
-assert_status "200" "$RESPONSE_STATUS" "timeline"
-TIMELINE_TYPES=$(printf '%s' "$RESPONSE_BODY" | python3 -c '
+missing=""
+timeline_types=''
+for _ in $(seq 1 30); do
+  request_json "GET" "$SERVIFY_URL/api/omni/sessions/${SESSION_ID}/timeline?limit=100" "" "$ADMIN_TOKEN"
+  save_response "timeline" "$RESPONSE_BODY"
+  assert_status "200" "$RESPONSE_STATUS" "timeline"
+  timeline_types=$(printf '%s' "$RESPONSE_BODY" | python3 -c '
 import json, sys
 payload = json.load(sys.stdin)
 items = payload.get("items") or []
 print("\n".join(item.get("event_type", "") for item in items))
 ')
+  missing=""
+  for wanted in conversation.created ticket.created ticket.closed; do
+    printf '%s' "$timeline_types" | grep -qx "$wanted" || missing="$missing $wanted"
+  done
+  [ -z "$missing" ] && break
+  sleep 0.5
+done
+TIMELINE_TYPES="$timeline_types"
 append_summary "timeline_event_types=$(printf '%s' "$TIMELINE_TYPES" | paste -sd, -)"
 
-missing=""
-for wanted in conversation.created ticket.created ticket.closed; do
-  printf '%s' "$TIMELINE_TYPES" | grep -qx "$wanted" || missing="$missing $wanted"
-done
 if [ -n "$missing" ]; then
-  echo "❌ Timeline 缺少事件:$missing"
+  echo "❌ Timeline 缺少事件:$missing（等待 15s 后仍缺）"
   exit 1
 fi
 echo "✅ Timeline 投影完整（conversation.created/ticket.created/ticket.closed）"
