@@ -1,11 +1,11 @@
 {
   "provider": "pgvector",
   "mode": "runtime-pgvector-chain",
-  "generated_at": "2026-09-18T17:55:31.605708",
+  "generated_at": "2026-11-09T13:35:22.648337",
   "env": {
-    "pg": "192.168.5.5:5433/servify",
+    "pg": "127.0.0.1:5433/servify",
     "embedding": "openai-compatible-mock (topic-embedding 1536d)",
-    "psql_mode": "ssh"
+    "psql_mode": "local"
   },
   "status": {
     "overall": "passed"
@@ -34,6 +34,7 @@
     "ai-status.txt",
     "build-output.txt",
     "embedding-mock-log.txt",
+    "explain-benchmark.txt",
     "knowledge-provider-enable.txt",
     "knowledge-sync.txt",
     "login-admin.txt",
