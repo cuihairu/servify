@@ -176,10 +176,12 @@ func TestProviderHealthCheckNilClient(t *testing.T) {
 	}
 }
 
-// recordingClient 记录 UpsertDocument 的删旧/上传调用顺序与参数。
+// recordingClient 记录 UpsertDocument 的删旧/上传调用顺序与参数；deleteFn
+// 可按文档 id 定制删除结果（nil 时回落 deleteErr）。
 type recordingClient struct {
 	mockClient
-	calls []string
+	calls    []string
+	deleteFn func(docID string) error
 }
 
 func (m *recordingClient) UploadDocument(ctx context.Context, kbID string, doc *base.Document) (*base.DocumentInfo, error) {
@@ -189,13 +191,16 @@ func (m *recordingClient) UploadDocument(ctx context.Context, kbID string, doc *
 
 func (m *recordingClient) DeleteDocument(ctx context.Context, kbID, docID string) error {
 	m.calls = append(m.calls, "delete:"+kbID+"/"+docID)
+	if m.deleteFn != nil {
+		return m.deleteFn(docID)
+	}
 	return m.deleteErr
 }
 
-// TestProviderUpsertDocumentDeletesStaleExternalFirst P1-1 一致性收口：更新
-// 场景（ExternalID 非空）必须先按本地映射删旧外部文档再上传，防止 WeKnora
-// 纯 Upload 语义残留旧版本被检索命中；删除目标 kb 与上传一致、id 去空格。
-func TestProviderUpsertDocumentDeletesStaleExternalFirst(t *testing.T) {
+// TestProviderUpsertDocumentUploadsBeforeStaleDelete 文档更新容错：先上传新
+// 版本再删旧外部文档（先新建后切换）——上传失败时旧内容仍在远端可用，不因
+// 先删后传失败造成内容不可用；删除目标 kb 与上传一致、id 去空格。
+func TestProviderUpsertDocumentUploadsBeforeStaleDelete(t *testing.T) {
 	client := &recordingClient{}
 	provider := NewProvider(client, "kb-default")
 
@@ -212,15 +217,62 @@ func TestProviderUpsertDocumentDeletesStaleExternalFirst(t *testing.T) {
 	if id != "doc-new" {
 		t.Fatalf("external id = %q", id)
 	}
-	want := []string{"delete:kb-doc/old-1", "upload:kb-doc"}
+	want := []string{"upload:kb-doc", "delete:kb-doc/old-1"}
 	if len(client.calls) != 2 || client.calls[0] != want[0] || client.calls[1] != want[1] {
-		t.Fatalf("calls = %v, want %v (delete before upload)", client.calls, want)
+		t.Fatalf("calls = %v, want %v (upload before delete)", client.calls, want)
 	}
 }
 
-// TestProviderUpsertDocumentAbortsWhenStaleDeleteFails 删旧失败即中断且不上传
-// （与 ragflow/dify 同语义：管理端可重试收敛，不留下新旧并存）。
-func TestProviderUpsertDocumentAbortsWhenStaleDeleteFails(t *testing.T) {
+// TestProviderUpsertDocumentUploadFailureKeepsOldDocument 上传失败即中断，
+// 旧文档未被动过（删除在上传成功之后才发生），重试可收敛。
+func TestProviderUpsertDocumentUploadFailureKeepsOldDocument(t *testing.T) {
+	client := &recordingClient{mockClient: mockClient{uploadErr: errors.New("upload boom")}}
+	provider := NewProvider(client, "kb-1")
+
+	_, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		ExternalID: "old-1",
+		Title:      "Billing",
+		Content:    "Billing content",
+	})
+	if err == nil || !strings.Contains(err.Error(), "upload boom") {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	want := []string{"upload:kb-1"}
+	if len(client.calls) != 1 || client.calls[0] != want[0] {
+		t.Fatalf("calls = %v, want %v (stale delete must not run after upload failure)", client.calls, want)
+	}
+}
+
+// TestProviderUpsertDocumentRollsBackNewWhenStaleDeleteFails 删旧失败时回滚
+// 刚上传的新文档并返回错误（本地映射未动，旧内容仍可用）：远端收敛为「旧
+// 文档原样、无孤儿」，重试重新走完整先传后删路径。
+func TestProviderUpsertDocumentRollsBackNewWhenStaleDeleteFails(t *testing.T) {
+	client := &recordingClient{}
+	client.deleteFn = func(docID string) error {
+		if docID == "old-1" {
+			return errors.New("delete boom")
+		}
+		return nil // 回滚删除新文档成功
+	}
+	provider := NewProvider(client, "kb-1")
+
+	_, err := provider.UpsertDocument(context.Background(), knowledgeprovider.KnowledgeDocument{
+		ExternalID: "old-1",
+		Title:      "Billing",
+		Content:    "Billing content",
+	})
+	if err == nil || !strings.Contains(err.Error(), "delete boom") {
+		t.Fatalf("UpsertDocument() error = %v", err)
+	}
+	want := []string{"upload:kb-1", "delete:kb-1/old-1", "delete:kb-1/doc-new"}
+	if len(client.calls) != 3 || client.calls[0] != want[0] || client.calls[1] != want[1] || client.calls[2] != want[2] {
+		t.Fatalf("calls = %v, want %v (rollback the just-uploaded document)", client.calls, want)
+	}
+}
+
+// TestProviderUpsertDocumentTracesOrphanWhenRollbackAlsoFails 删旧与回滚双失败：
+// 新文档 id 必须随错误透出可追踪（旧/新版本可追踪），错误如实上抛。
+func TestProviderUpsertDocumentTracesOrphanWhenRollbackAlsoFails(t *testing.T) {
 	client := &recordingClient{mockClient: mockClient{deleteErr: errors.New("delete boom")}}
 	provider := NewProvider(client, "kb-1")
 
@@ -229,11 +281,15 @@ func TestProviderUpsertDocumentAbortsWhenStaleDeleteFails(t *testing.T) {
 		Title:      "Billing",
 		Content:    "Billing content",
 	})
-	if err == nil || err.Error() != "delete stale weknora document old-1: delete boom" {
-		t.Fatalf("UpsertDocument() error = %v", err)
+	if err == nil {
+		t.Fatal("expected double failure error")
 	}
-	if len(client.calls) != 1 || client.calls[0] != "delete:kb-1/old-1" {
-		t.Fatalf("calls = %v, want delete only (no upload after failure)", client.calls)
+	if !strings.Contains(err.Error(), "old-1") || !strings.Contains(err.Error(), "doc-new") {
+		t.Fatalf("error must trace stale and rolled-back document ids, got %v", err)
+	}
+	want := []string{"upload:kb-1", "delete:kb-1/old-1", "delete:kb-1/doc-new"}
+	if len(client.calls) != 3 || client.calls[2] != want[2] {
+		t.Fatalf("calls = %v, want %v (rollback attempted)", client.calls, want)
 	}
 }
 

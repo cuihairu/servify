@@ -66,14 +66,10 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	if namespace.KnowledgeID == "" {
 		return "", fmt.Errorf("knowledge base id is not configured")
 	}
-	// 删旧建新：WeKnora UploadDocument 无幂等 upsert，更新场景不删旧会残留
-	// 旧外部文档（检索可命中过期内容）。与 ragflow/dify 同语义——本地映射的
-	// ExternalID 非空时先删旧再上传，删旧失败即中断（管理端可重试收敛）。
-	if oldID := strings.TrimSpace(doc.ExternalID); oldID != "" {
-		if err := p.client.DeleteDocument(ctx, namespace.KnowledgeID, oldID); err != nil {
-			return "", fmt.Errorf("delete stale weknora document %s: %w", oldID, err)
-		}
-	}
+	// 先新建后切换：WeKnora UploadDocument 无幂等 upsert，更新场景（本地映射
+	// 的 ExternalID 非空）不删旧会残留旧外部文档被检索命中。先上传新文档再删
+	// 旧：上传失败时旧内容仍在远端可用；删旧失败时回滚刚上传的新文档（远端
+	// 收敛为旧文档原样、无孤儿），回滚也失败时错误透出新旧 id 以便追踪残留。
 	info, err := p.client.UploadDocument(ctx, namespace.KnowledgeID, &base.Document{
 		Type:     "text",
 		Title:    doc.Title,
@@ -83,6 +79,14 @@ func (p *Provider) UpsertDocument(ctx context.Context, doc knowledgeprovider.Kno
 	})
 	if err != nil {
 		return "", err
+	}
+	if oldID := strings.TrimSpace(doc.ExternalID); oldID != "" {
+		if err := p.client.DeleteDocument(ctx, namespace.KnowledgeID, oldID); err != nil {
+			if rollbackErr := p.client.DeleteDocument(ctx, namespace.KnowledgeID, info.ID); rollbackErr != nil {
+				return "", fmt.Errorf("delete stale weknora document %s: %v; rollback delete of new document %s also failed: %w", oldID, err, info.ID, rollbackErr)
+			}
+			return "", fmt.Errorf("delete stale weknora document %s: %w", oldID, err)
+		}
 	}
 	return info.ID, nil
 }
