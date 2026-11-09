@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	conversationapp "servify/apps/server/internal/modules/conversation/application"
 )
@@ -19,6 +20,32 @@ type ConversationMessageDTO = conversationapp.ConversationMessageDTO
 type CloseOptions = conversationapp.CloseOptions
 
 var ErrOpenTicketsRemain = conversationapp.ErrOpenTicketsRemain
+
+// Transfer 错误面 sentinel 再导出（模块边界同上：handlers 经 delivery 消费）。
+var (
+	ErrTransferTargetNotFound    = conversationapp.ErrTransferTargetNotFound
+	ErrTransferTargetOutOfScope  = conversationapp.ErrTransferTargetOutOfScope
+	ErrTransferTargetUnavailable = conversationapp.ErrTransferTargetUnavailable
+	ErrConcurrentTransfer        = conversationapp.ErrConcurrentTransfer
+)
+
+// TransferHTTPStatus 转接失败面到 HTTP 状态的统一映射：目标不存在/会话不存在
+// 404、跨作用域 403、不可接/并发抢占 409，其余 500——失败必须有明确结果而非
+// 笼统错误。nil 错误不在契约内（调用方只在 err != nil 分支映射）。
+func TransferHTTPStatus(err error) int {
+	switch {
+	case errors.Is(err, ErrConversationNotFound),
+		errors.Is(err, ErrTransferTargetNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, ErrTransferTargetOutOfScope):
+		return http.StatusForbidden
+	case errors.Is(err, ErrTransferTargetUnavailable),
+		errors.Is(err, ErrConcurrentTransfer):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
 
 type HandlerService interface {
 	GetConversation(ctx context.Context, sessionID string) (*ConversationDTO, error)
