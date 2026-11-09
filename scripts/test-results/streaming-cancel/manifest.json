@@ -1,0 +1,33 @@
+{
+  "provider": "streaming-cancel",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18110",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "mock_llm_ok": "true",
+    "server_ready_ok": "true",
+    "normal_stream_ok": "true",
+    "client_disconnect_persist_ok": "true",
+    "ws_reconnect_retry_ok": "true",
+    "model_interrupt_consistent_ok": "true",
+    "no_error_detail_leak_ok": "true",
+    "duplicate_submit_ok": "true",
+    "transfer_keyword_no_model_ok": "true"
+  },
+  "evidence_files": [
+    "build-output.txt",
+    "manifest.json",
+    "mock-log.txt",
+    "server-log.txt",
+    "summary.txt",
+    "ws-abort.json",
+    "ws-disconnect.json",
+    "ws-duplicate.json",
+    "ws-normal.json",
+    "ws-retry.json",
+    "ws-transfer.json"
+  ]
+}
