@@ -203,9 +203,9 @@
 
 ### P2
 
-- [ ] 验证多渠道需求及交付边界：对邮件和 Telegram 等选一条真实客户需求试点；原因：Chatwoot 社区版支持多个渠道（评审竞品表），仓库 Telegram 真 token 联调仍阻塞（`todo.md:8`）；验收：记录渠道协议、授权、出入站、重放、失败处理和真实服务证据。
-- [ ] 设计客户工单跟踪入口：先访谈客户再决定是否建设；原因：Crisp Plus 提供 Ticket Center（评审竞品表），Servify 首版只明确后台跟进（`docs/zh/v1-product-scope.md:108-115`）；验收：记录决策及权限、状态、通知原型，若实施则客户只能查看自己的工单并完成端到端测试。
-- [ ] 验证远程协助差异化：选择真实排障场景，评估同意、权限、结束和恢复；原因：`README.zh.md:60-68` 明确尚非完整 co-browsing；验收：客户试用记录、威胁模型及可复现工作流，未实现能力不作为交付承诺。
+- [ ] BLOCKED — 验证多渠道需求及交付边界：对邮件和 Telegram 等选一条真实客户需求试点；原因：Chatwoot 社区版支持多个渠道（评审竞品表），仓库 Telegram 真 token 联调仍阻塞（`todo.md:8`）；验收：记录渠道协议、授权、出入站、重放、失败处理和真实服务证据。缺：真实客户需求来源 + 真实渠道凭据（telegram/bot_token，外部提供）；本环境无真实客户与渠道凭据，2026-11-10 标记。
+- [ ] BLOCKED — 设计客户工单跟踪入口：先访谈客户再决定是否建设；原因：Crisp Plus 提供 Ticket Center（评审竞品表），Servify 首版只明确后台跟进（`docs/zh/v1-product-scope.md:108-115`）；验收：记录决策及权限、状态、通知原型，若实施则客户只能查看自己的工单并完成端到端测试。缺：客户访谈输入（建设与否属用户/客户拍板，非仓内可代决项），2026-11-10 标记。
+- [ ] BLOCKED — 验证远程协助差异化：选择真实排障场景，评估同意、权限、结束和恢复；原因：`README.zh.md:60-68` 明确尚非完整 co-browsing；验收：客户试用记录、威胁模型及可复现工作流，未实现能力不作为交付承诺。缺：真实客户排障试用记录（需真实客户参与，外部提供），2026-11-10 标记。
 - [ ] 对候选开源解析、队列及 LLM SDK 做选型实验：比较许可证、维护、可靠性和自部署依赖；原因：`apps/server/go.mod:7-44` 现有组件不直接提供完整文档管线或专用队列；验收：每类至少两种方案或保留现状的对照、最小实验和明确采纳决定。
 
 - [x] 审核发现：本轮 diff 未见问题（54e3fa8e..HEAD） — 2026-11-05 复核属实：git log 54e3fa8e..HEAD 仅 2 提交（e0c8e27 todo 验证 95d6789d..HEAD、8959c31 dependabot 升级 npm_and_yarn 组 1 目录），git diff 54e3fa8e..HEAD -- '*.go' '*.sql' '*.yml' '*.yaml' '*.sh' 'Dockerfile*' 'Makefile' 为空；改动仅 docs/package-lock.json（vite 6.4.4→6.4.5）、sdk/package.json+7 子包 package.json+sdk/package-lock.json（vite 8.3.3→8.3.5）与 todo.md 台账，无 Go/SQL/YAML 语义面。实测：`npm -C sdk ci --no-audit --no-fund`（冷装）exit 0、`npm -C sdk run typecheck` exit 0、`npm -C sdk run test` 全绿、`npm -C docs ci --no-audit --no-fund`（冷装）exit 0、`npm -C docs run build` exit 0（93.96s，0 404）；锁内 vite 均一致（sdk node_modules/vite=8.3.5，docs=6.4.5），无版本漂移或 frozen-lockfile 冲突；dependabot 提交信息称「1 目录 /docs」但实际同批改了 SDK 依赖，属提交信息卫生（vite 同族补丁升级），非语义/契约/安全缺陷。
