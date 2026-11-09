@@ -1,7 +1,7 @@
 {
   "provider": "pgvector",
   "mode": "runtime-pgvector-chain",
-  "generated_at": "2026-11-09T13:35:22.648337",
+  "generated_at": "2026-11-09T19:07:59.528081",
   "env": {
     "pg": "127.0.0.1:5433/servify",
     "embedding": "openai-compatible-mock (topic-embedding 1536d)",

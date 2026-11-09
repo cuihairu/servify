@@ -734,9 +734,10 @@ func TestProvider_SearchScoresAndFilters(t *testing.T) {
 }
 
 func TestFuseRRFUsesBothRankingsWithK60(t *testing.T) {
-	vector := []knowledgeprovider.KnowledgeHit{{DocumentID: "a"}, {DocumentID: "b"}, {DocumentID: "c"}}
+	vector := []knowledgeprovider.KnowledgeHit{{DocumentID: "a", Score: 0.9}, {DocumentID: "b", Score: 0.8}, {DocumentID: "c", Score: 0.7}}
 	keyword := []knowledgeprovider.KnowledgeHit{{DocumentID: "c"}, {DocumentID: "b"}, {DocumentID: "d"}}
 	got := fuseRRF(vector, keyword, 4, 60)
+	// 排序仍按融合名次（RRF）：c=1/61+1/63 > b=1/62+1/62 > a=1/61 > d=1/64。
 	wantIDs := []string{"c", "b", "a", "d"}
 	if len(got) != len(wantIDs) {
 		t.Fatalf("got %d hits, want %d", len(got), len(wantIDs))
@@ -746,9 +747,13 @@ func TestFuseRRFUsesBothRankingsWithK60(t *testing.T) {
 			t.Fatalf("rank %d = %q, want %q (all: %+v)", i+1, got[i].DocumentID, want, got)
 		}
 	}
-	wantScore := 1.0/61 + 1.0/63
-	if got[0].Score < wantScore-1e-12 || got[0].Score > wantScore+1e-12 {
-		t.Fatalf("RRF score = %.12f, want %.12f", got[0].Score, wantScore)
+	// Score 保留向量榜原始相似度（todo 239：RRF 名次分不得覆盖成响应层置信度，
+	// 双榜 rank1 的 2/61≈0.033 会把命中正确的查询判 low_confidence）。
+	if got[0].Score != 0.7 {
+		t.Fatalf("score for doc c = %.6f, want vector-branch 0.7 (not RRF 2/61)", got[0].Score)
+	}
+	if got[3].Score != 0 {
+		t.Fatalf("keyword-only doc d score = %.6f, want 0 (searchKeyword 原值)", got[3].Score)
 	}
 }
 

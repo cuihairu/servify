@@ -262,15 +262,18 @@ func fuseRRF(vector, keyword []knowledgeprovider.KnowledgeHit, topK, k int) []kn
 		}
 	}
 	out := make([]knowledgeprovider.KnowledgeHit, 0, len(hits))
-	for id, hit := range hits {
-		hit.Score = scores[id]
+	for _, hit := range hits {
+		// Score 保留原始相似度（向量榜余弦；词面独占命中保持 searchKeyword
+		// 的 0）：RRF 名次分只用于排序。若把 Score 覆盖成 RRF 名次倒数和
+		// （如双榜 rank1 = 2/61 ≈ 0.033），响应层置信度会把名次分当相似度，
+		// 命中正确的查询也全判 low_confidence（todo 239）。
 		out = append(out, hit)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Score == out[j].Score {
+		if scores[out[i].DocumentID] == scores[out[j].DocumentID] {
 			return out[i].DocumentID < out[j].DocumentID
 		}
-		return out[i].Score > out[j].Score
+		return scores[out[i].DocumentID] > scores[out[j].DocumentID]
 	})
 	if topK > 0 && len(out) > topK {
 		out = out[:topK]

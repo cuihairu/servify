@@ -123,9 +123,9 @@ func TestGateSQLiteTopKTruncation(t *testing.T) {
 }
 
 func TestFuseRRFGuardsAndTruncation(t *testing.T) {
-	// k<=0 兜底为 60。
-	got := fuseRRF([]knowledgeprovider.KnowledgeHit{{DocumentID: "a"}}, nil, 5, 0)
-	if len(got) != 1 || got[0].Score < 1.0/61-1e-12 || got[0].Score > 1.0/61+1e-12 {
+	// k<=0 兜底为 60；Score 保留原始相似度（todo 239，未被 RRF 名次分覆盖）。
+	got := fuseRRF([]knowledgeprovider.KnowledgeHit{{DocumentID: "a", Score: 0.95}}, nil, 5, 0)
+	if len(got) != 1 || got[0].Score != 0.95 {
 		t.Fatalf("k fallback: %+v", got)
 	}
 	// topK 截断：两个来源各命中文档，截到 topK=1。
