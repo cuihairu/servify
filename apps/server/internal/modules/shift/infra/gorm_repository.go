@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	platformauth "servify/apps/server/internal/platform/auth"
@@ -101,11 +102,20 @@ func (r *GormRepository) CountShifts(ctx context.Context, req *shiftapp.ShiftLis
 	return total, nil
 }
 
-func (r *GormRepository) ListShifts(ctx context.Context, req *shiftapp.ShiftListRequest) ([]models.ShiftSchedule, error) {
-	sortField := req.SortBy
-	if sortField == "" {
-		sortField = "start_time"
+// normalizeShiftSortBy 白名单 ShiftSchedule 可排序列（P0-1 同类）：sort_by
+// 由查询参数直达 Order 拼接，未白名单任意串即盲注面，其余回退 start_time。
+func normalizeShiftSortBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "id", "agent_id", "shift_type", "start_time", "end_time",
+		"date", "status", "created_at", "updated_at":
+		return strings.ToLower(strings.TrimSpace(sortBy))
+	default:
+		return "start_time"
 	}
+}
+
+func (r *GormRepository) ListShifts(ctx context.Context, req *shiftapp.ShiftListRequest) ([]models.ShiftSchedule, error) {
+	sortField := normalizeShiftSortBy(req.SortBy)
 	sortOrder := req.SortOrder
 	if sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "asc"
