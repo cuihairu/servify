@@ -343,10 +343,7 @@ func (r *GormRepository) ListSatisfactions(ctx context.Context, req *satisfapp.S
 		return nil, 0, err
 	}
 
-	sortField := req.SortBy
-	if sortField == "" {
-		sortField = "created_at"
-	}
+	sortField := normalizeSatisfactionSortBy(req.SortBy)
 	sortOrder := req.SortOrder
 	if sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "desc"
@@ -368,6 +365,18 @@ func (r *GormRepository) ListSatisfactions(ctx context.Context, req *satisfapp.S
 func (r *GormRepository) DeleteSatisfaction(ctx context.Context, id uint) (int64, error) {
 	result := applyScopeFilter(r.db.WithContext(ctx), ctx).Delete(&models.CustomerSatisfaction{}, id)
 	return result.RowsAffected, result.Error
+}
+
+// normalizeSatisfactionSortBy 白名单排序字段：sort_by 由查询参数直达 List 的
+// Order 拼接（与 ticket 的 NormalizeTicketSortBy 同口径）。GORM Order 接收
+// 原生 SQL 片段，未白名单的任意串（如 "(CASE WHEN ...)"）即成盲注面。
+func normalizeSatisfactionSortBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "id", "ticket_id", "customer_id", "agent_id", "rating", "category", "created_at":
+		return strings.ToLower(strings.TrimSpace(sortBy))
+	default:
+		return "created_at"
+	}
 }
 
 func (r *GormRepository) SaveSatisfaction(ctx context.Context, satisfaction *models.CustomerSatisfaction) error {

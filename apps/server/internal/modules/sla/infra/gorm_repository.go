@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"servify/apps/server/internal/models"
@@ -117,16 +118,49 @@ func slaConfigFilterQuery(db *gorm.DB, ctx context.Context, req *slapp.SLAConfig
 	return query
 }
 
-// slaOrder 归一化排序字段与方向（与原始内联逻辑一致）。
+// slaOrder 归一化配置列表排序字段与方向：sort_by 由查询参数直达 Order 拼接，
+// 字段须白名单（GORM Order 接收原生 SQL 片段，任意串即盲注面；与 ticket 的
+// NormalizeTicketSortBy 同口径）。
 func slaOrder(sortBy, sortOrder string) string {
-	sortField := sortBy
-	if sortField == "" {
-		sortField = "created_at"
-	}
+	sortField := normalizeSLASortBy(sortBy)
 	if sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "desc"
 	}
 	return fmt.Sprintf("%s %s", sortField, sortOrder)
+}
+
+// slaViolationOrder 违约列表排序（独立白名单：违约列集合≠配置列集合，
+// 混用会让合法违约排序列被误回退）。
+func slaViolationOrder(sortBy, sortOrder string) string {
+	sortField := normalizeSLAViolationSortBy(sortBy)
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+	return fmt.Sprintf("%s %s", sortField, sortOrder)
+}
+
+// normalizeSLASortBy 白名单 SLAConfig 的可排序列，其余一律回退 created_at。
+func normalizeSLASortBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "id", "name", "priority", "customer_tier", "warning_threshold",
+		"first_response_time", "resolution_time", "escalation_time",
+		"business_hours_only", "active", "created_at", "updated_at":
+		return strings.ToLower(strings.TrimSpace(sortBy))
+	default:
+		return "created_at"
+	}
+}
+
+// normalizeSLAViolationSortBy 白名单 SLAViolation 的可排序列，其余回退
+// created_at。
+func normalizeSLAViolationSortBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "id", "ticket_id", "sla_config_id", "violation_type",
+		"deadline", "violated_at", "resolved", "created_at", "updated_at":
+		return strings.ToLower(strings.TrimSpace(sortBy))
+	default:
+		return "created_at"
+	}
 }
 
 func (r *GormRepository) FindConfigByPriorityTier(ctx context.Context, priority, tier string) (*models.SLAConfig, error) {
@@ -302,7 +336,7 @@ func (r *GormRepository) CountViolationsFiltered(ctx context.Context, req *slapp
 }
 
 func (r *GormRepository) ListViolations(ctx context.Context, req *slapp.SLAViolationListRequest) ([]models.SLAViolation, error) {
-	query := slaViolationFilterQuery(r.db, ctx, req).Order(slaOrder(req.SortBy, req.SortOrder))
+	query := slaViolationFilterQuery(r.db, ctx, req).Order(slaViolationOrder(req.SortBy, req.SortOrder))
 	if req.PageSize > 0 {
 		query = query.Offset((req.Page - 1) * req.PageSize).Limit(req.PageSize)
 	}
