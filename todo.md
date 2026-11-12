@@ -4,8 +4,10 @@
 
 ## 未完成
 
-- [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）—— BLOCKED：env 无 dify/weknora/ragflow 凭据，缺真实远端端点 + 凭证（外部提供）。2026-11-04 复核（env 仍无凭据，仅模板）；本轮跳过；复核 2026-11-05 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）；复核 2026-11-06 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）
-- [ ] 聊天平台 Phase 0：Telegram 真实 bot token 联调（隐私模式 / 逐群授权核实与运营授权记录）—— BLOCKED：env 无 telegram/bot_token，token 外部提供；仓内实现已收口。2026-11-04 复核（env 仍无 token）；本轮跳过；复核 2026-11-05 仍缺 外部 telegram bot token（env 无 telegram/bot_token）
+- [ ] real 模式知识库验收：Dify / WeKnora / RAGFlow 真实服务与凭证（脚本入口 `*_ACCEPTANCE_MODE=real` 已就绪）—— BLOCKED：env 无 dify/weknora/ragflow 凭据，缺真实远端端点 + 凭证（外部提供）。2026-11-04 复核（env 仍无凭据，仅模板）；本轮跳过；复核 2026-11-05 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）；复核 2026-11-06 仍缺 外部真实远端端点+凭证（env 无 dify/weknora/ragflow 凭据）；复核 2026-11-12 仍缺 外部真实远端端点+凭证（env 无 DIFY/WEKNORA/RAGFLOW 变量，仓内仅 .env.example / .env.weknora.example 模板）
+- [ ] 聊天平台 Phase 0：Telegram 真实 bot token 联调（隐私模式 / 逐群授权核实与运营授权记录）—— BLOCKED：env 无 telegram/bot_token，token 外部提供；仓内实现已收口。2026-11-04 复核（env 仍无 token）；本轮跳过；复核 2026-11-05 仍缺 外部 telegram bot token（env 无 telegram/bot_token）；复核 2026-11-12 仍缺 外部 telegram bot token（env 无 TELEGRAM/BOT_TOKEN 变量，仓内仅模板）
+
+> 2026-11-12 续推单（servify-next.md）复核：todo.md 未勾项共 9 条（179 条已勾），逐条复核全部为 BLOCKED，无可执行的仓内项，本轮无代码改动（不凑数）。阻塞依赖：①Dify/WeKnora/RAGFlow 真实端点+凭据（env 无，仅模板）②Telegram bot token（env 无）③可公网/局域网访问的部署环境实例 + 浏览器自动化设施（本环境无部署栈、仓内无 playwright/puppeteer）④真实客户需求来源/访谈输入/排障试用记录（外部提供，且「建设与否」属用户拍板）。解阻条件：用户提供上述任一凭据/资源/拍板，对应行即可推进。
 
 ## 已定口径
 
