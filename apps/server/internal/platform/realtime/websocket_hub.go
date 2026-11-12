@@ -508,12 +508,12 @@ func (c *WebSocketClient) handleWebRTCOffer(message WebSocketMessage) {
 			logrus.Errorf("Failed to handle WebRTC offer: %v", err)
 			return
 		}
-		c.Send <- WebSocketMessage{
+		c.trySend(WebSocketMessage{
 			Type:      "webrtc-answer",
 			Data:      answer,
 			SessionID: c.SessionID,
 			Timestamp: time.Now(),
-		}
+		})
 		return
 	}
 
@@ -581,6 +581,26 @@ func (h *WebSocketHub) SendToClient(clientID string, message WebSocketMessage) {
 	case client.Send <- message:
 	default:
 		logrus.Warnf("Drop message for client %s: send queue full", clientID)
+	}
+}
+
+// trySend 从读泵 goroutine 侧非阻塞下发（P0-3）：广播分支对慢消费者会
+// close(client.Send) 并剔除 map，而该连接的 readPump 仍在运行，其后续
+// webrtc-offer 帧的裸 `c.Send <- answer` 会撞上已关闭通道（send on closed
+// channel，gin.Recovery 不覆盖该 goroutine → 进程崩溃）。与 Run 的广播/
+// 注销及 SendToClient 同持 h.mutex，发送与 close/delete 互斥：已被剔除或
+// 注销的连接不再发送（map 查无即返回），未剔除的发送被序列化在 close 前。
+func (c *WebSocketClient) trySend(message WebSocketMessage) {
+	c.Hub.mutex.Lock()
+	defer c.Hub.mutex.Unlock()
+
+	if _, ok := c.Hub.clients[c.ID]; !ok {
+		return
+	}
+	select {
+	case c.Send <- message:
+	default:
+		logrus.Warnf("Drop message for client %s: send queue full", c.ID)
 	}
 }
 

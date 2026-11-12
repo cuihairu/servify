@@ -607,6 +607,11 @@ func TestWebSocketHub_handleWebRTCOfferUsesRTCService(t *testing.T) {
 		Send:      make(chan WebSocketMessage, 10),
 		Hub:       hub,
 	}
+	// P0-3 修复后读泵侧下发走 trySend：仅注册在 hub.clients 的连接会收到
+	// 应答（已剔除/注销连接静默丢弃），故须先注册再触发 offer。
+	hub.mutex.Lock()
+	hub.clients[client.ID] = client
+	hub.mutex.Unlock()
 
 	client.handleWebRTCOffer(WebSocketMessage{
 		Type: "webrtc-offer",
