@@ -141,11 +141,23 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 		return nil, err
 	}
 
+	// 注册角色白名单（审核 P0-2）：公开 POST /api/v1/auth/register 的 role
+	// 直入 User.Role 并写入 JWT roles——未白名单前传 role:"agent" 即可拿
+	// 坐席全部 RBAC 权限。仅允许 customer（默认）与首个 admin（无既有用户
+	// 时保留），其余任意值（含 agent/supervisor 等提权角色）一律降级
+	// customer，与「非首个 admin 降级」同一口径。
 	role := req.Role
 	if role == "" {
 		role = "customer"
 	}
-	if role == "admin" && s.repo.CountUsers(ctx) > 0 {
+	switch role {
+	case "customer":
+		// 允许
+	case "admin":
+		if s.repo.CountUsers(ctx) > 0 {
+			role = "customer"
+		}
+	default:
 		role = "customer"
 	}
 

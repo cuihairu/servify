@@ -241,6 +241,16 @@ func TestAuthService_RegisterStub(t *testing.T) {
 		t.Fatalf("admin downgrade: %+v %v", result, err)
 	}
 
+	// 提权角色（agent/supervisor/任意值）白名单外一律降级 customer（P0-2）
+	for _, escalated := range []string{"agent", "supervisor", "manager", "admin2", "ADMIN"} {
+		if result, err := NewService(&stubRepo{}, testAuthConfig()).Register(ctx, RegisterInput{
+			Username: "u_" + escalated, Email: "u_" + escalated + "@x.com",
+			Password: "pw123456", Role: escalated,
+		}, AuthSessionMetadata{}); err != nil || result.User.Role != "customer" {
+			t.Fatalf("role %q escalation: got role=%q err=%v, want customer", escalated, result.User.Role, err)
+		}
+	}
+
 	// CreateUser 唯一键冲突文案 → AlreadyExists；其余错误原样透传
 	dupInsert := &stubRepo{createUserErr: errors.New("duplicate key value violates unique constraint")}
 	if _, err := NewService(dupInsert, testAuthConfig()).Register(ctx, RegisterInput{
