@@ -36,7 +36,7 @@ AI handles first answers, clarification, knowledge recall, and suggestions; huma
 
 ## Recommended Reading
 
-8. [Implementation Plan Index](/zh/implementation/)
+1. [Implementation Plan Index](/implementation/)
 
 ## Where You Can Continue From Here
 
@@ -62,7 +62,7 @@ Grouped by usage task, consistent with the docs site navigation (`docs/.vitepres
 
 ### Development and Implementation Details
 
-- [Implementation Backlog Index](/zh/implementation/)
+- [Implementation Backlog Index](/implementation/)
 
 ## Common Entry Points
 

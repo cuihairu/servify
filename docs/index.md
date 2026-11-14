@@ -88,7 +88,7 @@ AI handles first responses, clarification, knowledge recall, and suggestions; hu
 
 ## Recommended Reading
 
-8. [Implementation Plan Index](/zh/implementation/)
+1. [Implementation Plan Index](/implementation/)
 
 ## Where You Can Go From Here
 
@@ -114,7 +114,7 @@ Grouped by usage task, consistent with the left navigation.
 
 ### Development and Implementation Details
 
-- [Implementation Backlog Index](/zh/implementation/)
+- [Implementation Backlog Index](/implementation/)
 
 ## Common Entry Points
 

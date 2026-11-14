@@ -10,12 +10,12 @@ Servify stays a modular monolith at the current stage, hardening step by step ar
 - Next round plan: [Architecture Redesign Plan](./architecture-redesign-plan.md)
 - Follow-up enhancement direction: [Remote Assistance](./remote-assistance.md)
 - Deployment guide: [Deployment Guide](./deployment.md)
-- Implementation backlog: [./implementation/README.md](/zh/implementation/README.md)
-- Engineering hardening: [./implementation/05-engineering-hardening.md](/zh/implementation/05-engineering-hardening.md)
+- Implementation backlog: [./implementation/README.md](/implementation/README.md)
+- Engineering hardening: [./implementation/05-engineering-hardening.md](/implementation/05-engineering-hardening.md)
 
 ## Corresponding Topics in the Current Documentation Site
 
-- [Implementation Plan](/zh/implementation/)
+- [Implementation Plan](/implementation/)
 
 ## Site Conventions
 

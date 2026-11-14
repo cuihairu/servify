@@ -77,6 +77,6 @@ When the following kinds of conflict appear, decide uniformly by these principle
 
 1. todo.md
 2. [acceptance-checklist.md](./acceptance-checklist.md)
-3. [implementation/README.md](/zh/implementation/README.md)
+3. [implementation/README.md](/implementation/README.md)
 4. [demo-and-mock-boundaries.md](./demo-and-mock-boundaries.md)
 5. [operator-runbook.md](./operator-runbook.md)
