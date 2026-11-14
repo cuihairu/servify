@@ -14,7 +14,7 @@ Go module proxy `go list -m -json <mod>@latest`（发布时间以 proxy 为准�
 |------|------|---------|
 | 文档解析 | **保留现状**（不新增依赖）；若未来落地本地 PDF→文本管线，首选 `ledongthuc/pdf` | 仓内现状 PDF 仅存储不抽取（摄取依赖外部 provider）；两候选最小实验均通过，ledongthuc 更活跃（pushed 2026-10-20） |
 | 队列 | **保留现状 outbox**（DB 轮询） | outbox 与领域写同事务、支持 sqlite+postgres 双轨；asynq 实验通过（roundtrip 3ms）但入队与 DB 写不共事务，会割裂可靠投递路径 |
-| LLM SDK | **保留现状自研 provider** | 实验实证 `sashabaranov/go-openai` 无法区分「EOF 无 [DONE]」与「正常完成」（两者都是 `Recv()=EOF`），而产品契约（流式取消持久化验收场景 3）依赖该区分 |
+| LLM SDK | **保留现状自写 provider** | 实验实证 `sashabaranov/go-openai` 无法区分「EOF 无 [DONE]」与「正常完成」（两者都是 `Recv()=EOF`），而产品契约（流式取消持久化验收场景 3）依赖该区分 |
 
 ## 一、文档解析（PDF 文本抽取）
 
@@ -83,7 +83,7 @@ postgres。当前没有需要亚秒级任务延迟的需求场景，不引入。
 
 ## 三、LLM SDK
 
-**现状**：自研 provider（`internal/platform/llm/{openai,anthropic,local,mock}`，原生 HTTP+SSE）。
+**现状**：自写 provider（`internal/platform/llm/{openai,anthropic,local,mock}`，原生 HTTP+SSE）。
 产品契约：连接 EOF 而无 `[DONE]`（模型中断）时，orchestrator 把已累积的部分内容 finalize 为
 最终回答（流式取消持久化验收场景 3 断言持久化==部分内容）；provider 错误只落日志不进内容 delta。
 
@@ -93,7 +93,7 @@ postgres。当前没有需要亚秒级任务延迟的需求场景，不引入。
 |------|--------|------|---------|
 | `github.com/sashabaranov/go-openai` v1.43.0 | Apache-2.0 | 10811★，pushed 2026-09-29，229 open issues，活跃 | ⚠️ 流式可用，但**无法区分中止与完成**（见下） |
 | `openai/openai-go`（官方，旁证） | Apache-2.0 | 官方维护 | 未实验：sashabaranov 的区分度缺陷属 SSE 语义层，官方 SDK 同样不暴露「EOF 无 [DONE]」这一连接层判据 |
-| 现状自研 | 仓内 | 仓内测试+验收覆盖（streaming-cancel 11 项证据） | ✅ 场景 3 实证：partial finalize、无错误细节泄漏 |
+| 现状自写 | 仓内 | 仓内测试+验收覆盖（streaming-cancel 11 项证据） | ✅ 场景 3 实证：partial finalize、无错误细节泄漏 |
 
 实验代码（throwaway `/tmp/sdkexp/openaiexp/main.go`）：本地 SSE mock 两模式——`done`（2 delta +
 `data: [DONE]`）与 `abort`（2 delta 后裸关连接、无 `[DONE]`），用 sashabaranov 客户端
@@ -107,7 +107,7 @@ postgres。当前没有需要亚秒级任务延迟的需求场景，不引入。
 两种情形调用面完全一致（都是 `Recv()` 返回 EOF），调用方无从得知模型是正常收尾还是中途断连——
 若迁移到该 SDK，中断的部分回答会被当完整回答直接落库/下发，正是流式取消验收专门要防的错误。
 
-**决定**：保留现状自研 provider。唯一候选的调用面语义与产品契约不兼容（EOF 判据丢失），收益
+**决定**：保留现状自写 provider。唯一候选的调用面语义与产品契约不兼容（EOF 判据丢失），收益
 （少维护一个 provider 包）不抵契约损失。若未来官方/社区 SDK 在 API 面区分「stream ended without
 [DONE]」，可重开选型。
 

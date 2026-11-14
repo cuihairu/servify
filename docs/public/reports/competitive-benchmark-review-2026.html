@@ -412,7 +412,7 @@ footer{margin-top:56px; border-top:1px solid var(--line); padding-top:18px; font
       </summary><div class="m-detail">
         <p><b>现状</b>：架构投入大（协议中立注册表、CallEvent/MediaEvent 契约、录音转写 Provider 抽象、voice 模块 CallSession/Recording/Transcript 实体），但「reserved contracts」没有变成通路——无真实 SIP 协议栈，PSTN webhook 驱动是壳。</p>
         <p><b>对标</b>：呼叫中心是国内三强标配与 Freshdesk 卖点；Zendesk Talk 在精简中。</p>
-        <p><b>建议</b>：自研 SIP 栈不现实；接托管 PSTN（Twilio Voice webhook，驱动骨架已在）先落一条真实通话通路，验证整个 voiceprotocol 设计是否成立。</p>
+        <p><b>建议</b>：自写 SIP 栈不现实；接托管 PSTN（Twilio Voice webhook，驱动骨架已在）先落一条真实通话通路，验证整个 voiceprotocol 设计是否成立。</p>
       </div></details>
 
       <details class="mrow"><summary>
