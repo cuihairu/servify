@@ -20,8 +20,10 @@ cd apps/server && go run ./cmd/server
 ```
 
 **First admin**: on a fresh instance (user table empty), a register request can carry `role:"admin"` directly;
-once the instance already has users, an `admin` in a register request lands as `customer`; admins can only be
-created or promoted by existing admins.
+once the instance already has users, an `admin` in a register request lands as `customer` — the register
+role field accepts `customer` only, any other value downgrades. Additional admins are provisioned by
+updating the user row directly (seed script or DB update) and logging in again; there is no HTTP role
+promotion endpoint.
 
 ```sh
 # 1) 全新实例：注册管理员，响应含 token 与 user.id
@@ -36,8 +38,10 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
         }'
 ```
 
-**Agent account** two steps: register a user with `role:"agent"`, then create an agent entity for that user
-(department/skills/concurrency cap, used for takeover, transfer, and load stats):
+**Agent account** two steps: register a user, then create an agent entity for that user (department/skills/
+concurrency cap, used for takeover, transfer, and load stats). The register role field is not how a seat is
+granted — it accepts `customer` only — the user is written back to `role:"agent"` when the agent entity is
+created for them:
 
 ```sh
 # 2) 坐席用户
@@ -47,9 +51,9 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
           "username": "agent1",
           "email": "agent1@example.com",
           "password": "Agent!12345",
-          "name": "坐席一",
-          "role": "agent"
+          "name": "坐席一"
         }'
+# role omitted: defaults to customer, the seat is granted by step 3)
 # 记下响应里的 user.id（下一步的 user_id）
 
 # 3) 坐席实体（管理员 token）

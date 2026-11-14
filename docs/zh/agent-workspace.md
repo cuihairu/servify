@@ -20,8 +20,9 @@ cd apps/server && go run ./cmd/server
 ```
 
 **首个管理员**：全新实例（用户表为空）时，注册请求可直接带 `role:"admin"`；
-实例已有用户后，注册请求里的 `admin` 会落为 `customer`，管理员只能由既有
-管理员创建或提权。
+实例已有用户后，注册请求里的 `admin` 会落为 `customer`——注册接口的 role
+字段只接受 `customer`，其余值一律降级。新增管理员须直接更新用户行（种子脚本
+或 DB 更新）后重新登录；服务端没有角色提权 HTTP 端点。
 
 ```sh
 # 1) 全新实例：注册管理员，响应含 token 与 user.id
@@ -36,8 +37,9 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
         }'
 ```
 
-**坐席账号**两步：注册 `role:"agent"` 的用户，再为该用户建坐席实体
-（部门/技能/并发上限，供接管、转派与负载统计使用）：
+**坐席账号**两步：注册一个用户，再为该用户建坐席实体（部门/技能/并发上限，
+供接管、转派与负载统计使用）。坐席身份不靠注册接口的 role 字段授予——该字段
+只接受 `customer`——而是在创建坐席实体时把该用户回写为 `role:"agent"`：
 
 ```sh
 # 2) 坐席用户
@@ -47,9 +49,9 @@ curl -sS -X POST http://localhost:8080/api/v1/auth/register \
           "username": "agent1",
           "email": "agent1@example.com",
           "password": "Agent!12345",
-          "name": "坐席一",
-          "role": "agent"
+          "name": "坐席一"
         }'
+# 省略 role：默认 customer，坐席身份由第 3) 步建坐席实体时回写
 # 记下响应里的 user.id（下一步的 user_id）
 
 # 3) 坐席实体（管理员 token）
