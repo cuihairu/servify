@@ -15,6 +15,9 @@ var (
 	ErrAuthInvalidCredentials  = errors.New("invalid auth credentials")
 	ErrAuthUserDisabled        = errors.New("auth user disabled")
 	ErrAuthInvalidRefreshToken = errors.New("invalid auth refresh token")
+	// 注册引导 fail-closed（Codex 深审 Critical-2）：用户计数查询失败时拒绝
+	// 注册，不再静默按 0 放行首个 admin。handlers 映射 503。
+	ErrAuthRegisterUnavailable = errors.New("auth register temporarily unavailable")
 	// 登录风险执行（P2-5 第二刀）：高风险来源登录被策略拦截。block 模式
 	// 直接拒绝；step_up 模式下用户无可用的第二因子时同样落到此错误。
 	// 对外只映射为 403 通用失败，不回显判定依据。

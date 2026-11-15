@@ -314,7 +314,7 @@ func cloneClaims(m map[string]interface{}) map[string]interface{} {
 }
 
 func TestAuthService_RegisterFirstAdmin(t *testing.T) {
-	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{})
+	db := newServicesTestDB(t, &models.User{}, &models.UserAuthSession{}, &models.AuthBootstrapClaim{})
 	svc := slapp.NewService(NewGormRepository(db), testAuthConfig())
 
 	adminResult, err := svc.Register(context.Background(), slapp.RegisterInput{

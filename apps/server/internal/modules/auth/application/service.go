@@ -154,7 +154,13 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 	case "customer":
 		// 允许
 	case "admin":
-		if s.repo.CountUsers(ctx) > 0 {
+		// 计数失败 fail-closed（Codex 深审 Critical-2）：旧实现 `_ = ...Error`
+		// 静默按 0，已有用户的系统在计数出错时仍会创建 admin。
+		total, err := s.repo.CountUsers(ctx)
+		if err != nil {
+			return nil, ErrAuthRegisterUnavailable
+		}
+		if total > 0 {
 			role = "customer"
 		}
 	default:
@@ -170,11 +176,32 @@ func (s *AuthService) Register(ctx context.Context, req RegisterInput, meta Auth
 		Role:     role,
 		Status:   "active",
 	}
-	if err := s.repo.CreateUser(ctx, user); err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
-			return nil, ErrAuthUserAlreadyExists
+	// admin 引导走原子占位（Critical-1）：CountUsers 与写入之间存在窗口，
+	// 空库两个不同用户名的请求可都读到 0 并都以 admin 入库，唯一键拦不住。
+	// 占位失败（已被并发消费或已有用户）则降级 customer 走普通写入。
+	created := false
+	if role == "admin" {
+		claimed, err := s.repo.CreateBootstrapAdmin(ctx, user)
+		if err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+				return nil, ErrAuthUserAlreadyExists
+			}
+			return nil, err
 		}
-		return nil, err
+		if claimed {
+			created = true
+		}
+	}
+	if !created {
+		if role == "admin" {
+			user.Role = "customer"
+		}
+		if err := s.repo.CreateUser(ctx, user); err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+				return nil, ErrAuthUserAlreadyExists
+			}
+			return nil, err
+		}
 	}
 
 	session, err := s.createAuthSession(ctx, user.ID, meta)

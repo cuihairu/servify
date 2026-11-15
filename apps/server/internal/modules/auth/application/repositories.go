@@ -5,8 +5,11 @@ package application
 // 返回语义约定：
 //   - 用户查询查不到 → 哨兵 ErrAuthUserNotFound（Login 分岔 401、OIDC 分岔
 //     自动开通，其余错误原样透传）
-//   - CountUsersByUsernameOrEmail / CountUsers 的查询失败沿用旧行为：静默按
-//     0 处理（唯一键兜底 / 首个 admin 引导不因查询错误卡死）
+//   - CountUsersByUsernameOrEmail 查询失败沿用旧行为：静默按 0 处理（用户名/
+//     邮箱唯一键兜底重复注册）；CountUsers 查询失败必须透传错误——调用方
+//     fail-closed 拒绝注册，不再静默按 0 放行首个 admin（Codex 深审 Critical-2）
+//   - CreateBootstrapAdmin：admin 引导原子占位（Critical-1），claimed=false
+//     表示占位被并发消费或已有用户落库，调用方降级 customer 走 CreateUser
 //   - UpdateUserLastLogin 错误由调用方吞掉（旧行为 `_ = ...Error`）
 //   - 其余错误原样透传
 //
@@ -23,7 +26,8 @@ import (
 type Repository interface {
 	// users
 	CountUsersByUsernameOrEmail(ctx context.Context, username, email string) int64
-	CountUsers(ctx context.Context) int64
+	CountUsers(ctx context.Context) (int64, error)
+	CreateBootstrapAdmin(ctx context.Context, user *models.User) (bool, error)
 	CreateUser(ctx context.Context, user *models.User) error
 	GetUserByUsernameOrEmail(ctx context.Context, identifier string) (*models.User, error)
 	GetUserByID(ctx context.Context, id uint) (*models.User, error)

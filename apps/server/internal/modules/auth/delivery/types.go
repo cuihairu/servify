@@ -34,6 +34,7 @@ var (
 	ErrAuthInvalidCredentials    = authapp.ErrAuthInvalidCredentials
 	ErrAuthUserDisabled          = authapp.ErrAuthUserDisabled
 	ErrAuthInvalidRefreshToken   = authapp.ErrAuthInvalidRefreshToken
+	ErrAuthRegisterUnavailable   = authapp.ErrAuthRegisterUnavailable
 	ErrLoginBlockedByRisk        = authapp.ErrLoginBlockedByRisk
 	ErrOIDCUnverifiedEmail       = authapp.ErrOIDCUnverifiedEmail
 	ErrOIDCDomainNotAllowed      = authapp.ErrOIDCDomainNotAllowed

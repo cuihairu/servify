@@ -83,6 +83,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "用户名、邮箱和密码不能为空"})
 		case errors.Is(err, authdelivery.ErrAuthUserAlreadyExists):
 			c.JSON(http.StatusConflict, gin.H{"error": "用户名或邮箱已存在"})
+		case errors.Is(err, authdelivery.ErrAuthRegisterUnavailable):
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "注册暂不可用，请稍后重试"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
 		}

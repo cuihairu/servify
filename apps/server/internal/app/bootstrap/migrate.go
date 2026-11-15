@@ -72,6 +72,8 @@ func MigrationModels() []interface{} {
 		&models.PushToken{},
 		&translationdomain.TranslationLanguagePreference{},
 		&models.TicketOutbox{},
+		// 首个管理员引导原子占位（000035）：固定 id=1 单行，注册 admin 引导串行化锚点
+		&models.AuthBootstrapClaim{},
 		// V1.0 收敛 B1：会话服务过程事件流水（Service Timeline）
 		&models.ConversationEvent{},
 		&channel.ChatConnectorInbox{},        // 聊天平台接入契约 Phase 1 收件箱（表名 chat_connector_inboxes，000027）

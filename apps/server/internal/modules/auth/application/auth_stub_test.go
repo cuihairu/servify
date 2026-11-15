@@ -27,7 +27,11 @@ type stubRepo struct {
 	countByUsernameOrEmail   int64
 	countByUsernameOrEmailFn func(ctx context.Context, username, email string) int64
 	countUsersTotal          int64
+	countUsersErr            error
 	createUserErr            error
+	bootstrapCalled          bool
+	bootstrapUser            *models.User
+	bootstrapClaimFn         func(ctx context.Context, user *models.User) (bool, error)
 	createdUser              *models.User
 	userByUsernameOrEmail    *models.User
 	userByUsernameOrEmailErr error
@@ -87,7 +91,20 @@ func (r *stubRepo) CountUsersByUsernameOrEmail(ctx context.Context, username, em
 	}
 	return r.countByUsernameOrEmail
 }
-func (r *stubRepo) CountUsers(ctx context.Context) int64 { return r.countUsersTotal }
+func (r *stubRepo) CountUsers(ctx context.Context) (int64, error) {
+	return r.countUsersTotal, r.countUsersErr
+}
+
+// CreateBootstrapAdmin 默认镜像真实仓储语义：空库即占位成功（claimed=true），
+// 已有用户则让位（claimed=false）。bootstrapClaimFn 可覆盖以便测并发消费分支。
+func (r *stubRepo) CreateBootstrapAdmin(ctx context.Context, user *models.User) (bool, error) {
+	r.bootstrapCalled = true
+	r.bootstrapUser = user
+	if r.bootstrapClaimFn != nil {
+		return r.bootstrapClaimFn(ctx, user)
+	}
+	return r.countUsersTotal == 0, nil
+}
 func (r *stubRepo) CreateUser(ctx context.Context, user *models.User) error {
 	r.createdUser = user
 	return r.createUserErr
@@ -249,6 +266,51 @@ func TestAuthService_RegisterStub(t *testing.T) {
 		}, AuthSessionMetadata{}); err != nil || result.User.Role != "customer" {
 			t.Fatalf("role %q escalation: got role=%q err=%v, want customer", escalated, result.User.Role, err)
 		}
+	}
+
+	// 计数失败 fail-closed（Codex 深审 Critical-2）：CountUsers 出错即拒绝注册，
+	// 不再静默按 0 放行 admin，也不落任何用户
+	countErr := &stubRepo{countUsersErr: errBoom}
+	if _, err := NewService(countErr, testAuthConfig()).Register(ctx, RegisterInput{
+		Username: "u", Email: "u@x.com", Password: "pw123456", Role: "admin",
+	}, AuthSessionMetadata{}); err != ErrAuthRegisterUnavailable {
+		t.Fatalf("count error: %v", err)
+	}
+	if countErr.createdUser != nil || countErr.bootstrapCalled {
+		t.Fatalf("count error must have no side effects: created=%v called=%v", countErr.createdUser, countErr.bootstrapCalled)
+	}
+
+	// admin 引导让位（占位被并发消费）：降级 customer 走普通 CreateUser
+	yield := &stubRepo{bootstrapClaimFn: func(context.Context, *models.User) (bool, error) { return false, nil }}
+	if result, err := NewService(yield, testAuthConfig()).Register(ctx, RegisterInput{
+		Username: "u", Email: "u@x.com", Password: "pw123456", Role: "admin",
+	}, AuthSessionMetadata{}); err != nil || result.User.Role != "customer" {
+		t.Fatalf("bootstrap yield: %+v %v", result, err)
+	}
+	if yield.createdUser == nil || yield.createdUser.Role != "customer" {
+		t.Fatalf("yield must create customer user: %+v", yield.createdUser)
+	}
+
+	// admin 引导成功：角色保持 admin，普通 CreateUser 不再走一遍
+	claimed := &stubRepo{}
+	if result, err := NewService(claimed, testAuthConfig()).Register(ctx, RegisterInput{
+		Username: "u", Email: "u@x.com", Password: "pw123456", Role: "admin",
+	}, AuthSessionMetadata{}); err != nil || result.User.Role != "admin" {
+		t.Fatalf("bootstrap claimed: %+v %v", result, err)
+	}
+	if !claimed.bootstrapCalled || claimed.bootstrapUser == nil || claimed.bootstrapUser.Role != "admin" {
+		t.Fatalf("bootstrap must be called with admin role: called=%v user=%+v", claimed.bootstrapCalled, claimed.bootstrapUser)
+	}
+	if claimed.createdUser != nil {
+		t.Fatalf("claimed path must not double-create via CreateUser: %+v", claimed.createdUser)
+	}
+
+	// admin 引导仓出错原样透传
+	bootErr := &stubRepo{bootstrapClaimFn: func(context.Context, *models.User) (bool, error) { return false, errBoom }}
+	if _, err := NewService(bootErr, testAuthConfig()).Register(ctx, RegisterInput{
+		Username: "u", Email: "u@x.com", Password: "pw123456", Role: "admin",
+	}, AuthSessionMetadata{}); err != errBoom {
+		t.Fatalf("bootstrap error passthrough: %v", err)
 	}
 
 	// CreateUser 唯一键冲突文案 → AlreadyExists；其余错误原样透传

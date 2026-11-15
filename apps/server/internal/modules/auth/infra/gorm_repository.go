@@ -14,7 +14,15 @@ import (
 	slapp "servify/apps/server/internal/modules/auth/application"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+// authBootstrapClaimID 引导占位行固定主键（全库唯一锚点，见 CreateBootstrapAdmin）。
+const authBootstrapClaimID = uint(1)
+
+// errBootstrapYield 占位成功但引导窗口内已有用户落库：回滚占位并让位，
+// 不视作错误（调用方降级 customer）。
+var errBootstrapYield = errors.New("auth bootstrap yield to existing users")
 
 type GormRepository struct {
 	db *gorm.DB
@@ -41,10 +49,57 @@ func (r *GormRepository) CountUsersByUsernameOrEmail(ctx context.Context, userna
 	return count
 }
 
-func (r *GormRepository) CountUsers(ctx context.Context) int64 {
+func (r *GormRepository) CountUsers(ctx context.Context) (int64, error) {
 	var total int64
-	_ = r.db.WithContext(ctx).Model(&models.User{}).Count(&total).Error
-	return total
+	// 不再静默吞错（Codex 深审 Critical-2）：计数失败放行会把已有用户系统的
+	// 注册角色引导成 admin，调用方按错误 fail-closed 拒绝注册。
+	if err := r.db.WithContext(ctx).Model(&models.User{}).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+// CreateBootstrapAdmin 原子引导首个 admin（Codex 深审 Critical-1）。
+// 同一事务内先插 auth_bootstrap_claims 固定 id=1 占位行：主键冲突即引导已被
+// 并发请求消费 → claimed=false 且事务回滚，调用方降级 customer；占位成功后
+// 再复查 users 计数（占位窗口内已有用户落库同样让位），通过才以 admin 写入
+// 用户。任一步失败整体回滚，占位随之释放。返回 (claimed, err)。
+func (r *GormRepository) CreateBootstrapAdmin(ctx context.Context, user *models.User) (bool, error) {
+	var claimed bool
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		claim := models.AuthBootstrapClaim{ID: authBootstrapClaimID}
+		now := time.Now()
+		claim.ClaimedAt = &now
+		res := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&claim)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // 占位已被并发请求消费：正常让位，事务内无写入
+		}
+		var total int64
+		if err := tx.Model(&models.User{}).Count(&total).Error; err != nil {
+			return err
+		}
+		if total > 0 {
+			// 已有用户落库：让位并回滚——占位行不得在未生成 admin 时提交，
+			// 否则引导被永久消费（事后删光用户也无法再走注册引导）。
+			return errBootstrapYield
+		}
+		user.Role = "admin"
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		claimed = true
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, errBootstrapYield) {
+			return false, nil
+		}
+		return false, err
+	}
+	return claimed, nil
 }
 
 func (r *GormRepository) CreateUser(ctx context.Context, user *models.User) error {

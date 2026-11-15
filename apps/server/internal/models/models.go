@@ -33,6 +33,16 @@ type User struct {
 	AuthSessions []UserAuthSession `gorm:"foreignKey:UserID" json:"auth_sessions,omitempty"`
 }
 
+// AuthBootstrapClaim 首个管理员引导原子占位（固定主键 id=1 的单行表）。
+// 公开注册的 admin 引导在同一 DB 事务里先插此行——主键冲突即占位已被并发
+// 请求消费，事务整体回滚、调用方把角色降级 customer。占位行只在 admin 用户
+// 随事务成功创建后存活（首注册回滚即释放占位）；事后删光用户也不重开注册
+// 引导，管理员恢复走种子 DB 更新。
+type AuthBootstrapClaim struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	ClaimedAt *time.Time `json:"claimed_at"`
+}
+
 // UserAuthSession tracks login/refresh session state for JWT issuance and targeted revocation.
 type UserAuthSession struct {
 	ID                string         `gorm:"primaryKey;size:64" json:"id"`

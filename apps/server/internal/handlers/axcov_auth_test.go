@@ -160,6 +160,7 @@ func TestAxcAuthRegister(t *testing.T) {
 		},
 		{name: "invalid input err", svc: &axcAuthService{registerErr: authdelivery.ErrInvalidAuthInput}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusBadRequest},
 		{name: "already exists", svc: &axcAuthService{registerErr: authdelivery.ErrAuthUserAlreadyExists}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusConflict},
+		{name: "register unavailable", svc: &axcAuthService{registerErr: authdelivery.ErrAuthRegisterUnavailable}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusServiceUnavailable, wantIn: "注册暂不可用"},
 		{name: "internal err", svc: &axcAuthService{registerErr: context.DeadlineExceeded}, body: `{"username":"u","email":"a@b.c","password":"p"}`, want: http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
