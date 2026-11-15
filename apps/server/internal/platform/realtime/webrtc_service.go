@@ -378,6 +378,25 @@ var terminalConnStates = map[string]bool{
 	"closed":       true,
 }
 
+// rollbackConnection 协商早期失败的回滚（Codex 深审 Major：畸形 SDP 反复重放
+// 会累积连接对象与语音生命周期——"created" 非终态，终态回收集合收不到）。
+// 按 closeTerminalConnections 同序关停：结束语音呼叫、关 PC、清转发状态、
+// 从连接表移除。
+func (s *WebRTCService) rollbackConnection(conn *WebRTCConnection) {
+	if s.voice != nil {
+		s.voice.EndCall(context.Background(), conn.ID)
+	}
+	if err := hookPeerConnectionClose(conn.PeerConnection); err != nil {
+		logrus.Errorf("Failed to close rolled back peer connection %s: %v", conn.ID, err)
+	}
+	conn.SetStatus("closed")
+	s.mutex.Lock()
+	s.dropForwarderStateLocked(conn.SessionID, conn.ID)
+	delete(s.connections, conn.ID)
+	s.mutex.Unlock()
+	logrus.Infof("Rolled back WebRTC connection %s after failed negotiation (session %s)", conn.ID, conn.SessionID)
+}
+
 // closeTerminalConnections 回收同 session 终态旧 PC（RA-8 服务端半边）：
 // 客户端断线重连会重发 offer，不回收则旧 PC 泄漏。存活 PC 不动——访客/
 // 坐席双端各持一条 PC 的现状拓扑（RA-5 歧义）不受影响，待信令协议加
@@ -560,21 +579,24 @@ func (s *WebRTCService) HandleOffer(ownerClientID string, sessionID string, offe
 		return nil, err
 	}
 
-	// 设置远程描述
+	// 设置远程描述（任一步失败即回滚连接，见 rollbackConnection）
 	err = conn.PeerConnection.SetRemoteDescription(offer)
 	if err != nil {
+		s.rollbackConnection(conn)
 		return nil, fmt.Errorf("failed to set remote description: %w", err)
 	}
 
 	// 创建答案
 	answer, err := hookPeerConnectionCreateAnswer(conn.PeerConnection, nil)
 	if err != nil {
+		s.rollbackConnection(conn)
 		return nil, fmt.Errorf("failed to create answer: %w", err)
 	}
 
 	// 设置本地描述
 	err = hookPeerConnectionSetLocalDescription(conn.PeerConnection, answer)
 	if err != nil {
+		s.rollbackConnection(conn)
 		return nil, fmt.Errorf("failed to set local description: %w", err)
 	}
 

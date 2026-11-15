@@ -81,6 +81,11 @@ type WebSocketClient struct {
 	Conn      *websocket.Conn
 	Send      chan WebSocketMessage
 	Hub       *WebSocketHub
+	// registered 由 Run 在把连接写入 clients map 后关闭：HandleWebSocket 等
+	// 此确认再启动读写泵，保证读泵处理的首帧信令应答不会被 trySend 的成员
+	// 检查当作未注册连接丢弃（Codex 深审 Major：register 发送成功只代表接收
+	// 发生，不保证 Run 已入表，合法调度下存在首帧应答丢失窗口）。
+	registered chan struct{}
 	// pingInterval 供测试注入；零值取默认 54 秒。
 	pingInterval time.Duration
 }
@@ -246,6 +251,11 @@ func (h *WebSocketHub) Run() {
 			h.clients[client.ID] = client
 			rtc := h.rtcService
 			h.mutex.Unlock()
+			// 注册确认（Codex 深审 Major-2）：入表即关 registered，等待方才能
+			// 启动读写泵。nil 守卫：测试夹具可手工入表，不经 HandleWebSocket。
+			if client.registered != nil {
+				close(client.registered)
+			}
 			logrus.Infof("Client %s connected", client.ID)
 			if provider, ok := rtc.(iceConfigProvider); ok {
 				if payload, ok := provider.ICEConfigPayload(); ok {
@@ -319,14 +329,19 @@ func (h *WebSocketHub) HandleWebSocket(c *gin.Context) {
 	}
 
 	client := &WebSocketClient{
-		ID:        newClientID(),
-		SessionID: sessionID,
-		Conn:      conn,
-		Send:      make(chan WebSocketMessage, 256),
-		Hub:       h,
+		ID:         newClientID(),
+		SessionID:  sessionID,
+		Conn:       conn,
+		Send:       make(chan WebSocketMessage, 256),
+		Hub:        h,
+		registered: make(chan struct{}),
 	}
 
 	h.register <- client
+	// 注册确认后再启动读写泵（Codex 深审 Major-2）：读泵在此之后才可能处理
+	// webrtc-offer，其应答经 trySend 的成员检查时连接必已入表，首帧应答
+	// 不再有被当作未注册连接丢弃的窗口。
+	<-client.registered
 
 	go client.writePump()
 	go client.readPump()
@@ -508,12 +523,17 @@ func (c *WebSocketClient) handleWebRTCOffer(message WebSocketMessage) {
 			logrus.Errorf("Failed to handle WebRTC offer: %v", err)
 			return
 		}
-		c.trySend(WebSocketMessage{
+		// 唯一 SDP 应答不得静默丢弃（Codex 深审 Major-3）：trySend 内置有界
+		// 重试吸收瞬时背压；持续满队说明连接僵死，显式记录，恢复面由客户端
+		// 断线重连重建协商承担（SDK 重发仅由重连触发）。
+		if !c.trySend(WebSocketMessage{
 			Type:      "webrtc-answer",
 			Data:      answer,
 			SessionID: c.SessionID,
 			Timestamp: time.Now(),
-		})
+		}) {
+			logrus.Errorf("Failed to deliver webrtc-answer to client %s (session %s): send queue stayed full after retries", c.ID, c.SessionID)
+		}
 		return
 	}
 
@@ -590,19 +610,38 @@ func (h *WebSocketHub) SendToClient(clientID string, message WebSocketMessage) {
 // channel，gin.Recovery 不覆盖该 goroutine → 进程崩溃）。与 Run 的广播/
 // 注销及 SendToClient 同持 h.mutex，发送与 close/delete 互斥：已被剔除或
 // 注销的连接不再发送（map 查无即返回），未剔除的发送被序列化在 close 前。
-func (c *WebSocketClient) trySend(message WebSocketMessage) {
-	c.Hub.mutex.Lock()
-	defer c.Hub.mutex.Unlock()
-
-	if _, ok := c.Hub.clients[c.ID]; !ok {
-		return
+func (c *WebSocketClient) trySend(message WebSocketMessage) bool {
+	// 有界重试（Codex 深审 Major-3）：队列满多为 writePump 短暂背压，间隔
+	// 重试在锁外等队列排空；每次尝试仍持锁做成员检查+发送，与 close/delete
+	// 互斥不变。已剔除/注销的连接立即返回（不会重新入表，重试无意义）；
+	// 持续满队返回 false，调用方显式处置（如唯一 SDP 应答）。
+	for attempt := 0; attempt < trySendAttempts; attempt++ {
+		c.Hub.mutex.Lock()
+		if _, ok := c.Hub.clients[c.ID]; !ok {
+			c.Hub.mutex.Unlock()
+			return false
+		}
+		select {
+		case c.Send <- message:
+			c.Hub.mutex.Unlock()
+			return true
+		default:
+		}
+		c.Hub.mutex.Unlock()
+		if attempt < trySendAttempts-1 {
+			time.Sleep(trySendRetryInterval)
+		}
 	}
-	select {
-	case c.Send <- message:
-	default:
-		logrus.Warnf("Drop message for client %s: send queue full", c.ID)
-	}
+	logrus.Warnf("Drop message for client %s: send queue full after %d attempts", c.ID, trySendAttempts)
+	return false
 }
+
+// trySend 重试参数：writePump 排空一条消息毫秒级，150ms 预算足够吸收瞬时
+// 背压，又不至于让信令读泵长时间停摆。
+const (
+	trySendAttempts      = 3
+	trySendRetryInterval = 50 * time.Millisecond
+)
 
 func (h *WebSocketHub) GetClientCount() int {
 	h.mutex.RLock()

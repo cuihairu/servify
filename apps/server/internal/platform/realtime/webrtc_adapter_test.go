@@ -51,13 +51,24 @@ func TestWebRTCAdapter_HandleOffer(t *testing.T) {
 func TestWebRTCAdapter_ConnectionStats(t *testing.T) {
 	adapter := newTestWebRTCAdapter()
 
+	// 畸形 SDP：协商失败即回滚，连接表不得残留占位连接
 	_, err := adapter.HandleOffer("session-1", webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: "not-a-valid-sdp"})
 	require.Error(t, err)
+	_, statsErr := adapter.ConnectionStats("session-1")
+	assert.Error(t, statsErr)
+	assert.Equal(t, 0, adapter.ConnectionCount())
+
+	// 合法 offer 后统计可用，初始状态如实为 created
+	valid := validTestOffer(t)
+	answer, err := adapter.HandleOffer("session-1", valid)
+	require.NoError(t, err)
+	require.NotNil(t, answer)
 
 	stats, err := adapter.ConnectionStats("session-1")
 	require.NoError(t, err)
 	require.NotNil(t, stats)
 	assert.Equal(t, "session-1", stats["session_id"])
 	assert.NotEmpty(t, stats["connection_id"])
-	assert.Equal(t, "created", stats["status"])
+	// 状态由 pion 回调异步推进（created→connecting→…），断言字段在场而非瞬时值
+	assert.NotEmpty(t, stats["status"])
 }
