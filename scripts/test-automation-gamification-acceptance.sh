@@ -323,10 +323,19 @@ request_capture "agent-create-a2" -X POST -H "$AUTH" -H "Content-Type: applicati
   "$AGENTS_BASE"
 AGENT_B_PROFILE_ID="$(json_extract "d.get('id')")"
 
-# 工单 assign 的可用性校验要求 agent 处于 online/busy（默认 offline 不可派单）。
-# /api/agents/:id/online 的 :id 是 user_id（handler 直接透传 service GoOnline(userID)）。
-request_capture "agent-a1-online" -X POST -H "$AUTH" "$AGENTS_BASE/$AGENT_A_ID/online"
-request_capture "agent-a2-online" -X POST -H "$AUTH" "$AGENTS_BASE/$AGENT_B_ID/online"
+# 工单 assign 的可用性校验要求 agent 处于 online/busy（默认 offline 不可派单，
+# infra/gorm_repository.go:815 AgentAssignable status IN online/busy）。这里置 busy 而非
+# online：auto-assign（orchestrator.go:83-99 subscribeCreatedForAutoAssign，ticket.created
+# 经 outbox 异步投递后触发）只在 findAutoAssignee 筛 status='online'
+# （infra/gorm_repository.go:826）。置 online 会让本脚本手工 assign 之后，异步自动派单按
+# least-load 覆盖重写 agent_id，把 A1 的票转派给 B1——leaderboard resolved 计数（按当前
+# agent_id 分组）与 CSAT 归属（POST 显式 agent_id）分裂，a1_resolved 变 2、b1_score 变 60。
+# 置 busy 后手工 assign 仍可用、且不入 auto-assign 候选，确定无竞态。
+# PUT /api/agents/:id/status 的 :id 同为 user_id（handler 透传 UpdateAgentStatus(userID,...)）。
+request_capture "agent-a1-busy" -X PUT -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"status":"busy"}' "$AGENTS_BASE/$AGENT_A_ID/status"
+request_capture "agent-a2-busy" -X PUT -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"status":"busy"}' "$AGENTS_BASE/$AGENT_B_ID/status"
 
 create_customer() {
   local name=$1

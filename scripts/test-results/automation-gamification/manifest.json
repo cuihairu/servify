@@ -28,12 +28,12 @@
     "leaderboard_department_filtered": "true"
   },
   "evidence_files": [
-    "agent-a1-online.txt",
-    "agent-a2-online.txt",
+    "agent-a1-busy.txt",
+    "agent-a2-busy.txt",
     "agent-create-a1.txt",
     "agent-create-a2.txt",
-    "agent-register-st7-agent-a-1789742527.txt",
-    "agent-register-st7-agent-b-1789742527.txt",
+    "agent-register-st7-agent-a-1795278782.txt",
+    "agent-register-st7-agent-b-1795278782.txt",
     "automation-baseline.txt",
     "automation-create.txt",
     "automation-delay-misplaced.txt",
