@@ -1,1 +1,1 @@
-{"success":true,"data":{"content":"感谢您的咨询！我已经收到您的问题，正在为您查找相关信息。如果需要更详细的帮助，我可以为您转接人工客服。","confidence":0.8,"source":"ai","strategy":"fallback","duration":519235802},"timestamp":"2026-09-27T08:22:15.682967091Z","duration":"519.420111ms"}
+{"success":true,"data":{"content":"","confidence":0.6,"source":"ai","next_action":"handoff","handoff_reason":"low_confidence","strategy":"llm","duration":113785,"tokens_used":153},"timestamp":"2026-11-21T22:18:26.468119198+08:00","duration":"1.761685ms"}

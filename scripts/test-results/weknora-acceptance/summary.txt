@@ -1,7 +1,7 @@
 WeKnora compatibility acceptance summary
 mode=mock
-servify_url=http://localhost:18080
-weknora_url=http://localhost:9000
+servify_url=http://localhost:18096
+weknora_url=http://localhost:19000
 weknora_enabled=true
 weknora_host=localhost
 weknora_health_service=weknora-mock
@@ -18,7 +18,7 @@ status_after_disable_enabled=false
 status_after_enable_enabled=true
 circuit_breaker_reset_ok=true
 fallback_query_ok=true
-fallback_query_strategy=fallback
+fallback_query_strategy=llm
 fallback_usage_count_after_disable=0
 knowledge_upload_ok=true
 knowledge_sync_ok=true

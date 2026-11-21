@@ -2,7 +2,7 @@
   "checks": {
     "circuit_breaker_reset_ok": "true",
     "fallback_query_ok": "true",
-    "fallback_query_strategy": "fallback",
+    "fallback_query_strategy": "llm",
     "fallback_usage_count_after_disable": "0",
     "knowledge_provider_disable_ok": "true",
     "knowledge_provider_enable_ok": "true",
@@ -23,6 +23,7 @@
     "knowledge-provider-enable.json",
     "knowledge-sync.json",
     "knowledge-upload.json",
+    "script-output.log",
     "servify-health.json",
     "summary.txt",
     "webrtc-connections.json",
@@ -31,8 +32,8 @@
   ],
   "mode": "mock",
   "provider": "weknora",
-  "provider_url": "http://localhost:9000",
-  "servify_url": "http://localhost:18080",
+  "provider_url": "http://localhost:19000",
+  "servify_url": "http://localhost:18096",
   "status": {
     "knowledge_provider": "weknora",
     "knowledge_provider_enabled": "true",

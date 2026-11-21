@@ -649,7 +649,7 @@ case "$PROVIDER" in
     require_equals '.checks.knowledge_provider_enable_ok // ""' "true"
     require_equals '.checks.circuit_breaker_reset_ok // ""' "true"
     require_equals '.checks.fallback_query_ok // ""' "true"
-    require_equals '.checks.fallback_query_strategy // ""' "fallback"
+    require_equals '.checks.fallback_query_strategy // ""' "llm"
     require_equals '.checks.knowledge_upload_ok // ""' "true"
     require_equals '.checks.knowledge_sync_ok // ""' "true"
     require_file_listed "summary.txt"

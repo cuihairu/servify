@@ -53,7 +53,6 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 	}
 
 	knowledgeProviderEnabled := true
-	fallbackUsageCount := 0
 
 	servify := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -64,13 +63,14 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 			if knowledgeProviderEnabled {
 				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"ok","strategy":"weknora"}}`))
 			} else {
-				fallbackUsageCount++
-				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"fallback-ok","strategy":"fallback"}}`))
+				// provider 禁用后走降级路径：零命中直答，策略标签 llm（非编排失败），
+				// 与 enhanced_service.go:416-419 口径一致；disable 非 fallback。
+				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"degraded-ok","strategy":"llm"}}`))
 			}
 		case "/api/v1/ai/status":
 			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider_enabled":%t,"knowledge_provider":"weknora","knowledge_provider_healthy":%t}}`, knowledgeProviderEnabled, knowledgeProviderEnabled)
 		case "/api/v1/ai/metrics":
-			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"query_count":3,"weknora_usage_count":2,"fallback_usage_count":%d}}`, fallbackUsageCount)
+			_, _ = w.Write([]byte(`{"success":true,"data":{"query_count":3,"weknora_usage_count":2,"fallback_usage_count":0}}`))
 		case "/api/v1/ai/knowledge-provider/disable":
 			knowledgeProviderEnabled = false
 			_, _ = w.Write([]byte(`{"success":true,"message":"knowledge provider disabled"}`))
@@ -182,8 +182,8 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 		"status_after_enable_enabled=true",
 		"circuit_breaker_reset_ok=true",
 		"fallback_query_ok=true",
-		"fallback_query_strategy=fallback",
-		"fallback_usage_count_after_disable=1",
+		"fallback_query_strategy=llm",
+		"fallback_usage_count_after_disable=0",
 		"knowledge_upload_ok=true",
 		"knowledge_sync_ok=true",
 	} {
@@ -201,7 +201,7 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 		`"provider": "weknora"`,
 		`"mode": "mock"`,
 		`"knowledge_provider": "weknora"`,
-		`"fallback_query_strategy": "fallback"`,
+		`"fallback_query_strategy": "llm"`,
 		`"knowledge_upload_ok": "true"`,
 		`"knowledge_sync_ok": "true"`,
 	} {
