@@ -30,6 +30,35 @@ features:
 
 ![Servify 架构图](/images/architecture-zh.svg)
 
+<script setup lang="ts">
+// 首次访问按浏览器语言选择文档语言（vitepress 无此能力，GitHub Pages 不支持 _redirects）
+// 与 docs/index.md 根页脚本对称：/zh/ 首页对非 zh 浏览器反向跳回根 /
+// 优先级：localStorage 手动选择 > navigator.language > 保持当前 locale
+import { onBeforeMount } from 'vue'
+const KEY = 'servify-lang-auto-picked'
+const BASE = '/servify/'
+const ROOT_PATH = BASE
+const ZH_PATH = BASE + 'zh/'
+onBeforeMount(() => {{
+  if (typeof window === 'undefined') return
+  const p = window.location.pathname
+  if (p !== ZH_PATH && p !== ZH_PATH.slice(0, -1)) return
+  const picked = localStorage.getItem(KEY)
+  if (picked) {{ if (picked !== p) window.location.replace(picked); return }}
+  const langs = (navigator.languages?.length ? navigator.languages : [navigator.language]).map(l => l.toLowerCase())
+  if (!langs.some(l => l.startsWith('zh'))) window.location.replace(ROOT_PATH)
+}})
+if (typeof window !== 'undefined') {{
+  window.addEventListener('click', (e) => {{
+    const a = (e.target as HTMLElement)?.closest?.('a') as HTMLAnchorElement | null
+    const href = a?.getAttribute('href') || ''
+    if (href.startsWith(ZH_PATH) || href.startsWith('zh/')) localStorage.setItem(KEY, ZH_PATH)
+    else if (href === ROOT_PATH || href === ROOT_PATH.slice(0, -1)) localStorage.setItem(KEY, ROOT_PATH)
+  }}, true)
+}}
+</script>
+
+
 ## 产品概览
 
 Servify 第一版先针对企业官网、品牌独立站、SaaS 官网和文档站提供 Web 智能客服能力。
