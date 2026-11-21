@@ -9,6 +9,8 @@
 
 > 2026-11-12 续推单（servify-next.md）复核：todo.md 未勾项共 9 条（179 条已勾），逐条复核全部为 BLOCKED，无可执行的仓内项，本轮无代码改动（不凑数）。阻塞依赖：①Dify/WeKnora/RAGFlow 真实端点+凭据（env 无，仅模板）②Telegram bot token（env 无）③可公网/局域网访问的部署环境实例 + 浏览器自动化设施（本环境无部署栈、仓内无 playwright/puppeteer）④真实客户需求来源/访谈输入/排障试用记录（外部提供，且「建设与否」属用户拍板）。解阻条件：用户提供上述任一凭据/资源/拍板，对应行即可推进。
 
+> 2026-11-21 巡检复核并暂结：todo.md 未勾项共 9 条（180 条已勾），逐条复核全部为 BLOCKED，无可执行的仓内项，本轮无代码改动（不凑数）。本轮已推进并入库三项：①语言自动识别两半闭合、原第 262 项已勾（4df62be /z/→根反向跳转 + 63d5cb8 内页探测，vitepress 构建 EXIT=0）②ragflow / dify 自含 mock 验收实跑 passed 且 evidence 入库（c1b0df3 / eae11ea）③real 模式三守卫实测逐字命中（30ca5e3）。九条挂起项复核结论（2026-11-21 证据）：①env 无 DIFY/WEKNORA/RAGFLOW/TELEGRAM/BOT_TOKEN 进程变量，仓内仅 .env.example / .env.weknora.example 两模板，config.yml:116-145 全部走 `${VAR}` 占位无硬编码密钥 → 知识库 real 验收（第 7/186/187/188 条）与 Telegram 联调（第 8 条）保持阻塞；②`git ls-files` 无 playwright/puppeteer 路径，sdk/package-lock.json 仅一处未启用的 `@vitest/browser-playwright` 节点（无任何 package.json 声明、无 browser 测试配置）→ Web 真实浏览器验收（第 201 条）保持阻塞；③无真实客户需求来源 / 访谈输入 / 排障试用记录，「建设与否」属用户拍板 → 多渠道试点、客户工单入口、远程协助差异化（第 208/209/210 条）保持阻塞。暂结口径：9 条保持 BLOCKED 原样挂起，不降级标通过、不删行；用户提供任一凭据/资源/拍板即对应行重启。
+
 ## 已定口径
 
 - tickets.session_id 保持可空不收紧（管理员独立建单与邮件建单两条路径不传）
