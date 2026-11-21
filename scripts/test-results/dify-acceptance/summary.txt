@@ -1,0 +1,17 @@
+Dify primary acceptance summary
+mode=mock
+servify_url=http://127.0.0.1:18094
+dify_url=http://127.0.0.1:18095/v1
+dify_dataset_id=dataset-1
+dify_host=127.0.0.1
+overall_status=healthy
+service_type=orchestrated_enhanced
+knowledge_provider_enabled=true
+knowledge_provider=dify
+knowledge_provider_healthy=true
+query_ok=true
+query_strategy=fallback
+dify_available=true
+dify_usage_count=0
+knowledge_upload_ok=true
+knowledge_sync_ok=true

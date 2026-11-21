@@ -74,6 +74,16 @@ scripts/test-results/**/*.txt
 !scripts/test-results/ragflow-acceptance/ragflow-dataset.json
 !scripts/test-results/ragflow-acceptance/ragflow-mock-requests.jsonl
 !scripts/test-results/ragflow-acceptance/server-log.txt
+# dify 验收关键证据入库：manifest 走全局白名单；此处收 summary + 响应留痕。
+# 与 ragflow 同口径（响应 JSON + 摘要），无 admin-auth（service token）/jsonl。
+!scripts/test-results/dify-acceptance/summary.txt
+!scripts/test-results/dify-acceptance/ai-status.json
+!scripts/test-results/dify-acceptance/ai-query.json
+!scripts/test-results/dify-acceptance/ai-metrics.json
+!scripts/test-results/dify-acceptance/knowledge-upload.json
+!scripts/test-results/dify-acceptance/knowledge-sync.json
+!scripts/test-results/dify-acceptance/dify-dataset.json
+!scripts/test-results/dify-acceptance/servify-health.json
 # weknora 全栈 mock 验收证据入库：manifest 走全局白名单；此处收
 # summary + 健康/AI 状态与查询（含 disable 降级路径）+ provider 控制面
 # （disable/enable/熔断复位）+ 知识上传/同步 + ws/webrtc 状态。均为
