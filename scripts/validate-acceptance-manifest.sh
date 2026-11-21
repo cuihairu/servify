@@ -649,7 +649,13 @@ case "$PROVIDER" in
     require_equals '.checks.knowledge_provider_enable_ok // ""' "true"
     require_equals '.checks.circuit_breaker_reset_ok // ""' "true"
     require_equals '.checks.fallback_query_ok // ""' "true"
-    require_equals '.checks.fallback_query_strategy // ""' "llm"
+    # disable 后降级策略 llm（零命中直答）与 fallback（编排失败走 legacy 兜底）
+    # 都是合法形态，取决于部署面 LLM 是否可用；manifest 记录实际值，两者皆可。
+    WEKNORA_FALLBACK_STRATEGY=$(json_get "$MANIFEST_JSON" '.checks.fallback_query_strategy // ""' || true)
+    if [ "$WEKNORA_FALLBACK_STRATEGY" != "llm" ] && [ "$WEKNORA_FALLBACK_STRATEGY" != "fallback" ]; then
+      echo "❌ manifest 校验失败: .checks.fallback_query_strategy expected=llm|fallback got=$WEKNORA_FALLBACK_STRATEGY" >&2
+      exit 1
+    fi
     require_equals '.checks.knowledge_upload_ok // ""' "true"
     require_equals '.checks.knowledge_sync_ok // ""' "true"
     require_file_listed "summary.txt"

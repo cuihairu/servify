@@ -47,10 +47,12 @@ func TestWeKnoraIntegrationScriptRealModeRejectsLocalHost(t *testing.T) {
 	}
 }
 
-func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("bash-backed acceptance script tests are not stable against httptest servers on Windows")
-	}
+// startWeKnoraIntegrationFakes 起 mock 模式所需的 Servify/WeKnora 假端点。
+// disable 后 ai/query 返回的 strategy 由 disableStrategy 决定：llm（零命中直答，
+// LLM 可用时）与 fallback（编排失败走 legacy 兜底，如部署面未配 LLM 凭据）都是
+// provider disable 后查询存活的合法降级形态。
+func startWeKnoraIntegrationFakes(t *testing.T, disableStrategy string) (servifyURL, weknoraURL string) {
+	t.Helper()
 
 	knowledgeProviderEnabled := true
 
@@ -63,9 +65,7 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 			if knowledgeProviderEnabled {
 				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"ok","strategy":"weknora"}}`))
 			} else {
-				// provider 禁用后走降级路径：零命中直答，策略标签 llm（非编排失败），
-				// 与 enhanced_service.go:416-419 口径一致；disable 非 fallback。
-				_, _ = w.Write([]byte(`{"success":true,"data":{"content":"degraded-ok","strategy":"llm"}}`))
+				_, _ = fmt.Fprintf(w, `{"success":true,"data":{"content":"degraded-ok","strategy":%q}}`, disableStrategy)
 			}
 		case "/api/v1/ai/status":
 			_, _ = fmt.Fprintf(w, `{"success":true,"data":{"type":"orchestrated_enhanced","knowledge_provider_enabled":%t,"knowledge_provider":"weknora","knowledge_provider_healthy":%t}}`, knowledgeProviderEnabled, knowledgeProviderEnabled)
@@ -111,7 +111,7 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer servify.Close()
+	t.Cleanup(servify.Close)
 
 	weknora := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -121,13 +121,22 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"service":"weknora-mock","status":"ok"}`))
 	}))
-	defer weknora.Close()
+	t.Cleanup(weknora.Close)
 
+	return servify.URL, weknora.URL
+}
+
+func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed acceptance script tests are not stable against httptest servers on Windows")
+	}
+
+	servifyURL, weknoraURL := startWeKnoraIntegrationFakes(t, "llm")
 	evidenceDir := t.TempDir()
 
 	cmd := exec.Command("bash", "-lc", fmt.Sprintf("WEKNORA_ACCEPTANCE_MODE=mock SERVIFY_URL=%q WEKNORA_URL=%q EVIDENCE_DIR=%q ./test-weknora-integration.sh",
-		servify.URL,
-		weknora.URL,
+		servifyURL,
+		weknoraURL,
 		evidenceDir,
 	))
 	cmd.Dir = "."
@@ -208,6 +217,46 @@ func TestWeKnoraIntegrationScriptMockModeWritesEvidence(t *testing.T) {
 		if !strings.Contains(manifestText, want) {
 			t.Fatalf("expected %q in manifest, got %s", want, manifestText)
 		}
+	}
+}
+
+func TestWeKnoraIntegrationScriptMockModeAcceptsFallbackStrategy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed acceptance script tests are not stable against httptest servers on Windows")
+	}
+
+	// provider disable 后 LLM 不可用（如 CI compose 的 servify 不带 LLM 凭据）时
+	// 编排器失败走 legacy base 兜底，strategy=fallback——与 llm（零命中直答）一样
+	// 是查询存活的合法降级形态，脚本不应把 llm 钉成唯一合法值。
+	servifyURL, weknoraURL := startWeKnoraIntegrationFakes(t, "fallback")
+	evidenceDir := t.TempDir()
+
+	cmd := exec.Command("bash", "-lc", fmt.Sprintf("WEKNORA_ACCEPTANCE_MODE=mock SERVIFY_URL=%q WEKNORA_URL=%q EVIDENCE_DIR=%q ./test-weknora-integration.sh",
+		servifyURL,
+		weknoraURL,
+		evidenceDir,
+	))
+	cmd.Dir = "."
+	cmd.Env = os.Environ()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected mock mode success, err=%v output=%s", err, string(output))
+	}
+
+	summary, err := os.ReadFile(filepath.Join(evidenceDir, "summary.txt"))
+	if err != nil {
+		t.Fatalf("read summary: %v", err)
+	}
+	if !strings.Contains(string(summary), "fallback_query_strategy=fallback") {
+		t.Fatalf("expected fallback_query_strategy=fallback in summary, got %s", string(summary))
+	}
+
+	manifest, err := os.ReadFile(filepath.Join(evidenceDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if !strings.Contains(string(manifest), `"fallback_query_strategy": "fallback"`) {
+		t.Fatalf("expected fallback_query_strategy fallback in manifest, got %s", string(manifest))
 	}
 }
 

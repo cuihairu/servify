@@ -258,6 +258,130 @@ func TestValidateAcceptanceManifestScriptRejectsInvalidWeKnoraManifest(t *testin
 	}
 }
 
+func TestValidateAcceptanceManifestScriptAcceptsWeKnoraFallbackStrategies(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	// disable 后降级策略的两种合法形态都必须被接受：llm（零命中直答，LLM 可用时）
+	// 与 fallback（编排失败走 legacy 兜底，如部署面未配 LLM 凭据）。
+	for _, strategy := range []string{"llm", "fallback"} {
+		t.Run(strategy, func(t *testing.T) {
+			dir := t.TempDir()
+			writeAcceptanceFixture(t, dir, map[string]string{
+				"summary.txt":                     "ok",
+				"ai-status.json":                  "{}",
+				"ai-query.json":                   "{}",
+				"knowledge-provider-disable.json": "{}",
+				"ai-query-after-disable.json":     "{}",
+				"knowledge-provider-enable.json":  "{}",
+				"circuit-breaker-reset.json":      "{}",
+				"knowledge-upload.json":           "{}",
+				"knowledge-sync.json":             "{}",
+				"manifest.json": fmt.Sprintf(`{
+  "provider": "weknora",
+  "mode": "mock",
+  "status": {
+    "knowledge_provider": "weknora",
+    "knowledge_provider_enabled": "true",
+    "knowledge_provider_healthy": "true"
+  },
+  "checks": {
+    "provider_available": "true",
+    "knowledge_provider_disable_ok": "true",
+    "knowledge_provider_enable_ok": "true",
+    "circuit_breaker_reset_ok": "true",
+    "fallback_query_ok": "true",
+    "fallback_query_strategy": %q,
+    "knowledge_upload_ok": "true",
+    "knowledge_sync_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "ai-status.json",
+    "ai-query.json",
+    "knowledge-provider-disable.json",
+    "ai-query-after-disable.json",
+    "knowledge-provider-enable.json",
+    "circuit-breaker-reset.json",
+    "knowledge-upload.json",
+    "knowledge-sync.json"
+  ]
+}`, strategy),
+			})
+
+			cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+			cmd.Dir = "."
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("expected validator success for strategy=%s, err=%v output=%s", strategy, err, string(output))
+			}
+			if !strings.Contains(string(output), "manifest 校验通过") {
+				t.Fatalf("expected success output, got %s", string(output))
+			}
+		})
+	}
+}
+
+func TestValidateAcceptanceManifestScriptRejectsUnknownWeKnoraFallbackStrategy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash-backed script tests are not stable on Windows")
+	}
+
+	dir := t.TempDir()
+	writeAcceptanceFixture(t, dir, map[string]string{
+		"summary.txt":                     "ok",
+		"ai-status.json":                  "{}",
+		"ai-query.json":                   "{}",
+		"knowledge-provider-disable.json": "{}",
+		"ai-query-after-disable.json":     "{}",
+		"knowledge-provider-enable.json":  "{}",
+		"circuit-breaker-reset.json":      "{}",
+		"knowledge-upload.json":           "{}",
+		"knowledge-sync.json":             "{}",
+		"manifest.json": `{
+  "provider": "weknora",
+  "mode": "mock",
+  "status": {
+    "knowledge_provider": "weknora",
+    "knowledge_provider_enabled": "true",
+    "knowledge_provider_healthy": "true"
+  },
+  "checks": {
+    "provider_available": "true",
+    "knowledge_provider_disable_ok": "true",
+    "knowledge_provider_enable_ok": "true",
+    "circuit_breaker_reset_ok": "true",
+    "fallback_query_ok": "true",
+    "fallback_query_strategy": "weknora",
+    "knowledge_upload_ok": "true",
+    "knowledge_sync_ok": "true"
+  },
+  "evidence_files": [
+    "summary.txt",
+    "ai-status.json",
+    "ai-query.json",
+    "knowledge-provider-disable.json",
+    "ai-query-after-disable.json",
+    "knowledge-provider-enable.json",
+    "circuit-breaker-reset.json",
+    "knowledge-upload.json",
+    "knowledge-sync.json"
+  ]
+}`,
+	})
+
+	cmd := exec.Command("bash", "./validate-acceptance-manifest.sh", filepath.Join(dir, "manifest.json"))
+	cmd.Dir = "."
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected validator failure, output=%s", string(output))
+	}
+	if !strings.Contains(string(output), "fallback_query_strategy") {
+		t.Fatalf("expected fallback_query_strategy failure reason in output, got %s", string(output))
+	}
+}
+
 func TestValidateAcceptanceManifestScriptAcceptsValidVoicePstnManifest(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("bash-backed script tests are not stable on Windows")

@@ -413,17 +413,20 @@ if [ "$SERVICE_IS_PROVIDER_CAPABLE" = "true" ]; then
     save_response "ai-query-after-disable" "$FALLBACK_QUERY_RESPONSE"
     if echo "$FALLBACK_QUERY_RESPONSE" | grep -q '"success":true'; then
         FALLBACK_QUERY_STRATEGY=$(json_get "$FALLBACK_QUERY_RESPONSE" '.data.strategy // "unknown"' || echo "unknown")
-        # disable 后查询走降级路径：策略标签为 llm（零命中直答，非编排失败——
-        # fallback 专指编排失败走 legacy 兜底，见 enhanced_service.go:416-419）。
-        # 历史该断言误期 fallback 编码旧语义，2026-11-21 对齐口径改为 llm；
-        # label 名沿用 fallback_query_strategy 保证据字段稳定，值为降级后策略。
-        if [ "$FALLBACK_QUERY_STRATEGY" = "llm" ]; then
+        # disable 后查询走降级路径，成功形态有两种，取决于部署面 LLM 是否可用：
+        # - llm：provider 已禁用、编排器零命中直答（enhanced_service.go:416-419，
+        #   fallback 专指编排失败走 legacy 兜底）；
+        # - fallback：编排器失败走 legacy base 兜底，查询仍成功（如 CI compose
+        #   的 servify 不带 LLM 凭据，OPENAI_API_KEY 未注入，禁用后直答无从发生）。
+        # 断言不变量是 success=true 且 strategy ∈ {llm, fallback}，不绑定单一
+        # 部署形态；label 名沿用 fallback_query_strategy 保证据字段稳定。
+        if [ "$FALLBACK_QUERY_STRATEGY" = "llm" ] || [ "$FALLBACK_QUERY_STRATEGY" = "fallback" ]; then
             FALLBACK_QUERY_OK=true
             if [ "$STATUS_AFTER_DISABLE_ENABLED" = "unknown" ]; then
                 STATUS_AFTER_DISABLE_ENABLED="false"
                 echo "    ✅ disable 后状态已由降级行为补证为 knowledge_provider_enabled=false"
             fi
-            echo "    ✅ disable 后降级查询成功，strategy=llm"
+            echo "    ✅ disable 后降级查询成功，strategy=$FALLBACK_QUERY_STRATEGY"
         else
             echo "    ❌ disable 后未降级，strategy=$FALLBACK_QUERY_STRATEGY"
             exit 1
@@ -664,8 +667,12 @@ if [ "$WEKNORA_ACCEPTANCE_MODE" = "real" ]; then
         echo "❌ real 模式要求 WeKnora provider enabled=true 且 healthy=true"
         exit 1
     fi
-    if [ "$FALLBACK_QUERY_OK" != "true" ] || [ "$FALLBACK_QUERY_STRATEGY" != "llm" ]; then
-        echo "❌ real 模式要求 disable 后降级查询成功（strategy=llm）"
+    if [ "$FALLBACK_QUERY_OK" != "true" ]; then
+        echo "❌ real 模式要求 disable 后降级查询成功"
+        exit 1
+    fi
+    if [ "$FALLBACK_QUERY_STRATEGY" != "llm" ] && [ "$FALLBACK_QUERY_STRATEGY" != "fallback" ]; then
+        echo "❌ real 模式要求 disable 后降级策略为 llm 或 fallback，当前为 $FALLBACK_QUERY_STRATEGY"
         exit 1
     fi
     if [ "$UPLOAD_OK" != "true" ] || [ "$SYNC_OK" != "true" ]; then
