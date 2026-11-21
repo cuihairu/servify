@@ -1,0 +1,32 @@
+{
+  "checks": {
+    "dify_usage_count": "0",
+    "knowledge_sync_ok": "true",
+    "knowledge_upload_ok": "true",
+    "provider_available": "true",
+    "query_ok": "true",
+    "query_strategy": "fallback"
+  },
+  "dataset_id": "dataset-1",
+  "evidence_files": [
+    "ai-metrics.json",
+    "ai-query.json",
+    "ai-status.json",
+    "dify-dataset.json",
+    "knowledge-sync.json",
+    "knowledge-upload.json",
+    "servify-health.json",
+    "summary.txt"
+  ],
+  "mode": "mock",
+  "provider": "dify",
+  "provider_url": "http://127.0.0.1:18095/v1",
+  "servify_url": "http://127.0.0.1:18094",
+  "status": {
+    "knowledge_provider": "dify",
+    "knowledge_provider_enabled": "true",
+    "knowledge_provider_healthy": "true",
+    "overall": "healthy",
+    "service_type": "orchestrated_enhanced"
+  }
+}
