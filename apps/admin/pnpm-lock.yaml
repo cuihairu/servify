@@ -32,7 +32,7 @@ overrides:
   source-map-js@<1.2.2: ^1.2.2
   vite@<7.3.7: 7.3.7
   follow-redirects@<1.16.1: 1.16.2
-  hono@<4.13.11: 4.13.11
+  hono@<4.13.16: ^4.13.20
   rimraf@5.0.1: 6.1.4
 
 importers:
@@ -1043,14 +1043,14 @@ packages:
     resolution: {integrity: sha512-p/KH9MnfNcsm3sR6x4lNgm5j+QN4Et8srKredl9DZfXiyZ1UQ3aQ2YVpFLbqktYN5JI+DB+VZFKM2PqE5hLKjQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: 4.13.11
+      hono: ^4.13.20
 
   '@hono/node-ws@1.3.1':
     resolution: {integrity: sha512-vo/MwCnpJAVHBkGzWjCJ28wF45fYHAfbPZcH2rodZODHtch2GHA94KtMfusmVycTUtsLAsaNsHhtY6P8X3RQsA==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       '@hono/node-server': ^2.1.3
-      hono: 4.13.11
+      hono: ^4.13.20
 
   '@humanwhocodes/config-array@0.11.14':
     resolution: {integrity: sha512-3T8LkOmg45BV5FICb15QQMsyUSWrQ8AygVfC7ZG32zOalnqrilm018ZVCw0eapXux8FtA33q8PSRSstjee3jSg==}
@@ -3804,8 +3804,8 @@ packages:
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
-  hono@4.13.11:
-    resolution: {integrity: sha512-/SMX/RQNJn7oNmFwH6DtwDqcrzZU2otm1FD6OJe2cWF6cfy/F8hq0XVBv7xW3FTJshRQwuBnXHDq2kNsdZnshg==}
+  hono@4.13.20:
+    resolution: {integrity: sha512-xo6gecEJQ+CjTtOUUbcLHE8CdRKMeF4qITe+DT+OhFnSUmZR/ZBa9XavAfiGh4HlukmlaHFdaK4dz5tkTYFNmA==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@2.8.9:
@@ -3892,6 +3892,7 @@ packages:
   image-size@0.5.5:
     resolution: {integrity: sha512-6TDAlDPZxUFCv+fuOkIoXT/V/f3Qbq8e37p+YOiYrUv3v9cc3/6x78VdfPgFVaB9dZYeLUfKgHRebpkm/oP2VQ==}
     engines: {node: '>=0.10.0'}
+    deprecated: Please migrate to image-size@2.x
     hasBin: true
 
   immer@9.0.21:
@@ -8331,14 +8332,14 @@ snapshots:
 
   '@formatjs/intl-utils@2.3.0': {}
 
-  '@hono/node-server@2.1.6(hono@4.13.11)':
+  '@hono/node-server@2.1.6(hono@4.13.20)':
     dependencies:
-      hono: 4.13.11
+      hono: 4.13.20
 
-  '@hono/node-ws@1.3.1(@hono/node-server@2.1.6(hono@4.13.11))(hono@4.13.11)':
+  '@hono/node-ws@1.3.1(@hono/node-server@2.1.6(hono@4.13.20))(hono@4.13.20)':
     dependencies:
-      '@hono/node-server': 2.1.6(hono@4.13.11)
-      hono: 4.13.11
+      '@hono/node-server': 2.1.6(hono@4.13.20)
+      hono: 4.13.20
       ws: 8.22.1
     transitivePeerDependencies:
       - bufferutil
@@ -9738,8 +9739,8 @@ snapshots:
   '@utoo/pack@1.5.37(less-loader@11.1.0(less@4.1.3)(webpack@5.105.4(lightningcss@1.33.0)(postcss@8.5.32)))(less@4.1.3)(postcss@8.5.32)(resolve-url-loader@5.0.0)(sass-loader@13.2.0(sass@1.54.0)(webpack@5.105.4(lightningcss@1.33.0)(postcss@8.5.32)))(sass@1.54.0)(styled-jsx@5.1.7(@babel/core@7.29.7)(react@18.3.1))':
     dependencies:
       '@babel/code-frame': 7.22.5
-      '@hono/node-server': 2.1.6(hono@4.13.11)
-      '@hono/node-ws': 1.3.1(@hono/node-server@2.1.6(hono@4.13.11))(hono@4.13.11)
+      '@hono/node-server': 2.1.6(hono@4.13.20)
+      '@hono/node-ws': 1.3.1(@hono/node-server@2.1.6(hono@4.13.20))(hono@4.13.20)
       '@jridgewell/trace-mapping': 0.3.31
       '@swc/helpers': 0.5.23
       '@utoo/pack-shared': 1.5.37
@@ -9747,7 +9748,7 @@ snapshots:
       domparser-rs: 0.0.7
       find-up: 4.1.0
       get-port: 5.1.1
-      hono: 4.13.11
+      hono: 4.13.20
       less: 4.1.3
       less-loader: 11.1.0(less@4.1.3)(webpack@5.105.4(lightningcss@1.33.0)(postcss@8.5.32))
       nanoid: 3.3.20
@@ -11925,7 +11926,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.13.11: {}
+  hono@4.13.20: {}
 
   hosted-git-info@2.8.9: {}
 
