@@ -362,6 +362,11 @@ func (o *TicketOrchestrator) ApplyCloseTicketSideEffects(ctx context.Context, ti
 }
 
 func (o *TicketOrchestrator) autoAssignAgent(ticketID uint) {
+	// ticket.created 经 outbox 异步投递，事件到达前人工 assign 可能已写入
+	// agent_id；已指派的工单跳过，避免自动派单覆盖手工指派。
+	if !o.ticketAllowsAutoAssign(ticketID) {
+		return
+	}
 	agent, err := o.selectAutoAssignee(context.Background())
 	if err != nil {
 		o.logger.Debugf("No available agent for auto-assignment of ticket %d", ticketID)
@@ -372,6 +377,24 @@ func (o *TicketOrchestrator) autoAssignAgent(ticketID uint) {
 	} else {
 		o.logger.Infof("Auto-assigned ticket %d to agent %d", ticketID, agent.UserID)
 	}
+}
+
+// ticketAllowsAutoAssign 以库内 agent_id 为准判断工单是否仍待指派。
+// loadTicket 未装配（无持久化路径）时放行，保持原有派单行为。
+func (o *TicketOrchestrator) ticketAllowsAutoAssign(ticketID uint) bool {
+	if o == nil || o.loadTicket == nil {
+		return true
+	}
+	ticket, err := o.loadTicket(context.Background(), ticketID)
+	if err != nil {
+		o.logger.Warnf("Failed to load ticket %d for auto-assignment, skipping: %v", ticketID, err)
+		return false
+	}
+	if ticket != nil && ticket.AgentID != nil && *ticket.AgentID != 0 {
+		o.logger.Debugf("Ticket %d already assigned to agent %d, skipping auto-assignment", ticketID, *ticket.AgentID)
+		return false
+	}
+	return true
 }
 
 func (o *TicketOrchestrator) selectAutoAssignee(ctx context.Context) (*models.Agent, error) {

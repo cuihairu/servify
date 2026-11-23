@@ -523,6 +523,162 @@ func TestAutoAssignAgentSkipsWhenNoCandidate(t *testing.T) {
 	}
 }
 
+func TestAutoAssignAgentSkipsAlreadyAssignedTicket(t *testing.T) {
+	called := false
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context) (*models.Agent, error) {
+			return &models.Agent{UserID: 15}, nil
+		},
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) {
+			return &models.Ticket{ID: 21, AgentID: uintPtr(99)}, nil
+		},
+		func(ctx context.Context, ticketID uint, agentID uint, assignerID uint) error {
+			called = true
+			return nil
+		},
+		nil,
+	)
+
+	o.autoAssignAgent(21)
+
+	if called {
+		t.Fatal("auto-assign must skip an already-assigned ticket to preserve manual assignment")
+	}
+}
+
+func TestAutoAssignAgentSkipsWhenTicketLoadFails(t *testing.T) {
+	called := false
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context) (*models.Agent, error) {
+			return &models.Agent{UserID: 15}, nil
+		},
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) {
+			return nil, errors.New("ticket gone")
+		},
+		func(ctx context.Context, ticketID uint, agentID uint, assignerID uint) error {
+			called = true
+			return nil
+		},
+		nil,
+	)
+
+	o.autoAssignAgent(22)
+
+	if called {
+		t.Fatal("auto-assign must skip when ticket state cannot be verified")
+	}
+}
+
+func TestAutoAssignAgentAssignsWhenAgentIDIsZeroSentinel(t *testing.T) {
+	var assignCalls []uint
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context) (*models.Agent, error) {
+			return &models.Agent{UserID: 15}, nil
+		},
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) {
+			// 0 是 unassign 哨兵，视同未指派，仍可自动派单。
+			return &models.Ticket{ID: 24, AgentID: uintPtr(0)}, nil
+		},
+		func(ctx context.Context, ticketID uint, agentID uint, assignerID uint) error {
+			assignCalls = append(assignCalls, ticketID)
+			return nil
+		},
+		nil,
+	)
+
+	o.autoAssignAgent(24)
+
+	if len(assignCalls) != 1 || assignCalls[0] != 24 {
+		t.Fatalf("zero-agent-id sentinel must be treated as unassigned, got %+v", assignCalls)
+	}
+}
+
+func TestAutoAssignAgentAssignsWhenLoadReturnsNilTicket(t *testing.T) {
+	var assignCalls []uint
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context) (*models.Agent, error) {
+			return &models.Agent{UserID: 15}, nil
+		},
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) {
+			return nil, nil
+		},
+		func(ctx context.Context, ticketID uint, agentID uint, assignerID uint) error {
+			assignCalls = append(assignCalls, ticketID)
+			return nil
+		},
+		nil,
+	)
+
+	o.autoAssignAgent(25)
+
+	if len(assignCalls) != 1 || assignCalls[0] != 25 {
+		t.Fatalf("nil ticket state must not block auto-assignment, got %+v", assignCalls)
+	}
+}
+
+func TestAutoAssignAgentAssignsWhenUnassigned(t *testing.T) {
+	var assignCalls []uint
+	o := NewTicketOrchestrator(
+		nil,
+		logrus.New(),
+		nil,
+		nil,
+		nil,
+		nil,
+		func(ctx context.Context) (*models.Agent, error) {
+			return &models.Agent{UserID: 15}, nil
+		},
+		nil,
+		nil,
+		func(ctx context.Context, ticketID uint) (*models.Ticket, error) {
+			return &models.Ticket{ID: 23, AgentID: nil}, nil
+		},
+		func(ctx context.Context, ticketID uint, agentID uint, assignerID uint) error {
+			assignCalls = append(assignCalls, ticketID)
+			return nil
+		},
+		nil,
+	)
+
+	o.autoAssignAgent(23)
+
+	if len(assignCalls) != 1 || assignCalls[0] != 23 {
+		t.Fatalf("unassigned ticket must be auto-assigned, got %+v", assignCalls)
+	}
+}
+
 func uintPtr(v uint) *uint {
 	return &v
 }
