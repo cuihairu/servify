@@ -20,6 +20,7 @@
     "ai-query.json",
     "ai-status.json",
     "build-output.txt",
+    "manifest.json",
     "server-log.txt",
     "summary.txt"
   ]

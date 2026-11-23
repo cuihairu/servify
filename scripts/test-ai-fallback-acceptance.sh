@@ -247,7 +247,7 @@ if [ "$AI_ACCEPTANCE_MODE" = "mock" ]; then
   append_summary "log_evidence=skipped(mock)"
 elif [ -f "$SERVER_LOG" ] \
   && grep -q 'strategy=fallback' "$SERVER_LOG" \
-  && grep -qE 'POST[[:space:]]+"/api/v1/ai/query"' "$SERVER_LOG"; then
+  && grep -qE 'POST[[:space:]]+"/api/v1/ai/query"|"method":"POST","msg":"http access","path":"/api/v1/ai/query"' "$SERVER_LOG"; then
   LOG_EVIDENCE_OK=true
   append_summary "log_evidence_ok=true"
 else
