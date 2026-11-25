@@ -51,6 +51,26 @@ API js-yaml 4 keeps (`safeLoad`, dropped in 4, was never used). `js-yaml@3`
 had exactly one consumer in the tree before the override, and the lockfile
 diff only removes those four packages. Audit went from 3 to 2 findings.
 
+Re-run on 2026-11-26 (`npx -y pnpm@10.22.0 audit`): **1 vulnerability found
+(1 low, `elliptic` only)**. Two entries left this ledger without any
+dependency change, the same departure mode as `braces` above — the advisory
+stopped covering the installed version:
+
+- `minimatch` (GHSA-g3hv-75wg-m249, moderate, formerly entry 3): the installed
+  `minimatch@3.1.5` (eslint chain) is unchanged, but the npm bulk advisory
+  endpoint (`/-/npm/v1/security/advisories/bulk`) returns no entry for it on
+  2026-11-26 — the advisory was re-scoped or withdrawn upstream.
+- `deepmerge` (GHSA-gcqx-w48m-w2h4, low, formerly entry 2): the installed
+  `deepmerge@4.3.1` is unchanged and likewise no longer covered (bulk endpoint
+  returns no entry, 2026-11-26).
+
+`hono` left the vulnerable set on 2026-11-23 via the `hono@<4.13.16 →
+^4.13.20` override (`cced970`); `pnpm-lock.yaml` resolves `hono@4.13.20`,
+above the advisory's `lowest-non-vulnerable-version` 4.13.16. That override
+is what unblocks the `Dependabot Updates` workflow, which had failed with
+`security_update_not_possible` (latest resolvable 4.13.11 < 4.13.16) on
+2026-11-13 and 2026-11-21. `sdk` (`npm audit`, same day): 0 vulnerabilities.
+
 ## 1. `elliptic` — GHSA-848j-6mx2-7j84 (low)
 
 | Field | Value |
@@ -115,52 +135,25 @@ sibling in either chain; the only other instance in the tree is
 `deepmerge@1.5.2` (via `webpack-5-chain`), an unrelated major with a different
 surface that the `^4.2.2` consumers cannot adopt.
 
-Unblock condition: upstream publishes a `deepmerge` release above `4.3.1`.
-Then add a `pnpm.overrides` entry, `pnpm install`, run `typecheck` + `build`,
-wait for CI `Admin Checks`, and delete this entry.
+(Entry closed 2026-11-26 — the advisory no longer covers the installed
+`deepmerge@4.3.1` (npm bulk advisory endpoint returns no entry); see the
+snapshot section. No override or upgrade was involved. `deepmerge@1.5.2`
+remains in the tree via `webpack-5-chain` and was never covered by the
+advisory.)
 
-## 3. `minimatch` — GHSA-g3hv-75wg-m249 (moderate)
-
-| Field | Value |
-|---|---|
-| Title | minimatch has potential denial of service via globparts amplification |
-| Vulnerable versions | `<11.0.1` |
-| Patched versions | `>=11.0.1` |
-| Registry latest | `11.0.4` |
-| Path | `@umijs/max > @umijs/lint > eslint-plugin-react > minimatch` |
-
-Reachability: this is lint tooling only. `eslint-plugin-react@7.33.2` uses
-`minimatch` only in `jsx-pascal-case` to compare rule names, and `max build`
-does not ship `minimatch` or the plugin in the served bundle.
-
-Why not an override: `@umijs/lint@4.7.30` pins `eslint-plugin-react@7.33.2`;
-that plugin declares `minimatch: ^3.1.2` and calls the required module
-directly (`minimatch(name, entry, { noglobstar: true })`). `minimatch@11`
-changed the CommonJS export to an object whose callable is
-`exports.minimatch`, so forcing the direct consumer to 11 makes the call
-`TypeError: minimatch is not a function`. The compatible patched upgrade
-must come from `eslint-plugin-react` (or `@umijs/lint`).
-
-Why not a dependency replacement: the vulnerable leaf is imported directly by
-the lint rule. Replacing it with a shim would mask the API mismatch rather
-than use an upstream-supported compatibility release.
-
-Unblock condition: `@umijs/lint` releases a version using an
-`eslint-plugin-react` release compatible with `minimatch@11`. Then update
-that chain, run `typecheck` + `lint` + `build`, and delete this entry.
-
-## Why an `@umijs/max` upgrade does not close any of these
+## Why an `@umijs/max` upgrade does not close these
 
 `@umijs/max` was upgraded from 4.7.16 to the current 4.7.30. That update plus
 the `rimraf@5.0.1 → 6.1.4` override now resolves the mako build chain to
 `rimraf@6.1.4 → glob@14.0.3 → minimatch@11.0.4`, closing the vulnerable glob
 10 chain. rimraf@6.1.4 declares `glob: ^14.0.3`, so the previous
 `glob@>=10.2 <10.5: 14.0.3` override (which injected glob@14 into rimraf@5.0.1
-declaring `^10.2.5`, a semver violation) was removed. The remaining three chains
-are structural to UMI: webpack node polyfills for `elliptic`; webpack svgr /
-TS-checker tooling for `deepmerge`; and the pinned lint plugin chain for
-`minimatch`. The blocking facts are the
-leaves and the consumer API, not the top of the chain.
+declaring `^10.2.5`, a semver violation) was removed. The one remaining chain
+is structural to UMI: webpack node polyfills for `elliptic`. The blocking fact
+is the leaf, not the top of the chain. (Former entries `deepmerge` and
+`minimatch` — a webpack svgr/TS-checker chain and a pinned lint plugin chain —
+left the ledger on 2026-11-26 when their advisories stopped covering the
+installed versions; the chains themselves are unchanged.)
 
 ## Procedure when an upstream fix lands
 
