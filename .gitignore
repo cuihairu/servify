@@ -84,6 +84,32 @@ scripts/test-results/**/*.txt
 !scripts/test-results/dify-acceptance/knowledge-sync.json
 !scripts/test-results/dify-acceptance/dify-dataset.json
 !scripts/test-results/dify-acceptance/servify-health.json
+# web-browser 验收截图（PNG）不入库：manifest.evidence_files 仅记录其文件名，
+# 工作台/工单页渲染证据以 admin-ui.json + 文本留痕为准（全仓无图像证据入库）。
+scripts/test-results/web-browser/*.png
+# web-browser 验收关键证据入库：manifest 走全局白名单；此处收 summary + 关键
+# 响应留痕（建管理员/两坐席/客户/知识上传）+ 浏览器驱动逐检查证据（browser-
+# summary/browser-result/visitor-ws-frames/visitor-effects/admin-ui/driver-
+# output）+ 服务/代理日志。工作台与工单页截图（PNG）仅在本地产物中留存，
+# manifest.evidence_files 记录其文件名；全仓惯例不入库图像。
+# admin-auth.json 含验收 JWT（127.0.0.1
+# dev 栈产物，与 auth-session/voice-pstn 全量入库同口径）。
+!scripts/test-results/web-browser/summary.txt
+!scripts/test-results/web-browser/build-output.txt
+!scripts/test-results/web-browser/server-log.txt
+!scripts/test-results/web-browser/admin-auth.json
+!scripts/test-results/web-browser/agent-create-1.json
+!scripts/test-results/web-browser/agent-create-2.json
+!scripts/test-results/web-browser/customer-create.json
+!scripts/test-results/web-browser/kb-upload.json
+!scripts/test-results/web-browser/browser-summary.txt
+!scripts/test-results/web-browser/browser-result.json
+!scripts/test-results/web-browser/visitor-ws-frames.json
+!scripts/test-results/web-browser/visitor-effects.json
+!scripts/test-results/web-browser/admin-ui.json
+!scripts/test-results/web-browser/driver-output.txt
+!scripts/test-results/web-browser/host-log.txt
+!scripts/test-results/web-browser/admin-proxy.log
 # weknora 全栈 mock 验收证据入库：manifest 走全局白名单；此处收
 # summary + 健康/AI 状态与查询（含 disable 降级路径）+ provider 控制面
 # （disable/enable/熔断复位）+ 知识上传/同步 + ws/webrtc 状态。均为

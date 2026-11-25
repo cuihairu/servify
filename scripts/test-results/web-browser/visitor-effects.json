@@ -1,0 +1,14 @@
+{
+  "servify_version": "1.1.0",
+  "session_id": "web-browser-1795621511-801",
+  "at": "2026-11-25T15:45:21.835Z",
+  "agent_reply_content": "您好，这里是坐席的回复，已为您登记。",
+  "bot_bubble_seen_after_reply": true,
+  "frames_types": [
+    "webrtc-ice-config",
+    "text-message",
+    "ai-response-delta",
+    "ai-response",
+    "agent-message"
+  ]
+}

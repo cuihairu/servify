@@ -1,0 +1,44 @@
+{
+  "provider": "web-browser",
+  "mode": "real",
+  "servify_url": "http://127.0.0.1:18123",
+  "status": {
+    "overall": "passed"
+  },
+  "checks": {
+    "build_ok": "true",
+    "browser_ok": "true",
+    "admin_auth_ok": "true",
+    "agent_created_ok": "true",
+    "customer_created_ok": "true",
+    "kb_seeded_ok": "true",
+    "assign_ok": "true",
+    "agent_reply_ok": "true",
+    "transfer_ok": "true",
+    "ticket_ok": "true"
+  },
+  "evidence_files": [
+    "admin-auth.json",
+    "admin-proxy.log",
+    "admin-ticket.png",
+    "admin-ui.json",
+    "admin-workspace.png",
+    "agent-create-1.json",
+    "agent-create-2.json",
+    "browser-result.json",
+    "browser-summary.txt",
+    "build-output.txt",
+    "customer-create.json",
+    "driver-output.txt",
+    "host-log.txt",
+    "kb-upload.json",
+    "manifest.json",
+    "server-log.txt",
+    "summary.txt",
+    "visitor-effects.json",
+    "visitor-embed.png",
+    "visitor-reconnect.png",
+    "visitor-sources.png",
+    "visitor-ws-frames.json"
+  ]
+}

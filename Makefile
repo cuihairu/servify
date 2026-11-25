@@ -1,6 +1,6 @@
 # Servify Makefile
 
-.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance ragflow-acceptance weknora-acceptance knowledge-provider-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance local-knowledge-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance conversation-lifecycle-acceptance streaming-cancel-acceptance routing-scoring-acceptance perf-baseline mobile-probe-acceptance validate-acceptance-manifest check-acceptance-evidence
+.PHONY: help build build-cli build-weknora build-knowledge-provider run run-cli run-weknora run-knowledge-provider migrate migrate-seed migrate-verify test test-golden clean clean-runtime docker-build docker-run docker-up-weknora docker-up-knowledge-provider docker-down docker-logs-weknora docker-logs-knowledge-provider docker-up-observ docker-down-observ dev-setup fmt lint update-deps docs changelog release-changelog sdk-sync-versions sdk-check-versions repo-hygiene text-encoding-check generated-assets local-check security-check observability-check release-check dify-acceptance ragflow-acceptance weknora-acceptance knowledge-provider-acceptance auth-session-acceptance workspace-acceptance ticket-acceptance backup-restore-acceptance public-surface-acceptance auth-audit-acceptance refresh-reuse-acceptance approval-rollback-acceptance session-transfer-acceptance satisfaction-acceptance customer-agent-acceptance statistics-acceptance macro-integration-customfield-acceptance remote-assist-acceptance automation-gamification-acceptance pgvector-acceptance local-knowledge-acceptance security-acceptance runtime-baseline-acceptance ai-fallback-acceptance suggestion-acceptance conversation-lifecycle-acceptance web-browser-acceptance streaming-cancel-acceptance routing-scoring-acceptance perf-baseline mobile-probe-acceptance validate-acceptance-manifest check-acceptance-evidence
 
 # Default target
 help:
@@ -66,6 +66,7 @@ help:
 	@echo "  ai-fallback-acceptance - Run the AI fallback acceptance script"
 	@echo "  suggestion-acceptance - Run the customer-side suggested questions acceptance script"
 	@echo "  conversation-lifecycle-acceptance - Run the conversation lifecycle e2e acceptance (V1.0 B1 gate)"
+	@echo "  web-browser-acceptance - Run the web browser acceptance (real Chromium: embed, auth, reconnect, takeover, transfer, ticket, source)"
 	@echo "  streaming-cancel-acceptance - Run the streaming cancel/persistence acceptance (todo 200)"
 	@echo "  routing-scoring-acceptance - Run the routing scoring audit acceptance (V1.0 B2-1 gate)"
 	@echo "  perf-baseline - Run the performance/capacity baseline (PERF_SCALE=smoke|full, default smoke)"
@@ -419,6 +420,11 @@ conversation-lifecycle-acceptance:
 	@echo "Running conversation lifecycle acceptance (V1.0 B1 gate)..."
 	chmod +x ./scripts/test-conversation-lifecycle-acceptance.sh
 	./scripts/test-conversation-lifecycle-acceptance.sh
+
+web-browser-acceptance:
+	@echo "Running web browser acceptance (real Chromium + widget + admin UI)..."
+	chmod +x ./scripts/test-web-browser-acceptance.sh
+	./scripts/test-web-browser-acceptance.sh
 
 streaming-cancel-acceptance:
 	@echo "Running streaming cancel/persistence acceptance (todo 200)..."

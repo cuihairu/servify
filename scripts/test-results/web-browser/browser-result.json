@@ -1,0 +1,73 @@
+{
+  "servify_version": "1.1.0",
+  "session_id": "web-browser-1795621511-801",
+  "at": "2026-11-25T15:45:21.835Z",
+  "results": {
+    "embed": {
+      "ok": true,
+      "selector": ".sw-trigger"
+    },
+    "auth": {
+      "ok": true,
+      "status": "已连接",
+      "session_id": "web-browser-1795621511-801"
+    },
+    "sources": {
+      "ok": true,
+      "row_text": "📄 打印机故障排查指南 · relevance 0.73",
+      "question": "打印机卡纸是最常见的办公设备故障"
+    },
+    "reconnect": {
+      "ok": true,
+      "fault": "setOffline(true)+ws.close() → 掉线 → setOffline(false) → 重连握手",
+      "closed_observed": true,
+      "handshakes": 2
+    },
+    "assign": {
+      "ok": true,
+      "http": 200,
+      "agent_a": "1",
+      "action": "接管(assign)"
+    },
+    "agent_reply": {
+      "ok": true,
+      "http": 201,
+      "content": "您好，这里是坐席的回复，已为您登记。",
+      "frame": "agent-message"
+    },
+    "transfer": {
+      "ok": true,
+      "http": 200,
+      "to_agent_b": "2",
+      "action": "转派(transfer)"
+    },
+    "ticket": {
+      "ok": true,
+      "http": 201,
+      "ticket_id": "1",
+      "session_linked": "web-browser-1795621511-801"
+    },
+    "admin_login": {
+      "ok": true,
+      "username": "web-browser-admin-18141"
+    },
+    "admin_workspace": {
+      "ok": true,
+      "session_row": "web-brow",
+      "buttons": "转派/转工单",
+      "note": "接管按钮按产品语义仅在会话 waiting 态渲染；接管动作经 assign API 实测（见 assign 证据）"
+    },
+    "transfer_ui": {
+      "ok": true,
+      "modal": "转派会话",
+      "target": "坐席 2"
+    },
+    "ticket_ui": {
+      "ok": true,
+      "page": "/ticket/list",
+      "modal": "新建工单",
+      "customer": "Browser Customer 1 (#4)",
+      "note": "会话关联工单由访客面 POST /api/v1/tickets 覆盖（见 ticket 证据）"
+    }
+  }
+}

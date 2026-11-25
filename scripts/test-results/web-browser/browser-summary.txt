@@ -1,0 +1,12 @@
+embed=true
+auth=true
+sources=true
+reconnect=true
+assign=true
+agent_reply=true
+transfer=true
+ticket=true
+admin_login=true
+admin_workspace=true
+transfer_ui=true
+ticket_ui=true

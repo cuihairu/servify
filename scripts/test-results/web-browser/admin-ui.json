@@ -1,0 +1,27 @@
+{
+  "servify_version": "1.1.0",
+  "session_id": "web-browser-1795621511-801",
+  "at": "2026-11-25T15:45:21.835Z",
+  "login_ok": true,
+  "workspace_ok": true,
+  "buttons_visible": true,
+  "transfer_ui_ok": true,
+  "ticket_ui_ok": true,
+  "ticket_ui_page": "/ticket/list",
+  "customer_id": "4",
+  "customer_name": "Browser Customer 1",
+  "admin_failures": [
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "401 GET http://127.0.0.1:18135/api/statistics/dashboard",
+    "401 GET http://127.0.0.1:18135/api/statistics/time-range?start_date=2026-11-18&end_date=2026-11-25",
+    "FAILED GET http://127.0.0.1:18135/login net::ERR_ABORTED",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "transfer_options: [\"坐席 2\",\"坐席 1\"]",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB",
+    "FAILED GET https://gw.alipayobjects.com/mdn/rms_b5fcc5/afts/img/A*1NHAQYduQiQAAAAAAAAAAAAAARQnAQ net::ERR_BLOCKED_BY_ORB"
+  ]
+}

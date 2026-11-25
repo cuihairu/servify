@@ -1,0 +1,110 @@
+{
+  "servify_version": "1.1.0",
+  "session_id": "web-browser-1795621511-801",
+  "at": "2026-11-25T15:45:21.835Z",
+  "frames": [
+    {
+      "type": "webrtc-ice-config",
+      "data": {
+        "ice_servers": [
+          {
+            "urls": [
+              "stun:stun.l.google.com:19302"
+            ]
+          }
+        ]
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:27.468790627Z"
+    },
+    {
+      "__sent": true,
+      "type": "text-message",
+      "data": {
+        "content": "打印机卡纸是最常见的办公设备故障"
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:28.431Z"
+    },
+    {
+      "type": "text-message",
+      "data": {
+        "content": "打印机卡纸是最常见的办公设备故障"
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:28.442033166Z"
+    },
+    {
+      "type": "ai-response-delta",
+      "data": {
+        "content_delta": "- 打印机故障排查指南: 打印机卡纸是最常见的办公设备故障。",
+        "done": false
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:28.87657681Z"
+    },
+    {
+      "type": "ai-response-delta",
+      "data": {
+        "content_delta": "",
+        "done": true
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:28.877747217Z"
+    },
+    {
+      "type": "ai-response",
+      "data": {
+        "answer_id": 1,
+        "confidence": 0.7297013754048617,
+        "content": "- 打印机故障排查指南: 打印机卡纸是最常见的办公设备故障。",
+        "source": "ai",
+        "sources": [
+          {
+            "document_id": "1",
+            "title": "打印机故障排查指南",
+            "content": "打印机卡纸是最常见的办公设备故障。当打印机卡纸发生时，应先关闭打印机电源，然后打开前盖，沿走纸方向缓慢抽出卡住的纸张。打印机卡纸的预防方法包括：使用符合规格的纸张、不要超出发纸器的容量、定期清理走纸通道的碎屑。如果打印机频繁卡纸，可能是搓纸轮磨损，需要联系售后更换搓纸轮组件。打印机显示缺纸但纸盒有纸，通常是纸位传感器被灰尘遮挡，用干燥的软布清洁传感器即可恢复。打印机打印出现纵向黑条，多为硒鼓表面划伤，更换硒鼓可解决。打印机卡纸的进阶处理：如果纸张在定影器处卡住，切勿直接用手拉扯，应打开后盖并等待定影器冷却，再沿出纸方向取出。",
+            "score": 0.7297013754048617,
+            "highlights": null,
+            "metadata": {
+              "category": "knowledge",
+              "chunk_index": 0,
+              "doc_chunk_id": "打印机故障排查指南-chunk-0",
+              "external_id": "打印机故障排查指南",
+              "tenant_id": "",
+              "workspace_id": ""
+            },
+            "chunk_index": 0,
+            "source": "local"
+          }
+        ],
+        "strategy": "local"
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:28.877752523Z"
+    },
+    {
+      "type": "webrtc-ice-config",
+      "data": {
+        "ice_servers": [
+          {
+            "urls": [
+              "stun:stun.l.google.com:19302"
+            ]
+          }
+        ]
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:30.495209341Z"
+    },
+    {
+      "type": "agent-message",
+      "data": {
+        "content": "您好，这里是坐席的回复，已为您登记。",
+        "sender": "agent"
+      },
+      "session_id": "web-browser-1795621511-801",
+      "timestamp": "2026-11-25T15:45:31.100308466Z"
+    }
+  ]
+}

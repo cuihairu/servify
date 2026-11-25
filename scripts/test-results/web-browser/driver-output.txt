@@ -1,0 +1,15 @@
+[PASS] embed {"selector":".sw-trigger"}
+[PASS] auth {"status":"已连接","session_id":"web-browser-1795621511-801"}
+[PASS] sources {"row_text":"📄 打印机故障排查指南 · relevance 0.73","question":"打印机卡纸是最常见的办公设备故障"}
+[PASS] reconnect {"fault":"setOffline(true)+ws.close() → 掉线 → setOffline(false) → 重连握手","closed_observed":true,"handshakes":2}
+[PASS] assign {"http":200,"agent_a":"1","action":"接管(assign)"}
+[PASS] agent_reply {"http":201,"content":"您好，这里是坐席的回复，已为您登记。","frame":"agent-message"}
+[PASS] transfer {"http":200,"to_agent_b":"2","action":"转派(transfer)"}
+[PASS] ticket {"http":201,"ticket_id":"1","session_linked":"web-browser-1795621511-801"}
+[PASS] admin_login {"username":"web-browser-admin-18141"}
+[PASS] admin_workspace {"session_row":"web-brow","buttons":"转派/转工单","note":"接管按钮按产品语义仅在会话 waiting 态渲染；接管动作经 assign API 实测（见 assign 证据）"}
+transfer options ["坐席 2","坐席 1"]
+[PASS] transfer_ui {"modal":"转派会话","target":"坐席 2"}
+[PASS] ticket_ui {"page":"/ticket/list","modal":"新建工单","customer":"Browser Customer 1 (#4)","note":"会话关联工单由访客面 POST /api/v1/tickets 覆盖（见 ticket 证据）"}
+
+DRIVER PASS

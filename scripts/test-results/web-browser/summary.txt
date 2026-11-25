@@ -1,0 +1,19 @@
+build_ok=true
+servify_url=http://127.0.0.1:18123 (sqlite local, three-local ai)
+register_status=201
+admin_auth_ok=true
+agent_1_id=1 online_status=200
+agent_2_id=2 online_status=200
+agent_created_ok=true
+customer_create_status=201 customer_id=4
+customer_created_ok=true
+kb_seeded_ok=true
+host_url=http://127.0.0.1:18124 session_id=web-browser-1795621511-801
+admin_ui=1
+admin_base=http://127.0.0.1:18135
+browser_ok=true
+assign_ok=true
+agent_reply_ok=true
+transfer_ok=true
+ticket_ok=true
+overall_status=passed
