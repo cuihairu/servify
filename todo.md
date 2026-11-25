@@ -23,13 +23,15 @@
 
 ## 已完成
 
+> 台账口径（2026-11-26）：可对应到单一实现提交的行已补该 commit hash；P0-1…P0-5 与 P1-3…P1-5、P1-8、P1-9 等 2026-09 批次在本仓 git 历史起点（baeea93，2026-09-25 全量导入）之前即已闭环，无单一可核验提交可标，保持原样不猜填；后续新完成的行一律落 hash。
+
 - [x] B0 文档与架构声明（README 漂移、current-architecture、ARCHITECTURE §6.4-6.6、domain Owns）— b419cef 081e819 62b78a7 baabeb5，make local-check 绿
 - [x] B1 客服核心产品闭环（conversation_events 投影、Timeline API、Workspace 三栏工作台、薄壳模块叙事降级）— 5b557ce 30a5146 26862b4 bcac4bf ddd71ed 80c0e6f e5ae355 b5a35eb，e2e conversation-lifecycle 12 步通过
 - [x] B2 Routing 打分引擎与安全数据边界（八因子评分、PII 清单导出与擦除、retention 配置化、statistics 收口 analytics）— fff2116 97f947a f9a14b1 4749eea 7e7357e a2fa76d，全量 go test 绿
 - [x] B3 Knowledge 产品化与 AI 反馈闭环（来源/版本/索引、AI 答案与反馈持久化、检索分析、citation 与反馈 UI）— a66da78 0a7a152 f7b99e5 78361f1 3a570ce，admin typecheck+build 绿
 - [x] B4 收口与 V1.0 发布（TASKS 与验收矩阵统一、release notes、四门禁）— b9c66e0 f0487ac 58b7c4e 16693c3，四检查绿
 - [x] C1 web 嵌入集成指南与组件外观（icon 三档、主题 token 23 项、亮暗两套、embedding-guide）— widget 12/12 node --test，b8f881e
-- [x] C2 admin-legacy 清理（apps/admin-legacy 整目录删除）— 19 文件 384K 删除，全量测试绿
+- [x] C2 admin-legacy 清理（apps/admin-legacy 整目录删除）— 19 文件 384K 删除，全量测试绿 — 0a13203
 - [x] C3 文档全面重整（八组重排、30 导航孤儿收口、清 AI 味、六处修漂移）— 93f6d13，docs build 绿，57 页 0 404
 - [x] P0-1 事件总线生产默认切 Redis，inmemory 生产拒启
 - [x] P0-2 Voice 运行时去 mock provider，disabled provider 显式
