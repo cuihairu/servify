@@ -38,8 +38,8 @@
 - [x] P0-3 Agent 运行态去内存注册表与 legacy runtime 适配层
 - [x] P0-4 配置加载去 panic，默认模型配置更新
 - [x] P0-5 Fallback 收口 legacy_kb_enabled 兼容语义
-- [x] P0-6 SDK 与后端协议漂移收口（漂移收敛 1 处、生成资产同步、漂移守卫、101 处端点对账）— sdk 186 用例全绿
-- [x] P0-7 SDK 工程门禁修复（typecheck 绑 workspace 编译器、聚合 9 包）— npm -C sdk run typecheck 0 错误
+- [x] P0-6 SDK 与后端协议漂移收口（漂移收敛 1 处、生成资产同步、漂移守卫、101 处端点对账）— sdk 186 用例全绿 — c1fcf47 0aaeb6b
+- [x] P0-7 SDK 工程门禁修复（typecheck 绑 workspace 编译器、聚合 9 包）— npm -C sdk run typecheck 0 错误 — d0e8376
 - [x] P0-8 网站与部署脚本路径失配（Makefile 三目标、wrangler、make docs、CI -run 白名单守卫）
 - [x] P1-1 AI / Knowledge 主链路验收（ragflow/weknora mock CRUD、容器化 weknora、ai-fallback 三类证据）— validate-acceptance-manifest.sh 绿
 - [x] P1-2 Auth 自助 session 链路验收 — baeea93，manifest 入库
@@ -81,14 +81,14 @@
 - [x] strict 基线与 release-readiness 挂 CI — 9956c7a，6.46s + 145.17s PASS
 - [x] 事件租户盖章收口（四模块事件构造器盖章、守卫测试、解 models→voice/infra 循环边）— 904c399，apps/server 全量绿
 - [x] O1 透传字段落地（FieldsFromContext 三源、X-Trace-ID 回退、AccessLogger 走 logrus）— 3306feb，telemetry 8 测试绿
-- [x] golangci-lint 基线归零与门落 CI（存量 214→0、.golangci.yml 钉 standard）— make lint 0 issues
+- [x] golangci-lint 基线归零与门落 CI（存量 214→0、.golangci.yml 钉 standard）— make lint 0 issues — e0aa555
 - [x] 覆盖率门口径对齐（run-tests 默认 20%→100%、聚合灰区补齐、本地与 CI 双向守卫）— 未覆盖语句归零
 - [x] ticket handler 测试与异步自动派单竞态修复（种子 agent 改 busy）— ca54704，20 连跑绿
 - [x] 生产侧派单竞态收口（assign/unassign/close 三路径事务内锁工单行，负载以库内 agent_id 为准）— 92f867b，4033 测试 0 失败、100.0%、lint 0
 - [x] 流式错误文本泄露收口（provider 失败不进 ContentDelta、转人工失败帧固定文案）— c222ee7，llm 四包 + ai + realtime 绿
 - [x] Web SDK 独立文档（8 节 API 与配置全表、data-* 19 项、导航登记）— 0c4a1ee，docs build 绿
-- [x] docs 根目录双语配对（59 篇实质文档全部配对）— docs build 绿 + check-text-encoding 绿
-- [x] docs 站 VitePress 官方 i18n 接路由（root=en、zh=zh-CN、site-structure 独立维护、87 中文 / 59 英文）— docs build 绿，41 条 nav/sidebar 0 断链
+- [x] docs 根目录双语配对（59 篇实质文档全部配对）— docs build 绿 + check-text-encoding 绿 — 6b86ddb
+- [x] docs 站 VitePress 官方 i18n 接路由（root=en、zh=zh-CN、site-structure 独立维护、87 中文 / 59 英文）— docs build 绿，41 条 nav/sidebar 0 断链 — 9efb65a
 - [x] docs 子目录英文正文补齐（28 篇：25 真译 + 2 >1000 行占位）— verify 28/28 clean、docs build 绿
 - [x] docs 站 i18n 目录布局收口（中文迁入 docs/zh/、根换英文、删 .en/.zh 双文件、切换器自动渲染）— 9efb65a，Docs Pages 38924039803 绿
 - [x] 审核整改（2026-10-18 luna-review：表一修风险、表二以码为准、表三分期）— 205cff0，Go 4209 测试/158 包、覆盖率 100%
@@ -100,12 +100,12 @@
 - [x] 远程协助 RA-7 媒体桥接 + RA-5 信令归属 — 864f897 075055b，realtime 100.0%、-race 三连过
 - [x] admin pnpm audit 五项收口（braces high / elliptic low 无 patched release 保留可见豁免，sprintf-js / react-router 消单）— AUDIT-EXEMPTIONS.md，typecheck+build 绿
 - [x] 知识库选型决策（RAGFlow 唯一新增投入、选择链、新客户默认口径）— docs/design/knowledge-provider-selection-policy.md，零代码改动
-- [x] MetricsAggregator Snapshot 读取出口 — Prometheus /metrics 为唯一出口，退役有损 Snapshot()，handlers integration 100.0%
+- [x] MetricsAggregator Snapshot 读取出口 — Prometheus /metrics 为唯一出口，退役有损 Snapshot()，handlers integration 100.0% — f00eeaa
 - [x] 远程协助 RA-8 SDK 半边（offer 载荷与协商状态、跨重连重发）— e2d6397 + e31846d，sdk.test 五例绿
-- [x] 会话消息译文持久化（messages.metadata 000023、translations 先到先得、历史免 LLM）— go test ./internal/... 全绿
+- [x] 会话消息译文持久化（messages.metadata 000023、translations 先到先得、历史免 LLM）— go test ./internal/... 全绿 — 597f128
 - [x] retriever 会话语义统一（非空 session_id 滤掉全局摄入文档）— 1f190df，全 provider 同构验证
 - [x] AI agent-loop 三工具接线（CustomerLookup / TicketLookup / Handoff）— 82002cf，服务包 272 测试绿
-- [x] modules 非 infra 层 GORM 写归属下沉 infra（satisfaction 50 / sla 32 / auth 19 操作，reopen TranslateError 哨兵）— 覆盖率回 100.0%，全量绿
+- [x] modules 非 infra 层 GORM 写归属下沉 infra（satisfaction 50 / sla 32 / auth 19 操作，reopen TranslateError 哨兵）— 覆盖率回 100.0%，全量绿 — 121d852 f6fc371 18bb89b
 - [x] models 侧过渡别名最终删除（models.go 9 别名块 + 5 domain 导入 + 3 文件删除）— 3481171（26 文件）+ 379e8c9 守卫 + cc43cb0/7d02e9b 灰区 14 条，CI 38547016404 绿
 - [x] 文档-源码一致性审计（2026-11-01 复扫，38 条：超前 3 / 滞后 13 / 不符 22，P0 0、P1 6）— 8073a14…e82f1f6，docs build 绿
 - [x] 依赖安全批次收口（admin @umijs/max 4.7.16→4.7.30、follow-redirects 1.16.2、glob 10.5.0→14.0.3 使 mako 链 minimatch→11.0.4；docs mermaid 11.16.1→11.17.2 / vitepress 1.6.0→1.6.4；minimatch 经 eslint-plugin-react 链无兼容补丁记豁免）— 32fa296 a82fd59（apps/admin/package.json:19,43；apps/admin/AUDIT-EXEMPTIONS.md:132；docs/package.json:14,15），admin typecheck+lint+build 0 退出、docs npm ci+build 0 退出、admin audit 5→3（1 moderate+2 low）、docs audit 0
