@@ -13,6 +13,8 @@
 
 > 2026-11-23 巡检复核并暂结：未勾项仍 9 条，逐条实查前提全部成立——①env 无 DIFY/WEKNORA/RAGFLOW/TELEGRAM/BOT_TOKEN/OPENAI 变量、无 `.env*`（仅 `.env.example` / `.env.weknora.example` 两模板），知识库 real 验收（第 7/190/191/192 条）与 Telegram 联调（第 8 条）保持阻塞；②`git ls-files` 无 playwright/puppeteer，无部署栈与浏览器自动化设施，Web 真实浏览器验收（第 205 条）保持阻塞；③无真实客户需求来源/访谈输入/排障试用记录，「建设与否」属用户拍板，多渠道试点/客户工单入口/远程协助差异化（第 212/213/214 条）保持阻塞。九条均无可执行的仓内可逆切片（real 模式守卫已实测 fail-closed、mock 验收已 passed 入库，无可补的仓内半程），本轮无代码改动（不凑数）。本轮另有 CI 面推进：weknora disable 后降级策略断言双形态修复（llm|fallback，CI Integration 栈无 LLM 凭据实测 fallback），见「审核发现」第 136 条（8bba7e0）。
 
+> 2026-11-26 巡检复核并暂结：未勾项 8 条（181 条已勾——较 11-23 少 1 条系 Web 真实浏览器验收 item 208 勾行 5d0d994，实现+证据 79749b5，12 项检查全绿、四门接线、CI 45659120839 success），逐条实查前提全部成立，无可执行的仓内项，本轮无代码改动（不凑数）。本轮深查新增记录：邮件面（第 215 条）同样需外部 SMTP/IMAP 服务器+凭据（仓内 email 模块 outbound dispatcher channel_outbound.go:62-116 + inbound poller runtime.go:260-266 + 装配 runtime_assembly.go:318 均已接线，仅缺真实服务凭据）。八条复核结论（2026-11-26 证据）：①env 0 凭据、仅 2 模板、git ls-files 无 playwright/puppeteer——知识库 real 验收（第 7/193/194/195 条，real 模式 fail-closed 守卫 30ca5e3 实测逐字命中 + 三 mock 验收 passed 入库）保持阻塞；②env 无 TELEGRAM/BOT_TOKEN——Telegram 联调（第 8 条）保持阻塞；③无真实客户需求来源/访谈输入/排障试用记录，「建设与否」属用户拍板（非仓内可代决项）——多渠道试点/客户工单入口/远程协助差异化（第 215/216/217 条）保持阻塞。依赖面：无 open dependabot PR/issue（已定口径升级义务无待办项）；审核发现各节（漏洞扫描遗留 / e3a0fabd..HEAD / 09c45c63..HEAD 两轮 / 深度评审 P0/P1/P2 / e0c8e27a..a167d09 / 覆盖率推进 / 审核修复批 / Codex 深审）全部 ✅ 已修无待修残留。暂结口径同 11-21/11-23：8 条保持 BLOCKED 原样挂起，不降级标通过、不删行；用户提供任一凭据/资源/拍板即对应行重启。
+
 ## 已定口径
 
 - tickets.session_id 保持可空不收紧（管理员独立建单与邮件建单两条路径不传）
