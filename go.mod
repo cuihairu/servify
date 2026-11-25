@@ -2,7 +2,7 @@ module servify
 
 go 1.26.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/swaggo/swag v1.16.6
