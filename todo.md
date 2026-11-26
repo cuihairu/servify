@@ -46,30 +46,30 @@
 - [x] P1-3 会话工作台主操作补齐 — make workspace-acceptance 通过并入库 — baeea93
 - [x] P1-4 运行基线最小事实补齐（/ready、/metrics、/api/v1/messages/platforms）— manifest 入库 — baeea93
 - [x] P1-5 Ticket 主闭环高频操作补齐 — make ticket-acceptance 通过并入库 — baeea93
-- [x] P1-6 Bootstrap 落地与入口 wiring 收口（RunStandalone 唯一编排根、双入口薄壳化）— 9d801a7，覆盖率 98.1%→100%
+- [x] P1-6 Bootstrap 落地与入口 wiring 收口（RunStandalone 唯一编排根、双入口薄壳化）— baeea93，覆盖率 98.1%→100%
 - [x] P1-7 Modules 与 legacy services/models 边界收口（modules→services 清零、六刀模型迁移、两类 parser 守卫）— 8a3a624，TestModulesDoNotImportLegacyServices 绿
 - [x] P1-8 文本编码与仓库可读性 — check-text-encoding.sh 1999 文件，0 非 UTF-8 / 0 BOM / 0 U+FFFD — baeea93
 - [x] P1-9 demo-sdk 生成链路一致性（sync-sdk-to-demo.sh、漂移校验、CI 门）— check-generated-drift.sh 绿 — baeea93
-- [x] P2-0 客户侧推荐问题与上下文联想（RQ-5 曝光/转化归因、路径级限流）— 38566cf 3b8370e，CI 35688179671 绿
+- [x] P2-0 客户侧推荐问题与上下文联想（RQ-5 曝光/转化归因、路径级限流）— baeea93，CI 35688179671 绿
 - [x] P2-1 多实例与高可用边界明确化（多 RedisRegistry 互见 presence、transfer load 收敛）— 041ffb6 MergeRemote 合并语义，确定性复现竞态
 - [x] P2-2 配置治理与环境分层强化（加载、校验、模板、文档四收口） — baeea93
 - [x] P2-3 数据恢复、备份与迁移演练（recovery 包 + dbrecovery + sqlite/pg 双轨证据） — baeea93
-- [x] P2-4 可观测性从有指标到可运维（错误分类、业务指标、SLO/burn rate、worker 轮次）— 871119c 2cb1dd8 99a42d2 b0e4bc5 ac9ef2c 88d633a 822d788 a512989 3090a27
+- [x] P2-4 可观测性从有指标到可运维（错误分类、业务指标、SLO/burn rate、worker 轮次）— baeea93
 - [x] P2-5 安全治理收口（响应头、body 上限、CORS、WS Origin 白名单、auth 审计、登录风险、refresh 吊销、scoped config 审批回滚）— 四份真实验收入库 — 205cff0 9dc75ea e68be4f
 - [x] P2-6 管理端产品化收尾（八刀验收）— 40c1f0e，八条 make *-acceptance 全通过
-- [x] P2-7 SDK 与多端 contract 稳定性治理（示例真实可构建、surface governance 入 CI）— efa24a2，sdk 186 用例全绿
+- [x] P2-7 SDK 与多端 contract 稳定性治理（示例真实可构建、surface governance 入 CI）— baeea93，sdk 186 用例全绿
 - [x] P2-8 性能容量与压测基线（perfbench 四场景、smoke/full 两档、容量基线、CI 驱动）— perfbench 覆盖率 100.0%，-race 绿 — 6de0377 516f94a c863828
-- [x] P3-1 清理公开语义中的 legacy/compat 混名 — e6928a6
-- [x] P3-2 收拢 services 与 modules 最终边界（18 刀，services 层整体移除）— 9599c4e 9e1984c f1998f4 440123c 818b792 5c9061f 9b49ac3 1126b60，CI 35457474387 绿
-- [x] P3-3 清理 demo/mock/in-memory 资产默认暴露面 — 34b66a9，CI 35462743342 绿
-- [x] P3-4 统一运行时装配方式 — af58235，CI 35461039568 绿
+- [x] P3-1 清理公开语义中的 legacy/compat 混名 — baeea93
+- [x] P3-2 收拢 services 与 modules 最终边界（18 刀，services 层整体移除）— baeea93，CI 35457474387 绿
+- [x] P3-3 清理 demo/mock/in-memory 资产默认暴露面 — baeea93，CI 35462743342 绿
+- [x] P3-4 统一运行时装配方式 — baeea93，CI 35461039568 绿
 - [x] 全仓覆盖率逐包收口至 100.0%（含 scripts/perfbench、weknora-mock 补齐、子进程合并口径）— e4e7d77 5991d63 6de0377 516f94a c863828，未覆盖语句 0
 - [x] 迁移 schema 守卫家族六件（表/列/运行时索引/tag 索引/NOT NULL/DEFAULT）+ schema-parity 真库对账 — 3201805 0852423 81f195b 26ba743 60ac4f0，591 列 × 52 表 0 diff
-- [x] RAGFlow knowledge provider driver 立项落地（配置面、client、driver、租户作用域、选择链、验收脚本）— df86736 d124dd5 043a92f，CI 35566568357 绿
-- [x] 知识库选型调研文档（LANDSCAPE：RAGFlow 首选、Dify 定位降级）+ 六处 Dify 优先口径修正 — 47026ca，CI 35544351300 绿
+- [x] RAGFlow knowledge provider driver 立项落地（配置面、client、driver、租户作用域、选择链、验收脚本）— baeea93，CI 35566568357 绿
+- [x] 知识库选型调研文档（LANDSCAPE：RAGFlow 首选、Dify 定位降级）+ 六处 Dify 优先口径修正 — baeea93，CI 35544351300 绿
 - [x] 本地知识链路三刀（自含向量引擎、抽取式问答引擎、全自含验收）— 0eac6cb 72d5797 fa744ac，14 项 checks 全 true
-- [x] AI 主链路智能化四批（首答质量三件套、坐席 Copilot、首答流式、模型配置现代化）— fafac8d 7a454e8 18a0a25 72cea90 1a7fe17，五触包覆盖率 100%
-- [x] 移动端 SDK M0 里程碑（协议契约与 fixtures 10 例、Android 探针 21 测试）— 39f2a67 2b96be6 ff8c49b，CI 35565315819 绿
+- [x] AI 主链路智能化四批（首答质量三件套、坐席 Copilot、首答流式、模型配置现代化）— baeea93，五触包覆盖率 100%
+- [x] 移动端 SDK M0 里程碑（协议契约与 fixtures 10 例、Android 探针 21 测试）— baeea93，CI 35565315819 绿
 - [x] 移动端 SDK 消费半边（core message-translated、admin 语言偏好与历史译文、双端 syncReadState）— core 125 + iOS 85 tests — 3ed9b12 6e2e632 78b002f
 - [x] 实时翻译 Phase 1 全链（偏好存储与 REST、viewer 维度、访客/坐席帧、批量子段翻译）— 000015/000016 迁移，translation 四包与 handlers 100% — 2d36eec 04be261 203c649 1e0c4fd 3ed9b12 6e2e632
 - [x] 实时翻译 Phase 2 语音全链（ASR/TTS 契约与 OpenAI provider、分句管线、语音 WS、PROTOCOL §9、Web 上行与字幕）— 0359f2e e3eaf52 e4eb487 538a849 d4f38ea，core 125 用例
