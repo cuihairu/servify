@@ -33,7 +33,7 @@
 - [x] C1 web 嵌入集成指南与组件外观（icon 三档、主题 token 23 项、亮暗两套、embedding-guide）— widget 12/12 node --test，b8f881e
 - [x] C2 admin-legacy 清理（apps/admin-legacy 整目录删除）— 19 文件 384K 删除，全量测试绿 — 0a13203
 - [x] C3 文档全面重整（八组重排、30 导航孤儿收口、清 AI 味、六处修漂移）— 93f6d13，docs build 绿，57 页 0 404
-- [x] P0-1 事件总线生产默认切 Redis，inmemory 生产拒启
+- [x] P0-1 事件总线生产默认切 Redis，inmemory 生产拒启 — baeea93
 - [x] P0-2 Voice 运行时去 mock provider，disabled provider 显式
 - [x] P0-3 Agent 运行态去内存注册表与 legacy runtime 适配层
 - [x] P0-4 配置加载去 panic，默认模型配置更新
@@ -41,7 +41,7 @@
 - [x] P0-6 SDK 与后端协议漂移收口（漂移收敛 1 处、生成资产同步、漂移守卫、101 处端点对账）— sdk 186 用例全绿 — c1fcf47 0aaeb6b
 - [x] P0-7 SDK 工程门禁修复（typecheck 绑 workspace 编译器、聚合 9 包）— npm -C sdk run typecheck 0 错误 — d0e8376
 - [x] P0-8 网站与部署脚本路径失配（Makefile 三目标、wrangler、make docs、CI -run 白名单守卫） — 2a5ab45 a9cf4d2
-- [x] P1-1 AI / Knowledge 主链路验收（ragflow/weknora mock CRUD、容器化 weknora、ai-fallback 三类证据）— validate-acceptance-manifest.sh 绿
+- [x] P1-1 AI / Knowledge 主链路验收（ragflow/weknora mock CRUD、容器化 weknora、ai-fallback 三类证据）— validate-acceptance-manifest.sh 绿 — 18a4541 decb1fa b7c96dd c1b0df3 2828d15
 - [x] P1-2 Auth 自助 session 链路验收 — baeea93，manifest 入库
 - [x] P1-3 会话工作台主操作补齐 — make workspace-acceptance 通过并入库
 - [x] P1-4 运行基线最小事实补齐（/ready、/metrics、/api/v1/messages/platforms）— manifest 入库
@@ -55,10 +55,10 @@
 - [x] P2-2 配置治理与环境分层强化（加载、校验、模板、文档四收口）
 - [x] P2-3 数据恢复、备份与迁移演练（recovery 包 + dbrecovery + sqlite/pg 双轨证据）
 - [x] P2-4 可观测性从有指标到可运维（错误分类、业务指标、SLO/burn rate、worker 轮次）— 871119c 2cb1dd8 99a42d2 b0e4bc5 ac9ef2c 88d633a 822d788 a512989 3090a27
-- [x] P2-5 安全治理收口（响应头、body 上限、CORS、WS Origin 白名单、auth 审计、登录风险、refresh 吊销、scoped config 审批回滚）— 四份真实验收入库
+- [x] P2-5 安全治理收口（响应头、body 上限、CORS、WS Origin 白名单、auth 审计、登录风险、refresh 吊销、scoped config 审批回滚）— 四份真实验收入库 — 205cff0 9dc75ea e68be4f
 - [x] P2-6 管理端产品化收尾（八刀验收）— 40c1f0e，八条 make *-acceptance 全通过
 - [x] P2-7 SDK 与多端 contract 稳定性治理（示例真实可构建、surface governance 入 CI）— efa24a2，sdk 186 用例全绿
-- [x] P2-8 性能容量与压测基线（perfbench 四场景、smoke/full 两档、容量基线、CI 驱动）— perfbench 覆盖率 100.0%，-race 绿
+- [x] P2-8 性能容量与压测基线（perfbench 四场景、smoke/full 两档、容量基线、CI 驱动）— perfbench 覆盖率 100.0%，-race 绿 — 6de0377 516f94a c863828
 - [x] P3-1 清理公开语义中的 legacy/compat 混名 — e6928a6
 - [x] P3-2 收拢 services 与 modules 最终边界（18 刀，services 层整体移除）— 9599c4e 9e1984c f1998f4 440123c 818b792 5c9061f 9b49ac3 1126b60，CI 35457474387 绿
 - [x] P3-3 清理 demo/mock/in-memory 资产默认暴露面 — 34b66a9，CI 35462743342 绿
