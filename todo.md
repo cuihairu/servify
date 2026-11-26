@@ -23,7 +23,7 @@
 
 ## 已完成
 
-> 台账口径（2026-11-26）：可对应到单一实现提交的行已补该 commit hash；P0-1…P0-5 与 P1-3…P1-5、P1-8、P1-9 等 2026-09 批次在本仓 git 历史起点（baeea93，2026-09-25 全量导入）之前即已闭环，无单一可核验提交可标，保持原样不猜填；后续新完成的行一律落 hash。
+> 台账口径（2026-11-26）：可对应到单一实现提交的行标该实现 commit hash；本仓 git 历史起点（baeea93，2026-09-25 全量导入）之前即已闭环、无单一实现提交的批次，以 baeea93（根导入台账在该提交内记载完成证据）作见证 hash，不臆造更早的提交；新完成的行一律落实现 commit hash。
 
 - [x] B0 文档与架构声明（README 漂移、current-architecture、ARCHITECTURE §6.4-6.6、domain Owns）— b419cef 081e819 62b78a7 baabeb5，make local-check 绿
 - [x] B1 客服核心产品闭环（conversation_events 投影、Timeline API、Workspace 三栏工作台、薄壳模块叙事降级）— 5b557ce 30a5146 26862b4 bcac4bf ddd71ed 80c0e6f e5ae355 b5a35eb，e2e conversation-lifecycle 12 步通过
@@ -34,26 +34,26 @@
 - [x] C2 admin-legacy 清理（apps/admin-legacy 整目录删除）— 19 文件 384K 删除，全量测试绿 — 0a13203
 - [x] C3 文档全面重整（八组重排、30 导航孤儿收口、清 AI 味、六处修漂移）— 93f6d13，docs build 绿，57 页 0 404
 - [x] P0-1 事件总线生产默认切 Redis，inmemory 生产拒启 — baeea93
-- [x] P0-2 Voice 运行时去 mock provider，disabled provider 显式
-- [x] P0-3 Agent 运行态去内存注册表与 legacy runtime 适配层
-- [x] P0-4 配置加载去 panic，默认模型配置更新
-- [x] P0-5 Fallback 收口 legacy_kb_enabled 兼容语义
+- [x] P0-2 Voice 运行时去 mock provider，disabled provider 显式 — baeea93
+- [x] P0-3 Agent 运行态去内存注册表与 legacy runtime 适配层 — baeea93
+- [x] P0-4 配置加载去 panic，默认模型配置更新 — baeea93
+- [x] P0-5 Fallback 收口 legacy_kb_enabled 兼容语义 — baeea93
 - [x] P0-6 SDK 与后端协议漂移收口（漂移收敛 1 处、生成资产同步、漂移守卫、101 处端点对账）— sdk 186 用例全绿 — c1fcf47 0aaeb6b
 - [x] P0-7 SDK 工程门禁修复（typecheck 绑 workspace 编译器、聚合 9 包）— npm -C sdk run typecheck 0 错误 — d0e8376
 - [x] P0-8 网站与部署脚本路径失配（Makefile 三目标、wrangler、make docs、CI -run 白名单守卫） — 2a5ab45 a9cf4d2
 - [x] P1-1 AI / Knowledge 主链路验收（ragflow/weknora mock CRUD、容器化 weknora、ai-fallback 三类证据）— validate-acceptance-manifest.sh 绿 — 18a4541 decb1fa b7c96dd c1b0df3 2828d15
 - [x] P1-2 Auth 自助 session 链路验收 — baeea93，manifest 入库
-- [x] P1-3 会话工作台主操作补齐 — make workspace-acceptance 通过并入库
-- [x] P1-4 运行基线最小事实补齐（/ready、/metrics、/api/v1/messages/platforms）— manifest 入库
-- [x] P1-5 Ticket 主闭环高频操作补齐 — make ticket-acceptance 通过并入库
+- [x] P1-3 会话工作台主操作补齐 — make workspace-acceptance 通过并入库 — baeea93
+- [x] P1-4 运行基线最小事实补齐（/ready、/metrics、/api/v1/messages/platforms）— manifest 入库 — baeea93
+- [x] P1-5 Ticket 主闭环高频操作补齐 — make ticket-acceptance 通过并入库 — baeea93
 - [x] P1-6 Bootstrap 落地与入口 wiring 收口（RunStandalone 唯一编排根、双入口薄壳化）— 9d801a7，覆盖率 98.1%→100%
 - [x] P1-7 Modules 与 legacy services/models 边界收口（modules→services 清零、六刀模型迁移、两类 parser 守卫）— 8a3a624，TestModulesDoNotImportLegacyServices 绿
 - [x] P1-8 文本编码与仓库可读性 — check-text-encoding.sh 1999 文件，0 非 UTF-8 / 0 BOM / 0 U+FFFD — baeea93
 - [x] P1-9 demo-sdk 生成链路一致性（sync-sdk-to-demo.sh、漂移校验、CI 门）— check-generated-drift.sh 绿 — baeea93
 - [x] P2-0 客户侧推荐问题与上下文联想（RQ-5 曝光/转化归因、路径级限流）— 38566cf 3b8370e，CI 35688179671 绿
 - [x] P2-1 多实例与高可用边界明确化（多 RedisRegistry 互见 presence、transfer load 收敛）— 041ffb6 MergeRemote 合并语义，确定性复现竞态
-- [x] P2-2 配置治理与环境分层强化（加载、校验、模板、文档四收口）
-- [x] P2-3 数据恢复、备份与迁移演练（recovery 包 + dbrecovery + sqlite/pg 双轨证据）
+- [x] P2-2 配置治理与环境分层强化（加载、校验、模板、文档四收口） — baeea93
+- [x] P2-3 数据恢复、备份与迁移演练（recovery 包 + dbrecovery + sqlite/pg 双轨证据） — baeea93
 - [x] P2-4 可观测性从有指标到可运维（错误分类、业务指标、SLO/burn rate、worker 轮次）— 871119c 2cb1dd8 99a42d2 b0e4bc5 ac9ef2c 88d633a 822d788 a512989 3090a27
 - [x] P2-5 安全治理收口（响应头、body 上限、CORS、WS Origin 白名单、auth 审计、登录风险、refresh 吊销、scoped config 审批回滚）— 四份真实验收入库 — 205cff0 9dc75ea e68be4f
 - [x] P2-6 管理端产品化收尾（八刀验收）— 40c1f0e，八条 make *-acceptance 全通过
