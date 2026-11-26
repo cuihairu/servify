@@ -70,7 +70,7 @@
 - [x] 本地知识链路三刀（自含向量引擎、抽取式问答引擎、全自含验收）— 0eac6cb 72d5797 fa744ac，14 项 checks 全 true
 - [x] AI 主链路智能化四批（首答质量三件套、坐席 Copilot、首答流式、模型配置现代化）— fafac8d 7a454e8 18a0a25 72cea90 1a7fe17，五触包覆盖率 100%
 - [x] 移动端 SDK M0 里程碑（协议契约与 fixtures 10 例、Android 探针 21 测试）— 39f2a67 2b96be6 ff8c49b，CI 35565315819 绿
-- [x] 移动端 SDK 消费半边（core message-translated、admin 语言偏好与历史译文、双端 syncReadState）— core 125 + iOS 85 tests
+- [x] 移动端 SDK 消费半边（core message-translated、admin 语言偏好与历史译文、双端 syncReadState）— core 125 + iOS 85 tests — 3ed9b12 6e2e632 78b002f
 - [x] 实时翻译 Phase 1 全链（偏好存储与 REST、viewer 维度、访客/坐席帧、批量子段翻译）— 000015/000016 迁移，translation 四包与 handlers 100% — 2d36eec 04be261 203c649 1e0c4fd 3ed9b12 6e2e632
 - [x] 实时翻译 Phase 2 语音全链（ASR/TTS 契约与 OpenAI provider、分句管线、语音 WS、PROTOCOL §9、Web 上行与字幕）— 0359f2e e3eaf52 e4eb487 538a849 d4f38ea，core 125 用例
 - [x] 管理端坐席侧语音实时翻译入口（voice.ts、PROTOCOL §9 守卫两条）— f269f05，CI 36758621877 绿
